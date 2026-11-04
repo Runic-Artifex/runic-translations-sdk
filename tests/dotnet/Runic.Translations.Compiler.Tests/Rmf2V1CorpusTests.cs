@@ -203,6 +203,10 @@ internal sealed class Rmf2V1CorpusTests
     // (GeneratedCatalogSupport, CompiledRmf2*, TranslationsCompatibility) and the readable surface implements
     // IReadableMessages; transport.js writes only version 2 and transport.d.ts drops the version 1 createTextReference
     // overload, in both digests.
+    // Re-pinned for TR-0.9 TE: messages.js exports the module namespace m, message modules carry their own contract in a
+    // pure call, runtime.js keeps only the markup contracts and dynamic.js the catalog's contract tables; messages.d.ts
+    // documents members with the base text; the C# accessors gain base-text summaries and the References factories, in
+    // both digests.
     // Re-pinned for TR 0.9 batch TC: runtime.js formats localized dates, times, time zones and percentages by the shared
     // rules, in the requested locale when it shares the content language, accepts Date and offset date-time inputs and
     // exports getRequestedLocale, getMessageLocale and onFallback; message modules pass the requested locale;
@@ -211,8 +215,11 @@ internal sealed class Rmf2V1CorpusTests
     // reads the local zone per call with configureTimeZoneResolver, writes other calendars' full years and one bidi mark
     // per run, and keeps the requested tag in createLocaleSource; server.js scopes the requested tag and zone per
     // request; runtime.d.ts and server.d.ts declare them, in both digests.
-    private const string EncodedOutputDigest = "c55183c35b3a19de5bdd53f0f9bc5e33e1de8eb92294ed897c8d0676d97695df";
-    private const string HiddenEncodedOutputDigest = "b4a04adc6d53f11340ff123a816b2270d9da0d6f41a02bc6479ed273c14da2f7";
+    // Re-pinned for merging TC with TE: message modules call the runtime with the requested locale, and runtime.js
+    // reads getMessageLocale's content locales from its own table (messageLocaleTable) rather than the contract tables
+    // that moved to dynamic.js, in both digests.
+    private const string EncodedOutputDigest = "cf82dd07bcab87cfb982a063153dbd085ef1f9e344eb61e981179c507120a578";
+    private const string HiddenEncodedOutputDigest = "bca94d9be3771a1601e32766f69215d938b69f982445779c79d7b6184e8b3eb7";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

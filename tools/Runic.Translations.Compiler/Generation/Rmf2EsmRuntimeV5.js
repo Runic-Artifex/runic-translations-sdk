@@ -4,7 +4,11 @@ const minimumInt64 = -9223372036854775808n;
 const maximumInt64 = 9223372036854775807n;
 const localeSet = new Set(locales);
 const limits = Object.freeze({ maximumDocumentBytes: 8388608, maximumDepth: 64, maximumMessages: 50000, maximumPatternBytes: 65536, maximumArgumentsPerMessage: 32 });
-const validatedMessages = new WeakSet();
+// A validated message wrapper maps to its message contract (see contractOf).
+const validatedMessages = new WeakMap();
+const contractCopies = new WeakMap();
+let structuredMessages;
+const dynamicContracts = new WeakMap();
 const decodedArtifacts = new WeakSet();
 let localeResolver = () => typeof document === "undefined" ? baseLocale : (document.documentElement.lang || baseLocale);
 
@@ -96,10 +100,13 @@ function reportFallback(key, locale, content) {
 
 // The locales of a message for a request: the locale whose text it shows (for the lang attribute of a string message)
 // and the locale its numbers and dates format in.
+// The catalog's table (messageLocaleTable above) is parsed on first use, so a bundle that never calls this drops it.
+let messageLocales;
 export function getMessageLocale(key, options) {
-  const entry = rmf2Contract.messages?.[key]; if (!entry || !Object.hasOwn(messageContracts, key)) throw new RangeError(`Unknown message '${key}'.`);
+  messageLocales ??= freezeTrusted(messageLocaleTable());
+  const entry = typeof key === "string" && Object.hasOwn(messageLocales, key) ? messageLocales[key] : undefined; if (!entry) throw new RangeError(`Unknown message '${key}'.`);
   const requested = options?.locale === undefined ? getRequestedLocale() : requestedTag(options.locale), locale = resolveLocale(requested);
-  const contentLocale = entry.contentLocales?.[locale] ?? locale;
+  const contentLocale = Object.hasOwn(entry, locale) ? entry[locale] : locale;
   return Object.freeze({ key, locale: contentLocale, formatLocale: formattingLocale(requested, contentLocale) });
 }
 
@@ -562,8 +569,8 @@ function validTimeZone(value) { return typeof value === "string" && value.length
 // requestedLocale is the tag the caller asked for (de-CH), resolvedLocale the catalog locale it resolved to (de),
 // which defaults to the requested one; the wrapper's content locale differs from it after a fallback.
 export function formatCompiledMessage(key, wrapper, inputs, requestedLocale, resolvedLocale = requestedLocale) {
-  const contract = messageContracts[key]; if (!contract || !wrapper) throw new RangeError(`Unknown message '${key}'.`);
-  if (!validatedMessages.has(wrapper)) throw new TypeError("A validated v5 message is required.");
+  if (!wrapper) throw new RangeError(`Unknown message '${key}'.`);
+  const contract = validatedMessages.get(wrapper); if (!contract || contract.key !== key) throw new TypeError("A validated v5 message is required.");
   const context = contextFor(wrapper, inputs, contract), locale = wrapper.contentLocale, formatLocale = formattingLocale(requestedLocale, locale);
   const selections = wrapper.ast.selectors.map(selector => {
     const resolved = context.resolve(selector.value, selector.type);
@@ -588,7 +595,7 @@ export function formatCompiledMessage(key, wrapper, inputs, requestedLocale, res
   const built = buildNodes(selected.nodes, context, formatLocale, locale, `v${selectedIndex}.`);
   if (typeof resolvedLocale === "string") reportFallback(key, resolvedLocale, locale);
   if (!contract.structured) { if (built.some(node => node.kind !== "text")) throw new TypeError("Structured content cannot be formatted as text."); return built.map(node => node.value).join(""); }
-  const kind = rmf2Contract.messages?.[key]?.content === "document" ? "localized-document" : "localized-content";
+  const kind = contract.content === "document" ? "localized-document" : "localized-content";
   return Object.freeze({ kind, key, locale, formatLocale, nodes: Object.freeze(built) });
 }
 
@@ -612,50 +619,82 @@ function freezeContentNode(node) { node.annotations = Object.freeze(node.annotat
 function compareRanks(left, right) { for (let index = 0; index < left.length; index++) if (left[index] !== right[index]) return left[index] - right[index]; return 0; }
 function canonicalCarrier(value, type) { if (type === "decimal") return decimalCanonical(value); if (type === "int64") return value.toString(); if (type === "boolean") return value ? "true" : "false"; return value; }
 
+// A message's contract: its key, inputs and whether it is structured, plus the content profile, slots and document
+// skeletons that validation needs. Each generated message module passes its own contract's data to the freeze functions,
+// so a bundle holds only the contracts of the messages it calls; dynamic.js carries the catalog's whole table. The
+// runtime keeps one frozen copy per data object and registers nothing by key: renderers check content against the
+// catalog's own table (structuredMessage), so no contract made at run time changes how other content renders.
+function contractOf(value) {
+  let contract = isRecord(value) ? contractCopies.get(value) : undefined; if (contract) return contract;
+  if (!isRecord(value) || typeof value.key !== "string" || value.inputs !== undefined && !Array.isArray(value.inputs)) throw new TypeError("A generated v5 message contract is required.");
+  contract = Object.freeze({ key: value.key, structured: value.structured === true, inputs: freezeTrusted(value.inputs ?? []),
+    content: value.content ?? "inline", slots: freezeTrusted(value.slots ?? {}), skeletons: freezeTrusted(value.skeletons ?? []),
+    contentLocales: value.contentLocales === undefined ? undefined : freezeTrusted(value.contentLocales) });
+  contractCopies.set(value, contract); return contract;
+}
+// The content kind and slots of each structured message, from the catalog's table above (structuredMessageTable), parsed
+// on first use. Renderers read only this, so content formatted in another process (server load data, postMessage,
+// stored content) renders without its message module, and a bundle that never renders content drops the table.
+function structuredMessage(key) {
+  structuredMessages ??= freezeTrusted(structuredMessageTable());
+  return typeof key === "string" && Object.hasOwn(structuredMessages, key) ? structuredMessages[key] : undefined;
+}
+
 // Compact generated messages. A message of text and plain input placeholders is written as its parts, text strings and
 // [inputName] for {$inputName}; these rebuild the same normalized AST, which freezeGeneratedMessage validates as before.
-export function freezeGeneratedText(key, contentLocale, text) { return freezeGeneratedPattern(key, contentLocale, text === "" ? [] : [text]); }
-export function freezeGeneratedPattern(key, contentLocale, parts) {
-  const inputs = messageContracts[key]?.inputs ?? [];
+export function freezeGeneratedText(contract, contentLocale, text) { return freezeGeneratedPattern(contract, contentLocale, text === "" ? [] : [text]); }
+export function freezeGeneratedPattern(value, contentLocale, parts) {
+  const contract = contractOf(value), key = contract.key, inputs = contract.inputs;
   const nodes = parts.map(part => {
     if (typeof part === "string") return { kind: "text", value: part };
     const input = inputs.find(item => item.name === part[0]);
     if (!input) throw new TypeError(`Invalid generated RMF2 v5 message: ${key} has no input ${part[0]}.`);
     return { kind: "expression", expression: { operand: { kind: "input", value: input.name }, valueType: input.type, options: [], annotations: [] } };
   });
-  return freezeGeneratedMessage(key, { contentLocale, ast: { astVersion: 5, profile: "rmf2-execution-v2",
+  return freezeGeneratedMessage(contract, { contentLocale, ast: { astVersion: 5, profile: "rmf2-execution-v2",
     inputs: inputs.map(item => ({ name: item.name, type: item.type })), declarations: [], selectors: [], variants: [{ keys: [], nodes }] } });
 }
 
-export function freezeGeneratedMessage(key, value) {
-  const contract = messageContracts[key]; const error = validateMessageWrapper(value, contract, null, key);
+export function freezeGeneratedMessage(data, value) {
+  const contract = contractOf(data), error = validateMessageWrapper(value, contract, null, contract.key);
   if (error) throw new TypeError(`Invalid generated RMF2 v5 message: ${error}.`);
-  const result=cloneFreeze(value);validatedMessages.add(result);return result;
+  const result=cloneFreeze(value);validatedMessages.set(result,contract);return result;
 }
 
-export function decodeLocaleArtifactV5(value) {
+// The catalog's whole contract tables come from dynamic.js, so only applications that decode artifacts carry them.
+function dynamicContract(tables, key) {
+  let contracts = dynamicContracts.get(tables); if (!contracts) dynamicContracts.set(tables, contracts = new Map());
+  let contract = contracts.get(key);
+  if (!contract) { const markup = tables.rmf2Contract.messages?.[key]; contract = contractOf({ ...markup, key, structured: tables.messageContracts[key].structured, inputs: tables.messageContracts[key].inputs, contentLocales: markup?.contentLocales ?? {} }); contracts.set(key, contract); }
+  return contract;
+}
+
+export function decodeLocaleArtifactV5(value, tables) {
+  if (!isRecord(tables?.rmf2Contract) || !isRecord(tables.messageContracts)) throw new TypeError("The catalog's contract tables are required; import decodeLocaleArtifact from dynamic.js.");
   const captured = snapshotJson(value, limits.maximumDepth, limits.maximumDocumentBytes);
   if (!captured.ok) return failure(`RTR0023/${captured.reason}`);
   const snapshot = captured.value;
-  const envelope = validateEnvelope(snapshot); if (envelope) return failure(envelope);
+  const envelope = validateEnvelope(snapshot, tables.rmf2Contract); if (envelope) return failure(envelope);
   const entries = [];
   for (const [key, message] of Object.entries(snapshot.messages)) {
-    if (!Object.hasOwn(messageContracts, key)) return failure("RTR0023/unknown-key");
-    const error = validateMessageWrapper(message, messageContracts[key], snapshot.locale, key); if (error) return failure(`RTR0023/${error}`);
-    validatedMessages.add(message); entries.push([key,message]);
+    if (!Object.hasOwn(tables.messageContracts, key)) return failure("RTR0023/unknown-key");
+    const contract = dynamicContract(tables, key);
+    const error = validateMessageWrapper(message, contract, snapshot.locale, key); if (error) return failure(`RTR0023/${error}`);
+    validatedMessages.set(message, contract); entries.push([key,message]);
   }
-  const artifact=Object.freeze({ artifactVersion: 5, messageGrammarVersion: 5, profile, catalog, locale: snapshot.locale, contractFingerprint, messages: freezeOwnRecord(entries), markupContract: rmf2Contract });decodedArtifacts.add(artifact);
+  const artifact=Object.freeze({ artifactVersion: 5, messageGrammarVersion: 5, profile, catalog, locale: snapshot.locale, contractFingerprint, messages: freezeOwnRecord(entries), markupContract: tables.rmf2Contract });decodedArtifacts.add(artifact);
   return Object.freeze({ ok: true, value: artifact });
 }
 
-export async function decodeLocalePackV5(content, expectedLocale, integrityVerifier) {
+export async function decodeLocalePackV5(content, expectedLocale, integrityVerifier, tables) {
+  if (!isRecord(tables?.rmf2Contract) || !isRecord(tables.messageContracts)) throw new TypeError("The catalog's contract tables are required; import decodeLocalePack from dynamic.js.");
   if (!(content instanceof Uint8Array) || content.byteLength === 0) return failure("RTR0023/malformed");
   if (content.byteLength > limits.maximumDocumentBytes) return failure("RTR0023/limit-exceeded");
   const snapshot = new Uint8Array(content);
   if (integrityVerifier) { try { if (!await integrityVerifier(new Uint8Array(snapshot))) return failure("RTR0023/integrity-rejected"); } catch { return failure("RTR0023/integrity-rejected"); } }
   if (!withinJsonDepth(snapshot, limits.maximumDepth)) return failure("RTR0023/limit-exceeded");
   let value; try { const text = new TextDecoder("utf-8", { fatal: true }).decode(snapshot); if (hasDuplicateJsonProperties(text)) return failure("RTR0023/malformed"); value = JSON.parse(text); } catch { return failure("RTR0023/malformed"); }
-  const result = decodeLocaleArtifactV5(value); if (!result.ok) return result;
+  const result = decodeLocaleArtifactV5(value, tables); if (!result.ok) return result;
   return result.value.locale === expectedLocale ? result : failure("RTR0023/locale-mismatch");
 }
 
@@ -679,7 +718,7 @@ export function decodeWireValue(value, type) {
   } catch { return failure(); }
 }
 
-function validateEnvelope(value) {
+function validateEnvelope(value, rmf2Contract) {
   const members=["artifactVersion","messageGrammarVersion","profile","catalog","locale","contractFingerprint","messages","markupContract"];
   if (!isRecord(value)) return "RTR0023/malformed";
   if (Object.keys(value).some(name=>!members.includes(name))) return "RTR0023/unknown-member";
@@ -699,7 +738,7 @@ function validateMessageWrapper(wrapper, contract, artifactLocale, key) {
   const wrapperMembers=["contentLocale","ast"];
   if (Object.keys(wrapper).some(name=>!wrapperMembers.includes(name))) return "unknown-member";
   if (!wrapperMembers.every(name=>Object.hasOwn(wrapper,name)) || typeof wrapper.contentLocale !== "string" || !localeSet.has(wrapper.contentLocale)) return "malformed-pattern";
-  if (artifactLocale !== null && rmf2Contract.messages?.[key]?.contentLocales?.[artifactLocale] !== wrapper.contentLocale) return "argument-contract-mismatch";
+  if (artifactLocale !== null && contract.contentLocales?.[artifactLocale] !== wrapper.contentLocale) return "argument-contract-mismatch";
   const ast = wrapper.ast, astMembers=["astVersion","profile","inputs","declarations","selectors","variants"];
   if (!isRecord(ast)) return "malformed-pattern";
   if (Object.keys(ast).some(name=>!astMembers.includes(name))) return "unknown-member";
@@ -738,7 +777,7 @@ function validateMessageWrapper(wrapper, contract, artifactLocale, key) {
     const vector = []; let all = true;
     for (let index = 0; index < variant.keys.length; index++) { const validated = validateKey(variant.keys[index], ast.selectors[index]); if (validated.error) return validated.error; vector.push(validated.value); all &&= validated.value === "*"; }
     const encoded = JSON.stringify(vector); if (vectors.has(encoded)) return "malformed-pattern"; vectors.add(encoded); fallback ||= all;
-    const stack = [], slotCounts = Object.create(null), slotRequirements = rmf2Contract.messages?.[key]?.slots ?? Object.create(null); let totalNodes = 0, textBytes = 0;
+    const stack = [], slotCounts = Object.create(null), slotRequirements = contract.slots; let totalNodes = 0, textBytes = 0;
     for (const node of variant.nodes) {
       if (++totalNodes > 4096) return "limit-exceeded";
       if (!isRecord(node) || typeof node.kind !== "string") return "malformed-pattern";
@@ -747,7 +786,7 @@ function validateMessageWrapper(wrapper, contract, artifactLocale, key) {
       else if (node.kind === "markup") {
         const memberError=closedMemberError(node,["kind","name","markupKind","options","annotations"]);if(memberError)return memberError==="unknown-member"?memberError:"argument-contract-mismatch";
         const annotationError=validateAnnotations(node.annotations,"argument-contract-mismatch");if(annotationError)return annotationError;
-        if (!validName(node.name,true) || !["open","close","standalone"].includes(node.markupKind) || !Object.hasOwn(rmf2Contract.contracts,node.name)) return "argument-contract-mismatch";
+        if (!validName(node.name,true) || !["open","close","standalone"].includes(node.markupKind) || !Object.hasOwn(markupContracts,node.name)) return "argument-contract-mismatch";
         const markupError = validateMarkupNode(node,symbols,slotRequirements,slotCounts,stack); if (markupError) return markupError;
         if (node.markupKind === "open") { stack.push(node.name); if (stack.length > 16) return "limit-exceeded"; } else if (node.markupKind === "close" && stack.pop() !== node.name) return "malformed-pattern";
       }
@@ -757,8 +796,8 @@ function validateMessageWrapper(wrapper, contract, artifactLocale, key) {
     for (const [slot,bounds] of Object.entries(slotRequirements)) if ((slotCounts[slot] ?? 0) < bounds.min || (slotCounts[slot] ?? 0) > bounds.max) return "argument-contract-mismatch";
     // Document profile v1: block rules and leaf invariants are malformed patterns; a skeleton
     // outside the locked source skeletons is a structure mismatch. Inline messages stay inline.
-    if (rmf2Contract.messages?.[key]?.content === "document") { const skeleton = documentSkeleton(variant.nodes); if (skeleton === null) return "malformed-pattern"; if (!rmf2Contract.messages[key].skeletons.includes(skeleton)) return "document-structure-mismatch"; }
-    else if (variant.nodes.some(node => node.kind === "markup" && rmf2Contract.contracts[node.name].placement !== "inline")) return "malformed-pattern";
+    if (contract.content === "document") { const skeleton = documentSkeleton(variant.nodes); if (skeleton === null) return "malformed-pattern"; if (!contract.skeletons.includes(skeleton)) return "document-structure-mismatch"; }
+    else if (variant.nodes.some(node => node.kind === "markup" && markupContracts[node.name].placement !== "inline")) return "malformed-pattern";
   }
   return fallback ? null : "malformed-pattern";
 }
@@ -768,7 +807,7 @@ function validateMessageWrapper(wrapper, contract, artifactLocale, key) {
 function documentSkeleton(nodes) {
   const frames = [{ model: "root", first: true }]; let encoded = "", leaf = [];
   for (const node of nodes) {
-    const frame = frames.at(-1), contract = node.kind === "markup" ? rmf2Contract.contracts[node.name] : null;
+    const frame = frames.at(-1), contract = node.kind === "markup" ? markupContracts[node.name] : null;
     if (frame.model === "root" || frame.model === "list") {
       if (!contract) return null;
       if (node.markupKind === "close") { frames.pop(); if (frame.model === "list") encoded += ")"; continue; }
@@ -814,11 +853,11 @@ function validateOptions(options, symbols, fn) {
   return null;
 }
 function validateMarkupNode(node,symbols,requirements,counts,stack) {
-  const contract=rmf2Contract.contracts[node.name],functional=["runic:link","runic:action","runic:icon"].includes(node.name);
+  const contract=markupContracts[node.name],functional=["runic:link","runic:action","runic:icon"].includes(node.name);
   if(!Array.isArray(node.options))return "argument-contract-mismatch";
   if(node.markupKind==="close") return node.options.length===0?null:"argument-contract-mismatch";
   if((contract.kind==="standalone")!==(node.markupKind==="standalone"))return "argument-contract-mismatch";
-  if(contract.interactive&&stack.some(name=>rmf2Contract.contracts[name]?.interactive))return "argument-contract-mismatch";
+  if(contract.interactive&&stack.some(name=>markupContracts[name]?.interactive))return "argument-contract-mismatch";
   if(node.options.length>256)return "limit-exceeded";
   const values=Object.create(null);
   for(const option of node.options){const memberError=closedMemberError(option,["name","value"]);if(memberError)return memberError==="unknown-member"?memberError:"argument-contract-mismatch";const valueError=validateValue(option.value);if(valueError)return ["unknown-member","malformed"].includes(valueError)?valueError:"argument-contract-mismatch";if(!validName(option.name)||Object.hasOwn(values,option.name))return "argument-contract-mismatch";values[option.name]=option.value;}
@@ -950,7 +989,7 @@ function createRendererCore(factory, bindings = [], allowUnboundCustom = false, 
   const custom = new Map();
   for (const binding of bindings) {
     if (!isRecord(binding) || !isRecord(binding.contract) || typeof binding.render !== "function") throw new TypeError("Invalid markup renderer binding.");
-    const suppliedContract = binding.contract, declared = rmf2Contract.contracts[suppliedContract.name];
+    const suppliedContract = binding.contract, declared = markupContracts[suppliedContract.name];
     if (!declared || suppliedContract.name.startsWith("runic:") || custom.has(suppliedContract.name) || declared.kind !== suppliedContract.kind || declared.placement !== (suppliedContract.placement ?? "inline") || declared.children !== suppliedContract.children || declared.plainText !== suppliedContract.plainText || declared.interactive !== suppliedContract.interactive) throw new TypeError("Incompatible or duplicate renderer contract.");
     const suppliedOptions = suppliedContract.options ?? Object.create(null);
     if (!isRecord(suppliedOptions) || Object.keys(declared.options).length !== Object.keys(suppliedOptions).length || Object.entries(declared.options).some(([name,schema]) => {
@@ -960,18 +999,18 @@ function createRendererCore(factory, bindings = [], allowUnboundCustom = false, 
     custom.set(suppliedContract.name,binding.render);
   }
   function render(content,{slots=Object.create(null)}={}) {
-    const requirements=rmf2Contract.messages[content?.key]?.slots;if(!isRecord(content)||!["localized-content","localized-document"].includes(content.kind)||!requirements||!isRecord(slots))throw new TypeError("Unknown RMF2 content contract.");
-    const document=rmf2Contract.messages[content.key].content==="document";
+    const messageContract=isRecord(content)?structuredMessage(content.key):undefined,requirements=messageContract?.slots;if(!isRecord(content)||!["localized-content","localized-document"].includes(content.kind)||!requirements||!isRecord(slots))throw new TypeError("Unknown RMF2 content contract.");
+    const document=messageContract.content==="document";
     if(document!==(content.kind==="localized-document"))throw new TypeError("Unknown RMF2 content contract.");
     if(document!==documents)throw new TypeError(document?`'${content.key}' is a document message; render it with createDocumentRenderer.`:`'${content.key}' is an inline message; render it with createInlineRenderer.`);
     const validatedSlots=Object.create(null);for (const [reference,requirement] of Object.entries(requirements)) validatedSlots[reference]=validateSlotBinding(reference,requirement.kind,slots[reference]);
     const counts=Object.create(null);let count=0;
     function checkOptions(node,contract){let binding;for(const[name,value]of Object.entries(node.attributes)){if(name==="ref"&&["runic:link","runic:action","runic:icon"].includes(node.name)){binding=validatedSlots[value];if(requirements[value]?.kind!==node.name||!binding)throw new TypeError(`Invalid slot '${value}'.`);counts[value]=(counts[value]??0)+1;}else if(!contract.options[name]||!renderOption(contract.options[name],value))throw new TypeError(`Invalid option '${name}'.`);}if(["runic:link","runic:action","runic:icon"].includes(node.name)&&!binding)throw new TypeError("Missing functional slot ref.");for(const name of Object.keys(contract.options))if(!Object.hasOwn(node.attributes,name))throw new TypeError(`Missing option '${name}'.`);return binding;}
     // In documents an inline element's occurrence is <blockPath>/<index path>; inline messages keep <key>:<node occurrence>.
-    function visit(nodes,interactive=false,depth=0,prefix=null){if(depth>16)throw new RangeError("Inline nesting exceeds 16 levels.");return nodes.map((node,index)=>{if(++count>4096)throw new RangeError("Inline node limit exceeded.");if(node.kind==="text")return node;const contract=rmf2Contract.contracts[node.name];if(node.kind!=="element"||!contract||contract.placement!=="inline"||(contract.kind==="standalone")!==node.standalone||interactive&&contract.interactive)throw new TypeError("Unknown or invalid inline markup.");const binding=checkOptions(node,contract);const occurrence=prefix===null?`${content.key}:${node.occurrence}`:prefix+index;const element={name:node.name,children:visit(node.children,interactive||contract.interactive,depth+1,prefix===null?null:occurrence+"."),options:node.attributes,binding,occurrence,locale:content.locale,standalone:node.standalone};if(!custom.has(node.name)&&!node.name.startsWith("runic:")&&!allowUnboundCustom)throw new TypeError(`No renderer linked for '${node.name}'.`);return element;});}
-    function blocks(nodes,list,path,depth){const siblings=Object.create(null);return nodes.map(node=>{if(++count>4096)throw new RangeError("Document node limit exceeded.");const contract=node.kind==="element"?rmf2Contract.contracts[node.name]:undefined;if(!contract||node.standalone||contract.placement!==(list?"list-item":"block"))throw new TypeError("Invalid document structure.");if(depth+1>16)throw new RangeError("Document nesting exceeds 16 levels.");checkOptions(node,contract);const name=node.name.startsWith("runic:")?node.name.slice(6):node.name;siblings[name]=(siblings[name]??0)+1;const occurrence=`${path?path+"/":""}${name}[${siblings[name]}]`;return contract.children==="list-items"?{block:true,name:node.name,options:node.attributes,children:blocks(node.children,true,occurrence,depth+1),occurrence}:{block:true,name:node.name,options:node.attributes,children:visit(node.children,false,depth+1,occurrence+"/"),occurrence};});}
+    function visit(nodes,interactive=false,depth=0,prefix=null){if(depth>16)throw new RangeError("Inline nesting exceeds 16 levels.");return nodes.map((node,index)=>{if(++count>4096)throw new RangeError("Inline node limit exceeded.");if(node.kind==="text")return node;const contract=markupContracts[node.name];if(node.kind!=="element"||!contract||contract.placement!=="inline"||(contract.kind==="standalone")!==node.standalone||interactive&&contract.interactive)throw new TypeError("Unknown or invalid inline markup.");const binding=checkOptions(node,contract);const occurrence=prefix===null?`${content.key}:${node.occurrence}`:prefix+index;const element={name:node.name,children:visit(node.children,interactive||contract.interactive,depth+1,prefix===null?null:occurrence+"."),options:node.attributes,binding,occurrence,locale:content.locale,standalone:node.standalone};if(!custom.has(node.name)&&!node.name.startsWith("runic:")&&!allowUnboundCustom)throw new TypeError(`No renderer linked for '${node.name}'.`);return element;});}
+    function blocks(nodes,list,path,depth){const siblings=Object.create(null);return nodes.map(node=>{if(++count>4096)throw new RangeError("Document node limit exceeded.");const contract=node.kind==="element"?markupContracts[node.name]:undefined;if(!contract||node.standalone||contract.placement!==(list?"list-item":"block"))throw new TypeError("Invalid document structure.");if(depth+1>16)throw new RangeError("Document nesting exceeds 16 levels.");checkOptions(node,contract);const name=node.name.startsWith("runic:")?node.name.slice(6):node.name;siblings[name]=(siblings[name]??0)+1;const occurrence=`${path?path+"/":""}${name}[${siblings[name]}]`;return contract.children==="list-items"?{block:true,name:node.name,options:node.attributes,children:blocks(node.children,true,occurrence,depth+1),occurrence}:{block:true,name:node.name,options:node.attributes,children:visit(node.children,false,depth+1,occurrence+"/"),occurrence};});}
     const output=document?blocks(content.nodes,false,"",0):visit(content.nodes);for(const[slot,bounds]of Object.entries(requirements))if((counts[slot]??0)<bounds.min||(counts[slot]??0)>bounds.max)throw new TypeError(`Slot multiplicity mismatch for '${slot}'.`);
-    function materialize(node){if(node.kind==="text")return factory.text(node.value);if(node.block)return factory.block(node.name,node.options,Object.freeze(node.children.map(materialize)),Object.freeze({occurrence:node.occurrence,locale:content.locale}));const contract=rmf2Contract.contracts[node.name];const bound=custom.has(node.name)&&(!projection||["explicit","alternateText"].includes(contract?.plainText));if(projection&&!bound&&!node.name.startsWith("runic:")&&["omit","lineBreak"].includes(contract?.plainText))return contract.plainText==="lineBreak"?"\n":"";const element={...node,children:node.children.map(materialize)};return bound?custom.get(node.name)(element):factory.element(element);}
+    function materialize(node){if(node.kind==="text")return factory.text(node.value);if(node.block)return factory.block(node.name,node.options,Object.freeze(node.children.map(materialize)),Object.freeze({occurrence:node.occurrence,locale:content.locale}));const contract=markupContracts[node.name];const bound=custom.has(node.name)&&(!projection||["explicit","alternateText"].includes(contract?.plainText));if(projection&&!bound&&!node.name.startsWith("runic:")&&["omit","lineBreak"].includes(contract?.plainText))return contract.plainText==="lineBreak"?"\n":"";const element={...node,children:node.children.map(materialize)};return bound?custom.get(node.name)(element):factory.element(element);}
     return Object.freeze(output.map(materialize));
   }
   return Object.freeze({ render, extend(extra) { return createRendererCore(factory,[...bindings,...extra],allowUnboundCustom,documents,projection); } });
@@ -979,14 +1018,14 @@ function createRendererCore(factory, bindings = [], allowUnboundCustom = false, 
 function validateSlotBinding(reference,kind,binding){if(binding?.kind!==kind)throw new TypeError(`Missing or incompatible slot '${reference}'.`);return kind==="runic:link"?linkBinding(binding):kind==="runic:action"?actionBinding(binding):iconBinding(binding);}
 // The project's own markup contracts from runic.json, by name, in the form defineMarkup returns: pass one to
 // bindMarkup to replace a tag's default rendering without restating its contract.
-export const projectMarkup = freezeTrusted(Object.fromEntries(Object.entries(rmf2Contract.contracts)
+export const projectMarkup = freezeTrusted(Object.fromEntries(Object.entries(markupContracts)
   .filter(([name]) => !name.startsWith("runic:")).map(([name, contract]) => [name, { name, ...contract }])));
 export function defineMarkup(contract) { if (!isRecord(contract) || !validName(contract.name,true) || contract.name.startsWith("runic:") || !["paired","standalone"].includes(contract.kind) || contract.placement !== undefined && contract.placement !== "inline" || contract.children !== (contract.kind === "standalone" ? "none" : "inline") || typeof contract.interactive !== "boolean" || !["children","lineBreak","alternateText","explicit","omit"].includes(contract.plainText) || contract.options !== undefined && !isRecord(contract.options)) throw new TypeError("Invalid markup contract."); return cloneFreeze(contract); }
 export function bindMarkup(contract,render) { if (typeof render !== "function") throw new TypeError("A markup renderer is required."); return Object.freeze({contract,render}); }
 export function toPlainText(content,{slots=Object.create(null),allowActionLabels=false,annotateLinkDestinations=false,custom=[],listMarker="- "}={}) {
   if (typeof listMarker !== "string") throw new TypeError("The list marker must be a string.");
   const document = content?.kind === "localized-document";
-  const renderer=createRendererCore({text:value=>value,element({name,children,binding,locale}) { if (name==="runic:br") return "\n"; if (name==="runic:action"&&!allowActionLabels) throw new TypeError("Action labels require explicit projection policy."); if (name==="runic:icon") { if (binding?.decorative) return ""; const label=binding?.accessibleName?.(locale); if (typeof label!=="string"||!label.trim()) throw new TypeError("Meaningful icon alternate text is empty."); return label; } const contract=rmf2Contract.contracts[name]; if(!name.startsWith("runic:")&&contract?.plainText==="lineBreak")return "\n";if(!name.startsWith("runic:")&&contract?.plainText==="omit")return "";if(!name.startsWith("runic:")&&["explicit","alternateText"].includes(contract?.plainText))throw new TypeError("Custom markup requires an explicit plain-text adapter.");const text=children.join(""); return name==="runic:link"&&annotateLinkDestinations?`${text} (${binding.href})`:text; },
+  const renderer=createRendererCore({text:value=>value,element({name,children,binding,locale}) { if (name==="runic:br") return "\n"; if (name==="runic:action"&&!allowActionLabels) throw new TypeError("Action labels require explicit projection policy."); if (name==="runic:icon") { if (binding?.decorative) return ""; const label=binding?.accessibleName?.(locale); if (typeof label!=="string"||!label.trim()) throw new TypeError("Meaningful icon alternate text is empty."); return label; } const contract=markupContracts[name]; if(!name.startsWith("runic:")&&contract?.plainText==="lineBreak")return "\n";if(!name.startsWith("runic:")&&contract?.plainText==="omit")return "";if(!name.startsWith("runic:")&&["explicit","alternateText"].includes(contract?.plainText))throw new TypeError("Custom markup requires an explicit plain-text adapter.");const text=children.join(""); return name==="runic:link"&&annotateLinkDestinations?`${text} (${binding.href})`:text; },
     // Document projection (document profile v1): items are joined by one line break, further item lines are indented two spaces.
     block(name,options,children) { if (!["runic:ul","runic:ol"].includes(name)) return children.join(""); const start=name==="runic:ol"?Number(options.start):1; return children.map((item,index)=>(name==="runic:ol"?`${listNumber(start+index,options.marker)}. `:listMarker)+item.split("\n").map((line,lineIndex)=>lineIndex&&line?`  ${line}`:line).join("\n")).join("\n"); }},custom,true,document,true);
   // Empty blocks project to nothing and add no separator, so the text never starts or ends with a line break.

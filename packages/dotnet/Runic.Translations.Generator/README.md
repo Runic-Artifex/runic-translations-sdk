@@ -56,7 +56,19 @@ only. The encoded members, such as `text.r_6170706c69636174696f6e_r_7469746c65`
 (each path segment as `r_` plus UTF-8 hexadecimal bytes), remain the stable
 machine-facing contract. The readable file needs a `Runic.Translations`
 runtime with typed slot support; an older runtime keeps the encoded members and
-reports `RTR0068`. See the [.NET consumer quick start](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/quickstart-dotnet.md)
+reports `RTR0068`. Each generated member's documentation comment shows the base locale's text and
+the entry's comment ("The title is longer than {$max :integer} characters. —
+Shown when a note title is too long."), and each parameter its `@param`
+description, so hovering a member in the IDE shows what the message says.
+
+`AppText.References` creates a typed `TranslationReference` for each plain-text
+message, for a backend to send or store and a reader to resolve in its own
+locale (see [text references](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/transport.md)):
+`AppText.References.title_too_long(max: 80)`. It carries the catalog ID, the
+contract fingerprint, the arguments in their canonical transport form and, as
+fallback text, the base locale's text with these arguments. Set
+`"code": { ..., "referenceFallbackText": false }` in `runic.json` to leave the
+fallback text out. See the [.NET consumer quick start](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/quickstart-dotnet.md)
 for a complete template and console application workflow.
 
 The generator reports compiler diagnostics at source locations and writes no

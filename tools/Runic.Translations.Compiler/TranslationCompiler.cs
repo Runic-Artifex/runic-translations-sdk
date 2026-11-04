@@ -8,7 +8,7 @@ namespace Runic.Translations.Compiler;
 public static partial class TranslationCompiler
 {
     private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceRoots", "markup" };
-    private static readonly string[] CodeMembers = { "namespace", "className", "visibility" };
+    private static readonly string[] CodeMembers = { "namespace", "className", "visibility", "referenceFallbackText" };
     private static readonly string[] LocaleMembers = { "tag", "fallback" };
     private static readonly string[] ValidationMembers = { "translationCompleteness", "extraLocaleKeys", "emptyValues" };
     private static readonly string[] RuntimeMembers = { "unsupportedLocale", "missingKey" };
@@ -239,6 +239,12 @@ public static partial class TranslationCompiler
             if (visibility.Value.Kind != JsonKind.String || (visibility.Value.Text != "public" && visibility.Value.Text != "internal"))
                 diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "visibility must be 'public' or 'internal'.", source, visibility.Value.Span);
             else model.Visibility = visibility.Value.Text == "internal" ? TranslationVisibility.Internal : TranslationVisibility.Public;
+        }
+        if (value.Property("referenceFallbackText") is { } fallback)
+        {
+            if (fallback.Value.Kind is not (JsonKind.True or JsonKind.False))
+                diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "referenceFallbackText must be true or false.", source, fallback.Value.Span);
+            else model.ReferenceFallbackText = fallback.Value.Kind == JsonKind.True;
         }
     }
 
