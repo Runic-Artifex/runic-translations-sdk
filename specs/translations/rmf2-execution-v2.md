@@ -332,7 +332,8 @@ formatting-locale cases; .NET and ESM must produce each expected string. Its
 documented tolerance covers characters that platform ICU versions write
 differently for the same punctuation: the space (U+0020, U+00A0, U+202F) and the
 apostrophe (U+0027, U+2019, as in the `de-CH` group separator `1'234`). Every
-other character must match exactly. CI runs the corpus on Linux, Windows
+other character must match exactly, except that a case can list `alternates`:
+the exact output of a platform ICU whose locale data differs. CI runs the corpus on Linux, Windows
 (`icu.dll`) and macOS (Apple's ICU), with the ESM half in Bun and Node. Platform
 data can also differ for
 non-Gregorian default calendars and, in ESM, for dates before the Gregorian

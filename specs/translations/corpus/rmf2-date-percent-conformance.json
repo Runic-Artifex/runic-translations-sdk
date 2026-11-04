@@ -86,7 +86,7 @@
     {"id":"ja-date-short","locale":"ja","message":"{{{$d :date style=short}}}","arguments":{"d":{"type":"date","value":"2026-11-04"}},"expected":"2026/11/04"},
     {"id":"ja-date-medium","locale":"ja","message":"{{{$d :date style=medium}}}","arguments":{"d":{"type":"date","value":"2026-11-04"}},"expected":"2026/11/04"},
     {"id":"ja-date-long","locale":"ja","message":"{{{$d :date style=long}}}","arguments":{"d":{"type":"date","value":"2026-11-04"}},"expected":"2026年11月4日"},
-    {"id":"ja-date-full","locale":"ja","message":"{{{$d :date style=full}}}","arguments":{"d":{"type":"date","value":"2026-11-04"}},"expected":"2026年11月4日水曜日"},
+    {"id":"ja-date-full","locale":"ja","message":"{{{$d :date style=full}}}","arguments":{"d":{"type":"date","value":"2026-11-04"}},"expected":"2026年11月4日水曜日","alternates":["2026年11月4日 水曜日"]},
     {"id":"ja-time-short","locale":"ja","message":"{{{$t :time style=short}}}","arguments":{"t":{"type":"time","value":"13:05:09"}},"expected":"13:05"},
     {"id":"ja-time-medium","locale":"ja","message":"{{{$t :time style=medium}}}","arguments":{"t":{"type":"time","value":"13:05:09"}},"expected":"13:05:09"},
     {"id":"ja-time-long","locale":"ja","message":"{{{$t :time style=long}}}","arguments":{"t":{"type":"time","value":"13:05:09"}},"expected":"13:05:09"},

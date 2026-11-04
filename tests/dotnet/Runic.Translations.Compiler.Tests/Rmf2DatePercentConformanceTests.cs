@@ -21,14 +21,16 @@ namespace Runic.Translations.Compiler.Tests;
 [Category("rmf2-semantic-v5")]
 internal sealed class Rmf2DatePercentConformanceTests
 {
-    private sealed record Vector(string Id, string Locale, string Requested, string Message, JsonObject Arguments, string Expected);
+    // Alternates are documented platform ICU variants of the expected string (see the corpus README).
+    private sealed record Vector(string Id, string Locale, string Requested, string Message, JsonObject Arguments, string Expected, string[] Alternates);
 
     private static List<Vector> Vectors()
     {
         var corpus = JsonNode.Parse(File.ReadAllBytes(RepositoryPaths.Resolve("specs", "translations", "corpus", "rmf2-date-percent-conformance.json")))!;
         var vectors = corpus["cases"]!.AsArray().Select(item => new Vector(
             item!["id"]!.GetValue<string>(), item["locale"]!.GetValue<string>(), item["requested"]?.GetValue<string>() ?? item["locale"]!.GetValue<string>(),
-            item["message"]!.GetValue<string>(), item["arguments"]!.AsObject(), item["expected"]!.GetValue<string>())).ToList();
+            item["message"]!.GetValue<string>(), item["arguments"]!.AsObject(), item["expected"]!.GetValue<string>(),
+            item["alternates"]?.AsArray().Select(value => value!.GetValue<string>()).ToArray() ?? [])).ToList();
         Assert.True(vectors.Count > 100, "The date and percent vectors are missing.");
         Assert.Equal(vectors.Count, vectors.Select(vector => vector.Id).Distinct(StringComparer.Ordinal).Count(), "Duplicate date and percent vector ids.");
         foreach (string family in TranslationCapabilityRegistry.CardinalLanguages)
@@ -92,8 +94,16 @@ internal sealed class Rmf2DatePercentConformanceTests
 
         void Check(Vector vector, string actual, string route)
         {
-            if (!Matches(vector.Expected, actual))
-                failures.Add(vector.Id + "/" + route + ": expected " + JsonSerializer.Serialize(vector.Expected) + ", got " + JsonSerializer.Serialize(actual));
+            if (!Matches(vector.Expected, actual) && !vector.Alternates.Any(alternate => Matches(alternate, actual)))
+                failures.Add(vector.Id + "/" + route + ": expected " + JsonSerializer.Serialize(vector.Expected) + ", got " + JsonSerializer.Serialize(actual) + Patterns(vector));
+        }
+
+        // The platform's date pattern lists, from which the .NET medium and long patterns are derived.
+        static string Patterns(Vector vector)
+        {
+            if (!vector.Message.Contains(":date", StringComparison.Ordinal)) return "";
+            DateTimeFormatInfo format = CultureInfo.GetCultureInfo(vector.Requested).DateTimeFormat;
+            return " (" + vector.Requested + " d: " + JsonSerializer.Serialize(format.GetAllDateTimePatterns('d')) + ", D: " + JsonSerializer.Serialize(format.GetAllDateTimePatterns('D')) + ")";
         }
     }
 
@@ -110,7 +120,7 @@ internal sealed class Rmf2DatePercentConformanceTests
                 File.WriteAllBytes(Path.Combine(directory, "artifact.json"), Rmf2LocaleArtifactV5.Render(project, group.Key).GetUtf8Bytes());
                 var cases = new JsonArray(vectors.Select((vector, index) => (JsonNode)new JsonObject
                 {
-                    ["id"] = vector.Id, ["key"] = "vector" + index, ["requested"] = vector.Requested, ["arguments"] = vector.Arguments.DeepClone(), ["expected"] = vector.Expected,
+                    ["id"] = vector.Id, ["key"] = "vector" + index, ["requested"] = vector.Requested, ["arguments"] = vector.Arguments.DeepClone(), ["expected"] = vector.Expected, ["alternates"] = new JsonArray(vector.Alternates.Select(value => (JsonNode)value).ToArray()),
                 }).ToArray());
                 string script = Path.Combine(directory, "date-vectors.mjs");
                 File.WriteAllText(script, "import { readFile } from \"node:fs/promises\";\nimport { m } from \"./dates.esm-v5/messages.js\";\n" +
@@ -121,13 +131,14 @@ internal sealed class Rmf2DatePercentConformanceTests
                     // U+0027 or U+2019 for the same apostrophe (de-CH grouping).
                     const tolerant = value => value.replace(/[\u00A0\u202F]/g, " ").replace(/\u2019/g, "'");
                     const same = (left, right) => left === right || tolerant(left) === tolerant(right);
+                    const accepted = (actual, item) => [item.expected, ...item.alternates].some(value => same(actual, value));
                     const failures = [];
                     for (const item of cases) {
                       const inputs = Object.fromEntries(Object.entries(item.arguments).map(([name, value]) => [name, value.type === "int64" ? BigInt(value.value) : value.value]));
                       const generated = m[item.key](inputs, { locale: item.requested });
-                      if (!same(generated, item.expected)) failures.push(`${item.id}: expected ${JSON.stringify(item.expected)}, generated ${JSON.stringify(generated)}`);
+                      if (!accepted(generated, item)) failures.push(`${item.id}: expected ${JSON.stringify(item.expected)}, generated ${JSON.stringify(generated)}`);
                       const dynamic = formatDynamicMessage(artifact.value, item.key, inputs, { locale: item.requested });
-                      if (!same(dynamic, item.expected)) failures.push(`${item.id}: expected ${JSON.stringify(item.expected)}, dynamic ${JSON.stringify(dynamic)}`);
+                      if (!accepted(dynamic, item)) failures.push(`${item.id}: expected ${JSON.stringify(item.expected)}, dynamic ${JSON.stringify(dynamic)}`);
                     }
                     if (failures.length) throw new Error(failures.join("\n"));
                     """, new UTF8Encoding(false));

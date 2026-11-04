@@ -34,7 +34,10 @@ The current release contract is exercised by eight complementary fixtures:
   the list corpus. The only tolerance is for punctuation that platform ICU
   versions write differently: U+0020, U+00A0 and U+202F count as the same space,
   and U+0027 and U+2019 as the same apostrophe (the `de-CH` group separator, `'`
-  in ICU 78 and `’` in older builds). CI runs it on Linux, Windows and macOS, with
+  in ICU 78 and `’` in older builds). A case may also list `alternates`, the
+  exact output of a platform ICU whose locale data differs (Apple's ICU writes
+  `2026年11月4日 水曜日` for the Japanese full date); each route must produce the
+  expected string or one of them. CI runs it on Linux, Windows and macOS, with
   the ESM half in Bun and Node;
 - [`transport-v2-persisted-references.json`](transport-v2-persisted-references.json)
   is the cross-backend oracle for [persisted text references](../transport-v2.md):
