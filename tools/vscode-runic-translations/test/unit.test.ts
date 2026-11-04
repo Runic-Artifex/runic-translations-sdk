@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync, realpathSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, symlinkSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { serverLaunch, sourceWatchRoots } from "../src/server.js";
@@ -7,6 +7,7 @@ import { resolvePreviewHtml } from "../src/preview.js";
 import type { Preview } from "../src/preview.js";
 import { PreviewSession, sampleChoices, type PreviewHost, type PreviewState, type Samples } from "../src/preview-session.js";
 import { ForwardedWatchers, type DisposableLike, type WatcherLike } from "../src/watchers.js";
+import { OneTimeNotice, errorSummary, statusPresentation, type DocumentInfo } from "../src/status.js";
 
 class MockWatcher implements WatcherLike<string> {
   readonly created: ((uri: string) => void)[] = [];
@@ -221,4 +222,44 @@ test("a failed older render cannot publish an error over a newer preview", async
   await session.open(target("new")); rendering.reject(new Error("old failure")); await old;
   expect(failures).toHaveLength(0);
   expect(published.map(state => state.html)).toEqual(["new"]);
+});
+test("status shows the server state, the catalog and the file's locale", () => {
+  const info: DocumentInfo = { project: "file:///w/runic.json", catalog: "app", baseLocale: "en", locale: "de" };
+  expect(statusPresentation("running", info)).toEqual({ text: "$(globe) Runic: app · de", tooltip: "Runic language server: running\nCatalog: app\nLocale: de\nSelect to show the Runic Translations output.", error: false });
+  expect(statusPresentation("running", { ...info, locale: "EN" }).tooltip).toContain("Locale: EN (base)");
+  // runic.json has a catalog but no locale.
+  expect(statusPresentation("running", { ...info, locale: null }).text).toBe("$(globe) Runic: app");
+  expect(statusPresentation("running").text).toBe("$(globe) Runic");
+  expect(statusPresentation("starting").text).toBe("$(sync~spin) Runic: starting");
+  const failed = statusPresentation("failed", undefined, "No project-local runic-translations tool was found.");
+  expect(failed.error).toBe(true);
+  expect(failed.text).toBe("$(error) Runic: not running");
+  expect(failed.tooltip).toContain("No project-local runic-translations tool was found.");
+  expect(statusPresentation("stopped").text).toBe("$(circle-slash) Runic: stopped");
+});
+test("start failures are announced once per folder until reset", () => {
+  const notice = new OneTimeNotice();
+  expect(notice.claim("a")).toBe(true);
+  expect(notice.claim("a")).toBe(false);
+  expect(notice.claim("b")).toBe(true);
+  notice.reset("a");
+  expect(notice.claim("a")).toBe(true);
+  notice.reset();
+  expect(notice.claim("b")).toBe(true);
+  expect(errorSummary(new Error("Error: first line\nstack detail"))).toBe("first line");
+  expect(errorSummary("plain")).toBe("plain");
+});
+test("the VSIX validates runic.json against the schema copied from the specification at build time", () => {
+  const here = join(import.meta.dir, "..");
+  const manifest = JSON.parse(readFileSync(join(here, "package.json"), "utf8"));
+  expect(manifest.contributes.jsonValidation).toEqual([{ fileMatch: "**/runic.json", url: "./dist/schemas/project-v1.schema.json" }]);
+  const assets = readFileSync(join(here, "package-assets.mjs"), "utf8");
+  expect(assets).toContain("join('dist', 'schemas', 'project-v1.schema.json')");
+  expect(assets).toContain("'specs', 'translations', 'schemas', 'project-v1.schema.json'");
+  const schema = JSON.parse(readFileSync(join(here, "..", "..", "specs", "translations", "schemas", "project-v1.schema.json"), "utf8"));
+  expect(schema.$id).toBe("https://runic-artifex.eu/schemas/translations/project-v1.schema.json");
+  // Every command the extension contributes is listed in the README's parity table.
+  const readme = readFileSync(join(here, "README.md"), "utf8");
+  for (const command of manifest.contributes.commands as { title: string }[])
+    expect(readme).toContain(command.title.replace(/^Runic: /, ""));
 });

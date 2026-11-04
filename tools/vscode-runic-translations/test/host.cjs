@@ -24,6 +24,18 @@ exports.run = async function () {
   assert.ok(JSON.stringify(rendered.runs).includes('runic:action'));
   assert.ok(JSON.stringify(rendered.runs).includes('positive'));
   await assert.rejects(client.sendRequest('workspace/executeCommand', {command: 'runic.renderPreview', arguments: [en.toString(), 'payment', 'en', {count: 'invalid', tone: 'positive'}]}));
+  stage = 'status bar and whole-catalog diagnostics';
+  await waitFor(() => api.status() === '$(globe) Runic: checkout · en', `Status bar did not show the catalog and locale: ${api.status()}`);
+  assert.equal(api.serverState(en), 'running');
+  // A catalog error in a closed translation reaches the Problems view with its documentation link.
+  const de = vscode.Uri.joinPath(root, 'de.rmf2');
+  const fs = require('node:fs');
+  const german = fs.readFileSync(de.fsPath, 'utf8');
+  fs.writeFileSync(de.fsPath, german.replace('plain = Zahlungsdetails', 'plain = Zahlungsdetails {$extra}'));
+  await waitFor(() => vscode.languages.getDiagnostics(de).some(item => /^RTR\d{4}$/.test(String(item.code?.value)) &&
+    String(item.code?.target).endsWith(`#${String(item.code.value).toLowerCase()}`)), 'The closed translation did not report its catalog diagnostic with a link');
+  fs.writeFileSync(de.fsPath, german);
+  await waitFor(() => vscode.languages.getDiagnostics(de).length === 0, 'Fixing the closed translation did not clear its diagnostics');
   stage = 'all examples and session sample reuse';
   // Two samples in an unsaved buffer must both be exposed by the compiler and
   // selecting the second one must skip per-input prompts and survive reopening.

@@ -223,6 +223,145 @@ internal sealed class Rmf2DiagnosticLspTests
         }
     }
 
+    private const string PlainProject = """{"schemaVersion":1,"catalog":"app","code":{"namespace":"Example","className":"Text"},"baseLocale":"en","locales":["en","de"]}""";
+
+    [Test, DisplayName("LSP publishes catalog diagnostics of closed project files with documentation links")]
+    public void ProjectFileDiagnostics()
+    {
+        using TemporaryDirectory temporary = new();
+        File.WriteAllText(temporary.Resolve("runic.json"), PlainProject);
+        File.WriteAllText(temporary.Resolve("en.rmf2"), "title = Hello {$name}\n");
+        const string brokenGerman = "title = Hallo {$name} {$extra}\n";
+        File.WriteAllText(temporary.Resolve("de.rmf2"), brokenGerman);
+        string enUri = new Uri(temporary.Resolve("en.rmf2")).AbsoluteUri, deUri = new Uri(temporary.Resolve("de.rmf2")).AbsoluteUri;
+        using Session session = new(temporary.Path);
+        session.Request("initialize", new JsonObject { ["rootUri"] = new Uri(temporary.Path).AbsoluteUri, ["capabilities"] = new JsonObject {
+            ["textDocument"] = new JsonObject { ["publishDiagnostics"] = new JsonObject { ["codeDescriptionSupport"] = true } } } });
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = enUri, ["version"] = 1, ["text"] = "title = Hello {$name}\n" } });
+        Flush(session, enUri);
+
+        // The German file is closed, yet its catalog error reaches the client with a link to its catalog entry.
+        JsonArray closed = LastDiagnostics(session, deUri);
+        Assert.True(closed.Count > 0, "The closed translation's catalog diagnostic was not published.");
+        JsonNode diagnostic = closed[0]!;
+        string code = diagnostic["code"]!.GetValue<string>();
+        Assert.True(code.StartsWith("RTR", StringComparison.Ordinal), closed.ToJsonString());
+        Assert.Equal(0, diagnostic["range"]!["start"]!["line"]!.GetValue<int>());
+        // The range is mapped from the saved file: the message name `title`.
+        Assert.Equal(5, diagnostic["range"]!["end"]!["character"]!.GetValue<int>(), closed.ToJsonString());
+        string href = diagnostic["codeDescription"]?["href"]?.GetValue<string>() ?? "";
+        Assert.True(href.StartsWith("https://github.com/Runic-Artifex/runic-translations-sdk/blob/v", StringComparison.Ordinal) &&
+            href.EndsWith("/docs/guides/translations/diagnostics.md#" + code.ToLowerInvariant(), StringComparison.Ordinal), href);
+        int before = session.Publications.Count;
+        // An unrelated keystroke revalidates the project without republishing unchanged closed files.
+        session.Notify("textDocument/didChange", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = enUri, ["version"] = 2 },
+            ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = "title = Hello, {$name}\n" }) });
+        Flush(session, enUri);
+        Assert.False(session.Publications.Skip(before).Any(frame => frame["params"]?["uri"]?.GetValue<string>() == deUri), "An unchanged closed file was republished.");
+
+        // Opening the file hands its diagnostics to the buffer; closing it returns them to the saved file.
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = deUri, ["version"] = 1, ["text"] = "title = Hallo {$name}\n" } });
+        Flush(session, enUri);
+        Assert.Equal(0, LastDiagnostics(session, deUri).Count, "The fixed open buffer kept the saved file's diagnostics.");
+        session.Notify("textDocument/didClose", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = deUri } });
+        Flush(session, enUri);
+        Assert.True(LastDiagnostics(session, deUri).Count > 0, "Closing the unsaved fix did not restore the saved file's diagnostics.");
+
+        // Fixing the saved file clears it after the watched-file notification.
+        File.WriteAllText(temporary.Resolve("de.rmf2"), "title = Hallo {$name}\n");
+        session.Notify("workspace/didChangeWatchedFiles", new JsonObject { ["changes"] = new JsonArray(new JsonObject { ["uri"] = deUri, ["type"] = 2 }) });
+        Flush(session, enUri);
+        Assert.Equal(0, LastDiagnostics(session, deUri).Count, "The fixed saved file kept its diagnostics.");
+
+        // When the last buffer of the project closes, its closed files are cleared too.
+        File.WriteAllText(temporary.Resolve("de.rmf2"), brokenGerman);
+        session.Notify("workspace/didChangeWatchedFiles", new JsonObject { ["changes"] = new JsonArray(new JsonObject { ["uri"] = deUri, ["type"] = 2 }) });
+        Flush(session, enUri);
+        Assert.True(LastDiagnostics(session, deUri).Count > 0, "The saved regression was not published.");
+        session.Notify("textDocument/didClose", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = enUri } });
+        session.Request("textDocument/hover", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = enUri }, ["position"] = Position(0, 0) });
+        Assert.Equal(0, LastDiagnostics(session, deUri).Count, "The closed project's file diagnostics were not cleared.");
+    }
+
+    [Test, DisplayName("LSP sends documentation links only to clients that support them")]
+    public void CodeDescriptionCapability()
+    {
+        using TemporaryDirectory temporary = new();
+        File.WriteAllText(temporary.Resolve("runic.json"), PlainProject);
+        File.WriteAllText(temporary.Resolve("en.rmf2"), "title = Hello {$name}\n");
+        File.WriteAllText(temporary.Resolve("de.rmf2"), "title = Hallo {$name} {$extra}\n");
+        string enUri = new Uri(temporary.Resolve("en.rmf2")).AbsoluteUri, deUri = new Uri(temporary.Resolve("de.rmf2")).AbsoluteUri;
+        using Session session = new(temporary.Path);
+        session.Request("initialize", new JsonObject { ["rootUri"] = new Uri(temporary.Path).AbsoluteUri, ["capabilities"] = new JsonObject() });
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = enUri, ["version"] = 1, ["text"] = "title = Hello {$name}\n" } });
+        Flush(session, enUri);
+        JsonArray diagnostics = LastDiagnostics(session, deUri);
+        Assert.True(diagnostics.Count > 0, "The closed translation's catalog diagnostic was not published.");
+        Assert.True(diagnostics.All(item => item?["codeDescription"] is null), diagnostics.ToJsonString());
+    }
+
+    [Test, DisplayName("LSP document info names the owning catalog and the file's locale")]
+    public void DocumentInfo()
+    {
+        using TemporaryDirectory temporary = new();
+        File.WriteAllText(temporary.Resolve("runic.json"), PlainProject);
+        File.WriteAllText(temporary.Resolve("en.rmf2"), "title = Hello\n");
+        string deUri = new Uri(temporary.Resolve("de.rmf2")).AbsoluteUri, configUri = new Uri(temporary.Resolve("runic.json")).AbsoluteUri;
+        using Session session = new(temporary.Path);
+        session.Request("initialize", new JsonObject { ["rootUri"] = new Uri(temporary.Path).AbsoluteUri, ["capabilities"] = new JsonObject() });
+        // A new unsaved translation already belongs to its catalog.
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = deUri, ["version"] = 1, ["text"] = "title = Hallo\n" } });
+        JsonNode info = session.Request("runic/documentInfo", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = deUri } })["result"]!;
+        Assert.Equal("app", info["catalog"]?.GetValue<string>(), info.ToJsonString());
+        Assert.Equal("de", info["locale"]?.GetValue<string>(), info.ToJsonString());
+        Assert.Equal("en", info["baseLocale"]?.GetValue<string>(), info.ToJsonString());
+        Assert.Equal(configUri, info["project"]?.GetValue<string>(), info.ToJsonString());
+        // An unsaved catalog rename in the open manifest is what the status shows.
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = configUri, ["version"] = 1, ["text"] = PlainProject.Replace("\"app\"", "\"shop\"", StringComparison.Ordinal) } });
+        JsonNode config = session.Request("runic/documentInfo", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = configUri } })["result"]!;
+        Assert.Equal("shop", config["catalog"]?.GetValue<string>(), config.ToJsonString());
+        Assert.True(config["locale"] is null, config.ToJsonString());
+    }
+
+    [Test, DisplayName("LSP hover on a translation shows the base text and its description")]
+    public void TranslatorContextHover()
+    {
+        using TemporaryDirectory temporary = new();
+        File.WriteAllText(temporary.Resolve("runic.json"), PlainProject);
+        File.WriteAllText(temporary.Resolve("en.rmf2"), "# Shown on the toolbar.\n@param $name - Who is greeted\ntitle = Hello {$name}\n");
+        const string german = "# Kurz halten.\ntitle = Hallo {$name}\n";
+        File.WriteAllText(temporary.Resolve("de.rmf2"), german);
+        string enUri = new Uri(temporary.Resolve("en.rmf2")).AbsoluteUri, deUri = new Uri(temporary.Resolve("de.rmf2")).AbsoluteUri;
+        using Session session = new(temporary.Path);
+        session.Request("initialize", new JsonObject { ["rootUri"] = new Uri(temporary.Path).AbsoluteUri, ["capabilities"] = new JsonObject() });
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = deUri, ["version"] = 1, ["text"] = german } });
+        string hover = session.Request("textDocument/hover", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = deUri }, ["position"] = Position(1, 1) })
+            ["result"]!["contents"]!["value"]!.GetValue<string>();
+        Assert.Contains("Base text (en): Hello {$name}", hover);
+        Assert.Contains("Description: Shown on the toolbar.", hover);
+        Assert.Contains("@param $name - Who is greeted", hover);
+        Assert.Contains("Kurz halten.", hover);
+        Assert.Contains("Content locale: de", hover);
+        // An unsaved base buffer is the base text the translator sees.
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = enUri, ["version"] = 1, ["text"] = "# Shown on the toolbar.\ntitle =\n    Hello\n    {$name}\n" } });
+        hover = session.Request("textDocument/hover", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = deUri }, ["position"] = Position(1, 1) })
+            ["result"]!["contents"]!["value"]!.GetValue<string>();
+        Assert.Contains("Base text (en):\n  Hello\n  {$name}", hover);
+        // The base file itself repeats no base text.
+        string baseHover = session.Request("textDocument/hover", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = enUri }, ["position"] = Position(1, 1) })
+            ["result"]!["contents"]!["value"]!.GetValue<string>();
+        Assert.False(baseHover.Contains("Base text", StringComparison.Ordinal), baseHover);
+        Assert.Contains("Shown on the toolbar.", baseHover);
+    }
+
+    // Requests are answered in order, so every notification sent before is processed once this returns.
+    private static void Flush(Session session, string uri) =>
+        session.Request("textDocument/documentSymbol", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = uri } });
+
+    private static JsonArray LastDiagnostics(Session session, string uri) =>
+        session.Publications.Last(frame => frame["method"]?.GetValue<string>() == "textDocument/publishDiagnostics" &&
+            frame["params"]?["uri"]?.GetValue<string>() == uri)["params"]!["diagnostics"]!.AsArray();
+
     private static JsonObject Position(int line, int character) => new() { ["line"] = line, ["character"] = character };
 
     internal sealed class Session : IDisposable
