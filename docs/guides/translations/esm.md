@@ -99,6 +99,23 @@ the listener. Date-time inputs (`Date | string`) accept a `Date` or an ISO 8601
 string with an optional fraction and `Z` or an offset; sub-second digits are
 dropped. See [the RMF2 guide](rmf2.md) for the date, time and percent styles.
 
+`createLocaleSource({ initialLocale: 'de-CH' })` keeps the requested tag beside
+the catalog locale: `getLocale()` returns `de` and `getRequestedLocale()`
+`de-CH`, and the Svelte adapter's `messageOptions` and `useMessageLocale` pass
+the requested tag to message calls. `setLocale` with the current catalog locale
+keeps a regional tag, so a navigation to a `/de` route keeps Swiss formatting.
+
+`timeZone=local` formats in the zone of the process, read on every call. On the
+server that is the server's zone, which differs from the visitor's after
+hydration. The generated `/server` entry takes the visitor's zone per request:
+`runWithLocale(locale, render, { requestedLocale: 'de-CH', timeZone: zone })`,
+where `zone` comes from a cookie or header the app sets in the browser from
+`Intl.DateTimeFormat().resolvedOptions().timeZone`; a zone the engine does not
+know falls back to the server's. Elsewhere, `configureTimeZoneResolver(() =>
+zone)` installs the zone that `local` means and returns a function that removes
+it. Until a request carries the zone, render local dates in the browser only, or
+pass an explicit `timeZone`.
+
 `localeDirection(locale)` returns `"rtl"` or `"ltr"` for any valid BCP 47
 tag, not only the catalog's locales, so the page can set its direction with
 the language:

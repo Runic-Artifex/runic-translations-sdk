@@ -207,8 +207,12 @@ internal sealed class Rmf2V1CorpusTests
     // rules, in the requested locale when it shares the content language, accepts Date and offset date-time inputs and
     // exports getRequestedLocale, getMessageLocale and onFallback; message modules pass the requested locale;
     // transport.js writes a Date input; runtime.d.ts and messages.d.ts declare them, in both digests.
-    private const string EncodedOutputDigest = "8b0817cfac99dd805964681e3fbe23bfb3df032d552b99df8971ab261a1dc137";
-    private const string HiddenEncodedOutputDigest = "0f61bf990a3ec0d327d2ef41e767fa21f41fbb76cad1647b92e433cbfdc59152";
+    // Re-pinned for the TC review: runtime.js compares implied scripts and drops extensions for the formatting locale,
+    // reads the local zone per call with configureTimeZoneResolver, writes other calendars' full years and one bidi mark
+    // per run, and keeps the requested tag in createLocaleSource; server.js scopes the requested tag and zone per
+    // request; runtime.d.ts and server.d.ts declare them, in both digests.
+    private const string EncodedOutputDigest = "c55183c35b3a19de5bdd53f0f9bc5e33e1de8eb92294ed897c8d0676d97695df";
+    private const string HiddenEncodedOutputDigest = "b4a04adc6d53f11340ff123a816b2270d9da0d6f41a02bc6479ed273c14da2f7";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

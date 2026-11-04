@@ -41,7 +41,7 @@ internal sealed class LocalizedFormattingTests
         var iso = Single(TextArgumentType.DateTime, "datetime", "en", new CompiledRmf2Option("timeZone", Text("Asia/Tokyo")));
         Assert.Equal("2026-11-04T20:30:00Z", iso.Format([new("value", Instant)], "en"));
         var unknown = Single(TextArgumentType.DateTime, "datetime", "en", new CompiledRmf2Option("style", Text("short")), new CompiledRmf2Option("timeZone", Text("Mars/Olympus_Mons")));
-        Assert.Throws<TranslationFormatException>(() => unknown.Format([new("value", Instant)], "en"));
+        Assert.Throws<TranslationFormatException>(() => unknown.Format([new("value", Instant)], "en"), "The time zone 'Mars/Olympus_Mons' is not available");
         Assert.Throws<ArgumentException>(() => Single(TextArgumentType.DateTime, "datetime", "en", new CompiledRmf2Option("timeZone", Text("UTC+1 hour"))));
     }
 
@@ -94,6 +94,36 @@ internal sealed class LocalizedFormattingTests
         Assert.Equal("04/11/2026", date.Format([new("value", new DateOnly(2026, 11, 4))], "en-GB"));
     }
 
+    [Test, DisplayName("the formatting locale needs the same implied script and drops extensions")]
+    [Arguments("sr", "sr-Latn", "sr")]
+    [Arguments("sr", "sr-Latn-RS", "sr")]
+    [Arguments("sr", "sr-RS", "sr-RS")]
+    [Arguments("sr", "sr-Cyrl-BA", "sr-Cyrl-BA")]
+    [Arguments("sr", "sr-ME", "sr")]
+    [Arguments("sr-Latn", "sr", "sr-Latn")]
+    [Arguments("sr-Latn", "sr-RS", "sr-Latn")]
+    [Arguments("sr-Latn", "sr-ME", "sr-ME")]
+    [Arguments("zh", "zh-TW", "zh")]
+    [Arguments("zh", "zh-HK", "zh")]
+    [Arguments("zh", "zh-SG", "zh-SG")]
+    [Arguments("zh", "zh-Hans-HK", "zh-Hans-HK")]
+    [Arguments("zh-Hant", "zh-CN", "zh-Hant")]
+    [Arguments("zh-Hant", "zh-TW", "zh-TW")]
+    [Arguments("zh-Hant", "zh", "zh-Hant")]
+    [Arguments("pa", "pa-PK", "pa")]
+    [Arguments("uz", "uz-Cyrl", "uz")]
+    [Arguments("de", "de-Latn-CH", "de")]
+    [Arguments("en", "en-US-u-ca-buddhist", "en-US")]
+    [Arguments("ja", "ja-JP-u-ca-japanese-nu-jpan", "ja-JP")]
+    [Arguments("en", "en-GB-x-private", "en-GB")]
+    [Arguments("en", "en-u-hc-h23", "en")]
+    [Arguments("de", "de-CH-1996", "de-CH-1996")]
+    public void FormattingLocaleScripts(string content, string requested, string expected)
+    {
+        var number = Single(TextArgumentType.Number, "number", content);
+        Assert.Equal(expected, number.FormatContent([new("value", 1m)], requested).FormattingLocale);
+    }
+
     [Test, DisplayName("localized dates, times and percentages fall back to invariant data under InvariantGlobalization")]
     public void InvariantGlobalization()
     {
@@ -107,6 +137,34 @@ internal sealed class LocalizedFormattingTests
         string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
         process.WaitForExit();
         Assert.Equal(0, process.ExitCode, output);
+    }
+
+    [Test, DisplayName("Windows NLS mode formats medium dates as short and reports unavailable IANA zones with the documented error")]
+    public void NlsMode()
+    {
+        // NLS exists only on Windows; ICU, the .NET default, is the specified and conformance-tested mode.
+        if (!OperatingSystem.IsWindows()) return;
+        string application = Environment.ProcessPath!;
+        var start = new ProcessStartInfo(application) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        if (Path.GetFileNameWithoutExtension(application) == "dotnet") start.ArgumentList.Add(typeof(LocalizedFormattingTests).Assembly.Location);
+        foreach (string argument in new[] { "--treenode-filter", "/*/*/LocalizedFormattingTests/NlsProbe" }) start.ArgumentList.Add(argument);
+        start.Environment["DOTNET_SYSTEM_GLOBALIZATION_USENLS"] = "1";
+        using Process process = Process.Start(start)!;
+        string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+        process.WaitForExit();
+        Assert.Equal(0, process.ExitCode, output);
+    }
+
+    [Test, Explicit, DisplayName("Windows NLS probe (run by NlsMode)")]
+    public void NlsProbe()
+    {
+        var date = new DateOnly(2026, 11, 4);
+        string Format(string style) => Single(TextArgumentType.Date, "date", "de", new CompiledRmf2Option("style", Text(style))).Format([new("value", date)], "de");
+        Assert.Equal(Format("short"), Format("medium"));
+        Assert.Equal(date.ToString(CultureInfo.GetCultureInfo("de").DateTimeFormat.LongDatePattern, CultureInfo.GetCultureInfo("de")), Format("long"));
+        var berlin = Single(TextArgumentType.DateTime, "datetime", "en", new CompiledRmf2Option("style", Text("short")), new CompiledRmf2Option("timeZone", Text("Europe/Berlin")));
+        if (TimeZoneInfo.TryConvertIanaIdToWindowsId("Europe/Berlin", out _)) Assert.Equal("11/4/2026 9:30 PM", berlin.Format([new("value", Instant)], "en"));
+        else Assert.Throws<TranslationFormatException>(() => berlin.Format([new("value", Instant)], "en"), "The time zone 'Europe/Berlin' is not available");
     }
 
     [Test, Explicit, DisplayName("invariant globalization probe (run by InvariantGlobalization)")]
@@ -137,6 +195,11 @@ internal sealed class LocalizedFormattingTests
         [CompiledTranslationDefinition.FromRmf2Inputs("amount", [new CompiledRmf2Input("n", TextArgumentType.Number)]), CompiledTranslationDefinition.FromRmf2Inputs("farewell", [])],
         [CompiledTranslationLocale.CreateDeferred("de", "en", () => CompiledTranslationLocale.ReadRmf2Values(Encoding.UTF8.GetBytes(German))),
          CompiledTranslationLocale.CreateDeferred("en", null, () => CompiledTranslationLocale.ReadRmf2Values(Encoding.UTF8.GetBytes(English)))]);
+
+    // German translates only farewell, so amount, whose formatting can fail, falls back to English.
+    private const string GermanFarewell = """
+        [[1,{"contentLocale":"de","ast":{"astVersion":5,"profile":"rmf2-execution-v2","inputs":[],"declarations":[],"selectors":[],"variants":[{"keys":[],"nodes":[{"kind":"text","value":"Tschüss"}]}]}}]]
+        """;
 
     [Test, DisplayName("a regional request keeps its tag on the snapshot, through the manager and a refresh")]
     public async Task RequestedLocale()
@@ -197,5 +260,26 @@ internal sealed class LocalizedFormattingTests
         Assert.Equal("Goodbye", german.Format(farewell, []));
         Assert.Equal(1, events.Count, "Only the fallen-back message raises the event, and only while subscribed.");
         Assert.Equal(("farewell", "de", "en", "de-AT"), (events[0].Key, events[0].Locale, events[0].ContentLocale, events[0].RequestedLocale));
+
+        // The event follows a successful format: a fallen-back message that fails to format raises nothing.
+        var catalog = new CompiledTranslationCatalog("fallback-after", "en",
+            [CompiledTranslationDefinition.FromRmf2Inputs("amount", [new CompiledRmf2Input("n", TextArgumentType.Number)]), CompiledTranslationDefinition.FromRmf2Inputs("farewell", [])],
+            [CompiledTranslationLocale.CreateDeferred("de", "en", () => CompiledTranslationLocale.ReadRmf2Values(Encoding.UTF8.GetBytes(GermanFarewell))),
+             CompiledTranslationLocale.CreateDeferred("en", null, () => CompiledTranslationLocale.ReadRmf2Values(Encoding.UTF8.GetBytes(English)))]);
+        ITranslationSnapshot partial = await new CompiledTranslationProvider(catalog).GetSnapshotAsync("de");
+        TranslationKey fallenBack = new("fallback-after", 0, "amount");
+        var after = new List<string>();
+        EventHandler<TranslationFallbackEventArgs> recorder = (_, change) => { if (change.Catalog == "fallback-after") lock (after) after.Add(change.Key); };
+        TranslationEvents.TranslationFallback += recorder;
+        try
+        {
+            Assert.Throws<TranslationFormatException>(() => partial.Format(fallenBack, [new TextArgument("n", "not a number")]));
+            Assert.Throws<TranslationFormatException>(() => partial.FormatContent(fallenBack, [new TextArgument("n", "not a number")]));
+            Assert.Equal(0, after.Count, "A failed format raises no fallback event.");
+            Assert.Equal("1", partial.Format(fallenBack, [new TextArgument("n", 1m)]));
+            Assert.Equal("1", partial.FormatContent(fallenBack, [new TextArgument("n", 1m)]).Nodes.Span[0].Value);
+        }
+        finally { TranslationEvents.TranslationFallback -= recorder; }
+        Assert.Equal("amount|amount", string.Join("|", after));
     }
 }

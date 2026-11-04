@@ -233,7 +233,7 @@ internal static class Rmf2RuntimeEvaluator
         catch (ArgumentException exception) { throw new TranslationFormatException("Invalid resolved v5 formatter option or locale.", exception); }
         catch (OverflowException exception) { throw new TranslationFormatException("V5 numeric value cannot be formatted.", exception); }
         catch (FormatException exception) { throw new TranslationFormatException("V5 value cannot be formatted.", exception); }
-        catch (TimeZoneNotFoundException exception) { throw new TranslationFormatException("The time zone of a v5 date-time is unknown.", exception); }
+        catch (TimeZoneNotFoundException exception) { throw new TranslationFormatException(exception.Message, exception); }
         catch (InvalidTimeZoneException exception) { throw new TranslationFormatException("The time zone of a v5 date-time is invalid.", exception); }
     }
     private static CompiledRmf2Variant Select(CompiledRmf2Message message, Context context, string locale)

@@ -117,8 +117,10 @@ internal sealed class Rmf2DatePercentConformanceTests
                     "import { decodeLocaleArtifact, formatDynamicMessage } from \"./dates.esm-v5/dynamic.js\";\nconst cases = " + cases.ToJsonString() + ";\n" + """
                     const artifact = decodeLocaleArtifact(JSON.parse(await readFile(new URL("./artifact.json", import.meta.url), "utf8")));
                     if (!artifact.ok) throw new Error(`artifact rejected: ${artifact.reason}`);
-                    // The documented tolerance: platform ICU versions may write U+0020, U+00A0 or U+202F for the same space.
-                    const same = (left, right) => left === right || left.replace(/[\u00A0\u202F]/g, " ") === right.replace(/[\u00A0\u202F]/g, " ");
+                    // The documented tolerance: platform ICU versions may write U+0020, U+00A0 or U+202F for the same space and
+                    // U+0027 or U+2019 for the same apostrophe (de-CH grouping).
+                    const tolerant = value => value.replace(/[\u00A0\u202F]/g, " ").replace(/\u2019/g, "'");
+                    const same = (left, right) => left === right || tolerant(left) === tolerant(right);
                     const failures = [];
                     for (const item of cases) {
                       const inputs = Object.fromEntries(Object.entries(item.arguments).map(([name, value]) => [name, value.type === "int64" ? BigInt(value.value) : value.value]));
@@ -129,14 +131,23 @@ internal sealed class Rmf2DatePercentConformanceTests
                     }
                     if (failures.length) throw new Error(failures.join("\n"));
                     """, new UTF8Encoding(false));
-                Rmf2EsmV5Tests.Run("bun", [script], directory);
+                foreach (string host in EsmHosts()) Rmf2EsmV5Tests.Run(host, [script], directory);
             }
             finally { Directory.Delete(directory, true); }
         }
     }
 
-    // The documented tolerance: platform ICU versions may write U+0020, U+00A0 or U+202F for the same space.
+    // --test-parameter esm-host=bun (default), node or all: the JavaScript engines the ESM route runs in. CI runs Bun
+    // (JavaScriptCore) and Node (V8) on Linux, Windows and macOS.
+    internal static string[] EsmHosts()
+    {
+        string host = TestContext.Parameters.TryGetValue("esm-host", out var values) && values.Count > 0 ? values[^1] : "bun";
+        return host switch { "bun" or "node" => [host], "all" => ["bun", "node"], _ => throw new InvalidOperationException("esm-host must be bun, node or all.") };
+    }
+
+    // The documented tolerance: platform ICU versions may write U+0020, U+00A0 or U+202F for the same space, and U+0027
+    // or U+2019 for the same apostrophe (the de-CH group separator). Everything else must match exactly.
     private static bool Matches(string expected, string actual) =>
-        string.Equals(expected, actual, StringComparison.Ordinal) || string.Equals(Spaces(expected), Spaces(actual), StringComparison.Ordinal);
-    private static string Spaces(string value) => value.Replace('\u00A0', ' ').Replace('\u202F', ' ');
+        string.Equals(expected, actual, StringComparison.Ordinal) || string.Equals(Tolerant(expected), Tolerant(actual), StringComparison.Ordinal);
+    private static string Tolerant(string value) => value.Replace('\u00A0', ' ').Replace('\u202F', ' ').Replace('\u2019', '\'');
 }

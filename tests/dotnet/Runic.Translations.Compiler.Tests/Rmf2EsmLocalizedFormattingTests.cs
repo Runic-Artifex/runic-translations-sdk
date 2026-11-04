@@ -52,7 +52,8 @@ internal sealed class Rmf2EsmLocalizedFormattingTests
             string script = Path.Combine(directory, "formats.mjs");
             File.WriteAllText(script, """
                 import { m } from "./formats.esm-v5/messages.js";
-                import { configureLocaleResolver, getLocale, getMessageLocale, getRequestedLocale, onFallback } from "./formats.esm-v5/runtime.js";
+                import { configureLocaleResolver, configureTimeZoneResolver, createLocaleSource, getLocale, getMessageLocale, getRequestedLocale, onFallback } from "./formats.esm-v5/runtime.js";
+                import { getRequestLocale, runWithLocale } from "./formats.esm-v5/server.js";
                 import { createTextReference, decodeTextReference } from "./formats.esm-v5/transport.js";
                 const check = (condition, message) => { if (!condition) throw new Error(message); };
                 const throwsType = (operation, type, message) => { try { operation(); } catch (error) { check(error instanceof type, `${message}: ${error}`); return; } throw new Error(`${message}: accepted`); };
@@ -100,14 +101,50 @@ internal sealed class Rmf2EsmLocalizedFormattingTests
                 check(m.whenLocal({ at }, { locale: "en" }) === m.whenZone({ at, zone }, { locale: "en" }), `local zone ${zone}`);
                 check(m.whenZone({ at, zone: "Asia/Tokyo" }, { locale: "en" }) === "11/4/2026 10:05 PM", "Tokyo");
                 throwsType(() => m.whenZone({ at, zone: "Mars/Olympus_Mons" }, { locale: "en" }), RangeError, "unknown zone");
+                try { m.whenZone({ at, zone: "Mars/Olympus_Mons" }, { locale: "en" }); } catch (error) { check(error.message.startsWith("The time zone 'Mars/Olympus_Mons' is not available."), error.message); }
                 throwsType(() => m.whenZone({ at, zone: "UTC+1 hour" }, { locale: "en" }), RangeError, "zone syntax");
+                // "local" follows a changed host zone at once (TZ), and the time-zone resolver when it names a known zone.
+                const savedZone = process.env.TZ;
+                try {
+                  process.env.TZ = "Asia/Tokyo"; check(m.whenLocal({ at }, { locale: "en" }) === "11/4/2026 10:05 PM", `TZ Tokyo: ${m.whenLocal({ at }, { locale: "en" })}`);
+                  process.env.TZ = "America/New_York"; check(m.whenLocal({ at }, { locale: "en" }) === "11/4/2026 8:05 AM", `TZ New York: ${m.whenLocal({ at }, { locale: "en" })}`);
+                  const removeZone = configureTimeZoneResolver(() => "Asia/Kolkata");
+                  check(m.whenLocal({ at }, { locale: "en" }) === "11/4/2026 6:35 PM", "resolver zone");
+                  const removeUnknown = configureTimeZoneResolver(() => "Mars/Olympus_Mons");
+                  check(m.whenLocal({ at }, { locale: "en" }) === "11/4/2026 8:05 AM", "an unknown resolver zone uses the host's");
+                  removeUnknown(); removeZone();
+                  check(m.whenLocal({ at }, { locale: "en" }) === "11/4/2026 8:05 AM", "resolver removed");
+                  // The server entry scopes the requested tag and the zone to a request.
+                  const rendered = runWithLocale("de", () => [getRequestLocale(), getLocale(), getRequestedLocale(), m.amount({ n: "1234567.5" }), m.whenLocal({ at })], { requestedLocale: "de-CH", timeZone: "Asia/Tokyo" });
+                  check(JSON.stringify(rendered) === JSON.stringify(["de", "de", "de-CH", `Betrag ${swiss}`, "04.11.2026 22:05"]), `request ${JSON.stringify(rendered)}`);
+                  check(runWithLocale("de", () => getRequestedLocale(), { requestedLocale: "fr-CH" }) === "de", "a requested tag of another locale is ignored");
+                  check(runWithLocale("de", () => m.whenLocal({ at }), { timeZone: "Mars/Olympus_Mons" }) === "04.11.2026 08:05", "an unknown request zone uses the host's");
+                } finally { if (savedZone === undefined) delete process.env.TZ; else process.env.TZ = savedZone; }
+                // Extensions of the requested tag do not reach formatting.
+                check(m.when({ at }, { locale: "en-US-u-ca-buddhist" }) === "11/4/2026 1:05 PM", `buddhist: ${m.when({ at }, { locale: "en-US-u-ca-buddhist" })}`);
+                check(getMessageLocale("amount", { locale: "de-CH-u-nu-arab" }).formatLocale === "de-CH", "extension dropped");
+                // A locale source keeps the requested tag beside the catalog locale.
+                const source = createLocaleSource({ initialLocale: "de-ch" }), seen = [];
+                source.subscribe(locale => seen.push(`${locale}/${source.getRequestedLocale()}`));
+                check(source.getLocale() === "de" && source.getRequestedLocale() === "de-CH", "source initial");
+                source.setLocale("de"); check(source.getRequestedLocale() === "de-CH" && seen.length === 0, "setting the current catalog locale keeps the region");
+                source.setLocale("de-AT"); source.setLocale("en"); source.setLocale("en-GB"); source.setLocale("en-GB");
+                check(seen.join(" ") === "de/de-AT en/en en/en-GB", `source events: ${seen.join(" ")}`);
                 """, new UTF8Encoding(false));
-            Rmf2EsmV5Tests.Run("bun", [script], directory);
+            foreach (string host in Rmf2DatePercentConformanceTests.EsmHosts()) Rmf2EsmV5Tests.Run(host, [script], directory);
 
             string typecheck = Path.Combine(directory, "formats-types.ts");
             File.WriteAllText(typecheck, """
                 import { m } from "./formats.esm-v5/messages.js";
-                import { getMessageLocale, getRequestedLocale, onFallback, type Locale, type MessageLocale } from "./formats.esm-v5/runtime.js";
+                import { configureTimeZoneResolver, createLocaleSource, getMessageLocale, getRequestedLocale, onFallback, type Locale, type MessageLocale } from "./formats.esm-v5/runtime.js";
+                import { runWithLocale, type RequestLocaleOptions } from "./formats.esm-v5/server.js";
+                const removeZone: () => void = configureTimeZoneResolver(() => undefined);
+                const source = createLocaleSource({ initialLocale: "de-CH" }); const sourceRequested: string = source.getRequestedLocale(); source.setLocale("de");
+                // @ts-expect-error setLocale takes a catalog locale.
+                source.setLocale("fr");
+                const requestOptions: RequestLocaleOptions = { requestedLocale: "de-CH", timeZone: "Europe/Zurich" };
+                const scoped: string = runWithLocale("de", () => "", requestOptions);
+                void removeZone; void sourceRequested; void scoped;
                 const fromDate: string = m.when({ at: new Date() });
                 const fromText: string = m.when({ at: "2026-11-04T13:05:09.123+01:00" });
                 const located: MessageLocale = getMessageLocale("farewell", { locale: "de-CH" });

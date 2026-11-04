@@ -173,6 +173,23 @@
     {"id":"en-gb-time-short","locale":"en","requested":"en-GB","message":"{{{$t :time style=short}}}","arguments":{"t":{"type":"time","value":"13:05:09"}},"expected":"13:05"},
     {"id":"fr-ca-date-short","locale":"fr","requested":"fr-CA","message":"{{{$d :date style=short}}}","arguments":{"d":{"type":"date","value":"2026-11-04"}},"expected":"2026-11-04"},
     {"id":"fr-ch-percent","locale":"fr","requested":"fr-CH","message":"{{{$n :number style=percent}}}","arguments":{"n":{"type":"decimal","value":"0.5"}},"expected":"50%"},
-    {"id":"en-gb-plural-stays-on-content","locale":"en","requested":"en-GB","message":".input {$n :number}\n.match $n\none {{{$n} item}}\n* {{{$n} items}}","arguments":{"n":{"type":"decimal","value":"1234.5"}},"expected":"1,234.5 items"}
+    {"id":"en-gb-plural-stays-on-content","locale":"en","requested":"en-GB","message":".input {$n :number}\n.match $n\none {{{$n} item}}\n* {{{$n} items}}","arguments":{"n":{"type":"decimal","value":"1234.5"}},"expected":"1,234.5 items"},
+    {"id":"sr-latn-over-sr-date-long","locale":"sr","requested":"sr-Latn","message":"{{{$d :date style=long}}}","arguments":{"d":{"type":"date","value":"2026-11-04"}},"expected":"4. новембар 2026."},
+    {"id":"sr-rs-over-sr-date-long","locale":"sr","requested":"sr-RS","message":"{{{$d :date style=long}}}","arguments":{"d":{"type":"date","value":"2026-11-04"}},"expected":"4. новембар 2026."},
+    {"id":"sr-over-sr-latn-date-long","locale":"sr-Latn","requested":"sr","message":"{{{$d :date style=long}}}","arguments":{"d":{"type":"date","value":"2026-11-04"}},"expected":"4. novembar 2026."},
+    {"id":"sr-me-over-sr-latn-date-long","locale":"sr-Latn","requested":"sr-ME","message":"{{{$d :date style=long}}}","arguments":{"d":{"type":"date","value":"2026-11-04"}},"expected":"4. novembar 2026."},
+    {"id":"zh-tw-over-zh-time-short","locale":"zh","requested":"zh-TW","message":"{{{$t :time style=short}}}","arguments":{"t":{"type":"time","value":"13:05:09"}},"expected":"13:05"},
+    {"id":"zh-hk-over-zh-date-long","locale":"zh","requested":"zh-HK","message":"{{{$d :date style=long}}}","arguments":{"d":{"type":"date","value":"2026-11-04"}},"expected":"2026年11月4日"},
+    {"id":"zh-sg-over-zh-time-short","locale":"zh","requested":"zh-SG","message":"{{{$t :time style=short}}}","arguments":{"t":{"type":"time","value":"13:05:09"}},"expected":"下午1:05"},
+    {"id":"zh-cn-over-zh-hant-time-short","locale":"zh-Hant","requested":"zh-CN","message":"{{{$t :time style=short}}}","arguments":{"t":{"type":"time","value":"13:05:09"}},"expected":"下午1:05"},
+    {"id":"zh-tw-over-zh-hant-time-short","locale":"zh-Hant","requested":"zh-TW","message":"{{{$t :time style=short}}}","arguments":{"t":{"type":"time","value":"13:05:09"}},"expected":"下午1:05"},
+    {"id":"zh-over-zh-hant-date-long","locale":"zh-Hant","requested":"zh","message":"{{{$d :date style=long}}}","arguments":{"d":{"type":"date","value":"2026-11-04"}},"expected":"2026年11月4日"},
+    {"id":"en-buddhist-extension-dropped","locale":"en","requested":"en-US-u-ca-buddhist","message":"{{{$d :date style=short}}}","arguments":{"d":{"type":"date","value":"2026-11-04"}},"expected":"11/4/2026"},
+    {"id":"ja-japanese-extension-dropped","locale":"ja","requested":"ja-JP-u-ca-japanese","message":"{{{$d :date style=medium}}}","arguments":{"d":{"type":"date","value":"2026-11-04"}},"expected":"2026/11/04"},
+    {"id":"de-ch-numbering-extension-dropped","locale":"de","requested":"de-CH-u-nu-arab","message":"{{{$n :integer}}}","arguments":{"n":{"type":"int64","value":"12345"}},"expected":"12'345"},
+    {"id":"en-gb-hour-cycle-extension-dropped","locale":"en","requested":"en-GB-u-hc-h12","message":"{{{$t :time style=short}}}","arguments":{"t":{"type":"time","value":"13:05:09"}},"expected":"13:05"},
+    {"id":"ar-date-short-single-marks","locale":"ar","message":"{{{$d :date style=short}}}","arguments":{"d":{"type":"date","value":"2026-11-04"}},"expected":"4\u200F/11\u200F/2026"},
+    {"id":"ar-date-medium","locale":"ar","message":"{{{$d :date style=medium}}}","arguments":{"d":{"type":"date","value":"2026-11-04"}},"expected":"04\u200F/11\u200F/2026"},
+    {"id":"th-date-short-buddhist-full-year","locale":"th","message":"{{{$d :date style=short}}}","arguments":{"d":{"type":"date","value":"2026-11-04"}},"expected":"4/11/2569"}
   ]
 }

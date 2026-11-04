@@ -38,16 +38,46 @@ function requestedTag(requested) {
   return canonical;
 }
 
-// The locale numbers, percentages, dates and times format in: the requested tag when its language subtag equals the
-// content locale's (and the scripts match when both name one), else the content locale. Plural, ordinal, list and
-// relative-time data stay on the content locale. The .NET runtime applies the same rule.
+// The locale numbers, percentages, dates and times format in: the requested tag, without its extensions and private-use
+// subtags, when it has the content locale's language and the same implied script, else the content locale. So de-CH
+// over de text formats Swiss numbers, while sr-Latn over Cyrillic sr text, or zh-TW (Traditional) over zh (Simplified)
+// text, keeps the content locale's. Plural, ordinal, list and relative-time data stay on the content locale. The .NET
+// runtime applies the same rule (Rmf2LocalizedFormats.FormattingLocale).
 function formattingLocale(requested, content) {
   if (requested === content || typeof requested !== "string" || requested === "") return content;
-  const canonical = canonicalLocale(requested); if (canonical === null) return content;
-  const left = canonical.split("-"), right = content.split("-");
-  if (left[0].toLowerCase() !== right[0].toLowerCase()) return content;
-  const script = parts => parts.length > 1 && /^[A-Za-z]{4}$/.test(parts[1]) ? parts[1].toLowerCase() : null;
-  return script(left) !== null && script(right) !== null && script(left) !== script(right) ? content : canonical;
+  let canonical = canonicalLocale(requested); if (canonical === null) return content;
+  canonical = withoutExtensions(canonical); if (canonical.toLowerCase() === content.toLowerCase()) return content;
+  const left = localeParts(canonical), right = localeParts(content);
+  if (left.language.toLowerCase() !== right.language.toLowerCase()) return content;
+  return (impliedScript(left) ?? "").toLowerCase() === (impliedScript(right) ?? "").toLowerCase() ? canonical : content;
+}
+// A canonical tag without its extensions and private-use subtags: en-US-u-ca-buddhist formats as en-US.
+function withoutExtensions(canonical) { const match = /-[0-9a-z]-/i.exec(canonical); return match === null ? canonical : canonical.slice(0, match.index); }
+function localeParts(canonical) {
+  const parts = canonical.split("-"); let index = 1, script = null, region = null;
+  if (parts[0].length <= 3) for (let count = 0; count < 3 && index < parts.length && parts[index].length === 3 && /^[a-z]/i.test(parts[index]); count++) index++;
+  if (index < parts.length && parts[index].length === 4 && /^[a-z]/i.test(parts[index])) script = parts[index++];
+  if (index < parts.length && (parts[index].length === 2 || (parts[index].length === 3 && /^\d/.test(parts[index])))) region = parts[index];
+  return { language: parts[0], script, region };
+}
+// The explicit script, else the language's likely script for the region (CLDR likelySubtags), else null for a language
+// without an entry; two tags of such a language match only when neither names a script.
+// TODO(#131): replace the table with cldrMaximize(...).script once the pinned likelySubtags data lands.
+function impliedScript(tag) { return tag.script ?? likelyScript(tag.language.toLowerCase(), tag.region?.toUpperCase() ?? null); }
+// CLDR 48.2 likelySubtags for the languages CLDR writes in more than one script: [default, { region: script }].
+const likelyScripts = Object.freeze({
+  az: ["Latn", { IQ: "Arab", IR: "Arab", RU: "Cyrl" }], bs: ["Latn", {}], ff: ["Latn", {}], ha: ["Latn", { CM: "Arab", SD: "Arab" }],
+  kk: ["Cyrl", { AF: "Arab", CN: "Arab", IR: "Arab", MN: "Arab" }], ks: ["Arab", {}],
+  ku: ["Latn", { AM: "Cyrl", AZ: "Cyrl", GE: "Cyrl", TM: "Cyrl", IQ: "Arab", IR: "Arab", LB: "Arab" }], ky: ["Cyrl", { CN: "Arab", TR: "Latn" }],
+  mn: ["Cyrl", { CN: "Mong" }], ms: ["Latn", { CC: "Arab" }], pa: ["Guru", { PK: "Arab" }], sd: ["Arab", { IN: "Deva" }], shi: ["Tfng", {}],
+  sr: ["Cyrl", { ME: "Latn", RO: "Latn", TR: "Latn" }], tg: ["Cyrl", { PK: "Arab" }], ug: ["Arab", { KZ: "Cyrl", MN: "Cyrl" }],
+  uz: ["Latn", { AF: "Arab", CN: "Cyrl" }], vai: ["Vaii", {}], yue: ["Hant", { CN: "Hans" }],
+  zh: ["Hans", Object.fromEntries(["AU", "BN", "GB", "GF", "HK", "ID", "MO", "PA", "PF", "PH", "SR", "TH", "TW", "US", "VN"].map(region => [region, "Hant"]))],
+});
+function likelyScript(language, region) {
+  if (!Object.hasOwn(likelyScripts, language)) return null;
+  const [fallback, regions] = likelyScripts[language];
+  return region !== null && Object.hasOwn(regions, region) ? regions[region] : fallback;
 }
 
 // Listeners for messages that show the text of a fallback locale, for development overlays and telemetry. A listener
@@ -73,13 +103,21 @@ export function getMessageLocale(key, options) {
   return Object.freeze({ key, locale: contentLocale, formatLocale: formattingLocale(requested, contentLocale) });
 }
 
+// A mutable locale for an application: getLocale() is the catalog locale, getRequestedLocale() the canonical tag that
+// was set (de-CH where getLocale() gives de). Setting the current catalog locale itself keeps a regional requested tag,
+// so a navigation to a /de route keeps de-CH formatting. Listeners run when either changes and receive the catalog locale.
 export function createLocaleSource(options = {}) {
   if (!isRecord(options)) throw new TypeError("Locale source options must be an object.");
-  let current = resolveLocale(options.initialLocale ?? baseLocale); const listeners = new Set();
+  let requested = requestedTag(options.initialLocale ?? baseLocale), current = resolveLocale(requested); const listeners = new Set();
   return Object.freeze({
     getLocale: () => current,
+    getRequestedLocale: () => requested,
     subscribe(listener) { if (typeof listener !== "function") throw new TypeError("A locale listener must be a function."); listeners.add(listener); let active = true; return () => { if (active) { active = false; listeners.delete(listener); } }; },
-    setLocale(locale) { const next = resolveLocale(locale); if (next === current) return; current = next; for (const listener of [...listeners]) listener(next); },
+    setLocale(locale) {
+      const nextRequested = requestedTag(locale), next = resolveLocale(nextRequested);
+      if (next === current && (nextRequested === requested || nextRequested === next)) return;
+      current = next; requested = nextRequested; for (const listener of [...listeners]) listener(next);
+    },
   });
 }
 
@@ -455,7 +493,8 @@ function temporalFormat(locale, kind, style, timeZone) {
   const cacheKey = `${locale}\u0000${kind}\u0000${style}\u0000${timeZone ?? ""}`;
   let format = temporalFormatCache.get(cacheKey);
   if (format) return format;
-  const options = kind === "date" ? { dateStyle: style, timeZone: "UTC", numberingSystem: "latn" }
+  const options = kind === "year" ? { year: "numeric", calendar: style, timeZone: "UTC", numberingSystem: "latn" }
+    : kind === "date" ? { dateStyle: style, timeZone: "UTC", numberingSystem: "latn" }
     : kind === "time" ? { timeStyle: style, timeZone: "UTC", numberingSystem: "latn" }
     : { calendar: "gregory", numberingSystem: "latn", hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric", ...(timeZone === undefined ? {} : { timeZone }) };
   format = new Intl.DateTimeFormat(kind === "zone" ? "en-US" : locale, options);
@@ -465,24 +504,57 @@ function temporalFormat(locale, kind, style, timeZone) {
 
 function utcDate(year, month, day, hour = 0, minute = 0, second = 0) { const date = new Date(0); date.setUTCFullYear(year, month - 1, day); date.setUTCHours(hour, minute, second, 0); return date; }
 
+// A shorter year field is replaced by the full year: a Gregorian year padded to four digits, as .NET's yyyy, or the
+// full year of the locale's calendar (Thai Buddhist 2569 rather than 69).
 function formatWallDate(year, month, day, style, locale) {
-  const format = temporalFormat(locale, "date", style), gregorian = format.resolvedOptions().calendar === "gregory";
-  return format.formatToParts(utcDate(year, month, day)).map(part => part.type === "year" && gregorian && /^\d{1,3}$/.test(part.value) ? String(year).padStart(4, "0") : part.value).join("").replaceAll("\u202F", " ");
+  const format = temporalFormat(locale, "date", style), calendar = format.resolvedOptions().calendar, date = utcDate(year, month, day);
+  return temporalText(format.formatToParts(date).map(part => part.type !== "year" || !/^\d{1,3}$/.test(part.value) ? part.value
+    : calendar === "gregory" ? String(year).padStart(4, "0") : fullYear(locale, calendar, date, part.value)).join(""));
+}
+function fullYear(locale, calendar, date, short) {
+  const parts = temporalFormat(locale, "year", calendar).formatToParts(date), year = parts.find(part => part.type === "year")?.value;
+  return year !== undefined && year.length > short.length && /^\d+$/.test(year) ? year : short;
 }
 
 function formatWallTime(hour, minute, second, style, locale) {
-  return temporalFormat(locale, "time", style === "short" ? "short" : "medium").format(utcDate(1970, 1, 1, hour, minute, second)).replaceAll("\u202F", " ");
+  return temporalText(temporalFormat(locale, "time", style === "short" ? "short" : "medium").format(utcDate(1970, 1, 1, hour, minute, second)));
 }
 
-// The wall-clock fields of an instant in "local" (the host's zone), "utc" or an IANA zone. An unknown zone throws a
-// RangeError, and so does a wall-clock year outside 1..9999, as in .NET.
+// U+202F is written as a space, as V8 writes it, and a run of one bidirectional mark (U+200E, U+200F, U+061C) once.
+function temporalText(value) { return value.replaceAll("\u202F", " ").replace(/([\u200E\u200F\u061C])\1+/g, "$1"); }
+
+// The wall-clock fields of an instant in "local", "utc" or an IANA zone. "local" is the zone the time-zone resolver
+// returns (configureTimeZoneResolver; the server entry's runWithLocale installs one for each request), else the host's
+// zone, read on every call so a changed TZ or browser zone applies at once. A zone the resolver returns that Intl does
+// not know is ignored, as resolvers read untrusted cookies and headers. An unknown timeZone option throws a RangeError
+// naming the zone, as .NET throws a TranslationFormatException, and so does a wall-clock year outside 1..9999.
 function wallClock(instant, timeZone) {
-  const zone = timeZone === "local" ? undefined : timeZone === "utc" ? "UTC" : timeZone;
+  const zone = timeZone === "local" ? localTimeZone() : timeZone === "utc" ? "UTC" : timeZone;
+  let format;
+  try { format = temporalFormat("en-US", "zone", "", zone); }
+  catch (error) { if (error instanceof RangeError) throw new RangeError(`The time zone '${timeZone}' is not available. It is unknown to this JavaScript engine's time zone data.`); throw error; }
   const fields = Object.create(null);
-  for (const part of temporalFormat("en-US", "zone", "", zone).formatToParts(instant)) if (part.type !== "literal") fields[part.type] = part.value;
+  for (const part of format.formatToParts(instant)) if (part.type !== "literal") fields[part.type] = part.value;
   const year = fields.era === "BC" ? 1 - Number(fields.year) : Number(fields.year);
   if (!(year >= 1 && year <= 9999)) throw new RangeError("The date-time is outside the supported range in its time zone.");
   return { year, month: Number(fields.month), day: Number(fields.day), hour: Number(fields.hour) % 24, minute: Number(fields.minute), second: Number(fields.second) };
+}
+
+let timeZoneResolver = null;
+export function configureTimeZoneResolver(resolver) {
+  if (typeof resolver !== "function") throw new TypeError("The time zone resolver must be a function.");
+  const previous = timeZoneResolver; timeZoneResolver = resolver;
+  return () => { if (timeZoneResolver === resolver) timeZoneResolver = previous; };
+}
+// The zone "local" means now: the resolver's zone when it names one Intl knows, else the host's (undefined when the
+// engine does not report it).
+function localTimeZone() {
+  const resolved = timeZoneResolver === null ? undefined : timeZoneResolver();
+  if (resolved !== undefined && resolved !== null) {
+    if (resolved === "utc" || resolved === "UTC") return "UTC";
+    if (validTimeZone(resolved)) { try { temporalFormat("en-US", "zone", "", resolved); return resolved; } catch { /* Unknown: use the host's zone. */ } }
+  }
+  try { return new Intl.DateTimeFormat().resolvedOptions().timeZone ?? undefined; } catch { return undefined; }
 }
 
 function validTimeZone(value) { return typeof value === "string" && value.length > 0 && value.length <= 64 && /^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$/.test(value); }

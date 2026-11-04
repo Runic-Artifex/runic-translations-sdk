@@ -257,11 +257,24 @@ must map this error to its public error API without turning it into output.
 
 Numbers, percentages, dates and times format in the **formatting locale**: the
 canonical requested tag (the one the caller asked for, such as `de-CH`, before it
-resolves to a catalog locale) when its language subtag equals the message's
-effective content locale's, and the scripts match when both tags name one;
-otherwise the content locale. Plural and ordinal rules, list patterns, relative
-time and the locale reported on content stay on the content locale. Content
-reports both (`.NET LocalizedTextContent.Locale`/`FormattingLocale`, ESM
+resolves to a catalog locale) without its extensions and private-use subtags,
+when its language subtag equals the message's effective content locale's and
+both tags have the same **implied script**; otherwise the content locale. The
+implied script is the tag's explicit script, else the CLDR likely script of its
+language and region (`sr` → Cyrl, `sr-ME` → Latn, `zh` → Hans, `zh-TW` → Hant), else
+none. So `sr-Latn` over Cyrillic `sr` text, `zh-TW` over `zh` text and `zh-CN` over
+`zh-Hant` text format in the content locale, while `zh-TW` over `zh-Hant` and
+`de-CH` over `de` format in the requested one. The likely scripts come from CLDR
+48.2 for the languages CLDR writes in more than one script (`az bs ff ha kk ks ku
+ky mn ms pa sd shi sr tg ug uz vai yue zh`); a language without an entry has no
+implied script, so its tags match only when neither names a script.
+
+Extensions are dropped because the runtimes would apply them differently
+(`en-US-u-ca-buddhist` and `ja-JP-u-ca-japanese` format Gregorian dates as `en-US`
+and `ja-JP`; `-u-nu-` and `-u-hc-` are dropped too) and requested tags can come
+from untrusted input. Plural and ordinal rules, list patterns, relative time and
+the locale reported on content stay on the content locale. Content reports both
+(`.NET LocalizedTextContent.Locale`/`FormattingLocale`, ESM
 `locale`/`formatLocale`).
 
 Percentages use the formatting locale's positive or negative percent pattern from
@@ -279,25 +292,49 @@ Localized dates and times come from platform globalization by these rules:
 | `time` | CLDR short time | CLDR medium time | CLDR medium time | CLDR medium time |
 | `datetime` | date and time in the style, joined by U+0020, in `timeZone` | | | |
 
-- A Gregorian year is written with at least four digits, so short dates show the
-  full year (.NET's short date pattern; ESM replaces a shorter year field).
+- A year is written in full, so short dates show the full year (.NET's short
+  date pattern; ESM replaces a shorter year field): a Gregorian year with at
+  least four digits, another calendar's year as its full number (Thai Buddhist
+  `4/11/2569`).
 - A `time` is a wall-clock time without a zone, so the longer styles do not add a
   zone name.
-- `timeZone=local` is the host's zone (.NET `TimeZoneInfo.Local`, ESM the default
-  `Intl` zone), `utc` is UTC and any other value is an IANA ID (.NET
-  `TimeZoneInfo.FindSystemTimeZoneById`). An unknown zone, or a wall-clock year
-  outside 1..9999, is an evaluation error. `iso` is always UTC and ignores
+- `timeZone=local` is the host's zone (.NET `TimeZoneInfo.Local`, which .NET
+  caches until `TimeZoneInfo.ClearCachedData()`; ESM the default `Intl` zone, read
+  on every call). In ESM a resolver installed with `configureTimeZoneResolver`,
+  such as the server entry's request-scoped `runWithLocale(locale, operation, {
+  timeZone })`, supplies the zone instead; a zone it returns that the engine does
+  not know is ignored. `utc` is UTC and any other value is an IANA ID (.NET
+  `TimeZoneInfo.FindSystemTimeZoneById`). `iso` is always UTC and ignores
   `timeZone`.
-- Digits are Latin, as for numbers; U+202F is written as U+0020.
+- A zone the platform cannot resolve is an evaluation error whose message starts
+  `The time zone '<id>' is not available.` in both runtimes (.NET
+  `TranslationFormatException`, ESM `RangeError`); there is no fallback to UTC.
+  This covers unknown IDs and IDs missing from the platform's zone data: .NET
+  reads tzdata on Linux and macOS (images without tzdata, such as chiseled or
+  distroless ones, resolve no IANA zone and treat `local` as UTC) and converts
+  IANA IDs to Windows zones through ICU on Windows (NLS and invariant mode
+  resolve none). Windows zone data also lacks most historical rules, so instants
+  before about 2000 can differ from ESM's tzdata. A wall-clock year outside
+  1..9999 is an evaluation error too.
+- Digits are Latin, as for numbers; U+202F is written as U+0020, and a run of
+  one bidirectional mark (U+200E, U+200F, U+061C) is written once.
 - Without platform locale data (.NET `InvariantGlobalization`), the invariant
   culture's patterns apply instead of an error, as for numbers.
+- .NET must run in ICU mode, the default on every platform, for these rules.
+  Windows NLS mode (`System.Globalization.UseNls`) lists other date patterns, so
+  there `medium` dates are the short pattern and `long` dates the full one, and
+  IANA zones are unavailable (see above); its output is not conformance-tested.
 
 The conformance corpus
 [`corpus/rmf2-date-percent-conformance.json`](corpus/rmf2-date-percent-conformance.json)
 gives every supported locale family's styles, time zones, percentages and
 formatting-locale cases; .NET and ESM must produce each expected string. Its
-documented tolerance is the space character (U+0020, U+00A0, U+202F), which
-platform ICU versions write differently. Platform data can also differ for
+documented tolerance covers characters that platform ICU versions write
+differently for the same punctuation: the space (U+0020, U+00A0, U+202F) and the
+apostrophe (U+0027, U+2019, as in the `de-CH` group separator `1'234`). Every
+other character must match exactly. CI runs the corpus on Linux, Windows
+(`icu.dll`) and macOS (Apple's ICU), with the ESM half in Bun and Node. Platform
+data can also differ for
 non-Gregorian default calendars and, in ESM, for dates before the Gregorian
 reform of 1582, where `Intl` uses the Julian calendar.
 

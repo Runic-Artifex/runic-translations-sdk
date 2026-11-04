@@ -327,7 +327,7 @@
     "conformance": "corpus/rmf2-list-conformance.json"
   },
   "formattingLocale": {
-    "rule": "numbers, percentages, dates and times format in the requested locale when its language subtag equals the content locale's (and the scripts match when both are explicit); otherwise in the content locale",
+    "rule": "numbers, percentages, dates and times format in the requested locale, without extensions and private-use subtags, when its language subtag equals the content locale's and both have the same implied script (the explicit script, else the CLDR likely script of the language and region); otherwise in the content locale",
     "contentLocale": "plural, ordinal, list and relative-time data, and the locale reported on content, stay on the message's effective content locale",
     "requested": "the canonical tag the caller asked for, before it was resolved to a catalog locale"
   },
@@ -339,12 +339,12 @@
   "dateTimeFormat": {
     "iso": "invariant: date yyyy-MM-dd, time HH:mm:ss, datetime UTC yyyy-MM-ddTHH:mm:ssZ; timeZone does not apply",
     "dateStyles": "short, medium, long and full are the CLDR date lengths of the formatting locale from platform globalization",
-    "yearWidth": "a Gregorian year is written with at least four digits, so short dates show the full year",
+    "yearWidth": "a year is written in full, so short dates show the full year: a Gregorian year with at least four digits, another calendar's year as its full number",
     "timeStyles": "short is the CLDR short time; medium, long and full are the CLDR medium time, because a wall-clock time has no zone name",
     "datetime": "the date in the style, a space, and the time in the style, both in the timeZone",
-    "timeZone": "local (default) is the host's time zone, utc is UTC, any other value is an IANA time zone ID; an unknown zone is an evaluation error",
+    "timeZone": "local (default) is the host's current time zone, or the zone a request-scoped resolver supplies (ESM); utc is UTC; any other value is an IANA time zone ID; a zone the platform cannot resolve (unknown, or missing from its zone data) is an evaluation error naming the zone, never a silent UTC",
     "digits": "Latin digits, as for numbers",
-    "spaces": "U+202F is written as U+0020",
+    "spaces": "U+202F is written as U+0020; a run of one bidirectional mark (U+200E, U+200F, U+061C) is written once",
     "conformance": "corpus/rmf2-date-percent-conformance.json"
   },
   "selection": {

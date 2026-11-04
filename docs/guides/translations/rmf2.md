@@ -137,8 +137,25 @@ A short date always shows the full year. A time has no zone, so `long` and
 `full` write it as `medium` does. `:datetime` writes the date and the time in the
 style, separated by a space (`11/4/2026 1:05 PM`), in the host's local time zone
 unless `timeZone` names another one: `utc`, `local` (the default) or an IANA ID
-such as `Europe/Berlin`, as a literal or a `:string` input. An unknown zone is a
-formatting error. `iso` is always UTC.
+such as `Europe/Berlin`, as a literal or a `:string` input. A zone the platform
+cannot resolve is a formatting error (`The time zone '…' is not available.`),
+never a silent UTC: an unknown ID, a Linux image without tzdata, or .NET on
+Windows in NLS or invariant mode, which cannot map IANA IDs. `iso` is always UTC.
+
+`local` is the zone of the process that formats. With server-side rendering
+that is the server's zone (often UTC), while the browser formats in the
+visitor's, so a page that hydrates shows different text or rewrites it. Pass
+the visitor's zone for server rendering: the SvelteKit handle's `timeZone`
+option, or `runWithLocale(locale, render, { timeZone })` from the generated
+`/server` entry, reads it from a cookie or header the app sets in the browser
+(`Intl.DateTimeFormat().resolvedOptions().timeZone`). Until the first request
+carries it, render such dates in the browser only, or use an explicit
+`timeZone`. .NET caches `TimeZoneInfo.Local`; call
+`TimeZoneInfo.ClearCachedData()` after the host's zone changes.
+
+.NET formats dates by these rules in ICU mode, the default. Windows NLS mode
+(`System.Globalization.UseNls`) is not supported for localized dates: there
+`medium` is the short and `long` the full date, and IANA zones are unavailable.
 
 ```rmf2
 due = Due {$date :date style=medium}
@@ -149,10 +166,15 @@ local =
 ```
 
 Numbers, percentages, dates and times format in the **requested** locale when
-it shares the language of the message's text, and in the text's locale
-otherwise. A `de-CH` user reading the catalog's `de` text sees Swiss separators
-(`1’234.5` rather than `1.234,5`) and percentages (`50%`), and an `en-GB` user reading
-`en` text sees `04/11/2026`. Plural and ordinal rules, lists and relative time
+it shares the language and the script of the message's text, and in the text's
+locale otherwise. A `de-CH` user reading the catalog's `de` text sees Swiss
+separators (`1'234.5` rather than `1.234,5`; older ICU versions write the
+apostrophe as `’`) and percentages (`50%`), and an `en-GB` user reading `en`
+text sees `04/11/2026`. The script is the tag's own or the language's likely one
+for the region, so an `sr-Latn` user reading Cyrillic `sr` text, or a `zh-TW`
+user reading Simplified `zh` text, sees the text's dates rather than ones in
+another script. Unicode extensions of the requested tag (`-u-ca-buddhist`,
+`-u-nu-arab`) are ignored. Plural and ordinal rules, lists and relative time
 stay on the text's locale. Content objects report both locales: .NET
 `LocalizedTextContent.Locale` and `FormattingLocale`, ESM `locale` and
 `formatLocale`. A string message's text locale (for `lang`) comes from .NET
@@ -161,8 +183,12 @@ stay on the text's locale. Content objects report both locales: .NET
 When a message shows the text of a fallback locale, because it has no
 translation in the requested one, .NET raises the static
 `TranslationEvents.TranslationFallback` event and ESM calls the listeners added
-with `onFallback((key, locale, contentLocale) => ...)`. Use them for development
-overlays or telemetry; without listeners they cost nothing.
+with `onFallback((key, locale, contentLocale) => ...)`, both after the message
+has formatted. Use them for development overlays or telemetry; without
+listeners they cost nothing. They fire on every format call, not once per key,
+so telemetry should deduplicate. The .NET event is static: remove a handler
+(`TranslationEvents.TranslationFallback -= handler`) when its owner is disposed,
+or the event keeps it alive for the life of the process.
 
 `:runic:list` joins a list of strings with the content locale's CLDR list
 patterns, like `Intl.ListFormat`. `type` is `conjunction` (default),

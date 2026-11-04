@@ -67,11 +67,23 @@ public static class TranslationEvents
     private static EventHandler<TranslationFallbackEventArgs>? s_fallback;
 
     /// <summary>
-    /// Raised when a snapshot formats an RMF2 message whose text comes from another locale through the catalog's
-    /// fallback chain, because the message has no translation in the snapshot's locale. Without subscribers it costs
-    /// nothing. Handlers run synchronously on the formatting thread with a <see langword="null"/> sender; a handler that
-    /// throws never affects formatting.
+    /// Raised after a snapshot has formatted an RMF2 message whose text comes from another locale through the catalog's
+    /// fallback chain, because the message has no translation in the snapshot's locale. A format call that throws
+    /// raises nothing. Without subscribers it costs nothing. Handlers run synchronously on the formatting thread with a
+    /// <see langword="null"/> sender; a handler that throws never affects formatting.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The event is raised on every such format call, not once per message, so a view that re-renders reports the same key
+    /// again; a telemetry handler that counts missing translations should deduplicate by <see cref="TranslationFallbackEventArgs.Catalog"/>,
+    /// <see cref="TranslationFallbackEventArgs.Key"/> and <see cref="TranslationFallbackEventArgs.Locale"/>.
+    /// </para>
+    /// <para>
+    /// The event is static, so it keeps every subscriber reachable for the life of the process. Remove a handler when its
+    /// owner goes away, for example when a development overlay or view model is disposed, or it leaks with everything it
+    /// references.
+    /// </para>
+    /// </remarks>
     public static event EventHandler<TranslationFallbackEventArgs>? TranslationFallback
     {
         add { lock (Gate) s_fallback += value; }
@@ -89,7 +101,7 @@ public static class TranslationEvents
         foreach (Delegate handler in handlers.GetInvocationList())
         {
             try { ((EventHandler<TranslationFallbackEventArgs>)handler)(null, notification); }
-            catch (Exception) { /* Formatting is complete; a listener cannot change it. */ }
+            catch (Exception) { /* The message is already formatted; a listener cannot change it. */ }
         }
     }
 }

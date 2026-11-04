@@ -198,8 +198,9 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         }
 
         if (message.Rmf2V5 is null) ValidateArguments(_definitions[index], arguments);
+        string text = CompiledTextMessageRuntime.Format(message, arguments, Locale, _valueFormatter, requestedLocale: RequestedLocale);
         ReportFallback(index, message);
-        return CompiledTextMessageRuntime.Format(message, arguments, Locale, _valueFormatter, requestedLocale: RequestedLocale);
+        return text;
     }
 
     /// <inheritdoc />
@@ -212,8 +213,9 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         // that contract-wide FormatContent surface.
         if (!message.HasMarkup && message.Rmf2V5 is null) throw new TranslationFormatException("The resource does not produce structured content.");
         if (message.Rmf2V5 is null) ValidateArguments(_definitions[index], arguments);
+        LocalizedTextContent content = CompiledTextMessageRuntime.FormatContent(message, arguments, Locale, _valueFormatter, requestedLocale: RequestedLocale);
         ReportFallback(index, message);
-        return CompiledTextMessageRuntime.FormatContent(message, arguments, Locale, _valueFormatter, requestedLocale: RequestedLocale);
+        return content;
     }
 
     /// <inheritdoc />
@@ -319,7 +321,8 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         return -1;
     }
 
-    // Only RMF2 v5 messages record their effective content locale; the event costs nothing without subscribers.
+    // Raised after a successful format, as the ESM runtime reports after building the message. Only RMF2 v5 messages
+    // record their effective content locale; the event costs nothing without subscribers.
     private void ReportFallback(int index, CompiledTextMessage message)
     {
         if (TranslationEvents.HasFallbackListeners && message.Rmf2V5?.ContentLocale is string content && !string.Equals(content, Locale, StringComparison.Ordinal))
