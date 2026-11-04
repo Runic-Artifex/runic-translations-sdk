@@ -377,6 +377,14 @@ ui {
 }
 ui {
   backend {
+    picker_failed =
+      .input {$reason :string}
+      {{Der ausgewählte Ordner konnte nicht geöffnet werden ({$reason}).}}
+
+  }
+}
+ui {
+  backend {
     picker_start = Die native Ordnerauswahl konnte nicht gestartet werden.
   }
 }
@@ -3230,12 +3238,10 @@ ui {
 }
 ui {
   palette {
-    interface_language_deutsch = Oberflächensprache · Deutsch
-  }
-}
-ui {
-  palette {
-    interface_language_english = Oberflächensprache · English
+    interface_language =
+      .input {$language :string}
+      {{Oberflächensprache · {$language}}}
+
   }
 }
 ui {
@@ -3666,17 +3672,7 @@ ui {
 }
 ui {
   settings {
-    english = Englisch
-  }
-}
-ui {
-  settings {
     fjord = Fjord
-  }
-}
-ui {
-  settings {
-    german = Deutsch
   }
 }
 ui {

@@ -35,8 +35,7 @@ public static class SnapshotTextCatalog
         global::Runic.Translations.ITranslationSnapshotFactory? snapshotFactory = null,
         global::Runic.Translations.TranslationOptions? options = null)
     {
-        if (global::Runic.Translations.Generated.TranslationsCompatibility.RuntimeAbiVersion != 1)
-            throw new global::System.InvalidOperationException("RTR0024: Generated translation code is incompatible with the referenced runtime ABI.");
+        global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRuntimeAbi(1);
         global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(3);
         return new global::Runic.Translations.CompiledTranslationProvider(SnapshotTextCatalogData.CreateDefinition().WithOptions(options), valueFormatter, snapshotFactory);
     }

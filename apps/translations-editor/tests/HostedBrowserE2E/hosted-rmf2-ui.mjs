@@ -68,15 +68,20 @@ try {
       const bridge = window.__runicBridge;
       if (bridge.__authoringObserved) return;
       bridge.__authoringObserved = true;
-      const call = bridge.call.bind(bridge);
+      // Views protocol 4 (Runic SDK 0.16) sends each request as one JSON message through `request`, such as
+      // {"kind":"start","route":…,"member":"save"} for an operation and {"kind":"open","route":…} for a routed View.
+      const request = bridge.request.bind(bridge);
       window.__runicEditorDocumentCalls = [];
-      bridge.call = async (name, ...args) => {
+      bridge.request = async (text, ...rest) => {
+        let message;
+        try { message = JSON.parse(text); } catch { message = {}; }
+        const call = { kind: message.kind, route: message.route, member: message.member };
         try {
-          const response = await call(name, ...args);
-          window.__runicEditorDocumentCalls.push({ name, args: /PreviewMessage|ApplyAuthoring|Snapshot/.test(name) ? args : undefined, response: /PreviewMessage|ApplyAuthoring|Mount|Snapshot/.test(name) ? response : undefined });
+          const response = await request(text, ...rest);
+          window.__runicEditorDocumentCalls.push(call);
           return response;
         } catch (error) {
-          window.__runicEditorDocumentCalls.push({ name, error: String(error) });
+          window.__runicEditorDocumentCalls.push({ ...call, error: String(error) });
           throw error;
         }
       };
@@ -93,19 +98,8 @@ try {
   stage = "two-logical-keys";
   await select("common_cancel");
   await page.evaluate(() => {
-    const bridge = window.__runicBridge;
-    const call = bridge.call.bind(bridge);
+    // Records again from here, so the checks below see only the queued edits and their save.
     window.__runicEditorDocumentCalls = [];
-    bridge.call = async (name, ...args) => {
-      try {
-        const response = await call(name, ...args);
-        window.__runicEditorDocumentCalls.push({ name, response: name.endsWith("Mount") ? response : undefined });
-        return response;
-      } catch (error) {
-        window.__runicEditorDocumentCalls.push({ name, error: String(error) });
-        throw error;
-      }
-    };
   });
   await editor().fill("Queued cancel from the real editor");
   await select("common_save");
@@ -115,12 +109,15 @@ try {
   const savedBytes = await readFile(diskPath, "utf8");
   assert.ok(savedBytes.includes("Queued cancel from the real editor"));
   assert.ok(savedBytes.startsWith(preservedComment), "Unchanged RMF2 comments must survive authoring.");
+  // The document's operations run on its own routed View, not on the root View that opened it.
+  const documentOperation = member => call => call.kind === "start" && call.member === member && typeof call.route === "string" && call.route.length > 0;
   await waitFor(async () => (await page.evaluate(() => window.__runicEditorDocumentCalls))
-    .some(call => /^content.+Save$/.test(call.name)), "routed document save completion");
+    .some(documentOperation("save")), "routed document save completion");
   const routedCalls = await page.evaluate(() => window.__runicEditorDocumentCalls);
-  assert.ok(routedCalls.some(call => /^content.+Snapshot$/.test(call.name)), "Opening a document must read its routed ViewModel.");
-  assert.ok(routedCalls.some(call => /^content.+Validate$/.test(call.name)), "Validation must use the routed document ViewModel.");
-  assert.ok(routedCalls.some(call => /^content.+Save$/.test(call.name)), "Save must use the routed document ViewModel.");
+  const saveRoute = routedCalls.find(documentOperation("save")).route;
+  // `open` presents the routed View and replies with its state; `snapshot` reads it again.
+  assert.ok(routedCalls.some(call => (call.kind === "open" || call.kind === "snapshot") && call.route === saveRoute), "Opening a document must read its routed ViewModel.");
+  assert.ok(routedCalls.some(call => documentOperation("validate")(call) && call.route === saveRoute), "Validation must use the routed document ViewModel.");
   await page.reload({ waitUntil: "domcontentloaded" });
   await select("common_cancel");
   assert.equal(await editor().inputValue(), "Queued cancel from the real editor");
@@ -197,6 +194,23 @@ try {
   await diagnosticDialog.waitFor({ state: "hidden" });
   assert.ok((await readFile(diskPath, "utf8")).includes("cancel = {{}}"));
   if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "diagnostic-fixed-en.png"), fullPage: true });
+
+  // The interface language switch sets the window's locale through the ViewModel, the page follows it, and the
+  // choice survives a reload from the native editor state.
+  stage = "interface-language";
+  await page.evaluate(() => { window.__runicEditorDocumentCalls = []; });
+  await page.getByRole("button", { name: /^Editor settings, / }).click();
+  await page.getByRole("menuitemradio", { name: "Deutsch", exact: true }).click();
+  await waitFor(async () => (await page.evaluate(() => document.documentElement.lang)) === "de", "German interface language");
+  await waitFor(async () => (await page.evaluate(() => window.__runicEditorDocumentCalls))
+    .some(call => call.member === "setUiLocale" && call.error === undefined), "setUiLocale request to the editor ViewModel");
+  await page.getByRole("button", { name: /^Editoreinstellungen, .*Oberflächensprache Deutsch$/ }).waitFor();
+  await waitFor(async () => (await page.evaluate(() => window.__runicEditorDocumentCalls))
+    .some(call => call.member === "saveLocalState" && call.error === undefined), "native save of the interface language");
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: /^Editoreinstellungen, .*Oberflächensprache Deutsch$/ }).waitFor();
+  assert.equal(await page.evaluate(() => document.documentElement.lang), "de", "The interface language did not survive a reload.");
+  if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "interface-language-de.png"), fullPage: true });
   assert.deepEqual(pageErrors, [], "The production editor reported uncaught browser errors.");
   console.log("hosted-rmf2-ui-ok (real packaged frontend + Views host + editor session)");
 } catch (error) {

@@ -229,8 +229,12 @@ internal sealed class Rmf2V1CorpusTests
     // Re-pinned for merging TB with T1a/T1b: the registration has both SupportedLocales/ResolveLocale and Registration,
     // and runtime.js prefers, among equal maximized locales, the one nearest in the preference's CLDR chain
     // (en-US-posix to en-US before en), in both digests.
-    private const string EncodedOutputDigest = "d0c014789be414d4de6ce9dbb407a8139871e90fe49c6df743a5a857a3833a4b";
-    private const string HiddenEncodedOutputDigest = "ce9cff3f755455257e79360256742e304223cd66ded5550ffdeff197ed93bf83";
+    // Re-pinned for T1g (0.9): the generated base ABI check is a call, TranslationsCompatibility.EnsureRuntimeAbi(1),
+    // in both digests.
+    // Re-pinned for merging T1g with main (TE, TC, TD) through T1a/T1b, in both digests.
+    // Re-pinned for merging TB (#131) with T1g (#132), in both digests.
+    private const string EncodedOutputDigest = "a3546eed56e08d586a1797a0f091b107cbd29d9af377a87844bbf68b150702ab";
+    private const string HiddenEncodedOutputDigest = "b9c69c821f485298819188a77269bde8adf083f87fc428246fa4d4e7b3f9a3eb";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

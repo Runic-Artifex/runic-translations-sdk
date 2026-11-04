@@ -39,7 +39,7 @@ Use `export` to write XLIFF or portable review JSON. Use `report` to inspect an 
 
 ## Local support diagnostics
 
-Run `diagnostics <workspace>` to create the existing privacy-bounded diagnostic ZIP for an explicit local support collection. The command never uploads it. Use `runic-translations support preview|collect|remove --editor-diagnostics <zip> --destination <path>` (the `dotnet-runic-translations` tool) to inspect, collect, or remove a local unsigned support envelope. The editor stores preferences, recents, and recovery drafts in one native per-user record, not a browser profile; it is atomically replaced and an unreadable record is quarantined on next launch. In the editor’s **About & diagnostics** panel, **Local editor state** reports only entry counts and bytes; use **Clear local state** to remove those records without changing workspace files or current in-memory work.
+Run `diagnostics <workspace>` to create the existing privacy-bounded diagnostic ZIP for an explicit local support collection. The command never uploads it. Use `runic-translations support preview|collect|remove --editor-diagnostics <zip> --destination <path>` (the `dotnet-runic-translations` tool) to inspect, collect, or remove a local unsigned support envelope. The interface language starts from the operating system's preferred languages, matched against the editor's own languages (English and German), and the choice is kept; it is also the window's language, so native surfaces follow it. The editor stores preferences, recents, and recovery drafts in one native per-user record, not a browser profile; it is atomically replaced and an unreadable record is quarantined on next launch. In the editor’s **About & diagnostics** panel, **Local editor state** reports only entry counts and bytes; use **Clear local state** to remove those records without changing workspace files or current in-memory work.
 
 ## What it supports
 
@@ -92,8 +92,13 @@ It does not require another repository's shell.
 `edit` opens an installed browser in app mode; add `--webview` to request the
 embedded WebView instead. On Linux, interactive launch needs a running X11 or
 Wayland desktop session; native chooser services also need that session's D-Bus
-and configured XDG portal backend. The shell supplies tools and libraries without
-starting those services or selecting the session's backend.
+and configured XDG portal backend. On Linux, **Browse** chooses a workspace folder
+through the first of these that is available: the portal's FileChooser (version 3 or
+newer, for example from `xdg-desktop-portal-gnome`, `-kde` or `-gtk`), then
+`/usr/bin/zenity` when the session has no such FileChooser or no session bus. Without
+either, enter the workspace directory instead. Windows and macOS show their system
+folder dialog. The shell supplies tools and libraries without starting those services or
+selecting the session's backend.
 
 On Linux without Nix, provide a supported Chromium browser for normal `edit`,
 GTK 3 and WebKitGTK 4.1 for `--webview`, and the session services above. To choose
@@ -111,7 +116,7 @@ when running from source, pass those arguments after the `--` above.
 Translations dependencies resolve from source in this repository. Runic Command
 Line and the Runic SDK packages (Views with its CS-WebUI host and ReactiveUI
 adapter, Navigation, Platform) and their npm counterparts resolve from
-independently pinned published packages; the editor is built on Runic SDK 0.11.0.
+independently pinned published packages; the editor is built on Runic SDK 0.16.0.
 No sibling SDK checkout is needed. The native transport is pinned to published
 `CsWebUi` and `CsWebUi.Native` `2.5.0-beta.4.8`, which bundle WebUI nightly
 `2b35db13f`: it includes WebUI's fix for concurrent Bridge calls, and one

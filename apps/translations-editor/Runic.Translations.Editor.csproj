@@ -41,6 +41,8 @@
     <Compile Include="../../eng/translations/Rmf2Preview.cs" Link="Shared/Rmf2Preview.cs" />
     <Compile Include="../../eng/translations/TranslationManifestReader.cs" Link="Shared/TranslationManifestReader.cs" />
     <PackageReference Include="Runic.Platform.$(RunicNativeProvider)" />
+    <!-- The workspace folder picker uses the portal's unparented FileChooser (EditorWorkspacePicker). -->
+    <PackageReference Include="Runic.Platform.Linux.Portal" Condition="'$(RunicNativeProvider)' == 'Linux'" />
   </ItemGroup>
 
   <ItemGroup>
@@ -51,6 +53,8 @@
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <!-- The editor smoke test drives the editor's window through the SDK's window test host. -->
+    <PackageReference Include="Runic.Application.Testing" />
     <PackageReference Include="Runic.Application.Views.CsWebUi" />
     <PackageReference Include="Runic.Application.Views.ReactiveUI" />
     <PackageReference Include="Runic.CommandLine" />

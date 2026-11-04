@@ -106,7 +106,11 @@ Runic.Translations.TranslationProviderFactory
 Runic.Translations.TranslationSnapshotPublishedEventArgs.LocaleResolution.get -> Runic.Translations.LocaleResolution
 Runic.Translations.TranslationSnapshotPublishedEventArgs.RequestedLocale.get -> string!
 const Runic.Translations.Generated.TranslationsCompatibility.CompositionVersion = 1 -> int
+const Runic.Translations.Generated.TranslationsCompatibility.MinimumRmf2RuntimeAbiVersion = 3 -> int
+const Runic.Translations.Generated.TranslationsCompatibility.MinimumRuntimeAbiVersion = 1 -> int
 override Runic.Translations.TranslationOverlayDiagnostic.GetHashCode() -> int
+static Runic.Translations.Generated.TranslationsCompatibility.EnsureRuntimeAbi(int requiredVersion) -> void
+static Runic.Translations.Generated.TranslationsCompatibility.SupportsRuntimeAbi(int requiredVersion) -> bool
 static Runic.Translations.LocaleNegotiation.Match(string! requestedLocale, System.Collections.Generic.IEnumerable<string!>! availableLocales) -> string?
 static Runic.Translations.LocaleNegotiation.Negotiate(System.Collections.Generic.IEnumerable<string!>! preferredLocales, System.Collections.Generic.IEnumerable<string!>! availableLocales, string! defaultLocale) -> string!
 static Runic.Translations.TranslationContext.CreateBuilder() -> Runic.Translations.TranslationContextBuilder!
