@@ -218,11 +218,19 @@ internal sealed class Rmf2V1CorpusTests
     // Re-pinned for merging TC with TE: message modules call the runtime with the requested locale, and runtime.js
     // reads getMessageLocale's content locales from its own table (messageLocaleTable) rather than the contract tables
     // that moved to dynamic.js, in both digests.
+    // Re-pinned for T1a/T1b (0.9): generated C# adds the XText(ITranslationContext) constructor and
+    // XCatalog.Registration, and gives the XText(ITranslationManager) constructor OverloadResolutionPriority(1) so
+    // new XText(null) still compiles, in both digests. Every other output is unchanged.
+    // Re-pinned for merging T1a/T1b with main (TE, TC, TD): the context constructor sits before the base-text
+    // accessor summaries and the References factories, in both digests.
     // Re-pinned for merging TB (#131) with TC and TE: runtime.js embeds the catalog's CLDR tables (likely subtags,
     // parents, aliases, plural selectors, lists, relative time) and negotiates locales, and the C# registration adds
     // SupportedLocales, ResolveLocale and CreateManagerFromPreferences[Async], in both digests.
-    private const string EncodedOutputDigest = "ea0b0874c30c7cc17bb509d705acf9ab06a09927f1d33eb05262505376618fbd";
-    private const string HiddenEncodedOutputDigest = "491ca7bec03432f254edbc8e2e776dd2f32b290b3c80440151f89f274051f58f";
+    // Re-pinned for merging TB with T1a/T1b: the registration has both SupportedLocales/ResolveLocale and Registration,
+    // and runtime.js prefers, among equal maximized locales, the one nearest in the preference's CLDR chain
+    // (en-US-posix to en-US before en), in both digests.
+    private const string EncodedOutputDigest = "d0c014789be414d4de6ce9dbb407a8139871e90fe49c6df743a5a857a3833a4b";
+    private const string HiddenEncodedOutputDigest = "ce9cff3f755455257e79360256742e304223cd66ded5550ffdeff197ed93bf83";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

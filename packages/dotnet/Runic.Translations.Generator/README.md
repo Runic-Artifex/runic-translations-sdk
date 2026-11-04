@@ -38,6 +38,13 @@ For startup code that cannot await, such as a WPF application with `StartupUri`,
 `AppTextCatalog.CreateManager()` returns the same manager synchronously; the
 embedded catalog needs no I/O.
 
+`AppTextCatalog.Registration` describes the catalog to a `TranslationContext`,
+which switches several catalogs (an application's and its libraries') to one
+locale together, and `new AppText(context)` uses the catalog's manager in a
+context. Both need a `Runic.Translations` runtime that declares
+`TranslationsCompatibility.CompositionVersion`; with an older runtime they are
+not generated. See [Catalogs from libraries](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/composition.md).
+
 The generated catalog embeds each locale's messages as UTF-8 data in the
 assembly and reads a locale when a manager or provider first needs it, with the
 locales it falls back to. A process that formats English never reads German,

@@ -144,6 +144,13 @@
       { "preferences": ["DE-de"], "expected": "de" },
       { "preferences": ["de-u-co-phonebk"], "expected": "de" },
       { "preferences": ["de-x-private"], "expected": "de" }
+    ] },
+    { "id": "equal-maximized-nearest", "locales": ["en", "en-US", "zh-Hant", "zh-Hant-TW"], "base": "en", "cases": [
+      { "preferences": ["en-US-posix"], "expected": "en-US" },
+      { "preferences": ["en-Latn-US"], "expected": "en-US" },
+      { "preferences": ["en-AU"], "expected": "en" },
+      { "preferences": ["zh-TW"], "expected": "zh-Hant-TW" },
+      { "preferences": ["zh-HK"], "expected": "zh-Hant" }
     ] }
   ]
 }

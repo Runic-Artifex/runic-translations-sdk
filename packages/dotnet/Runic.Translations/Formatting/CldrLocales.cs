@@ -134,7 +134,8 @@ internal static class CldrLocales
     /// </summary>
     /// <remarks>
     /// Like ICU's <c>LocaleMatcher</c>, both sides are maximized with likely subtags and must share the language and
-    /// script. Equal maximized tags match best (<c>zh-TW</c> → <c>zh-Hant</c>, <c>de</c> → <c>de-DE</c>). Then the nearest
+    /// script. Equal maximized tags match best (<c>zh-TW</c> → <c>zh-Hant</c>, <c>de</c> → <c>de-DE</c>), the one nearest in
+    /// the desired tag's CLDR parent chain first (<c>en-US-posix</c> → <c>en-US</c> before <c>en</c>). Then the nearest
     /// CLDR ancestor of the desired tag that a locale shares decides, the ancestor itself before its other descendants:
     /// <c>es-MX</c> → <c>es-419</c>, then <c>es-AR</c>, then <c>es</c>/<c>es-ES</c>; <c>en-AU</c> → <c>en-GB</c> (via
     /// <c>en-001</c>) before <c>en-US</c>; <c>de-CH</c> → <c>de</c>/<c>de-DE</c> before <c>de-AT</c>. A language whose
@@ -158,7 +159,13 @@ internal static class CldrLocales
             if (penalty < 0) continue;
             if (candidate.Script != wanted.Script) continue;
             int score;
-            if (candidate.Region == wanted.Region) score = 0;
+            if (candidate.Region == wanted.Region)
+            {
+                // Equal maximized tags: the nearest in the desired tag's CLDR chain first, so en-US-posix matches en-US
+                // before en, and zh-TW matches zh-Hant-TW before zh-Hant.
+                int step = chain.IndexOf(DataId(available[index]));
+                score = step < 0 ? 16 : step;
+            }
             else
             {
                 // The nearest ancestor of the desired tag that the candidate shares; the ancestor itself (or its

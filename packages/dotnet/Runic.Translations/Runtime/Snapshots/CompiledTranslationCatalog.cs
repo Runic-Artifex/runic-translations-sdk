@@ -188,10 +188,20 @@ public sealed class CompiledTranslationCatalog
     public string NegotiateLocale(IEnumerable<string> preferredLocales)
     {
         ArgumentNullException.ThrowIfNull(preferredLocales);
-        return LocaleNegotiation.Negotiate(preferredLocales, LocaleTags) ?? DefaultLocale;
+        return LocaleNegotiation.Negotiate(preferredLocales, LocaleTags()) ?? DefaultLocale;
     }
 
-    private string[] LocaleTags => _localeTags ??= CreateLocaleTags(_locales);
+    internal string ResolveRequestedLocale(string requestedLocale) => ResolveRequest(requestedLocale).Locale;
+
+    internal LocaleRequest ResolveRequest(string requestedLocale) =>
+        LocaleRequestResolver.Resolve(requestedLocale, LocaleTags(), UnsupportedLocale, DefaultLocale, Catalog);
+
+    internal bool DeclaresLocale(string canonicalLocale) => _localeByTag.ContainsKey(canonicalLocale);
+
+    internal string? GetFallbackLocale(string canonicalLocale) => _localeByTag[canonicalLocale].FallbackLocale;
+
+    /// <summary>The declared locale tags in ordinal order; callers must not modify the array.</summary>
+    internal string[] LocaleTags() => _localeTags ??= CreateLocaleTags(_locales);
 
     private static string[] CreateLocaleTags(CompiledTranslationLocale[] locales)
     {
@@ -201,34 +211,13 @@ public sealed class CompiledTranslationCatalog
         return tags;
     }
 
-    internal string ResolveRequestedLocale(string requestedLocale)
+    /// <summary>The values a declared locale defines itself, without its fallback chain.</summary>
+    internal (string?[] Patterns, CompiledTextMessage?[] Messages) GetDirect(string canonicalLocale)
     {
-        ArgumentNullException.ThrowIfNull(requestedLocale);
-        // An empty tag, the name of the invariant culture (for example under LANG=C), names no locale.
-        // It is an unsupported locale without subtags, so the policy chooses the default locale or rejects it.
-        string canonical = string.Empty;
-        if (requestedLocale.Length != 0 && !LocaleTag.TryCanonicalize(requestedLocale, out canonical))
-        {
-            throw new ArgumentException("The requested locale is not a structurally valid BCP 47 tag.", nameof(requestedLocale));
-        }
-
-        if (_localeByTag.ContainsKey(canonical))
-        {
-            return canonical;
-        }
-
-        switch (UnsupportedLocale)
-        {
-            case UnsupportedLocalePolicy.Default:
-                return DefaultLocale;
-            case UnsupportedLocalePolicy.ParentsThenDefault:
-                // CLDR likely-subtag matching (zh-TW → zh-Hant, de-CH → de-DE), else the nearest truncation.
-                return canonical.Length == 0 ? DefaultLocale : LocaleNegotiation.Match(canonical, LocaleTags) ?? DefaultLocale;
-            case UnsupportedLocalePolicy.Exact:
-            default:
-                throw new TranslationNotFoundException(
-                    $"Locale '{canonical}' is not declared by catalog '{Catalog}'.");
-        }
+        // Resolving the locale builds the direct values of every locale in its chain.
+        _ = Resolve(canonicalLocale);
+        LocaleState state = _localeByTag[canonicalLocale];
+        return (state.DirectPatterns!, state.DirectMessages!);
     }
 
     internal string?[] GetResolvedPatterns(string canonicalLocale) =>

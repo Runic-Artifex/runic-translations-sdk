@@ -25,7 +25,9 @@ internal static class Rmf2CSharpOutputRendererV5
         return Output(TranslationGeneratedOutputKind.CSharpKeys, project.ClassName + ".Keys.g.cs", writer);
     }
 
-    internal static TranslationGeneratedOutput RenderAccessors(Rmf2ProjectV5 project, bool readableSurface = true)
+    // composition: the referenced runtime has the catalog composition surface (TranslationsCompatibility.CompositionVersion),
+    // so the accessors get a constructor over an ITranslationContext and the registration class a Registration.
+    internal static TranslationGeneratedOutput RenderAccessors(Rmf2ProjectV5 project, bool readableSurface = true, bool composition = true)
     {
         GenerationWriter writer = StartFile(project);
         string visibility = Visibility(project), className = GenerationSupport.CSharpIdentifier(project.ClassName);
@@ -34,10 +36,22 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("{"); writer.Indent();
         writer.Line("private readonly global::Runic.Translations.ITranslationManager __translationManager;"); writer.Blank();
         writer.Line("/// <summary>Creates accessors over a locale manager.</summary>");
+        // With the context constructor beside it, a null argument (new XText(null)) keeps choosing this constructor.
+        if (composition) writer.Line("[global::System.Runtime.CompilerServices.OverloadResolutionPriority(1)]");
         writer.Line("public " + className + "(global::Runic.Translations.ITranslationManager manager)");
         writer.Line("{"); writer.Indent();
         writer.Line("__translationManager = manager ?? throw new global::System.ArgumentNullException(nameof(manager));");
         writer.Unindent(); writer.Line("}");
+        if (composition)
+        {
+            writer.Blank();
+            writer.Line("/// <summary>Creates accessors over this catalog's manager in a translation context that registers it.</summary>");
+            writer.Line("/// <exception cref=\"global::System.Collections.Generic.KeyNotFoundException\">The context does not register the catalog.</exception>");
+            writer.Line("public " + className + "(global::Runic.Translations.ITranslationContext context)");
+            writer.Line("{"); writer.Indent();
+            writer.Line("__translationManager = (context ?? throw new global::System.ArgumentNullException(nameof(context))).GetManager(" + className + "Catalog.CatalogId);");
+            writer.Unindent(); writer.Line("}");
+        }
         var documentation = new Rmf2MessageDocumentationV5(project);
         foreach (Rmf2MessageContractV5 message in Canonical(project)) WriteAccessor(writer, project, message, readableSurface, documentation);
         WriteReferences(writer, project, documentation);
@@ -71,7 +85,7 @@ internal static class Rmf2CSharpOutputRendererV5
         return Output(TranslationGeneratedOutputKind.CSharpCatalogData, project.ClassName + ".CatalogData.g.cs", writer);
     }
 
-    internal static TranslationGeneratedOutput RenderRegistration(Rmf2ProjectV5 project)
+    internal static TranslationGeneratedOutput RenderRegistration(Rmf2ProjectV5 project, bool composition = true)
     {
         GenerationWriter writer = StartFile(project);
         string visibility = Visibility(project), className = GenerationSupport.CSharpIdentifier(project.ClassName);
@@ -95,6 +109,13 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("/// <summary>Chooses the declared locale for an ordered preference list with CLDR likely subtags, or <see cref=\"DefaultLocale\"/>; see <see cref=\"global::Runic.Translations.LocaleNegotiation\"/>.</summary>");
         writer.Line("public static string ResolveLocale(global::System.Collections.Generic.IEnumerable<string> preferredLocales) =>"); writer.Indent();
         writer.Line("global::Runic.Translations.LocaleNegotiation.Negotiate(preferredLocales, SupportedLocales, DefaultLocale);"); writer.Unindent(); writer.Blank();
+        if (composition)
+        {
+            writer.Line("/// <summary>Describes this catalog to a translation context: its ID, contract and provider factory.</summary>");
+            writer.Line("public static global::Runic.Translations.TranslationCatalogRegistration Registration { get; } = new global::Runic.Translations.TranslationCatalogRegistration(");
+            writer.Indent(); writer.Line("CatalogId, DefaultLocale, ContractFingerprint, Rmf2MarkupContract, CreateProvider);"); writer.Unindent();
+            writer.Blank();
+        }
         writer.Line("public static global::Runic.Translations.ITranslationProvider CreateProvider("); writer.Indent();
         writer.Line("global::Runic.Translations.ITextValueFormatter? valueFormatter = null,");
         writer.Line("global::Runic.Translations.ITranslationSnapshotFactory? snapshotFactory = null,");

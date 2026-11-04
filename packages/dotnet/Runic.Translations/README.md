@@ -30,11 +30,36 @@ Console.WriteLine(text.Messages.application_title);
 
 Each successful locale change replaces the complete immutable snapshot. Reads through `manager.Current` do not observe a partially updated catalog.
 
-To start in the user's language, pass an ordered preference list, such as the operating system's user languages. The generated `SupportedLocales` lists the declared locales, and `ResolveLocale(IEnumerable<string>)` chooses one with the pinned CLDR likely subtags and parent locales: `zh-TW` matches a declared `zh-Hant`, `de-CH` matches `de-DE`, and `nb` matches `no`. `CreateManagerFromPreferencesAsync`, `CreateManagerFromPreferences` and `ITranslationManager.SetLocaleFromPreferencesAsync` take the same list (the one-tag `CreateManager(null)` and `SetLocaleAsync` are unchanged), and `LocaleNegotiation.Negotiate` applies the rules to any set of locales. The generated ESM runtime's `negotiateLocale` gives the same answer.
+To start in the user's language, pass an ordered preference list, such as the operating system's user languages. The generated `SupportedLocales` lists the declared locales, and `ResolveLocale(IEnumerable<string>)` chooses one with the pinned CLDR likely subtags and parent locales: `zh-TW` matches a declared `zh-Hant`, `de-CH` matches `de-DE`, and `nb` matches `no`. `CreateManagerFromPreferencesAsync`, `CreateManagerFromPreferences` and `ITranslationManager.SetLocaleFromPreferencesAsync` take the same list (the one-tag `CreateManager(null)` and `SetLocaleAsync` are unchanged), and `LocaleNegotiation.Negotiate` applies the rules to any set of locales. The generated ESM runtime's `negotiateLocale` gives the same answer. A single requested tag that the catalog does not declare is matched by the same rules under the default `ParentsThenDefault` policy, and the snapshot reports how (`LocaleResolution`).
 
 ```csharp
 ITranslationManager manager = await AppTextCatalog.CreateManagerFromPreferencesAsync(["de-CH", "en"]);
 ```
+
+## Use catalogs from libraries
+
+A library with its own public catalog takes an `ITranslationContext`, and the application registers every catalog in
+one context. `SetLocaleAsync` prepares every catalog's snapshot and publishes them together:
+
+```csharp
+TranslationContext translations = await TranslationContext.CreateBuilder()
+    .Add(AppTextCatalog.Registration)
+    .Add(GridTextCatalog.Registration)          // a library's generated registration
+    .AddOverlay(TranslationOverlay.FromPacks("acme-grid", packSource,
+        addedLocales: [new TranslationOverlayLocale("fr")]))
+    .BuildAsync(initialLocale: "de");
+
+var text = new AppText(translations);           // generated constructor over a context
+await translations.SetLocaleAsync("fr");        // every catalog switches together
+```
+
+`translations.Catalogs` reports, per catalog, the requested locale, the locale used and whether it was resolved
+exactly, through a parent (`es-419` for `es-MX`), to a related locale CLDR likely subtags match (`de-DE` for `de-CH`)
+or to the default (`LocaleResolution`); `translations.SupportedLocales` lists the locales every catalog shows, and
+`SetLocaleFromPreferencesAsync` chooses among them for a preference list. The latest `SetLocaleAsync` call wins over earlier ones still in flight, and contexts built from one
+builder share their catalogs' providers, so a context per window or request is cheap. Overlays are checked key by key,
+keep working when the library adds messages, and resolve locale-first. The text class now has a second one-parameter
+constructor, so register it with a factory rather than by type in a DI container. See [Catalogs from libraries](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/composition.md).
 
 ## When to choose this package
 

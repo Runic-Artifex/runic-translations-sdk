@@ -613,7 +613,8 @@ function cldrRelatedPenalty(first, second) {
   if (firstParent === second || secondParent === first) return 1000;
   return firstParent !== undefined && firstParent === secondParent ? 2000 : -1;
 }
-// Both sides maximized must share language and script. Equal maximized tags match best, then the nearest CLDR
+// Both sides maximized must share language and script. Equal maximized tags match best (the one nearest in the
+// desired tag's CLDR chain first), then the nearest CLDR
 // ancestor of the desired tag that a locale shares (the ancestor itself first), then a sibling region (the likely
 // region first), then a related language (cldrRelatedPenalty). The undetermined language only matches itself.
 // Ties keep the ordinal order of the declared locales.
@@ -629,8 +630,11 @@ function cldrMatch(desired, available) {
     if (penalty < 0) continue;
     if (candidate.script !== wanted.script) continue;
     let score;
-    if (candidate.region === wanted.region) score = 0;
-    else {
+    if (candidate.region === wanted.region) {
+      // Equal maximized tags: the nearest in the desired tag's CLDR chain first (en-US-posix → en-US before en).
+      const step = chain.indexOf(cldrDataId(locale));
+      score = step < 0 ? 16 : step;
+    } else {
       // The nearest ancestor of the desired tag that the candidate shares; the ancestor itself before its other descendants.
       score = -1; const candidateId = cldrDataId(locale), candidateChain = cldrChain(candidateId);
       for (let step = 1; step < chain.length && score < 0; step++) {

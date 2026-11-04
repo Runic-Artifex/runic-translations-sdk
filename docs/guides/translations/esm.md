@@ -114,7 +114,8 @@ the language and script. So `zh-TW` and `zh-HK` resolve to a declared `zh-Hant`,
 before `es`, `en-AU` to `en-GB` before `en-US`, and `nb`, `nn` and `no` to each
 other (`nn` prefers `no` to `nb`). Deprecated and legacy codes resolve to their
 replacements: `iw` to `he`, `tl` to `fil`, `mo` to `ro`, `sh` to `sr-Latn`.
-Removing subtags still applies, but only within the same likely script
+Among locales that maximize alike, the one nearest in the tag's CLDR parent
+chain wins, so `en-US-posix` resolves to `en-US` before `en`. Removing subtags still applies, but only within the same likely script
 (`tlh-x-klingon` resolves to `tlh`): a locale of another script never matches,
 so `zh-TW` falls to `baseLocale` when only `zh` (Simplified) is declared, and
 `sr-Latn-RS` when only Cyrillic `sr` is. A tag of the undetermined language

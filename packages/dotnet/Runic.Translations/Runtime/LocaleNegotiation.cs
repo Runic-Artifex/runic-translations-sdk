@@ -11,7 +11,8 @@ namespace Runic.Translations;
 /// <para>
 /// A preference matches a locale with the same tag first. Otherwise both are maximized with CLDR likely subtags
 /// and must share the language and script, as ICU's <c>LocaleMatcher</c> requires: equal maximized tags match best
-/// (<c>zh-TW</c> → <c>zh-Hant</c>, <c>de</c> → <c>de-DE</c>). Then the nearest CLDR parent of the preference that a
+/// (<c>zh-TW</c> → <c>zh-Hant</c>, <c>de</c> → <c>de-DE</c>), the one nearest in the preference's CLDR parent chain first
+/// (<c>en-US-posix</c> → <c>en-US</c> before <c>en</c>). Then the nearest CLDR parent of the preference that a
 /// locale shares decides, the parent itself before its other descendants: <c>es-MX</c> → <c>es-419</c>, then
 /// <c>es-AR</c>, then <c>es</c>; <c>en-AU</c> → <c>en-GB</c> (both under <c>en-001</c>) before <c>en-US</c>;
 /// <c>de-CH</c> → <c>de-DE</c> (the likely region of <c>de</c>) before <c>de-AT</c>. <c>nb</c> and

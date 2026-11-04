@@ -191,7 +191,9 @@ public sealed class TranslationManager : ITranslationManager
         }
     }
 
-    // The requested tag, not only the resolved locale, is current: switching from de to de-CH changes how numbers and dates format.
+    // The requested tag, not only the resolved locale, is current: a snapshot records the request it serves (de-CH
+    // resolving to de), and switching from de to de-CH changes how numbers and dates format. Snapshots that do not
+    // record requests report their locale, as before.
     private bool IsCurrentLocale(string requestedLocale) =>
         string.Equals(Current.RequestedLocale, requestedLocale, StringComparison.OrdinalIgnoreCase);
 
@@ -233,6 +235,12 @@ public sealed class TranslationManager : ITranslationManager
                             Interlocked.Exchange(ref _current, replacement);
                         notification = new TranslationLocaleChangedEventArgs(previous, replacement);
                         publishedSwitch = replacement;
+                    }
+                    else if (current.LocaleResolution != replacement.LocaleResolution)
+                    {
+                        // The same request and locale, resolved another way: the text and formatting are unchanged, so
+                        // no event is raised, but Current reports the latest resolution.
+                        Interlocked.Exchange(ref _current, replacement);
                     }
                 }
             }

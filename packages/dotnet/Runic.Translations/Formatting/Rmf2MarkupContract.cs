@@ -106,7 +106,9 @@ public sealed class Rmf2MarkupContract
             var skeletons = new HashSet<string>(StringComparer.Ordinal);
             foreach (JsonElement skeleton in message.Value.GetProperty("skeletons").EnumerateArray()) skeletons.Add(skeleton.GetString()!);
             if (content == "inline" && skeletons.Count != 0) throw new FormatException("An inline RMF2 message cannot declare document skeletons.");
-            Messages.Add(message.Name, new Message(slots, bounds, locales, content == "document", skeletons));
+            // Whether any locale of the message uses markup; a contract without the member allows markup.
+            bool structured = !message.Value.TryGetProperty("structured", out JsonElement structuredValue) || structuredValue.GetBoolean();
+            Messages.Add(message.Name, new Message(slots, bounds, locales, content == "document", skeletons, structured));
         }
     }
 
@@ -130,9 +132,12 @@ public sealed class Rmf2MarkupContract
     // Validates one loaded external-pack message against the linked contract: markup kinds,
     // options and slots, and for document messages the block rules, the normalized leaf
     // invariants and the locked skeleton (document profile v1, sections 3 to 6).
-    internal void ValidatePlanV5(TranslationPackMessageContract contract, CompiledRmf2Message message)
+    internal void ValidatePlanV5(TranslationPackMessageContract contract, CompiledRmf2Message message) =>
+        ValidatePlanV5(contract.Key.Name, message);
+
+    internal void ValidatePlanV5(string key, CompiledRmf2Message message)
     {
-        if (!Messages.TryGetValue(contract.Key.Name, out Message? linked))
+        if (!Messages.TryGetValue(key, out Message? linked))
             throw new TranslationFormatException("Unknown RMF2 message contract.");
         var types = message.InputArray.ToDictionary(input => input.Name, input => input.Type, StringComparer.Ordinal);
         foreach (CompiledRmf2Declaration declaration in message.DeclarationArray) types[declaration.Name] = declaration.Expression.ValueType;
@@ -304,7 +309,7 @@ public sealed class Rmf2MarkupContract
     }
 
     internal sealed record Message(Dictionary<string, string> Slots, Dictionary<string, (int Min, int Max)> Bounds,
-        Dictionary<string, string> ContentLocales, bool Document, HashSet<string> Skeletons);
+        Dictionary<string, string> ContentLocales, bool Document, HashSet<string> Skeletons, bool Structured);
 
     internal sealed record Tag(bool Standalone, string Placement, string Children, bool Interactive, string PlainText, Dictionary<string, Option> Options)
     {

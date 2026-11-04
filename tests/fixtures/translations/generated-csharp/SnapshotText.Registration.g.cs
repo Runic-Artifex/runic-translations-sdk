@@ -26,6 +26,10 @@ public static class SnapshotTextCatalog
     public static string ResolveLocale(global::System.Collections.Generic.IEnumerable<string> preferredLocales) =>
         global::Runic.Translations.LocaleNegotiation.Negotiate(preferredLocales, SupportedLocales, DefaultLocale);
 
+    /// <summary>Describes this catalog to a translation context: its ID, contract and provider factory.</summary>
+    public static global::Runic.Translations.TranslationCatalogRegistration Registration { get; } = new global::Runic.Translations.TranslationCatalogRegistration(
+        CatalogId, DefaultLocale, ContractFingerprint, Rmf2MarkupContract, CreateProvider);
+
     public static global::Runic.Translations.ITranslationProvider CreateProvider(
         global::Runic.Translations.ITextValueFormatter? valueFormatter = null,
         global::Runic.Translations.ITranslationSnapshotFactory? snapshotFactory = null,
