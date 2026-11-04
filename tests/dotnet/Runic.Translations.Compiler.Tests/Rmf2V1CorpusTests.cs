@@ -205,8 +205,10 @@ internal sealed class Rmf2V1CorpusTests
     // overload, in both digests.
     // Re-pinned for T1a/T1b (0.9): generated C# adds the XText(ITranslationContext) constructor and
     // XCatalog.Registration, in both digests. Every other output is unchanged.
-    private const string EncodedOutputDigest = "b376c7cbe6a48821ea80bd38416a88e90c2ec98869260976c19d1c9262a20347";
-    private const string HiddenEncodedOutputDigest = "26590f63d92e92d8b23805cfbcd44770f53b4ab0e1abc856575c1297ee9a3124";
+    // Re-pinned for T1g (0.9): the generated base ABI check is a call, TranslationsCompatibility.EnsureRuntimeAbi(1),
+    // in both digests.
+    private const string EncodedOutputDigest = "2a96fd0bc7204a0eef3a73caf82b3431fefe58620d9d23e2d935c01773498ab6";
+    private const string HiddenEncodedOutputDigest = "a821a20878455d99cc9e10d0fb70c455feed89b2dc0a21b2227a6d56aaaa6221";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

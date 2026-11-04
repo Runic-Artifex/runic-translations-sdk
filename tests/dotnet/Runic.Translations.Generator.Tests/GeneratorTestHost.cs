@@ -103,6 +103,7 @@ internal static class GeneratorTestHost
             RuntimeReferenceMode.Rmf2V1 => "public const int Rmf2RuntimeAbiVersion = 1;",
             RuntimeReferenceMode.Rmf2V3 => "public const int Rmf2RuntimeAbiVersion = 3;",
             RuntimeReferenceMode.Rmf2V3Typed => "public const int Rmf2RuntimeAbiVersion = 3; public const int TypedSlotBindingsVersion = 1;",
+            RuntimeReferenceMode.LaterCompatible => "public const int Rmf2RuntimeAbiVersion = 4; public const int MinimumRmf2RuntimeAbiVersion = 3; public const int MinimumRuntimeAbiVersion = 1;",
             RuntimeReferenceMode.Rmf2V3Composition => "public const int Rmf2RuntimeAbiVersion = 3; public const int CompositionVersion = 1;",
             RuntimeReferenceMode.ProjectReferenceRmf2V3 => "public const int Rmf2RuntimeAbiVersion = 3;",
             RuntimeReferenceMode.ProjectReferenceRmf2V3Typed => "public const int Rmf2RuntimeAbiVersion = 3; public const int TypedSlotBindingsVersion = 1;",
@@ -114,7 +115,7 @@ internal static class GeneratorTestHost
             namespace Runic.Translations.Generated;
             public static class TranslationsCompatibility
             {
-                public const int RuntimeAbiVersion = {{(mode == RuntimeReferenceMode.Mismatched ? 2 : 1)}};
+                public const int RuntimeAbiVersion = {{(mode is RuntimeReferenceMode.Mismatched or RuntimeReferenceMode.LaterCompatible ? 2 : 1)}};
                 {{rmf2Marker}}
             }
             """);
@@ -211,6 +212,8 @@ internal enum RuntimeReferenceMode
     ProjectReferenceRmf2V3Typed,
     // Synthetic metadata runtime with CompositionVersion but without the readable surface.
     Rmf2V3Composition,
+    // A later runtime (RMF2 ABI 4, base ABI 2) that still runs base ABI 1 and RMF2 ABI 3.
+    LaterCompatible,
 }
 
 internal sealed record GeneratorRun(
