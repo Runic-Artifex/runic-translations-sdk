@@ -95,6 +95,8 @@ public sealed class CompiledTranslationCatalog
             BuildDirect(_localeByTag[locale.Locale], _definitions, nameof(locales));
         }
 
+        if (deferred) TranslationHotReload.Track(this);
+
         if (!deferred)
         {
             for (int i = 0; i < _definitions.Length; i++)
@@ -280,6 +282,29 @@ public sealed class CompiledTranslationCatalog
                 throw new InvalidOperationException(
                     $"The compiled data of locale '{canonicalLocale}' in catalog '{Catalog}' is invalid: {exception.Message}",
                     exception);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Drops the values built from deferred (generated) locale data and every resolved locale, so the next snapshot
+    /// reads the generated data again. Snapshots created before keep their text. Called by <see cref="TranslationHotReload"/>.
+    /// </summary>
+    internal void ResetDeferredData()
+    {
+        lock (_stateGate)
+        {
+            foreach (LocaleState state in _localeByTag.Values)
+            {
+                if (state.Deferred)
+                {
+                    state.Locale.ResetDeferredValues();
+                    state.DirectPatterns = null;
+                    state.DirectMessages = null;
+                }
+
+                state.ResolvedPatterns = null;
+                Volatile.Write(ref state.ResolvedMessages, null);
             }
         }
     }

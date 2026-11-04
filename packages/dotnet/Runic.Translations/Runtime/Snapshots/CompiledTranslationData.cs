@@ -236,11 +236,21 @@ public sealed class CompiledTranslationLocale
                     IReadOnlyList<CompiledTranslationValue> created = _valueFactory!() ??
                         throw new InvalidOperationException($"The value factory of locale '{Locale}' returned null.");
                     Volatile.Write(ref _values, CopyValues(created, "valueFactory"));
-                    _valueFactory = null;
+                    // Under Hot Reload the factory reads the generated data again after an edit (TranslationHotReload).
+                    if (!TranslationHotReload.IsSupported) _valueFactory = null;
                 }
 
                 return _values;
             }
+        }
+    }
+
+    /// <summary>Drops the created values of a deferred locale, so the next use calls its factory again (Hot Reload only).</summary>
+    internal void ResetDeferredValues()
+    {
+        lock (_gate)
+        {
+            if (_valueFactory is not null) Volatile.Write(ref _values, null);
         }
     }
 

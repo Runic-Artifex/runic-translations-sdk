@@ -246,8 +246,9 @@ new snapshot, from any thread: the source marshals to the dispatcher it was
 created on, and each rich element renders on its own dispatcher. Several changes
 in a row render once. The source follows `ITranslationManager.SnapshotPublished`,
 which a manager raises for a locale switch and for `RefreshAsync` (for example
-after external pack bytes change), although a refresh never raises
-`LocaleChanged`.
+after external pack bytes change, or after a text-only `.rmf2` edit under
+`dotnet watch`; see [Edit text while the app runs](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/quickstart-dotnet.md#edit-text-while-the-app-runs)),
+although a refresh never raises `LocaleChanged`.
 
 Nothing leaks when windows close: the manager holds only a weak reference to the
 source, the source holds rich elements weakly, and WPF's own bindings do the

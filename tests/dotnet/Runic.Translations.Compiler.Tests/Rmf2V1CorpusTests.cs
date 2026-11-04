@@ -218,8 +218,10 @@ internal sealed class Rmf2V1CorpusTests
     // Re-pinned for merging TC with TE: message modules call the runtime with the requested locale, and runtime.js
     // reads getMessageLocale's content locales from its own table (messageLocaleTable) rather than the contract tables
     // that moved to dynamic.js, in both digests.
-    private const string EncodedOutputDigest = "cf82dd07bcab87cfb982a063153dbd085ef1f9e344eb61e981179c507120a578";
-    private const string HiddenEncodedOutputDigest = "bca94d9be3771a1601e32766f69215d938b69f982445779c79d7b6184e8b3eb7";
+    // Re-pinned for TR 0.9 batch TJ: <Class>Catalog.SourceHash and Rmf2MarkupContract are static properties rather than
+    // constants, so .NET Hot Reload applies text-only catalog edits, in both digests (C# only).
+    private const string EncodedOutputDigest = "024a7aaa4be77da42198819df216ec781cd1e5f6b56134fe0cc7255777a7e10b";
+    private const string HiddenEncodedOutputDigest = "d7fcdbda2b7100bc2f7681c43fcf3e9a9442b7de59ae680f175cece8d2aa0a9b";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

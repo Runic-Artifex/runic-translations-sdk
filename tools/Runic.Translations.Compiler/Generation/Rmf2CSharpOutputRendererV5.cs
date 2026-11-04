@@ -81,8 +81,10 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("public const string CatalogId = " + GenerationSupport.CSharpString(project.Id) + ";");
         writer.Line("public const string DefaultLocale = " + GenerationSupport.CSharpString(project.DefaultLocale) + ";");
         writer.Line("public const string ContractFingerprint = " + GenerationSupport.CSharpString(project.CallerFingerprint) + ";");
-        writer.Line("public const string SourceHash = " + GenerationSupport.CSharpString(project.SourceHash) + ";");
-        writer.Line("public const string Rmf2MarkupContract = " + GenerationSupport.CSharpString(project.MarkupContract) + ";");
+        // Properties, not constants: a text-only edit changes them, and .NET Hot Reload can update a property body but
+        // not a constant's value (ENC0011), so a constant would force a restart for every catalog edit.
+        writer.Line("public static string SourceHash => " + GenerationSupport.CSharpString(project.SourceHash) + ";");
+        writer.Line("public static string Rmf2MarkupContract => " + GenerationSupport.CSharpString(project.MarkupContract) + ";");
         writer.Line("public const string Rmf2Profile = " + GenerationSupport.CSharpString(Rmf2ProjectV5.Profile) + ";");
         writer.Line("public const int RuntimeAbiVersion = 1;");
         writer.Line("public const int Rmf2RuntimeAbiVersion = " + Rmf2ProjectV5.RuntimeAbiVersion + ";");

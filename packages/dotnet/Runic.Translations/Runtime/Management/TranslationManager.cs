@@ -45,6 +45,7 @@ public sealed class TranslationManager : ITranslationManager
         _provider = provider;
         _catalog = initialSnapshot.Catalog;
         _current = initialSnapshot;
+        TranslationHotReload.Track(this);
     }
 
     /// <inheritdoc />
