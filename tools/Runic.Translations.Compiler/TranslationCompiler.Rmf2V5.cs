@@ -41,7 +41,8 @@ public static partial class TranslationCompiler
     private sealed record Rmf2ProjectEntryV5(Rmf2ProjectSourceV5 Source, Rmf2LinkedMarkupV5 Linked)
     {
         internal Rmf2TranslationV5 Translation => new(Source.Key, Source.Locale, Linked.Message, Source.Node.NameLocation,
-            Source.Node.Comments.Count == 0 ? null : string.Join("\n", Source.Node.Comments));
+            Source.Node.Comments.Count == 0 ? null : string.Join("\n", Source.Node.Comments))
+        { SourceText = Source.Node.Message, ParameterDescriptions = ParameterDescriptionsV5(Source.Node.Properties) };
     }
 
     internal static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project,
@@ -252,7 +253,8 @@ public static partial class TranslationCompiler
         });
         return Result(new(manifest.Id, manifest.CodeNamespace, manifest.ClassName, manifest.Visibility, manifest.DefaultLocale,
             manifest.UnsupportedLocale, manifest.MissingKey, contracts.AsReadOnly(), extraContracts.AsReadOnly(), linkedLocales.AsReadOnly(), usedContracts,
-            Rmf2ProjectMarkupV5.Export(usedContracts, contracts.Concat(extraContracts).ToArray(), linkedLocales), HashV5(Encoding.UTF8.GetBytes(callerContract)), SourceHashV5(project, sources)));
+            Rmf2ProjectMarkupV5.Export(usedContracts, contracts.Concat(extraContracts).ToArray(), linkedLocales), HashV5(Encoding.UTF8.GetBytes(callerContract)), SourceHashV5(project, sources))
+            { ReferenceFallbackText = manifest.ReferenceFallbackText });
 
         Rmf2ProjectEntryV5? Compile(Rmf2ProjectSourceV5 source, IReadOnlyList<Rmf2InputV5>? callerInputs)
         {
@@ -460,6 +462,23 @@ public static partial class TranslationCompiler
             else segments.Add(part);
         }
         return (combined.StartsWith('/') ? "/" : "") + string.Join("/", segments) + (segments.Count == 0 ? "" : "/");
+    }
+
+    // "@param $name - description" (the dash is optional) by NFC input name; null when the entry documents none.
+    private static IReadOnlyDictionary<string, string>? ParameterDescriptionsV5(IReadOnlyList<string> properties)
+    {
+        Dictionary<string, string>? result = null;
+        foreach (string property in properties)
+        {
+            if (!property.StartsWith("param ", StringComparison.Ordinal)) continue;
+            string value = property.Substring("param ".Length).Trim();
+            if (!value.StartsWith('$')) continue;
+            string[] parts = value.Split(' ', 2);
+            string name = parts[0].Substring(1).Normalize(NormalizationForm.FormC), description = parts.Length < 2 ? "" : parts[1].Trim();
+            if (description.StartsWith('-')) description = description.Substring(1).Trim();
+            if (name.Length != 0 && description.Length != 0) (result ??= new Dictionary<string, string>(StringComparer.Ordinal))[name] = description;
+        }
+        return result;
     }
 
     private static void ValidateMetadataV5(Rmf2ResourceNode node, Rmf2MessageV5 message, DiagnosticBag diagnostics)

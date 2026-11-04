@@ -4,7 +4,9 @@
 Its module inventory is `web-module-manifest-v3.json` and its ESM ABI is 4. Each
 canonical message has an injectively named internal module under `messages/`;
 `messages.js` exposes the application namespace `m` and `messages.d.ts`
-supplies exact-key, typed inputs. `m` is a module namespace object
+supplies exact-key, typed inputs; each member's JSDoc shows the base locale's
+text and the entry's comment, and each input its `@param` description. `m` is a
+module namespace object
 (`export * as m from "./messages/_index.js"`, where `_index.js` re-exports each
 message module under its key), so a bundler keeps only the messages an
 application calls as `m.key()`. A key that is not an ASCII identifier is an

@@ -8,8 +8,24 @@ accept version 1.
 
 ## Writing references
 
-In .NET, create a `TranslationReference` with `TranslationReferenceArgument`
-values: a canonical scalar (`new(TextArgumentType.Int, "3")`), a list
+In .NET, the generated `References` class of a catalog creates a reference for
+each plain-text message with typed parameters, the contract fingerprint and, as
+fallback text, the base locale's text with these arguments:
+
+```csharp
+TranslationReference reference = NotesText.References.title_too_long(max: 80);
+// Catalog "notes", NotesTextCatalog.ContractFingerprint, key "title_too_long",
+// arguments { max: int64 "80" }, fallback text "The title is longer than 80 characters."
+```
+
+A member uses the message's flattened key, as `text.Messages` does, or its
+encoded name when the key is not a readable name. Times and date-times keep whole
+seconds, the transport's precision. Messages with markup have no factory, as a
+reference resolves to plain text. `"referenceFallbackText": false` under `code`
+in `runic.json` leaves the fallback text out.
+
+To nest a message argument, or without generated code, create a
+`TranslationReference` with `TranslationReferenceArgument` values: a canonical scalar (`new(TextArgumentType.Int, "3")`), a list
 (`new(["firefox", "gimp"])`) or another message (`new(stepReference)`), which
 fills a string input with that message's text. Serialize it with
 `TranslationReferenceJsonContext`, which is reflection-free and NativeAOT-safe:

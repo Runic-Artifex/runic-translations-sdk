@@ -74,7 +74,12 @@ internal sealed record Rmf2MessageContractV5(int Id, string Key, IReadOnlyList<s
     internal IReadOnlyList<string> Skeletons => DocumentSkeletons ?? Array.Empty<string>();
 }
 internal sealed record Rmf2TranslationV5(string Key, string ContentLocale, Rmf2MessageV5 Message,
-    TextSourceLocation SourceLocation, string? Description);
+    TextSourceLocation SourceLocation, string? Description)
+{
+    // The authored message text and its @param descriptions by input name, for generated documentation.
+    internal string? SourceText { get; init; }
+    internal IReadOnlyDictionary<string, string>? ParameterDescriptions { get; init; }
+}
 internal sealed record Rmf2LocaleV5(string Tag, string? FallbackTag,
     IReadOnlyList<Rmf2TranslationV5> DirectResources, IReadOnlyList<Rmf2TranslationV5> ResolvedResources);
 internal sealed record Rmf2MarkupOptionContractV5(string Type, IReadOnlyList<string> Values, string? Default, bool LiteralOnly,
@@ -92,6 +97,9 @@ internal sealed record Rmf2ProjectV5(string Id, string CodeNamespace, string Cla
     internal const int MessageGrammarVersion = 5;
     internal const int RuntimeAbiVersion = 3;
     internal const int MarkupContractVersion = 2;
+
+    // code.referenceFallbackText in runic.json: generated C# reference factories carry the base-locale text.
+    internal bool ReferenceFallbackText { get; init; } = true;
 }
 
 internal static class Rmf2ProjectV5EmissionEligibility
