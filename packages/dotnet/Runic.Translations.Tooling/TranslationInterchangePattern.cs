@@ -17,6 +17,24 @@ internal sealed record TranslationInterchangePiece(string? Text, string? Express
     internal static TranslationInterchangePiece FromExpression(string expression, string display) => new(null, expression, display);
 }
 
+/// <summary>One variant of a selector message: its keys as written (<see langword="null"/> for the single pattern of a
+/// message with declarations and no <c>.match</c>) and the pieces of its pattern.</summary>
+internal sealed record TranslationInterchangeVariant(string? Keys, IReadOnlyList<TranslationInterchangePiece> Pieces);
+
+/// <summary>
+/// A message with declarations or a <c>.match</c> whose patterns are text and placeholders. XLIFF carries the header
+/// (declarations and the <c>.match</c> statement) as one protected <c>&lt;ph&gt;</c> and every variant as a
+/// <c>&lt;pc&gt;</c> whose start and end codes are its keys and pattern quotes, so translators edit only the text.
+/// </summary>
+/// <param name="Header">The declarations and the <c>.match</c> statement as written, without trailing whitespace.</param>
+/// <param name="Display">A short display for the header: its last line.</param>
+/// <param name="PluralFunction"><c>plural</c> or <c>ordinal</c> when the message has exactly one selector and it selects by plural category.</param>
+internal sealed record TranslationInterchangeSelector(string Header, string Display, IReadOnlyList<TranslationInterchangeVariant> Variants, string? PluralFunction)
+{
+    /// <summary>Every placeholder piece of every variant, in order.</summary>
+    internal IEnumerable<TranslationInterchangePiece> Pieces => Variants.SelectMany(static variant => variant.Pieces);
+}
+
 /// <summary>
 /// The profile v3 view of a message: a plain message (one pattern of text and placeholder expressions, without
 /// declarations, selectors or markup) is a sequence of pieces. XLIFF carries the text as text and every expression
@@ -64,6 +82,13 @@ internal static class TranslationInterchangePattern
     /// <summary>Writes pieces as an MF2 pattern: text escaped, placeholders verbatim, quoted when framing would change it.</summary>
     internal static string Compose(IReadOnlyList<TranslationInterchangePiece> pieces)
     {
+        string text = Body(pieces);
+        return NeedsQuoting(pieces) ? "{{" + text + "}}" : text;
+    }
+
+    // The pattern text of pieces: text escaped, placeholders verbatim, without quoting.
+    private static string Body(IReadOnlyList<TranslationInterchangePiece> pieces)
+    {
         var body = new StringBuilder();
         foreach (TranslationInterchangePiece piece in pieces)
         {
@@ -74,9 +99,68 @@ internal static class TranslationInterchangePattern
                 body.Append(character);
             }
         }
-        string text = body.ToString();
-        return NeedsQuoting(pieces) ? "{{" + text + "}}" : text;
+        return body.ToString();
     }
+
+    /// <summary>
+    /// The selector view of a message with declarations or a <c>.match</c>, or <see langword="null"/> when it is plain,
+    /// invalid, or has markup, or a pattern reads something a standalone pattern cannot (such as a dynamic option).
+    /// </summary>
+    internal static TranslationInterchangeSelector? DecomposeSelector(string message)
+    {
+        byte[] bytes = Encoding.UTF8.GetBytes(message);
+        var source = new TranslationSource(Path, bytes);
+        Mf2SyntaxDocument syntax = Mf2SyntaxReader.Read(source);
+        if (!syntax.Success || (syntax.Declarations.Count == 0 && syntax.Match is null)) return null;
+        Rmf2MessageV5? compiled = Rmf2SemanticCompilerV5.Compile(source).Message;
+        if (compiled is null || compiled.Variants.Any(static variant => variant.Nodes.Any(static node => node is not Rmf2TextV5 and not Rmf2ExpressionNodeV5))) return null;
+        var spans = new List<(string? Keys, int Start, int End)>();
+        int headerEnd;
+        if (syntax.Match is null)
+        {
+            Mf2SyntaxToken? opening = syntax.Tokens.FirstOrDefault(static token => token.Kind == Mf2SyntaxTokenKind.PatternStart);
+            Mf2SyntaxToken? closing = syntax.Tokens.LastOrDefault(static token => token.Kind == Mf2SyntaxTokenKind.PatternEnd);
+            if (opening is null || closing is null) return null;
+            headerEnd = opening.Location.StartByte;
+            spans.Add((null, opening.Location.StartByte + 2, closing.Location.StartByte));
+        }
+        else
+        {
+            if (syntax.Variants.Count == 0 || syntax.Variants.Count != compiled.Variants.Count) return null;
+            headerEnd = syntax.Variants[0].KeyLocations.Count == 0 ? syntax.Variants[0].Location.StartByte : syntax.Variants[0].KeyLocations[0].StartByte;
+            foreach (Mf2VariantSyntax variant in syntax.Variants)
+            {
+                TextSourceLocation pattern = variant.PatternLocation;
+                if (pattern.LengthBytes < 4) return null;
+                spans.Add((string.Join(' ', variant.Keys), pattern.StartByte + 2, pattern.StartByte + pattern.LengthBytes - 2));
+            }
+        }
+        var variants = new List<TranslationInterchangeVariant>(spans.Count);
+        foreach ((string? keys, int start, int end) in spans)
+        {
+            if (end < start) return null;
+            string inner = Encoding.UTF8.GetString(bytes, start, end - start);
+            IReadOnlyList<TranslationInterchangePiece>? pieces = inner.Length == 0 ? [] : Decompose("{{" + inner + "}}");
+            if (pieces is null) return null;
+            variants.Add(new(keys, pieces));
+        }
+        string header = Encoding.UTF8.GetString(bytes, 0, headerEnd).TrimEnd();
+        if (header.Length == 0) return null;
+        string display = header.Split('\n')[^1].Trim();
+        string? plural = compiled.Selectors.Count == 1 && compiled.Selectors[0].Function is "plural" or "ordinal" ? compiled.Selectors[0].Function : null;
+        return new(header, display, variants, plural);
+    }
+
+    /// <summary>Writes a selector message: the header, then each variant on its own line.</summary>
+    internal static string Compose(TranslationInterchangeSelector selector) =>
+        selector.Header + "\n" + string.Join("\n", selector.Variants.Select(static variant =>
+            (variant.Keys is null ? "" : variant.Keys + " ") + "{{" + Body(variant.Pieces) + "}}"));
+
+    /// <summary>Header spellings compare without the whitespace that only separates syntax.</summary>
+    internal static string CanonicalHeader(string header) => string.Join(' ', header.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+    /// <summary>Keys compare as written, with separating whitespace collapsed.</summary>
+    internal static string? CanonicalKeys(string? keys) => keys is null ? null : string.Join(' ', keys.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
     /// <summary>The text of the pieces with every placeholder shown as its expression; for comparisons and fingerprints.</summary>
     internal static string Canonical(string pattern) =>

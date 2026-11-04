@@ -42,19 +42,26 @@ internal sealed record TranslationInterchangeSourceUnit(
     bool Document = false)
 {
     internal IReadOnlyList<TranslationInterchangePiece>? Pieces { get; init; }
+    /// <summary>The selector view of a message with declarations or a <c>.match</c>, exchanged as protected codes and variant texts.</summary>
+    internal TranslationInterchangeSelector? Selector { get; init; }
     internal string SourceFingerprint { get; init; } = string.Empty;
 }
 
 internal sealed record TranslationInterchangeTargetUnit(string Key, string Text, bool Structured)
 {
     internal IReadOnlyList<TranslationInterchangePiece>? Pieces { get; init; }
+    internal TranslationInterchangeSelector? Selector { get; init; }
     internal TextSourceLocation? Location { get; init; }
 }
 
 internal sealed record TranslationInterchangeLocale(
     string Tag,
     string? FallbackTag,
-    IReadOnlyList<TranslationInterchangeTargetUnit> DirectResources);
+    IReadOnlyList<TranslationInterchangeTargetUnit> DirectResources)
+{
+    /// <summary>The locale's <c>validation.pluralCategories</c> policy, which import applies to selector units.</summary>
+    internal TranslationPolicy PluralCategories { get; init; } = TranslationPolicy.Warning;
+}
 
 internal sealed record TranslationInterchangeUnitMetadata(
     string? Description,
@@ -105,6 +112,7 @@ internal static class TranslationInterchangeProjectionAdapter
                 IReadOnlyList<TranslationInterchangePiece>? pieces = document || IsStructured(source.Message)
                     ? null
                     : TranslationInterchangePattern.Decompose(raw);
+                TranslationInterchangeSelector? selector = document || pieces is not null ? null : TranslationInterchangePattern.DecomposeSelector(raw);
                 TranslationInterchangePlaceholder[] placeholders = contract.Inputs
                     .OrderBy(static input => input.Name, StringComparer.Ordinal)
                     .Select(static input => new TranslationInterchangePlaceholder(input.Name, input.Type, string.Empty))
@@ -112,7 +120,7 @@ internal static class TranslationInterchangeProjectionAdapter
                 return new TranslationInterchangeSourceUnit(
                     contract.Key,
                     raw,
-                    pieces is null,
+                    pieces is null && selector is null,
                     new TranslationInterchangeUnitMetadata(
                         source.Description,
                         null,
@@ -129,6 +137,7 @@ internal static class TranslationInterchangeProjectionAdapter
                     document)
                 {
                     Pieces = pieces,
+                    Selector = selector,
                     SourceFingerprint = TranslationInterchangeFingerprint.UnitSource(contract.Key, raw, pieces, placeholders),
                 };
             })
@@ -145,13 +154,18 @@ internal static class TranslationInterchangeProjectionAdapter
                     {
                         string raw = RawSyntax(resource.Message);
                         IReadOnlyList<TranslationInterchangePiece>? pieces = IsStructured(resource.Message) ? null : TranslationInterchangePattern.Decompose(raw);
-                        return new TranslationInterchangeTargetUnit(resource.Key, raw, pieces is null)
+                        TranslationInterchangeSelector? selector = pieces is null ? TranslationInterchangePattern.DecomposeSelector(raw) : null;
+                        return new TranslationInterchangeTargetUnit(resource.Key, raw, pieces is null && selector is null)
                         {
                             Pieces = pieces,
+                            Selector = selector,
                             Location = resource.SourceLocation,
                         };
                     })
-                    .ToArray()))
+                    .ToArray())
+            {
+                PluralCategories = project.PluralCategoryPolicies.GetValueOrDefault(locale.Tag, TranslationPolicy.Warning),
+            })
             .ToArray();
 
         return Create(project.Id, project.DefaultLocale, canonical, locales, diagnostics,
@@ -196,7 +210,8 @@ internal static class TranslationInterchangeProjectionAdapter
     private static string RawSyntax(Rmf2MessageV5 message) =>
         Encoding.UTF8.GetString(message.Syntax.Source.GetUtf8Bytes());
 
-    // Profile v3: placeholders are plain (exchanged as <ph>); declarations, selectors and markup are structured.
+    // Profile v3: placeholders are plain (exchanged as <ph>); declarations and selectors are exchanged as a selector
+    // view (DecomposeSelector) when their patterns are plain; markup is structured.
     private static bool IsStructured(Rmf2MessageV5 message) =>
         message.Declarations.Count != 0 ||
         message.Selectors.Count != 0 ||
