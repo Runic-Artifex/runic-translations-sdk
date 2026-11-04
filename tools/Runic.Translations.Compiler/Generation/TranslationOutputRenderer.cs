@@ -19,8 +19,8 @@ internal static class TranslationOutputRenderer
     internal static TranslationGeneratedOutput RenderRmf2V5CSharpCatalogData(Rmf2ProjectV5 project) =>
         Rmf2CSharpOutputRendererV5.RenderCatalogData(RequireProject(project));
 
-    internal static TranslationGeneratedOutput RenderRmf2V5CSharpRegistration(Rmf2ProjectV5 project, bool composition = true) =>
-        Rmf2CSharpOutputRendererV5.RenderRegistration(RequireProject(project), composition);
+    internal static TranslationGeneratedOutput RenderRmf2V5CSharpRegistration(Rmf2ProjectV5 project, bool composition = true, bool runtimeAbiCall = true) =>
+        Rmf2CSharpOutputRendererV5.RenderRegistration(RequireProject(project), composition, runtimeAbiCall);
 
     internal static TranslationGeneratedOutput RenderRmf2V5CSharpReadable(Rmf2ProjectV5 project) =>
         Rmf2CSharpOutputRendererV5.RenderReadable(RequireProject(project));
