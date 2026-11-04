@@ -65,6 +65,9 @@ internal sealed record TranslationInterchangeUnitMetadata(
 {
     /// <summary>The documented parameters, each <c>$name - text</c>, shown in the readable description note.</summary>
     internal IReadOnlyList<string> Parameters { get; init; } = Array.Empty<string>();
+
+    /// <summary>The message's <c>@maxLength</c> in Unicode code points, exported as an XLIFF size restriction.</summary>
+    internal int? MaxLength { get; init; }
 }
 
 internal sealed record TranslationInterchangePlaceholder(string Name, string Type, string Format);
@@ -121,6 +124,7 @@ internal static class TranslationInterchangeProjectionAdapter
                             .Where(static property => property.StartsWith("param ", StringComparison.Ordinal))
                             .Select(static property => property["param ".Length..].Trim())
                             .ToArray(),
+                        MaxLength = MaxLength(source.Properties),
                     },
                     document)
                 {
@@ -177,6 +181,16 @@ internal static class TranslationInterchangeProjectionAdapter
         {
             SourceFreshness = sourceFreshness ?? TranslationInterchangeFingerprint.ProjectionSource(projection),
         };
+    }
+
+    // "@maxLength N" with a positive N; the compiler reports any other spelling (RTR0051).
+    private static int? MaxLength(IReadOnlyList<string> properties)
+    {
+        foreach (string property in properties)
+            if (property.StartsWith("maxLength ", StringComparison.Ordinal) &&
+                int.TryParse(property["maxLength ".Length..].Trim(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int value) && value > 0)
+                return value;
+        return null;
     }
 
     private static string RawSyntax(Rmf2MessageV5 message) =>

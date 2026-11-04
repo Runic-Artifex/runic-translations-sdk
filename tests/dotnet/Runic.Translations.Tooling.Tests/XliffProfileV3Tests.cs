@@ -80,6 +80,27 @@ internal sealed class XliffProfileV3Tests
             ValidateSchema(File.ReadAllBytes(file));
     }
 
+    [Test, DisplayName("@maxLength is exported as an XLIFF size restriction in code points and ignored on import")]
+    public void MaxLengthIsASizeRestriction()
+    {
+        Rmf2ProjectCompilation compilation = Compile("@maxLength 12\nsave = Save {$name}\nplain = Plain", "save = Sichern {$name}");
+        byte[] bytes = TranslationInterchange.ExportXliff21(compilation).Documents.Single().Bytes.ToArray();
+        ValidateSchema(bytes);
+        XDocument document = XDocument.Parse(Text(bytes));
+        XNamespace xliff = TranslationInterchangeNamespace, slr = "urn:oasis:names:tc:xliff:sizerestriction:2.0";
+        XElement file = document.Root!.Element(xliff + "file")!;
+        XElement profiles = file.Elements().First();
+        Require(profiles.Name == slr + "profiles" && (string?)profiles.Attribute("generalProfile") == "xliff:codepoints" &&
+            (string?)profiles.Element(slr + "normalization")?.Attribute("general") == "nfc", "The size restriction profile is missing: " + file);
+        XElement[] units = file.Elements(xliff + "unit").ToArray();
+        Require((string?)units.Single(unit => (string?)unit.Attribute("id") == "save").Attribute(slr + "sizeRestriction") == "12", "The unit has no size restriction.");
+        Require(units.Single(unit => (string?)unit.Attribute("id") == "plain").Attribute(slr + "sizeRestriction") is null, "A unit without @maxLength has a size restriction.");
+        TranslationXliffImportResult imported = TranslationInterchange.ImportXliff21(bytes, compilation);
+        Require(Message(imported, "save") == "Sichern {$name}", "The restricted unit did not import: " + Message(imported, "save"));
+        // Without @maxLength nothing of the module is written.
+        Require(!Text(TranslationInterchange.ExportXliff21(Compile(English, German)).Documents.Single().Bytes).Contains("sizerestriction", StringComparison.Ordinal), "The module was written without @maxLength.");
+    }
+
     [Test, DisplayName("readable description notes carry the description and @param lines and are accepted back")]
     public void DescriptionNotesAreReadable()
     {
@@ -412,6 +433,7 @@ internal sealed class XliffProfileV3Tests
         set.Add("http://www.w3.org/XML/1998/namespace", Path.Combine(schemas, "informativeCopiesOf3rdPartySchemas", "w3c", "xml.xsd"));
         using (XmlReader core = XmlReader.Create(Path.Combine(schemas, "xliff_core_2.0.xsd"), new XmlReaderSettings { DtdProcessing = DtdProcessing.Ignore }))
             set.Add(TranslationInterchangeNamespace, core);
+        set.Add("urn:oasis:names:tc:xliff:sizerestriction:2.0", Path.Combine(schemas, "size_restriction.xsd"));
         set.Compile();
         var errors = new List<string>();
         var settings = new XmlReaderSettings { ValidationType = ValidationType.Schema, Schemas = set, ValidationFlags = XmlSchemaValidationFlags.ReportValidationWarnings };

@@ -237,8 +237,8 @@ internal static class Rmf2ResourceReader
             foreach (string property in properties)
             {
                 string name = property.Split(' ', 2)[0];
-                if (isGroup && (name == "example" || name == "param")) Error("@example and @param attach only to messages.", statementStart, at);
-                if (name != "example" && name != "param") diagnostics.Add("RTR0051", TranslationDiagnosticSeverity.Warning, "Unknown metadata @" + name + " is preserved without execution.", Location(statementStart, at));
+                if (isGroup && (name == "example" || name == "param" || name == "maxLength")) Error("@example, @param and @maxLength attach only to messages.", statementStart, at);
+                if (name != "example" && name != "param" && name != "maxLength") diagnostics.Add("RTR0051", TranslationDiagnosticSeverity.Warning, "Unknown metadata @" + name + " is preserved without execution.", Location(statementStart, at));
             }
             ClearAttachment(false);
             if (isGroup)
