@@ -15,6 +15,10 @@
       "project": "packages/dotnet/Runic.Translations.CommandLine/Runic.Translations.CommandLine.csproj"
     },
     {
+      "name": "Runic.Translations.Hosting",
+      "project": "packages/dotnet/Runic.Translations.Hosting/Runic.Translations.Hosting.csproj"
+    },
+    {
       "name": "Runic.Translations.Tooling",
       "project": "packages/dotnet/Runic.Translations.Tooling/Runic.Translations.Tooling.csproj"
     },

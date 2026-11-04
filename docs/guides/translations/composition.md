@@ -50,6 +50,15 @@ as the WPF `TranslationSource` keep working. A manager's `SetLocaleAsync` switch
 recomposes only its catalog. Managers raise `LocaleChanged` and `SnapshotPublished` as before, and the context then
 raises its own `LocaleChanged` once.
 
+With dependency injection, `Runic.Translations.Hosting` registers the shared context, and the application and each
+library add their catalogs in their own registration methods:
+
+```csharp
+services.AddRunicTranslations(options => options.InitialLocale = settings.Language)
+    .AddCatalog(AppTextCatalog.Registration, context => new AppText(context));
+services.AddRunicTranslations().AddCatalog(GridTextCatalog.Registration, context => new GridText(context));   // in the library
+```
+
 `translations.Resolve(reference)` resolves a stored `TranslationReference` of any registered catalog, so validation
 text from a library ViewModel is translated like the application's own.
 
