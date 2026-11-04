@@ -131,8 +131,9 @@ internal sealed class Rmf2RuntimeV5Tests
         var maximum = Simple([new("digits", TextArgumentType.Int)], [Declare("digits", TextArgumentType.Int)], Output(Number("1.2"), TextArgumentType.Number, "number", new CompiledRmf2Option("minimumFractionDigits", Number("3")), new CompiledRmf2Option("maximumFractionDigits", Input("digits"))));
         Assert.Throws<TranslationFormatException>(() => maximum.Format([new("digits", 2L)], "en"));
         (TextArgumentType Type, string Function, string Option, string Valid, string Invalid)[] enums =
-        [ (TextArgumentType.Int,"integer","useGrouping","min2","sometimes"), (TextArgumentType.Number,"number","useGrouping","auto","true"), (TextArgumentType.Date,"date","style","long","medium"),
-          (TextArgumentType.Time,"time","style","long","medium"), (TextArgumentType.DateTime,"datetime","style","short","full"),
+        [ (TextArgumentType.Int,"integer","useGrouping","min2","sometimes"), (TextArgumentType.Number,"number","useGrouping","auto","true"), (TextArgumentType.Date,"date","style","medium","longer"),
+          (TextArgumentType.Time,"time","style","full","Medium"), (TextArgumentType.DateTime,"datetime","style","full","FULL"),
+          (TextArgumentType.DateTime,"datetime","timeZone","Europe/Berlin","Europe Berlin"),
           (TextArgumentType.Guid,"runic:uuid","style","p","P"), (TextArgumentType.Number,"runic:relative-time","unit","week","decade"),
           (TextArgumentType.Number,"runic:relative-time","numeric","auto","never") ];
         foreach (var item in enums)

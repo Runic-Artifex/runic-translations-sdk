@@ -15,12 +15,34 @@ export interface LocaleHandleOptions<Locale extends string> {
   readonly canonicalRedirect?: boolean;
   readonly redirectStatus?: 301 | 302 | 307 | 308;
   readonly localsKey?: string;
+  /** Property of `event.locals` that receives the requested tag (`de-CH` for a `de` locale), or `false`. */
+  readonly requestedLocaleKey?: string | false;
   readonly applicationLocale?: (event: RequestEvent) => string | null | undefined | Promise<string | null | undefined>;
-  readonly setLocale?: (event: RequestEvent, locale: Locale) => void;
+  /**
+   * The IANA zone that `timeZone=local` formats in while the server renders this request, normally the visitor's
+   * zone from a cookie or header the app sets in the browser. Without it, or when it returns nothing or a zone the
+   * server does not know, server rendering uses the server's zone, which can differ from the browser's after hydration.
+   */
+  readonly timeZone?: (event: RequestEvent) => string | null | undefined | Promise<string | null | undefined>;
+  readonly setLocale?: (event: RequestEvent, locale: Locale, request: RequestLocale) => void;
   /** Generated `runWithLocale` from the catalog's server entrypoint. */
-  readonly runWithLocale?: <Result>(locale: Locale, operation: () => Result) => Result;
+  readonly runWithLocale?: <Result>(locale: Locale, operation: () => Result, options?: RequestLocaleOptions) => Result;
   /** Token placed in app.html, for example `<html lang="%runic.locale%">`. */
   readonly htmlLanguageToken?: string | false;
+}
+
+/** The request-scoped options the generated `runWithLocale` takes besides the locale. */
+export interface RequestLocaleOptions {
+  readonly requestedLocale?: string;
+  readonly timeZone?: string;
+}
+
+/** What the handle resolved for a request besides its locale. */
+export interface RequestLocale {
+  /** The canonical tag the visitor asked for, such as `de-CH` for a `de` locale (see `LocaleResolution.requestedLocale`). */
+  readonly requestedLocale: string;
+  /** The zone from the `timeZone` option, if any. */
+  readonly timeZone: string | undefined;
 }
 
 export function createLocaleHandle<Locale extends string>(
@@ -36,6 +58,7 @@ export function createLocaleHandle<Locale extends string>(
     sameSite: configuredCookie.sameSite ?? "lax",
   } satisfies LocaleCookieOptions;
   const localsKey = options.localsKey ?? "locale";
+  const requestedLocaleKey = options.requestedLocaleKey ?? "requestedLocale";
   const htmlLanguageToken = options.htmlLanguageToken ?? "%runic.locale%";
 
   return async ({ event, resolve }) => {
@@ -47,10 +70,14 @@ export function createLocaleHandle<Locale extends string>(
       acceptLanguage: event.request.headers.get("accept-language"),
     });
 
+    const timeZone = (await options.timeZone?.(event)) ?? undefined;
+    const request: RequestLocale = { requestedLocale: resolution.requestedLocale ?? resolution.locale, timeZone };
+
     if (options.setLocale) {
-      options.setLocale(event, resolution.locale);
+      options.setLocale(event, resolution.locale, request);
     } else {
       (event.locals as Record<string, unknown>)[localsKey] = resolution.locale;
+      if (requestedLocaleKey !== false) (event.locals as Record<string, unknown>)[requestedLocaleKey] = request.requestedLocale;
     }
 
     if (cookie && options.persistLocale) {
@@ -72,7 +99,9 @@ export function createLocaleHandle<Locale extends string>(
     const render = () => resolve(event, htmlLanguageToken === false ? undefined : {
       transformPageChunk: ({ html }) => html.replaceAll(htmlLanguageToken, escapeHtmlAttribute(resolution.locale)),
     });
-    return options.runWithLocale ? options.runWithLocale(resolution.locale, render) : render();
+    return options.runWithLocale
+      ? options.runWithLocale(resolution.locale, render, { requestedLocale: request.requestedLocale, ...(timeZone === undefined ? {} : { timeZone }) })
+      : render();
   };
 }
 
@@ -95,6 +124,22 @@ export function localeFromLocals<Locale extends string>(
     throw new Error(`App.Locals.${key} does not contain a supported Runic locale.`);
   }
   return locale;
+}
+
+/**
+ * The requested tag the handle stored (`de-CH` for a `de` locale), for layout data that the browser passes to
+ * `createLocaleSource({ initialLocale })` so that hydration formats numbers and dates as the server did; the locale
+ * from `localeFromLocals` when the handle stored none.
+ */
+export function requestedLocaleFromLocals<Locale extends string>(
+  locals: App.Locals,
+  routing: LocaleRouting<Locale>,
+  key = "requestedLocale",
+  localeKey = "locale",
+): string {
+  const locale = localeFromLocals(locals, routing, localeKey);
+  const requested = (locals as Record<string, unknown>)[key];
+  return typeof requested === "string" && routing.matchLocale(requested) === locale ? requested : locale;
 }
 
 function withoutUndefined<T extends object>(value: T): T {

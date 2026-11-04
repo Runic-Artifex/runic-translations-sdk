@@ -257,6 +257,11 @@
             "public",
             "internal"
           ]
+        },
+        "referenceFallbackText": {
+          "type": "boolean",
+          "default": true,
+          "description": "Generated C# reference factories (Class.References) include the base-locale text as the reference's fallback text."
         }
       },
       "additionalProperties": false

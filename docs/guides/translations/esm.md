@@ -3,8 +3,17 @@
 `--emit-esm` emits `{catalog}.esm-v5/` beneath the selected output directory.
 Its module inventory is `web-module-manifest-v3.json` and its ESM ABI is 4. Each
 canonical message has an injectively named internal module under `messages/`;
-`messages.js` exposes the tree-shakable application namespace `m` and
-`messages.d.ts` supplies exact-key, typed inputs.
+`messages.js` exposes the application namespace `m` and `messages.d.ts`
+supplies exact-key, typed inputs; each member's JSDoc shows the base locale's
+text and the entry's comment, and each input its `@param` description. `m` is a
+module namespace object
+(`export * as m from "./messages/_index.js"`, where `_index.js` re-exports each
+message module under its key), so a bundler keeps only the messages an
+application calls as `m.key()`. A key that is not an ASCII identifier is an
+ES2022 string export name. Passing `m` as a whole, as a text-reference handler
+map or to `Object.keys`, keeps every message. Like the frozen object of earlier
+releases, `m` cannot be extended or assigned to, but `Object.isFrozen(m)` is
+`false` because module namespace properties are reported as writable.
 `runtime.js` owns locale canonicalization, fallback, explicit locale overrides,
 input validation, and portable scalar formatting. Generated messages consume the
 compiler AST and never parse authoring patterns or fetch JSON.
@@ -15,7 +24,21 @@ such as `["Hello ", ["name"]]`; any other message is minified AST JSON. A locale
 whose message comes from its fallback shares the fallback's object instead of a
 copy. The runtime rebuilds the same normalized AST from the parts and validates
 every message when its module loads, so the encoding does not change what a
-message formats. For a catalog of about 1,300 messages in two locales, the
+message formats. Each message module also carries its own contract (inputs,
+content profile and slots), and its data sits in a `/* @__PURE__ */` call, so a
+bundle holds only the contracts and text of the messages it calls. The catalog's
+whole contract tables (`rmf2Contract`, `messageContracts`) are in `dynamic.js`,
+which only applications that decode locale artifacts import. The renderers
+(`createInlineRenderer`, `createDocumentRenderer`, `toPlainText`) check content
+against a table of the catalog's structured messages (each key's content kind
+and slots) in `runtime.js`. It is parsed on first use and dropped from bundles
+that never render content, and it lets a renderer show content formatted
+somewhere else, such as SvelteKit server `load` data, a `postMessage` from a
+worker or stored content, without loading that message's module. For the
+Translations Editor's catalog (759 messages, two locales), a Vite build that
+calls one message through `m` shrank from 1,024,952 bytes to 65,790 bytes
+(786,138 to 46,490 minified), the same as importing that message's module
+directly; `runtime.js` shrank from 270,049 to 98,162 bytes. For a catalog of about 1,300 messages in two locales, the
 minified bundle of all messages shrank from 2.0 MB to 0.93 MB, of which
 0.32 MB is `runtime.js`.
 
@@ -83,6 +106,38 @@ unset `lang` attribute, resolves like an unsupported locale (the base locale
 unless `unsupportedLocale` is `exact`). Framework adapters consume this
 structural contract and create one source per browser root. SSR uses the
 generated server entrypoint rather than a mutable global source.
+
+A message formats its numbers, percentages, dates and times in the requested
+tag, before it resolves to a catalog locale, when the tag shares the language of
+the message's text: `m.total({ amount }, { locale: 'de-CH' })` shows the `de`
+text with Swiss separators. `getRequestedLocale()` returns that tag for the
+current resolver (`de-CH` where `getLocale()` returns `de`), and
+`getMessageLocale(key, options?)` returns `{ key, locale, formatLocale }`: the
+locale of the message's text, for the `lang` of a string message after a
+fallback, and the locale its values format in. Structured content carries the
+same `locale` and `formatLocale`. `onFallback((key, locale, contentLocale) => …)`
+adds a listener, called when a message shows the text of a fallback locale
+because `locale` has no translation of it; it returns a function that removes
+the listener. Date-time inputs (`Date | string`) accept a `Date` or an ISO 8601
+string with an optional fraction and `Z` or an offset; sub-second digits are
+dropped. See [the RMF2 guide](rmf2.md) for the date, time and percent styles.
+
+`createLocaleSource({ initialLocale: 'de-CH' })` keeps the requested tag beside
+the catalog locale: `getLocale()` returns `de` and `getRequestedLocale()`
+`de-CH`, and the Svelte adapter's `messageOptions` and `useMessageLocale` pass
+the requested tag to message calls. `setLocale` with the current catalog locale
+keeps a regional tag, so a navigation to a `/de` route keeps Swiss formatting.
+
+`timeZone=local` formats in the zone of the process, read on every call. On the
+server that is the server's zone, which differs from the visitor's after
+hydration. The generated `/server` entry takes the visitor's zone per request:
+`runWithLocale(locale, render, { requestedLocale: 'de-CH', timeZone: zone })`,
+where `zone` comes from a cookie or header the app sets in the browser from
+`Intl.DateTimeFormat().resolvedOptions().timeZone`; a zone the engine does not
+know falls back to the server's. Elsewhere, `configureTimeZoneResolver(() =>
+zone)` installs the zone that `local` means and returns a function that removes
+it. Until a request carries the zone, render local dates in the browser only, or
+pass an explicit `timeZone`.
 
 `localeDirection(locale)` returns `"rtl"` or `"ltr"` for any valid BCP 47
 tag, not only the catalog's locales, so the page can set its direction with

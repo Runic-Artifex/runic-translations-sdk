@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -36,28 +37,28 @@ internal sealed class Rmf2EsmV5Tests
                 import { createTextReference, decodeTextReference } from "./billing.esm-v5/transport.js";
                 const check = (condition, message) => { if (!condition) throw new Error(message); };
                 // #86: a :number input takes a finite JavaScript number as the decimal String() writes.
-                check(m.account_total({ rate: 0.125 }, { locale: "de" }) === "12,50%", "number decimal input");
+                check(m.account_total({ rate: 0.125 }, { locale: "de" }) === "12,50\u00A0%", "number decimal input");
                 check(m.account_total({ rate: 1e-7 }, { locale: "en" }) === m.account_total({ rate: "0.0000001" }, { locale: "en" }), "exponent number decimal input");
                 for (const value of [NaN, Infinity, -Infinity]) { let rejected=false; try { m.account_total({ rate: value }); } catch (error) { rejected = error instanceof TypeError; } check(rejected, `non-finite decimal accepted: ${value}`); }
                 check(createTextReference("account_total", { rate: 0.125 }).arguments.rate.value === "0.125", "number decimal reference");
                 check(createTextReference("account_total", { rate: -0 }).arguments.rate.value === "0", "negative zero decimal reference");
-                check(m.account_total({ rate: decimal("0.125") }, { locale: "de" }) === "12,50%", "exact percent formatting");
+                check(m.account_total({ rate: decimal("0.125") }, { locale: "de" }) === "12,50\u00A0%", "exact percent formatting");
                 check(m.account_total({ rate: { coefficient: 125n, scale: 3, negative: false } }, { locale: "en" }) === "12.50%", "coefficient/scale input");
                 const bill = m.account_bill({ count: 2n, rate: decimal("0.125"), "用户": "Ada" }, { locale: "de" });
                 check(bill.kind === "localized-content" && bill.locale === "de" && Object.isFrozen(bill.nodes), "structured content");
                 check(bill.nodes[0].children.map(node => node.value).join("") === "2 Rechnungen" && bill.nodes[0].attributes.ref === "invoice", "linked markup and options");
-                const plain=toPlainText(bill,{slots:{invoice:linkBinding({href:"/invoice"})}});check(plain==="2 Rechnungen: 12,5%", `plain-text markup projection: ${JSON.stringify(plain)}`);
+                const plain=toPlainText(bill,{slots:{invoice:linkBinding({href:"/invoice"})}});check(plain==="2 Rechnungen: 12,5\u00A0%", `plain-text markup projection: ${JSON.stringify(plain)}`);
                 let forgedLink=false;try{toPlainText(bill,{slots:{invoice:{kind:"runic:link",href:"javascript:alert(1)"}},annotateLinkDestinations:true});}catch{forgedLink=true;}check(forgedLink,"forged unsafe link binding accepted");
                 let hrefReads=0;const changingLink={kind:"runic:link",get href(){return ++hrefReads===1?"https://safe.example/":"javascript:alert(1)";}};const snapshottedLink=toPlainText(bill,{slots:{invoice:changingLink},annotateLinkDestinations:true});check(hrefReads===1&&snapshottedLink.includes("(https://safe.example/)"),"validated slot binding was not snapshotted before rendering");
                 const concurrent = await Promise.all([
                   runWithLocale("en", async () => { await Promise.resolve(); return m.account_total({ rate: decimal("0.125") }); }),
                   runWithLocale("de", async () => { await Promise.resolve(); return m.account_total({ rate: decimal("0.125") }); }),
                 ]);
-                check(concurrent[0] === "12.50%" && concurrent[1] === "12,50%", "request-local SSR isolation");
+                check(concurrent[0] === "12.50%" && concurrent[1] === "12,50\u00A0%", "request-local SSR isolation");
                 const raw = JSON.parse(await readFile(new URL("./artifact.json", import.meta.url), "utf8"));
                 const declared=raw.markupContract.contracts["runic:link"];let incompatible=false;try{createInlineRenderer({text:value=>value,element:element=>element.children.join("")},[{contract:{name:"runic:link",children:"none",...declared},render:()=>""}]);}catch{incompatible=true;}check(incompatible,"incompatible renderer contract accepted");
                 const decoded = decodeLocaleArtifact(raw); check(decoded.ok, decoded.reason);
-                check(formatDynamicMessage(decoded.value, "account_total", { rate: decimal("0.125") }) === "12,50%", "dynamic parity");
+                check(formatDynamicMessage(decoded.value, "account_total", { rate: decimal("0.125") }) === "12,50\u00A0%", "dynamic parity");
                 const validAst=raw.messages.account_total.ast;let reads=0;
                 const getterWrapper={contentLocale:raw.messages.account_total.contentLocale};Object.defineProperty(getterWrapper,"ast",{enumerable:true,get(){reads++;return validAst;}});
                 const getterArtifact=structuredClone(raw);getterArtifact.messages.account_total=getterWrapper;const getterDecoded=decodeLocaleArtifact(getterArtifact);check(!getterDecoded.ok&&getterDecoded.reason==="RTR0023/malformed"&&reads===0,"artifact accessor was invoked or accepted");
@@ -261,7 +262,8 @@ internal sealed class Rmf2EsmV5Tests
             string script = Path.Combine(directory, "integer-options.mjs");
             File.WriteAllText(script, """
                 import { m } from "./app.esm-v5/messages.js";
-                import { bindMarkup, createInlineRenderer, defineMarkup, rmf2Contract, rmf2RuntimeAbiVersion } from "./app.esm-v5/runtime.js";
+                import { bindMarkup, createInlineRenderer, defineMarkup, rmf2RuntimeAbiVersion } from "./app.esm-v5/runtime.js";
+                import { rmf2Contract } from "./app.esm-v5/dynamic.js";
                 const check=(condition,message)=>{if(!condition)throw new Error(message);};
                 check(rmf2RuntimeAbiVersion===3&&rmf2Contract.version===2,"contract markers");
                 const exported=rmf2Contract.contracts["app:step"];
@@ -308,6 +310,151 @@ internal sealed class Rmf2EsmV5Tests
         finally { Directory.Delete(directory, true); }
     }
 
+    // L4-8: a Vite production build through the shipping plugin of a large compiled catalog keeps only the message the
+    // application calls through m, the same bytes as importing that message module directly, within runtime.js plus
+    // the module; no other message's text and none of the catalog's contract tables (which name every key).
+    [Test, DisplayName("RMF2 v5 ESM namespace m tree-shakes to the called message in a Vite build of compiler output")]
+    public void NamespaceTreeShaking()
+    {
+        const int count = 400;
+        var english = new StringBuilder("greet = Hello {$name}, welcome\n");
+        var german = new StringBuilder("greet = Hallo {$name}, willkommen\n");
+        for (int index = 0; index < count; index++)
+        {
+            english.Append(CultureInfo.InvariantCulture, $"message_{index:D3} = Unused sentinel {index:D3}\n");
+            german.Append(CultureInfo.InvariantCulture, $"message_{index:D3} = Ungenutzter Platzhalter {index:D3}\n");
+        }
+        const string json = """{"schemaVersion":1,"catalog":"budget","code":{"namespace":"Example","className":"BudgetText"},"baseLocale":"en","locales":["en","de"]}""";
+        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(json)),
+            [new("translations/en.rmf2", Encoding.UTF8.GetBytes(english.ToString())), new("translations/de.rmf2", Encoding.UTF8.GetBytes(german.ToString()))]);
+        Assert.True(compilation.Success, string.Join("; ", compilation.Diagnostics.Select(item => item.Message)));
+        IReadOnlyList<TranslationGeneratedOutput> outputs = TranslationOutputRenderer.RenderRmf2V5EsmModules(compilation.Project!);
+        string module = "messages/" + Rmf2GeneratedNamesV1.Identifier("greet") + ".js";
+        int budget = outputs.Single(item => item.RelativePath == "budget.esm-v5/runtime.js").GetUtf8Bytes().Length +
+            outputs.Single(item => item.RelativePath == "budget.esm-v5/" + module).GetUtf8Bytes().Length;
+        string directory = Write(outputs);
+        try
+        {
+            string plugin = RepositoryPaths.Resolve("packages", "web", "vite-plugin-runic-translations", "dist", "index.js");
+            File.WriteAllText(Path.Combine(directory, "namespace.js"), "import { m } from \"virtual:runic-translations/budget\";\nexport const result = m.greet({ name: \"Ada\" });\n");
+            File.WriteAllText(Path.Combine(directory, "direct.js"), "import { " + Rmf2GeneratedNamesV1.Identifier("greet") + " as greet } from \"./budget.esm-v5/" + module + "\";\nexport const result = greet({ name: \"Ada\" });\n");
+            string script = Path.Combine(directory, "budget.mjs");
+            File.WriteAllText(script, "import { createRequire } from \"node:module\";\nimport { readFile } from \"node:fs/promises\";\nimport { join } from \"node:path\";\n" +
+                "const plugin = " + JsonString(plugin) + ", budget = " + budget.ToString(CultureInfo.InvariantCulture) + ";\n" + """
+                const { runicTranslations } = await import(plugin);
+                const { build } = await import(createRequire(plugin).resolve("vite"));
+                const root = import.meta.dirname, sizes = {};
+                for (const name of ["namespace", "direct"]) {
+                  const outDir = join(root, "dist-" + name);
+                  await build({ configFile: false, root, logLevel: "silent", plugins: [runicTranslations({ manifest: join(root, "budget.esm-v5", "web-module-manifest-v3.json") })],
+                    build: { outDir, minify: false, lib: { entry: join(root, name + ".js"), formats: ["es"], fileName: () => "bundle.js" } } });
+                  const bundle = await readFile(join(outDir, "bundle.js"), "utf8"); sizes[name] = Buffer.byteLength(bundle);
+                  if (!bundle.includes("Hello ") || !bundle.includes("Hallo ")) throw new Error(name + ": the called message is missing");
+                  for (const text of ["Unused sentinel", "Ungenutzter Platzhalter", "message_"]) if (bundle.includes(text)) throw new Error(name + ": the bundle contains " + text);
+                  const { result } = await import(join(outDir, "bundle.js")); if (result !== "Hello Ada, welcome") throw new Error(name + ": " + result);
+                }
+                console.log(JSON.stringify({ budget, ...sizes }));
+                if (sizes.namespace > sizes.direct + 64) throw new Error(`m.greet() bundles ${sizes.namespace} B, its module alone ${sizes.direct} B`);
+                if (sizes.namespace > budget) throw new Error(`m.greet() bundles ${sizes.namespace} B, over runtime.js plus its module (${budget} B)`);
+                """, new UTF8Encoding(false));
+            Run("bun", [script], directory);
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
+    // Content formatted in one process (SvelteKit server load data, postMessage, stored content) is rendered in another
+    // whose module graph never loaded that message's module: the renderers check it against the catalog's own table of
+    // structured messages in runtime.js, which a bundle that only calls m.key() still leaves out.
+    [Test, DisplayName("RMF2 v5 ESM renders content serialized by another process without its message module")]
+    public void SerializedContent()
+    {
+        const string json = """{"schemaVersion":1,"catalog":"wire","code":{"namespace":"Example","className":"WireText"},"baseLocale":"en","locales":["en","de"]}""";
+        const string english = "greet = Hello {$name}\nhelp_link = Read the {#link ref=handbook}handbook{/link} now.\nnotice_doc =\n  {#p}Open the {#link ref=handbook}handbook{/link}.{/p}\n  {#ul}{#li}First step{/li}{/ul}\n";
+        const string german = "greet = Hallo {$name}\nhelp_link = Lies das {#link ref=handbook}Handbuch{/link} jetzt.\nnotice_doc =\n  {#p}Öffne das {#link ref=handbook}Handbuch{/link}.{/p}\n  {#ul}{#li}Erster Schritt{/li}{/ul}\n";
+        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(json)),
+            [new("translations/en.rmf2", Encoding.UTF8.GetBytes(english)), new("translations/de.rmf2", Encoding.UTF8.GetBytes(german))]);
+        Assert.True(compilation.Success, string.Join("; ", compilation.Diagnostics.Select(item => item.Message)));
+        IReadOnlyList<TranslationGeneratedOutput> outputs = TranslationOutputRenderer.RenderRmf2V5EsmModules(compilation.Project!);
+        string runtime = Encoding.UTF8.GetString(outputs.Single(item => item.RelativePath == "wire.esm-v5/runtime.js").GetUtf8Bytes());
+        Assert.True(!runtime.Contains("export function generatedContract", StringComparison.Ordinal), "runtime.js exports a contract factory");
+        string directory = Write(outputs);
+        try
+        {
+            // Process 1, the server: formats the content and serializes it with the expected renderings.
+            File.WriteAllText(Path.Combine(directory, "server.mjs"), """
+                import { writeFile } from "node:fs/promises";
+                import { m } from "./wire.esm-v5/messages.js";
+                import { createDocumentRenderer, createInlineRenderer, linkBinding, toPlainText } from "./wire.esm-v5/runtime.js";
+                const slots = { handbook: linkBinding({ href: "/handbook" }) };
+                const factory = { text: value => value, element: ({ name, children, binding }) => name === "runic:link" ? `<a href="${binding.href}">${children.join("")}</a>` : children.join(""), block: (name, options, children) => `<${name}>${children.join("")}</${name}>` };
+                const content = { help: m.help_link({ locale: "de" }), notice: m.notice_doc({ locale: "en" }) };
+                const expected = { helpText: toPlainText(content.help, { slots, annotateLinkDestinations: true }), noticeText: toPlainText(content.notice, { slots }),
+                  helpHtml: createInlineRenderer(factory).render(content.help, { slots }).join(""), noticeHtml: createDocumentRenderer(factory).render(content.notice, { slots }).join("") };
+                await writeFile(new URL("./data.json", import.meta.url), JSON.stringify({ content, expected }));
+                """, new UTF8Encoding(false));
+            // Process 2, the client: imports only the runtime and renders the parsed data.
+            const string client = """
+                export function hydrate(data) {
+                  const check = (condition, message) => { if (!condition) throw new Error(message); };
+                  const fails = (action, text, message) => { try { action(); } catch (error) { if (String(error).includes(text)) return; throw error; } throw new Error(message); };
+                  const slots = { handbook: linkBinding({ href: "/handbook" }) };
+                  const factory = { text: value => value, element: ({ name, children, binding }) => name === "runic:link" ? `<a href="${binding.href}">${children.join("")}</a>` : children.join(""), block: (name, options, children) => `<${name}>${children.join("")}</${name}>` };
+                  const { content, expected } = data;
+                  check(toPlainText(content.help, { slots, annotateLinkDestinations: true }) === expected.helpText, "inline plain text");
+                  check(toPlainText(content.notice, { slots }) === expected.noticeText, "document plain text");
+                  check(createInlineRenderer(factory).render(content.help, { slots }).join("") === expected.helpHtml, "inline renderer");
+                  check(createDocumentRenderer(factory).render(content.notice, { slots }).join("") === expected.noticeHtml, "document renderer");
+                  // The catalog's table still decides: slots are required, kinds are checked, unknown keys are rejected.
+                  fails(() => toPlainText(content.help), "Missing or incompatible slot 'handbook'", "missing slot accepted");
+                  fails(() => createInlineRenderer(factory).render({ ...content.notice, kind: "localized-content" }, { slots }), "Unknown RMF2 content contract", "document content accepted as inline");
+                  fails(() => toPlainText({ ...content.help, key: "greet" }, { slots }), "Unknown RMF2 content contract", "plain-text message accepted as content");
+                  fails(() => toPlainText({ ...content.help, key: "missing" }, { slots }), "Unknown RMF2 content contract", "unknown key accepted");
+                  // A contract made at run time changes nothing for other content: no registry to claim a key in first.
+                  const forged = freezeGeneratedText({ key: "help_link", structured: true, inputs: [], slots: {} }, "en", "forged");
+                  check(typeof forged === "object", "forged message");
+                  fails(() => toPlainText(content.help), "Missing or incompatible slot 'handbook'", "a run-time contract changed the slots of help_link");
+                  return "SERIALIZED_CONTENT_OK";
+                }
+                """;
+            File.WriteAllText(Path.Combine(directory, "client.mjs"), "import { createDocumentRenderer, createInlineRenderer, freezeGeneratedText, linkBinding, toPlainText } from \"./wire.esm-v5/runtime.js\";\n" + client, new UTF8Encoding(false));
+            File.WriteAllText(Path.Combine(directory, "client-entry.js"), "import { createDocumentRenderer, createInlineRenderer, freezeGeneratedText, linkBinding, toPlainText } from \"virtual:runic-translations/wire/runtime\";\n" + client, new UTF8Encoding(false));
+            File.WriteAllText(Path.Combine(directory, "render.mjs"), """
+                import { readFile } from "node:fs/promises";
+                import { hydrate } from "./client.mjs";
+                const data = JSON.parse(await readFile(new URL("./data.json", import.meta.url), "utf8"));
+                if (data.expected.helpText !== "Lies das Handbuch (/handbook) jetzt.") throw new Error("server inline plain text: " + data.expected.helpText);
+                if (data.expected.noticeText !== "Open the handbook.\n\n- First step") throw new Error("server document plain text: " + data.expected.noticeText);
+                console.log(hydrate(data));
+                """, new UTF8Encoding(false));
+            File.WriteAllText(Path.Combine(directory, "namespace.js"), "import { m } from \"virtual:runic-translations/wire\";\nexport const result = m.greet({ name: \"Ada\" });\n");
+            // Process 3, a Vite build: the client bundle carries the table and no message, and a bundle that only calls
+            // m.greet() carries neither.
+            string plugin = RepositoryPaths.Resolve("packages", "web", "vite-plugin-runic-translations", "dist", "index.js");
+            string script = Path.Combine(directory, "bundle.mjs");
+            File.WriteAllText(script, "import { createRequire } from \"node:module\";\nimport { readFile } from \"node:fs/promises\";\nimport { join } from \"node:path\";\n" +
+                "const plugin = " + JsonString(plugin) + ";\n" + """
+                const { runicTranslations } = await import(plugin);
+                const { build } = await import(createRequire(plugin).resolve("vite"));
+                const root = import.meta.dirname, bundles = {};
+                for (const name of ["client-entry", "namespace"]) {
+                  const outDir = join(root, "dist-" + name);
+                  await build({ configFile: false, root, logLevel: "silent", plugins: [runicTranslations({ manifest: join(root, "wire.esm-v5", "web-module-manifest-v3.json") })],
+                    build: { outDir, minify: false, lib: { entry: join(root, name + ".js"), formats: ["es"], fileName: () => "bundle.js" } } });
+                  bundles[name] = { path: join(outDir, "bundle.js"), text: await readFile(join(outDir, "bundle.js"), "utf8") };
+                }
+                for (const text of ["Read the", "Lies das", "Open the", "Hello "]) if (bundles["client-entry"].text.includes(text)) throw new Error("the client bundle contains message text " + text);
+                if (!bundles["client-entry"].text.includes("notice_doc")) throw new Error("the client bundle has no table of structured messages");
+                for (const text of ["handbook", "notice_doc", "help_link"]) if (bundles.namespace.text.includes(text)) throw new Error("m.greet() bundles " + text);
+                const { hydrate } = await import(bundles["client-entry"].path);
+                console.log(hydrate(JSON.parse(await readFile(join(root, "data.json"), "utf8"))));
+                """, new UTF8Encoding(false));
+            Run("bun", [Path.Combine(directory, "server.mjs")], directory);
+            Run("bun", [Path.Combine(directory, "render.mjs")], directory);
+            Run("bun", [script], directory);
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
     [Test, DisplayName("RMF2 v5 ESM preserves hostile NFC caller names without prototype mutation")]
     public void HostileNames()
     {
@@ -327,7 +474,7 @@ internal sealed class Rmf2EsmV5Tests
                 import { m } from "./app.esm-v5/messages.js";
                 const inputs=Object.create(null); inputs.__proto__="p"; inputs.constructor="c"; inputs["user-name"]="u"; inputs["用户"]="雪";
                 if(m.x(inputs)!==" p c u 雪 ")throw new Error("hostile names failed");
-                if(m["__proto__"]()!=="Proto"||m.constructor()!=="Constructor"||Object.getPrototypeOf(m)!==null)throw new Error("hostile message keys failed");
+                if(m["__proto__"]()!=="Proto"||m.constructor()!=="Constructor"||"toString" in m||"hasOwnProperty" in m)throw new Error("hostile message keys failed");
                 if(({}).polluted!==undefined||Object.getPrototypeOf(inputs)!==null)throw new Error("prototype pollution");
                 """, new UTF8Encoding(false));
             Run("bun", [script], directory);
@@ -493,8 +640,8 @@ internal sealed class Rmf2EsmV5Tests
         Rmf2ProjectV5 project = compilation.Project!;
         IReadOnlyList<TranslationGeneratedOutput> outputs = TranslationOutputRenderer.RenderRmf2V5EsmModules(project);
         string Module(string key) => outputs.Single(output => output.RelativePath.EndsWith("/" + Rmf2GeneratedNamesV1.Identifier(key) + ".js", StringComparison.Ordinal)).Text;
-        Assert.True(Module("title").Contains("messages[\"de\"] = freezeGeneratedText(\"title\", \"de\", \"Aktualisierungen\");", StringComparison.Ordinal), Module("title"));
-        Assert.True(Module("greet").Contains("freezeGeneratedPattern(\"greet\", \"en\", [\"Hello \", [\"name\"], \", welcome to \", [\"place\"]])", StringComparison.Ordinal), Module("greet"));
+        Assert.True(Module("title").Contains("messages[\"de\"] = freezeGeneratedText(contract, \"de\", \"Aktualisierungen\");", StringComparison.Ordinal), Module("title"));
+        Assert.True(Module("greet").Contains("freezeGeneratedPattern(contract, \"en\", [\"Hello \", [\"name\"], \", welcome to \", [\"place\"]])", StringComparison.Ordinal), Module("greet"));
         Assert.True(Module("plural").Contains("messages[\"de\"] = messages[\"en\"];", StringComparison.Ordinal), Module("plural"));
         Assert.True(Module("plural").Contains("JSON.parse(", StringComparison.Ordinal), Module("plural"));
         Assert.True(Module("count").Contains("JSON.parse(", StringComparison.Ordinal), Module("count"));

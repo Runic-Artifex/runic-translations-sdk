@@ -12,7 +12,7 @@ links open this page at the release tag of the package you use.
 Most diagnostics are errors and stop generation. `RTR0010`, `RTR0011` and
 `RTR0021` follow the project's `validation` policies (`allow`, `warning` or
 `error`), and some `RTR0051` reports are warnings, as are `RTR0068`, `RTR0069`, `RTR0071`,
-`RTR0076`, `RTR0077`, `RTR0078` and `RTR0084`. `RTR0085` is informational.
+`RTR0076`, `RTR0077`, `RTR0078`, `RTR0084`, `RTR0090` and `RTR0091`. `RTR0085` is informational.
 
 ## RTR0001
 
@@ -233,6 +233,12 @@ is reported once at `code.className`. Reserved message keys are the
 to the message key. The message stays available through its encoded member.
 Rename the key, input or slot to fix it.
 
+RTR0069 is also reported when a message key is the encoded name of another
+message's reference factory: key `ToString` is reserved, so
+`Class.References.r_546f537472696e67` is its factory, and a key
+`r_546f537472696e67` cannot use that name too. Its factory keeps its own
+encoded name; rename the key to fix it.
+
 RTR0069 is reported at the `.rmf2` or `runic.json` location of the name, not in
 a `.cs` file, so an `.editorconfig` `[*.cs]` section does not apply. To change
 its severity, use one of the same mechanisms as RTR0068:
@@ -430,6 +436,35 @@ its diagnostics name the cause.
 `RCLI8214` diagnostic names each problem. The command exits with 2 and writes
 nothing.
 
+## RTR0090
+
+A translation predates a change to its source. `validate` reports this warning
+at the translation when the project has a review file, `<catalog>.review.json`
+beside `runic.json`, and the file's entry for the key and locale records the
+fingerprint of an older source: the base text or its placeholders changed after
+the translation was made, imported or approved. The C# source generator does not
+report it. Review the translation, then record it with
+`runic-translations review mark --key <key> --locale <locale> --state approved`
+(or `needs-review`). See
+[review state](../../../tools/dotnet-runic-translations/README.md#track-review-state-and-stale-translations).
+
+## RTR0091
+
+The review file cannot be read. `validate` reports this warning at
+`<catalog>.review.json` when it is not valid
+`runic.translations.interchange-review/2` (or `/1`) JSON, or belongs to another
+catalog. The message names the interchange code, such as `REVIEW-MALFORMED`.
+Fix or delete the file; `review mark` refuses to overwrite it.
+
+## RTR0092
+
+An `xliff` or `review` command cannot use its document. The fault of an
+`xliff export`, `xliff import` or `review mark` that stops before writing
+anything; one `RCLI8215` diagnostic names the problem. The command exits with 2.
+`xliff import` also stops with this fault when `--fail-on refused` is given and
+a unit was refused (each refusal is an `RCLI8216` warning), and when a source or
+the review file changed on disk between reading and writing, for example through
+an editor save or a second import; run the import again.
 ## RTR0092
 
 `Runic.Translations.Build` could not write the `Runic.Translations` dependency
@@ -500,6 +535,38 @@ JSON object of string values, `--base` is not a JSON array of strings, a
 translation uses a placeholder that its base text lacks, or the existing
 base-locale file of the group cannot be read back. The message names the file
 or the base text. The fault is `RTR0088`.
+
+## RCLI8215
+
+An XLIFF document or review file cannot be used as a whole. The message starts
+with its interchange code: `XLIFF21-MALFORMED` (not well-formed XML),
+`XLIFF21-ROOT` or `XLIFF21-VERSION` (not XLIFF 2.0 or 2.1, no `trgLang`),
+`XLIFF21-FILE` (not exactly one `<file>`, no units), `XLIFF21-CATALOG-MISMATCH`,
+`XLIFF21-SOURCE-LOCALE` or `XLIFF21-TARGET-LOCALE` (another catalog, base locale
+or an undeclared target locale), `XLIFF21-CONTRACT` or `XLIFF21-PROFILE`
+(another execution contract or Runic profile), `XLIFF21-LIMIT` (more than 8 MiB,
+50,000 units, or elements nested deeper than 64 levels, counting `<xliff>` as
+level 0), or a `REVIEW-*` code for the review file. It also names a source or
+review file that changed on disk during `xliff import`. The fault is `RTR0092`
+and nothing is written.
+
+## RCLI8216
+
+An XLIFF unit was refused and the rest of the document was applied. This
+warning names the key and the unit code: `XLIFF21-PLACEHOLDER` (a `<ph>` that
+is not one MF2 placeholder, or a placeholder the message's caller contract does
+not have), `XLIFF21-PLACEHOLDER-CHANGED` (a target `<ph>` whose expression is
+not one of the message's placeholders: another function or options, or a literal
+in place of a variable), `XLIFF21-INLINE` (an inline element other than `<ph>`, `<mrk>` and
+`<cp>`), `XLIFF21-TARGET-INVALID` (the target does not compile against the base
+message), `XLIFF21-UNKNOWN-KEY`, `XLIFF21-DUPLICATE-UNIT`, `XLIFF21-UNIT-ID`,
+`XLIFF21-STATE` (an unknown segment state), `XLIFF21-SOURCE-CHANGED` (with
+`--source-changed refuse`) or `XLIFF21-METADATA` (an unreadable Runic note).
+Fix the unit in the TMS or the file and import it again. With
+`--fail-on refused` a refused unit fails the whole import instead (`RTR0092`).
+Skipped units
+(`XLIFF21-UNTRANSLATED`, `XLIFF21-EMPTY-TARGET`, `XLIFF21-STRUCTURED-SKIPPED`)
+are listed in the `interchange` payload only.
 
 ## runic-translations support codes
 

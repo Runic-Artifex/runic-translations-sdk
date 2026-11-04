@@ -7,6 +7,7 @@ import {
   createLocaleRouting,
   localeFromLocals,
   parseAcceptLanguage,
+  requestedLocaleFromLocals,
 } from "../src/translations/index.js";
 
 const routing = createLocaleRouting({
@@ -71,7 +72,7 @@ describe("Runic locale routing", () => {
       url: "/de/setup",
       cookieLocale: "en",
       applicationLocale: "en",
-    })).toEqual({ locale: "de", source: "url" });
+    })).toEqual({ locale: "de", source: "url", requestedLocale: "de" });
 
     const preferenceFirst = createLocaleRouting({
       locales: ["en", "de"] as const,
@@ -83,11 +84,11 @@ describe("Runic locale routing", () => {
       url: "/setup",
       applicationLocale: "de-DE",
       cookieLocale: "en",
-    })).toEqual({ locale: "de", source: "application" });
+    })).toEqual({ locale: "de", source: "application", requestedLocale: "de-DE" });
     expect(preferenceFirst.resolveLocale({
       url: "/setup",
       acceptLanguage: "fr;q=0.9, de-DE;q=0.8, en;q=0.7",
-    })).toEqual({ locale: "de", source: "browser" });
+    })).toEqual({ locale: "de", source: "browser", requestedLocale: "de-DE" });
     expect(parseAcceptLanguage("en;q=0.5, de;q=1, *;q=0.9")).toEqual(["de", "en"]);
   });
 
@@ -167,6 +168,50 @@ describe("Runic SvelteKit request integration", () => {
     });
     const response = await handle({ event, resolve: async () => new Response(activeLocale) });
     expect(await response.text()).toBe("de");
+  });
+});
+
+describe("Runic SvelteKit requested locale and time zone", () => {
+  test("resolution reports the canonical tag the matching preference asked for", () => {
+    const negotiated = createLocaleRouting({ locales: ["en", "de"] as const, baseLocale: "en", baseLocalePath: "prefixed" });
+    expect(negotiated.resolveLocale({ url: "/setup", acceptLanguage: "fr;q=0.9, de-ch" }))
+      .toEqual({ locale: "de", source: "browser", requestedLocale: "de-CH" });
+    expect(negotiated.resolveLocale({ url: "/setup", cookieLocale: "en_gb" }))
+      .toEqual({ locale: "en", source: "cookie", requestedLocale: "en-GB" });
+    expect(negotiated.resolveLocale({ url: "/de/setup", acceptLanguage: "de-AT" }))
+      .toEqual({ locale: "de", source: "url", requestedLocale: "de" });
+    expect(negotiated.resolveLocale({ url: "/setup", applicationLocale: "de-CH.UTF-8" }))
+      .toEqual({ locale: "de", source: "application", requestedLocale: "de" });
+    expect(negotiated.resolveLocale({ url: "/setup", acceptLanguage: "fr" }))
+      .toEqual({ locale: "en", source: "default", requestedLocale: "en" });
+    expect(routing.resolveLocale({ url: "/setup", acceptLanguage: "de-CH" }))
+      .toEqual({ locale: "en", source: "url", requestedLocale: "en" });
+  });
+
+  test("the handle stores the requested tag and passes it and the time zone to runWithLocale", async () => {
+    const strict = createLocaleRouting({ locales: ["en", "de"] as const, baseLocale: "en", baseLocalePath: "prefixed", resolutionOrder: ["browser"] });
+    const { event } = requestEvent("/de/setup", { acceptLanguage: "de-CH" });
+    const calls: unknown[] = [];
+    const handle = createLocaleHandle(strict, {
+      htmlLanguageToken: false,
+      canonicalRedirect: false,
+      timeZone: (request) => request.cookies.get("tz") ?? "Europe/Zurich",
+      runWithLocale(locale, operation, options) {
+        calls.push([locale, options]);
+        return operation();
+      },
+    });
+    await handle({ event, resolve: async () => new Response("ok") });
+    expect(calls).toEqual([["de", { requestedLocale: "de-CH", timeZone: "Europe/Zurich" }]]);
+    expect(event.locals).toEqual({ locale: "de", requestedLocale: "de-CH" });
+    expect(requestedLocaleFromLocals(event.locals, strict)).toBe("de-CH");
+    expect(requestedLocaleFromLocals({ locale: "de", requestedLocale: "fr-CH" } as App.Locals, strict)).toBe("de");
+    expect(requestedLocaleFromLocals({ locale: "de" } as App.Locals, strict)).toBe("de");
+
+    const custom = requestEvent("/setup", { acceptLanguage: "de-CH" }).event;
+    const setLocale = vi.fn();
+    await createLocaleHandle(strict, { htmlLanguageToken: false, canonicalRedirect: false, requestedLocaleKey: false, setLocale })({ event: custom, resolve: async () => new Response("ok") });
+    expect(setLocale).toHaveBeenCalledWith(custom, "de", { requestedLocale: "de-CH", timeZone: undefined });
   });
 });
 

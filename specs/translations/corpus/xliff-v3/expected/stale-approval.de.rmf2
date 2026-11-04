@@ -1,0 +1,6 @@
+# German translations of the shop.
+greeting = Hallo {$name}!
+farewell = Auf Wiedersehen
+cart {
+  empty = Der Warenkorb ist leer
+}

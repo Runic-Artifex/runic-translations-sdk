@@ -203,13 +203,31 @@ internal sealed class Rmf2V1CorpusTests
     // (GeneratedCatalogSupport, CompiledRmf2*, TranslationsCompatibility) and the readable surface implements
     // IReadableMessages; transport.js writes only version 2 and transport.d.ts drops the version 1 createTextReference
     // overload, in both digests.
+    // Re-pinned for TR-0.9 TE: messages.js exports the module namespace m, message modules carry their own contract in a
+    // pure call, runtime.js keeps only the markup contracts and dynamic.js the catalog's contract tables; messages.d.ts
+    // documents members with the base text; the C# accessors gain base-text summaries and the References factories, in
+    // both digests.
+    // Re-pinned for TR 0.9 batch TC: runtime.js formats localized dates, times, time zones and percentages by the shared
+    // rules, in the requested locale when it shares the content language, accepts Date and offset date-time inputs and
+    // exports getRequestedLocale, getMessageLocale and onFallback; message modules pass the requested locale;
+    // transport.js writes a Date input; runtime.d.ts and messages.d.ts declare them, in both digests.
+    // Re-pinned for the TC review: runtime.js compares implied scripts and drops extensions for the formatting locale,
+    // reads the local zone per call with configureTimeZoneResolver, writes other calendars' full years and one bidi mark
+    // per run, and keeps the requested tag in createLocaleSource; server.js scopes the requested tag and zone per
+    // request; runtime.d.ts and server.d.ts declare them, in both digests.
+    // Re-pinned for merging TC with TE: message modules call the runtime with the requested locale, and runtime.js
+    // reads getMessageLocale's content locales from its own table (messageLocaleTable) rather than the contract tables
+    // that moved to dynamic.js, in both digests.
     // Re-pinned for T1a/T1b (0.9): generated C# adds the XText(ITranslationContext) constructor and
     // XCatalog.Registration, and gives the XText(ITranslationManager) constructor OverloadResolutionPriority(1) so
     // new XText(null) still compiles, in both digests. Every other output is unchanged.
-    private const string EncodedOutputDigest = "a4379a28c5f378628647ea4429b77e42d4817aaa0793cc6085edc0682b40458b";
-    private const string HiddenEncodedOutputDigest = "83043d6618984ab3a5034ee4c8069570d697ae374b23a485f68571e3ed09d0ec";
+    // Re-pinned for merging T1a/T1b with main (TE, TC, TD): the context constructor sits before the base-text
+    // accessor summaries and the References factories, in both digests.
     // Re-pinned for T1g (0.9): the generated base ABI check is a call, TranslationsCompatibility.EnsureRuntimeAbi(1),
     // in both digests.
+    // Re-pinned for merging T1g with main (TE, TC, TD) through T1a/T1b, in both digests.
+    private const string EncodedOutputDigest = "055994a0adfc6fea54e61fd01110903108b0c2d19f49b7480ee01578edfa4dae";
+    private const string HiddenEncodedOutputDigest = "2b7c3a87b91fbddfc92f1655605f1e4e804729fd8644747a9dd758ba408b3e63";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

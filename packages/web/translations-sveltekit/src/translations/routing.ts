@@ -24,6 +24,12 @@ export interface LocaleResolutionInput {
 export interface LocaleResolution<Locale extends string> {
   readonly locale: Locale;
   readonly source: LocaleResolutionSource;
+  /**
+   * The canonical tag the matching preference asked for, such as `de-CH` for `Accept-Language: de-CH` resolved to `de`;
+   * the locale itself for the URL and default sources and for preferences that are not valid tags. Generated messages
+   * format numbers and dates in it when it shares the language of their text.
+   */
+  readonly requestedLocale?: string;
 }
 
 export interface LocalizedUrl<Locale extends string> {
@@ -114,9 +120,9 @@ export function createLocaleRouting<const Locale extends string>(
     const inspected = inspectUrl(input.url);
     for (const strategy of resolutionOrder) {
       const candidate = candidateFor(strategy, inspected, input, matchLocale);
-      if (candidate) return { locale: candidate, source: strategy };
+      if (candidate) return { locale: candidate.locale, source: strategy, requestedLocale: candidate.requested ?? candidate.locale };
     }
-    return { locale: options.baseLocale, source: "default" };
+    return { locale: options.baseLocale, source: "default", requestedLocale: options.baseLocale };
   }
 
   function localizeUrl(input: string | URL, locale: Locale): string {
@@ -163,20 +169,31 @@ function candidateFor<Locale extends string>(
   inspected: LocalizedUrl<Locale>,
   input: LocaleResolutionInput,
   match: (value: string | null | undefined) => Locale | undefined,
-): Locale | undefined {
+): { readonly locale: Locale; readonly requested: string | undefined } | undefined {
+  const preference = (value: string | null | undefined) => {
+    const locale = match(value);
+    return locale && { locale, requested: canonicalTag(value) };
+  };
   switch (strategy) {
-    case "url": return inspected.locale;
-    case "cookie": return match(input.cookieLocale);
-    case "application": return match(input.applicationLocale);
+    case "url": return inspected.locale && { locale: inspected.locale, requested: undefined };
+    case "cookie": return preference(input.cookieLocale);
+    case "application": return preference(input.applicationLocale);
     case "browser": {
       const preferences = input.browserLocales ?? parseAcceptLanguage(input.acceptLanguage);
-      for (const preference of preferences) {
-        const locale = match(preference);
-        if (locale) return locale;
+      for (const value of preferences) {
+        const candidate = preference(value);
+        if (candidate) return candidate;
       }
       return undefined;
     }
   }
+}
+
+// The canonical BCP 47 form of a preference (de-ch → de-CH), or undefined when it is not a valid tag.
+function canonicalTag(value: string | null | undefined): string | undefined {
+  const trimmed = value?.trim().replaceAll("_", "-");
+  if (!trimmed || trimmed.length > 64) return undefined;
+  try { return Intl.getCanonicalLocales(trimmed)[0]; } catch { return undefined; }
 }
 
 export function parseAcceptLanguage(value: string | null | undefined): readonly string[] {

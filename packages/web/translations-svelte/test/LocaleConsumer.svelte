@@ -4,7 +4,8 @@
   let { id }: { id: string } = $props();
   const locale = testLocaleContext.use();
 
-  function generatedGreeting(options: Readonly<{ locale: "en" | "de" }>): string {
+  // As a generated message function, it takes any requested tag (MessageOptions is { locale?: string }).
+  function generatedGreeting(options: Readonly<{ locale: string }>): string {
     return options.locale === "de" ? "Hallo" : "Hello";
   }
 </script>

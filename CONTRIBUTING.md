@@ -13,6 +13,7 @@ Pull requests must pass the `verify` job in [CI](.github/workflows/ci.yml), whic
 | Editor / hosted RMF2 E2E | `bun run build`, `dotnet apps/translations-editor/bin/Release/net10.0/Runic.Translations.Editor.dll validate apps/translations-editor/ExampleWorkspace`, then the commands in [the hosted E2E README](apps/translations-editor/tests/HostedBrowserE2E/README.md) |
 | Editor / packed Translations packages | `bun run verify-editor-packed` |
 | IDE / VS Code extension package | `bun install --frozen-lockfile && bun run --bun check && bun run --bun test && bun run package` in `tools/vscode-runic-translations` |
+| Localized formatting / Windows, macOS | `bash eng/ci/localized-formatting.sh` (the localized formatting tests and the date/percent corpus, ESM in Bun and Node) |
 | WPF / Windows | `dotnet run --project tests/dotnet/Runic.Translations.Wpf.Tests --configuration Release`, `dotnet build examples/wpf/document-sample --configuration Release`, then `dotnet run --project tests/dotnet/Runic.Translations.Build.Tests --configuration Release -- --treenode-filter "/*/*/XamlBuildTests/*" --test-parameter xaml-wpf=true --minimum-expected-tests 3` |
 | IDE / Windows VSIX package | Windows only; see [the Visual Studio extension README](tools/visualstudio-runic-translations/README.md) |
 

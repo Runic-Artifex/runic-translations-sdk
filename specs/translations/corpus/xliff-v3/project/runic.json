@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "catalog": "shop",
+  "code": { "namespace": "Shop", "className": "ShopText" },
+  "baseLocale": "en",
+  "locales": ["en", { "tag": "de", "fallback": "en" }],
+  "validation": { "translationCompleteness": "allow" }
+}

@@ -45,6 +45,12 @@
         "configuration": "./language-configuration.json"
       }
     ],
+    "jsonValidation": [
+      {
+        "fileMatch": "**/runic.json",
+        "url": "./dist/schemas/project-v1.schema.json"
+      }
+    ],
     "grammars": [
       {
         "language": "rmf2",
@@ -56,6 +62,10 @@
       {
         "command": "runicTranslations.restart",
         "title": "Runic: Restart Language Server"
+      },
+      {
+        "command": "runicTranslations.showOutput",
+        "title": "Runic: Show Output"
       },
       {
         "command": "runicTranslations.preview",
