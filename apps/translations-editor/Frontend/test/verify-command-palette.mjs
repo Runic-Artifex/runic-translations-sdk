@@ -28,6 +28,7 @@ const state = {
   selectedLocale: "en",
   editorMode: "translation",
   uiLocale: "en",
+  uiLocales: [{ tag: "en", name: "English" }, { tag: "de", name: "Deutsch" }],
   themeMode: "dark",
   workspaceReady: true,
   searchAvailable: true,

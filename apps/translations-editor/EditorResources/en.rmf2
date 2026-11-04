@@ -3230,12 +3230,10 @@ ui {
 }
 ui {
   palette {
-    interface_language_deutsch = Interface language · Deutsch
-  }
-}
-ui {
-  palette {
-    interface_language_english = Interface language · English
+    interface_language =
+      .input {$language :string}
+      {{Interface language · {$language}}}
+
   }
 }
 ui {
@@ -3666,17 +3664,7 @@ ui {
 }
 ui {
   settings {
-    english = English
-  }
-}
-ui {
-  settings {
     fjord = Fjord
-  }
-}
-ui {
-  settings {
-    german = Deutsch
   }
 }
 ui {

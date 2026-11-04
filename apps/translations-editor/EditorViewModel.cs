@@ -3,6 +3,7 @@ using ReactiveUI.Primitives.Concurrency;
 using Runic.Application.Views;
 using Runic.Application.Views.ReactiveUI;
 using Runic.Navigation;
+using ReactiveUI.Primitives;
 
 namespace Runic.Translations.Editor;
 
@@ -16,12 +17,18 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
     private readonly Dictionary<string, IRunicModelContextLease> _documentContextLeases = new(StringComparer.Ordinal);
     private readonly Dictionary<string, EditorDocumentViewModel> _documents = new(StringComparer.Ordinal);
     private IReadOnlyList<EditorDocumentViewModel> _documentViews = [];
+    private readonly IRunicWindowLocale _windowLocale;
 
-    internal EditorViewModel(EditorSession session, IRunicModelContext modelContext, ISequencer scheduler)
+    internal EditorViewModel(EditorSession session, IRunicModelContext modelContext, ISequencer scheduler,
+        IRunicWindowLocale windowLocale)
     {
         _session = session;
         _modelContext = modelContext;
         _scheduler = scheduler;
+        _windowLocale = windowLocale;
+        // The page negotiates the interface locale against the editor catalog and the stored choice, then sets it
+        // here; the window's pages and its native surfaces follow the window's locale.
+        SetUiLocaleCommand = ReactiveCommand.Create<string>(SetUiLocale, outputScheduler: _scheduler);
         Workspace = new EditorWorkspaceViewModel(session, this, _scheduler);
         DocumentTools = new EditorDocumentToolsViewModel(session, this, _scheduler);
         Review = new EditorReviewViewModel(session, this, _scheduler);
@@ -41,7 +48,18 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
     public EditorLocalStateViewModel LocalState { get; }
     public EditorProjectViewModel Project { get; }
     public IReadOnlyList<EditorDocumentViewModel> Documents => _documentViews;
+    /// <summary>Sets the window's locale to one of the editor catalog's locales, such as <c>de</c>.</summary>
+    public ReactiveCommand<string, RxVoid> SetUiLocaleCommand { get; }
     internal IRunicModelContext ModelContext => _modelContext;
+
+    internal string? UiLocale => _windowLocale.Locale;
+
+    // The page lists only the editor catalog's locales; a tag the window rejects leaves the locale as it is.
+    private void SetUiLocale(string locale)
+    {
+        try { _windowLocale.Locale = string.IsNullOrWhiteSpace(locale) ? null : locale; }
+        catch (ArgumentException) { }
+    }
 
     internal void SyncDocuments(WorkspaceSnapshot snapshot)
     {
@@ -111,6 +129,7 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
         _documents.Clear();
         foreach (var lease in _documentContextLeases.Values) lease.Dispose();
         _documentContextLeases.Clear();
+        SetUiLocaleCommand.Dispose();
         _modelContextLease.Dispose();
         _session.Dispose();
     }

@@ -80,7 +80,7 @@ const members: BridgeMemberDecoders<EditorDiagnosticsState> = {
   isRevealDiagnosticBundleExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isDeleteDiagnosticBundleExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorDiagnosticsViewModel:03436124E1B317F004B755B4270D26782EFF6AA974533455EB9D3D86178EB5CF";
+const bridgeContract = "Runic.Translations.Editor.EditorDiagnosticsViewModel:AD00A5B4BE47AA9A45169F855E1B9CE367A214E3C59A59057362787C22ABD400";
 const aboutOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const createDiagnosticBundleOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const revealDiagnosticBundleOperation: BridgeOperationCodec<void> = { decode: value => undefined };

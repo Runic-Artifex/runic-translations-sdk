@@ -241,8 +241,14 @@ internal static class EditorSmokeTest
             // session. The hosted browser test covers routed document editing.
             await using var editorContext = new RunicModelContext();
             var scheduler = ReactiveSchedulers.For(editorContext);
-            using (var editor = new EditorViewModel(new EditorSession(project), editorContext, scheduler))
+            var windowLocale = new SmokeWindowLocale();
+            using (var editor = new EditorViewModel(new EditorSession(project), editorContext, scheduler, windowLocale))
             {
+                // The page's language switch sets the window's locale; a malformed tag leaves it unchanged.
+                await Signal.ToTask(editor.SetUiLocaleCommand.Execute("de"), CancellationToken.None).ConfigureAwait(false);
+                Require(windowLocale.Locale == "de" && editor.UiLocale == "de", "The interface language did not set the window's locale.");
+                await Signal.ToTask(editor.SetUiLocaleCommand.Execute("not a tag"), CancellationToken.None).ConfigureAwait(false);
+                Require(windowLocale.Locale == "de", "A malformed interface language changed the window's locale.");
                 await ExecuteRouteAsync(editor.Workspace.LoadCommand, () => editor.Workspace.LoadResultJson, "{}");
                 WorkspaceSnapshot loaded = editor.Workspace.LastLoad
                     ?? throw new InvalidOperationException("The workspace ViewModel did not publish a typed snapshot.");
@@ -383,5 +389,26 @@ internal static class EditorSmokeTest
             "The routed feature result was not correlated with its command.");
         Require(result.RootElement.TryGetProperty("result", out _),
             "The routed feature did not publish a result.");
+    }
+
+    // The window locale of a ViewModel constructed outside a window: it validates tags as the window's does.
+    private sealed class SmokeWindowLocale : IRunicWindowLocale
+    {
+        private string? _locale;
+
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+
+        public string? Locale
+        {
+            get => _locale;
+            set
+            {
+                if (value is not null && (value.Length is 0 or > 64 || !char.IsAsciiLetter(value[0]) ||
+                    !value.All(static character => char.IsAsciiLetterOrDigit(character) || character == '-')))
+                    throw new ArgumentException($"'{value}' is not a locale tag.", nameof(value));
+                _locale = value;
+                PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(Locale)));
+            }
+        }
     }
 }

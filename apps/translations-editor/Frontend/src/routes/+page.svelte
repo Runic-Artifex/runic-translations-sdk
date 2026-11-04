@@ -2,6 +2,9 @@
   import InlinePreview from "#lib/InlinePreview.svelte";
   import { onMount, tick } from "svelte";
   import { m } from "virtual:runic-translations/editor";
+  import { baseLocale as uiBaseLocale, locales as uiLocales } from "virtual:runic-translations/editor/runtime";
+  import { onWindowLocale, windowLocale } from "@runic-artifex/views";
+  import { matchUiLocale, negotiateUiLocale, preferredLanguages, uiLocaleName, uiLocaleStateKey } from "#lib/ui-locale.js";
 
   import type {
     EditorAbout,
@@ -147,7 +150,8 @@
   let sourceSelection = $state.raw<{ start: number; end: number; token: number }>();
   let selectionToken = 0;
   let authoringPending = $state(0);
-  let uiLocale = $state("en");
+  // Until the native state loads, the page shows the OS preference negotiated against the editor catalog.
+  let uiLocale = $state<string>(negotiateUiLocale(preferredLanguages(), uiLocales, uiBaseLocale));
   const ui = createUiText(() => uiLocale);
   setUiText(ui);
   let themeMode = $state<ThemeMode>("dark");
@@ -398,7 +402,7 @@
         createDiagnosticBundle: () => void createDiagnosticBundle(),
         setEditorMode: chooseMode,
         selectLocale,
-        setUiLocale: (locale) => uiLocale = locale,
+        setUiLocale: changeUiLocale,
         setThemeMode: changeThemeMode,
         toggleLanguagesSection: () => languagesOpen = !languagesOpen,
         toggleMessagesSection: () => messagesOpen = !messagesOpen,
@@ -411,6 +415,7 @@
         selectedLocale,
         editorMode: mode,
         uiLocale,
+        uiLocales: uiLocales.map((tag) => ({ tag, name: uiLocaleName(tag) })),
         themeMode,
         workspaceReady: snapshot !== undefined,
         searchAvailable: searchInput !== null,
@@ -453,6 +458,8 @@
         const loadedSimulation = readUiSimulation(getLocalEditorState);
         pseudoLocalization = loadedSimulation.pseudoLocalization;
         uiDirection = loadedSimulation.direction;
+        // The stored choice wins over the OS preference; either becomes the window's locale.
+        applyUiLocale(matchUiLocale(getLocalEditorState(uiLocaleStateKey), uiLocales) ?? uiLocale);
         recentProjects = readRecentProjects();
         if (nativeStateRecovered) {
           operationMessage = notice("ui_feedback_state_recovered");
@@ -463,12 +470,34 @@
       if (!disposed) await loadWorkspace(false);
     })();
     const interval = window.setInterval(() => void checkExternalChanges(), 2_000);
+    // Another page of this window, or the application, can switch the window's locale.
+    const stopWindowLocale = onWindowLocale((locale) => {
+      const match = matchUiLocale(locale, uiLocales);
+      if (match !== undefined) uiLocale = match;
+    });
     return () => {
       disposed = true;
+      stopWindowLocale();
       colorScheme.removeEventListener("change", updateSystemTheme);
       window.clearInterval(interval);
     };
   });
+
+  // Shows `locale` and makes it the window's locale, so native surfaces and the window's other pages follow.
+  function applyUiLocale(locale: string): void {
+    uiLocale = locale;
+    if (windowLocale() === locale) return;
+    void bridge.setUiLocale(locale).catch(() => {
+      // The page keeps the locale it shows; the next switch or connection sets the window's locale again.
+    });
+  }
+
+  function changeUiLocale(locale: string): void {
+    const match = matchUiLocale(locale, uiLocales);
+    if (match === undefined) return;
+    setLocalEditorState(uiLocaleStateKey, match);
+    applyUiLocale(match);
+  }
 
   function changeThemeMode(mode: ThemeMode): void {
     themeMode = mode;
@@ -2035,8 +2064,8 @@
     <header class="welcome-brand">
       <div class="mark small" aria-hidden="true"><span></span></div>
       <div><p class="eyebrow">{labels.eyebrow}</p><h1>{labels.title}</h1></div>
-      <select aria-label={ui.text("ui_page_interface_language")} value={uiLocale} onchange={(event) => uiLocale = event.currentTarget.value}>
-        <option value="en">EN</option><option value="de">DE</option>
+      <select aria-label={ui.text("ui_page_interface_language")} value={uiLocale} onchange={(event) => changeUiLocale(event.currentTarget.value)}>
+        {#each uiLocales as locale (locale)}<option value={locale} title={uiLocaleName(locale)}>{locale.toUpperCase()}</option>{/each}
       </select>
     </header>
     <section class="welcome-content">
@@ -2179,11 +2208,12 @@
       </Sidebar.Content>
       <EditorSettingsFooter
         locale={uiLocale}
+        locales={uiLocales}
         {themeMode}
         {themePalette}
         {pseudoLocalization}
         {uiDirection}
-        onlocalechange={(locale) => uiLocale = locale}
+        onlocalechange={changeUiLocale}
         onthememodechange={changeThemeMode}
         onthemepalettechange={changeThemePalette}
         ontogglepseudo={togglePseudoLocalization}

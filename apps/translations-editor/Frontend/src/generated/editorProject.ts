@@ -66,7 +66,7 @@ const members: BridgeMemberDecoders<EditorProjectState> = {
   isCreateProjectExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isOpenWorkspaceExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorProjectViewModel:03436124E1B317F004B755B4270D26782EFF6AA974533455EB9D3D86178EB5CF";
+const bridgeContract = "Runic.Translations.Editor.EditorProjectViewModel:AD00A5B4BE47AA9A45169F855E1B9CE367A214E3C59A59057362787C22ABD400";
 const previewProjectOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const createProjectOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const openWorkspaceOperation: BridgeOperationCodec<void> = { decode: value => undefined };

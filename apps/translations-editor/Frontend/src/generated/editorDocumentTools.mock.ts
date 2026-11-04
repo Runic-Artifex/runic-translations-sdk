@@ -40,7 +40,7 @@ export interface EditorDocumentToolsMock extends MockTypedView<EditorDocumentToo
 const spec: MockTypedViewSpec = {
   kind: "editorDocumentTools",
   route: "editorDocumentTools",
-  contract: "Runic.Translations.Editor.EditorDocumentToolsViewModel:03436124E1B317F004B755B4270D26782EFF6AA974533455EB9D3D86178EB5CF",
+  contract: "Runic.Translations.Editor.EditorDocumentToolsViewModel:AD00A5B4BE47AA9A45169F855E1B9CE367A214E3C59A59057362787C22ABD400",
   fields: {
     applyAuthoringOperationResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     applyDiagnosticFixResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
