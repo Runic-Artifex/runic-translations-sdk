@@ -140,19 +140,20 @@ internal static class GeneratedLocaleTables
         "es-419", "es-419", "es-419", "en-IN", "fr-HT", "no", "no", "pt-PT", "pt-PT", "pt-PT", "pt-PT", "pt-PT",
         "pt-PT", "pt-PT", "pt-PT", "pt-PT", "pt-PT", "pt-PT", "zh-Hant-HK"
     ];
-    /// <summary>Deprecated and legacy language codes with a plain replacement, such as <c>iw</c> → <c>he</c>.</summary>
+    /// <summary>Deprecated and legacy language codes and their replacements: <c>iw</c> → <c>he</c>, <c>sh</c> → <c>sr-Latn</c>.</summary>
     internal static readonly string[] AliasKeys =
     [
-        "adp", "ajp", "als", "arb", "azj", "bcc", "bh", "bxk", "bxr", "cld", "cls", "cmn", "dgo", "drh", "ekk",
-        "fat", "fuc", "gaz", "gom", "gug", "ike", "in", "iw", "ji", "khk", "kmr", "lvs", "mup", "npi", "ory",
-        "pbu", "pes", "plt", "prp", "quz", "scc", "scr", "spy", "src", "swh", "tw", "uzn", "xpe", "ydd", "zsm",
-        "zyb"
+        "adp", "ajp", "als", "arb", "azj", "bcc", "bh", "bxk", "bxr", "cld", "cls", "cmn", "cnr", "dgo", "drh",
+        "drw", "ekk", "fat", "fuc", "gaz", "gom", "gug", "ike", "in", "iw", "ji", "jw", "khk", "kmr", "lvs", "mo",
+        "mup", "npi", "ory", "pbu", "pes", "plt", "prp", "quz", "scc", "scr", "sh", "spy", "src", "swh", "tl",
+        "tnf", "tw", "uzn", "xpe", "ydd", "zsm", "zyb"
     ];
     internal static readonly string[] AliasValues =
     [
-        "dz", "apc", "sq", "ar", "az", "bal", "bho", "luy", "bua", "syr", "sa", "zh", "doi", "mn", "et", "ak",
-        "ff", "om", "kok", "gn", "iu", "id", "he", "yi", "mn", "ku", "lv", "raj", "ne", "or", "ps", "fa", "mg",
-        "gu", "qu", "sr", "hr", "kln", "sc", "sw", "ak", "uz", "kpe", "yi", "ms", "za"
+        "dz", "apc", "sq", "ar", "az", "bal", "bho", "luy", "bua", "syr", "sa", "zh", "sr-ME", "doi", "mn",
+        "fa-AF", "et", "ak", "ff", "om", "kok", "gn", "iu", "id", "he", "yi", "jv", "mn", "ku", "lv", "ro", "raj",
+        "ne", "or", "ps", "fa", "mg", "gu", "qu", "sr", "hr", "sr-Latn", "kln", "sc", "sw", "fil", "fa-AF", "ak",
+        "uz", "kpe", "yi", "ms", "za"
     ];
     /// <summary>The cardinal plural rule set of each CLDR plural locale.</summary>
     internal static readonly string[] CardinalKeys =

@@ -13,6 +13,7 @@ internal static partial class TranslationCapabilityRegistry
 {
     private static readonly Lazy<JsonDocument> s_localeData = new(LoadLocaleData);
 
+    /// <summary>A locale with CLDR plural rules, or with CLDR data whose plurals are the root rule (<c>agq</c>, <c>rw</c>).</summary>
     internal static bool SupportsCardinal(string locale) => Canonical(locale) is { } canonical && CldrLocales.PluralRule(canonical, ordinal: false) >= 0;
 
     /// <summary>Every locale with cardinal rules has ordinal rules; CLDR's root rule (<c>other</c>) serves languages without their own.</summary>
@@ -63,7 +64,7 @@ internal static partial class TranslationCapabilityRegistry
         Table("parents", GeneratedLocaleTables.ParentKeys, GeneratedLocaleTables.ParentValues.Select(Quote).ToArray());
         var aliases = new StringBuilder();
         for (int index = 0; index < GeneratedLocaleTables.AliasKeys.Length; index++)
-            if (languages.Contains(GeneratedLocaleTables.AliasValues[index]))
+            if (languages.Contains(CldrLocales.Parse(GeneratedLocaleTables.AliasValues[index]).Language))
                 aliases.Append(aliases.Length == 0 ? "" : ",").Append(Quote(GeneratedLocaleTables.AliasKeys[index])).Append(':').Append(Quote(GeneratedLocaleTables.AliasValues[index]));
         json.Append(",\"aliases\":{").Append(aliases).Append('}');
         Table("cardinal", GeneratedLocaleTables.CardinalKeys, GeneratedLocaleTables.CardinalValues.Select(Rule).ToArray());

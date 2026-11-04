@@ -50,7 +50,8 @@ export function resolveLocale(requested) {
 
 // The best declared locale for a list of preferences, such as navigator.languages, Accept-Language or LANGUAGE:
 // the first preference that matches a declared locale wins, else the base locale. Invalid and empty entries are
-// skipped, and POSIX forms (de_DE.UTF-8) are accepted. The unsupported-locale policy does not apply.
+// skipped, and so are und tags that are not declared; POSIX forms (de_DE.UTF-8) are accepted. The
+// unsupported-locale policy does not apply.
 export function negotiateLocale(preferences) {
   if (typeof preferences === "string") preferences = [preferences];
   if (preferences === null || typeof preferences !== "object" || typeof preferences[Symbol.iterator] !== "function") throw new TypeError("Locale preferences must be an iterable of strings.");
@@ -65,11 +66,18 @@ export function negotiateLocale(preferences) {
 }
 
 // A declared locale for a canonical tag that is not declared: CLDR likely-subtag matching, else the nearest
-// declared truncation (zh-TW → zh when only zh is declared), else undefined.
+// declared truncation with the same likely script (tlh-x-a → tlh, but never sr-Latn-RS → sr or zh-Hant → zh),
+// else undefined. The undetermined language (und, und-DE) matches nothing.
 function matchLocale(canonical) {
   const match = cldrMatch(canonical, locales);
   if (match !== undefined) return match;
-  let parent = canonical; while (parent.includes("-")) { parent = parent.slice(0, parent.lastIndexOf("-")); if (localeSet.has(parent)) return parent; }
+  const wanted = cldrMaximize(cldrParse(canonical));
+  if (wanted.language === "und") return undefined;
+  let parent = canonical;
+  while (parent.includes("-")) {
+    parent = parent.slice(0, parent.lastIndexOf("-"));
+    if (localeSet.has(parent) && cldrMaximize(cldrParse(parent)).script === wanted.script) return parent;
+  }
   return undefined;
 }
 
@@ -399,13 +407,16 @@ function cldrLocale(locale) {
   if (canonical === null) entry = Object.freeze({ language: "", cardinal: -1, ordinal: -1, grouping: 1, list: undefined, relativeTime: undefined });
   else {
     const cardinalId = cldrFind(canonical, generatedLocaleData.cardinal, true), ordinalId = cldrFind(canonical, generatedLocaleData.ordinal, true), groupingId = cldrFind(canonical, generatedLocaleData.grouping, false);
+    const list = cldrFind(canonical, generatedLocaleData.list, false), relativeTime = cldrFind(canonical, generatedLocaleData.relativeTime, false);
+    // A locale with CLDR data but no plural rules of its own (agq, rw) uses CLDR's root rule (0, other only).
+    const rootRule = list !== undefined || relativeTime !== undefined ? 0 : -1;
     entry = Object.freeze({
       language: cldrParse(canonical).language,
-      cardinal: cardinalId === undefined ? -1 : generatedLocaleData.cardinal[cardinalId],
-      ordinal: cardinalId === undefined ? -1 : ordinalId === undefined ? 0 : generatedLocaleData.ordinal[ordinalId],
+      cardinal: cardinalId === undefined ? rootRule : generatedLocaleData.cardinal[cardinalId],
+      ordinal: cardinalId === undefined ? rootRule : ordinalId === undefined ? 0 : generatedLocaleData.ordinal[ordinalId],
       grouping: groupingId === undefined ? 1 : generatedLocaleData.grouping[groupingId],
-      list: cldrFind(canonical, generatedLocaleData.list, false),
-      relativeTime: cldrFind(canonical, generatedLocaleData.relativeTime, false),
+      list,
+      relativeTime,
     });
   }
   if (cldrLocaleCache.size < 64) cldrLocaleCache.set(locale, entry);
@@ -421,9 +432,16 @@ function cldrParse(canonical) {
 }
 function cldrFormat(tag) { return tag.language + (tag.script === undefined ? "" : "-" + tag.script) + (tag.region === undefined ? "" : "-" + tag.region) + tag.variants; }
 function cldrTable(table, key) { return Object.hasOwn(table, key) ? table[key] : undefined; }
-function cldrLanguage(language) { return cldrTable(generatedLocaleData.aliases, language) ?? language; }
+// A deprecated or legacy language code becomes its replacement, whose script and region fill those the tag lacks:
+// iw → he, tl → fil, sh → sr-Latn, cnr → sr-ME.
+function cldrCanonicalize(tag) {
+  const replacement = cldrTable(generatedLocaleData.aliases, tag.language);
+  if (replacement === undefined) return tag;
+  const found = cldrParse(replacement);
+  return { ...tag, language: found.language, script: tag.script ?? found.script, region: tag.region ?? found.region };
+}
 function cldrMaximize(tag) {
-  tag = { ...tag, language: cldrLanguage(tag.language) };
+  tag = cldrCanonicalize(tag);
   const likely = generatedLocaleData.likely;
   let value;
   if (tag.script !== undefined && tag.region !== undefined) value = cldrTable(likely, `${tag.language}-${tag.script}-${tag.region}`);
@@ -435,7 +453,7 @@ function cldrMaximize(tag) {
   return { ...tag, script: tag.script ?? found.script, region: tag.region ?? found.region };
 }
 function cldrDataId(canonical) {
-  let tag = cldrParse(canonical); tag = { ...tag, language: cldrLanguage(tag.language) };
+  const tag = cldrCanonicalize(cldrParse(canonical));
   const script = tag.script ?? cldrMaximize(tag).script, likely = cldrTable(generatedLocaleData.likely, tag.language);
   const defaultScript = likely === undefined ? undefined : cldrParse(likely).script;
   return cldrFormat({ ...tag, script: script !== undefined && script === defaultScript ? undefined : script });
@@ -455,22 +473,27 @@ function cldrFind(canonical, table, truncate) {
   return undefined;
 }
 function cldrChain(id) { const result = []; for (let current = id; current !== undefined && result.length < 16; current = cldrParent(current, false)) result.push(current); return result; }
-function cldrRelated(first, second) { return cldrParent(first, false) === second || cldrParent(second, false) === first; }
+// A language and its bare-language CLDR parent (nb, nn → no) match after every same-language candidate (1000); two
+// languages with the same parent, nb and nn, after those (2000); -1: not related.
+function cldrRelatedPenalty(first, second) {
+  const firstParent = cldrParent(first, false), secondParent = cldrParent(second, false);
+  if (firstParent === second || secondParent === first) return 1000;
+  return firstParent !== undefined && firstParent === secondParent ? 2000 : -1;
+}
 // Both sides maximized must share language and script. Equal maximized tags match best, then the nearest CLDR
 // ancestor of the desired tag that a locale shares (the ancestor itself first), then a sibling region (the likely
-// region first); a language whose CLDR parent is another bare language (nb, nn → no) matches after every
-// same-language candidate.
+// region first), then a related language (cldrRelatedPenalty). The undetermined language only matches itself.
 // Ties keep the ordinal order of the declared locales.
 function cldrMatch(desired, available) {
   if (available.includes(desired)) return desired;
-  const wanted = cldrMaximize(cldrParse(desired)), chain = cldrChain(cldrDataId(desired));
+  const wanted = cldrMaximize(cldrParse(desired));
+  if (wanted.language === "und") return undefined;
+  const chain = cldrChain(cldrDataId(desired));
   let best, bestScore = Infinity;
   for (const locale of available) {
     const candidate = cldrMaximize(cldrParse(locale));
-    let penalty;
-    if (candidate.language === wanted.language) penalty = 0;
-    else if (cldrRelated(wanted.language, candidate.language)) penalty = 1000;
-    else continue;
+    const penalty = candidate.language === wanted.language ? 0 : cldrRelatedPenalty(wanted.language, candidate.language);
+    if (penalty < 0) continue;
     if (candidate.script !== wanted.script) continue;
     let score;
     if (candidate.region === wanted.region) score = 0;

@@ -63,7 +63,7 @@ const checkTable = (name, pattern) => {
 };
 const likely = checkTable("likelySubtags", /^[a-z]{2,3}-[A-Z][a-z]{3}-(?:[A-Z]{2}|\d{3})$/);
 const parents = checkTable("parentLocales", /^(?:root|[a-z]{2,3}(?:-[A-Z][a-z]{3})?(?:-(?:[A-Z]{2}|\d{3}))?)$/);
-const aliases = checkTable("languageAliases", /^[a-z]{2,3}$/);
+const aliases = checkTable("languageAliases", /^[a-z]{2,3}(?:-[A-Z][a-z]{3})?(?:-(?:[A-Z]{2}|\d{3}))?$/);
 for (const key of Object.keys(likely)) if (likely[parseTag(key).language] === undefined)
   throw new Error(`Likely subtags for '${key}' have no language entry.`);
 
@@ -197,7 +197,7 @@ internal static class GeneratedLocaleTables
 ${keysAndValues("Likely", likely)}
     /// <summary>CLDR parentLocales as data IDs, without the parents the default rules give; <c>root</c> ends a chain.</summary>
 ${keysAndValues("Parent", parents)}
-    /// <summary>Deprecated and legacy language codes with a plain replacement, such as <c>iw</c> → <c>he</c>.</summary>
+    /// <summary>Deprecated and legacy language codes and their replacements: <c>iw</c> → <c>he</c>, <c>sh</c> → <c>sr-Latn</c>.</summary>
 ${keysAndValues("Alias", aliases)}
     /// <summary>The cardinal plural rule set of each CLDR plural locale.</summary>
 ${keysAndValues("Cardinal", cardinal, "byte")}
@@ -287,7 +287,8 @@ const matrix =
       },
       messageProfile: { cardinal: "exact", ordinal: "exact", relativeTime: "semantic", list: "exact" },
       locales: matrixTags.map((tag) => {
-        const plural = pluralLanguage(cardinal, tag);
+        // A locale with CLDR data but no plural rules of its own (agq, rw) uses the root rule, `other` only.
+        const plural = pluralLanguage(cardinal, tag) || dataLocale(list, tag) || dataLocale(relativeTime, tag);
         return {
           tag,
           cardinal: plural,

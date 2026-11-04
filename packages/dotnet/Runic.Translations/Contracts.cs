@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -88,17 +87,15 @@ public interface ITranslationManager
     /// <see cref="UnsupportedLocalePolicy.Exact"/>. Requesting the active locale completes without composing a snapshot; use
     /// <see cref="RefreshAsync"/> to reload replacement bytes for the active locale.
     /// </remarks>
-    [SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "The overloads take unrelated first parameters (one tag vs. a preference list), so calls cannot become ambiguous.")]
     ValueTask SetLocaleAsync(string locale, CancellationToken cancellationToken = default);
-    /// <summary>Negotiates a locale for an ordered preference list and activates it as <see cref="SetLocaleAsync(string, CancellationToken)"/> does.</summary>
+    /// <summary>Negotiates a locale for an ordered preference list and activates it as <see cref="SetLocaleAsync"/> does.</summary>
     /// <remarks>
     /// <see cref="TranslationManager"/> asks its provider's <see cref="ITranslationProvider.NegotiateLocale"/>. The default
     /// implementation throws <see cref="NotSupportedException"/>.
     /// </remarks>
     /// <param name="preferredLocales">The preferences, most preferred first, such as the operating system's user languages.</param>
     /// <param name="cancellationToken">Cancels this caller's wait.</param>
-    [SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "The overloads take unrelated first parameters (one tag vs. a preference list), so calls cannot become ambiguous.")]
-    ValueTask SetLocaleAsync(IEnumerable<string> preferredLocales, CancellationToken cancellationToken = default) =>
+    ValueTask SetLocaleFromPreferencesAsync(IEnumerable<string> preferredLocales, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("This manager does not negotiate locales.");
     /// <summary>
     /// Rebuilds and atomically republishes the active locale's snapshot from its sources as if the
@@ -108,14 +105,14 @@ public interface ITranslationManager
     /// <para>
     /// Refresh recomposes whatever locale is current once an internal transition lock is acquired,
     /// so concurrent callers coalesce into one composition and a refresh racing pending
-    /// <see cref="SetLocaleAsync(string, CancellationToken)"/> work resolves deterministically: whichever acquires the lock
+    /// <see cref="SetLocaleAsync"/> work resolves deterministically: whichever acquires the lock
     /// first runs first, and a refresh that runs after a committed switch recomposes the newly
     /// active locale. <see cref="LocaleChanged"/> is never raised by a refresh because the active
     /// locale is unchanged. <see cref="SnapshotPublished"/> is raised for refreshes and locale switches alike.
     /// </para>
     /// <para>
     /// The replacement publishes only after the same validation gates as
-    /// <see cref="SetLocaleAsync(string, CancellationToken)"/>. Any failure, including cancellation, preserves
+    /// <see cref="SetLocaleAsync"/>. Any failure, including cancellation, preserves
     /// <see cref="Current"/> exactly and surfaces the provider's exception; incompatible external
     /// packs surface the established normalized <c>RTR0023</c> rejection identity.
     /// </para>
@@ -129,7 +126,7 @@ public interface ITranslationManager
     /// For a locale switch it is raised after <see cref="LocaleChanged"/>. Handlers run on the
     /// thread that completed the publication, which may be a thread-pool thread, never while the manager holds its
     /// transition lock, so a handler may call <see cref="RefreshAsync"/> or
-    /// <see cref="SetLocaleAsync(string, CancellationToken)"/>. Notifications of transitions that complete close together
+    /// <see cref="SetLocaleAsync"/>. Notifications of transitions that complete close together
     /// are not serialized and may arrive out of order; read <see cref="Current"/> for the latest
     /// state instead of relying on the event data. A subscriber failure never affects the publishing caller.
     /// </remarks>

@@ -38,14 +38,25 @@ internal static class CldrLocales
         return new Parts(parts[0], script, region, variants);
     }
 
-    /// <summary>The language with deprecated and legacy codes replaced (<c>iw</c> → <c>he</c>).</summary>
-    internal static string Language(string language) =>
-        Lookup(GeneratedLocaleTables.AliasKeys, GeneratedLocaleTables.AliasValues, language) ?? language;
+    /// <summary>The language with deprecated and legacy codes replaced (<c>iw</c> → <c>he</c>, <c>sh</c> → <c>sr</c>).</summary>
+    internal static string Language(string language) => Canonicalize(new Parts(language, null, null, "")).Language;
+
+    /// <summary>
+    /// Replaces a deprecated or legacy language code with its CLDR replacement, whose script and region fill those the
+    /// tag lacks (UTS #35 languageAlias): <c>iw</c> → <c>he</c>, <c>tl</c> → <c>fil</c>, <c>sh</c> → <c>sr-Latn</c>,
+    /// <c>cnr</c> → <c>sr-ME</c>.
+    /// </summary>
+    internal static Parts Canonicalize(Parts tag)
+    {
+        if (Lookup(GeneratedLocaleTables.AliasKeys, GeneratedLocaleTables.AliasValues, tag.Language) is not { } replacement) return tag;
+        Parts found = Parse(replacement);
+        return tag with { Language = found.Language, Script = tag.Script ?? found.Script, Region = tag.Region ?? found.Region };
+    }
 
     /// <summary>Adds likely subtags (UTS #35): the first entry found for language-script-region, language-region, language-script or language fills the missing script and region.</summary>
     internal static Parts Maximize(Parts tag)
     {
-        tag = tag with { Language = Language(tag.Language) };
+        tag = Canonicalize(tag);
         string? value = null;
         if (tag.Script is not null && tag.Region is not null) value = Likely(tag.Language + "-" + tag.Script + "-" + tag.Region);
         if (value is null && tag.Region is not null) value = Likely(tag.Language + "-" + tag.Region);
@@ -62,8 +73,7 @@ internal static class CldrLocales
     /// </summary>
     internal static string DataId(string canonical)
     {
-        Parts tag = Parse(canonical);
-        tag = tag with { Language = Language(tag.Language) };
+        Parts tag = Canonicalize(Parse(canonical));
         string? script = tag.Script ?? Maximize(tag).Script;
         string? likely = Likely(tag.Language);
         string? defaultScript = likely is null ? null : Parse(likely).Script;
@@ -96,14 +106,17 @@ internal static class CldrLocales
     }
 
     /// <summary>
-    /// The plural rule set of a locale, or -1 without CLDR plural rules. CLDR looks plural rules up by truncation
-    /// (<c>pt-PT</c> has its own; <c>pt-AO</c> uses <c>pt</c>'s). A language with cardinal but no ordinal rules
-    /// selects <c>other</c> (rule 0).
+    /// The plural rule set of a locale, or -1 for a language without CLDR data. CLDR looks plural rules up by
+    /// truncation (<c>pt-PT</c> has its own; <c>pt-AO</c> uses <c>pt</c>'s). A language with cardinal but no ordinal
+    /// rules selects <c>other</c> (rule 0, CLDR's root rule), and so does a locale with CLDR list or relative-time data
+    /// but no plural rules of its own (<c>agq</c>, <c>rw</c>), as in ICU.
     /// </summary>
     internal static int PluralRule(string canonical, bool ordinal)
     {
         string? cardinal = Find(canonical, GeneratedLocaleTables.CardinalKeys, truncate: true);
-        if (cardinal is null) return -1;
+        if (cardinal is null)
+            return Find(canonical, GeneratedLocaleTables.ListIds, truncate: false) is not null ||
+                Find(canonical, GeneratedLocaleTables.RelativeTimeIds, truncate: false) is not null ? 0 : -1;
         if (!ordinal) return GeneratedLocaleTables.CardinalValues[Array.BinarySearch(GeneratedLocaleTables.CardinalKeys, cardinal, StringComparer.Ordinal)];
         string? id = Find(canonical, GeneratedLocaleTables.OrdinalKeys, truncate: true);
         return id is null ? 0 : GeneratedLocaleTables.OrdinalValues[Array.BinarySearch(GeneratedLocaleTables.OrdinalKeys, id, StringComparer.Ordinal)];
@@ -126,23 +139,23 @@ internal static class CldrLocales
     /// <c>es-MX</c> → <c>es-419</c>, then <c>es-AR</c>, then <c>es</c>/<c>es-ES</c>; <c>en-AU</c> → <c>en-GB</c> (via
     /// <c>en-001</c>) before <c>en-US</c>; <c>de-CH</c> → <c>de</c>/<c>de-DE</c> before <c>de-AT</c>. A language whose
     /// CLDR parent is another bare language (<c>nb</c> and <c>nn</c> → <c>no</c>) matches it after every same-language
-    /// candidate. Ties keep the order of <paramref name="available"/>. When no locale shares the script, the caller falls
-    /// back to truncating subtags, as before likely subtags were used.
+    /// candidate, and two languages with the same such parent (<c>nb</c> and <c>nn</c>) match each other after that.
+    /// Ties keep the order of <paramref name="available"/>. A tag of the undetermined language (<c>und</c>,
+    /// <c>und-DE</c>) only matches itself. <see cref="Truncate"/> is the fallback when nothing matches.
     /// </remarks>
     internal static string? Match(string desired, IReadOnlyList<string> available)
     {
         for (int index = 0; index < available.Count; index++)
             if (string.Equals(available[index], desired, StringComparison.Ordinal)) return desired;
         Parts wanted = Maximize(Parse(desired));
+        if (wanted.Language == "und") return null;
         List<string> chain = Chain(DataId(desired));
         string? best = null; int bestScore = int.MaxValue;
         for (int index = 0; index < available.Count; index++)
         {
             Parts candidate = Maximize(Parse(available[index]));
-            int penalty;
-            if (candidate.Language == wanted.Language) penalty = 0;
-            else if (Related(wanted.Language, candidate.Language)) penalty = 1000;
-            else continue;
+            int penalty = candidate.Language == wanted.Language ? 0 : RelatedPenalty(wanted.Language, candidate.Language);
+            if (penalty < 0) continue;
             if (candidate.Script != wanted.Script) continue;
             int score;
             if (candidate.Region == wanted.Region) score = 0;
@@ -169,6 +182,25 @@ internal static class CldrLocales
         return best;
     }
 
+    /// <summary>
+    /// The nearest locale of <paramref name="available"/> (canonical tags in ordinal order) left by removing subtags from
+    /// <paramref name="desired"/>, as before likely subtags were used, or null. It must have the likely script of
+    /// <paramref name="desired"/>, so <c>sr-Latn-RS</c> never falls to a Cyrillic <c>sr</c> and <c>zh-Hant</c> never to
+    /// <c>zh</c>; variants, extensions and private use are removed (<c>tlh-x-a</c> → <c>tlh</c>).
+    /// </summary>
+    internal static string? Truncate(string desired, string[] available)
+    {
+        Parts wanted = Maximize(Parse(desired));
+        if (wanted.Language == "und") return null;
+        for (int separator = desired.LastIndexOf('-'); separator > 0; separator = desired.LastIndexOf('-'))
+        {
+            desired = desired[..separator];
+            if (Array.BinarySearch(available, desired, StringComparer.Ordinal) >= 0 && Maximize(Parse(desired)).Script == wanted.Script) return desired;
+        }
+
+        return null;
+    }
+
     /// <summary>The parent chain of a data ID, the ID first.</summary>
     internal static List<string> Chain(string id)
     {
@@ -177,9 +209,14 @@ internal static class CldrLocales
         return result;
     }
 
-    // nb and nn have no as their CLDR parent; such languages match each other after same-language candidates.
-    private static bool Related(string first, string second) =>
-        Parent(first, truncate: false) == second || Parent(second, truncate: false) == first;
+    // nb and nn have no as their CLDR parent. A language and its bare-language parent match after every same-language
+    // candidate (1000); two languages with the same parent, nb and nn, after those (2000). -1: not related.
+    private static int RelatedPenalty(string first, string second)
+    {
+        string? firstParent = Parent(first, truncate: false), secondParent = Parent(second, truncate: false);
+        if (firstParent == second || secondParent == first) return 1000;
+        return firstParent is not null && firstParent == secondParent ? 2000 : -1;
+    }
 
     private static string? Likely(string key) => Lookup(GeneratedLocaleTables.LikelyKeys, GeneratedLocaleTables.LikelyValues, key);
 

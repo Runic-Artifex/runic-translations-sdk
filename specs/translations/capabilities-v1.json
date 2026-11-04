@@ -59,16 +59,16 @@
   "locales": [
     {
       "tag": "aa",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "ab",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -80,9 +80,9 @@
     },
     {
       "tag": "agq",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -108,16 +108,16 @@
     },
     {
       "tag": "ann",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "apc",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -129,9 +129,9 @@
     },
     {
       "tag": "arn",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -185,9 +185,9 @@
     },
     {
       "tag": "ba",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -206,9 +206,9 @@
     },
     {
       "tag": "bas",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -227,9 +227,9 @@
     },
     {
       "tag": "bew",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -248,16 +248,16 @@
     },
     {
       "tag": "bgc",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "bgn",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -276,9 +276,9 @@
     },
     {
       "tag": "blt",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -311,9 +311,9 @@
     },
     {
       "tag": "bqi",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -346,23 +346,23 @@
     },
     {
       "tag": "bss",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "bua",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "byn",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -374,23 +374,23 @@
     },
     {
       "tag": "cad",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "cch",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "ccp",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -416,9 +416,9 @@
     },
     {
       "tag": "cho",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -430,9 +430,9 @@
     },
     {
       "tag": "cic",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -444,16 +444,16 @@
     },
     {
       "tag": "co",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "cop",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -472,9 +472,9 @@
     },
     {
       "tag": "cu",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -500,9 +500,9 @@
     },
     {
       "tag": "dav",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -514,9 +514,9 @@
     },
     {
       "tag": "dje",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -535,9 +535,9 @@
     },
     {
       "tag": "dua",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -549,9 +549,9 @@
     },
     {
       "tag": "dyo",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -563,9 +563,9 @@
     },
     {
       "tag": "ebu",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -633,9 +633,9 @@
     },
     {
       "tag": "ewo",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -689,9 +689,9 @@
     },
     {
       "tag": "frr",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -717,9 +717,9 @@
     },
     {
       "tag": "gaa",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -731,9 +731,9 @@
     },
     {
       "tag": "gez",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -745,9 +745,9 @@
     },
     {
       "tag": "gn",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -773,9 +773,9 @@
     },
     {
       "tag": "guz",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -983,16 +983,16 @@
     },
     {
       "tag": "kaa",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "kaa-Latn",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1011,9 +1011,9 @@
     },
     {
       "tag": "kam",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1039,37 +1039,37 @@
     },
     {
       "tag": "kek",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "ken",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "kgp",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "khq",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "ki",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1102,9 +1102,9 @@
     },
     {
       "tag": "kln",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1144,9 +1144,9 @@
     },
     {
       "tag": "kpe",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1172,9 +1172,9 @@
     },
     {
       "tag": "ksf",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1207,30 +1207,30 @@
     },
     {
       "tag": "kxv",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "kxv-Deva",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "kxv-Orya",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "kxv-Telu",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1242,9 +1242,9 @@
     },
     {
       "tag": "la",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1291,9 +1291,9 @@
     },
     {
       "tag": "lmo",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1312,9 +1312,9 @@
     },
     {
       "tag": "lrc",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1326,30 +1326,30 @@
     },
     {
       "tag": "ltg",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "lu",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "luo",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "luy",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1361,16 +1361,16 @@
     },
     {
       "tag": "lzz",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "mai",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1382,23 +1382,23 @@
     },
     {
       "tag": "mdf",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "mer",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "mfe",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1410,9 +1410,9 @@
     },
     {
       "tag": "mgh",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1424,23 +1424,23 @@
     },
     {
       "tag": "mhn",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "mi",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "mic",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1473,16 +1473,16 @@
     },
     {
       "tag": "mni",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "mni-Mtei",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1494,9 +1494,9 @@
     },
     {
       "tag": "moh",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1529,23 +1529,23 @@
     },
     {
       "tag": "mua",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "mus",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "mww",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1557,16 +1557,16 @@
     },
     {
       "tag": "myv",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "mzn",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1599,9 +1599,9 @@
     },
     {
       "tag": "nds",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1620,9 +1620,9 @@
     },
     {
       "tag": "nmg",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1669,16 +1669,16 @@
     },
     {
       "tag": "nus",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "nv",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1697,16 +1697,16 @@
     },
     {
       "tag": "oc",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "oka",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1767,16 +1767,16 @@
     },
     {
       "tag": "pi",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "pis",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1788,9 +1788,9 @@
     },
     {
       "tag": "pms",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1816,37 +1816,37 @@
     },
     {
       "tag": "qu",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "quc",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "raj",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "rhg",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "rif",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1858,9 +1858,9 @@
     },
     {
       "tag": "rn",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1886,9 +1886,9 @@
     },
     {
       "tag": "rw",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1900,9 +1900,9 @@
     },
     {
       "tag": "sa",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -1935,9 +1935,9 @@
     },
     {
       "tag": "sbp",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -2033,9 +2033,9 @@
     },
     {
       "tag": "shn",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -2047,9 +2047,9 @@
     },
     {
       "tag": "sid",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -2061,9 +2061,9 @@
     },
     {
       "tag": "skr",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -2173,16 +2173,16 @@
     },
     {
       "tag": "suz",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "suz-Sunu",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -2208,9 +2208,9 @@
     },
     {
       "tag": "szl",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -2236,9 +2236,9 @@
     },
     {
       "tag": "tg",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -2292,9 +2292,9 @@
     },
     {
       "tag": "tok",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -2313,16 +2313,16 @@
     },
     {
       "tag": "trv",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "trw",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -2334,23 +2334,23 @@
     },
     {
       "tag": "tt",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "twq",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "tyv",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -2411,16 +2411,16 @@
     },
     {
       "tag": "vai",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "vai-Latn",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -2446,9 +2446,9 @@
     },
     {
       "tag": "vmw",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -2481,16 +2481,16 @@
     },
     {
       "tag": "wal",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "wbp",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -2509,9 +2509,9 @@
     },
     {
       "tag": "xnr",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -2523,9 +2523,9 @@
     },
     {
       "tag": "yav",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -2544,9 +2544,9 @@
     },
     {
       "tag": "yrl",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
@@ -2565,16 +2565,16 @@
     },
     {
       "tag": "za",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "zgh",
-      "cardinal": false,
-      "ordinal": false,
-      "relativeTime": false,
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {

@@ -1,9 +1,9 @@
 #nullable enable
 Runic.Translations.CompiledTranslationCatalog.NegotiateLocale(System.Collections.Generic.IEnumerable<string!>! preferredLocales) -> string!
 Runic.Translations.CompiledTranslationProvider.NegotiateLocale(System.Collections.Generic.IEnumerable<string!>! preferredLocales) -> string!
-Runic.Translations.ITranslationManager.SetLocaleAsync(System.Collections.Generic.IEnumerable<string!>! preferredLocales, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Runic.Translations.ITranslationManager.SetLocaleFromPreferencesAsync(System.Collections.Generic.IEnumerable<string!>! preferredLocales, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Runic.Translations.ITranslationProvider.NegotiateLocale(System.Collections.Generic.IEnumerable<string!>! preferredLocales) -> string!
 Runic.Translations.LocaleNegotiation
-Runic.Translations.TranslationManager.SetLocaleAsync(System.Collections.Generic.IEnumerable<string!>! preferredLocales, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Runic.Translations.TranslationManager.SetLocaleFromPreferencesAsync(System.Collections.Generic.IEnumerable<string!>! preferredLocales, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 static Runic.Translations.LocaleNegotiation.Match(string! requestedLocale, System.Collections.Generic.IEnumerable<string!>! availableLocales) -> string?
 static Runic.Translations.LocaleNegotiation.Negotiate(System.Collections.Generic.IEnumerable<string!>! preferredLocales, System.Collections.Generic.IEnumerable<string!>! availableLocales, string! defaultLocale) -> string!

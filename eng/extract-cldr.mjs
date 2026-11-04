@@ -62,15 +62,18 @@ for (const [key, value] of Object.entries(allLikely)) {
 }
 const likely = sortedObject(Object.entries(likelySubtags));
 
-// Deprecated and legacy language codes with a plain replacement (iw → he), for languages without data of their own.
+// Deprecated and legacy language codes and their replacements, which may add a script or region (iw → he,
+// sh → sr-Latn, cnr → sr-ME). Deprecated and legacy codes are kept even when CLDR still lists plural rules for
+// them (tl, mo, sh, jw), because ICU and Java still produce them; their rules equal the replacement's (checked
+// below). Macrolanguage codes are kept only for languages without data of their own (cmn → zh).
+const replacementPattern = /^[a-z]{2,3}(?:-[A-Z][a-z]{3})?(?:-(?:[A-Z]{2}|\d{3}))?$/;
 const languageAliases = sortedObject(
   Object.entries(aliasSource)
-    .filter(([key, value]) => /^[a-z]{2,3}$/.test(key) && !languages.has(key) &&
-      ["deprecated", "legacy", "macrolanguage"].includes(value._reason) &&
-      /^[a-z]{2,3}$/.test(value._replacement) && languages.has(value._replacement))
+    .filter(([key, value]) => /^[a-z]{2,3}$/.test(key) &&
+      (["deprecated", "legacy"].includes(value._reason) || (value._reason === "macrolanguage" && !languages.has(key))) &&
+      replacementPattern.test(value._replacement) && languages.has(parseTag(value._replacement).language))
     .map(([key, value]) => [key, value._replacement]),
 );
-
 // Explicit parents of the main component, as data IDs; parents that the default rules give are omitted.
 const parentEntries = [];
 for (const [child, parent] of Object.entries(parentSource.parentLocale)) {
@@ -151,6 +154,15 @@ for (const id of [...resolved.keys()].sort(ordinalSort)) {
 // Every data ID must reach stored data through its chain.
 for (const id of resolved.keys()) if (!chainOf(id).some((candidate) => localeEntries.some(([key]) => key === candidate)))
   throw new Error(`${id} reaches no stored data.`);
+
+// An alias with plural rules of its own must select as its replacement does, so aliasing never changes plurals.
+for (const [alias, replacement] of Object.entries(languageAliases))
+  for (const source of [cardinalSource, ordinalSource]) {
+    if (source[alias] === undefined) continue;
+    const target = chainOf(dataId(replacement, likely)).concat(parseTag(replacement).language).find((id) => source[id] !== undefined);
+    if (JSON.stringify(source[alias]) !== JSON.stringify(source[target]))
+      throw new Error(`The plural rules of alias ${alias} differ from those of ${replacement}.`);
+  }
 
 const subset = {
   source: {

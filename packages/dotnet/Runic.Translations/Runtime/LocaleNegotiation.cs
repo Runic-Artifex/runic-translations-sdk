@@ -15,13 +15,18 @@ namespace Runic.Translations;
 /// locale shares decides, the parent itself before its other descendants: <c>es-MX</c> → <c>es-419</c>, then
 /// <c>es-AR</c>, then <c>es</c>; <c>en-AU</c> → <c>en-GB</c> (both under <c>en-001</c>) before <c>en-US</c>;
 /// <c>de-CH</c> → <c>de-DE</c> (the likely region of <c>de</c>) before <c>de-AT</c>. <c>nb</c> and
-/// <c>nn</c> match <c>no</c> (and <c>no</c> matches <c>nb</c>) after every same-language locale. When no locale shares
-/// the script, the nearest locale left by removing subtags matches (<c>sr-Latn-RS</c> → <c>sr</c>), as before.
+/// <c>nn</c> match <c>no</c> (and <c>no</c> matches <c>nb</c>) after every same-language locale, and <c>nb</c> and
+/// <c>nn</c> match each other after that. Deprecated and legacy codes match their replacements: <c>iw</c> → <c>he</c>,
+/// <c>tl</c> → <c>fil</c>, <c>mo</c> → <c>ro</c>, <c>sh</c> → <c>sr-Latn</c>. Otherwise the nearest locale left by
+/// removing subtags matches, but only with the same likely script: <c>tlh-x-a</c> → <c>tlh</c>, while
+/// <c>sr-Latn-RS</c> does not match a Cyrillic <c>sr</c> and <c>zh-Hant</c> does not match <c>zh</c>.
 /// </para>
 /// <para>
-/// The first preference that matches decides; ties keep the ordinal order of the locales. Preferences that are not
-/// valid tags are skipped. POSIX forms are accepted: <c>de_DE</c>, <c>de_DE.UTF-8</c> and <c>de_DE@euro</c> name
-/// <c>de-DE</c>.
+/// The first preference that matches decides, so a script mismatch reaches the next preference:
+/// <c>[sr-Latn-RS, en]</c> chooses <c>en</c> from <c>en</c> and <c>sr</c>. Ties keep the ordinal order of the locales.
+/// Preferences that are not valid tags are skipped, and so are those of the undetermined language (<c>und</c>,
+/// <c>und-DE</c>) unless a locale is exactly that tag. POSIX forms are accepted: <c>de_DE</c>, <c>de_DE.UTF-8</c> and
+/// <c>de_DE@euro</c> name <c>de-DE</c>.
 /// </para>
 /// </remarks>
 public static class LocaleNegotiation
@@ -62,18 +67,9 @@ public static class LocaleNegotiation
         return null;
     }
 
-    /// <summary>The best locale for a canonical tag: exact, CLDR likely-subtag matching, then truncation.</summary>
-    internal static string? Match(string canonical, string[] available)
-    {
-        if (CldrLocales.Match(canonical, available) is { } match) return match;
-        for (int separator = canonical.LastIndexOf('-'); separator > 0; separator = canonical.LastIndexOf('-'))
-        {
-            canonical = canonical[..separator];
-            if (Array.BinarySearch(available, canonical, StringComparer.Ordinal) >= 0) return canonical;
-        }
-
-        return null;
-    }
+    /// <summary>The best locale for a canonical tag: exact, CLDR likely-subtag matching, then truncation within the same script.</summary>
+    internal static string? Match(string canonical, string[] available) =>
+        CldrLocales.Match(canonical, available) ?? CldrLocales.Truncate(canonical, available);
 
     // A POSIX locale name may carry a code set and a modifier: de_DE.UTF-8@euro.
     private static string? Canonical(string preference)

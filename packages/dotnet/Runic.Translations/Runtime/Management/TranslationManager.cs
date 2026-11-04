@@ -60,7 +60,6 @@ public sealed class TranslationManager : ITranslationManager
     public event EventHandler<TranslationSnapshotPublishedEventArgs>? SnapshotPublished;
 
     /// <inheritdoc />
-    [SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "The overloads take unrelated first parameters (one tag vs. a preference list), so calls cannot become ambiguous.")]
     public ValueTask SetLocaleAsync(
         string locale,
         CancellationToken cancellationToken = default)
@@ -99,8 +98,7 @@ public sealed class TranslationManager : ITranslationManager
     }
 
     /// <inheritdoc />
-    [SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "The overloads take unrelated first parameters (one tag vs. a preference list), so calls cannot become ambiguous.")]
-    public ValueTask SetLocaleAsync(
+    public ValueTask SetLocaleFromPreferencesAsync(
         IEnumerable<string> preferredLocales,
         CancellationToken cancellationToken = default)
     {
