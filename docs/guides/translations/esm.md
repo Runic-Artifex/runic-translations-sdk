@@ -84,6 +84,33 @@ unless `unsupportedLocale` is `exact`). Framework adapters consume this
 structural contract and create one source per browser root. SSR uses the
 generated server entrypoint rather than a mutable global source.
 
+An undeclared tag resolves with the pinned CLDR likely subtags and parent
+locales, as ICU's `LocaleMatcher` does: both tags are maximized and must share
+the language and script. So `zh-TW` and `zh-HK` resolve to a declared `zh-Hant`,
+`sr-Latn-RS` to `sr-Latn`, `de-CH` to a declared `de-DE`, `es-MX` to `es-419`
+before `es`, `en-AU` to `en-GB` before `en-US`, and `nb`, `nn` and `no` to each
+other. When no declared locale shares the script, removing subtags still
+applies (`zh-TW` resolves to `zh` when only `zh` is declared). POSIX names such
+as `de_DE` are accepted wherever a tag is.
+
+`negotiateLocale(preferences)` takes an ordered preference list, such as
+`navigator.languages`, a parsed `Accept-Language` header or the `LANGUAGE`
+environment variable split on `:`, and returns the declared locale for the first
+preference that matches, else `baseLocale`. Invalid entries are skipped, and
+`de_DE.UTF-8` or `de_DE@euro` names `de-DE`. The unsupported-locale policy does
+not apply to it. .NET has the same rules in `LocaleNegotiation.Negotiate` and
+the generated `ResolveLocale(IEnumerable<string>)`:
+
+```ts
+import { createLocaleSource, negotiateLocale } from 'virtual:runic-translations/app/runtime';
+
+const source = createLocaleSource({ initialLocale: negotiateLocale(navigator.languages) });
+```
+
+Plural rules, list patterns and relative-time data come from the pinned CLDR
+data. `runtime.js` embeds only the data of the catalog's languages and of the
+languages their CLDR parents link to (`nb` and `nn` with `no`).
+
 `localeDirection(locale)` returns `"rtl"` or `"ltr"` for any valid BCP 47
 tag, not only the catalog's locales, so the page can set its direction with
 the language:

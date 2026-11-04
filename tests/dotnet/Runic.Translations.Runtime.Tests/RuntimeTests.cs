@@ -518,7 +518,30 @@ internal sealed class RuntimeTests
         Assert.Equal(1, changes);
         await manager.SetLocaleAsync(string.Empty);
         Assert.Equal(1, changes);
-        await Assert.ThrowsAsync<ArgumentNullException>(() => manager.SetLocaleAsync(null!).AsTask());
+        await Assert.ThrowsAsync<ArgumentNullException>(() => manager.SetLocaleAsync((string)null!).AsTask());
+    }
+
+    [Test, DisplayName("manager and provider negotiate an ordered preference list with CLDR likely subtags")]
+    public async Task ManagerPreferenceList()
+    {
+        CompiledTranslationProvider provider = new(CreateCatalog());
+        TranslationManager manager = new(provider, await provider.GetSnapshotAsync("en"));
+        // de-CH matches the declared de-DE (the likely region of de); invalid and unmatched entries are skipped.
+        await manager.SetLocaleAsync(["C", "fr-FR", "de_CH.UTF-8", "en"]);
+        Assert.Equal("de-DE", manager.CurrentLocale);
+        await ((ITranslationManager)manager).SetLocaleAsync(["en-GB"]);
+        Assert.Equal("en", manager.CurrentLocale);
+        Assert.Equal("en", provider.NegotiateLocale(["it", "ja"]));
+        Assert.Equal("en-US", provider.NegotiateLocale(["en-US"]));
+        // A single requested locale resolves the same way under ParentsThenDefault.
+        Assert.Equal("de-DE", (await provider.GetSnapshotAsync("de-AT")).Locale);
+        Assert.Equal("de-DE", (await provider.GetSnapshotAsync("de")).Locale);
+        Assert.Equal("de-DE", (await provider.GetSnapshotAsync("de_DE")).Locale);
+        await Assert.ThrowsAsync<ArgumentNullException>(() => manager.SetLocaleAsync((IEnumerable<string>)null!).AsTask());
+        Assert.Equal("de-DE", LocaleNegotiation.Match("de-CH", ["en", "de-DE"]));
+        Assert.Equal(null, LocaleNegotiation.Match("fr", ["en", "de-DE"]));
+        Assert.Equal("en", LocaleNegotiation.Negotiate([], ["en", "de"], "en"));
+        Assert.Throws<ArgumentException>(() => LocaleNegotiation.Negotiate(["de"], ["en", "not a tag"], "en"));
     }
 
     [Test, DisplayName("provider caches and coalesces canonical locale")]

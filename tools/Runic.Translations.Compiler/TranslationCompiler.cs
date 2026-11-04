@@ -435,7 +435,7 @@ public static partial class TranslationCompiler
         return true;
     }
 
-    private static bool TryCanonicalizeLocale(string value, out string canonical)
+    internal static bool TryCanonicalizeLocale(string value, out string canonical)
     {
         canonical = string.Empty;
         if (value.Length == 0 || value[0] == '-' || value[value.Length - 1] == '-') return false;

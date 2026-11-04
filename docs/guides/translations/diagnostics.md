@@ -128,8 +128,11 @@ code, or no runtime at all. Reference `Runic.Translations` at the same version a
 ## RTR0031
 
 Built-in formatter does not support the content locale. A plural, ordinal,
-relative-time or list formatter is used for a locale the built-in data does not cover.
-Use a supported locale or avoid the formatter for that locale.
+relative-time or list formatter is used for a locale that the pinned CLDR data
+does not cover. Every CLDR plural, ordinal and list locale is covered, including
+regional and script variants such as `pt-PT`, `sr-Latn` and `zh-TW`; see
+[capabilities](capabilities.md). Use a supported locale or avoid the formatter
+for that locale.
 
 ## RTR0041
 

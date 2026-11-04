@@ -54,8 +54,8 @@ internal static class Rmf2EsmOutputRendererV5
         writer.Line("export const baseLocale = " + GenerationSupport.JsonString(project.DefaultLocale) + ";");
         writer.Line("export const locales = Object.freeze(" + JsonSerializer.Serialize(project.Locales.Select(item => item.Tag).OrderBy(item => item, StringComparer.Ordinal)) + ");");
         writer.Line("const unsupportedLocalePolicy = " + GenerationSupport.JsonString(project.UnsupportedLocale.ToString()) + ";");
-        writer.Line("const generatedLocaleData = " + TranslationCapabilityRegistry.EsmLocaleDataJson + ";");
-        writer.Line(TranslationCapabilityRegistry.EsmPluralRulesSource);
+        // Only the CLDR data of the catalog's languages is embedded.
+        writer.Line(TranslationCapabilityRegistry.EsmLocaleSource(project.Locales.Select(item => item.Tag)));
         writer.Line("export const rmf2Contract = freezeTrusted(JSON.parse(" + GenerationSupport.JsonString(project.MarkupContract) + "));");
         writer.Line("export const messageContracts = freezeTrusted(JSON.parse(" + GenerationSupport.JsonString(ContractsJson(project, includeExtras: true)) + "));");
         using Stream stream = typeof(Rmf2EsmOutputRendererV5).Assembly.GetManifestResourceStream("Runic.Translations.Compiler.Generation.Rmf2EsmRuntimeV5.js")!;
@@ -199,6 +199,8 @@ internal static class Rmf2EsmOutputRendererV5
         export declare const locales: readonly Locale[];
         export declare function decimal(value: string): Rmf2Decimal;
         export declare function resolveLocale(locale: string): Locale;
+        /** The best declared locale for an ordered preference list (navigator.languages, Accept-Language, LANGUAGE), matched with CLDR likely subtags; the base locale when none matches. */
+        export declare function negotiateLocale(preferences: Iterable<string>): Locale;
         /** The text direction of any BCP 47 locale tag's script, for the page's `dir` attribute. */
         export declare function localeDirection(locale: string): "ltr" | "rtl";
         export declare function getLocale(): Locale;

@@ -109,7 +109,7 @@ internal sealed class Rmf2ResolvedFormat
         if (grouping == "never") return false;
         int[] sizes = format.NumberGroupSizes;
         if (sizes.Length == 0 || sizes[0] <= 0 || format.NumberGroupSeparator.Length == 0) return false;
-        int pinned = GeneratedLocaleData.MinimumGroupingDigits(GeneratedLocaleData.Language(locale));
+        int pinned = GeneratedLocaleData.MinimumGroupingDigits(locale);
         int minimum = grouping switch { "always" => 1, "min2" => Math.Max(2, pinned), _ => pinned };
         return digits - sizes[0] >= minimum;
     }
@@ -240,7 +240,7 @@ internal static class Rmf2RuntimeEvaluator
             if (selector.Function != "exact")
             {
                 PluralOperands operands = operand.Operands;
-                categories[index] = GeneratedLocaleData.SelectPlural(GeneratedLocaleData.Language(locale), selector.Function == "ordinal", in operands)
+                categories[index] = GeneratedLocaleData.SelectPlural(locale, selector.Function == "ordinal", in operands)
                     ?? throw new TranslationFormatException("V5 plural selection is not supported for locale '" + locale + "'.");
             }
         }

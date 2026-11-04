@@ -30,6 +30,13 @@ Console.WriteLine(text.Messages.application_title);
 
 Each successful locale change replaces the complete immutable snapshot. Reads through `manager.Current` do not observe a partially updated catalog.
 
+To start in the user's language, pass an ordered preference list, such as the operating system's user languages. The generated `SupportedLocales` lists the declared locales, and `ResolveLocale(IEnumerable<string>)` chooses one with the pinned CLDR likely subtags and parent locales: `zh-TW` matches a declared `zh-Hant`, `de-CH` matches `de-DE`, and `nb` matches `no`. `CreateManagerAsync`, `CreateManager` and `ITranslationManager.SetLocaleAsync` accept the same list, and `LocaleNegotiation.Negotiate` applies the rules to any set of locales. The generated ESM runtime's `negotiateLocale` gives the same answer.
+
+```csharp
+ITranslationManager manager = await AppTextCatalog.CreateManagerAsync(
+    preferredLocales: ["de-CH", "en"]);
+```
+
 ## When to choose this package
 
 Choose `Runic.Translations` for application runtime behavior: generated catalog data, locale resolution, formatting, structured content, translation references, and optional verified external packs. Choose `Runic.Translations.Tooling` when building an editor, compiler host, or workspace tool.

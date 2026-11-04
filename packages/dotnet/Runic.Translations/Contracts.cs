@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -59,6 +61,15 @@ public interface ITranslationProvider
     /// <see cref="UnsupportedLocalePolicy.Exact"/>.
     /// </remarks>
     ValueTask<ITranslationSnapshot> GetSnapshotAsync(string requestedLocale, CancellationToken cancellationToken = default);
+    /// <summary>Chooses the provided locale for an ordered preference list, such as the operating system's user languages.</summary>
+    /// <remarks>
+    /// <see cref="CompiledTranslationProvider"/> matches with CLDR likely subtags and parent locales
+    /// (<see cref="LocaleNegotiation"/>) and returns the default locale when no preference matches. The default
+    /// implementation throws <see cref="NotSupportedException"/>.
+    /// </remarks>
+    /// <param name="preferredLocales">The preferences, most preferred first.</param>
+    string NegotiateLocale(IEnumerable<string> preferredLocales) =>
+        throw new NotSupportedException("This provider does not negotiate locales.");
 }
 
 /// <summary>Owns the currently active immutable locale snapshot.</summary>
@@ -77,7 +88,18 @@ public interface ITranslationManager
     /// <see cref="UnsupportedLocalePolicy.Exact"/>. Requesting the active locale completes without composing a snapshot; use
     /// <see cref="RefreshAsync"/> to reload replacement bytes for the active locale.
     /// </remarks>
+    [SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "The overloads take unrelated first parameters (one tag vs. a preference list), so calls cannot become ambiguous.")]
     ValueTask SetLocaleAsync(string locale, CancellationToken cancellationToken = default);
+    /// <summary>Negotiates a locale for an ordered preference list and activates it as <see cref="SetLocaleAsync(string, CancellationToken)"/> does.</summary>
+    /// <remarks>
+    /// <see cref="TranslationManager"/> asks its provider's <see cref="ITranslationProvider.NegotiateLocale"/>. The default
+    /// implementation throws <see cref="NotSupportedException"/>.
+    /// </remarks>
+    /// <param name="preferredLocales">The preferences, most preferred first, such as the operating system's user languages.</param>
+    /// <param name="cancellationToken">Cancels this caller's wait.</param>
+    [SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "The overloads take unrelated first parameters (one tag vs. a preference list), so calls cannot become ambiguous.")]
+    ValueTask SetLocaleAsync(IEnumerable<string> preferredLocales, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This manager does not negotiate locales.");
     /// <summary>
     /// Rebuilds and atomically republishes the active locale's snapshot from its sources as if the
     /// locale were being entered fresh, without changing locales.
@@ -86,14 +108,14 @@ public interface ITranslationManager
     /// <para>
     /// Refresh recomposes whatever locale is current once an internal transition lock is acquired,
     /// so concurrent callers coalesce into one composition and a refresh racing pending
-    /// <see cref="SetLocaleAsync"/> work resolves deterministically: whichever acquires the lock
+    /// <see cref="SetLocaleAsync(string, CancellationToken)"/> work resolves deterministically: whichever acquires the lock
     /// first runs first, and a refresh that runs after a committed switch recomposes the newly
     /// active locale. <see cref="LocaleChanged"/> is never raised by a refresh because the active
     /// locale is unchanged. <see cref="SnapshotPublished"/> is raised for refreshes and locale switches alike.
     /// </para>
     /// <para>
     /// The replacement publishes only after the same validation gates as
-    /// <see cref="SetLocaleAsync"/>. Any failure, including cancellation, preserves
+    /// <see cref="SetLocaleAsync(string, CancellationToken)"/>. Any failure, including cancellation, preserves
     /// <see cref="Current"/> exactly and surfaces the provider's exception; incompatible external
     /// packs surface the established normalized <c>RTR0023</c> rejection identity.
     /// </para>
@@ -107,7 +129,7 @@ public interface ITranslationManager
     /// For a locale switch it is raised after <see cref="LocaleChanged"/>. Handlers run on the
     /// thread that completed the publication, which may be a thread-pool thread, never while the manager holds its
     /// transition lock, so a handler may call <see cref="RefreshAsync"/> or
-    /// <see cref="SetLocaleAsync"/>. Notifications of transitions that complete close together
+    /// <see cref="SetLocaleAsync(string, CancellationToken)"/>. Notifications of transitions that complete close together
     /// are not serialized and may arrive out of order; read <see cref="Current"/> for the latest
     /// state instead of relying on the event data. A subscriber failure never affects the publishing caller.
     /// </remarks>

@@ -203,8 +203,8 @@ internal sealed class Rmf2V1CorpusTests
     // (GeneratedCatalogSupport, CompiledRmf2*, TranslationsCompatibility) and the readable surface implements
     // IReadableMessages; transport.js writes only version 2 and transport.d.ts drops the version 1 createTextReference
     // overload, in both digests.
-    private const string EncodedOutputDigest = "3c0d6e68105b785be90716051494fd03c97212bb7b7f61c4f395d1e8a7ea7ed1";
-    private const string HiddenEncodedOutputDigest = "ab003375e12da228bf01aa8eba793b64f51a8244c25313c042c754f50ae347d6";
+    private const string EncodedOutputDigest = "b770a448bf0d30a0fc4b90bed9d181ce0c202af40815b7ef9f03e864aa10e0a7";
+    private const string HiddenEncodedOutputDigest = "1cb589eb3ec1e7044e8f5687d3c41fa32f7641474df5b9d58193aa49c1e4a976";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

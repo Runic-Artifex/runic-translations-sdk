@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -52,6 +53,9 @@ public sealed class CompiledTranslationProvider : ITranslationProvider, ITransla
         _valueFormatter = valueFormatter ?? DefaultTextValueFormatter.Shared;
         _snapshotFactory = snapshotFactory ?? DefaultSnapshotFactory.Instance;
     }
+
+    /// <inheritdoc />
+    public string NegotiateLocale(IEnumerable<string> preferredLocales) => _catalog.NegotiateLocale(preferredLocales);
 
     /// <inheritdoc />
     public ValueTask<ITranslationSnapshot> GetSnapshotAsync(

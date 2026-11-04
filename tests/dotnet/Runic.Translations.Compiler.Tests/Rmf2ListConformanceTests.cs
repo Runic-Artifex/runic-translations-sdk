@@ -21,6 +21,12 @@ internal sealed class Rmf2ListConformanceTests
 {
     private sealed record Vector(string Id, string Locale, string Message, JsonObject Arguments, string Expected);
 
+    // The 0.8 families, plus locales whose patterns or rules differ in kind (pt-PT, scripts, suffix patterns).
+    // CldrLocaleConformanceTests compares both runtimes for every CLDR list locale.
+    private static readonly string[] CoveredLocales =
+        ["cs", "da", "de", "en", "es", "fr", "it", "ja", "nb", "nl", "nn", "no", "sv",
+         "ar", "he", "ko", "mi", "pl", "pt", "pt-PT", "ru", "sr-Latn", "tr", "zh", "zh-Hant"];
+
     private static List<Vector> Vectors()
     {
         var corpus = JsonNode.Parse(File.ReadAllBytes(RepositoryPaths.Resolve("specs", "translations", "corpus", "rmf2-list-conformance.json")))!;
@@ -30,8 +36,8 @@ internal sealed class Rmf2ListConformanceTests
             item["arguments"]!.AsObject(), item["expected"]!.GetValue<string>())).ToList();
         Assert.True(vectors.Count > 40, "The list vectors are missing.");
         Assert.Equal(vectors.Count, vectors.Select(vector => vector.Id).Distinct(StringComparer.Ordinal).Count(), "Duplicate list vector ids.");
-        foreach (string family in TranslationCapabilityRegistry.ListLanguages)
-            Assert.True(vectors.Any(vector => vector.Locale.Split('-')[0] == family), "No list vector covers locale family '" + family + "'.");
+        foreach (string family in CoveredLocales)
+            Assert.True(vectors.Any(vector => vector.Locale == family), "No list vector covers locale '" + family + "'.");
         return vectors;
     }
 
@@ -206,15 +212,15 @@ internal sealed class Rmf2ListConformanceTests
     [Test, DisplayName("RMF2 list formatting reports RTR0031 for a content locale without CLDR list patterns")]
     public void UnsupportedLocale()
     {
-        const string manifest = """{"schemaVersion":1,"catalog":"lists","code":{"namespace":"Example","className":"Text"},"baseLocale":"en","locales":["en","pl"]}""";
+        const string manifest = """{"schemaVersion":1,"catalog":"lists","code":{"namespace":"Example","className":"Text"},"baseLocale":"en","locales":["en","tlh"]}""";
         Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(manifest)),
         [
             new("translations/en.rmf2", Encoding.UTF8.GetBytes("names = {{{$names :runic:list}}}\n")),
             // Without an explicit function the list input still formats with list patterns.
-            new("translations/pl.rmf2", Encoding.UTF8.GetBytes("names = {{{$names}}}\n")),
+            new("translations/tlh.rmf2", Encoding.UTF8.GetBytes("names = {{{$names}}}\n")),
         ]);
         TranslationDiagnostic diagnostic = result.Diagnostics.Single(item => item.Id == "RTR0031");
-        Assert.True(diagnostic.Message.Contains("list registry", StringComparison.Ordinal) && diagnostic.Message.Contains("'pl'", StringComparison.Ordinal), diagnostic.Message);
+        Assert.True(diagnostic.Message.Contains("list registry", StringComparison.Ordinal) && diagnostic.Message.Contains("'tlh'", StringComparison.Ordinal), diagnostic.Message);
     }
 
     private static Rmf2SemanticResultV5 Compile(string text) => Rmf2SemanticCompilerV5.Compile(new TranslationSource("message.mf2", Encoding.UTF8.GetBytes(text)));
