@@ -105,6 +105,9 @@ internal static class GeneratorTestHost
             RuntimeReferenceMode.Rmf2V3Typed => "public const int Rmf2RuntimeAbiVersion = 3; public const int TypedSlotBindingsVersion = 1;",
             RuntimeReferenceMode.LaterCompatible => "public const int Rmf2RuntimeAbiVersion = 4; public const int MinimumRmf2RuntimeAbiVersion = 3; public const int MinimumRuntimeAbiVersion = 1;",
             RuntimeReferenceMode.Rmf2V3Composition => "public const int Rmf2RuntimeAbiVersion = 3; public const int CompositionVersion = 1;",
+            RuntimeReferenceMode.Rmf2V3CompositionVersionRule => "public const int Rmf2RuntimeAbiVersion = 3; public const int CompositionVersion = 1; " +
+                "public const int MinimumRuntimeAbiVersion = 1; public const int MinimumRmf2RuntimeAbiVersion = 3; " +
+                "public static void EnsureRuntimeAbi(int requiredVersion) { } public static void EnsureRmf2RuntimeAbi(int requiredVersion) { }",
             RuntimeReferenceMode.ProjectReferenceRmf2V3 => "public const int Rmf2RuntimeAbiVersion = 3;",
             RuntimeReferenceMode.ProjectReferenceRmf2V3Typed => "public const int Rmf2RuntimeAbiVersion = 3; public const int TypedSlotBindingsVersion = 1;",
             RuntimeReferenceMode.Rmf2Zero => "public const int Rmf2RuntimeAbiVersion = 0;",
@@ -212,6 +215,8 @@ internal enum RuntimeReferenceMode
     ProjectReferenceRmf2V3Typed,
     // Synthetic metadata runtime with CompositionVersion but without the readable surface.
     Rmf2V3Composition,
+    // As Rmf2V3Composition, with the version rule (Minimum* constants and EnsureRuntimeAbi).
+    Rmf2V3CompositionVersionRule,
     // A later runtime (RMF2 ABI 4, base ABI 2) that still runs base ABI 1 and RMF2 ABI 3.
     LaterCompatible,
 }

@@ -206,8 +206,8 @@ internal sealed class Rmf2V1CorpusTests
     // Re-pinned for T1a/T1b (0.9): generated C# adds the XText(ITranslationContext) constructor and
     // XCatalog.Registration, and gives the XText(ITranslationManager) constructor OverloadResolutionPriority(1) so
     // new XText(null) still compiles, in both digests. Every other output is unchanged.
-    private const string EncodedOutputDigest = "b0cfb394606951cc0b889eb00f315f116142ee0e8bdcb6f646885cb37d3605dc";
-    private const string HiddenEncodedOutputDigest = "c64033f39491d4dd6be5a6f85964f15141ce9ddf661cccff96ae2369bb8f095c";
+    private const string EncodedOutputDigest = "a4379a28c5f378628647ea4429b77e42d4817aaa0793cc6085edc0682b40458b";
+    private const string HiddenEncodedOutputDigest = "83043d6618984ab3a5034ee4c8069570d697ae374b23a485f68571e3ed09d0ec";
     // Re-pinned for T1g (0.9): the generated base ABI check is a call, TranslationsCompatibility.EnsureRuntimeAbi(1),
     // in both digests.
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];

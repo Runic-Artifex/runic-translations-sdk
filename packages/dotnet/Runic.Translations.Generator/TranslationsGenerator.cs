@@ -295,7 +295,8 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
                 Rmf2ProjectV5EmissionEligibility.Message));
             return new LinkResult(diagnostics.ToImmutable(), null, false);
         }
-        return new LinkResult(diagnostics.ToImmutable(), linked, runtimeAbi.SupportsReadableSurface, runtimeAbi.SupportsComposition);
+        return new LinkResult(diagnostics.ToImmutable(), linked, runtimeAbi.SupportsReadableSurface, runtimeAbi.SupportsComposition,
+            runtimeAbi.SupportsRuntimeAbiCall);
     }
 
     // Links each referenced project's catalog for XAML checks only. The referenced project's own
@@ -326,14 +327,14 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
     {
         foreach (Diagnostic diagnostic in result.Diagnostics) context.ReportDiagnostic(diagnostic);
         if (result.Project is not { } linked) return;
-        bool readableSurface = result.ReadableSurface, composition = result.Composition;
+        bool readableSurface = result.ReadableSurface, composition = result.Composition, runtimeAbiCall = result.RuntimeAbiCall;
 
         var outputs = new List<TranslationGeneratedOutput>(5)
         {
             TranslationOutputRenderer.RenderRmf2V5CSharpKeys(linked, readableSurface),
             TranslationOutputRenderer.RenderRmf2V5CSharpAccessors(linked, readableSurface, composition),
             TranslationOutputRenderer.RenderRmf2V5CSharpCatalogData(linked),
-            TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(linked, composition),
+            TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(linked, composition, runtimeAbiCall),
         };
         // The readable surface needs the typed slot types of a runtime that declares
         // TypedSlotBindingsVersion. Without it, keep the encoded files and explain the gap.
@@ -454,12 +455,14 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
     // link (a translation source, project or runtime ABI change) reaches both outputs.
     internal sealed class LinkResult
     {
-        internal LinkResult(ImmutableArray<Diagnostic> diagnostics, Rmf2ProjectV5? project, bool readableSurface, bool composition = false)
+        internal LinkResult(ImmutableArray<Diagnostic> diagnostics, Rmf2ProjectV5? project, bool readableSurface, bool composition = false,
+            bool runtimeAbiCall = false)
         {
             Diagnostics = diagnostics;
             Project = project;
             ReadableSurface = readableSurface;
             Composition = composition;
+            RuntimeAbiCall = runtimeAbiCall;
             // XAML keys name readable members. Without the readable surface (an old runtime or a
             // reserved class name, both reported once already) there is nothing to check XAML against.
             XamlCatalog = project is not null && readableSurface && Rmf2ReadableNamesV1.SupportsClassName(project.ClassName)
@@ -474,6 +477,8 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         internal bool ReadableSurface { get; }
         /// <summary>Whether the referenced runtime has the catalog composition surface.</summary>
         internal bool Composition { get; }
+        /// <summary>Whether the referenced runtime declares the version rule (MinimumRuntimeAbiVersion, EnsureRuntimeAbi).</summary>
+        internal bool RuntimeAbiCall { get; }
         internal XamlCatalog? XamlCatalog { get; }
     }
 
@@ -537,6 +542,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             TypedSlotBindingsVersion = typedSlotBindingsVersion;
             CompositionVersion = compositionVersion;
             // A runtime that declares no minimum runs exactly its own ABI, as before the version rule.
+            DeclaresMinimumVersion = minimumVersion >= 0;
             MinimumVersion = minimumVersion < 0 ? version : minimumVersion;
             MinimumRmf2Version = minimumRmf2Version < 0 ? rmf2Version : minimumRmf2Version;
         }
@@ -556,11 +562,14 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         internal bool IsCompatible => SupportsBase && Rmf2Version >= 0 && MinimumRmf2Version <= RequiredRmf2Version && Rmf2Version >= RequiredRmf2Version;
         internal bool SupportsReadableSurface => TypedSlotBindingsVersion >= 1;
         internal bool SupportsComposition => CompositionVersion >= 1;
+        internal bool DeclaresMinimumVersion { get; }
+        // The runtime that declares MinimumRuntimeAbiVersion also declares EnsureRuntimeAbi, which generated code calls.
+        internal bool SupportsRuntimeAbiCall => DeclaresMinimumVersion;
 
         public bool Equals(RuntimeAbiState other) => Version == other.Version && Rmf2Version == other.Rmf2Version &&
             TypedSlotBindingsVersion == other.TypedSlotBindingsVersion && CompositionVersion == other.CompositionVersion &&
-            MinimumVersion == other.MinimumVersion && MinimumRmf2Version == other.MinimumRmf2Version;
+            MinimumVersion == other.MinimumVersion && MinimumRmf2Version == other.MinimumRmf2Version && DeclaresMinimumVersion == other.DeclaresMinimumVersion;
         public override bool Equals(object? obj) => obj is RuntimeAbiState other && Equals(other);
-        public override int GetHashCode() => HashCode.Combine(Version, Rmf2Version, TypedSlotBindingsVersion, CompositionVersion, MinimumVersion, MinimumRmf2Version);
+        public override int GetHashCode() => HashCode.Combine(Version, Rmf2Version, TypedSlotBindingsVersion, CompositionVersion, MinimumVersion, MinimumRmf2Version, DeclaresMinimumVersion);
     }
 }

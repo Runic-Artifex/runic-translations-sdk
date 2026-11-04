@@ -75,6 +75,11 @@ internal sealed class GeneratorTests
         string generated = Serialize(GeneratorTestHost.Run(ProjectInput(), MessageInput()));
         Assert.True(generated.Contains("TranslationsCompatibility.EnsureRuntimeAbi(1);", StringComparison.Ordinal) &&
             !generated.Contains("TranslationsCompatibility.RuntimeAbiVersion != 1", StringComparison.Ordinal), "base ABI check is not a runtime call");
+        // The call is emitted exactly when the runtime declares the version rule (MinimumRuntimeAbiVersion, and with it
+        // EnsureRuntimeAbi), independently of the composition surface.
+        string composition = Serialize(GeneratorTestHost.Run(RuntimeReferenceMode.Rmf2V3Composition, ProjectInput(), MessageInput()));
+        Assert.True(composition.Contains("TranslationsCompatibility.RuntimeAbiVersion != 1", StringComparison.Ordinal) &&
+            !composition.Contains("EnsureRuntimeAbi", StringComparison.Ordinal), "EnsureRuntimeAbi emitted for a runtime without the version rule");
     }
 
     [Test, DisplayName("generated C# executes the selected semantic surface")]

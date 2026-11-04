@@ -83,7 +83,9 @@ internal static class Rmf2CSharpOutputRendererV5
         return Output(TranslationGeneratedOutputKind.CSharpCatalogData, project.ClassName + ".CatalogData.g.cs", writer);
     }
 
-    internal static TranslationGeneratedOutput RenderRegistration(Rmf2ProjectV5 project, bool composition = true)
+    // runtimeAbiCall: the referenced runtime declares the version rule (TranslationsCompatibility.MinimumRuntimeAbiVersion)
+    // and with it EnsureRuntimeAbi, so the base ABI is checked with a call.
+    internal static TranslationGeneratedOutput RenderRegistration(Rmf2ProjectV5 project, bool composition = true, bool runtimeAbiCall = true)
     {
         GenerationWriter writer = StartFile(project);
         string visibility = Visibility(project), className = GenerationSupport.CSharpIdentifier(project.ClassName);
@@ -113,9 +115,9 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("global::Runic.Translations.ITranslationSnapshotFactory? snapshotFactory = null,");
         writer.Line("global::Runic.Translations.TranslationOptions? options = null)"); writer.Unindent();
         writer.Line("{"); writer.Indent();
-        // A runtime with the composition surface checks the base ABI with a call, against the runtime that is loaded;
-        // the constant comparison of earlier releases is folded at compile time and never fails.
-        if (composition) writer.Line("global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRuntimeAbi(1);");
+        // A runtime with the version rule checks the base ABI with a call, against the runtime that is loaded; the
+        // constant comparison of earlier releases is folded at compile time and never fails.
+        if (runtimeAbiCall) writer.Line("global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRuntimeAbi(1);");
         else
         {
             writer.Line("if (global::Runic.Translations.Generated.TranslationsCompatibility.RuntimeAbiVersion != 1)"); writer.Indent();
