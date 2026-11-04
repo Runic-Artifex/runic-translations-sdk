@@ -1,0 +1,11 @@
+# German translations of the shop.
+greeting = Hallo {$name}!
+farewell = Auf Wiedersehen
+cart {
+  empty = Dein Warenkorb ist leer
+  checkout {
+    title = Kasse
+    total = Gesamt: {$amount :number minimumFractionDigits=2}
+  }
+  items = {$count :integer} Artikel im Warenkorb
+}

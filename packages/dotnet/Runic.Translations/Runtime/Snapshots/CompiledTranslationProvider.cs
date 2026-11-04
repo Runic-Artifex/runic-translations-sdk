@@ -64,6 +64,9 @@ public sealed class CompiledTranslationProvider : ITranslationProvider, ITransla
     {
         cancellationToken.ThrowIfCancellationRequested();
         string canonicalLocale = _catalog.ResolveRequestedLocale(requestedLocale);
+        // A regional request such as de-CH for a de snapshot formats numbers and dates in de-CH; the cached snapshot is shared.
+        string? regional = requestedLocale.Length != 0 && LocaleTag.TryCanonicalize(requestedLocale, out string canonicalRequest) &&
+            !string.Equals(canonicalRequest, canonicalLocale, StringComparison.Ordinal) ? canonicalRequest : null;
 
         while (true)
         {
@@ -77,7 +80,8 @@ public sealed class CompiledTranslationProvider : ITranslationProvider, ITransla
             if (entry.TryAddWaiter())
             {
                 Task<ITranslationSnapshot> task = entry.Task;
-                return new ValueTask<ITranslationSnapshot>(WaitForCallerAsync(entry, task, cancellationToken));
+                Task<ITranslationSnapshot> waiting = WaitForCallerAsync(entry, task, cancellationToken);
+                return new ValueTask<ITranslationSnapshot>(regional is null ? waiting : WithRequestedLocaleAsync(waiting, regional));
             }
 
             RemoveIfCurrent(canonicalLocale, entry);
@@ -117,6 +121,10 @@ public sealed class CompiledTranslationProvider : ITranslationProvider, ITransla
             throw;
         }
     }
+
+    // The cached snapshot serves every request that resolves to its locale; a regional request gets its view.
+    private static async Task<ITranslationSnapshot> WithRequestedLocaleAsync(Task<ITranslationSnapshot> waiting, string requestedLocale) =>
+        await waiting.ConfigureAwait(false) is CompiledTranslationSnapshot compiled ? compiled.ForRequestedLocale(requestedLocale) : await waiting.ConfigureAwait(false);
 
     private static async Task<ITranslationSnapshot> WaitForCallerAsync(
         LoadEntry entry,

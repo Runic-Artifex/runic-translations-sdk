@@ -370,9 +370,9 @@ internal static class CompiledTextMessageRuntime
     }
 
     internal static string Format(CompiledTextMessage message, ReadOnlySpan<TextArgument> arguments, string locale,
-        ITextValueFormatter formatter, int maximumOutputLength = TextPatternFormatter.DefaultMaximumOutputLength)
+        ITextValueFormatter formatter, int maximumOutputLength = TextPatternFormatter.DefaultMaximumOutputLength, string? requestedLocale = null)
     {
-        if (message.Rmf2V5 is { } v5) return v5.Format(arguments, locale, maximumOutputLength);
+        if (message.Rmf2V5 is { } v5) return Rmf2RuntimeEvaluator.Format(v5, arguments, locale, maximumOutputLength, requestedLocale);
         CompiledTextMessageNode[] nodes = message.NodeArray;
         if (message.VariantArray.Length != 0) nodes = SelectVariant(message, arguments, locale);
         if (message.HasMarkup) throw new TranslationFormatException("Structured localized content must be requested through FormatContent.");
@@ -404,9 +404,9 @@ internal static class CompiledTextMessageRuntime
     }
 
     internal static LocalizedTextContent FormatContent(CompiledTextMessage message, ReadOnlySpan<TextArgument> arguments,
-        string locale, ITextValueFormatter formatter, int maximumOutputLength = TextPatternFormatter.DefaultMaximumOutputLength)
+        string locale, ITextValueFormatter formatter, int maximumOutputLength = TextPatternFormatter.DefaultMaximumOutputLength, string? requestedLocale = null)
     {
-        if (message.Rmf2V5 is { } v5) return v5.FormatContent(arguments, locale, maximumOutputLength);
+        if (message.Rmf2V5 is { } v5) return Rmf2RuntimeEvaluator.FormatContent(v5, arguments, locale, maximumOutputLength, requestedLocale);
         locale = message.ContentLocale ?? locale;
         CompiledTextMessageNode[] nodes = message.VariantArray.Length == 0 ? message.NodeArray : SelectVariant(message, arguments, locale);
         var result = new List<LocalizedTextContentNode>();

@@ -16,8 +16,7 @@ internal sealed class ToolingTests
     public void SemanticXliffRoundTripsDirectMf2AndReview()
     {
         Rmf2ProjectCompilation compilation = CompileSemantic("hello = Hello", "hello = Hallo", grouped: false);
-        object preflight = Preflight(compilation);
-        string fingerprint = Property<string>(preflight, "TextProfileFingerprint");
+        string fingerprint = TranslationInterchange.ComputeSourceFingerprints(compilation)["hello"];
         var review = new TranslationInterchangeReview("app",
             [new TranslationInterchangeReviewEntry("hello", "de", TranslationReviewState.Approved, "Ready.", fingerprint)]);
 
@@ -48,13 +47,17 @@ internal sealed class ToolingTests
         {
             var review = new TranslationInterchangeReview("app", [new TranslationInterchangeReviewEntry("hello", "de", state)]);
             byte[] json = TranslationInterchange.ExportReviewJson(review);
-            if (!Encoding.UTF8.GetString(json).Contains("\"state\":\"" + wire + "\"", StringComparison.Ordinal))
+            if (!Encoding.UTF8.GetString(json).Contains("\"state\": \"" + wire + "\"", StringComparison.Ordinal) ||
+                !Encoding.UTF8.GetString(json).StartsWith("{\n  \"$schema\": \"runic.translations.interchange-review/2\"", StringComparison.Ordinal))
                 throw new InvalidOperationException($"{state} was not written as '{wire}': {Encoding.UTF8.GetString(json)}");
             if (TranslationInterchange.ImportReviewJson(json).Entries.Single().State != state)
                 throw new InvalidOperationException($"'{wire}' did not read back as {state}.");
         }
         byte[] unknown = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(TranslationInterchange.ExportReviewJson(
             new TranslationInterchangeReview("app", [new TranslationInterchangeReviewEntry("hello", "de", TranslationReviewState.Draft)]))).Replace("\"draft\"", "\"final\"", StringComparison.Ordinal));
+        byte[] former = Encoding.UTF8.GetBytes("{\"$schema\":\"runic.translations.interchange-review/1\",\"catalog\":\"app\",\"entries\":[{\"key\":\"hello\",\"locale\":\"de\",\"state\":\"approved\",\"sourceFingerprint\":\"sha256:00\"}]}");
+        if (TranslationInterchange.ImportReviewJson(former).Entries.Single().State != TranslationReviewState.Approved)
+            throw new InvalidOperationException("A runic.translations.interchange-review/1 file was not read.");
         try { TranslationInterchange.ImportReviewJson(unknown); throw new InvalidOperationException("An unknown review state was accepted."); }
         catch (TranslationInterchangeException exception) when (exception.Code == "REVIEW-INVALID") { }
         try { _ = new TranslationInterchangeReviewEntry("hello", "de", (TranslationReviewState)42); throw new InvalidOperationException("An undefined review state was accepted."); }
@@ -106,9 +109,11 @@ internal sealed class ToolingTests
         if (exported.Report.IsLossless ||
             !exported.Report.Losses.Any(loss => loss.Code == "XLIFF21-STRUCTURED-MESSAGE" && loss.SemanticLoss))
             throw new InvalidOperationException("Structured semantic XLIFF loss was not reported.");
-        try { _ = TranslationInterchange.ImportXliff21(exported.Documents.Single().Bytes); }
-        catch (TranslationInterchangeException exception) when (exception.Code == "XLIFF21-STRUCTURED-IMPORT") { return; }
-        throw new InvalidOperationException("Structured XLIFF input was accepted.");
+        if (!Encoding.UTF8.GetString(exported.Documents.Single().Bytes.Span).Contains("<unit id=\"hello\" translate=\"no\">", StringComparison.Ordinal))
+            throw new InvalidOperationException("A structured unit was not exported as not translatable.");
+        TranslationXliffImportResult imported = TranslationInterchange.ImportXliff21(exported.Documents.Single().Bytes);
+        if (imported.Messages.Count != 0 || imported.Units.Single() is not { Outcome: TranslationXliffUnitOutcome.Skipped, Code: "XLIFF21-STRUCTURED-SKIPPED" })
+            throw new InvalidOperationException("A structured XLIFF unit was not skipped per unit.");
     }
 
     [Test]
@@ -122,23 +127,27 @@ internal sealed class ToolingTests
         if (document.Code != "XLIFF21-STRUCTURED-MESSAGE" || !document.SemanticLoss || !document.Message.Contains("document profile", StringComparison.Ordinal) ||
             inline.Code != "XLIFF21-STRUCTURED-MESSAGE" || inline.Message.Contains("document profile", StringComparison.Ordinal))
             throw new InvalidOperationException("The XLIFF loss report does not name the document profile for document messages only.");
-        try { _ = TranslationInterchange.ImportXliff21(exported.Documents.Single().Bytes); }
-        catch (TranslationInterchangeException exception) when (exception.Code == "XLIFF21-STRUCTURED-IMPORT") { return; }
-        throw new InvalidOperationException("A document message was imported from the XLIFF text profile.");
+        TranslationXliffImportResult imported = TranslationInterchange.ImportXliff21(exported.Documents.Single().Bytes);
+        if (imported.Messages.Count != 0 || imported.Units.Count != 2 || imported.Units.Any(unit => unit.Code != "XLIFF21-STRUCTURED-SKIPPED"))
+            throw new InvalidOperationException("A document message was imported from the XLIFF text profile.");
     }
 
+    // Profile v3 carries text as text: braces a translator types are literal, and a placeholder can only arrive as
+    // one <ph> MF2 expression, so markup or selectors cannot be smuggled in through the target.
     [Test]
-    public void XliffRefusesStructuredTextWithStaleMetadata()
+    public void XliffTreatsTargetTextAsLiteralAndRefusesMarkupPlaceholders()
     {
         byte[] exported = Export(CompileSemantic("hello = Hello", "hello = Hallo", grouped: false)).Documents.Single().Bytes.ToArray();
         string text = Encoding.UTF8.GetString(exported);
         const string original = "<target>Hallo</target>";
         if (!text.Contains(original, StringComparison.Ordinal))
             throw new InvalidOperationException("The plain XLIFF fixture did not contain the expected target text.");
-        byte[] tampered = Encoding.UTF8.GetBytes(text.Replace(original, "<target>{{{|Hallo|}}}</target>", StringComparison.Ordinal));
-        try { _ = TranslationInterchange.ImportXliff21(tampered); }
-        catch (TranslationInterchangeException exception) when (exception.Code == "XLIFF21-STRUCTURED-IMPORT") { return; }
-        throw new InvalidOperationException("Structured XLIFF text bypassed refusal through stale runic:unit metadata.");
+        TranslationXliffImportResult literal = TranslationInterchange.ImportXliff21(Encoding.UTF8.GetBytes(text.Replace(original, "<target>{{{|Hallo|}}}</target>", StringComparison.Ordinal)));
+        if (Encoding.UTF8.GetString(literal.Messages.Single().Bytes.Span) != "\\{\\{\\{|Hallo|\\}\\}\\}\n")
+            throw new InvalidOperationException("Braces in XLIFF target text were not escaped as literal MF2 text: " + Encoding.UTF8.GetString(literal.Messages.Single().Bytes.Span));
+        TranslationXliffImportResult markup = TranslationInterchange.ImportXliff21(Encoding.UTF8.GetBytes(text.Replace(original, "<target><ph id=\"t1\" equiv=\"{#b}\"/>Hallo</target>", StringComparison.Ordinal)));
+        if (markup.Messages.Count != 0 || markup.Units.Single() is not { Outcome: TranslationXliffUnitOutcome.Refused, Code: "XLIFF21-PLACEHOLDER" })
+            throw new InvalidOperationException("A markup expression was accepted as a placeholder.");
     }
 
     [Test]
@@ -151,14 +160,14 @@ internal sealed class ToolingTests
         string caller = first.CallerFingerprint!;
         string changedCaller = changed.CallerFingerprint!;
         string sourceHash = first.SourceHash!;
-        string fingerprint = Property<string>(firstPreflight, "TextProfileFingerprint");
+        string fingerprint = TranslationInterchange.ComputeSourceFingerprints(first)["hello"];
         string freshness = Property<string>(firstPreflight, "SourceFreshness");
 
         if (!Property<bool>(firstPreflight, "Success") ||
             Property<string>(firstPreflight, "CatalogId") != "app" ||
             Property<string>(firstPreflight, "SourceLocale") != "en" ||
             caller != changedCaller || sourceHash != freshness || fingerprint == caller || fingerprint == sourceHash ||
-            fingerprint == Property<string>(changedPreflight, "TextProfileFingerprint") ||
+            fingerprint == TranslationInterchange.ComputeSourceFingerprints(changed)["hello"] ||
             freshness == Property<string>(changedPreflight, "SourceFreshness"))
             throw new InvalidOperationException("XLIFF preflight conflated caller compatibility, source freshness, or the closed text profile.");
     }
@@ -171,14 +180,14 @@ internal sealed class ToolingTests
         if (!metadata.Contains("\"executionProfile\":\"rmf2-execution-v2\"", StringComparison.Ordinal) ||
             !metadata.Contains("\"messageGrammarVersion\":5", StringComparison.Ordinal) ||
             !metadata.Contains("\"interchangeProfile\":\"runic.xliff21.closed-text\"", StringComparison.Ordinal) ||
-            !metadata.Contains("\"interchangeProfileVersion\":2", StringComparison.Ordinal) ||
+            !metadata.Contains("\"interchangeProfileVersion\":3", StringComparison.Ordinal) ||
             metadata.Contains("schemaVersion", StringComparison.Ordinal) || metadata.Contains("\"layer\"", StringComparison.Ordinal))
             throw new InvalidOperationException("XLIFF metadata did not identify only the selected v5 execution and interchange contracts.");
 
         RejectContractMutation(exported, "\"rmf2-execution-v2\"", "\"rmf2-execution-v1\"", "XLIFF21-CONTRACT");
         RejectContractMutation(exported, "\"messageGrammarVersion\":5", "\"messageGrammarVersion\":4", "XLIFF21-CONTRACT");
         RejectContractMutation(exported, "\"runic.xliff21.closed-text\"", "\"runic.xliff21.other\"", "XLIFF21-PROFILE");
-        RejectContractMutation(exported, "\"interchangeProfileVersion\":2", "\"interchangeProfileVersion\":1", "XLIFF21-PROFILE");
+        RejectContractMutation(exported, "\"interchangeProfileVersion\":3", "\"interchangeProfileVersion\":1", "XLIFF21-PROFILE");
     }
 
     [Test]
@@ -270,9 +279,13 @@ internal sealed class ToolingTests
             "Runic.Translations.Tooling.TranslationInterchangeReviewEntry",
             "Runic.Translations.Tooling.TranslationMf2Document",
             "Runic.Translations.Tooling.TranslationReviewState",
+            "Runic.Translations.Tooling.TranslationSourceChangePolicy",
             "Runic.Translations.Tooling.TranslationXliffDocument",
             "Runic.Translations.Tooling.TranslationXliffExportResult",
+            "Runic.Translations.Tooling.TranslationXliffImportOptions",
             "Runic.Translations.Tooling.TranslationXliffImportResult",
+            "Runic.Translations.Tooling.TranslationXliffUnitOutcome",
+            "Runic.Translations.Tooling.TranslationXliffUnitResult",
         ];
         string[] exported = new[] { typeof(TranslationInterchange).Assembly, typeof(TranslationCompiler).Assembly, Assembly.Load("Runic.Translations.Authoring") }
             .SelectMany(assembly => assembly.GetExportedTypes())

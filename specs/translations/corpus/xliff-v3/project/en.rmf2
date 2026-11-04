@@ -1,0 +1,21 @@
+# The greeting on the start page.
+@param $name - the customer's first name
+greeting = Hello {$name}!
+farewell = See you soon
+search_placeholder = Search products
+checkout_note = Payment is safe. Delivery is free.
+cart {
+  # The cart summary.
+  items = {$count :integer} items in your cart
+  empty = Your cart is empty
+  checkout {
+    title = Checkout
+    total = Total: {$amount :number minimumFractionDigits=2}
+  }
+}
+order_status =
+  .input {$status :string}
+  .match $status
+  shipped {{Your order has shipped}}
+  * {{Your order is being prepared}}
+help_hint = Read the {#strong}help{/strong} first.

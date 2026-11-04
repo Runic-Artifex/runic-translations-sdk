@@ -7,7 +7,8 @@ export type ConfigureLocaleResolver = (resolver: () => string) => () => void;
  * Makes the generated message functions (`m.*()`) follow a locale that the application owns, such as a ViewModel's
  * language setting.
  *
- * `locale` must read Svelte state: a getter over `$state` or a ViewModel's reactive state, or a {@link SvelteLocale}.
+ * `locale` must read Svelte state: a getter over `$state` or a ViewModel's reactive state, or a {@link SvelteLocale},
+ * whose `requestedLocale` (such as `de-CH` for `de` text) is used so numbers and dates follow the requested region.
  * The generated functions read the locale through the resolver while they format, so a template, `$derived` or
  * `$effect` that calls `m.*()` runs again when the locale changes, without keying the page on it. A locale the
  * catalog does not declare goes through the catalog's unsupported-locale policy, as an explicit `locale` option
@@ -35,13 +36,15 @@ export type ConfigureLocaleResolver = (resolver: () => string) => () => void;
  */
 export function useMessageLocale(
   configureLocaleResolver: ConfigureLocaleResolver,
-  locale: (() => string) | { readonly locale: string },
+  locale: (() => string) | { readonly locale: string; readonly requestedLocale?: string },
 ): void {
   if (typeof configureLocaleResolver !== "function")
     throw new TypeError("Pass the generated runtime's configureLocaleResolver.");
   if (typeof locale !== "function" && (typeof locale !== "object" || locale === null || !("locale" in locale)))
     throw new TypeError("The locale must be a function or an object with a locale property, such as a SvelteLocale.");
-  const read = typeof locale === "function" ? locale : () => locale.locale;
+  // A SvelteLocale reports the requested tag (de-CH for de), so numbers and dates follow the requested region.
+  const read = typeof locale === "function" ? locale
+    : () => "requestedLocale" in locale && typeof locale.requestedLocale === "string" ? locale.requestedLocale : locale.locale;
   // onDestroy first: outside a component it throws before anything is installed.
   let remove: (() => void) | undefined;
   onDestroy(() => remove?.());

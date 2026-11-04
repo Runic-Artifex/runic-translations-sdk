@@ -203,8 +203,26 @@ internal sealed class Rmf2V1CorpusTests
     // (GeneratedCatalogSupport, CompiledRmf2*, TranslationsCompatibility) and the readable surface implements
     // IReadableMessages; transport.js writes only version 2 and transport.d.ts drops the version 1 createTextReference
     // overload, in both digests.
-    private const string EncodedOutputDigest = "b770a448bf0d30a0fc4b90bed9d181ce0c202af40815b7ef9f03e864aa10e0a7";
-    private const string HiddenEncodedOutputDigest = "1cb589eb3ec1e7044e8f5687d3c41fa32f7641474df5b9d58193aa49c1e4a976";
+    // Re-pinned for TR-0.9 TE: messages.js exports the module namespace m, message modules carry their own contract in a
+    // pure call, runtime.js keeps only the markup contracts and dynamic.js the catalog's contract tables; messages.d.ts
+    // documents members with the base text; the C# accessors gain base-text summaries and the References factories, in
+    // both digests.
+    // Re-pinned for TR 0.9 batch TC: runtime.js formats localized dates, times, time zones and percentages by the shared
+    // rules, in the requested locale when it shares the content language, accepts Date and offset date-time inputs and
+    // exports getRequestedLocale, getMessageLocale and onFallback; message modules pass the requested locale;
+    // transport.js writes a Date input; runtime.d.ts and messages.d.ts declare them, in both digests.
+    // Re-pinned for the TC review: runtime.js compares implied scripts and drops extensions for the formatting locale,
+    // reads the local zone per call with configureTimeZoneResolver, writes other calendars' full years and one bidi mark
+    // per run, and keeps the requested tag in createLocaleSource; server.js scopes the requested tag and zone per
+    // request; runtime.d.ts and server.d.ts declare them, in both digests.
+    // Re-pinned for merging TC with TE: message modules call the runtime with the requested locale, and runtime.js
+    // reads getMessageLocale's content locales from its own table (messageLocaleTable) rather than the contract tables
+    // that moved to dynamic.js, in both digests.
+    // Re-pinned for merging TB (#131) with TC and TE: runtime.js embeds the catalog's CLDR tables (likely subtags,
+    // parents, aliases, plural selectors, lists, relative time) and negotiates locales, and the C# registration adds
+    // SupportedLocales, ResolveLocale and CreateManagerFromPreferences[Async], in both digests.
+    private const string EncodedOutputDigest = "ea0b0874c30c7cc17bb509d705acf9ab06a09927f1d33eb05262505376618fbd";
+    private const string HiddenEncodedOutputDigest = "491ca7bec03432f254edbc8e2e776dd2f32b290b3c80440151f89f274051f58f";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

@@ -21,7 +21,7 @@ const output = resolve(process.argv[3] ?? join(here, 'artifacts', 'runic-transla
 const staging = join(here, 'artifacts', 'package');
 
 const files = run(['ls', '--no-dependencies'], here).split('\n').map(line => line.trim()).filter(Boolean);
-assert.ok(files.includes('package.json') && files.includes('dist/extension.cjs'), `Unexpected vsce file list: ${files.join(', ')}`);
+assert.ok(files.includes('package.json') && files.includes('dist/extension.cjs') && files.includes('dist/schemas/project-v1.schema.json'), `Unexpected vsce file list: ${files.join(', ')}`);
 rmSync(staging, { recursive: true, force: true });
 mkdirSync(staging, { recursive: true });
 mkdirSync(dirname(output), { recursive: true });

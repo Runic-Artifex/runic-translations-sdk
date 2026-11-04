@@ -15,8 +15,12 @@ It covers every CLDR locale (`availableLocales.full`) and keeps:
   without the entries that shorter keys already imply;
 - `parentLocales`: CLDR's explicit parent locales (the main component) as data
   IDs, without the parents the default rules give;
-- `languageAliases`: deprecated and legacy language codes with a plain
-  replacement, such as `iw` → `he`, for languages without data of their own;
+- `languageAliases`: deprecated and legacy language codes and their CLDR
+  replacements, which may add a script or region (`iw` → `he`, `tl` → `fil`,
+  `sh` → `sr-Latn`, `cnr` → `sr-ME`), and macrolanguage codes of languages
+  without data of their own (`cmn` → `zh`). Codes such as `tl`, `mo`, `sh` and
+  `jw` still have CLDR plural rules; the extractor checks that they equal the
+  replacement's, so aliasing never changes a plural;
 - `rightToLeftScripts`: the scripts whose `rtl` is `YES` in
   `cldr-core/scriptMetadata.json`, which the ESM runtime's `localeDirection` reads;
 - `locales`: per CLDR data ID, `minimumGroupingDigits` from

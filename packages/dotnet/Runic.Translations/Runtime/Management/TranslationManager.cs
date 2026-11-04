@@ -146,8 +146,9 @@ public sealed class TranslationManager : ITranslationManager
                     invalidatable.InvalidateSnapshot(refreshedLocale);
                 }
 
+                // The refreshed snapshot keeps the requested locale (de-CH over a de snapshot) that numbers and dates format in.
                 ITranslationSnapshot? replacement = await _provider
-                    .GetSnapshotAsync(refreshedLocale, pending.CancellationToken)
+                    .GetSnapshotAsync(Current.RequestedLocale, pending.CancellationToken)
                     .ConfigureAwait(false);
 
                 pending.CancellationToken.ThrowIfCancellationRequested();
@@ -190,8 +191,9 @@ public sealed class TranslationManager : ITranslationManager
         }
     }
 
+    // The requested tag, not only the resolved locale, is current: switching from de to de-CH changes how numbers and dates format.
     private bool IsCurrentLocale(string requestedLocale) =>
-        string.Equals(Current.Locale, requestedLocale, StringComparison.OrdinalIgnoreCase);
+        string.Equals(Current.RequestedLocale, requestedLocale, StringComparison.OrdinalIgnoreCase);
 
     private async Task ActivateAsync(PendingSwitch pending)
     {
@@ -224,10 +226,8 @@ public sealed class TranslationManager : ITranslationManager
                     }
 
                     ITranslationSnapshot current = Current;
-                    if (!string.Equals(
-                        current.Locale,
-                        replacement.Locale,
-                        StringComparison.Ordinal))
+                    if (!string.Equals(current.Locale, replacement.Locale, StringComparison.Ordinal) ||
+                        !string.Equals(current.RequestedLocale, replacement.RequestedLocale, StringComparison.Ordinal))
                     {
                         ITranslationSnapshot previous =
                             Interlocked.Exchange(ref _current, replacement);

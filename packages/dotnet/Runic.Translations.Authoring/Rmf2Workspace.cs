@@ -481,7 +481,11 @@ internal sealed class Rmf2Workspace
 
     public IReadOnlyList<string> LogicalPath(string path, Rmf2ResourceNode node) =>
         (_direct ? Mount(path).Prefix : Prefix(path)).Concat(node.Path).ToArray();
-    public string Locale(string path) => _direct
+    public string Locale(string path) => Locale(path, _direct);
+    /// <summary>Whether the project's resources are direct MF2 files (locale named by the directory).</summary>
+    internal bool IsDirect => _direct;
+    /// <summary>The locale of a resource path in a direct or RMF2 layout, without loading the project.</summary>
+    internal static string Locale(string path, bool direct) => direct
         ? Path.GetFileName(Path.GetDirectoryName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))) ?? string.Empty
         : Path.GetFileNameWithoutExtension(path);
     /// <summary>Resolves an explicit logical path relative to a physical resource mount.</summary>

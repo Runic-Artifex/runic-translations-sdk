@@ -22,6 +22,18 @@ internal sealed class CldrLocaleConformanceTests
     private static readonly string[] ListStyles = ["long", "short", "narrow"];
     private static readonly string[] PluralSamples = ["0", "1", "2", "3", "4", "5", "6", "7", "11", "12", "21", "22", "101", "111", "1000000", "0.5", "1.0", "1.5", "2.10", "0.01"];
     private static readonly string[] RelativeValues = ["-2", "-1", "0", "1", "2", "3", "5", "11", "21", "-100"];
+    // Inputs that both canonicalizers must treat alike: case, '_', POSIX code sets and modifiers, extensions, private use,
+    // grandfathered and malformed tags, legacy and undetermined codes, script and region forms.
+    private static readonly string[] RawPreferences =
+    [
+        "DE_ch", "zh_hant_tw", "sr-latn-me@latin", "en-US-u-ca-gregory-x-a", "en--US", "i-klingon", "zh-min-nan", "C.UTF-8", "C", "POSIX",
+        "en-a-bbb-a-ccc", "EN-gb", "de_DE.UTF-8@euro", "de_DE@euro", "x-private", "en-x", "", " en", "en ", "123", "en-US-", "-de", "de-",
+        "und", "UND-tw", "und-Latn-DE", "sh", "SH-rs", "tl_PH", "mo", "jw", "cnr", "drw", "iw-il", "in_ID", "ji", "nb_NO", "nn-no", "no-bok",
+        "zh-Hans-CN-u-nu-hanidec", "sr-Cyrl-RS-x-foo", "es-419", "ES-419", "pt-BR-abl1943", "de-1996", "de-DE-1901-1901", "ar-u-nu-arab",
+        "hi-Latn", "pa-PK", "pa-Arab", "az-Arab", "AZ-arab-IR", "ku-IQ", "ms-Arab", "zh-TW", "zh-hk", "yue", "yue-Hans", "cmn-Hant-TW",
+        "zh-cmn-Hans-CN", "art-lojban", "sgn-BE-FR", "en-GB-oed", "en-001", "en-150", "es-MX", "pt-AO", "de-CH-1996", "fil", "tlh-x-klingon",
+        "qaa", "aaa-bbb-ccc-ddd", "abcdefghi", "en-Latn-US-posix", "en_US_POSIX", "sr-ME", "uz-AF", "uz-Cyrl", "kk-Arab", "mn-Mong",
+    ];
 
     private sealed record RelativeCase(string Id, string Locale, string Value, string Unit, string Numeric, string Expected);
     private sealed record NegotiationGroup(string Id, string[] Locales, string Base, (string[] Preferences, string Expected)[] Cases);
@@ -56,6 +68,38 @@ internal sealed class CldrLocaleConformanceTests
         foreach (NegotiationGroup group in NegotiationGroups())
             foreach ((string[] preferences, string expected) in group.Cases)
                 Assert.Equal(expected, LocaleNegotiation.Negotiate(preferences, group.Locales, group.Base), group.Id + ": " + string.Join(",", preferences));
+    }
+
+    /// <summary>
+    /// Every CLDR ID and the raw inputs, plus case and POSIX forms of every third ID, so that both canonicalizers and
+    /// the POSIX stripping are compared on more than canonical tags.
+    /// </summary>
+    private static string[] PreferencePool(string[] all)
+    {
+        var pool = new List<string>(all);
+        pool.AddRange(RawPreferences);
+        for (int index = 0; index < all.Length; index += 3)
+        {
+            pool.Add(all[index].ToUpperInvariant());
+            pool.Add(all[index].ToLowerInvariant().Replace('-', '_') + (index % 2 == 0 ? ".UTF-8" : "@latin"));
+        }
+
+        return pool.Distinct(StringComparer.Ordinal).ToArray();
+    }
+
+    /// <summary>Deterministic two- to four-entry preference lists drawn from <paramref name="pool"/> (a fixed linear congruential sequence).</summary>
+    private static string[][] PreferenceLists(string[] pool, int count)
+    {
+        ulong state = 0x5DEECE66DUL;
+        int Next(int bound) { state = state * 6364136223846793005UL + 1442695040888963407UL; return (int)((state >> 33) % (ulong)bound); }
+        var lists = new string[count][];
+        for (int index = 0; index < count; index++)
+        {
+            lists[index] = new string[2 + Next(3)];
+            for (int entry = 0; entry < lists[index].Length; entry++) lists[index][entry] = pool[Next(pool.Length)];
+        }
+
+        return lists;
     }
 
     [Test, NotInParallel, DisplayName("the ESM runtime matches the shared vectors and .NET for every CLDR locale")]
@@ -104,10 +148,19 @@ internal sealed class CldrLocaleConformanceTests
         }
         expected["plural"] = plural;
         var negotiation = new JsonObject();
-        string[] preferences = [.. all, "zh-TW", "zh-HK", "sr-ME", "de-CH", "en-AU", "es-MX", "pt-AO", "nb-NO", "no-NO", "iw", "cmn-TW"];
+        string[] preferences = [.. PreferencePool(all), "zh-HK", "de-CH", "en-AU", "nb-NO", "no-NO", "iw", "cmn-TW"];
+        preferences = preferences.Distinct(StringComparer.Ordinal).ToArray();
+        string[][] preferenceLists = PreferenceLists(preferences, 1500);
+        // One preference at a time, then the generated lists, so ordering across preferences is compared too.
         foreach (NegotiationGroup group in NegotiationGroups())
-            negotiation[group.Id] = new JsonArray(preferences.Select(preference => (JsonNode?)LocaleNegotiation.Negotiate([preference], group.Locales, group.Base)).ToArray());
+            negotiation[group.Id] = new JsonArray(preferences.Select(preference => (JsonNode?)LocaleNegotiation.Negotiate([preference], group.Locales, group.Base))
+                .Concat(preferenceLists.Select(list => (JsonNode?)LocaleNegotiation.Negotiate(list, group.Locales, group.Base))).ToArray());
         expected["negotiation"] = negotiation;
+        // Both canonicalizers on every input, as the single-tag resolveLocale and ResolveRequestedLocale see it.
+        expected["canonical"] = new JsonObject
+        {
+            ["all"] = new JsonArray(preferences.Select(preference => (JsonNode?)(Runic.Translations.LocaleTag.TryCanonicalize(preference, out string canonical) ? canonical : null)).ToArray()),
+        };
 
         Rmf2ProjectV5 project = Rmf2EsmV5Tests.CompileProject("cldr", "en", ["en"], false, ("en", "x = {{x}}\n"));
         string directory = Rmf2EsmV5Tests.Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(project));
@@ -122,7 +175,7 @@ internal sealed class CldrLocaleConformanceTests
                 .Replace(ownData, TranslationCapabilityRegistry.EsmLocaleSource(all), StringComparison.Ordinal)
                 .Replace("export const baseLocale = \"en\";", "export const baseLocale = " + JsonSerializer.Serialize(baseLocale) + ";", StringComparison.Ordinal)
                 .Replace("export const locales = Object.freeze([\"en\"]);", "export const locales = Object.freeze(" + JsonSerializer.Serialize(locales.Order(StringComparer.Ordinal)) + ");", StringComparison.Ordinal)
-                + "\nexport { formatList as conformanceFormatList, formatRelative as conformanceFormatRelative, selectPlural as conformanceSelectPlural };\n";
+                + "\nexport { formatList as conformanceFormatList, formatRelative as conformanceFormatRelative, selectPlural as conformanceSelectPlural, canonicalLocale as conformanceCanonicalLocale };\n";
             File.WriteAllText(Path.Combine(directory, "cldr.esm-v5", "harness-all.js"), harness(["en"], "en"), new UTF8Encoding(false));
             var groups = new JsonArray();
             foreach (NegotiationGroup group in NegotiationGroups())
@@ -138,6 +191,7 @@ internal sealed class CldrLocaleConformanceTests
             File.WriteAllText(Path.Combine(directory, "input.json"), new JsonObject
             {
                 ["groups"] = groups, ["relative"] = relativeCases, ["preferences"] = new JsonArray(preferences.Select(value => (JsonNode)value).ToArray()),
+                ["preferenceLists"] = new JsonArray(preferenceLists.Select(list => (JsonNode)new JsonArray(list.Select(value => (JsonNode)value).ToArray())).ToArray()),
                 ["units"] = new JsonArray(Units.Select(value => (JsonNode)value).ToArray()), ["relativeValues"] = new JsonArray(RelativeValues.Select(value => (JsonNode)value).ToArray()),
                 ["pluralSamples"] = new JsonArray(PluralSamples.Select(value => (JsonNode)value).ToArray()), ["all"] = new JsonArray(all.Select(value => (JsonNode)value).ToArray()),
                 ["listIds"] = new JsonArray(lists.Select(item => (JsonNode)item.Key).ToArray()), ["relativeIds"] = new JsonArray(relative.Select(item => (JsonNode)item.Key).ToArray()),
@@ -159,7 +213,7 @@ internal sealed class CldrLocaleConformanceTests
                     const actual = module.negotiateLocale(item.preferences);
                     if (actual !== item.expected) failures.push(`${group.id} ${JSON.stringify(item.preferences)}: expected ${item.expected}, got ${actual}`);
                   }
-                  negotiation[group.id] = input.preferences.map(preference => module.negotiateLocale([preference]));
+                  negotiation[group.id] = [...input.preferences.map(preference => module.negotiateLocale([preference])), ...input.preferenceLists.map(list => module.negotiateLocale(list))];
                 }
                 const list = {};
                 for (const id of input.listIds) {
@@ -186,20 +240,25 @@ internal sealed class CldrLocaleConformanceTests
                   }
                   plural[id] = values;
                 }
-                await writeFile(new URL("./output.json", import.meta.url), JSON.stringify({ failures, list, relativeTime, plural, negotiation }));
+                const canonical = { all: input.preferences.map(preference => runtime.conformanceCanonicalLocale(preference)) };
+                await writeFile(new URL("./output.json", import.meta.url), JSON.stringify({ failures, list, relativeTime, plural, negotiation, canonical }));
                 """, new UTF8Encoding(false));
             Rmf2EsmV5Tests.Run("bun", [script], directory);
             JsonNode output = JsonNode.Parse(File.ReadAllText(Path.Combine(directory, "output.json")))!;
             var failures = output["failures"]!.AsArray().Select(item => item!.GetValue<string>()).ToList();
-            foreach (string section in new[] { "list", "relativeTime", "plural", "negotiation" })
+            foreach (string section in new[] { "list", "relativeTime", "plural", "negotiation", "canonical" })
                 foreach ((string id, JsonNode? values) in expected[section]!.AsObject())
                 {
                     JsonArray dotnet = values!.AsArray(), esm = output[section]![id]!.AsArray();
                     for (int index = 0; index < dotnet.Count; index++)
                         if (dotnet[index]?.GetValue<string>() != esm[index]?.GetValue<string>())
-                            failures.Add(section + " " + id + " #" + index + ": .NET " + JsonSerializer.Serialize(dotnet[index]?.GetValue<string>()) + ", ESM " + JsonSerializer.Serialize(esm[index]?.GetValue<string>()));
+                            failures.Add(section + " " + id + " #" + index + Input(section, index) + ": .NET " + JsonSerializer.Serialize(dotnet[index]?.GetValue<string>()) + ", ESM " + JsonSerializer.Serialize(esm[index]?.GetValue<string>()));
                 }
             Assert.True(failures.Count == 0, failures.Count + " differences:\n" + string.Join("\n", failures.Take(40)));
+
+            string Input(string section, int index) => section is "negotiation" or "canonical"
+                ? " " + JsonSerializer.Serialize(index < preferences.Length ? [preferences[index]] : preferenceLists[index - preferences.Length])
+                : "";
         }
         finally { Directory.Delete(directory, true); }
     }
@@ -214,6 +273,9 @@ internal sealed class CldrLocaleConformanceTests
         Assert.True(norwegian.Contains("\"no\":", StringComparison.Ordinal) && norwegian.Contains("\"nn\":", StringComparison.Ordinal), "Bokmål lacks its CLDR relatives.");
         string hebrew = TranslationCapabilityRegistry.EsmLocaleSource(["he"]);
         Assert.True(hebrew.Contains("\"iw\":\"he\"", StringComparison.Ordinal), "The iw alias is missing.");
+        Assert.True(TranslationCapabilityRegistry.EsmLocaleSource(["fil"]).Contains("\"tl\":\"fil\"", StringComparison.Ordinal), "The tl alias is missing.");
+        string serbian = TranslationCapabilityRegistry.EsmLocaleSource(["sr-Latn"]);
+        Assert.True(serbian.Contains("\"sh\":\"sr-Latn\"", StringComparison.Ordinal) && serbian.Contains("\"cnr\":\"sr-ME\"", StringComparison.Ordinal), "The sh and cnr aliases are missing.");
         Assert.True(english.Length < 20_000, "English locale data is " + english.Length + " characters.");
     }
 
@@ -226,6 +288,13 @@ internal sealed class CldrLocaleConformanceTests
             Assert.True(TranslationCapabilityRegistry.SupportsOrdinal(locale), "ordinal " + locale);
             Assert.True(TranslationCapabilityRegistry.SupportsList(locale), "list " + locale);
             Assert.True(TranslationCapabilityRegistry.SupportsRelativeTime(locale), "relative time " + locale);
+        }
+        // CLDR data without plural rules of its own: the root rule (other only), so no RTR0031.
+        foreach (string locale in new[] { "agq", "bas", "rw", "mi", "tt", "yav", "zgh" })
+        {
+            Assert.True(TranslationCapabilityRegistry.SupportsCardinal(locale) && TranslationCapabilityRegistry.SupportsOrdinal(locale), "plurals " + locale);
+            Assert.True(TranslationCapabilityRegistry.SupportsRelativeTime(locale), "relative time " + locale);
+            Assert.Equal("other", string.Join("|", TranslationCapabilityRegistry.PluralCategories(locale, false)), "categories " + locale);
         }
         foreach (string locale in new[] { "tlh", "qaa", "x-private" })
             Assert.True(!TranslationCapabilityRegistry.SupportsCardinal(locale) && !TranslationCapabilityRegistry.SupportsList(locale), "unexpected support for " + locale);

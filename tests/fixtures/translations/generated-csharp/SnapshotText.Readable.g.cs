@@ -22,15 +22,18 @@ public sealed class @SnapshotTextMessages : global::Runic.Translations.IReadable
 
     internal @SnapshotTextMessages(global::@Snapshot.@SnapshotText text) => this.__text = text;
 
-    /// <summary>Formats <c>greeting</c>.</summary>
+    /// <summary>Hello {$name}</summary>
+    /// <remarks>Formats <c>greeting</c>.</remarks>
     /// <param name="name">Input <c>name</c>.</param>
     public string @greeting(string @name) =>
         this.__text.r_6772656574696e67(r_6e616d65: @name);
 
-    /// <summary>Formats <c>help</c>.</summary>
+    /// <summary>Read the {#link}guide{/link}.</summary>
+    /// <remarks>Formats <c>help</c>.</remarks>
     public global::Runic.Translations.LocalizedTextContent<global::@Snapshot.@SnapshotTextSlots.@help> @help => new(this.__text.r_68656c70);
 
-    /// <summary>Formats <c>items</c>.</summary>
+    /// <summary>{$count} items</summary>
+    /// <remarks>Formats <c>items</c>.</remarks>
     /// <param name="count">Input <c>count</c>.</param>
     public string @items(long @count) =>
         this.__text.r_6974656d73(r_636f756e74: @count);

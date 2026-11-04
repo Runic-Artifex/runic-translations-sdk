@@ -93,6 +93,8 @@ function encode(value, type, name) {
   let wire = value;
   if (type === "int64" && (typeof value === "bigint" || Number.isSafeInteger(value))) wire = String(value);
   else if (type === "decimal" && typeof value === "number" && Number.isFinite(value)) wire = encode(decimal(String(value)), type, name);
+  // A Date, as messages accept it, is written in the canonical UTC form without sub-second digits.
+  else if (type === "datetime" && value instanceof Date && Number.isFinite(value.getTime())) wire = value.toISOString().replace(/\.\d{3}Z$/, "Z");
   else if (type === "decimal" && isRecord(value) && typeof value.coefficient === "bigint" && Number.isInteger(value.scale) && value.scale >= 0) {
     const digits = value.coefficient.toString().padStart(value.scale + 1, "0");
     const unsigned = value.scale === 0 ? digits : `${digits.slice(0, digits.length - value.scale)}.${digits.slice(digits.length - value.scale)}`;

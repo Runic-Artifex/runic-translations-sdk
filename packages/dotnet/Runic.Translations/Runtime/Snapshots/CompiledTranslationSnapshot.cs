@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace Runic.Translations;
 
@@ -36,6 +38,20 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         _valueFormatter = valueFormatter ?? DefaultTextValueFormatter.Shared;
         Catalog = catalog.Catalog;
         Locale = canonicalLocale;
+        RequestedLocale = canonicalLocale;
+    }
+
+    private CompiledTranslationSnapshot(CompiledTranslationSnapshot source, string requestedLocale)
+    {
+        _catalog = source._catalog;
+        _definitions = source._definitions;
+        _patterns = source._patterns;
+        _messages = source._messages;
+        _noArgumentText = source._noArgumentText;
+        _valueFormatter = source._valueFormatter;
+        Catalog = source.Catalog;
+        Locale = source.Locale;
+        RequestedLocale = requestedLocale;
     }
 
     /// <summary>
@@ -110,6 +126,41 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
     public string Locale { get; }
 
     /// <inheritdoc />
+    public string RequestedLocale { get; }
+
+    /// <summary>
+    /// This snapshot's data for another canonical requested tag that resolved to <see cref="Locale"/>, such as <c>de-CH</c>
+    /// for <c>de</c>: a message formats numbers and dates in the requested locale when its language matches the
+    /// message's content locale. The views are memoized, so repeated requests for one tag get the same object; requested
+    /// tags can come from untrusted input, so only the first <see cref="MaximumRequestViews"/> are kept.
+    /// </summary>
+    internal CompiledTranslationSnapshot ForRequestedLocale(string requestedLocale)
+    {
+        if (string.Equals(requestedLocale, RequestedLocale, StringComparison.Ordinal)) return this;
+        ConcurrentDictionary<string, CompiledTranslationSnapshot> views =
+            LazyInitializer.EnsureInitialized(ref _requestViews, static () => new ConcurrentDictionary<string, CompiledTranslationSnapshot>(StringComparer.Ordinal));
+        if (views.TryGetValue(requestedLocale, out CompiledTranslationSnapshot? view)) return view;
+        view = new CompiledTranslationSnapshot(this, requestedLocale);
+        return views.Count < MaximumRequestViews ? views.GetOrAdd(requestedLocale, view) : view;
+    }
+
+    private const int MaximumRequestViews = 64;
+    private ConcurrentDictionary<string, CompiledTranslationSnapshot>? _requestViews;
+
+    /// <inheritdoc />
+    public bool TryGetContentLocale(TranslationKey key, out string contentLocale)
+    {
+        if (TryGetKeyIndex(key, out int index) && _messages[index] is CompiledTextMessage message)
+        {
+            contentLocale = message.Rmf2V5?.ContentLocale ?? message.ContentLocale ?? Locale;
+            return true;
+        }
+
+        contentLocale = string.Empty;
+        return false;
+    }
+
+    /// <inheritdoc />
     public bool TryGet(TranslationKey key, out string pattern)
     {
         if (TryGetKeyIndex(key, out int index) && _patterns[index] is string resolved)
@@ -147,7 +198,9 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         }
 
         if (message.Rmf2V5 is null) ValidateArguments(_definitions[index], arguments);
-        return CompiledTextMessageRuntime.Format(message, arguments, Locale, _valueFormatter);
+        string text = CompiledTextMessageRuntime.Format(message, arguments, Locale, _valueFormatter, requestedLocale: RequestedLocale);
+        ReportFallback(index, message);
+        return text;
     }
 
     /// <inheritdoc />
@@ -160,7 +213,9 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         // that contract-wide FormatContent surface.
         if (!message.HasMarkup && message.Rmf2V5 is null) throw new TranslationFormatException("The resource does not produce structured content.");
         if (message.Rmf2V5 is null) ValidateArguments(_definitions[index], arguments);
-        return CompiledTextMessageRuntime.FormatContent(message, arguments, Locale, _valueFormatter);
+        LocalizedTextContent content = CompiledTextMessageRuntime.FormatContent(message, arguments, Locale, _valueFormatter, requestedLocale: RequestedLocale);
+        ReportFallback(index, message);
+        return content;
     }
 
     /// <inheritdoc />
@@ -264,6 +319,14 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         }
 
         return -1;
+    }
+
+    // Raised after a successful format, as the ESM runtime reports after building the message. Only RMF2 v5 messages
+    // record their effective content locale; the event costs nothing without subscribers.
+    private void ReportFallback(int index, CompiledTextMessage message)
+    {
+        if (TranslationEvents.HasFallbackListeners && message.Rmf2V5?.ContentLocale is string content && !string.Equals(content, Locale, StringComparison.Ordinal))
+            TranslationEvents.RaiseFallback(new TranslationFallbackEventArgs(Catalog, _definitions[index].Name, Locale, content, RequestedLocale));
     }
 
     private bool TryGetKeyIndex(TranslationKey key, out int index)

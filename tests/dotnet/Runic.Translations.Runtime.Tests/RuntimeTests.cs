@@ -518,7 +518,7 @@ internal sealed class RuntimeTests
         Assert.Equal(1, changes);
         await manager.SetLocaleAsync(string.Empty);
         Assert.Equal(1, changes);
-        await Assert.ThrowsAsync<ArgumentNullException>(() => manager.SetLocaleAsync((string)null!).AsTask());
+        await Assert.ThrowsAsync<ArgumentNullException>(() => manager.SetLocaleAsync(null!).AsTask());
     }
 
     [Test, DisplayName("manager and provider negotiate an ordered preference list with CLDR likely subtags")]
@@ -527,9 +527,9 @@ internal sealed class RuntimeTests
         CompiledTranslationProvider provider = new(CreateCatalog());
         TranslationManager manager = new(provider, await provider.GetSnapshotAsync("en"));
         // de-CH matches the declared de-DE (the likely region of de); invalid and unmatched entries are skipped.
-        await manager.SetLocaleAsync(["C", "fr-FR", "de_CH.UTF-8", "en"]);
+        await manager.SetLocaleFromPreferencesAsync(["C", "fr-FR", "de_CH.UTF-8", "en"]);
         Assert.Equal("de-DE", manager.CurrentLocale);
-        await ((ITranslationManager)manager).SetLocaleAsync(["en-GB"]);
+        await ((ITranslationManager)manager).SetLocaleFromPreferencesAsync(["en-GB"]);
         Assert.Equal("en", manager.CurrentLocale);
         Assert.Equal("en", provider.NegotiateLocale(["it", "ja"]));
         Assert.Equal("en-US", provider.NegotiateLocale(["en-US"]));
@@ -537,9 +537,19 @@ internal sealed class RuntimeTests
         Assert.Equal("de-DE", (await provider.GetSnapshotAsync("de-AT")).Locale);
         Assert.Equal("de-DE", (await provider.GetSnapshotAsync("de")).Locale);
         Assert.Equal("de-DE", (await provider.GetSnapshotAsync("de_DE")).Locale);
-        await Assert.ThrowsAsync<ArgumentNullException>(() => manager.SetLocaleAsync((IEnumerable<string>)null!).AsTask());
+        await Assert.ThrowsAsync<ArgumentNullException>(() => manager.SetLocaleFromPreferencesAsync(null!).AsTask());
         Assert.Equal("de-DE", LocaleNegotiation.Match("de-CH", ["en", "de-DE"]));
         Assert.Equal(null, LocaleNegotiation.Match("fr", ["en", "de-DE"]));
+        // Removing subtags keeps the likely script: no Cyrillic sr for sr-Latn-RS, no Simplified zh for zh-TW.
+        Assert.Equal(null, LocaleNegotiation.Match("sr-Latn-RS", ["en", "sr"]));
+        Assert.Equal(null, LocaleNegotiation.Match("zh-TW", ["en", "zh"]));
+        Assert.Equal("tlh", LocaleNegotiation.Match("tlh-x-klingon", ["en", "tlh"]));
+        Assert.Equal("en", LocaleNegotiation.Negotiate(["sr-Latn-RS", "en"], ["en", "sr"], "sr"));
+        // Legacy codes match their replacements; und matches nothing.
+        Assert.Equal("fil", LocaleNegotiation.Match("tl", ["en", "fil"]));
+        Assert.Equal("sr-Latn", LocaleNegotiation.Match("sh", ["sr", "sr-Latn"]));
+        Assert.Equal(null, LocaleNegotiation.Match("und", ["en", "de"]));
+        Assert.Equal("de", LocaleNegotiation.Negotiate(["und", "de"], ["en", "de"], "en"));
         Assert.Equal("en", LocaleNegotiation.Negotiate([], ["en", "de"], "en"));
         Assert.Throws<ArgumentException>(() => LocaleNegotiation.Negotiate(["de"], ["en", "not a tag"], "en"));
     }
@@ -555,8 +565,11 @@ internal sealed class RuntimeTests
         Assert.Equal(1, factory.CallCount);
         factory.Release();
         ITranslationSnapshot[] snapshots = await Task.WhenAll(a, b);
-        Assert.Same(snapshots[0], snapshots[1]);
-        Assert.Same(snapshots[0], await provider.GetSnapshotAsync("en"));
+        // en-AU is a view of the one en snapshot that formats numbers and dates for en-AU.
+        Assert.Equal(("en", "en-AU"), (snapshots[0].Locale, snapshots[0].RequestedLocale));
+        Assert.Equal(("en", "en"), (snapshots[1].Locale, snapshots[1].RequestedLocale));
+        Assert.Same(snapshots[1], await provider.GetSnapshotAsync("en"));
+        Assert.Same(snapshots[0], await provider.GetSnapshotAsync("en-au"));
         Assert.Equal(1, factory.CallCount);
     }
 

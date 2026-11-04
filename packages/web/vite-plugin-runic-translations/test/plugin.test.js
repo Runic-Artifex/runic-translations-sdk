@@ -437,21 +437,8 @@ if ((await readFile(${JSON.stringify(english)}, "utf8")).includes("INVALID")) pr
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("Vite production builds retain static v3 message re-exports", async () => {
-  const root = await mkdtemp(join(tmpdir(), "runic-vite-production-"));
-  try {
-    const generated = join(root, "app.esm-v5"), messages = join(generated, "messages"); await mkdir(messages, { recursive: true });
-    const manifest = await writeV3Fixture(generated);
-    await writeFile(join(messages, "used.js"), "export const internalUsed = () => 'USED_MESSAGE';\n");
-    await writeFile(join(messages, "unused.js"), "export const internalUnused = () => 'UNRELATED_MESSAGE_SENTINEL';\n");
-    await writeFile(join(messages, "_index.js"), "export { internalUsed as used } from './used.js';\nexport { internalUnused as unused } from './unused.js';\n");
-    await writeFile(join(generated, "messages.js"), "export * as m from './messages/_index.js';\n");
-    const document = JSON.parse(await readFile(manifest, "utf8")); document.assets.push({ path: "messages/_index.js" }, { path: "messages/used.js" }, { path: "messages/unused.js" }); await writeGeneratedManifest(manifest, document);
-    const entry = join(root, "main.js"), outDir = join(root, "dist"); await writeFile(entry, "import { m } from 'virtual:runic-translations/app'; export const result = m.used();\n");
-    await build({ configFile: false, logLevel: "silent", plugins: [runicTranslations({ manifest })], build: { outDir, minify: false, lib: { entry, formats: ["es"], fileName: () => "bundle.js" } } });
-    const bundle = await readFile(join(outDir, "bundle.js"), "utf8"); assert.match(bundle, /USED_MESSAGE/); assert.doesNotMatch(bundle, /UNRELATED_MESSAGE_SENTINEL/);
-  } finally { await rm(root, { recursive: true, force: true }); }
-});
+// Tree-shaking of the generated namespace m is tested on real compiler output, through this plugin, by the Compiler
+// suite's "RMF2 v5 ESM namespace m tree-shakes to the called message in a Vite build of compiler output".
 
 test("a dev-server change makes the browser re-import the regenerated messages", async () => {
   const root = await mkdtemp(join(tmpdir(), "runic-vite-hmr-timestamp-"));

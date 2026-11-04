@@ -30,11 +30,10 @@ Console.WriteLine(text.Messages.application_title);
 
 Each successful locale change replaces the complete immutable snapshot. Reads through `manager.Current` do not observe a partially updated catalog.
 
-To start in the user's language, pass an ordered preference list, such as the operating system's user languages. The generated `SupportedLocales` lists the declared locales, and `ResolveLocale(IEnumerable<string>)` chooses one with the pinned CLDR likely subtags and parent locales: `zh-TW` matches a declared `zh-Hant`, `de-CH` matches `de-DE`, and `nb` matches `no`. `CreateManagerAsync`, `CreateManager` and `ITranslationManager.SetLocaleAsync` accept the same list, and `LocaleNegotiation.Negotiate` applies the rules to any set of locales. The generated ESM runtime's `negotiateLocale` gives the same answer.
+To start in the user's language, pass an ordered preference list, such as the operating system's user languages. The generated `SupportedLocales` lists the declared locales, and `ResolveLocale(IEnumerable<string>)` chooses one with the pinned CLDR likely subtags and parent locales: `zh-TW` matches a declared `zh-Hant`, `de-CH` matches `de-DE`, and `nb` matches `no`. `CreateManagerFromPreferencesAsync`, `CreateManagerFromPreferences` and `ITranslationManager.SetLocaleFromPreferencesAsync` take the same list (the one-tag `CreateManager(null)` and `SetLocaleAsync` are unchanged), and `LocaleNegotiation.Negotiate` applies the rules to any set of locales. The generated ESM runtime's `negotiateLocale` gives the same answer.
 
 ```csharp
-ITranslationManager manager = await AppTextCatalog.CreateManagerAsync(
-    preferredLocales: ["de-CH", "en"]);
+ITranslationManager manager = await AppTextCatalog.CreateManagerFromPreferencesAsync(["de-CH", "en"]);
 ```
 
 ## When to choose this package

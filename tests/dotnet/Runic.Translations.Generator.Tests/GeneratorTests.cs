@@ -219,6 +219,39 @@ internal sealed class GeneratorTests
         Assert.Equal("en|Title|en|en", Execute(run, "Example.Localization.InvariantProbe", "Run"), "invariant culture managers");
     }
 
+    // null keeps meaning "the default locale" for the one-tag overloads; the preference-list methods have their own names (#131).
+    [Test, DisplayName("generated managers accept null and default as the initial locale")]
+    public void NullInitialLocale()
+    {
+        string source = """
+            namespace Example.Localization;
+            public static class NullProbe
+            {
+                public static string Run()
+                {
+                    global::Runic.Translations.ITranslationManager fromNull = AppTextCatalog.CreateManager(null);
+                    global::Runic.Translations.ITranslationManager fromDefault = AppTextCatalog.CreateManager(default);
+                    global::Runic.Translations.ITranslationManager withFormatter = AppTextCatalog.CreateManager(null, null);
+                    global::Runic.Translations.ITranslationManager awaited = AppTextCatalog.CreateManagerAsync(null).AsTask().GetAwaiter().GetResult();
+                    global::Runic.Translations.ITranslationManager preferred = AppTextCatalog.CreateManagerFromPreferences(new[] { "fr", "de-CH" });
+                    global::Runic.Translations.ITranslationManager preferredAsync = AppTextCatalog.CreateManagerFromPreferencesAsync(new[] { "de_DE.UTF-8" }).AsTask().GetAwaiter().GetResult();
+                    string rejected = "none";
+                    try { preferred.SetLocaleAsync(null!).AsTask().GetAwaiter().GetResult(); }
+                    catch (global::System.ArgumentNullException) { rejected = "null"; }
+                    preferred.SetLocaleFromPreferencesAsync(new[] { "en-GB" }).AsTask().GetAwaiter().GetResult();
+                    return string.Join("|", fromNull.CurrentLocale, fromDefault.CurrentLocale, withFormatter.CurrentLocale, awaited.CurrentLocale,
+                        preferredAsync.CurrentLocale, rejected, preferred.CurrentLocale, AppTextCatalog.ResolveLocale(new[] { "und", "de-AT" }));
+                }
+            }
+            """;
+        GeneratorRun run = GeneratorTestHost.RunWithConsumer(source, ProjectInput(Project.Replace("[ \"en\" ]", "[ \"en\", \"de\" ]", StringComparison.Ordinal)),
+            new TestInput("C:/repo/translations/en.rmf2", "Rmf2", "title = Title\n"), new TestInput("C:/repo/translations/de.rmf2", "Rmf2", "title = Titel\n"));
+        Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
+        Diagnostic[] errors = run.Compilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToArray();
+        Assert.Equal(0, errors.Length, string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
+        Assert.Equal("en|en|en|en|de|null|en|de", Execute(run, "Example.Localization.NullProbe", "Run"), "null and preference-list managers");
+    }
+
     [Test, DisplayName("generator input enumeration is deterministic")]
     public void DeterministicInputOrder()
     {

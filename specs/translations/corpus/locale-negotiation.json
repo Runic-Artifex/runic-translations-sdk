@@ -1,7 +1,7 @@
 {
   "corpusVersion": 1,
   "cldrVersion": "48.2",
-  "comment": "Shared .NET (LocaleNegotiation.Negotiate) and ESM (negotiateLocale) oracle. Each group declares its locales and base locale; each case lists preferences, most preferred first.",
+  "comment": "Shared .NET (LocaleNegotiation.Negotiate) and ESM (negotiateLocale) oracle. Each group declares its locales and base locale; each case lists preferences, most preferred first. A preference never matches a locale of another likely script, so the next preference is consulted; und preferences are skipped.",
   "groups": [
     { "id": "chinese-scripts", "locales": ["en", "zh", "zh-Hant"], "base": "en", "cases": [
       { "preferences": ["zh-TW"], "expected": "zh-Hant" },
@@ -15,8 +15,9 @@
       { "preferences": ["cmn"], "expected": "zh" }
     ] },
     { "id": "chinese-simplified-only", "locales": ["en", "zh"], "base": "en", "cases": [
-      { "preferences": ["zh-TW"], "expected": "zh" },
-      { "preferences": ["zh-Hant"], "expected": "zh" }
+      { "preferences": ["zh-TW"], "expected": "en" },
+      { "preferences": ["zh-Hant"], "expected": "en" },
+      { "preferences": ["zh-SG"], "expected": "zh" }
     ] },
     { "id": "chinese-traditional-only", "locales": ["en", "zh-Hant"], "base": "en", "cases": [
       { "preferences": ["zh-TW"], "expected": "zh-Hant" },
@@ -29,7 +30,21 @@
       { "preferences": ["sr-ME"], "expected": "sr-Latn" }
     ] },
     { "id": "serbian-cyrillic-only", "locales": ["en", "sr"], "base": "en", "cases": [
-      { "preferences": ["sr-Latn-RS"], "expected": "sr" }
+      { "preferences": ["sr-Latn-RS"], "expected": "en" },
+      { "preferences": ["sr-Cyrl-ME"], "expected": "sr" },
+      { "preferences": ["sh"], "expected": "en" }
+    ] },
+    { "id": "script-mismatch-next-preference", "locales": ["az", "de", "en", "hi", "ku", "ms", "pa", "sr", "zh"], "base": "de", "cases": [
+      { "preferences": ["sr-Latn-RS", "en"], "expected": "en" },
+      { "preferences": ["zh-Hant", "en"], "expected": "en" },
+      { "preferences": ["pa-PK", "en"], "expected": "en" },
+      { "preferences": ["az-Arab", "en"], "expected": "en" },
+      { "preferences": ["ms-Arab", "en"], "expected": "en" },
+      { "preferences": ["ku-IQ", "en"], "expected": "en" },
+      { "preferences": ["hi-Latn", "en"], "expected": "en" },
+      { "preferences": ["sr-Latn-RS"], "expected": "de" },
+      { "preferences": ["sr-Cyrl-RS", "en"], "expected": "sr" },
+      { "preferences": ["pa-Guru-IN", "en"], "expected": "pa" }
     ] },
     { "id": "german-regions", "locales": ["de-AT", "de-DE", "en-US"], "base": "en-US", "cases": [
       { "preferences": ["de-CH"], "expected": "de-DE" },
@@ -72,7 +87,16 @@
       { "preferences": ["no"], "expected": "nb" },
       { "preferences": ["nb-NO"], "expected": "nb" },
       { "preferences": ["no-NO"], "expected": "nb" },
-      { "preferences": ["nn"], "expected": "en" }
+      { "preferences": ["nn"], "expected": "nb" }
+    ] },
+    { "id": "norwegian-nynorsk", "locales": ["en", "nn"], "base": "en", "cases": [
+      { "preferences": ["nb"], "expected": "nn" },
+      { "preferences": ["no"], "expected": "nn" },
+      { "preferences": ["nb-NO", "en"], "expected": "nn" }
+    ] },
+    { "id": "norwegian-parent-first", "locales": ["en", "nb", "no"], "base": "en", "cases": [
+      { "preferences": ["nn"], "expected": "no" },
+      { "preferences": ["nb-NO"], "expected": "nb" }
     ] },
     { "id": "norwegian", "locales": ["en", "no"], "base": "en", "cases": [
       { "preferences": ["nb"], "expected": "no" },
@@ -87,6 +111,27 @@
       { "preferences": ["iw"], "expected": "he" },
       { "preferences": ["iw-IL"], "expected": "he" },
       { "preferences": ["in"], "expected": "id" }
+    ] },
+    { "id": "legacy-aliases", "locales": ["en", "fa", "fil", "jv", "ro", "sr", "sr-Latn"], "base": "en", "cases": [
+      { "preferences": ["tl"], "expected": "fil" },
+      { "preferences": ["tl-PH"], "expected": "fil" },
+      { "preferences": ["mo"], "expected": "ro" },
+      { "preferences": ["mo-MD"], "expected": "ro" },
+      { "preferences": ["sh"], "expected": "sr-Latn" },
+      { "preferences": ["sh-Cyrl"], "expected": "sr" },
+      { "preferences": ["cnr"], "expected": "sr-Latn" },
+      { "preferences": ["jw"], "expected": "jv" },
+      { "preferences": ["drw"], "expected": "fa" }
+    ] },
+    { "id": "legacy-declared", "locales": ["en", "tl"], "base": "en", "cases": [
+      { "preferences": ["fil"], "expected": "tl" },
+      { "preferences": ["fil-PH"], "expected": "tl" }
+    ] },
+    { "id": "undetermined", "locales": ["de", "en"], "base": "en", "cases": [
+      { "preferences": ["und"], "expected": "en" },
+      { "preferences": ["und", "de"], "expected": "de" },
+      { "preferences": ["und-DE", "de"], "expected": "de" },
+      { "preferences": ["und-Latn-DE"], "expected": "en" }
     ] },
     { "id": "preference-lists", "locales": ["de", "en", "fr"], "base": "en", "cases": [
       { "preferences": ["xx", "fr-CA", "de"], "expected": "fr" },

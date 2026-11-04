@@ -50,7 +50,7 @@ public static class SnapshotTextCatalog
     }
 
     /// <summary>Creates a manager in the declared locale that best matches an ordered preference list (<see cref="ResolveLocale"/>).</summary>
-    public static global::System.Threading.Tasks.ValueTask<global::Runic.Translations.ITranslationManager> CreateManagerAsync(
+    public static global::System.Threading.Tasks.ValueTask<global::Runic.Translations.ITranslationManager> CreateManagerFromPreferencesAsync(
         global::System.Collections.Generic.IEnumerable<string> preferredLocales,
         global::Runic.Translations.ITextValueFormatter? valueFormatter = null,
         global::Runic.Translations.ITranslationSnapshotFactory? snapshotFactory = null,
@@ -70,7 +70,7 @@ public static class SnapshotTextCatalog
     }
 
     /// <summary>Creates a manager without awaiting, in the declared locale that best matches an ordered preference list (<see cref="ResolveLocale"/>).</summary>
-    public static global::Runic.Translations.ITranslationManager CreateManager(
+    public static global::Runic.Translations.ITranslationManager CreateManagerFromPreferences(
         global::System.Collections.Generic.IEnumerable<string> preferredLocales,
         global::Runic.Translations.ITextValueFormatter? valueFormatter = null,
         global::Runic.Translations.TranslationOptions? options = null) =>

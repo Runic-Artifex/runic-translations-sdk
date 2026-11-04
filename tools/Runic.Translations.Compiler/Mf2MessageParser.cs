@@ -105,8 +105,9 @@ internal static partial class Mf2MessageParser
                         "number" => option.Value is "decimal" or "percent",
                         "runic:uuid" => option.Value is "d" or "n" or "b" or "p",
                         "runic:list" => option.Value is "long" or "short" or "narrow",
-                        _ => option.Value is "iso" or "short" or "long",
+                        _ => option.Value is "iso" or "short" or "medium" or "long" or "full",
                     },
+                    "timeZone" => Rmf2FunctionRegistryV2.IsTimeZone(option.Value),
                     "minimumFractionDigits" or "maximumFractionDigits" => int.TryParse(option.Value, out int digits) && digits >= 0 && digits <= (values.GetValueOrDefault("style") == "percent" ? 4 : 6),
                     "unit" => option.Value is "second" or "minute" or "hour" or "day" or "week" or "month" or "year",
                     "numeric" => option.Value is "always" or "auto",
@@ -122,7 +123,7 @@ internal static partial class Mf2MessageParser
     }
     internal static string FunctionOptions(string name) => name switch {
         "string" => "select", "integer" => "select useGrouping", "number" => "select style useGrouping minimumFractionDigits maximumFractionDigits",
-        "date" or "time" or "datetime" or "runic:uuid" => "style", "runic:boolean" => "select", "runic:relative-time" => "unit numeric", "runic:list" => "type style", _ => "",
+        "date" or "time" or "runic:uuid" => "style", "datetime" => "style timeZone", "runic:boolean" => "select", "runic:relative-time" => "unit numeric", "runic:list" => "type style", _ => "",
     };
 
     private static CompiledMessageNode? ParseExpression(
