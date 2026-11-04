@@ -23,6 +23,8 @@ internal sealed class ToolOperationResult
     internal CommandFault? Fault { get; set; }
     internal IReadOnlyList<CommandDiagnostic> Diagnostics => _diagnostics;
     internal IReadOnlyList<TranslationsToolDiagnostic> TranslationDiagnostics => _translationDiagnostics;
+    /// <summary>The <c>interchange</c> payload member of <c>xliff export</c>, <c>xliff import</c> and <c>review mark</c>.</summary>
+    internal TranslationsToolInterchange? Interchange { get; set; }
 
     internal void WriteOutput(string value)
     {

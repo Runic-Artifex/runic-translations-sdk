@@ -207,8 +207,19 @@ internal sealed class Rmf2V1CorpusTests
     // pure call, runtime.js keeps only the markup contracts and dynamic.js the catalog's contract tables; messages.d.ts
     // documents members with the base text; the C# accessors gain base-text summaries and the References factories, in
     // both digests.
-    private const string EncodedOutputDigest = "15098e30aedc1715661d53590a7b7688eadf4828f7d68bdc2f42bdfc0ca8e1b4";
-    private const string HiddenEncodedOutputDigest = "2ee89d8f4a65f5db6e0ae2100173272da721e39c6cbc2230afe773b2f847ee02";
+    // Re-pinned for TR 0.9 batch TC: runtime.js formats localized dates, times, time zones and percentages by the shared
+    // rules, in the requested locale when it shares the content language, accepts Date and offset date-time inputs and
+    // exports getRequestedLocale, getMessageLocale and onFallback; message modules pass the requested locale;
+    // transport.js writes a Date input; runtime.d.ts and messages.d.ts declare them, in both digests.
+    // Re-pinned for the TC review: runtime.js compares implied scripts and drops extensions for the formatting locale,
+    // reads the local zone per call with configureTimeZoneResolver, writes other calendars' full years and one bidi mark
+    // per run, and keeps the requested tag in createLocaleSource; server.js scopes the requested tag and zone per
+    // request; runtime.d.ts and server.d.ts declare them, in both digests.
+    // Re-pinned for merging TC with TE: message modules call the runtime with the requested locale, and runtime.js
+    // reads getMessageLocale's content locales from its own table (messageLocaleTable) rather than the contract tables
+    // that moved to dynamic.js, in both digests.
+    private const string EncodedOutputDigest = "cf82dd07bcab87cfb982a063153dbd085ef1f9e344eb61e981179c507120a578";
+    private const string HiddenEncodedOutputDigest = "bca94d9be3771a1601e32766f69215d938b69f982445779c79d7b6184e8b3eb7";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

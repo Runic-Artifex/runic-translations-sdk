@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:2.0" version="2.0" srcLang="en" trgLang="de">
+  <file id="shop" original="shop">
+    <unit id="cart_checkout_title" name="cart_checkout_title">
+      <segment>
+        <source>Checkout</source>
+        <target/>
+      </segment>
+    </unit>
+    <unit id="cart_checkout_total" name="cart_checkout_total">
+      <segment>
+        <source>Total: <ph id="1"/></source>
+        <target/>
+      </segment>
+    </unit>
+    <unit id="cart_empty" name="cart_empty">
+      <segment>
+        <source>Your cart is empty</source>
+        <target/>
+      </segment>
+    </unit>
+    <unit id="cart_items" name="cart_items">
+      <notes>
+        <note>The cart summary.</note>
+      </notes>
+      <segment>
+        <source><ph id="1"/> items in your cart</source>
+        <target><ph id="1"/> Artikel</target>
+      </segment>
+    </unit>
+    <unit id="checkout_note" name="checkout_note">
+      <segment>
+        <source>Payment is safe. Delivery is free.</source>
+        <target/>
+      </segment>
+    </unit>
+    <unit id="farewell" name="farewell">
+      <segment>
+        <source>See you soon</source>
+        <target/>
+      </segment>
+    </unit>
+    <unit id="greeting" name="greeting">
+      <notes>
+        <note>The greeting on the start page.
+@param $name - the customer's first name</note>
+      </notes>
+      <segment>
+        <source>Hello <ph id="1"/>!</source>
+        <target>Servus <ph id="1"/>!</target>
+      </segment>
+    </unit>
+    <unit id="help_hint" name="help_hint">
+      <segment>
+        <source>Read the {#strong}help{/strong} first.</source>
+        <target/>
+      </segment>
+    </unit>
+    <unit id="order_status" name="order_status">
+      <segment>
+        <source>.input {$status :string}
+.match $status
+shipped {{Your order has shipped}}
+* {{Your order is being prepared}}</source>
+        <target/>
+      </segment>
+    </unit>
+    <unit id="search_placeholder" name="search_placeholder">
+      <segment>
+        <source>Search products</source>
+        <target>Suche</target>
+      </segment>
+    </unit>
+  </file>
+</xliff>

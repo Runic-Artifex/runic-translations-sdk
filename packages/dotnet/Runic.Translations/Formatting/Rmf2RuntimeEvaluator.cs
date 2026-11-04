@@ -37,7 +37,8 @@ internal sealed class Rmf2ResolvedFormat
             ("integer" or "number", "select") => text is "exact" or "plural" or "ordinal",
             ("integer" or "number", "useGrouping") => text is "auto" or "always" or "never" or "min2",
             ("number", "style") => text is "decimal" or "percent",
-            ("date" or "time" or "datetime", "style") => text is "iso" or "short" or "long",
+            ("date" or "time" or "datetime", "style") => text is "iso" or "short" or "medium" or "long" or "full",
+            ("datetime", "timeZone") => Rmf2LocalizedFormats.IsTimeZone(text),
             ("runic:uuid", "style") => text is "d" or "n" or "b" or "p",
             ("runic:relative-time", "unit") => text is "second" or "minute" or "hour" or "day" or "week" or "month" or "year",
             ("runic:relative-time", "numeric") => text is "always" or "auto",
@@ -47,7 +48,11 @@ internal sealed class Rmf2ResolvedFormat
         };
         if (!valid) throw new ArgumentException("Invalid option '" + name + "' for '" + function + "'.", nameof(value));
     }
-    internal string Format(TextArgument value, string locale)
+    /// <summary>
+    /// Formats in <paramref name="locale"/>, the formatting locale for numbers, percentages, dates and times; lists and
+    /// relative time use the plural and list data of <paramref name="contentLocale"/>.
+    /// </summary>
+    internal string Format(TextArgument value, string locale, string contentLocale)
     {
         string style = String("style", "iso");
         switch (Function)
@@ -60,7 +65,7 @@ internal sealed class Rmf2ResolvedFormat
                 string grouping = String("useGrouping", "auto");
                 // Ungrouped integers stay invariant; the grouping strategies use the locale's sign, separator and group sizes.
                 if (grouping == "never") return integer.ToString(CultureInfo.InvariantCulture);
-                CultureInfo culture = NumberCulture(locale);
+                CultureInfo culture = Rmf2LocalizedFormats.Culture(locale);
                 int digits = integer == long.MinValue ? 19 : Math.Abs(integer).ToString(CultureInfo.InvariantCulture).Length;
                 return integer.ToString(Groups(grouping, digits, locale, culture.NumberFormat) ? "#,0" : "0", culture);
             }
@@ -71,32 +76,30 @@ internal sealed class Rmf2ResolvedFormat
                 // Round the unscaled decimal explicitly. The custom percent formatter
                 // scales its decimal digit buffer, so decimal.MaxValue cannot overflow.
                 decimal rounded = decimal.Round(Number(value), maximum + (percent ? 2 : 0), MidpointRounding.AwayFromZero);
-                CultureInfo culture = NumberCulture(locale);
+                CultureInfo culture = Rmf2LocalizedFormats.Culture(locale);
                 VisibleDecimal visible = VisibleDecimal.FromNumber(Number(value), percent, minimum, maximum);
                 int digits = Math.Max(1, visible.Coefficient.ToString(CultureInfo.InvariantCulture).Length - visible.Scale);
                 string pattern = (Groups(String("useGrouping", "auto"), digits, locale, culture.NumberFormat) ? "#,0" : "0")
                     + (maximum == 0 ? "" : "." + new string('0', minimum) + new string('#', maximum - minimum)) + (percent ? "%" : "");
-                return rounded.ToString(pattern, culture);
+                if (!percent) return rounded.ToString(pattern, culture);
+                // The scaled digits without a sign or percent sign, then the locale's percent pattern around them.
+                var unsigned = (NumberFormatInfo)culture.NumberFormat.Clone();
+                unsigned.PercentSymbol = string.Empty;
+                return Rmf2LocalizedFormats.Percent(Math.Abs(rounded).ToString(pattern, unsigned), visible.Negative, culture.NumberFormat);
             }
-            case "date": return Get<DateOnly>(value).ToString(style == "iso" ? "yyyy-MM-dd" : style == "short" ? "d" : "D", style == "iso" ? CultureInfo.InvariantCulture : CultureInfo.GetCultureInfo(locale));
-            case "time": return Get<TimeOnly>(value).ToString(style == "iso" ? "HH:mm:ss.FFFFFFF" : style == "short" ? "t" : "T", style == "iso" ? CultureInfo.InvariantCulture : CultureInfo.GetCultureInfo(locale));
+            case "date": return style == "iso" ? Get<DateOnly>(value).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+                : Rmf2LocalizedFormats.Date(Get<DateOnly>(value), style, Rmf2LocalizedFormats.Culture(locale));
+            case "time": return style == "iso" ? Get<TimeOnly>(value).ToString("HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture)
+                : Rmf2LocalizedFormats.Time(Get<TimeOnly>(value), style, Rmf2LocalizedFormats.Culture(locale));
             case "datetime":
-                DateTimeOffset instant = Get<DateTimeOffset>(value).ToUniversalTime();
-                return instant.ToString(style == "iso" ? "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'" : style == "short" ? "g" : "F", style == "iso" ? CultureInfo.InvariantCulture : CultureInfo.GetCultureInfo(locale));
+                // iso is always UTC; the localized styles use the timeZone option, the host's local zone by default.
+                return style == "iso" ? Get<DateTimeOffset>(value).ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'", CultureInfo.InvariantCulture)
+                    : Rmf2LocalizedFormats.DateTime(Get<DateTimeOffset>(value), style, String("timeZone", "local"), Rmf2LocalizedFormats.Culture(locale));
             case "runic:uuid": return Get<Guid>(value).ToString(String("style", "d"), CultureInfo.InvariantCulture);
-            case "runic:list": return TextListFormatter.Format(Get<IReadOnlyList<string>>(value), String("type", "conjunction"), String("style", "long"), locale);
-            case "runic:relative-time": return TextRelativeTimeFormatter.Format(Rmf2RuntimeDecimal.Parse(Rmf2RuntimeDecimal.Canonical(Number(value))), String("unit", "day"), String("numeric", "always"), locale);
+            case "runic:list": return TextListFormatter.Format(Get<IReadOnlyList<string>>(value), String("type", "conjunction"), String("style", "long"), contentLocale);
+            case "runic:relative-time": return TextRelativeTimeFormatter.Format(Rmf2RuntimeDecimal.Parse(Rmf2RuntimeDecimal.Canonical(Number(value))), String("unit", "day"), String("numeric", "always"), contentLocale);
             default: throw new TranslationFormatException("Unknown v5 formatter.");
         }
-    }
-    /// <summary>
-    /// The platform's number symbols for a locale. Without platform locale data, as under
-    /// <c>InvariantGlobalization</c>, numbers use the invariant symbols instead of failing.
-    /// </summary>
-    private static CultureInfo NumberCulture(string locale)
-    {
-        try { return CultureInfo.GetCultureInfo(locale); }
-        catch (CultureNotFoundException) { return CultureInfo.InvariantCulture; }
     }
     /// <summary>
     /// Whether <c>useGrouping</c> separates an integer part of <paramref name="digits"/> digits, as ICU and
@@ -175,19 +178,26 @@ internal static class Rmf2RuntimeEvaluator
         }
         internal string MarkupOption(CompiledRmf2Option option) => Rmf2ResolvedFormat.Canonical(Resolve(option.Value, option.Value.Kind == "number-literal" ? TextArgumentType.Number : TextArgumentType.String).Carrier);
     }
-    internal static string Format(CompiledRmf2Message message, ReadOnlySpan<TextArgument> arguments, string locale, int maximum)
+    /// <summary>
+    /// Formats with <paramref name="locale"/> as the content locale unless the message has its own, and with
+    /// <paramref name="requestedLocale"/> (by default <paramref name="locale"/>) as the requested locale that numbers and
+    /// dates format in when it shares the content locale's language.
+    /// </summary>
+    internal static string Format(CompiledRmf2Message message, ReadOnlySpan<TextArgument> arguments, string locale, int maximum, string? requestedLocale = null)
     {
         if (message.HasMarkup) throw new TranslationFormatException("Structured localized content must be requested through FormatContent.");
-        LocalizedTextContent content = FormatContent(message, arguments, locale, maximum);
+        LocalizedTextContent content = FormatContent(message, arguments, locale, maximum, requestedLocale);
         var builder = new StringBuilder();
         foreach (var node in content.Nodes.Span) builder.Append(node.Value);
         return builder.ToString();
     }
-    internal static LocalizedTextContent FormatContent(CompiledRmf2Message message, ReadOnlySpan<TextArgument> arguments, string locale, int maximum)
+    internal static LocalizedTextContent FormatContent(CompiledRmf2Message message, ReadOnlySpan<TextArgument> arguments, string locale, int maximum, string? requestedLocale = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(locale);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximum);
+        string requested = requestedLocale ?? locale;
         locale = message.ContentLocale ?? locale;
+        string formatting = Rmf2LocalizedFormats.FormattingLocale(requested, locale);
         try
         {
             var context = new Context(message, arguments);
@@ -210,12 +220,12 @@ internal static class Rmf2RuntimeEvaluator
                 else
                 {
                     Value? expression = node.Expression is null ? null : context.Expression(node.Expression);
-                    string text = expression is null ? node.Value : expression.Format.Format(expression.Carrier, locale);
+                    string text = expression is null ? node.Value : expression.Format.Format(expression.Carrier, formatting, locale);
                     AddLength(text.Length);
                     nodes.Add(new(LocalizedTextContentNodeKind.Text, text, null, node.Expression?.AnnotationArray));
                 }
             }
-            return new(nodes, locale);
+            return new(nodes, locale, formatting);
             void AddLength(int count)
             { if (count > maximum - length) throw new TranslationFormatException("Formatted text exceeds the configured output limit."); length += count; }
         }
@@ -223,6 +233,8 @@ internal static class Rmf2RuntimeEvaluator
         catch (ArgumentException exception) { throw new TranslationFormatException("Invalid resolved v5 formatter option or locale.", exception); }
         catch (OverflowException exception) { throw new TranslationFormatException("V5 numeric value cannot be formatted.", exception); }
         catch (FormatException exception) { throw new TranslationFormatException("V5 value cannot be formatted.", exception); }
+        catch (TimeZoneNotFoundException exception) { throw new TranslationFormatException(exception.Message, exception); }
+        catch (InvalidTimeZoneException exception) { throw new TranslationFormatException("The time zone of a v5 date-time is invalid.", exception); }
     }
     private static CompiledRmf2Variant Select(CompiledRmf2Message message, Context context, string locale)
     {

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -502,13 +503,14 @@ internal sealed class EditorWorkspace : IDisposable
 
     // ---- XLIFF interchange (W03) ----
     //
-    // Fingerprint reconciliation: approved interchange entries use the closed
-    // text-profile fingerprint (source text plus its interchange contract),
+    // Fingerprint reconciliation: interchange entries use the per-unit source
+    // fingerprint (key, source text and caller contract; profile v3),
     // independently of v5 CallerFingerprint and SourceHash. SourceHash remains
     // the optimistic-concurrency freshness token. The editor sidecar keeps its
-    // per-entry fnv1a64 marker separately. Approved entries are stamped on
-    // export and stripped after validated import; later exports stamp them from
-    // the current text profile. Non-approved entries never carry a stamp.
+    // per-entry fnv1a64 marker separately. Export stamps an entry with its
+    // unit's current fingerprint only while that marker still matches the
+    // base value; an approval recorded against an older source is exported as
+    // needs-review. Imported entries are stripped of stamps after validation.
 
     // allowRootedOutput is set only by the command line (`export --output`): a
     // rooted path there is the caller's chosen destination. The UI bridge keeps
@@ -527,7 +529,7 @@ internal sealed class EditorWorkspace : IDisposable
             if (!state.Compilation.Success)
                 return new EditorXliffExportResult(false, EditorNotice.Create("ui_backend_xliff_compile"), null, [], []);
             TranslationInterchangeProjection catalog = TranslationInterchange.PreflightXliff21(state.Compilation);
-            TranslationInterchangeReview review = BuildExportReview(TranslationEditorStateStore.Load(_root, catalog.CatalogId), catalog);
+            TranslationInterchangeReview review = BuildExportReview(TranslationEditorStateStore.Load(_root, catalog.CatalogId), catalog, BaseValues(state));
             TranslationXliffExportResult export = TranslationInterchange.ExportXliff21(state.Compilation, review);
             string targetDirectory = ResolveInterchangeOutputDirectory(directory, Path.Combine(".runic-translations", "export"), allowRootedOutput);
             Directory.CreateDirectory(targetDirectory);
@@ -570,7 +572,7 @@ internal sealed class EditorWorkspace : IDisposable
             if (!state.Compilation.Success)
                 return new EditorReviewFileResult(false, EditorNotice.Create("ui_backend_review_compile"), null, 0);
             TranslationInterchangeProjection catalog = TranslationInterchange.PreflightXliff21(state.Compilation);
-            TranslationInterchangeReview review = BuildExportReview(TranslationEditorStateStore.Load(_root, catalog.CatalogId), catalog);
+            TranslationInterchangeReview review = BuildExportReview(TranslationEditorStateStore.Load(_root, catalog.CatalogId), catalog, BaseValues(state));
             byte[] bytes = TranslationInterchange.ExportReviewJson(review);
             string targetPath = Path.Combine(
                 ResolveInterchangeOutputDirectory(path is null ? null : Path.GetDirectoryName(path), Path.Combine(".runic-translations", "export"), allowRootedOutput),
@@ -609,13 +611,12 @@ internal sealed class EditorWorkspace : IDisposable
             TranslationXliffImportResult import = TranslationInterchange.ImportXliff21(bytes);
             var refusals = new List<EditorInterchangeRefusal>();
             CollectCatalogRefusals(catalog, import, refusals);
-            CollectXliffSourceRefusals(bytes, catalog, refusals);
+            CollectUnitRefusals(catalog, import, refusals);
 
-            Dictionary<string, TranslationMf2Document> importedMessages = import.Messages
-                .ToDictionary(static message => message.MessageId, StringComparer.Ordinal);
-            Dictionary<string, string> importedValues = importedMessages.ToDictionary(
-                static pair => pair.Key,
-                static pair => StrictUtf8.GetString(pair.Value.Bytes.Span).TrimEnd('\r', '\n'),
+            // Only applied units carry messages; untranslated, empty and selector units are skipped per unit.
+            Dictionary<string, string> importedValues = import.Messages.ToDictionary(
+                static message => message.MessageId,
+                static message => StrictUtf8.GetString(message.Bytes.Span).TrimEnd('\r', '\n'),
                 StringComparer.Ordinal);
             if (!string.Equals(import.SourceLocale, catalog.SourceLocale, StringComparison.Ordinal))
                 refusals.Add(new EditorInterchangeRefusal("EDITOR-SOURCE-LOCALE-MISMATCH",
@@ -637,71 +638,43 @@ internal sealed class EditorWorkspace : IDisposable
                 static resource => resource.Key,
                 static resource => resource.Text.TrimEnd('\r', '\n'),
                 StringComparer.Ordinal);
-            string configPath = FindMf2ProjectConfig()!;
-            var documents = new List<PreparedInterchangeDocument>();
-            string manifestContent = state.Files.Single(file => file.Kind == DocumentKind.Manifest).Content;
-            bool rmf2 = state.Files.Any(file => file.Kind == DocumentKind.Resource && file.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase));
-            Rmf2Workspace? rmf2Workspace = null;
-            Dictionary<string, byte[]>? rmf2Sources = null;
-            Dictionary<string, string>? rmf2ExpectedRevisions = null;
-            if (rmf2)
-            {
-                rmf2Sources = state.Files
-                    .Where(file => file.Kind == DocumentKind.Resource && file.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
-                    .ToDictionary(static file => file.Path, static file => StrictUtf8.GetBytes(file.Content), StringComparer.Ordinal);
-                rmf2ExpectedRevisions = rmf2Sources.ToDictionary(static pair => pair.Key, static pair => Revision(pair.Value), StringComparer.Ordinal);
-                rmf2Workspace = new Rmf2Workspace(
-                    _root,
-                    Source(NormalizeRelativePath(Path.GetRelativePath(_root, configPath)), manifestContent),
-                    rmf2Sources.Select(static pair => Source(pair.Key, StrictUtf8.GetString(pair.Value))),
-                    cancellationToken);
-            }
             var changes = new List<EditorKeyChange>();
+            var values = new Dictionary<string, string>(StringComparer.Ordinal);
             bool overflowed = false;
             int added = 0, changed = 0, removed = 0, unchanged = 0;
             foreach ((string key, string after) in importedValues.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
             {
                 string? before = direct.GetValueOrDefault(key);
-                if (!direct.ContainsKey(key)) added += 1;
-                else if (string.Equals(before, after, StringComparison.Ordinal)) unchanged += 1;
+                // Equivalent MF2 spellings of the same text (escapes, quoting) are unchanged.
+                bool same = before is not null && string.Equals(TranslationInterchangePattern.Canonical(before), TranslationInterchangePattern.Canonical(after), StringComparison.Ordinal);
+                if (before is null) added += 1;
+                else if (same) unchanged += 1;
                 else changed += 1;
-                Push(ref changes, ref overflowed, new EditorKeyChange(key, direct.ContainsKey(key) ? "changed" : "added", before, after, null, null));
-                if (string.Equals(before, after, StringComparison.Ordinal)) continue;
-                if (rmf2)
-                {
-                    ApplyRmf2InterchangeValue(
-                        rmf2Workspace!,
-                        rmf2Sources!,
-                        import.TargetLocale!,
-                        key,
-                        after);
-                    continue;
-                }
-                string targetPath = DirectInterchangeTargetPath(state, configPath, manifestContent, import.TargetLocale!, key);
-                WorkspaceFile? target = state.Files.FirstOrDefault(file => string.Equals(file.Path, targetPath, StringComparison.Ordinal));
-                byte[]? original = target is null ? null : StrictUtf8.GetBytes(target.Content);
-                documents.Add(new PreparedInterchangeDocument(
-                    targetPath,
-                    target?.Revision,
-                    original,
-                    importedMessages[key].Bytes.ToArray()));
+                Push(ref changes, ref overflowed, new EditorKeyChange(key, before is not null ? "changed" : "added", before, after, null, null));
+                if (!same) values[key] = after;
             }
 
-            if (rmf2)
+            // The shared Tooling writer: an existing translation changes in place, a missing one is added
+            // beside its base resource (the target .rmf2 file, or the target locale's .mf2 directory).
+            string configPath = FindMf2ProjectConfig()!;
+            string manifestContent = state.Files.Single(file => file.Kind == DocumentKind.Manifest).Content;
+            TranslationSource[] resources = state.Files
+                .Where(static file => file.Kind == DocumentKind.Resource)
+                .Select(static file => Source(file.Path, file.Content))
+                .ToArray();
+            IReadOnlyList<TranslationSourceEdit> edits = TranslationInterchangeSourceWriter.Plan(
+                _root,
+                Source(NormalizeRelativePath(Path.GetRelativePath(_root, configPath)), manifestContent),
+                resources,
+                state.Compilation,
+                import.TargetLocale!,
+                values,
+                cancellationToken);
+            var documents = edits.Select(edit =>
             {
-                foreach (KeyValuePair<string, byte[]> pair in rmf2Sources!.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
-                {
-                    if (rmf2ExpectedRevisions!.TryGetValue(pair.Key, out string? expected) &&
-                        string.Equals(expected, Revision(pair.Value), StringComparison.Ordinal))
-                        continue;
-                    WorkspaceFile? original = state.Files.FirstOrDefault(file => file.Kind == DocumentKind.Resource && file.Path == pair.Key);
-                    documents.Add(new PreparedInterchangeDocument(
-                        pair.Key,
-                        original?.Revision,
-                        original is null ? null : StrictUtf8.GetBytes(original.Content),
-                        pair.Value));
-                }
-            }
+                WorkspaceFile? original = state.Files.FirstOrDefault(file => file.Kind == DocumentKind.Resource && string.Equals(file.Path, edit.Path, StringComparison.Ordinal));
+                return new PreparedInterchangeDocument(edit.Path, original?.Revision, original is null ? null : StrictUtf8.GetBytes(original.Content), edit.Bytes);
+            }).ToList();
 
             Rmf2ProjectCompilation proposed = CompileWithInterchangeDocuments(state.Files, documents, cancellationToken);
             if (!proposed.Success)
@@ -725,7 +698,7 @@ internal sealed class EditorWorkspace : IDisposable
                 Push(ref changes, ref overflowed, new EditorKeyChange(entry.Key, "state-change", null, null, existing?.State ?? "draft", TranslationReviewStates.ToWire(entry.State)));
             }
 
-            List<TranslationEditorStateEntry> merged = MergeImportedEntries(sidecar, import.Review.Entries);
+            List<TranslationEditorStateEntry> merged = MergeImportedEntries(sidecar, import.Review.Entries, catalog, BaseValues(state));
             var prepared = new PreparedInterchangeImport(
                 ResolveImportSourcePath(path),
                 SHA256.HashData(bytes),
@@ -885,7 +858,7 @@ internal sealed class EditorWorkspace : IDisposable
                     Push(ref changes, ref overflowed, new EditorReviewChange(entry.Key, entry.Locale, "changed", existing.State, TranslationReviewStates.ToWire(entry.State)));
                 }
             }
-            List<TranslationEditorStateEntry> merged = MergeImportedEntries(sidecar, import.Entries);
+            List<TranslationEditorStateEntry> merged = MergeImportedEntries(sidecar, import.Entries, catalog, BaseValues(state));
             var prepared = new PreparedInterchangeImport(
                 ResolveImportSourcePath(path),
                 SHA256.HashData(bytes),
@@ -1006,33 +979,95 @@ internal sealed class EditorWorkspace : IDisposable
     private string ReportedOutputPath(string fullPath) =>
         IsWithinSourceRoot(_root, fullPath) ? Path.GetRelativePath(_root, fullPath).Replace('\\', '/') : fullPath;
 
+    // Review data for export. Each entry carries the per-unit source fingerprint of its key, so one edited key no
+    // longer voids every approval. An entry the editor recorded against an older source (its fnv1a64 marker no
+    // longer matches the current base value, as review-model.ts computes it) keeps that marker: an approval is
+    // then exported as needs-review and reported as REVIEW-STALE instead of being stamped as current.
     private static TranslationInterchangeReview BuildExportReview(
         TranslationEditorStateLoadResult sidecar,
-        TranslationInterchangeProjection catalog)
+        TranslationInterchangeProjection catalog,
+        Dictionary<string, string> baseValues)
     {
-        var keys = new HashSet<string>(catalog.CanonicalUnits.Select(static value => value.Key), StringComparer.Ordinal);
+        IReadOnlyDictionary<string, string> fingerprints = catalog.SourceFingerprints;
         var locales = new HashSet<string>(
             catalog.Locales.Where(locale => !string.Equals(locale.Tag, catalog.SourceLocale, StringComparison.Ordinal)).Select(static locale => locale.Tag),
             StringComparer.Ordinal);
         var entries = sidecar.State.Entries
-            .Where(entry => keys.Contains(entry.Key) && locales.Contains(entry.Locale))
-            .Select(entry => new TranslationInterchangeReviewEntry(
-                entry.Key,
-                entry.Locale,
-                TranslationReviewStates.TryParse(entry.State, out TranslationReviewState state) ? state : throw new InvalidDataException("Unknown review state '" + entry.State + "'."),
-                entry.Note,
-                string.Equals(entry.State, "approved", StringComparison.Ordinal) ? catalog.TextProfileFingerprint : null))
+            .Where(entry => fingerprints.ContainsKey(entry.Key) && locales.Contains(entry.Locale))
+            .Select(entry =>
+            {
+                TranslationReviewState state = TranslationReviewStates.TryParse(entry.State, out TranslationReviewState parsed) ? parsed : throw new InvalidDataException("Unknown review state '" + entry.State + "'.");
+                bool stale = entry.SourceFingerprint is not null && baseValues.TryGetValue(entry.Key, out string? value) &&
+                    !string.Equals(entry.SourceFingerprint, EditorSourceFingerprint(value), StringComparison.Ordinal);
+                string? fingerprint = !stale ? fingerprints[entry.Key] : state == TranslationReviewState.Approved ? entry.SourceFingerprint : null;
+                return new TranslationInterchangeReviewEntry(entry.Key, entry.Locale, state, entry.Note, fingerprint);
+            })
             .ToArray();
         return new TranslationInterchangeReview(catalog.CatalogId, entries);
     }
 
+    // The base-locale value of every key as the frontend fingerprints it: an .rmf2 entry's message, a direct
+    // .mf2 file's content.
+    private static Dictionary<string, string> BaseValues(WorkspaceState state)
+    {
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (state.Compilation.Project is not { } project) return values;
+        var files = state.Files.Where(static file => file.Kind == DocumentKind.Resource).ToDictionary(static file => file.Path, StringComparer.Ordinal);
+        var nodes = new Dictionary<string, IReadOnlyList<Rmf2ResourceNode>>(StringComparer.Ordinal);
+        foreach (Rmf2TranslationV5 resource in project.Locales.Single(locale => locale.Tag == project.DefaultLocale).DirectResources)
+        {
+            if (!files.TryGetValue(resource.SourceLocation.Path, out WorkspaceFile? file)) continue;
+            if (file.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)) { values[resource.Key] = file.Content; continue; }
+            if (!nodes.TryGetValue(file.Path, out IReadOnlyList<Rmf2ResourceNode>? parsed))
+                nodes[file.Path] = parsed = Rmf2ResourceReader.Read(Source(file.Path, file.Content)).Nodes;
+            if (parsed.FirstOrDefault(node => !node.IsGroup && node.NameLocation.StartByte == resource.SourceLocation.StartByte) is { Message: { } message })
+                values[resource.Key] = message;
+        }
+        return values;
+    }
+
+    /// <summary>The frontend's review fingerprint (<c>sourceFingerprint</c> in review-model.ts): FNV-1a 64 over the UTF-16 code units of <c>JSON.stringify(value)</c>.</summary>
+    internal static string EditorSourceFingerprint(string value)
+    {
+        var json = new StringBuilder(value.Length + 2).Append('"');
+        for (int index = 0; index < value.Length; index++)
+        {
+            char character = value[index];
+            switch (character)
+            {
+                case '"': json.Append("\\\""); break;
+                case '\\': json.Append("\\\\"); break;
+                case '\b': json.Append("\\b"); break;
+                case '\f': json.Append("\\f"); break;
+                case '\n': json.Append("\\n"); break;
+                case '\r': json.Append("\\r"); break;
+                case '\t': json.Append("\\t"); break;
+                default:
+                    if (char.IsHighSurrogate(character) && index + 1 < value.Length && char.IsLowSurrogate(value[index + 1])) json.Append(character).Append(value[++index]);
+                    else if (character < 0x20 || char.IsSurrogate(character)) json.Append("\\u").Append(((int)character).ToString("x4", CultureInfo.InvariantCulture));
+                    else json.Append(character);
+                    break;
+            }
+        }
+        json.Append('"');
+        ulong hash = 0xcbf29ce484222325;
+        foreach (char unit in json.ToString()) hash = unchecked((hash ^ unit) * 0x100000001b3);
+        return "fnv1a64:" + hash.ToString("x16", CultureInfo.InvariantCulture);
+    }
+
     // Imported entries replace matching identities wholesale (interchange cannot
     // express samples, so samples survive from the current sidecar); unrelated
-    // identities and terminology are preserved.
+    // identities and terminology are preserved. An entry made for the current
+    // source gets the editor's marker of the current base value, so a later
+    // change to that value makes an imported approval stale on export, as it
+    // does for one made in the editor.
     private static List<TranslationEditorStateEntry> MergeImportedEntries(
         TranslationEditorStateLoadResult sidecar,
-        IReadOnlyList<TranslationInterchangeReviewEntry> imported)
+        IReadOnlyList<TranslationInterchangeReviewEntry> imported,
+        TranslationInterchangeProjection catalog,
+        Dictionary<string, string> baseValues)
     {
+        IReadOnlyDictionary<string, string> fingerprints = catalog.SourceFingerprints;
         Dictionary<string, TranslationEditorStateEntry> merged = sidecar.State.Entries.ToDictionary(
             static entry => Identity(entry.Key, entry.Locale), StringComparer.Ordinal);
         foreach (TranslationInterchangeReviewEntry entry in imported)
@@ -1043,7 +1078,8 @@ internal sealed class EditorWorkspace : IDisposable
                 entry.Locale,
                 TranslationReviewStates.ToWire(entry.State),
                 entry.Note,
-                null,
+                fingerprints.TryGetValue(entry.Key, out string? current) && string.Equals(entry.SourceFingerprint, current, StringComparison.Ordinal) &&
+                    baseValues.TryGetValue(entry.Key, out string? value) ? EditorSourceFingerprint(value) : null,
                 existing?.Samples ?? new SortedDictionary<string, string>(StringComparer.Ordinal));
         }
         return merged.Values
@@ -1070,93 +1106,6 @@ internal sealed class EditorWorkspace : IDisposable
             cancellationToken);
     }
 
-    private static void ApplyRmf2InterchangeValue(
-        Rmf2Workspace workspace,
-        Dictionary<string, byte[]> sources,
-        string locale,
-        string logicalKey,
-        string value)
-    {
-        string[] logicalPath = logicalKey.Split('_', StringSplitOptions.RemoveEmptyEntries);
-        if (logicalPath.Length == 0)
-            throw new TranslationAuthoringException("An imported RMF2 key is empty.");
-
-        // Prefer the target locale's existing declaration. This keeps its
-        // physical file, comments, and formatting intact while changing only
-        // the message body.
-        foreach (Rmf2ResourceDocument document in workspace.Documents
-            .Where(document => string.Equals(Path.GetFileNameWithoutExtension(document.Source.Path), locale, StringComparison.OrdinalIgnoreCase)))
-        {
-            Rmf2ResourceNode? node = document.Nodes.FirstOrDefault(node =>
-                !node.IsGroup && string.Equals(string.Join('_', workspace.LogicalPath(document.Source.Path, node)), logicalKey, StringComparison.Ordinal));
-            if (node is null) continue;
-            sources[document.Source.Path] = Rmf2ResourceWriter.SetMessage(
-                new TranslationSource(document.Source.Path, sources[document.Source.Path]), node.Key, value);
-            return;
-        }
-
-        // A missing target translation follows the base resource's namespace
-        // and mount. Replace only the locale file name, then use the writer's
-        // explicit path operation; never synthesize a legacy .mf2 path.
-        Rmf2ResourceDocument? baseDocument = workspace.Documents
-            .Where(document => string.Equals(Path.GetFileNameWithoutExtension(document.Source.Path), workspace.BaseLocale, StringComparison.OrdinalIgnoreCase))
-            .FirstOrDefault(document => document.Nodes.Any(node =>
-                !node.IsGroup && string.Equals(string.Join('_', workspace.LogicalPath(document.Source.Path, node)), logicalKey, StringComparison.Ordinal)));
-        IReadOnlyList<string> resolvedLogicalPath = logicalPath;
-        string targetPath;
-        if (baseDocument is not null)
-        {
-            Rmf2ResourceNode node = baseDocument.Nodes.First(node =>
-                !node.IsGroup && string.Equals(string.Join('_', workspace.LogicalPath(baseDocument.Source.Path, node)), logicalKey, StringComparison.Ordinal));
-            resolvedLogicalPath = workspace.LogicalPath(baseDocument.Source.Path, node);
-            targetPath = Path.Combine(Path.GetDirectoryName(baseDocument.Source.Path) ?? string.Empty, locale + ".rmf2").Replace('\\', '/');
-        }
-        else
-        {
-            targetPath = locale + ".rmf2";
-        }
-
-        byte[] existing = sources.GetValueOrDefault(targetPath, []);
-        string[] localPath = workspace.LocalPath(targetPath, resolvedLogicalPath).ToArray();
-        sources[targetPath] = Rmf2ResourceWriter.AddMessage(
-            new TranslationSource(targetPath, existing), localPath, value);
-    }
-
-    private string DirectInterchangeTargetPath(
-        WorkspaceState state,
-        string configPath,
-        string manifestContent,
-        string targetLocale,
-        string logicalKey)
-    {
-        Rmf2ProjectV5 project = state.Compilation.Project
-            ?? throw new TranslationAuthoringException("The RMF2 v5 project is unavailable.");
-        Rmf2TranslationV5? existing = project.Locales
-            .Single(locale => string.Equals(locale.Tag, targetLocale, StringComparison.Ordinal))
-            .DirectResources.SingleOrDefault(resource => string.Equals(resource.Key, logicalKey, StringComparison.Ordinal));
-        if (existing is not null) return existing.SourceLocation.Path;
-
-        Rmf2TranslationV5 source = project.Locales
-            .Single(locale => string.Equals(locale.Tag, project.DefaultLocale, StringComparison.Ordinal))
-            .DirectResources.SingleOrDefault(resource => string.Equals(resource.Key, logicalKey, StringComparison.Ordinal))
-            ?? throw new TranslationAuthoringException("The imported direct MF2 key has no canonical source resource.");
-        // Resolve against the manifest this plan compiled, not a later disk state.
-        TranslationManifestLayout layout = TranslationManifestReader.Read(StrictUtf8.GetBytes(manifestContent), Path.GetDirectoryName(configPath)!);
-        if (!layout.IsValid) throw new TranslationAuthoringException(layout.Error!);
-        IReadOnlyList<string> sourceRoots = layout.SourceRoots;
-
-        string sourceFullPath = ContainedPath(source.SourceLocation.Path);
-        string[] matches = sourceRoots.Where(root => IsWithinSourceRoot(root, sourceFullPath)).ToArray();
-        if (matches.Length != 1)
-            throw new TranslationAuthoringException("The canonical direct MF2 resource does not match exactly one source root.");
-        string[] relative = NormalizeRelativePath(Path.GetRelativePath(matches[0], sourceFullPath))
-            .Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (relative.Length != 2 || !string.Equals(relative[0], project.DefaultLocale, StringComparison.OrdinalIgnoreCase))
-            throw new TranslationAuthoringException("Direct MF2 resources require a locale directory and physical message filename.");
-        string targetFullPath = Path.Combine(matches[0], targetLocale, relative[1]);
-        return NormalizeRelativePath(Path.GetRelativePath(_root, targetFullPath));
-    }
-
     private static async Task<bool> RollBackInterchangeDocumentsAsync(
         List<(PreparedInterchangeDocument Document, string FullPath)> committed,
         CancellationToken cancellationToken)
@@ -1178,23 +1127,22 @@ internal sealed class EditorWorkspace : IDisposable
         return succeeded;
     }
 
-    private static void CollectXliffSourceRefusals(
-        byte[] bytes,
+    // A unit the import refused blocks the editor's preview with its own code. A translation of a source that
+    // changed after export is refused as EDITOR-SOURCE-MISMATCH: the per-unit fingerprint differs.
+    private static void CollectUnitRefusals(
         TranslationInterchangeProjection catalog,
+        TranslationXliffImportResult import,
         List<EditorInterchangeRefusal> refusals)
     {
-        var liveSources = catalog.CanonicalUnits.ToDictionary(static value => value.Key, static value => value.Text, StringComparer.Ordinal);
-        using var stream = new MemoryStream(bytes, writable: false);
-        using XmlReader reader = XmlReader.Create(stream, new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null });
-        XDocument document = XDocument.Load(reader, LoadOptions.None);
-        XNamespace xliff = "urn:oasis:names:tc:xliff:document:2.0";
-        foreach (XElement unit in document.Descendants(xliff + "unit"))
+        IReadOnlyDictionary<string, string> live = catalog.SourceFingerprints;
+        foreach (TranslationXliffUnitResult unit in import.Units)
         {
-            string? key = unit.Attribute("id")?.Value;
-            string? source = unit.Element(xliff + "segment")?.Element(xliff + "source")?.Value;
-            if (key is null || source is null || !liveSources.TryGetValue(key, out string? liveSource) || string.Equals(source, liveSource, StringComparison.Ordinal)) continue;
-            refusals.Add(new EditorInterchangeRefusal("EDITOR-SOURCE-MISMATCH",
-                EditorNotice.Create("ui_backend_refusal_6", ("value1", key!))));
+            if (unit.Outcome == TranslationXliffUnitOutcome.Refused)
+                refusals.Add(new EditorInterchangeRefusal(unit.Code!, EditorNotice.External(unit.Key + ": " + unit.Message)));
+            else if (unit.Outcome == TranslationXliffUnitOutcome.Applied && live.TryGetValue(unit.Key, out string? fingerprint) &&
+                !string.Equals(unit.SourceFingerprint, fingerprint, StringComparison.Ordinal))
+                refusals.Add(new EditorInterchangeRefusal("EDITOR-SOURCE-MISMATCH",
+                    EditorNotice.Create("ui_backend_refusal_6", ("value1", unit.Key!))));
         }
     }
 
@@ -1219,9 +1167,10 @@ internal sealed class EditorWorkspace : IDisposable
         IReadOnlyList<TranslationInterchangeReviewEntry> entries,
         List<EditorInterchangeRefusal> refusals)
     {
+        IReadOnlyDictionary<string, string> fingerprints = catalog.SourceFingerprints;
         foreach (TranslationInterchangeReviewEntry entry in entries.Where(static entry => entry.State == TranslationReviewState.Approved))
         {
-            if (string.Equals(entry.SourceFingerprint, catalog.TextProfileFingerprint, StringComparison.Ordinal)) continue;
+            if (fingerprints.TryGetValue(entry.Key, out string? fingerprint) && string.Equals(entry.SourceFingerprint, fingerprint, StringComparison.Ordinal)) continue;
             refusals.Add(new EditorInterchangeRefusal("EDITOR-APPROVAL-FINGERPRINT",
                 EditorNotice.Create("ui_backend_refusal_10", ("value1", entry.Key!), ("value2", entry.Locale!))));
         }

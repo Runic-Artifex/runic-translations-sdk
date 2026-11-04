@@ -1,0 +1,18 @@
+{
+  "$schema": "runic.translations.interchange-review/2",
+  "catalog": "shop",
+  "entries": [
+    {
+      "key": "farewell",
+      "locale": "de",
+      "state": "approved",
+      "sourceFingerprint": "sha256:0cb2cc444fba7db60167b0e3b5bbe325dc5f992e549e39198ae5c17552c820f4"
+    },
+    {
+      "key": "greeting",
+      "locale": "de",
+      "state": "approved",
+      "sourceFingerprint": "sha256:9c34a174e1058359a61481b8c19fdd032e2bcd3105761824d4c5d9fe31dd98fb"
+    }
+  ]
+}

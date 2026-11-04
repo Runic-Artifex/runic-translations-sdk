@@ -76,6 +76,8 @@ internal sealed record Rmf2MessageContractV5(int Id, string Key, IReadOnlyList<s
 internal sealed record Rmf2TranslationV5(string Key, string ContentLocale, Rmf2MessageV5 Message,
     TextSourceLocation SourceLocation, string? Description)
 {
+    /// <summary>The attached <c>@name value</c> properties in source order, without the <c>@</c>, such as <c>param $name - text</c>.</summary>
+    internal IReadOnlyList<string> Properties { get; init; } = Array.Empty<string>();
     // The authored message text and its @param descriptions by input name, for generated documentation.
     internal string? SourceText { get; init; }
     internal IReadOnlyDictionary<string, string>? ParameterDescriptions { get; init; }
