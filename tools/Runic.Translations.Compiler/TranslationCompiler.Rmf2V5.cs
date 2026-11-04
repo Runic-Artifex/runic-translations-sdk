@@ -41,7 +41,8 @@ public static partial class TranslationCompiler
     private sealed record Rmf2ProjectEntryV5(Rmf2ProjectSourceV5 Source, Rmf2LinkedMarkupV5 Linked)
     {
         internal Rmf2TranslationV5 Translation => new(Source.Key, Source.Locale, Linked.Message, Source.Node.NameLocation,
-            Source.Node.Comments.Count == 0 ? null : string.Join("\n", Source.Node.Comments)) { Properties = Source.Node.Properties };
+            Source.Node.Comments.Count == 0 ? null : string.Join("\n", Source.Node.Comments))
+        { SourceText = Source.Node.Message, ParameterDescriptions = ParameterDescriptionsV5(Source.Node.Properties), Properties = Source.Node.Properties };
     }
 
     internal static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project,
@@ -186,6 +187,11 @@ public static partial class TranslationCompiler
                 !Rmf2ReadableNamesV1.TryCreate(manifest.ClassName, contracts[^1], out _, out string? readableProblem))
                 diagnostics.Add(Rmf2ReadableNamesV1.DiagnosticId, TranslationDiagnosticSeverity.Warning, readableProblem!, pair.Value.Source.Node.NameLocation);
         }
+        // A reference factory whose readable name is another factory's encoded name keeps its encoded name.
+        var referenceProblems = new List<(string Key, string Problem)>();
+        Generation.Rmf2CSharpOutputRendererV5.ReadableReferences(manifest.ClassName, contracts, referenceProblems);
+        foreach ((string key, string problem) in referenceProblems)
+            diagnostics.Add(Rmf2ReadableNamesV1.DiagnosticId, TranslationDiagnosticSeverity.Warning, problem, canonical[key].Source.Node.NameLocation);
         // Allowed extra keys are retained for dynamic consumers, but never add
         // canonical generated API members. Their contracts must still agree.
         var extraContracts = new List<Rmf2MessageContractV5>();
@@ -252,7 +258,8 @@ public static partial class TranslationCompiler
         });
         return Result(new(manifest.Id, manifest.CodeNamespace, manifest.ClassName, manifest.Visibility, manifest.DefaultLocale,
             manifest.UnsupportedLocale, manifest.MissingKey, contracts.AsReadOnly(), extraContracts.AsReadOnly(), linkedLocales.AsReadOnly(), usedContracts,
-            Rmf2ProjectMarkupV5.Export(usedContracts, contracts.Concat(extraContracts).ToArray(), linkedLocales), HashV5(Encoding.UTF8.GetBytes(callerContract)), SourceHashV5(project, sources)));
+            Rmf2ProjectMarkupV5.Export(usedContracts, contracts.Concat(extraContracts).ToArray(), linkedLocales), HashV5(Encoding.UTF8.GetBytes(callerContract)), SourceHashV5(project, sources))
+            { ReferenceFallbackText = manifest.ReferenceFallbackText });
 
         Rmf2ProjectEntryV5? Compile(Rmf2ProjectSourceV5 source, IReadOnlyList<Rmf2InputV5>? callerInputs)
         {
@@ -460,6 +467,23 @@ public static partial class TranslationCompiler
             else segments.Add(part);
         }
         return (combined.StartsWith('/') ? "/" : "") + string.Join("/", segments) + (segments.Count == 0 ? "" : "/");
+    }
+
+    // "@param $name - description" (the dash is optional) by NFC input name; null when the entry documents none.
+    private static Dictionary<string, string>? ParameterDescriptionsV5(IReadOnlyList<string> properties)
+    {
+        Dictionary<string, string>? result = null;
+        foreach (string property in properties)
+        {
+            if (!property.StartsWith("param ", StringComparison.Ordinal)) continue;
+            string value = property.Substring("param ".Length).Trim();
+            if (!value.StartsWith('$')) continue;
+            string[] parts = value.Split(' ', 2);
+            string name = parts[0].Substring(1).Normalize(NormalizationForm.FormC), description = parts.Length < 2 ? "" : parts[1].Trim();
+            if (description.StartsWith('-')) description = description.Substring(1).Trim();
+            if (name.Length != 0 && description.Length != 0) (result ??= new Dictionary<string, string>(StringComparer.Ordinal))[name] = description;
+        }
+        return result;
     }
 
     private static void ValidateMetadataV5(Rmf2ResourceNode node, Rmf2MessageV5 message, DiagnosticBag diagnostics)

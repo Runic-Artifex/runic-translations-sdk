@@ -230,6 +230,12 @@ is reported once at `code.className`. Reserved message keys are the
 to the message key. The message stays available through its encoded member.
 Rename the key, input or slot to fix it.
 
+RTR0069 is also reported when a message key is the encoded name of another
+message's reference factory: key `ToString` is reserved, so
+`Class.References.r_546f537472696e67` is its factory, and a key
+`r_546f537472696e67` cannot use that name too. Its factory keeps its own
+encoded name; rename the key to fix it.
+
 RTR0069 is reported at the `.rmf2` or `runic.json` location of the name, not in
 a `.cs` file, so an `.editorconfig` `[*.cs]` section does not apply. To change
 its severity, use one of the same mechanisms as RTR0068:

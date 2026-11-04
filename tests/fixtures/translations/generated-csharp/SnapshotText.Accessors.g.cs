@@ -15,7 +15,8 @@ public sealed partial class SnapshotText
         __translationManager = manager ?? throw new global::System.ArgumentNullException(nameof(manager));
     }
 
-    /// <summary>Formats <c>greeting</c>.</summary>
+    /// <summary>Hello {$name}</summary>
+    /// <remarks>Formats <c>greeting</c>.</remarks>
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
     public string r_6772656574696e67(string r_6e616d65)
     {
@@ -27,13 +28,15 @@ public sealed partial class SnapshotText
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
     public string r_args_r_6772656574696e67(global::System.ReadOnlySpan<global::Runic.Translations.TextArgument> arguments) => __translationManager.Current.Format(SnapshotTextKeys.r_6772656574696e67, arguments);
 
-    /// <summary>Formats <c>help</c>.</summary>
+    /// <summary>Read the {#link}guide{/link}.</summary>
+    /// <remarks>Formats <c>help</c>.</remarks>
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
     public global::Runic.Translations.LocalizedTextContent r_68656c70 => __translationManager.Current.FormatContent(SnapshotTextKeys.r_68656c70, global::System.ReadOnlySpan<global::Runic.Translations.TextArgument>.Empty);
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
     public global::Runic.Translations.LocalizedTextContent r_args_r_68656c70(global::System.ReadOnlySpan<global::Runic.Translations.TextArgument> arguments) => __translationManager.Current.FormatContent(SnapshotTextKeys.r_68656c70, arguments);
 
-    /// <summary>Formats <c>items</c>.</summary>
+    /// <summary>{$count} items</summary>
+    /// <remarks>Formats <c>items</c>.</remarks>
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
     public string r_6974656d73(long r_636f756e74)
     {
@@ -44,4 +47,55 @@ public sealed partial class SnapshotText
     }
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
     public string r_args_r_6974656d73(global::System.ReadOnlySpan<global::Runic.Translations.TextArgument> arguments) => __translationManager.Current.Format(SnapshotTextKeys.r_6974656d73, arguments);
+
+    private static global::Runic.Translations.ITranslationSnapshot? __referenceSnapshot;
+
+    // A reference with the base locale's text as its fallback text, from one snapshot of the embedded catalog created on
+    // first use. The fallback text repeats the arguments' text, so for long arguments it can break a transport limit that
+    // the arguments alone keep; the reference then has no fallback text.
+    private static global::Runic.Translations.TranslationReference __Reference(string key, global::System.Collections.Generic.IReadOnlyDictionary<string, global::Runic.Translations.TranslationReferenceArgument>? arguments,
+        global::Runic.Translations.TranslationKey message, global::Runic.Translations.TextArgument[] fallbackArguments)
+    {
+        string fallbackText = global::System.Threading.LazyInitializer.EnsureInitialized(ref __referenceSnapshot, static () => global::@Snapshot.@SnapshotTextCatalog.CreateProvider()
+            .GetSnapshotAsync("en").AsTask().GetAwaiter().GetResult()).Format(message, fallbackArguments);
+        if (fallbackText.Length <= global::Runic.Translations.TranslationTransport.MaximumFallbackLength)
+        {
+            try { return new global::Runic.Translations.TranslationReference("snapshot", "sha256:a687dec2a95d67bc25c81e59a6874d63eed871ee966b9f9f5376e01fc9f70904", key, arguments, fallbackText); }
+            catch (global::System.ArgumentOutOfRangeException) { }
+        }
+        return new global::Runic.Translations.TranslationReference("snapshot", "sha256:a687dec2a95d67bc25c81e59a6874d63eed871ee966b9f9f5376e01fc9f70904", key, arguments, null);
+    }
+
+    /// <summary>Typed <see cref="global::Runic.Translations.TranslationReference"/> factories for the plain-text messages of the snapshot translation catalog.</summary>
+    /// <remarks>A reference names a message and its arguments; a reader shows it in its own locale with <c>TranslationReferenceResolver</c> or the ESM <c>resolveTextReference</c>. Each reference carries the base locale's text as its fallback text.</remarks>
+    public static class References
+    {
+        /// <summary>Hello {$name}</summary>
+        /// <remarks>Formats <c>greeting</c>.</remarks>
+        /// <param name="name">Input <c>name</c>.</param>
+        public static global::Runic.Translations.TranslationReference @greeting(string @name) =>
+            global::@Snapshot.@SnapshotText.__Reference("greeting",
+            new global::System.Collections.Generic.Dictionary<string, global::Runic.Translations.TranslationReferenceArgument>(global::System.StringComparer.Ordinal)
+            {
+                ["name"] = new global::Runic.Translations.TranslationReferenceArgument(global::Runic.Translations.TextArgumentType.String, @name),
+            },
+            global::@Snapshot.@SnapshotTextKeys.r_6772656574696e67, new global::Runic.Translations.TextArgument[]
+            {
+                global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument("name", new global::Runic.Translations.TextArgument("_", @name)),
+            });
+
+        /// <summary>{$count} items</summary>
+        /// <remarks>Formats <c>items</c>.</remarks>
+        /// <param name="count">Input <c>count</c>.</param>
+        public static global::Runic.Translations.TranslationReference @items(long @count) =>
+            global::@Snapshot.@SnapshotText.__Reference("items",
+            new global::System.Collections.Generic.Dictionary<string, global::Runic.Translations.TranslationReferenceArgument>(global::System.StringComparer.Ordinal)
+            {
+                ["count"] = new global::Runic.Translations.TranslationReferenceArgument(global::Runic.Translations.TextArgumentType.Int, @count.ToString(global::System.Globalization.CultureInfo.InvariantCulture)),
+            },
+            global::@Snapshot.@SnapshotTextKeys.r_6974656d73, new global::Runic.Translations.TextArgument[]
+            {
+                global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument("count", new global::Runic.Translations.TextArgument("_", @count)),
+            });
+    }
 }

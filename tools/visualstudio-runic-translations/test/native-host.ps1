@@ -71,8 +71,10 @@ try {
     $german = Wait-For { Named $locale 'de' ([Windows.Automation.ControlType]::ListItem) } 'German locale option is missing.'
     $german.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
     $locale.GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern).Collapse()
-    Render $preview
+    # Selecting a locale renders without the button.
     Wait-For { if ((Texts $preview) -like '*Bereit*') { $true } } 'German preview did not render.' | Out-Null
+    $samples = Named $preview 'Preview samples' ([Windows.Automation.ControlType]::ComboBox)
+    if (!$samples) { throw 'Preview sample selector is missing.' }
     Close-Preview $preview; $preview = $null
     $original = [IO.File]::ReadAllText("$fixture\en.rmf2")
     $document.Activate(); $document.Selection.SelectAll(); $document.Selection.Insert($original.Replace('plain = Payment details', 'plain = UNSAVED preview marker'))
@@ -84,7 +86,7 @@ try {
     $dte.ExecuteCommand('Tools.RunicPreviewMessage', '')
     $preview = Preview 'plain'
     Wait-For { if ((Texts $preview) -like '*UNSAVED preview marker*') { $true } } 'Restart lost the unsaved buffer.' | Out-Null
-    $receipt = @{sessionId=[Diagnostics.Process]::GetCurrentProcess().SessionId;windowName='Visual Studio RMF2';snapshotName='preview, validation, locale, unsaved restart';ideProcessId=$ideId;serverBefore=$before;serverAfter=$after.ProcessId;checks=@('selected semantic project','registered preview command','native inert rich content','invalid-number recovery','locale selection','registered restart command','unsaved buffer after restart')}
+    $receipt = @{sessionId=[Diagnostics.Process]::GetCurrentProcess().SessionId;windowName='Visual Studio RMF2';snapshotName='preview, validation, locale, unsaved restart';ideProcessId=$ideId;serverBefore=$before;serverAfter=$after.ProcessId;checks=@('selected semantic project','registered preview command','native inert rich content','invalid-number recovery','locale selection','sample selector','registered restart command','unsaved buffer after restart')}
 }
 finally {
     if ($preview) { Close-Preview $preview }
