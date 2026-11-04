@@ -4,11 +4,10 @@ const minimumInt64 = -9223372036854775808n;
 const maximumInt64 = 9223372036854775807n;
 const localeSet = new Set(locales);
 const limits = Object.freeze({ maximumDocumentBytes: 8388608, maximumDepth: 64, maximumMessages: 50000, maximumPatternBytes: 65536, maximumArgumentsPerMessage: 32 });
-// A validated message wrapper maps to its message contract (see generatedContract).
+// A validated message wrapper maps to its message contract (see contractOf).
 const validatedMessages = new WeakMap();
-// Contracts by key, for renderers that receive formatted content; filled as message modules load and artifacts decode.
-const messageRegistry = Object.create(null);
-const generatedContracts = new WeakSet();
+const contractCopies = new WeakMap();
+let structuredMessages;
 const dynamicContracts = new WeakMap();
 const decodedArtifacts = new WeakSet();
 let localeResolver = () => typeof document === "undefined" ? baseLocale : (document.documentElement.lang || baseLocale);
@@ -414,22 +413,31 @@ function compareRanks(left, right) { for (let index = 0; index < left.length; in
 function canonicalCarrier(value, type) { if (type === "decimal") return decimalCanonical(value); if (type === "int64") return value.toString(); if (type === "boolean") return value ? "true" : "false"; return value; }
 
 // A message's contract: its key, inputs and whether it is structured, plus the content profile, slots and document
-// skeletons that validation and renderers need. Each generated message module carries its own contract, so a bundle
-// holds only the contracts of the messages it calls; dynamic.js carries the catalog's whole table.
-export function generatedContract(value) {
-  const contract = Object.freeze({ key: value.key, structured: value.structured === true, inputs: freezeTrusted(value.inputs ?? []),
+// skeletons that validation needs. Each generated message module passes its own contract's data to the freeze functions,
+// so a bundle holds only the contracts of the messages it calls; dynamic.js carries the catalog's whole table. The
+// runtime keeps one frozen copy per data object and registers nothing by key: renderers check content against the
+// catalog's own table (structuredMessage), so no contract made at run time changes how other content renders.
+function contractOf(value) {
+  let contract = isRecord(value) ? contractCopies.get(value) : undefined; if (contract) return contract;
+  if (!isRecord(value) || typeof value.key !== "string" || value.inputs !== undefined && !Array.isArray(value.inputs)) throw new TypeError("A generated v5 message contract is required.");
+  contract = Object.freeze({ key: value.key, structured: value.structured === true, inputs: freezeTrusted(value.inputs ?? []),
     content: value.content ?? "inline", slots: freezeTrusted(value.slots ?? {}), skeletons: freezeTrusted(value.skeletons ?? []),
     contentLocales: value.contentLocales === undefined ? undefined : freezeTrusted(value.contentLocales) });
-  generatedContracts.add(contract); messageRegistry[contract.key] ??= contract;
-  return contract;
+  contractCopies.set(value, contract); return contract;
 }
-function requireContract(contract) { if (!generatedContracts.has(contract)) throw new TypeError("A generated v5 message contract is required."); return contract; }
+// The content kind and slots of each structured message, from the catalog's table above (structuredMessageTable), parsed
+// on first use. Renderers read only this, so content formatted in another process (server load data, postMessage,
+// stored content) renders without its message module, and a bundle that never renders content drops the table.
+function structuredMessage(key) {
+  structuredMessages ??= freezeTrusted(structuredMessageTable());
+  return typeof key === "string" && Object.hasOwn(structuredMessages, key) ? structuredMessages[key] : undefined;
+}
 
 // Compact generated messages. A message of text and plain input placeholders is written as its parts, text strings and
 // [inputName] for {$inputName}; these rebuild the same normalized AST, which freezeGeneratedMessage validates as before.
 export function freezeGeneratedText(contract, contentLocale, text) { return freezeGeneratedPattern(contract, contentLocale, text === "" ? [] : [text]); }
-export function freezeGeneratedPattern(contract, contentLocale, parts) {
-  const key = requireContract(contract).key, inputs = contract.inputs;
+export function freezeGeneratedPattern(value, contentLocale, parts) {
+  const contract = contractOf(value), key = contract.key, inputs = contract.inputs;
   const nodes = parts.map(part => {
     if (typeof part === "string") return { kind: "text", value: part };
     const input = inputs.find(item => item.name === part[0]);
@@ -440,8 +448,8 @@ export function freezeGeneratedPattern(contract, contentLocale, parts) {
     inputs: inputs.map(item => ({ name: item.name, type: item.type })), declarations: [], selectors: [], variants: [{ keys: [], nodes }] } });
 }
 
-export function freezeGeneratedMessage(contract, value) {
-  const error = validateMessageWrapper(value, requireContract(contract), null, contract.key);
+export function freezeGeneratedMessage(data, value) {
+  const contract = contractOf(data), error = validateMessageWrapper(value, contract, null, contract.key);
   if (error) throw new TypeError(`Invalid generated RMF2 v5 message: ${error}.`);
   const result=cloneFreeze(value);validatedMessages.set(result,contract);return result;
 }
@@ -450,7 +458,7 @@ export function freezeGeneratedMessage(contract, value) {
 function dynamicContract(tables, key) {
   let contracts = dynamicContracts.get(tables); if (!contracts) dynamicContracts.set(tables, contracts = new Map());
   let contract = contracts.get(key);
-  if (!contract) { const markup = tables.rmf2Contract.messages?.[key]; contract = generatedContract({ ...markup, key, structured: tables.messageContracts[key].structured, inputs: tables.messageContracts[key].inputs, contentLocales: markup?.contentLocales ?? {} }); contracts.set(key, contract); }
+  if (!contract) { const markup = tables.rmf2Contract.messages?.[key]; contract = contractOf({ ...markup, key, structured: tables.messageContracts[key].structured, inputs: tables.messageContracts[key].inputs, contentLocales: markup?.contentLocales ?? {} }); contracts.set(key, contract); }
   return contract;
 }
 
@@ -781,7 +789,7 @@ function createRendererCore(factory, bindings = [], allowUnboundCustom = false, 
     custom.set(suppliedContract.name,binding.render);
   }
   function render(content,{slots=Object.create(null)}={}) {
-    const messageContract=isRecord(content)&&typeof content.key==="string"?messageRegistry[content.key]:undefined,requirements=messageContract?.slots;if(!isRecord(content)||!["localized-content","localized-document"].includes(content.kind)||!requirements||!isRecord(slots))throw new TypeError("Unknown RMF2 content contract.");
+    const messageContract=isRecord(content)?structuredMessage(content.key):undefined,requirements=messageContract?.slots;if(!isRecord(content)||!["localized-content","localized-document"].includes(content.kind)||!requirements||!isRecord(slots))throw new TypeError("Unknown RMF2 content contract.");
     const document=messageContract.content==="document";
     if(document!==(content.kind==="localized-document"))throw new TypeError("Unknown RMF2 content contract.");
     if(document!==documents)throw new TypeError(document?`'${content.key}' is a document message; render it with createDocumentRenderer.`:`'${content.key}' is an inline message; render it with createInlineRenderer.`);

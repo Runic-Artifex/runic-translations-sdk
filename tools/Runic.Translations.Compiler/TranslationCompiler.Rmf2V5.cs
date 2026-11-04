@@ -187,6 +187,11 @@ public static partial class TranslationCompiler
                 !Rmf2ReadableNamesV1.TryCreate(manifest.ClassName, contracts[^1], out _, out string? readableProblem))
                 diagnostics.Add(Rmf2ReadableNamesV1.DiagnosticId, TranslationDiagnosticSeverity.Warning, readableProblem!, pair.Value.Source.Node.NameLocation);
         }
+        // A reference factory whose readable name is another factory's encoded name keeps its encoded name.
+        var referenceProblems = new List<(string Key, string Problem)>();
+        Generation.Rmf2CSharpOutputRendererV5.ReadableReferences(manifest.ClassName, contracts, referenceProblems);
+        foreach ((string key, string problem) in referenceProblems)
+            diagnostics.Add(Rmf2ReadableNamesV1.DiagnosticId, TranslationDiagnosticSeverity.Warning, problem, canonical[key].Source.Node.NameLocation);
         // Allowed extra keys are retained for dynamic consumers, but never add
         // canonical generated API members. Their contracts must still agree.
         var extraContracts = new List<Rmf2MessageContractV5>();

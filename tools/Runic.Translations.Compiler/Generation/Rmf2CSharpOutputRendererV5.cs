@@ -337,24 +337,38 @@ internal static class Rmf2CSharpOutputRendererV5
     // contract fingerprint and, unless runic.json sets code.referenceFallbackText to false, the base locale's text with these
     // arguments as fallback text. Values are written in their canonical transport form; times and date-times keep whole
     // seconds, the transport's precision. Members use the readable name (the key) where the readable policy allows it and
-    // the encoded name otherwise. Every reference is fully qualified, as no key or input name can capture it.
+    // the encoded name otherwise (see ReadableReferences). Every reference is fully qualified, as no key or input name can
+    // capture it.
     private static void WriteReferences(GenerationWriter writer, Rmf2ProjectV5 project, Rmf2MessageDocumentationV5 documentation)
     {
         // A nested type cannot share the name of its enclosing class (CS0542).
         if (project.ClassName == ReferencesClass) return;
         string ns = "global::" + string.Join(".", project.CodeNamespace.Split('.').Select(Verbatim)) + ".";
         string self = ns + Verbatim(project.ClassName), keys = ns + Verbatim(project.ClassName + "Keys");
-        bool fallback = project.ReferenceFallbackText, readableNames = Rmf2ReadableNamesV1.SupportsClassName(project.ClassName);
+        bool fallback = project.ReferenceFallbackText;
+        Dictionary<string, Rmf2ReadableMessageV1> readableNames = ReadableReferences(project.ClassName, project.CanonicalMessages, null);
         const string Reference = "global::Runic.Translations.TranslationReference", Argument = "global::Runic.Translations.TranslationReferenceArgument";
         const string Invariant = "global::System.Globalization.CultureInfo.InvariantCulture";
+        string catalog = GenerationSupport.CSharpString(project.Id), fingerprint = GenerationSupport.CSharpString(project.CallerFingerprint);
         if (fallback)
         {
             writer.Blank();
             writer.Line("private static global::Runic.Translations.ITranslationSnapshot? __referenceSnapshot;"); writer.Blank();
-            writer.Line("// The base locale's text of a reference, from one snapshot of the embedded catalog created on first use.");
-            writer.Line("private static string __ReferenceFallbackText(global::Runic.Translations.TranslationKey key, global::Runic.Translations.TextArgument[] arguments) =>"); writer.Indent();
-            writer.Line("global::System.Threading.LazyInitializer.EnsureInitialized(ref __referenceSnapshot, static () => " + ns + Verbatim(project.ClassName + "Catalog") + ".CreateProvider()");
-            writer.Line("    .GetSnapshotAsync(" + GenerationSupport.CSharpString(project.DefaultLocale) + ").AsTask().GetAwaiter().GetResult()).Format(key, arguments);"); writer.Unindent();
+            writer.Line("// A reference with the base locale's text as its fallback text, from one snapshot of the embedded catalog created on");
+            writer.Line("// first use. The fallback text repeats the arguments' text, so for long arguments it can break a transport limit that");
+            writer.Line("// the arguments alone keep; the reference then has no fallback text.");
+            writer.Line("private static " + Reference + " __Reference(string key, global::System.Collections.Generic.IReadOnlyDictionary<string, " + Argument + ">? arguments,");
+            writer.Line("    global::Runic.Translations.TranslationKey message, global::Runic.Translations.TextArgument[] fallbackArguments)");
+            writer.Line("{"); writer.Indent();
+            writer.Line("string fallbackText = global::System.Threading.LazyInitializer.EnsureInitialized(ref __referenceSnapshot, static () => " + ns + Verbatim(project.ClassName + "Catalog") + ".CreateProvider()");
+            writer.Line("    .GetSnapshotAsync(" + GenerationSupport.CSharpString(project.DefaultLocale) + ").AsTask().GetAwaiter().GetResult()).Format(message, fallbackArguments);");
+            writer.Line("if (fallbackText.Length <= global::Runic.Translations.TranslationTransport.MaximumFallbackLength)");
+            writer.Line("{"); writer.Indent();
+            writer.Line("try { return new " + Reference + "(" + catalog + ", " + fingerprint + ", key, arguments, fallbackText); }");
+            writer.Line("catch (global::System.ArgumentOutOfRangeException) { }");
+            writer.Unindent(); writer.Line("}");
+            writer.Line("return new " + Reference + "(" + catalog + ", " + fingerprint + ", key, arguments, null);");
+            writer.Unindent(); writer.Line("}");
         }
         writer.Blank();
         writer.Line("/// <summary>Typed <see cref=\"" + Reference + "\"/> factories for the plain-text messages of the " + GenerationSupport.XmlDocumentation(project.Id) + " translation catalog.</summary>");
@@ -363,11 +377,11 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("public static class " + ReferencesClass);
         writer.Line("{"); writer.Indent();
         bool first = true;
-        foreach (Rmf2MessageContractV5 message in Canonical(project).Where(static item => !item.Structured && item.Content != Rmf2DocumentProfileV5.Document))
+        foreach (Rmf2MessageContractV5 message in Canonical(project).Where(HasReference))
         {
             string member = Member(message);
             string[] parameters = message.Inputs.Select(input => Rmf2GeneratedNamesV1.Identifier(input.Name)).ToArray();
-            if (readableNames && Rmf2ReadableNamesV1.TryCreate(project.ClassName, message, out Rmf2ReadableMessageV1? readable, out _) && readable!.Member != ReferencesClass)
+            if (readableNames.TryGetValue(message.Key, out Rmf2ReadableMessageV1? readable))
             {
                 member = Verbatim(readable.Member);
                 parameters = readable.Inputs.Select(input => Verbatim(input.Identifier)).ToArray();
@@ -378,7 +392,8 @@ internal static class Rmf2CSharpOutputRendererV5
             for (int index = 0; index < parameters.Length; index++)
                 WriteParameter(writer, message, parameters[index].TrimStart('@'), message.Inputs[index].Name, documentation);
             writer.Line("public static " + Reference + " " + member + "(" + string.Join(", ", message.Inputs.Select((input, index) => ParameterType(input.Type) + " " + parameters[index])) + ") =>"); writer.Indent();
-            writer.Line("new " + Reference + "(" + GenerationSupport.CSharpString(project.Id) + ", " + GenerationSupport.CSharpString(project.CallerFingerprint) + ", " + GenerationSupport.CSharpString(message.Key) + ",");
+            writer.Line(fallback ? self + ".__Reference(" + GenerationSupport.CSharpString(message.Key) + ","
+                : "new " + Reference + "(" + catalog + ", " + fingerprint + ", " + GenerationSupport.CSharpString(message.Key) + ",");
             if (message.Inputs.Count == 0) writer.Line("null,");
             else
             {
@@ -407,18 +422,50 @@ internal static class Rmf2CSharpOutputRendererV5
             }
             if (!fallback) writer.Line("null);");
             else if (parameters.Length == 0)
-                writer.Line(self + ".__ReferenceFallbackText(" + keys + "." + Member(message) + ", global::System.Array.Empty<global::Runic.Translations.TextArgument>()));");
+                writer.Line(keys + "." + Member(message) + ", global::System.Array.Empty<global::Runic.Translations.TextArgument>());");
             else
             {
-                writer.Line(self + ".__ReferenceFallbackText(" + keys + "." + Member(message) + ", new global::Runic.Translations.TextArgument[]");
+                writer.Line(keys + "." + Member(message) + ", new global::Runic.Translations.TextArgument[]");
                 writer.Line("{"); writer.Indent();
                 for (int index = 0; index < parameters.Length; index++)
                     writer.Line("global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(" + GenerationSupport.CSharpString(message.Inputs[index].Name) + ", new global::Runic.Translations.TextArgument(\"_\", " + parameters[index] + ")),");
-                writer.Unindent(); writer.Line("}));");
+                writer.Unindent(); writer.Line("});");
             }
             writer.Unindent();
         }
         writer.Unindent(); writer.Line("}");
+    }
+
+    // Plain-text messages get a reference factory; markup and document messages resolve to structured content.
+    private static bool HasReference(Rmf2MessageContractV5 message) => !message.Structured && message.Content != Rmf2DocumentProfileV5.Document;
+
+    // The factories that use their readable name, by key. The readable policy allows a key that equals another factory's
+    // encoded name: key ToString is reserved and keeps r_546f537472696e67, which is also a valid key. A message whose
+    // readable name is taken that way keeps its own encoded name instead, repeated until no name is used twice, so the
+    // result depends only on the catalog. Each such message is added to problems for an RTR0069 warning.
+    internal static Dictionary<string, Rmf2ReadableMessageV1> ReadableReferences(string className, IEnumerable<Rmf2MessageContractV5> messages,
+        List<(string Key, string Problem)>? problems)
+    {
+        var readable = new Dictionary<string, Rmf2ReadableMessageV1>(StringComparer.Ordinal);
+        if (className == ReferencesClass || !Rmf2ReadableNamesV1.SupportsClassName(className)) return readable;
+        Rmf2MessageContractV5[] factories = messages.Where(HasReference).ToArray();
+        foreach (Rmf2MessageContractV5 message in factories)
+            if (Rmf2ReadableNamesV1.TryCreate(className, message, out Rmf2ReadableMessageV1? names, out _) && names!.Member != ReferencesClass)
+                readable.Add(message.Key, names);
+        for (bool changed = true; changed;)
+        {
+            changed = false;
+            Dictionary<string, string> encoded = factories.Where(message => !readable.ContainsKey(message.Key))
+                .ToDictionary(Member, message => message.Key, StringComparer.Ordinal);
+            foreach (Rmf2ReadableMessageV1 names in readable.Values.OrderBy(item => item.Contract.Key, StringComparer.Ordinal).ToArray())
+            {
+                if (!encoded.TryGetValue(names.Member, out string? other)) continue;
+                readable.Remove(names.Contract.Key); changed = true;
+                problems?.Add((names.Contract.Key, "Reference factory name '" + names.Member + "' is the encoded name of message '" + other + "'; " + className + ".References." +
+                    Member(names.Contract) + " is the factory of message '" + names.Contract.Key + "'."));
+            }
+        }
+        return readable;
     }
 
     private const int ChunkSize = 32;

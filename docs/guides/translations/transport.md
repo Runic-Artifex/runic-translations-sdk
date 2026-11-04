@@ -22,7 +22,12 @@ A member uses the message's flattened key, as `text.Messages` does, or its
 encoded name when the key is not a readable name. Times and date-times keep whole
 seconds, the transport's precision. Messages with markup have no factory, as a
 reference resolves to plain text. `"referenceFallbackText": false` under `code`
-in `runic.json` leaves the fallback text out.
+in `runic.json` leaves the fallback text out. The fallback text repeats the
+arguments' text, so a factory also leaves it out when it would push a reference
+over a transport limit that the arguments alone keep. When a readable name is
+also the encoded name of another message (key `ToString` is reserved and uses
+`r_546f537472696e67`, which is also a valid key), the readable one keeps its
+encoded name too, and the compiler reports `RTR0069`.
 
 To nest a message argument, or without generated code, create a
 `TranslationReference` with `TranslationReferenceArgument` values: a canonical scalar (`new(TextArgumentType.Int, "3")`), a list

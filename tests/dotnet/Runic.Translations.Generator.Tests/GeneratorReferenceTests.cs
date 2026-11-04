@@ -30,6 +30,7 @@ internal sealed class GeneratorReferenceTests
         saved = {$name} saved {$size :number} on {$day :date} at {$time :time} ({$when :datetime}, {$id :runic:uuid}, {$ok :runic:boolean}, {$tags :runic:list})
         help = Read the {#link ref=guide}guide{/link}.
         References = Clash
+        pair = {$first} and {$second}
         """;
     private const string German = """
         title = Notizen
@@ -37,6 +38,7 @@ internal sealed class GeneratorReferenceTests
         saved = {$name} hat {$size :number} am {$day :date} um {$time :time} gespeichert ({$when :datetime}, {$id :runic:uuid}, {$ok :runic:boolean}, {$tags :runic:list})
         help = Lies die {#link ref=guide}Anleitung{/link}.
         References = Konflikt
+        pair = {$first} und {$second}
         """;
 
     private const string Probe = """
@@ -104,7 +106,66 @@ internal sealed class GeneratorReferenceTests
         GeneratorRun run = GeneratorTestHost.RunWithConsumer(probe, Inputs(", \"referenceFallbackText\": false"));
         AssertClean(run);
         Assert.Equal("none|title", Execute(run), "opt-out execution");
-        Assert.True(!Source(run, "NotesText.Accessors.g.cs").Contains("__ReferenceFallbackText", StringComparison.Ordinal), "opt-out still formats fallback text");
+        Assert.True(!Source(run, "NotesText.Accessors.g.cs").Contains("__referenceSnapshot", StringComparison.Ordinal), "opt-out still formats fallback text");
+    }
+
+    // The fallback text repeats the arguments' text. Arguments that are valid alone must not fail because of it.
+    [Test, DisplayName("reference factories leave out fallback text that would break a transport limit")]
+    public void ReferenceFallbackLimits()
+    {
+        const string probe = """
+            namespace Example.Consumer;
+            using System;
+            using Example.Notes;
+            using Runic.Translations;
+            public static class Probe
+            {
+                public static string Run()
+                {
+                    // 32,768 characters of arguments and as many of fallback text: over MaximumTotalTextLength (65,536).
+                    TranslationReference text = NotesText.References.pair(first: new string('a', 16384), second: new string('b', 16384));
+                    // 44,000 characters in all, but control characters are six bytes each in JSON: over MaximumEncodedLength.
+                    TranslationReference encoded = NotesText.References.pair(first: new string('\u0001', 11000), second: new string('\u0002', 11000));
+                    TranslationReference small = NotesText.References.pair(first: "a", second: "b");
+                    TranslationReference parsed = TranslationReference.Parse(System.Text.Json.JsonSerializer.Serialize(text, TranslationReferenceJsonContext.Default.TranslationReference));
+                    bool tooLong = false;
+                    try { NotesText.References.pair(first: new string('a', 16385), second: "b"); } catch (ArgumentOutOfRangeException) { tooLong = true; }
+                    return string.Join("|", text.FallbackText ?? "none", text.Arguments["first"].Value.Length, encoded.FallbackText ?? "none",
+                        encoded.Arguments["second"].Value.Length, small.FallbackText, parsed.Arguments["second"].Value.Length, tooLong);
+                }
+            }
+            """;
+        GeneratorRun run = GeneratorTestHost.RunWithConsumer(probe, Inputs(""));
+        AssertClean(run);
+        Assert.Equal("none|16384|none|11000|a and b|16384|True", Execute(run), "limit execution");
+    }
+
+    // Key ToString is reserved, so its factory keeps the encoded name r_546f537472696e67, which is also a valid key.
+    [Test, DisplayName("a reference factory whose readable name is another factory's encoded name keeps its encoded name")]
+    public void ReferenceNameClash()
+    {
+        const string probe = """
+            namespace Example.Consumer;
+            using Example.Notes;
+            public static class Probe
+            {
+                public static string Run() => NotesText.References.r_546f537472696e67().Key + "|" + NotesText.References.r_725f35343666353337343732363936653637().Key +
+                    "|" + NotesText.References.plain().Key;
+            }
+            """;
+        TestInput[] inputs =
+        [
+            new("C:/repo/translations/runic.json", "Project", Project.Replace("FALLBACK", "", StringComparison.Ordinal)),
+            new("C:/repo/translations/en.rmf2", "Rmf2", "ToString = One\nr_546f537472696e67 = Two\nplain = Three\n"),
+            new("C:/repo/translations/de.rmf2", "Rmf2", "ToString = Eins\nr_546f537472696e67 = Zwei\nplain = Drei\n"),
+        ];
+        GeneratorRun run = GeneratorTestHost.RunWithConsumer(probe, inputs);
+        string[] warnings = run.SingleResult.Diagnostics.Select(static item => item.Id + ": " + item.GetMessage(System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+        Assert.True(warnings.Any(static item => item.StartsWith("RTR0069: Reference factory name 'r_546f537472696e67' is the encoded name of message 'ToString'", StringComparison.Ordinal)),
+            "no clash warning: " + string.Join("\n", warnings));
+        Diagnostic[] problems = run.Compilation.GetDiagnostics().Where(static item => item.Severity >= DiagnosticSeverity.Warning).ToArray();
+        Assert.Equal(0, problems.Length, string.Join("\n", problems.Select(static item => item.ToString())));
+        Assert.Equal("ToString|r_546f537472696e67|plain", Execute(run), "clash execution");
     }
 
     [Test, DisplayName("generated members document the base text, the description and @param descriptions")]

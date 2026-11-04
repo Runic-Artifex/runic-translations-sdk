@@ -207,8 +207,8 @@ internal sealed class Rmf2V1CorpusTests
     // pure call, runtime.js keeps only the markup contracts and dynamic.js the catalog's contract tables; messages.d.ts
     // documents members with the base text; the C# accessors gain base-text summaries and the References factories, in
     // both digests.
-    private const string EncodedOutputDigest = "8e53041656f48d5ced2f9fb6adac99b324c864158d34c3bacdcacb5b57f821a9";
-    private const string HiddenEncodedOutputDigest = "05e853a51d4966f879d308b08a09571582011919efe823a0ed3ed40144398a58";
+    private const string EncodedOutputDigest = "15098e30aedc1715661d53590a7b7688eadf4828f7d68bdc2f42bdfc0ca8e1b4";
+    private const string HiddenEncodedOutputDigest = "2ee89d8f4a65f5db6e0ae2100173272da721e39c6cbc2230afe773b2f847ee02";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

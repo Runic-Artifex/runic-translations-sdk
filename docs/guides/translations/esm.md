@@ -28,7 +28,13 @@ message formats. Each message module also carries its own contract (inputs,
 content profile and slots), and its data sits in a `/* @__PURE__ */` call, so a
 bundle holds only the contracts and text of the messages it calls. The catalog's
 whole contract tables (`rmf2Contract`, `messageContracts`) are in `dynamic.js`,
-which only applications that decode locale artifacts import. For the
+which only applications that decode locale artifacts import. The renderers
+(`createInlineRenderer`, `createDocumentRenderer`, `toPlainText`) check content
+against a table of the catalog's structured messages (each key's content kind
+and slots) in `runtime.js`. It is parsed on first use and dropped from bundles
+that never render content, and it lets a renderer show content formatted
+somewhere else, such as SvelteKit server `load` data, a `postMessage` from a
+worker or stored content, without loading that message's module. For the
 Translations Editor's catalog (759 messages, two locales), a Vite build that
 calls one message through `m` shrank from 1,024,952 bytes to 65,790 bytes
 (786,138 to 46,490 minified), the same as importing that message's module
