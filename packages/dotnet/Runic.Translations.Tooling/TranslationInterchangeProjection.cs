@@ -198,7 +198,9 @@ internal static class TranslationInterchangeFingerprint
 
     /// <summary>
     /// The per-unit source fingerprint: the key, the source text and the caller contract (input names and types).
-    /// A plain message hashes its canonical pattern, so equivalent escapes do not change it.
+    /// The text is hashed in canonical form (<see cref="TranslationInterchangePattern.CanonicalMessage"/>): equivalent
+    /// escapes, spacing inside an expression, literal quoting and option order do not change it; a different
+    /// placeholder, function, option value, selector or pattern text does.
     /// </summary>
     internal static string UnitSource(
         string key,
@@ -212,7 +214,9 @@ internal static class TranslationInterchangeFingerprint
             writer.WriteStartObject();
             writer.WriteString("profile", UnitSourceDomain);
             writer.WriteString("key", key);
-            writer.WriteString("source", pieces is null ? rawSource : TranslationInterchangePattern.Compose(pieces));
+            writer.WriteString("source", pieces is null
+                ? TranslationInterchangePattern.CanonicalMessage(rawSource)
+                : TranslationInterchangePattern.Compose(TranslationInterchangePattern.Canonical(pieces)));
             writer.WriteStartArray("inputs");
             foreach (TranslationInterchangePlaceholder input in contract.OrderBy(static input => input.Name, StringComparer.Ordinal))
             {

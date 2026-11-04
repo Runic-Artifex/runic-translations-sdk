@@ -75,11 +75,19 @@ internal static class Rmf2ResourceWriter
         if (brace < 0) return AddMessage(source, path, message);
         int lineStart = brace == 0 ? 0 : Array.LastIndexOf(raw, (byte)'\n', brace - 1) + 1;
         string newline = Utf8.GetString(raw).Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
-        int depth = group.NameLocation.Column - 1 + 2;
+        // The new lines copy the indentation of the group's existing children (siblings must share it), and use the
+        // same step for any inner group they open; an empty group's children are indented by two spaces.
+        int groupColumn = group.NameLocation.Column - 1;
+        int groupEnd = group.Location.StartByte + group.Location.LengthBytes;
+        Rmf2ResourceNode? child = document.Nodes.FirstOrDefault(node =>
+            node.Path.Count == group.Path.Count + 1 && node.Path.Take(group.Path.Count).SequenceEqual(group.Path, StringComparer.Ordinal) &&
+            node.NameLocation.StartByte > group.NameLocation.StartByte && node.NameLocation.StartByte < groupEnd);
+        int depth = child is null ? groupColumn + 2 : child.NameLocation.Column - 1;
+        int step = Math.Max(depth - groupColumn, 1);
         var output = new StringBuilder();
-        for (int i = group.Path.Count; i < path.Count - 1; i++) { output.Append(' ', depth).Append(path[i]).Append(" {").Append(newline); depth += 2; }
+        for (int i = group.Path.Count; i < path.Count - 1; i++) { output.Append(' ', depth).Append(path[i]).Append(" {").Append(newline); depth += step; }
         output.Append(Entry(path[^1], message, depth, newline));
-        for (int i = path.Count - 2; i >= group.Path.Count; i--) { depth -= 2; output.Append(' ', depth).Append('}').Append(newline); }
+        for (int i = path.Count - 2; i >= group.Path.Count; i--) { depth -= step; output.Append(' ', depth).Append('}').Append(newline); }
         byte[] result = Replace(raw, [(lineStart, 0, Utf8.GetBytes(output.ToString()))]);
         Require(new TranslationSource(source.Path, result)); return result;
     }

@@ -10,7 +10,7 @@ in [`index.json`](index.json) imports one file from [`files/`](files) into a cop
 
 `export` is also an export golden: exporting `project/` with its review file writes
 `files/export.de.xliff` byte for byte. Its `farewell` approval was made while the source read "Goodbye", so it
-is exported as needs-review, and `validate` reports `RTR0089` for it.
+is exported as needs-review, and `validate` reports `RTR0090` for it.
 
 **The TMS files are modeled, not captured.** `crowdin`, `weblate`, `phrase` and `lokalise` were built from a
 Runic export of `project/` and changed to show the behaviour this corpus assumes for each tool's XLIFF 2.x

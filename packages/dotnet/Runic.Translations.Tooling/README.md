@@ -31,11 +31,19 @@ This is not general XLIFF or MF2 conformance.
 Import is tolerant of what TMS tools write and decides **per unit**:
 `TranslationXliffImportResult.Units` says whether each unit was applied, skipped
 (no target, state `initial`, an empty target without a translated state, a
-structured message) or refused (an unknown placeholder or inline code, invalid
-MF2), with a stable code such as `XLIFF21-UNTRANSLATED`; `Messages` holds the
-applied ones. Foreign notes, unknown attributes, module metadata, `<mrk>`
-annotations, groups and resegmented units are accepted, and what is dropped is
-reported in `Report`. Import reads XLIFF 2.0 and 2.1 and profile 2 files.
+structured message) or refused (an unknown placeholder or inline code, a target
+`<ph>` that changes a placeholder's expression, invalid MF2), with a stable code
+such as `XLIFF21-UNTRANSLATED`; `Messages` holds the applied ones, and every one
+of them compiles against its source. A target `<ph>` may only use the
+expressions of the source (and, with the live compilation, of the current
+translation), compared in canonical form; another function or option, or a
+literal in place of a variable, is `XLIFF21-PLACEHOLDER-CHANGED`. A target that
+is a copy of the source, with no segment state and no Runic review note, is
+applied as needs-review (`XLIFF21-TARGET-COPIES-SOURCE`). Foreign notes, unknown
+attributes, module metadata, `<mrk>` annotations, groups and resegmented units
+are accepted, and what is dropped is reported in `Report`. A document nested
+deeper than 64 elements is refused as a whole (`XLIFF21-LIMIT`). Import reads
+XLIFF 2.0 and 2.1 and profile 2 files.
 The overload with the live `Rmf2ProjectCompilation` also checks the catalog and
 locales, uses the current caller contract, and applies a unit whose source
 changed since export as needs-review, or refuses it
@@ -48,8 +56,10 @@ matching Runic review note is present, and `reviewed` reads as approved. The
 compact `runic.translations.interchange-review/2` JSON (`ExportReviewJson`,
 `ImportReviewJson`, which also reads `/1`) is the Git-friendly authoritative
 form. Each entry records a per-unit source fingerprint
-(`ComputeSourceFingerprints`: the key, the source text and the caller contract),
-so an edit to one message never invalidates the review of another. Export writes
+(`ComputeSourceFingerprints`: the key, the source text in canonical MF2 form and
+the caller contract), so an edit to one message never invalidates the review of
+another, and spacing inside expressions, literal quoting or option order do not
+invalidate it either. Export writes
 an approval whose fingerprint no longer matches as needs-review and reports
 `REVIEW-STALE`.
 

@@ -270,6 +270,141 @@ internal sealed class XliffProfileV3Tests
             ["translations/de/bye.mf2=Tschüss\n(new)", "translations/de/hello.mf2=Servus\n"]), "The direct .mf2 edits are wrong.");
     }
 
+    [Test, DisplayName("deeply nested <mrk> and <group> are refused as a document over the depth limit, not a crash")]
+    public void DeepNestingIsRefused()
+    {
+        Rmf2ProjectCompilation compilation = Compile(English, German);
+        string xml = Text(TranslationInterchange.ExportXliff21(compilation).Documents.Single().Bytes);
+        string markers = SetTarget(xml, "plain", string.Concat(Enumerable.Repeat("<mrk id=\"m\">", 20_000)) + "Schlicht" + string.Concat(Enumerable.Repeat("</mrk>", 20_000)));
+        RequireLimit(markers, "20,000 nested <mrk>");
+        int file = xml.IndexOf("<unit ", StringComparison.Ordinal), end = xml.LastIndexOf("</file>", StringComparison.Ordinal);
+        string groups = xml[..file] + string.Concat(Enumerable.Repeat("<group id=\"g\">", 100_000)) + xml[file..end] + string.Concat(Enumerable.Repeat("</group>", 100_000)) + xml[end..];
+        RequireLimit(groups, "100,000 nested <group>");
+
+        // Nesting below the limit is walked without recursion and keeps document order.
+        string shallow = xml[..file] + string.Concat(Enumerable.Repeat("<group id=\"g\">", 40)) + xml[file..end] + string.Concat(Enumerable.Repeat("</group>", 40)) + xml[end..];
+        shallow = SetTarget(shallow, "plain", string.Concat(Enumerable.Repeat("<mrk id=\"m\">", 10)) + "Sch<mrk id=\"n\">li</mrk>cht" + string.Concat(Enumerable.Repeat("</mrk>", 10)));
+        TranslationXliffImportResult imported = TranslationInterchange.ImportXliff21(Encoding.UTF8.GetBytes(shallow), compilation);
+        Require(Message(imported, "plain") == "Schlicht" && imported.Units.Select(unit => unit.Key).SequenceEqual(compilation.Project!.CanonicalMessages.Select(message => message.Key).Order(StringComparer.Ordinal)),
+            "Nested groups or markers below the limit were not read in order: " + string.Join(", ", imported.Units.Select(unit => unit.Key)));
+
+        static void RequireLimit(string document, string what)
+        {
+            try { _ = TranslationInterchange.ImportXliff21(Encoding.UTF8.GetBytes(document)); }
+            catch (TranslationInterchangeException exception) when (exception.Code == "XLIFF21-LIMIT" && exception.Message.Contains("64", StringComparison.Ordinal)) { return; }
+            throw new InvalidOperationException(what + " was not refused with XLIFF21-LIMIT.");
+        }
+    }
+
+    [Test, DisplayName("a target <ph equiv> may move and respell a placeholder but not change its formatting or replace it")]
+    public void TargetPlaceholdersCannotChangeExpressions()
+    {
+        Rmf2ProjectCompilation compilation = Compile(English, German);
+        string xml = Text(TranslationInterchange.ExportXliff21(compilation).Documents.Single().Bytes);
+        string edited = SetTarget(xml, "items", "<ph id=\"9\" equiv=\"{$count :number style=percent}\"/> Artikel");
+        edited = SetTarget(edited, "greet", "Hallo <ph id=\"7\" equiv=\"{|Mallory|}\"/>!");
+        foreach (Rmf2ProjectCompilation? live in new[] { compilation, null })
+        {
+            TranslationXliffImportResult imported = live is null
+                ? TranslationInterchange.ImportXliff21(Encoding.UTF8.GetBytes(edited))
+                : TranslationInterchange.ImportXliff21(Encoding.UTF8.GetBytes(edited), live);
+            Require(Outcome(imported, "items") is { Outcome: TranslationXliffUnitOutcome.Refused, Code: "XLIFF21-PLACEHOLDER-CHANGED" } items &&
+                items.Message!.Contains("{$count :number style=percent}", StringComparison.Ordinal) && items.Message.Contains("{$count :integer}", StringComparison.Ordinal),
+                "A target that changed the placeholder's formatting was not refused with its reason: " + Outcome(imported, "items").Message);
+            Require(Outcome(imported, "greet") is { Outcome: TranslationXliffUnitOutcome.Refused, Code: "XLIFF21-PLACEHOLDER-CHANGED" },
+                "A literal that replaced a placeholder was not refused.");
+            Require(Message(imported, "items") is null && Message(imported, "greet") is null, "A refused unit was applied.");
+        }
+
+        // The same expression spelled differently, from equiv or originalData, is accepted and written as the source spells it.
+        string respelled = SetTarget(xml, "items", "<ph id=\"9\" equiv=\"{ $count   :integer }\"/> Artikel, <ph id=\"1\"/> insgesamt");
+        TranslationXliffImportResult accepted = TranslationInterchange.ImportXliff21(Encoding.UTF8.GetBytes(respelled), compilation);
+        Require(Message(accepted, "items") == "{$count :integer} Artikel, {$count :integer} insgesamt", "A respelled placeholder was not accepted in the source's spelling: " + Message(accepted, "items"));
+
+        // An expression of the live translation is accepted too, even when the source formats it differently.
+        Rmf2ProjectCompilation translated = Compile(English, German + "\nitems = {$count :number} Stück\n");
+        string own = SetTarget(Text(TranslationInterchange.ExportXliff21(translated).Documents.Single().Bytes), "items", "<ph id=\"9\" equiv=\"{$count :number}\"/> Teile");
+        Require(Message(TranslationInterchange.ImportXliff21(Encoding.UTF8.GetBytes(own), translated), "items") == "{$count :number} Teile",
+            "An expression of the live translation was refused.");
+    }
+
+    [Test, DisplayName("a stateless target that copies the source is imported as needs-review; an explicit state is kept")]
+    public void CopiedSourceIsNeedsReview()
+    {
+        Rmf2ProjectCompilation compilation = Compile(English, German);
+        string xml = Text(TranslationInterchange.ExportXliff21(compilation).Documents.Single().Bytes);
+        string copied = SetTarget(SetTarget(xml, "later", "Later"), "items", "<ph id=\"1\"/> items");
+        TranslationXliffImportResult imported = TranslationInterchange.ImportXliff21(Encoding.UTF8.GetBytes(copied), compilation);
+        foreach (string key in new[] { "later", "items" })
+        {
+            Require(Outcome(imported, key) is { Outcome: TranslationXliffUnitOutcome.Applied, State: TranslationReviewState.NeedsReview } &&
+                imported.Review.Entries.Single(entry => entry.Key == key).State == TranslationReviewState.NeedsReview,
+                "A stateless copy of the source was not imported as needs-review: " + key);
+            Require(imported.Report.Losses.Any(loss => loss.Code == "XLIFF21-TARGET-COPIES-SOURCE" && loss.Location == "/" + key), "The copy was not reported: " + key);
+        }
+        TranslationXliffImportResult stated = TranslationInterchange.ImportXliff21(Encoding.UTF8.GetBytes(SetState(SetState(copied, "later", "translated"), "items", "final")), compilation);
+        Require(Outcome(stated, "later").State == TranslationReviewState.Translated && Outcome(stated, "items").State == TranslationReviewState.Approved &&
+            stated.Report.Losses.All(loss => loss.Code != "XLIFF21-TARGET-COPIES-SOURCE"), "An identical translation with an explicit state did not keep it.");
+        TranslationXliffImportResult different = TranslationInterchange.ImportXliff21(Encoding.UTF8.GetBytes(SetTarget(xml, "later", "Später")), compilation);
+        Require(Outcome(different, "later").State == TranslationReviewState.Translated, "A stateless translation was not imported as translated.");
+    }
+
+    [Test, DisplayName("the contract check refuses every invalid unit, so a library result holds only valid messages")]
+    public void ContractCheckReachesAFixedPoint()
+    {
+        // Without a live catalog the file's source is the contract; a source whose placeholders conflict (one input
+        // read as two types) does not compile, so its unit is invalid, whatever the other units contain.
+        static string Unit(string key, string source, string target) =>
+            "<unit id=\"" + key + "\"><segment state=\"translated\"><source>" + source + "</source><target>" + target + "</target></segment></unit>";
+        string xml = "<?xml version=\"1.0\" encoding=\"utf-8\"?><xliff xmlns=\"urn:oasis:names:tc:xliff:document:2.0\" version=\"2.1\" srcLang=\"en\" trgLang=\"de\"><file id=\"app\">" +
+            Unit("alpha", "<ph id=\"1\" equiv=\"{$n :integer}\"/> of <ph id=\"2\" equiv=\"{$n :datetime}\"/>", "<ph id=\"1\"/> von <ph id=\"2\"/>") +
+            Unit("beta", "Plain", "Schlicht") +
+            Unit("gamma", "<ph id=\"1\" equiv=\"{$when :datetime}\"/> <ph id=\"2\" equiv=\"{$when :string}\"/>", "am <ph id=\"1\"/> <ph id=\"2\"/>") +
+            Unit("delta", "Hello <ph id=\"1\" equiv=\"{$name}\"/>", "Hallo <ph id=\"1\"/>") +
+            "</file></xliff>";
+        TranslationXliffImportResult imported = TranslationInterchange.ImportXliff21(Encoding.UTF8.GetBytes(xml));
+        Require(imported.Units.Where(unit => unit.Outcome == TranslationXliffUnitOutcome.Refused).Select(unit => unit.Key + "=" + unit.Code).SequenceEqual(["alpha=XLIFF21-TARGET-INVALID", "gamma=XLIFF21-TARGET-INVALID"]),
+            "The invalid units were not all refused: " + string.Join(", ", imported.Units.Select(unit => unit.Key + "=" + unit.Outcome + "/" + unit.Code)));
+        Require(imported.Messages.Select(message => message.MessageId).SequenceEqual(["beta", "delta"]), "An invalid message is in the library result.");
+    }
+
+    [Test, DisplayName("source fingerprints ignore spacing inside expressions and selectors, but not a changed placeholder or selector")]
+    public void FingerprintsUseCanonicalSource()
+    {
+        const string match = ".input {$count :integer}\n.match $count\none {{One item}}\n* {{{$count} items}}";
+        string[] Fingerprint(string items, string count = match)
+        {
+            string english = English.Replace("items = {$count :integer} items", "items = " + items, StringComparison.Ordinal) + "\ncount =\n" + string.Join("\n", count.Split('\n').Select(line => "  " + line)) + "\n";
+            IReadOnlyDictionary<string, string> fingerprints = TranslationInterchange.ComputeSourceFingerprints(Compile(english, German));
+            return [fingerprints["items"], fingerprints["count"]];
+        }
+        string[] baseline = Fingerprint("{$count :integer} items");
+        string[] spaced = Fingerprint("{ $count   :integer } items", ".input   { $count  :integer }\n.match   $count\n  one   {{One item}}\n  *   {{{ $count } items}}");
+        Require(spaced.SequenceEqual(baseline), "Spacing inside expressions or between selector parts changed a fingerprint.");
+        Require(Fingerprint("{$count :number} items")[0] != baseline[0], "A changed function did not change the fingerprint.");
+        Require(Fingerprint("{$count :integer} things")[0] != baseline[0], "Changed text did not change the fingerprint.");
+        Require(Fingerprint("{$count :integer}  items")[0] != baseline[0], "Changed pattern spacing did not change the fingerprint.");
+        Require(Fingerprint("{$count :integer} items", match.Replace("one {{One item}}", "one {{Single item}}", StringComparison.Ordinal))[1] != baseline[1],
+            "A changed variant did not change the fingerprint.");
+        Require(Fingerprint("{$count :integer} items", match.Replace(".input {$count :integer}", ".input {$count :number}", StringComparison.Ordinal))[1] != baseline[1],
+            "A changed selector function did not change the fingerprint.");
+    }
+
+    [Test, DisplayName("the source writer adds a key to an existing group with 4-space indentation")]
+    public void SourceWriterCopiesGroupIndentation()
+    {
+        TranslationSource project = Source("translations/runic.json", Project);
+        string english = "cart {\n    empty = Empty\n    items = Items\n}\nother = Other\n";
+        TranslationSource[] sources = [Source("translations/en.rmf2", english), Source("translations/de.rmf2", "cart {\n    empty = Leer\n}\n")];
+        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileProject(project, sources);
+        Require(compilation.Success, "The writer fixture did not compile.");
+        IReadOnlyList<TranslationSourceEdit> edits = TranslationInterchangeSourceWriter.Plan(Environment.CurrentDirectory, project, sources, compilation, "de",
+            [new("cart_items", "Artikel"), new("other", "Andere")]);
+        Require(Encoding.UTF8.GetString(edits.Single().Bytes) == "cart {\n    empty = Leer\n    items = Artikel\n}\nother = Andere\n",
+            "The key was not added with the group's indentation: " + Encoding.UTF8.GetString(edits.Single().Bytes));
+        Require(TranslationCompiler.CompileProject(project, TranslationInterchangeSourceWriter.Apply(sources, edits)).Success, "The edited sources do not compile.");
+    }
+
     private static void ValidateSchema(byte[] document)
     {
         string schemas = Path.Combine(RepositoryRoot(), "tests", "dotnet", "Runic.Translations.Tooling.Tests", "Fixtures", "xliff-2.1");

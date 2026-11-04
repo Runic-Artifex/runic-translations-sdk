@@ -4,6 +4,7 @@ using ReactiveUI;
 using ReactiveUI.Primitives;
 using ReactiveUI.Primitives.Signals;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Runic.Translations.Internal;
 using Runic.Application.Views;
 using Runic.Application.Views.ReactiveUI;
@@ -236,6 +237,61 @@ internal static class EditorSmokeTest
             "An approval made before the source changed was exported as current.");
     }
 
+    // An approval imported from XLIFF records the editor's marker of the current base value, so a later change to
+    // that value exports it as needs-review, as for an approval made in the editor. A key the import adds to an
+    // existing group copies the group's 4-space indentation.
+    private static async Task ImportedApprovalJourneyAsync(string container)
+    {
+        string project = Path.Combine(container, "workspace");
+        await TranslationProjectWriter.CreateAsync(TranslationProjectScaffolder.Render(
+            new TranslationProjectCreationRequest(project, "import-smoke", "en", "Smoke.Translations", "SmokeText",
+                [new TranslationProjectLocale("de", "en")]))).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), "title = Title\ncart {\n    empty = Empty\n    items = Items\n}\n").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "de.rmf2"), "cart {\n    empty = Leer\n}\n").ConfigureAwait(false);
+        // The German translation starts incomplete, so the import adds keys.
+        JsonObject manifest = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(project, "runic.json")).ConfigureAwait(false))!.AsObject();
+        manifest["validation"] = new JsonObject { ["translationCompleteness"] = "allow" };
+        await File.WriteAllTextAsync(Path.Combine(project, "runic.json"), manifest.ToJsonString()).ConfigureAwait(false);
+        using var session = new EditorSession(project);
+        EditorXliffExportResult export = await session.ExportXliffAsync("xliff").ConfigureAwait(false);
+        Require(export.Ok, "The import-smoke export failed: " + export.Message?.Code + " " + export.Message?.Detail);
+        string relative = export.Documents.Single().Path;
+        XDocument xliff = XDocument.Load(Path.Combine(project, relative));
+        foreach ((string key, string text, string state) in new[] { ("title", "Titel", "final"), ("cart_items", "Artikel", "translated") })
+        {
+            XElement segment = xliff.Descendants().Single(element => element.Name.LocalName == "unit" && element.Attribute("id")?.Value == key)
+                .Elements().Single(element => element.Name.LocalName == "segment");
+            segment.SetAttributeValue("state", state);
+            segment.Elements().SingleOrDefault(element => element.Name.LocalName == "target")?.Remove();
+            XElement source = segment.Elements().Single(element => element.Name.LocalName == "source");
+            source.AddAfterSelf(new XElement(source.Name.Namespace + "target", text));
+        }
+        xliff.Save(Path.Combine(project, relative), SaveOptions.DisableFormatting);
+        EditorXliffImportPlan plan = await session.PreviewXliffImportAsync(relative).ConfigureAwait(false);
+        Require(plan.Ok && plan.ConfirmationToken is not null,
+            "The import-smoke XLIFF import was not planned: " + string.Join("; ", plan.Refusals.Select(refusal => refusal.Code)));
+        Require((await session.ApplyXliffImportAsync(plan.ConfirmationToken!).ConfigureAwait(false)).Ok, "The import-smoke XLIFF import was not applied.");
+        string german = await File.ReadAllTextAsync(Path.Combine(project, "de.rmf2")).ConfigureAwait(false);
+        Require(german.StartsWith("cart {\n    empty = Leer\n    items = Artikel\n}\n", StringComparison.Ordinal) && german.Contains("title = Titel\n", StringComparison.Ordinal),
+            "The editor import did not copy the group's indentation: " + german);
+        TranslationEditorStateEntry imported = TranslationEditorStateStore.Load(project, "import-smoke").State.Entries.Single(entry => entry.Key == "title" && entry.Locale == "de");
+        Require(imported.State == "approved" && imported.SourceFingerprint == EditorWorkspace.EditorSourceFingerprint("Title"),
+            "The imported approval was stored without the editor's marker of its base value.");
+
+        async Task<string> SegmentAsync()
+        {
+            EditorXliffExportResult again = await session.ExportXliffAsync("xliff").ConfigureAwait(false);
+            Require(again.Ok, "The import-smoke re-export failed.");
+            return XDocument.Load(Path.Combine(project, again.Documents.Single().Path)).Descendants()
+                .Single(element => element.Name.LocalName == "unit" && element.Attribute("id")?.Value == "title")
+                .Elements().Single(element => element.Name.LocalName == "segment").ToString(SaveOptions.DisableFormatting);
+        }
+        Require((await SegmentAsync().ConfigureAwait(false)).Contains("state=\"final\"", StringComparison.Ordinal), "A current imported approval was not exported as final.");
+        await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), "title = Main title\ncart {\n    empty = Empty\n    items = Items\n}\n").ConfigureAwait(false);
+        Require((await SegmentAsync().ConfigureAwait(false)).Contains("subState=\"runic:needs-review\"", StringComparison.Ordinal),
+            "An imported approval whose base text changed was exported as current.");
+    }
+
     // commandLine is the command-line operations (Program.cs), which a frontend
     // bootstrap build does not compile.
     public static async Task<int> RunAsync(string workspacePath, IEditorCommandOperations commandLine)
@@ -248,6 +304,7 @@ internal static class EditorSmokeTest
             await MalformedManifestJourneyAsync(Path.Combine(container, "malformed-manifest")).ConfigureAwait(false);
             await InterchangeOutputJourneyAsync(Path.Combine(container, "interchange-output"), commandLine).ConfigureAwait(false);
             await ReviewStampJourneyAsync(Path.Combine(container, "review-stamp")).ConfigureAwait(false);
+            await ImportedApprovalJourneyAsync(Path.Combine(container, "imported-approval")).ConfigureAwait(false);
             string project = Path.Combine(container, "translations");
             // Smoke tests exercise an intentionally minimal workspace. They must
             // never mutate the packaged example or a caller-provided directory.

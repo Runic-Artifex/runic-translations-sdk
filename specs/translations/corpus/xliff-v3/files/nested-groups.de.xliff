@@ -24,7 +24,7 @@
         </unit>
         <unit id="cart_checkout_total">
           <notes>
-            <note category="runic:unit">eyJleGVjdXRpb25Qcm9maWxlIjoicm1mMi1leGVjdXRpb24tdjIiLCJtZXNzYWdlR3JhbW1hclZlcnNpb24iOjUsImludGVyY2hhbmdlUHJvZmlsZSI6InJ1bmljLnhsaWZmMjEuY2xvc2VkLXRleHQiLCJpbnRlcmNoYW5nZVByb2ZpbGVWZXJzaW9uIjozLCJzdHJ1Y3R1cmVkIjpmYWxzZSwidGFncyI6IlcxMD0iLCJwbGFjZWhvbGRlcnMiOiJXM3NpYm1GdFpTSTZJbUZ0YjNWdWRDSXNJblI1Y0dVaU9pSmtaV05wYldGc0lpd2labTl5YldGMElqb2lJbjFkIiwic291cmNlRmluZ2VycHJpbnQiOiJzaGEyNTY6ZWNmNzc0MTg1ZTZjZGI5Y2ZiNjlmYTc4ZTc3NjE0NmNjYjRlYzA0YmEzNzM5Y2MwMDIwYWEzYmEzYzI0NmJjMSJ9</note>
+            <note category="runic:unit">eyJleGVjdXRpb25Qcm9maWxlIjoicm1mMi1leGVjdXRpb24tdjIiLCJtZXNzYWdlR3JhbW1hclZlcnNpb24iOjUsImludGVyY2hhbmdlUHJvZmlsZSI6InJ1bmljLnhsaWZmMjEuY2xvc2VkLXRleHQiLCJpbnRlcmNoYW5nZVByb2ZpbGVWZXJzaW9uIjozLCJzdHJ1Y3R1cmVkIjpmYWxzZSwidGFncyI6IlcxMD0iLCJwbGFjZWhvbGRlcnMiOiJXM3NpYm1GdFpTSTZJbUZ0YjNWdWRDSXNJblI1Y0dVaU9pSmtaV05wYldGc0lpd2labTl5YldGMElqb2lJbjFkIiwic291cmNlRmluZ2VycHJpbnQiOiJzaGEyNTY6NTUxMmQxYTRjYzZkZjM4NmU4NzUzODU5MTdhMWUyYzQ5Yzc0NDg1ZTI5MTlmZjA3NzBlZDExOTU2MDc3ZjFiMSJ9</note>
           </notes>
           <segment id="1" state="translated">
             <source>Total: <ph id="1" equiv="{$amount :number minimumFractionDigits=2}" disp="amount"/></source>

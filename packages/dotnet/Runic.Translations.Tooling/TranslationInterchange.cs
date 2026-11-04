@@ -31,6 +31,8 @@ public static class TranslationInterchange
     internal const int MaximumXliffBytes = 8 * 1024 * 1024;
     internal const int MaximumUnits = 50_000;
     internal const int MaximumTextLength = 65_536;
+    /// <summary>The deepest element nesting an imported XLIFF document may use (the root element is level 0); deeper documents are refused with XLIFF21-LIMIT.</summary>
+    internal const int MaximumXliffDepth = 64;
     private const int MaximumReviewEntries = 50_000;
     private const int MaximumReviewBytes = 8 * 1024 * 1024;
 

@@ -231,6 +231,9 @@ internal sealed record TranslationsToolCommandRequest(
     /// <summary>The <c>--source-changed</c> policy of <c>xliff import</c>: <c>needs-review</c> or <c>refuse</c>.</summary>
     public string? SourceChanged { get; init; }
 
+    /// <summary>The <c>--fail-on</c> condition of <c>xliff import</c>: <c>refused</c> fails the command, and writes nothing, when any unit is refused.</summary>
+    public string? FailOn { get; init; }
+
     /// <summary>Whether <c>xliff import</c> creates the review file when it does not exist.</summary>
     public bool WriteReview { get; init; }
 

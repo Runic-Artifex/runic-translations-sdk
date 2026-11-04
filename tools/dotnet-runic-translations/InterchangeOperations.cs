@@ -13,12 +13,12 @@ namespace Runic.Translations.Tool;
 /// <summary>
 /// The optional, SDK-owned review file <c>&lt;catalog&gt;.review.json</c> beside runic.json
 /// (<c>runic.translations.interchange-review/2</c>). Each entry records the per-unit fingerprint of the source its
-/// translation was made or approved for; <c>validate</c> warns when the source changed since (<c>RTR0089</c>).
+/// translation was made or approved for; <c>validate</c> warns when the source changed since (<c>RTR0090</c>).
 /// </summary>
 internal static class ReviewFile
 {
-    internal const string StaleCode = "RTR0089";
-    internal const string InvalidCode = "RTR0090";
+    internal const string StaleCode = "RTR0090";
+    internal const string InvalidCode = "RTR0091";
 
     internal static string PathFor(CompilerInputs inputs, string catalog)
     {
@@ -28,10 +28,12 @@ internal static class ReviewFile
         return Path.Combine(Path.GetDirectoryName(project)!, catalog + ".review.json");
     }
 
-    internal static TranslationInterchangeReview? Read(string path, string catalog)
+    internal static TranslationInterchangeReview? Read(string path, string catalog) =>
+        File.Exists(path) ? Parse(File.ReadAllBytes(path), catalog) : null;
+
+    internal static TranslationInterchangeReview Parse(byte[] bytes, string catalog)
     {
-        if (!File.Exists(path)) return null;
-        TranslationInterchangeReview review = TranslationInterchange.ImportReviewJson(File.ReadAllBytes(path));
+        TranslationInterchangeReview review = TranslationInterchange.ImportReviewJson(bytes);
         if (!string.Equals(review.CatalogId, catalog, StringComparison.Ordinal))
             throw new TranslationInterchangeException("REVIEW-CATALOG", $"The review file is for catalog '{review.CatalogId}', not '{catalog}'.");
         return review;
@@ -155,13 +157,19 @@ internal static class InterchangeOperations
         return relative == ".." || relative.StartsWith("../", StringComparison.Ordinal) ? fullPath.Replace('\\', '/') : relative;
     }
 
-    internal static int Import(string projectPath, string source, string? policyName, bool writeReview, bool dryRun, ToolOperationResult result)
+    internal static int Import(string projectPath, string source, string? policyName, bool writeReview, bool dryRun, ToolOperationResult result, string? failOn = null)
     {
         TranslationSourceChangePolicy policy = policyName switch
         {
             null or "needs-review" => TranslationSourceChangePolicy.NeedsReview,
             "refuse" => TranslationSourceChangePolicy.Refuse,
             _ => throw new ToolUsageException("--source-changed expects needs-review or refuse."),
+        };
+        bool failOnRefused = failOn switch
+        {
+            null => false,
+            "refused" => true,
+            _ => throw new ToolUsageException("--fail-on expects refused."),
         };
         (CompilerInputs inputs, Rmf2ProjectCompilation compilation)? compiled = Compile(projectPath, result);
         if (compiled is not { } project) return 1;
@@ -174,10 +182,11 @@ internal static class InterchangeOperations
 
         TranslationXliffImportResult import;
         TranslationInterchangeReview? existingReview;
+        byte[]? existingReviewBytes = File.Exists(reviewPath) ? File.ReadAllBytes(reviewPath) : null;
         try
         {
             import = TranslationInterchange.ImportXliff21(File.ReadAllBytes(sourcePath), project.compilation, new TranslationXliffImportOptions { SourceChangePolicy = policy });
-            existingReview = ReviewFile.Read(reviewPath, catalog);
+            existingReview = existingReviewBytes is null ? null : ReviewFile.Parse(existingReviewBytes, catalog);
         }
         catch (TranslationInterchangeException exception) { return Refuse(result, exception, "The XLIFF document could not be imported; nothing was written."); }
 
@@ -255,19 +264,32 @@ internal static class InterchangeOperations
             review = new TranslationInterchangeReview(catalog, merged.Values);
         }
 
-        if (!dryRun)
+        // --fail-on refused: a refused unit fails the command before anything is written.
+        bool failed = failOnRefused && refused != 0;
+        bool writeReviewFile = review is not null && (reviewChanged || existingReviewBytes is null);
+        if (!dryRun && !failed)
         {
-            WriteSources(edits, currentDirectory);
-            if (review is not null && (reviewChanged || !File.Exists(reviewPath))) ReviewFile.Write(reviewPath, review);
+            var writes = edits.Select(edit => new SourceWrite(Path.GetFullPath(edit.Path, currentDirectory), edit.Path, edit.OriginalBytes, edit.Bytes)).ToList();
+            if (writeReviewFile) writes.Add(new SourceWrite(reviewPath, Display(reviewPath), existingReviewBytes, TranslationInterchange.ExportReviewJson(review!)));
+            try { WriteSources(writes); }
+            catch (SourceChangedException exception)
+            {
+                result.AddDiagnostic(ToolCodes.InterchangeDocument, "xliff", exception.Message, CommandDiagnosticSeverity.Error);
+                result.Fault = new CommandFault(ToolCodes.InterchangeRejected, "A file changed on disk during the import; nothing was written. Run the import again.");
+                result.WriteOutputLine("A file changed on disk during the import; nothing was written.");
+                result.ExitCategory = CommandExitCategory.Validation;
+                return 1;
+            }
         }
 
         string verb = dryRun ? "would write" : "wrote";
         result.WriteOutputLine($"{(dryRun ? "dry run: " : string.Empty)}imported {import.TargetLocale}: {added} added, {changed} changed, {unchanged} unchanged, {skipped} skipped, {refused} refused.");
-        foreach (TranslationSourceEdit edit in edits) result.WriteOutputLine($"{verb} {edit.Path}.");
+        if (!failed)
+            foreach (TranslationSourceEdit edit in edits) result.WriteOutputLine($"{verb} {edit.Path}.");
         if (sourceChanged != 0) result.WriteOutputLine($"{sourceChanged} translation(s) of changed sources were imported as needs-review.");
         foreach (TranslationsToolInterchangeEntry entry in entries.Where(static entry => entry.Outcome == "refused").Take(MaximumUnitWarnings))
             result.WriteOutputLine($"refused {entry.Key}: {entry.Code}: {entry.Message}");
-        if (review is not null && (reviewChanged || !File.Exists(reviewPath)))
+        if (writeReviewFile && !failed)
             result.WriteOutputLine($"{verb} {Display(reviewPath)}.");
         result.Interchange = new TranslationsToolInterchange("import", catalog)
         {
@@ -281,9 +303,16 @@ internal static class InterchangeOperations
             Entries = entries.Take(MaximumEntries).ToArray(),
             EntriesTruncated = entries.Count > MaximumEntries,
             Notices = Notices(import.Report.Losses),
-            Files = edits.Select(static edit => new TranslationsToolInterchangeFile(edit.Path, edit.OriginalBytes is null ? "added" : "changed")).ToArray(),
+            Files = failed ? [] : edits.Select(static edit => new TranslationsToolInterchangeFile(edit.Path, edit.OriginalBytes is null ? "added" : "changed")).ToArray(),
             ReviewFile = review is null ? null : Display(reviewPath),
         };
+        if (failed)
+        {
+            result.Fault = new CommandFault(ToolCodes.InterchangeRejected, $"{refused} unit(s) were refused and --fail-on refused is set; nothing was written.");
+            result.WriteOutputLine($"{refused} unit(s) were refused and --fail-on refused is set; nothing was written.");
+            result.ExitCategory = CommandExitCategory.Validation;
+            return 1;
+        }
         return 0;
     }
 
@@ -370,22 +399,36 @@ internal static class InterchangeOperations
         throw new ToolOutputException($"RTR0020: the imported translation path '{path}' is outside every source root.");
     }
 
-    // Stages every file, then replaces them; a failure restores the files already replaced.
-    private static void WriteSources(IReadOnlyList<TranslationSourceEdit> edits, string currentDirectory)
+    /// <summary>One file an import replaces: its full and displayed path, the bytes it was read with (none for a new file) and the new bytes.</summary>
+    internal sealed record SourceWrite(string FullPath, string DisplayPath, byte[]? OriginalBytes, byte[] Bytes);
+
+    /// <summary>A file an import replaces no longer holds the bytes the import was computed from.</summary>
+    internal sealed class SourceChangedException(string path)
+        : Exception($"'{path}' changed on disk after the import read it (an editor save or another import); nothing was written.");
+
+    // Stages every file, checks that none changed since it was read, then replaces them; a failure restores the
+    // files already replaced. The check closes the window between compiling and writing to the staging time.
+    internal static void WriteSources(IReadOnlyList<SourceWrite> writes)
     {
         var staged = new List<(string Path, string Temporary, byte[]? Original)>();
         var committed = new List<(string Path, byte[]? Original)>();
         try
         {
-            foreach (TranslationSourceEdit edit in edits)
+            foreach (SourceWrite write in writes)
             {
-                string full = Path.GetFullPath(edit.Path, currentDirectory);
+                string full = write.FullPath;
                 Directory.CreateDirectory(Path.GetDirectoryName(full)!);
                 if (File.Exists(full) && (File.GetAttributes(full) & FileAttributes.ReparsePoint) != 0)
-                    throw new ToolOutputException($"RTR0020: the translation source '{edit.Path}' is a symbolic link or reparse point.");
+                    throw new ToolOutputException($"RTR0020: the translation source '{write.DisplayPath}' is a symbolic link or reparse point.");
                 string temporary = Path.Combine(Path.GetDirectoryName(full)!, $".{Path.GetFileName(full)}.{Guid.NewGuid():N}.tmp");
-                File.WriteAllBytes(temporary, edit.Bytes);
-                staged.Add((full, temporary, edit.OriginalBytes));
+                File.WriteAllBytes(temporary, write.Bytes);
+                staged.Add((full, temporary, write.OriginalBytes));
+            }
+            foreach (SourceWrite write in writes)
+            {
+                byte[]? current = File.Exists(write.FullPath) ? File.ReadAllBytes(write.FullPath) : null;
+                bool unchanged = current is null ? write.OriginalBytes is null : write.OriginalBytes is not null && current.AsSpan().SequenceEqual(write.OriginalBytes);
+                if (!unchanged) throw new SourceChangedException(write.DisplayPath);
             }
             foreach ((string path, string temporary, byte[]? original) in staged)
             {

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://runic-artifex.eu/schemas/translations/interchange-review-v2.schema.json",
   "title": "runic.translations.interchange-review/2",
-  "description": "Review state of translations: the optional <catalog>.review.json beside runic.json that runic-translations review mark and xliff import write, the review export of the Translations Editor, and the review data of TranslationInterchange.ExportReviewJson. Each entry records the per-unit source fingerprint of the source its translation was made or approved for; validate warns (RTR0089) when the current source differs. Readers also accept runic.translations.interchange-review/1, whose approval fingerprints covered the whole catalog.",
+  "description": "Review state of translations: the optional <catalog>.review.json beside runic.json that runic-translations review mark and xliff import write, the review export of the Translations Editor, and the review data of TranslationInterchange.ExportReviewJson. Each entry records the per-unit source fingerprint of the source its translation was made or approved for; validate warns (RTR0090) when the current source differs. Readers also accept runic.translations.interchange-review/1, whose approval fingerprints covered the whole catalog.",
   "type": "object",
   "additionalProperties": false,
   "required": [

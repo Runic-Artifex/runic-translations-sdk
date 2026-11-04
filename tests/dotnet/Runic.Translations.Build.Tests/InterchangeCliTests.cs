@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using Runic.Translations.Tool;
 using TUnit.Core;
 
 namespace Runic.Translations.Build.Tests;
@@ -40,7 +41,7 @@ internal sealed class InterchangeCliTests
         Assert.Equal(0, validate.ExitCode, validate.Combined);
     }
 
-    [Test, DisplayName("CLI xliff import refuses single units with a warning and whole documents with RTR0091")]
+    [Test, DisplayName("CLI xliff import refuses single units with a warning and whole documents with RTR0092")]
     public void XliffImportRefusals()
     {
         using TemporaryDirectory temporary = CopyProject();
@@ -56,7 +57,7 @@ internal sealed class InterchangeCliTests
         ProcessResult other = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--source", "other.xliff", "--format", "json");
         Assert.Equal(2, other.ExitCode, other.Combined);
         using JsonDocument failure = JsonDocument.Parse(other.StandardOutput);
-        Assert.Equal("RTR0091", failure.RootElement.GetProperty("fault").GetProperty("code").GetString());
+        Assert.Equal("RTR0092", failure.RootElement.GetProperty("fault").GetProperty("code").GetString());
         Assert.True(failure.RootElement.GetProperty("diagnostics").EnumerateArray().Any(diagnostic =>
             diagnostic.GetProperty("code").GetString() == "RCLI8215" && diagnostic.GetProperty("message").GetString()!.StartsWith("XLIFF21-CATALOG-MISMATCH", StringComparison.Ordinal)), other.StandardOutput);
         ProcessResult human = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--source", "other.xliff");
@@ -64,7 +65,7 @@ internal sealed class InterchangeCliTests
         Assert.Contains("XLIFF21-CATALOG-MISMATCH", human.StandardError);
     }
 
-    [Test, DisplayName("CLI review mark, validate RTR0089 and xliff export demote stale approvals per unit")]
+    [Test, DisplayName("CLI review mark, validate RTR0090 and xliff export demote stale approvals per unit")]
     public void ReviewFileTracksStaleTranslations()
     {
         using TemporaryDirectory temporary = CopyProject();
@@ -74,11 +75,11 @@ internal sealed class InterchangeCliTests
         using (JsonDocument envelope = JsonDocument.Parse(stale.StandardOutput))
         {
             JsonElement diagnostic = envelope.RootElement.GetProperty("payload").GetProperty("diagnostics").EnumerateArray().Single();
-            Assert.Equal("RTR0089", diagnostic.GetProperty("code").GetString());
+            Assert.Equal("RTR0090", diagnostic.GetProperty("code").GetString());
             Assert.Equal("warning", diagnostic.GetProperty("severity").GetString());
             Assert.Equal("translations/de.rmf2", diagnostic.GetProperty("path").GetString());
             Assert.Contains("'farewell'", diagnostic.GetProperty("message").GetString()!);
-            TestFixture.AssertReleaseHelpUri(diagnostic.GetProperty("helpUri").GetString(), "RTR0089");
+            TestFixture.AssertReleaseHelpUri(diagnostic.GetProperty("helpUri").GetString(), "RTR0090");
         }
 
         ProcessResult export = TestFixture.RunTool(temporary, "xliff", "export", "--project", "translations", "--output", "xliff", "--format", "json");
@@ -98,7 +99,7 @@ internal sealed class InterchangeCliTests
         Assert.Contains("\"note\": \"Checked.\"", File.ReadAllText(temporary.Resolve("translations", "shop.review.json")));
         ProcessResult current = TestFixture.RunTool(temporary, "validate", "--project", "translations");
         Assert.Equal(0, current.ExitCode, current.Combined);
-        Assert.False(current.Combined.Contains("RTR0089", StringComparison.Ordinal), current.Combined);
+        Assert.False(current.Combined.Contains("RTR0090", StringComparison.Ordinal), current.Combined);
 
         ProcessResult invalid = TestFixture.RunTool(temporary, "review", "mark", "--project", "translations", "--key", "farewell", "--locale", "en", "--state", "approved");
         Assert.Equal(2, invalid.ExitCode, invalid.Combined);
@@ -111,7 +112,7 @@ internal sealed class InterchangeCliTests
         File.WriteAllText(temporary.Resolve("translations", "shop.review.json"), "{", new UTF8Encoding(false));
         ProcessResult broken = TestFixture.RunTool(temporary, "validate", "--project", "translations");
         Assert.Equal(0, broken.ExitCode, broken.Combined);
-        Assert.Contains("warning RTR0090", broken.StandardError);
+        Assert.Contains("warning RTR0091", broken.StandardError);
     }
 
     [Test, DisplayName("CLI xliff import of a changed source records needs-review with the old fingerprint, or refuses it")]
@@ -135,7 +136,7 @@ internal sealed class InterchangeCliTests
             Assert.Equal("needs-review", farewell.GetProperty("state").GetString());
         }
         ProcessResult validate = TestFixture.RunTool(second, "validate", "--project", "translations");
-        Assert.Contains("warning RTR0089", validate.StandardError);
+        Assert.Contains("warning RTR0090", validate.StandardError);
 
         ProcessResult help = TestFixture.RunTool(second, "--help");
         Assert.Contains("xliff ", help.StandardOutput);
@@ -143,6 +144,67 @@ internal sealed class InterchangeCliTests
         ProcessResult policy = TestFixture.RunTool(second, "xliff", "import", "--project", "translations", "--source", file, "--source-changed", "keep");
         Assert.Equal(2, policy.ExitCode, policy.Combined);
         Assert.Contains("--source-changed expects needs-review or refuse.", policy.StandardError);
+    }
+
+    [Test, DisplayName("CLI xliff import --fail-on refused fails with RTR0092 and writes nothing when a unit is refused")]
+    public void XliffImportFailOnRefused()
+    {
+        using TemporaryDirectory temporary = CopyProject();
+        string file = Path.Combine(Corpus, "files", "partial.de.xliff");
+        ProcessResult strict = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--source", file, "--fail-on", "refused", "--format", "json");
+        Assert.Equal(2, strict.ExitCode, strict.Combined);
+        Assert.FileBytesEqual(Path.Combine(Corpus, "project", "de.rmf2"), temporary.Resolve("translations", "de.rmf2"));
+        Assert.FileBytesEqual(Path.Combine(Corpus, "project", "shop.review.json"), temporary.Resolve("translations", "shop.review.json"));
+        using (JsonDocument envelope = JsonDocument.Parse(strict.StandardOutput))
+        {
+            JsonElement fault = envelope.RootElement.GetProperty("fault");
+            Assert.Equal("RTR0092", fault.GetProperty("code").GetString());
+            Assert.Contains("--fail-on refused", fault.GetProperty("message").GetString()!);
+            JsonElement payload = fault.GetProperty("data").GetProperty("payload");
+            PayloadSchemas.Validate(PayloadSchemas.Tool, payload);
+            JsonElement interchange = payload.GetProperty("interchange");
+            Assert.Equal(1, interchange.GetProperty("units").GetProperty("refused").GetInt32());
+            Assert.Equal(0, interchange.GetProperty("files").GetArrayLength());
+            Assert.True(envelope.RootElement.GetProperty("diagnostics").EnumerateArray().Any(diagnostic => diagnostic.GetProperty("code").GetString() == "RCLI8216"), strict.StandardOutput);
+        }
+
+        // Without a refused unit the flag changes nothing.
+        ProcessResult clean = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--source", Path.Combine(Corpus, "files", "crowdin.de.xliff"), "--fail-on", "refused");
+        Assert.Equal(0, clean.ExitCode, clean.Combined);
+        Assert.FileBytesEqual(Path.Combine(Corpus, "expected", "crowdin.de.rmf2"), temporary.Resolve("translations", "de.rmf2"));
+        ProcessResult usage = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--source", file, "--fail-on", "skipped");
+        Assert.Equal(2, usage.ExitCode, usage.Combined);
+        Assert.Contains("--fail-on expects refused.", usage.StandardError);
+    }
+
+    [Test, DisplayName("CLI xliff import writes nothing when a source changed on disk after it was read")]
+    public void XliffImportRefusesConcurrentlyChangedSources()
+    {
+        using TemporaryDirectory temporary = new();
+        string existing = temporary.Resolve("de.rmf2"), added = temporary.Resolve("fr.rmf2");
+        File.WriteAllText(existing, "greeting = Hallo\n", new UTF8Encoding(false));
+        byte[] read = File.ReadAllBytes(existing);
+        // An editor saves the file between the import's compile and its write.
+        File.WriteAllText(existing, "greeting = Servus\n", new UTF8Encoding(false));
+        InterchangeOperations.SourceWrite[] writes =
+        [
+            new(existing, "de.rmf2", read, Encoding.UTF8.GetBytes("greeting = Guten Tag\n")),
+            new(added, "fr.rmf2", null, Encoding.UTF8.GetBytes("greeting = Bonjour\n")),
+        ];
+        try { InterchangeOperations.WriteSources(writes); throw new InvalidOperationException("A changed source was overwritten."); }
+        catch (InterchangeOperations.SourceChangedException exception) { Assert.Contains("'de.rmf2' changed on disk", exception.Message); }
+        Assert.Equal("greeting = Servus\n", File.ReadAllText(existing));
+        Assert.False(File.Exists(added), "A file was written although the import failed.");
+        Assert.Equal(1, Directory.GetFiles(temporary.Path).Length);
+
+        // A file that appeared since the import read the sources is not replaced either.
+        File.WriteAllText(added, "greeting = Salut\n", new UTF8Encoding(false));
+        try { InterchangeOperations.WriteSources([new(added, "fr.rmf2", null, Encoding.UTF8.GetBytes("greeting = Bonjour\n"))]); throw new InvalidOperationException("A new source was overwritten."); }
+        catch (InterchangeOperations.SourceChangedException) { }
+        Assert.Equal("greeting = Salut\n", File.ReadAllText(added));
+
+        InterchangeOperations.WriteSources([new(existing, "de.rmf2", File.ReadAllBytes(existing), Encoding.UTF8.GetBytes("greeting = Guten Tag\n"))]);
+        Assert.Equal("greeting = Guten Tag\n", File.ReadAllText(existing));
     }
 
     private static TemporaryDirectory CopyProject()

@@ -461,7 +461,7 @@ internal static class Program
         }
         if (invocation.Command == ToolCommand.Validate)
         {
-            // The optional review file: translations that predate a source change (RTR0089).
+            // The optional review file: translations that predate a source change (RTR0090).
             WriteDiagnostics(ReviewFile.Check(inputs, compilation), result);
             result.WriteOutputLine($"validated 1 project(s) and {inputs.Messages.Count} source document(s).");
             return Success;
@@ -624,7 +624,7 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
             "xliff export" => ExecuteInterchange(request, ToolCommand.XliffExport, (project, result) =>
                 InterchangeOperations.Export(project, request.Output!, request.Locales ?? [], request.Review, result)),
             "xliff import" => ExecuteInterchange(request, ToolCommand.XliffImport, (project, result) =>
-                InterchangeOperations.Import(project, request.Source!, request.SourceChanged, request.WriteReview, request.DryRun, result)),
+                InterchangeOperations.Import(project, request.Source!, request.SourceChanged, request.WriteReview, request.DryRun, result, request.FailOn)),
             "review mark" => ExecuteInterchange(request, ToolCommand.ReviewMark, (project, result) =>
                 InterchangeOperations.Mark(project, request.Keys ?? [], request.Locales![0], request.State!, request.Note, result)),
             _ => new ToolOperationResult { ExitCode = Program.UsageFailure, ExitCategory = CommandExitCategory.Usage },
@@ -720,7 +720,7 @@ internal static class ToolCodes
     internal const string UnsupportedOutput = "RCLI8213";
     internal const string Import = "RCLI8214";
     /// <summary>The fault of an <c>xliff</c> or <c>review</c> command whose document cannot be used; <see cref="InterchangeDocument"/> names the problem.</summary>
-    internal const string InterchangeRejected = "RTR0091";
+    internal const string InterchangeRejected = "RTR0092";
     /// <summary>An XLIFF document or review file that cannot be exported, imported or read, with its interchange code.</summary>
     internal const string InterchangeDocument = "RCLI8215";
     /// <summary>A warning: one XLIFF unit was refused and the rest of the document applied.</summary>

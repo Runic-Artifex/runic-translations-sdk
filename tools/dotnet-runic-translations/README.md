@@ -116,6 +116,8 @@ notes (ignored; a dropped translator note is reported as `XLIFF21-NOTE-IGNORED`)
 | empty target, unless its state is `translated` or later | skipped, `XLIFF21-EMPTY-TARGET`; the base text stays the fallback |
 | selector, declaration or markup message, or `translate="no"` | skipped, `XLIFF21-STRUCTURED-SKIPPED` |
 | a placeholder outside the message's caller contract, an unknown inline code, invalid MF2 | refused, `XLIFF21-PLACEHOLDER`, `XLIFF21-INLINE` or `XLIFF21-TARGET-INVALID` |
+| a target `<ph>` whose `equiv` changes a placeholder (another function or options, or a literal for a variable) | refused, `XLIFF21-PLACEHOLDER-CHANGED`; a target may only use the expressions of the current source and translation, compared in canonical form |
+| a target identical to the source, with no state and no Runic review note | applied as needs-review, reported as `XLIFF21-TARGET-COPIES-SOURCE` (some tools copy the source into untranslated units); with an explicit state it keeps that state |
 | a key the catalog does not have, a duplicate unit | refused, `XLIFF21-UNKNOWN-KEY`, `XLIFF21-DUPLICATE-UNIT` |
 | its source changed since export | applied as needs-review, or refused (`XLIFF21-SOURCE-CHANGED`) with `--source-changed refuse` |
 | otherwise | applied |
@@ -123,11 +125,23 @@ notes (ignored; a dropped translator note is reported as `XLIFF21-NOTE-IGNORED`)
 Applied translations are written into the sources as the editor writes them: an existing translation keeps its
 `.rmf2` file, comments and formatting and only its body changes; a missing one is added to the target locale's
 `.rmf2` beside the base file, inside its existing groups, or as the same file name in the target locale's
-directory for direct `.mf2` sources. Equivalent spellings of the same text count as unchanged. Every file is
-staged and the project is compiled before anything is written; `--dry-run` reports without writing. Refused
-units are warnings (`RCLI8216`) and the rest is applied; the command exits with 0. A document that cannot be
-used at all (another catalog or base locale, an undeclared target locale, not XLIFF 2) fails with `RTR0091`
-(`RCLI8215` names the problem), exit code 2, and nothing is written.
+directory for direct `.mf2` sources. A key added to an existing group copies the indentation of the group's
+other entries. Equivalent spellings of the same text count as unchanged. Every file is staged and the project is
+compiled before anything is written; `--dry-run` reports without writing. If a source or the review file changed
+on disk since the import read it (an editor save, a second import), nothing is written and the command fails
+with `RTR0092`; run it again. Refused units are warnings (`RCLI8216`) and the rest is applied; the command exits
+with 0. A document that cannot be used at all (another catalog or base locale, an undeclared target locale, not
+XLIFF 2, more than 8 MiB or elements nested deeper than 64 levels) fails with `RTR0092` (`RCLI8215` names the
+problem), exit code 2, and nothing is written.
+
+In CI, or for a bot that imports TMS output, add `--fail-on refused`: when any unit is refused, the command
+writes nothing and fails with `RTR0092` and exit code 2, so a refused unit (including one refused by
+`--source-changed refuse`) fails the pipeline. The JSON payload is the same, with `files` empty and the payload
+in the failure data:
+
+```bash
+dotnet tool run runic-translations -- xliff import --source xliff/app.de.xliff --source-changed refuse --fail-on refused
+```
 
 The review state comes from the segment `state` (`translated`, `translated` + `subState="runic:needs-review"`,
 `reviewed` or `final` as approved) or from the unit's `runic:review` note when both agree; a TMS state change
@@ -146,15 +160,17 @@ The optional review file `<catalog>.review.json` beside `runic.json`
 (`runic.translations.interchange-review/2`, schema `interchange-review-v2.schema.json`) records the review
 state of translations for teams that do not use the editor. Commit it with the sources. Each entry stores the
 per-unit fingerprint of the source its translation was made or approved for (a hash of the key, the source text
-and the caller contract), so editing one message never touches the others.
+and the caller contract), so editing one message never touches the others. The source text is hashed in canonical
+MF2 form: spacing inside an expression or between a `.match`'s parts, literal quoting, option order and equivalent
+escapes do not change it; different text, placeholders, functions, options or selectors do.
 
 - `review mark --key <key>... --locale <locale> --state draft|translated|needs-review|approved [--note <text>]`
   creates or updates entries with the fingerprint of the current source. `--key` is repeatable.
 - `xliff import` updates the file when it exists, or creates it with `--review`. A translation of a changed
   source keeps the fingerprint of the source the translator saw.
-- `validate` warns with `RTR0089` at the translation when its entry's fingerprint is not the current one:
+- `validate` warns with `RTR0090` at the translation when its entry's fingerprint is not the current one:
   the translation predates a source change. Review it, then run `review mark`. An unreadable review file is
-  the warning `RTR0090`. Without the file nothing is reported.
+  the warning `RTR0091`. Without the file nothing is reported.
 - `xliff export` reads it for the XLIFF review state (see above).
 
 ## Other commands

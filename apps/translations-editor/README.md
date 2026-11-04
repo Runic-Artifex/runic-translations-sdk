@@ -59,7 +59,9 @@ reports structured messages as semantic loss and skips them on import instead of
 flattening them. Untranslated units are skipped; a refused unit or a unit whose
 source changed since export (`EDITOR-SOURCE-MISMATCH`) blocks the import preview.
 Export stamps review state with per-unit source fingerprints: an approval made
-before its source changed is exported as needs-review.
+before its source changed is exported as needs-review. This includes approvals
+that came in through an XLIFF or review-JSON import, which record the base text
+they were made for.
 
 Machine-translation providers and signed stable distribution are not available yet.
 

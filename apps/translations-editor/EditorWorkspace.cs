@@ -698,7 +698,7 @@ internal sealed class EditorWorkspace : IDisposable
                 Push(ref changes, ref overflowed, new EditorKeyChange(entry.Key, "state-change", null, null, existing?.State ?? "draft", TranslationReviewStates.ToWire(entry.State)));
             }
 
-            List<TranslationEditorStateEntry> merged = MergeImportedEntries(sidecar, import.Review.Entries);
+            List<TranslationEditorStateEntry> merged = MergeImportedEntries(sidecar, import.Review.Entries, catalog, BaseValues(state));
             var prepared = new PreparedInterchangeImport(
                 ResolveImportSourcePath(path),
                 SHA256.HashData(bytes),
@@ -858,7 +858,7 @@ internal sealed class EditorWorkspace : IDisposable
                     Push(ref changes, ref overflowed, new EditorReviewChange(entry.Key, entry.Locale, "changed", existing.State, TranslationReviewStates.ToWire(entry.State)));
                 }
             }
-            List<TranslationEditorStateEntry> merged = MergeImportedEntries(sidecar, import.Entries);
+            List<TranslationEditorStateEntry> merged = MergeImportedEntries(sidecar, import.Entries, catalog, BaseValues(state));
             var prepared = new PreparedInterchangeImport(
                 ResolveImportSourcePath(path),
                 SHA256.HashData(bytes),
@@ -1057,11 +1057,17 @@ internal sealed class EditorWorkspace : IDisposable
 
     // Imported entries replace matching identities wholesale (interchange cannot
     // express samples, so samples survive from the current sidecar); unrelated
-    // identities and terminology are preserved.
+    // identities and terminology are preserved. An entry made for the current
+    // source gets the editor's marker of the current base value, so a later
+    // change to that value makes an imported approval stale on export, as it
+    // does for one made in the editor.
     private static List<TranslationEditorStateEntry> MergeImportedEntries(
         TranslationEditorStateLoadResult sidecar,
-        IReadOnlyList<TranslationInterchangeReviewEntry> imported)
+        IReadOnlyList<TranslationInterchangeReviewEntry> imported,
+        TranslationInterchangeProjection catalog,
+        Dictionary<string, string> baseValues)
     {
+        IReadOnlyDictionary<string, string> fingerprints = catalog.SourceFingerprints;
         Dictionary<string, TranslationEditorStateEntry> merged = sidecar.State.Entries.ToDictionary(
             static entry => Identity(entry.Key, entry.Locale), StringComparer.Ordinal);
         foreach (TranslationInterchangeReviewEntry entry in imported)
@@ -1072,7 +1078,8 @@ internal sealed class EditorWorkspace : IDisposable
                 entry.Locale,
                 TranslationReviewStates.ToWire(entry.State),
                 entry.Note,
-                null,
+                fingerprints.TryGetValue(entry.Key, out string? current) && string.Equals(entry.SourceFingerprint, current, StringComparison.Ordinal) &&
+                    baseValues.TryGetValue(entry.Key, out string? value) ? EditorSourceFingerprint(value) : null,
                 existing?.Samples ?? new SortedDictionary<string, string>(StringComparer.Ordinal));
         }
         return merged.Values

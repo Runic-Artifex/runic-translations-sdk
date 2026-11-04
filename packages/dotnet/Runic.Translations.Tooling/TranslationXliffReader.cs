@@ -27,13 +27,22 @@ internal static class TranslationXliffReader
         XDocument document;
         try
         {
-            using var stream = new MemoryStream(source.ToArray(), writable: false);
-            using XmlReader reader = XmlReader.Create(stream, new XmlReaderSettings
+            var settings = new XmlReaderSettings
             {
                 DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, IgnoreComments = true,
                 IgnoreProcessingInstructions = true, MaxCharactersInDocument = TranslationInterchange.MaximumXliffBytes,
-            });
-            document = XDocument.Load(reader, LoadOptions.PreserveWhitespace);
+            };
+            byte[] bytes = source.ToArray();
+            // The element depth is checked in a streaming pass before the tree is built, so that no later step
+            // sees a document nested deeper than the limit.
+            using (var stream = new MemoryStream(bytes, writable: false))
+            using (XmlReader scan = XmlReader.Create(stream, settings))
+                while (scan.Read())
+                    if (scan.NodeType == XmlNodeType.Element && scan.Depth >= TranslationInterchange.MaximumXliffDepth)
+                        throw new TranslationInterchangeException("XLIFF21-LIMIT", "The XLIFF document nests elements deeper than " + TranslationInterchange.MaximumXliffDepth.ToString(CultureInfo.InvariantCulture) + " levels.");
+            using (var stream = new MemoryStream(bytes, writable: false))
+            using (XmlReader reader = XmlReader.Create(stream, settings))
+                document = XDocument.Load(reader, LoadOptions.PreserveWhitespace);
         }
         catch (XmlException exception) { throw new TranslationInterchangeException("XLIFF21-MALFORMED", "The XLIFF document is malformed.", exception); }
 
@@ -120,11 +129,17 @@ internal static class TranslationXliffReader
     private sealed record UnitNote(string ExecutionProfile, int MessageGrammarVersion, string InterchangeProfile, int InterchangeProfileVersion, bool Structured, string? Description, string? Since, string? Deprecated, string[] Tags, IReadOnlyList<TranslationInterchangePlaceholder> Placeholders, string? SourceFingerprint);
     private sealed record ReviewNote(TranslationReviewState State, string? Note, string? SourceFingerprint);
 
+    // Units in document order, through any depth of <group>; iterative, so the nesting never reaches the call stack.
     private static void CollectUnits(XElement container, List<ParsedUnit> units)
     {
-        foreach (XElement element in container.Elements())
+        var pending = new Stack<IEnumerator<XElement>>();
+        pending.Push(container.Elements().GetEnumerator());
+        while (pending.Count != 0)
         {
-            if (element.Name == Xliff + "group") { CollectUnits(element, units); continue; }
+            IEnumerator<XElement> current = pending.Peek();
+            if (!current.MoveNext()) { pending.Pop().Dispose(); continue; }
+            XElement element = current.Current;
+            if (element.Name == Xliff + "group") { pending.Push(element.Elements().GetEnumerator()); continue; }
             if (element.Name != Xliff + "unit") continue; // notes, skeleton, module metadata
             if (units.Count > TranslationInterchange.MaximumUnits) return;
             units.Add(ParseUnit(element));
@@ -194,10 +209,16 @@ internal static class TranslationXliffReader
         }
     }
 
+    // Inline content in document order; <mrk> is unwrapped iteratively, so its nesting never reaches the call stack.
     private static void ReadInline(XElement container, List<Inline> output, ParsedUnit unit)
     {
-        foreach (XNode node in container.Nodes())
+        var pending = new Stack<IEnumerator<XNode>>();
+        pending.Push(container.Nodes().GetEnumerator());
+        while (pending.Count != 0)
         {
+            IEnumerator<XNode> current = pending.Peek();
+            if (!current.MoveNext()) { pending.Pop().Dispose(); continue; }
+            XNode node = current.Current;
             switch (node)
             {
                 case XText text:
@@ -215,7 +236,7 @@ internal static class TranslationXliffReader
                 case XElement element when element.Name == Xliff + "mrk":
                     // An annotation (a term, a comment, a translate="no" span): its content is kept, the annotation is not.
                     unit.HasMarkers = true;
-                    ReadInline(element, output, unit);
+                    pending.Push(element.Nodes().GetEnumerator());
                     break;
                 case XElement element:
                     throw new UnitProblem("XLIFF21-INLINE", "The inline element <" + element.Name.LocalName + "> is not supported; only <ph>, <mrk> and <cp> are.");
@@ -252,6 +273,9 @@ internal static class TranslationXliffReader
         internal string? FormerTextProfileFingerprint { get; set; }
         internal Dictionary<string, TranslationInterchangeSourceUnit> LiveUnits { get; } =
             live?.CanonicalUnits.ToDictionary(static unit => unit.Key, StringComparer.Ordinal) ?? new(StringComparer.Ordinal);
+        internal Dictionary<string, TranslationInterchangeTargetUnit> LiveTargets { get; } =
+            live?.Locales.FirstOrDefault(locale => string.Equals(locale.Tag, targetLocale, StringComparison.Ordinal))?.DirectResources
+                .ToDictionary(static unit => unit.Key, StringComparer.Ordinal) ?? new(StringComparer.Ordinal);
     }
 
     private sealed class UnitDecision
@@ -342,6 +366,11 @@ internal static class TranslationXliffReader
         bool translatedState = stateDeclared || unit.Review is not null;
         if (TranslationInterchangePattern.IsEmpty(targetPieces) && !translatedState)
             return UnitDecision.Skip(key, "XLIFF21-EMPTY-TARGET", "The target is empty and no state marks it as translated; the base text stays the fallback.");
+        // Some tools fill an untranslated target with a copy of the source and write no state. Without a state that
+        // says otherwise, such a copy is imported for review instead of as a finished translation.
+        bool copiedSource = !translatedState && string.Equals(
+            TranslationInterchangePattern.Compose(TranslationInterchangePattern.Canonical(targetPieces)),
+            TranslationInterchangePattern.Compose(TranslationInterchangePattern.Canonical(sourcePieces)), StringComparison.Ordinal);
 
         // The contract the target is checked against: the live caller contract, else the one the file records,
         // else the placeholders of the file's source.
@@ -353,6 +382,12 @@ internal static class TranslationXliffReader
         foreach (string variable in TranslationInterchangePattern.Variables(targetPieces))
             if (!allowed.Contains(variable))
                 return UnitDecision.Refuse(key, "XLIFF21-PLACEHOLDER", "The target uses the placeholder $" + variable + ", which the message's caller contract does not have.");
+        if (context.ProfileVersion >= 3)
+        {
+            if (!TryKeepExpressions(targetPieces, KnownExpressions(key, live, sourcePieces, context), out targetPieces, out string? changedProblem))
+                return UnitDecision.Refuse(key, "XLIFF21-PLACEHOLDER-CHANGED", changedProblem!);
+            targetPattern = TranslationInterchangePattern.Compose(targetPieces);
+        }
 
         // The source the translator saw, and whether the live source changed since.
         IReadOnlyList<TranslationInterchangePlaceholder> recordedContract = unit.Metadata?.Placeholders ?? contract;
@@ -367,7 +402,12 @@ internal static class TranslationXliffReader
         // otherwise the segment state is authoritative.
         TranslationReviewState state = MapSegmentState(segmentState, unit.SubStates.Contains(TranslationInterchange.NeedsReviewSubState), context.ProfileVersion);
         string? note = unit.Review?.Note;
-        if (!stateDeclared && unit.Review is null)
+        if (copiedSource)
+        {
+            context.Losses.Add(new("XLIFF21-TARGET-COPIES-SOURCE", location, "The target equals the source and no state marks it as translated; it is imported as needs-review.", false));
+            state = TranslationReviewState.NeedsReview;
+        }
+        else if (!stateDeclared && unit.Review is null)
             context.Losses.Add(new("XLIFF21-STATE-MISSING", location, "The segment has a target but no state; it is imported as translated.", false));
         if (unit.Review is { } review)
         {
@@ -402,7 +442,7 @@ internal static class TranslationXliffReader
             Contract = contract,
             State = state,
             // "translated" is what an existing translation is by default; only other states become review data.
-            ExplicitState = unit.Review is not null || sourceChanged || (stateDeclared && state != TranslationReviewState.Translated),
+            ExplicitState = unit.Review is not null || sourceChanged || copiedSource || (stateDeclared && state != TranslationReviewState.Translated),
             Note = note,
             SourceFingerprint = fileFingerprint,
             SourceChanged = sourceChanged,
@@ -461,45 +501,105 @@ internal static class TranslationXliffReader
         return true;
     }
 
+    // The placeholder expressions a target may use, by canonical spelling: those of the live source and the live
+    // translation, or without a live catalog those of the file's source. The value is the spelling that is written.
+    private static Dictionary<string, string> KnownExpressions(string key, TranslationInterchangeSourceUnit? live, IReadOnlyList<TranslationInterchangePiece> fileSource, ImportContext context)
+    {
+        var known = new Dictionary<string, string>(StringComparer.Ordinal);
+        void Add(IReadOnlyList<TranslationInterchangePiece>? pieces)
+        {
+            foreach (TranslationInterchangePiece piece in pieces ?? [])
+                if (!piece.IsText) known.TryAdd(TranslationInterchangePattern.CanonicalExpression(piece.Expression!), piece.Expression!);
+        }
+        if (context.Live is null) { Add(fileSource); return known; }
+        Add(live?.Pieces);
+        if (context.LiveTargets.TryGetValue(key, out TranslationInterchangeTargetUnit? target))
+            Add(target.Pieces ?? TranslationInterchangePattern.Decompose(target.Text));
+        return known;
+    }
+
+    // A target <ph> carries its expression in equiv, which a tool or a person can edit. A translation may move and
+    // repeat the message's placeholders but not change one (another function or option) or replace it with a literal.
+    private static bool TryKeepExpressions(IReadOnlyList<TranslationInterchangePiece> target, Dictionary<string, string> known,
+        out IReadOnlyList<TranslationInterchangePiece> pieces, out string? problem)
+    {
+        var result = new List<TranslationInterchangePiece>(target.Count);
+        foreach (TranslationInterchangePiece piece in target)
+        {
+            if (piece.IsText) { result.Add(piece); continue; }
+            if (!known.TryGetValue(TranslationInterchangePattern.CanonicalExpression(piece.Expression!), out string? spelling))
+            {
+                pieces = target;
+                problem = "The target placeholder " + piece.Expression + " is not one of the message's placeholders" +
+                    (known.Count == 0 ? string.Empty : " (" + string.Join(", ", known.Values) + ")") +
+                    "; a translation cannot change a placeholder's function or options or replace it with text.";
+                return false;
+            }
+            result.Add(piece with { Expression = spelling });
+        }
+        pieces = result;
+        problem = null;
+        return true;
+    }
+
     // Compiles every applied unit's source and target as one synthetic project: the compiler checks that the target
     // is valid MF2 and introduces no input outside the source's caller contract. A unit with errors is refused.
+    // Every round refuses at least one unit, so the loop reaches a fixed point: either the remaining units compile
+    // together, or none remain. A failure that names no unit is narrowed by compiling the units one by one.
     private static void ValidateContracts(List<UnitDecision> decisions, ImportContext context)
     {
-        for (int round = 0; round < 3; round++)
+        while (true)
         {
             UnitDecision[] applied = decisions.Where(static decision => decision.Outcome == TranslationXliffUnitOutcome.Applied).ToArray();
             if (applied.Length == 0) return;
-            string project = "{\"schemaVersion\":1,\"catalog\":" + Quote(context.Catalog) + ",\"code\":{\"namespace\":\"Runic.Interchange\",\"className\":\"Text\"},\"baseLocale\":" + Quote(context.SourceLocale) +
-                ",\"locales\":[{\"tag\":" + Quote(context.SourceLocale) + "},{\"tag\":" + Quote(context.TargetLocale) + ",\"fallback\":" + Quote(context.SourceLocale) + "}]}";
-            var messages = new List<TranslationSource>(applied.Length * 2);
-            foreach (UnitDecision decision in applied)
-            {
-                messages.Add(new TranslationSource("interchange/" + context.SourceLocale + "/" + decision.Key + ".mf2", Encoding.UTF8.GetBytes(decision.SourcePattern!)));
-                messages.Add(new TranslationSource("interchange/" + context.TargetLocale + "/" + decision.Key + ".mf2", Encoding.UTF8.GetBytes(decision.Pattern!)));
-            }
-            Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(
-                new TranslationSource("interchange/runic.json", Encoding.UTF8.GetBytes(project)), messages);
+            Rmf2ProjectCompilation compilation = CompileUnits(applied, context);
             if (compilation.Success) return;
-            var failing = new Dictionary<string, string>(StringComparer.Ordinal);
-            bool unattributed = false;
-            foreach (TranslationDiagnostic diagnostic in compilation.Diagnostics.Where(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error))
-            {
-                string path = diagnostic.Location.Path;
-                string? key = path.StartsWith("interchange/", StringComparison.Ordinal) && path.EndsWith(".mf2", StringComparison.Ordinal)
-                    ? Path.GetFileNameWithoutExtension(path) : null;
-                if (key is null || !applied.Any(decision => decision.Key == key)) { unattributed = true; continue; }
-                failing.TryAdd(key, "[" + diagnostic.Id + "] " + diagnostic.Message);
-            }
+            Dictionary<string, string> failing = FailingUnits(compilation, applied);
+            if (failing.Count == 0)
+                foreach (UnitDecision decision in applied)
+                {
+                    Rmf2ProjectCompilation alone = CompileUnits([decision], context);
+                    if (!alone.Success)
+                        failing[decision.Key] = FailingUnits(alone, [decision]).GetValueOrDefault(decision.Key) ?? "The target does not satisfy the message's caller contract.";
+                }
+            // Units that compile alone but not together: refuse the rest deterministically rather than apply them.
+            bool isolated = failing.Count != 0;
             foreach (UnitDecision decision in applied)
             {
-                if (failing.TryGetValue(decision.Key, out string? message) || (unattributed && failing.Count == 0))
-                {
-                    decision.Outcome = TranslationXliffUnitOutcome.Refused;
-                    decision.Code = "XLIFF21-TARGET-INVALID";
-                    decision.Message = message ?? "The target does not satisfy the message's caller contract.";
-                }
+                if (!failing.TryGetValue(decision.Key, out string? message) && isolated) continue;
+                decision.Outcome = TranslationXliffUnitOutcome.Refused;
+                decision.Code = "XLIFF21-TARGET-INVALID";
+                decision.Message = message ?? "The imported units do not compile together; none of them was applied.";
             }
         }
+    }
+
+    private static Rmf2ProjectCompilation CompileUnits(IReadOnlyList<UnitDecision> applied, ImportContext context)
+    {
+        string project = "{\"schemaVersion\":1,\"catalog\":" + Quote(context.Catalog) + ",\"code\":{\"namespace\":\"Runic.Interchange\",\"className\":\"Text\"},\"baseLocale\":" + Quote(context.SourceLocale) +
+            ",\"locales\":[{\"tag\":" + Quote(context.SourceLocale) + "},{\"tag\":" + Quote(context.TargetLocale) + ",\"fallback\":" + Quote(context.SourceLocale) + "}]}";
+        var messages = new List<TranslationSource>(applied.Count * 2);
+        foreach (UnitDecision decision in applied)
+        {
+            messages.Add(new TranslationSource("interchange/" + context.SourceLocale + "/" + decision.Key + ".mf2", Encoding.UTF8.GetBytes(decision.SourcePattern!)));
+            messages.Add(new TranslationSource("interchange/" + context.TargetLocale + "/" + decision.Key + ".mf2", Encoding.UTF8.GetBytes(decision.Pattern!)));
+        }
+        return TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("interchange/runic.json", Encoding.UTF8.GetBytes(project)), messages);
+    }
+
+    // The first error of every unit that a diagnostic names.
+    private static Dictionary<string, string> FailingUnits(Rmf2ProjectCompilation compilation, IReadOnlyList<UnitDecision> applied)
+    {
+        var keys = new HashSet<string>(applied.Select(static decision => decision.Key), StringComparer.Ordinal);
+        var failing = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (TranslationDiagnostic diagnostic in compilation.Diagnostics.Where(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error))
+        {
+            string path = diagnostic.Location.Path;
+            string? key = path.StartsWith("interchange/", StringComparison.Ordinal) && path.EndsWith(".mf2", StringComparison.Ordinal)
+                ? Path.GetFileNameWithoutExtension(path) : null;
+            if (key is not null && keys.Contains(key)) failing.TryAdd(key, "[" + diagnostic.Id + "] " + diagnostic.Message);
+        }
+        return failing;
     }
 
     // ---- Notes ----

@@ -82,6 +82,55 @@ internal static class TranslationInterchangePattern
     internal static string Canonical(string pattern) =>
         Decompose(pattern) is { } pieces ? Compose(pieces) : pattern;
 
+    /// <summary>
+    /// The canonical spelling of one placeholder expression: whitespace collapsed to single separators, string
+    /// literals quoted, options and attributes sorted by name. <c>{ $count  :integer }</c> and <c>{$count :integer}</c>
+    /// are the same; a different operand, function or option is not. An expression that does not parse is returned as is.
+    /// </summary>
+    internal static string CanonicalExpression(string expression)
+    {
+        Mf2SyntaxDocument syntax = Mf2SyntaxReader.Read(new TranslationSource(Path, Encoding.UTF8.GetBytes(expression)));
+        Mf2ExpressionSyntax[] expressions = syntax.Expressions.ToArray();
+        if (!syntax.Success || expressions.Length != 1 || expressions[0].MarkupKind != Mf2MarkupKind.None) return expression;
+        Mf2ExpressionSyntax parsed = expressions[0];
+        var parts = new List<string>();
+        if (parsed.Operand is { } operand) parts.Add(Operand(operand));
+        if (parsed.Function is { } function) parts.Add(":" + function);
+        foreach (Mf2PropertySyntax option in parsed.Options.OrderBy(static option => option.Name, StringComparer.Ordinal))
+            parts.Add(option.Name + "=" + (option.Value is { } value ? Operand(value) : string.Empty));
+        foreach (Mf2PropertySyntax attribute in parsed.Attributes.OrderBy(static attribute => attribute.Name, StringComparer.Ordinal))
+            parts.Add("@" + attribute.Name + (attribute.Value is { } value ? "=" + Operand(value) : string.Empty));
+        return "{" + string.Join(' ', parts) + "}";
+    }
+
+    /// <summary>
+    /// The canonical form of a whole message for fingerprints: a plain message is its pattern with canonical
+    /// expressions; any other message is its token stream without the whitespace that only separates syntax (pattern
+    /// text, including its spaces, is kept).
+    /// </summary>
+    internal static string CanonicalMessage(string message)
+    {
+        if (Decompose(message) is { } pieces) return Compose(Canonical(pieces));
+        Mf2SyntaxDocument syntax = Mf2SyntaxReader.Read(new TranslationSource(Path, Encoding.UTF8.GetBytes(message)));
+        if (!syntax.Success) return message;
+        var canonical = new StringBuilder();
+        foreach (Mf2SyntaxToken token in syntax.Tokens)
+        {
+            if (token.Kind == Mf2SyntaxTokenKind.Whitespace) continue;
+            canonical.Append((char)('A' + (int)token.Kind)).Append(token.Kind == Mf2SyntaxTokenKind.Literal ? token.Value : token.Raw).Append('\u0000');
+        }
+        return canonical.ToString();
+    }
+
+    /// <summary>The pieces with every expression in its canonical spelling.</summary>
+    internal static IReadOnlyList<TranslationInterchangePiece> Canonical(IReadOnlyList<TranslationInterchangePiece> pieces) =>
+        pieces.Select(static piece => piece.IsText ? piece : piece with { Expression = CanonicalExpression(piece.Expression!) }).ToArray();
+
+    // A literal is always quoted: {1}, {|1|} and {|a|}, {a} are the same values.
+    private static string Operand(Mf2OperandSyntax operand) => operand.Kind == Mf2OperandKind.Variable
+        ? "$" + operand.Value
+        : "|" + operand.Value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("|", "\\|", StringComparison.Ordinal) + "|";
+
     /// <summary>Whether the pieces are empty, or only empty text.</summary>
     internal static bool IsEmpty(IReadOnlyList<TranslationInterchangePiece> pieces) =>
         pieces.All(static piece => piece.IsText && piece.Text!.Length == 0);
