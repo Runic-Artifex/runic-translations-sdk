@@ -199,9 +199,10 @@ internal static partial class Rmf2LocalizedFormats
     /// year first; the original two-digit short pattern takes the place of the first later pattern equal to it, or is
     /// appended. So the second pattern is the medium one unless it is that two-digit original (then medium equals the
     /// short pattern), or, when no two-digit year was replaced, a numeric <c>yMd</c> pattern that follows because the
-    /// medium pattern equalled the short one. A <c>yMd</c> pattern never pads a day or month that the short pattern
-    /// leaves unpadded, so a numeric second pattern that does (Arabic <c>dd/MM/yyyy</c> after <c>d/M/yyyy</c>) is the
-    /// medium one.
+    /// medium pattern equalled the short one. Such a <c>yMd</c> pattern is the short pattern with fewer padded days or
+    /// months (Japanese <c>yyyy/M/d</c> after <c>yyyy/MM/dd</c>), so a numeric second pattern that pads more (Arabic
+    /// <c>dd/MM/yyyy</c> after <c>d/M/yyyy</c>) or has other separators (Apple's Czech <c>d. M. yyyy</c> after
+    /// <c>dd.MM.yyyy</c>) is the medium one.
     /// </summary>
     private static string MediumDatePattern(DateTimeFormatInfo format)
     {
@@ -212,9 +213,13 @@ internal static partial class Rmf2LocalizedFormats
         string twoDigit = first.Replace("yyyy", "yy", StringComparison.Ordinal);
         bool replaced = !string.Equals(twoDigit, first, StringComparison.Ordinal) && Array.IndexOf(patterns, twoDigit, 1) >= 0;
         if (string.Equals(second, twoDigit, StringComparison.Ordinal)) return first;
-        if (!replaced && Numeric(second) && Numeric(first) && Padded(second) <= Padded(first)) return first;
+        if (!replaced && Numeric(second) && Numeric(first) && Padded(second) <= Padded(first) &&
+            string.Equals(Unpadded(second), Unpadded(first), StringComparison.Ordinal)) return first;
         return second;
     }
+
+    // The pattern with its two-letter day and month fields written with one letter.
+    private static string Unpadded(string pattern) => pattern.Replace("dd", "d", StringComparison.Ordinal).Replace("MM", "M", StringComparison.Ordinal);
 
     // The number of two-letter day and month fields (dd, MM) of a pattern.
     private static int Padded(string pattern)
