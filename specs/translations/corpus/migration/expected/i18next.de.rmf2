@@ -1,0 +1,15 @@
+title = Laden
+cart {
+  items =
+    .input {$count :number}
+    .match $count
+    one {{{$count} Artikel}}
+    * {{{$count} Artikel}}
+  total = Summe: {$amount :number}
+}
+common {
+  cancel = Abbrechen
+  ok = OK
+}
+sign_in = Anmelden
+welcome = Willkommen, {$name}!

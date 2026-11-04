@@ -226,7 +226,7 @@ internal static class Rmf2AuthoringService
     }
     // Extract category names from the same generated CLDR rules shipped to ESM.
     // This avoids a host Intl evaluator or a second hand-maintained locale table.
-    private static string[] PluralCategories(string locale, bool ordinal)
+    internal static string[] PluralCategories(string locale, bool ordinal)
     {
         string language = locale.Split('-', '_')[0].ToLowerInvariant();
         string rules = TranslationCapabilityRegistry.EsmPluralRulesSource;

@@ -293,6 +293,7 @@ internal static class InterchangeOperations
             result.WriteOutputLine($"{verb} {Display(reviewPath)}.");
         result.Interchange = new TranslationsToolInterchange("import", catalog)
         {
+            Format = "xliff",
             Locale = import.TargetLocale,
             DryRun = dryRun,
             Units = new TranslationsToolInterchangeCounts
