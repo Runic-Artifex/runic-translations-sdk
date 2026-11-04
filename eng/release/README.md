@@ -338,7 +338,10 @@ same policy. For Translations:
 - Contracts covered by the breaking-change rules, besides the C# API of each
   package's `PublicAPI.Shipped.txt`, the `Runic.Translations.Build` MSBuild
   properties and the `dotnet-runic-translations` commands and options: the JSON
-  contract `runic.translations.interchange-review/1`; the
+  contract `runic.translations.interchange-review/2` (schema `interchange-review-v2`,
+  also the optional `<catalog>.review.json`; readers keep reading `/1`) and the
+  XLIFF profile `runic.xliff21.closed-text` version 3 (import keeps reading
+  version 2); the
   `runic.translations.editor-diagnostics/1` bundle only as input of
   `runic-translations support`, which keeps reading every `/1` bundle; the packed
   schemas `project-v1`, `message-ast-v5`, `locale-artifact-v5`, `external-pack-v5`
