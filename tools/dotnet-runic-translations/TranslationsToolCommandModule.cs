@@ -14,7 +14,7 @@ namespace Runic.Translations.Tool;
 internal static class TranslationsToolCommandModule
 {
     /// <summary>The translation commands, whose human output <see cref="ToolOutcomePresenter"/> writes.</summary>
-    internal static readonly string[] Commands = ["init", "lsp", "serve", "validate", "generate", "verify", "import-text", "schema", "xliff export", "xliff import", "review mark"];
+    internal static readonly string[] Commands = ["init", "lsp", "serve", "validate", "generate", "verify", "import-text", "schema", "xliff export", "xliff import", "review mark", "locale add", "locale remove"];
 
     /// <summary>Writes a catalog-level response through the standard command-line transport.</summary>
     internal static ValueTask PresentAsync(
@@ -80,8 +80,8 @@ internal static class TranslationsToolCommandModule
     [Command("serve", Description = "Run a persistent compiler for development servers over standard input/output.")][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
     internal static CommandOutcome<TranslationsToolCommandResult> Serve([FromServices] ITranslationsToolCommandOperations operations) => operations.Execute(new("serve"));
 
-    [Command("validate", Description = "Validate catalogs and report translation diagnostics.", LongDescription = ExitCodes, Examples = ["runic-translations validate", "runic-translations validate --project src/App/translations"])][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
-    internal static CommandOutcome<TranslationsToolCommandResult> Validate([FromServices] ITranslationsToolCommandOperations operations, [Option("--project", Description = ProjectDescription, ValueName = "directory")] string? project) => operations.Execute(new("validate", Project: project));
+    [Command("validate", Description = "Validate catalogs and report translation diagnostics.", LongDescription = ExitCodes, Examples = ["runic-translations validate", "runic-translations validate --project src/App/translations", "runic-translations validate --project src/App/translations --project src/Lib/translations --sarif artifacts/translations.sarif"])][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
+    internal static CommandOutcome<TranslationsToolCommandResult> Validate([FromServices] ITranslationsToolCommandOperations operations, [Option("--project", AllowMultipleValues = true, Description = ProjectDescription + " Repeatable: each project is validated and their diagnostics are reported together.", ValueName = "directory")] IReadOnlyList<string> projects, [Option("--sarif", ValueName = "file", Description = "Also write every diagnostic as a SARIF 2.1.0 report, for code scanning; written even when validation fails.")] string? sarif) => operations.Execute(new("validate") { Projects = projects, Sarif = sarif });
 
     [Command("generate", Description = "Generate translation artifacts.", LongDescription = EmitDescription + "\n\n" + ExitCodes, Examples = ["runic-translations generate --output obj/translations --emit-esm"])][CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
     internal static CommandOutcome<TranslationsToolCommandResult> Generate([FromServices] ITranslationsToolCommandOperations operations, [Option("--project", Description = ProjectDescription, ValueName = "directory")] string? project, [Option("--output", Required = true, Description = "Directory to write the artifacts to.", ValueName = "directory")] string output, [Option("--emit-csharp", Description = "Render the typed C# API.")] bool csharp, [Option("--emit-json", Description = "Render locale-v5 JSON and its asset manifest.")] bool json, [Option("--emit-esm", Description = "Render the ESM package and web-module-manifest-v3.json.")] bool esm) => operations.Execute(new("generate", Project: project, Output: output, EmitCSharp: csharp, EmitJson: json, EmitEsm: esm));
@@ -221,6 +221,18 @@ internal sealed record TranslationsToolCommandRequest(
 
     /// <summary>The path of the JSON array of base texts without a translation that <c>import-text</c> reads.</summary>
     public string? BaseTexts { get; init; }
+
+    /// <summary>The projects of <c>validate</c>, each a translations directory or its runic.json.</summary>
+    public IReadOnlyList<string>? Projects { get; init; }
+
+    /// <summary>The SARIF report that <c>validate</c> writes.</summary>
+    public string? Sarif { get; init; }
+
+    /// <summary>The locale that <c>locale add</c> or <c>locale remove</c> changes.</summary>
+    public string? Tag { get; init; }
+
+    /// <summary>The fallback locale of <c>locale add</c>.</summary>
+    public string? Fallback { get; init; }
 
     /// <summary>The review file that <c>xliff export</c> reads instead of the default one.</summary>
     public string? Review { get; init; }

@@ -15,6 +15,8 @@ internal enum ToolCommand
     XliffExport,
     XliffImport,
     ReviewMark,
+    LocaleAdd,
+    LocaleRemove,
 }
 
 [Flags]

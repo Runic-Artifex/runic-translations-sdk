@@ -126,8 +126,8 @@ internal sealed class CliIntegrationTests
         ProcessResult commandHelp = TestFixture.RunTool(temporary, "help", "validate");
         Assert.Equal(0, commandHelp.ExitCode, commandHelp.Combined);
         Assert.Contains("runic-translations validate", commandHelp.StandardOutput);
-        // --project is optional and described, in the same aligned help as every other command.
-        string? project = commandHelp.StandardOutput.Split('\n').FirstOrDefault(value => value.TrimStart().StartsWith("--project <directory>", StringComparison.Ordinal));
+        // --project is optional, repeatable and described, in the same aligned help as every other command.
+        string? project = commandHelp.StandardOutput.Split('\n').FirstOrDefault(value => value.TrimStart().StartsWith("--project <directory...>", StringComparison.Ordinal));
         Assert.True(project is not null && project.Contains("Translations directory or its runic.json.", StringComparison.Ordinal) && !project.Contains("[required]", StringComparison.Ordinal), commandHelp.StandardOutput);
         Assert.Contains("Defaults to ./runic.json", System.Text.RegularExpressions.Regex.Replace(commandHelp.StandardOutput, "\\s+", " "));
         // The retired --emit-typescript, --emit-template-manifest and --emit-cpp options are gone: help does not list
@@ -644,7 +644,7 @@ internal sealed class CliIntegrationTests
         ProcessResult result = TestFixture.RunTool(temporary, "schema", "--output", "schemas");
         Assert.Equal(0, result.ExitCode, result.Combined);
         string source = RepositoryPaths.Resolve("specs", "translations", "schemas");
-        string[] expected = ["asset-manifest-v1.schema.json", "capabilities-v1.schema.json", "external-pack-v5.schema.json", "interchange-review-v2.schema.json", "locale-artifact-v5.schema.json", "message-ast-v5.schema.json", "project-v1.schema.json", "translations-serve-v1.schema.json", "translations-support-v1.schema.json", "translations-tool-v1.schema.json", "web-module-manifest-v3.schema.json"];
+        string[] expected = ["asset-manifest-v1.schema.json", "capabilities-v1.schema.json", "external-pack-v5.schema.json", "interchange-review-v2.schema.json", "locale-artifact-v5.schema.json", "message-ast-v5.schema.json", "project-v1.schema.json", "translations-serve-v1.schema.json", "translations-status-v1.schema.json", "translations-support-v1.schema.json", "translations-tool-v1.schema.json", "web-module-manifest-v3.schema.json"];
         Array.Sort(expected, StringComparer.Ordinal);
         Assert.Equal(string.Join('|', expected), string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("schemas"))));
         foreach (string schema in expected)

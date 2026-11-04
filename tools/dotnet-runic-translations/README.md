@@ -26,6 +26,57 @@ New projects use grouped RMF2 resources in sibling files such as `en.rmf2` and
 `de.rmf2`. Direct locale-directory `.mf2` messages are also supported; the
 representation is inferred from source files and cannot be mixed.
 
+`--project` is repeatable: `validate --project src/App/translations --project src/Lib/translations` validates
+each catalog and reports their diagnostics together (exit 2 when any fails). `--sarif <file>` also writes every
+diagnostic as a SARIF 2.1.0 report (one rule per RTR code, linked to its reference entry; UTF-16 columns), for
+GitHub code scanning or other CI annotations. It is written when validation fails too.
+
+```bash
+dotnet tool run runic-translations -- validate --project src/App/translations --project src/Lib/translations --sarif artifacts/translations.sarif
+```
+
+## Report translation coverage
+
+```bash
+dotnet tool run runic-translations -- status
+dotnet tool run runic-translations -- status --min-coverage de=100,fr=80 --format json
+```
+
+`status` lists, per catalog and locale, the messages the locale translates, those a fallback locale other than
+the base locale serves (`de-CH` from `de`), those missing (shown in the base locale), and with a review file
+(below) the stale ones, translations whose source changed since they were recorded:
+
+```text
+shop (translations/runic.json): 10 message(s), base locale en
+  locale      translated  fallback  missing  stale  coverage
+  en                  10         0        0      -      100%
+  de                   3         0        7      1       30%  below 80%
+```
+
+Coverage is translated plus fallback as a percentage of the base locale's messages. `--min-coverage
+<locale>=<percent>` (repeatable or comma-separated; `*` for every translated locale) makes the command exit
+with 1 and the fault `RTR0099` when a locale is below it; the payload, `runic.translations.status/1`
+([schema](../../specs/translations/schemas/translations-status-v1.schema.json)), is then in
+`fault.data.payload`. `--project` is repeatable. To require completeness at build time instead, use the
+locale's own policy in `runic.json`: `{ "tag": "fr", "fallback": "en", "validation": { "translationCompleteness":
+"warning" } }` lets `fr` lag while the project's `error` still applies to the other locales.
+
+## Add or remove a locale
+
+```bash
+dotnet tool run runic-translations -- locale add fr
+dotnet tool run runic-translations -- locale add de-CH --fallback de
+dotnet tool run runic-translations -- locale remove fr --dry-run
+```
+
+`locale add <tag>` adds the locale to `runic.json`'s `locales` (keeping the file's formatting; an object entry
+with `--fallback` or when the list has object entries) and creates an empty `<tag>.rmf2` beside every
+base-locale `.rmf2` file. It writes nothing when the project would not compile with it. The new locale is
+untranslated, so `validate` reports `RTR0010` until it is translated, unless the locale entry relaxes
+`validation.translationCompleteness`. `locale remove <tag>` removes the entry, deletes the locale's `.rmf2`
+files (or its `<tag>/` `.mf2` files) and its review entries; it refuses the base locale and a locale that
+another locale falls back to. Both accept `--project` and `--dry-run`.
+
 ## Generate C# and ESM
 
 ```bash

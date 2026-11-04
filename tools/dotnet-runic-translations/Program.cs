@@ -277,6 +277,8 @@ internal static class Program
         ToolCommand.XliffExport => new CommandPath(["xliff", "export"]),
         ToolCommand.XliffImport => new CommandPath(["xliff", "import"]),
         ToolCommand.ReviewMark => new CommandPath(["review", "mark"]),
+        ToolCommand.LocaleAdd => new CommandPath(["locale", "add"]),
+        ToolCommand.LocaleRemove => new CommandPath(["locale", "remove"]),
         _ => new CommandPath([command.ToString().ToLowerInvariant()]),
     };
 
@@ -408,6 +410,11 @@ internal static class Program
         while (end < value.Length && value[end] is not '\'' and not '"' and not '\r' and not '\n') end++;
         return $" at {value.Substring(start, end - start)}";
     }
+
+    /// <summary>Runs one invocation into a shared result, for commands that run several projects.</summary>
+    internal static int RunInto(ToolInvocation invocation, ToolOperationResult result) => Run(invocation, result, null);
+
+    internal static string Version => ToolVersion;
 
     private static int Run(ToolInvocation invocation, ToolOperationResult result, SourceUnitCache? units)
     {
@@ -616,7 +623,7 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
         ToolOperationResult result = request.Command switch
         {
             "init" => Program.ExecuteInit(request.Directory!, request.Catalog!, request.DefaultLocale!, request.Namespace!, request.ClassName!, request.Locales ?? [], request.NoStarter),
-            "validate" => ExecuteCompilation(request, ToolCommand.Validate, null, ToolEmission.None),
+            "validate" => ExecuteValidate(request),
             "generate" => ExecuteCompilation(request, ToolCommand.Generate, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitEsm), OmitSourceDiagnostics()),
             "verify" => ExecuteCompilation(request, ToolCommand.Verify, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitEsm), OmitSourceDiagnostics()),
             "schema" => Program.Execute(new ToolInvocation(ToolCommand.Schema, request.Output, ToolEmission.None, null)),
@@ -627,6 +634,10 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
                 InterchangeOperations.Import(project, request.Source!, request.SourceChanged, request.WriteReview, request.DryRun, result, request.FailOn)),
             "review mark" => ExecuteInterchange(request, ToolCommand.ReviewMark, (project, result) =>
                 InterchangeOperations.Mark(project, request.Keys ?? [], request.Locales![0], request.State!, request.Note, result)),
+            "locale add" => ExecuteInterchange(request, ToolCommand.LocaleAdd, (project, result) =>
+                LocaleOperations.Add(project, request.Tag!, request.Fallback, request.DryRun, result)),
+            "locale remove" => ExecuteInterchange(request, ToolCommand.LocaleRemove, (project, result) =>
+                LocaleOperations.Remove(project, request.Tag!, request.DryRun, result)),
             _ => new ToolOperationResult { ExitCode = Program.UsageFailure, ExitCategory = CommandExitCategory.Usage },
         };
         var report = new TranslationsToolCommandResult(result.Output, string.Empty) { Diagnostics = result.TranslationDiagnostics, Interchange = result.Interchange };
@@ -644,6 +655,28 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
     }
 
     private const string PayloadType = "runic.translations.tool/1";
+
+    // validate: every --project into one result, then the optional SARIF report of all their diagnostics.
+    private static ToolOperationResult ExecuteValidate(TranslationsToolCommandRequest request)
+    {
+        IReadOnlyList<string> projects = request.Projects is { Count: > 0 } several ? several
+            : DefaultProject() is { } found ? [found] : [];
+        if (projects.Count == 0)
+            return Program.Usage("no runic.json in the current directory or in ./translations; pass --project <directory>.", ToolCommand.Validate);
+        return Program.Execute(ToolCommand.Validate, result =>
+        {
+            int exit = Program.Success;
+            foreach (string project in projects)
+                if (Program.RunInto(new ToolInvocation(ToolCommand.Validate, null, ToolEmission.None, null, project), result) != Program.Success) exit = 1;
+            if (request.Sarif is { Length: > 0 } sarif)
+            {
+                string path = Path.GetFullPath(sarif, Environment.CurrentDirectory);
+                InterchangeOperations.WriteFile(path, SarifReport.Render(result.AllTranslationDiagnostics, Program.Version));
+                result.WriteOutputLine($"wrote {InputFiles.DisplayPath(path, Path.GetFullPath(Environment.CurrentDirectory))} ({result.AllTranslationDiagnostics.Count} result(s)).");
+            }
+            return exit;
+        });
+    }
 
     private static ToolOperationResult ExecuteImport(TranslationsToolCommandRequest request)
     {
@@ -692,7 +725,7 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
 
     // Without --project: the current directory when it holds runic.json, else the conventional
     // ./translations directory that the templates, init and Runic.Translations.Build use.
-    private static string? DefaultProject()
+    internal static string? DefaultProject()
     {
         if (File.Exists("runic.json")) return ".";
         return File.Exists(Path.Combine("translations", "runic.json")) ? "translations" : null;
@@ -725,6 +758,8 @@ internal static class ToolCodes
     internal const string InterchangeDocument = "RCLI8215";
     /// <summary>A warning: one XLIFF unit was refused and the rest of the document applied.</summary>
     internal const string InterchangeUnit = "RCLI8216";
+    /// <summary>The fault of a <c>status</c> whose locale is below its <c>--min-coverage</c>.</summary>
+    internal const string CoverageBelowThreshold = "RTR0099";
 }
 
 internal sealed class ToolDiagnosticException : Exception

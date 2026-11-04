@@ -12,3 +12,4 @@ RTR0095 | Runic.Translations | Warning | Plural categories of the locale fall to
 RTR0096 | Runic.Translations | Warning | Translation drops a placeholder the base displays
 RTR0097 | Runic.Translations | Warning | Boolean is formatted as text
 RTR0098 | Runic.Translations | Warning | Message is longer than its @maxLength
+RTR0100 | Runic.Translations | Info | Message is not referenced from C# code

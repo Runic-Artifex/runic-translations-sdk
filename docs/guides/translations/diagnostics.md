@@ -525,6 +525,31 @@ can enforce it. Shorten the translation or raise the limit. A warning by
 default; `validation.maxLength` sets the policy. A `@maxLength` that is not a
 positive whole number, or appears twice, is an `RTR0051` error.
 
+## RTR0099
+
+Translation coverage is below its minimum. The fault of a `runic-translations
+status` whose locale is below its `--min-coverage`, for example `status
+--min-coverage de=100,fr=80` when `fr` has 66.67% coverage. Coverage counts the
+messages a locale translates and those a fallback locale other than the base
+locale serves (`de-CH` from `de`), as a percentage of the base locale's
+messages. The command exits with 1 and its payload (`runic.translations.status/1`)
+is in `fault.data`. Translate the missing messages (`status` lists the counts per
+locale) or lower the threshold.
+
+## RTR0100
+
+Message is not referenced from C# code. Information from
+`Runic.Translations.Build` when the project sets
+`<RunicTranslationsReportUnusedMessages>true</RunicTranslationsReportUnusedMessages>`:
+no C# code of the project uses the message through its readable member
+(`Text.Messages.greeting`), its encoded member, its `References` factory or its
+key property. It is reported at the end of a full compilation, so `dotnet build`
+(with `-v:n` or a binary log for information messages) and full-solution
+analysis show it. A message used only by key, from XAML, from another assembly
+or from the web is reported too; the ESM side has its own report in
+`vite-plugin-runic-translations` (`reportUnused`). Remove the message from every
+locale, or keep it and leave the report off.
+
 ## RCLI8201
 
 The requested output could not be written, for example because of an
