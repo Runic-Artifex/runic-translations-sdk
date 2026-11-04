@@ -31,16 +31,17 @@ export interface EditorReviewMock extends MockTypedView<EditorReviewMockState, E
 const spec: MockTypedViewSpec = {
   kind: "editorReview",
   route: "editorReview",
-  contract: "Runic.Translations.Editor.EditorReviewViewModel:784F15523E5F9FC7853425110F02B90ADDB9AF7CD0883E05D99B5DD87635FB67",
+  contract: "Runic.Translations.Editor.EditorReviewViewModel:03436124E1B317F004B755B4270D26782EFF6AA974533455EB9D3D86178EB5CF",
   fields: {
     saveReviewResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
   },
   defaults: { isSaveReviewExecuting: false },
+  texts: ["saveReviewResultJson"],
   commands: {
-    saveReview: { route: "SaveReview", read: (raw: unknown) => { const wire: unknown = JSON.parse(raw as string); return bridgeWire.string(wire); } },
+    saveReview: { member: "saveReview", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
   },
   operations: {
-    saveReview: { member: "SaveReview", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    saveReview: { member: "saveReview", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
   },
 };
 

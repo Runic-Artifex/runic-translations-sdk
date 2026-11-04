@@ -40,7 +40,7 @@ export interface EditorDiagnosticsMock extends MockTypedView<EditorDiagnosticsMo
 const spec: MockTypedViewSpec = {
   kind: "editorDiagnostics",
   route: "editorDiagnostics",
-  contract: "Runic.Translations.Editor.EditorDiagnosticsViewModel:784F15523E5F9FC7853425110F02B90ADDB9AF7CD0883E05D99B5DD87635FB67",
+  contract: "Runic.Translations.Editor.EditorDiagnosticsViewModel:03436124E1B317F004B755B4270D26782EFF6AA974533455EB9D3D86178EB5CF",
   fields: {
     aboutResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     createDiagnosticBundleResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
@@ -48,17 +48,18 @@ const spec: MockTypedViewSpec = {
     deleteDiagnosticBundleResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
   },
   defaults: { isAboutExecuting: false, isCreateDiagnosticBundleExecuting: false, isRevealDiagnosticBundleExecuting: false, isDeleteDiagnosticBundleExecuting: false },
+  texts: ["aboutResultJson", "createDiagnosticBundleResultJson", "revealDiagnosticBundleResultJson", "deleteDiagnosticBundleResultJson"],
   commands: {
-    about: { route: "About", read: (raw: unknown) => { const wire: unknown = JSON.parse(raw as string); return bridgeWire.string(wire); } },
-    createDiagnosticBundle: { route: "CreateDiagnosticBundle", read: (raw: unknown) => { const wire: unknown = JSON.parse(raw as string); return bridgeWire.string(wire); } },
-    revealDiagnosticBundle: { route: "RevealDiagnosticBundle", read: (raw: unknown) => { const wire: unknown = JSON.parse(raw as string); return bridgeWire.string(wire); } },
-    deleteDiagnosticBundle: { route: "DeleteDiagnosticBundle", read: (raw: unknown) => { const wire: unknown = JSON.parse(raw as string); return bridgeWire.string(wire); } },
+    about: { member: "about", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    createDiagnosticBundle: { member: "createDiagnosticBundle", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    revealDiagnosticBundle: { member: "revealDiagnosticBundle", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    deleteDiagnosticBundle: { member: "deleteDiagnosticBundle", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
   },
   operations: {
-    about: { member: "About", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
-    createDiagnosticBundle: { member: "CreateDiagnosticBundle", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
-    revealDiagnosticBundle: { member: "RevealDiagnosticBundle", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
-    deleteDiagnosticBundle: { member: "DeleteDiagnosticBundle", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    about: { member: "about", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    createDiagnosticBundle: { member: "createDiagnosticBundle", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    revealDiagnosticBundle: { member: "revealDiagnosticBundle", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    deleteDiagnosticBundle: { member: "deleteDiagnosticBundle", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
   },
 };
 

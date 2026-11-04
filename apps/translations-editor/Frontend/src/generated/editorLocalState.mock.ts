@@ -37,22 +37,23 @@ export interface EditorLocalStateMock extends MockTypedView<EditorLocalStateMock
 const spec: MockTypedViewSpec = {
   kind: "editorLocalState",
   route: "editorLocalState",
-  contract: "Runic.Translations.Editor.EditorLocalStateViewModel:784F15523E5F9FC7853425110F02B90ADDB9AF7CD0883E05D99B5DD87635FB67",
+  contract: "Runic.Translations.Editor.EditorLocalStateViewModel:03436124E1B317F004B755B4270D26782EFF6AA974533455EB9D3D86178EB5CF",
   fields: {
     loadLocalStateResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     saveLocalStateResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     clearLocalStateResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
   },
   defaults: { isLoadLocalStateExecuting: false, isSaveLocalStateExecuting: false, isClearLocalStateExecuting: false },
+  texts: ["loadLocalStateResultJson", "saveLocalStateResultJson", "clearLocalStateResultJson"],
   commands: {
-    loadLocalState: { route: "LoadLocalState", read: (raw: unknown) => { const wire: unknown = JSON.parse(raw as string); return bridgeWire.string(wire); } },
-    saveLocalState: { route: "SaveLocalState", read: (raw: unknown) => { const wire: unknown = JSON.parse(raw as string); return bridgeWire.string(wire); } },
-    clearLocalState: { route: "ClearLocalState", read: (raw: unknown) => { const wire: unknown = JSON.parse(raw as string); return bridgeWire.string(wire); } },
+    loadLocalState: { member: "loadLocalState", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    saveLocalState: { member: "saveLocalState", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    clearLocalState: { member: "clearLocalState", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
   },
   operations: {
-    loadLocalState: { member: "LoadLocalState", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
-    saveLocalState: { member: "SaveLocalState", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
-    clearLocalState: { member: "ClearLocalState", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    loadLocalState: { member: "loadLocalState", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    saveLocalState: { member: "saveLocalState", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    clearLocalState: { member: "clearLocalState", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
   },
 };
 

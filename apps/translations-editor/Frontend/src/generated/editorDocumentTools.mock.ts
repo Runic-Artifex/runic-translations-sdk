@@ -40,7 +40,7 @@ export interface EditorDocumentToolsMock extends MockTypedView<EditorDocumentToo
 const spec: MockTypedViewSpec = {
   kind: "editorDocumentTools",
   route: "editorDocumentTools",
-  contract: "Runic.Translations.Editor.EditorDocumentToolsViewModel:784F15523E5F9FC7853425110F02B90ADDB9AF7CD0883E05D99B5DD87635FB67",
+  contract: "Runic.Translations.Editor.EditorDocumentToolsViewModel:03436124E1B317F004B755B4270D26782EFF6AA974533455EB9D3D86178EB5CF",
   fields: {
     applyAuthoringOperationResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     applyDiagnosticFixResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
@@ -48,17 +48,18 @@ const spec: MockTypedViewSpec = {
     previewMessageResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
   },
   defaults: { isApplyAuthoringOperationExecuting: false, isApplyDiagnosticFixExecuting: false, isTransformDocumentExecuting: false, isPreviewMessageExecuting: false },
+  texts: ["applyAuthoringOperationResultJson", "applyDiagnosticFixResultJson", "transformDocumentResultJson", "previewMessageResultJson"],
   commands: {
-    applyAuthoringOperation: { route: "ApplyAuthoringOperation", read: (raw: unknown) => { const wire: unknown = JSON.parse(raw as string); return bridgeWire.string(wire); } },
-    applyDiagnosticFix: { route: "ApplyDiagnosticFix", read: (raw: unknown) => { const wire: unknown = JSON.parse(raw as string); return bridgeWire.string(wire); } },
-    transformDocument: { route: "TransformDocument", read: (raw: unknown) => { const wire: unknown = JSON.parse(raw as string); return bridgeWire.string(wire); } },
-    previewMessage: { route: "PreviewMessage", read: (raw: unknown) => { const wire: unknown = JSON.parse(raw as string); return bridgeWire.string(wire); } },
+    applyAuthoringOperation: { member: "applyAuthoringOperation", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    applyDiagnosticFix: { member: "applyDiagnosticFix", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    transformDocument: { member: "transformDocument", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    previewMessage: { member: "previewMessage", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
   },
   operations: {
-    applyAuthoringOperation: { member: "ApplyAuthoringOperation", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
-    applyDiagnosticFix: { member: "ApplyDiagnosticFix", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
-    transformDocument: { member: "TransformDocument", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
-    previewMessage: { member: "PreviewMessage", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    applyAuthoringOperation: { member: "applyAuthoringOperation", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    applyDiagnosticFix: { member: "applyDiagnosticFix", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    transformDocument: { member: "transformDocument", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    previewMessage: { member: "previewMessage", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
   },
 };
 

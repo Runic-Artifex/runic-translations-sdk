@@ -37,22 +37,23 @@ export interface EditorProjectMock extends MockTypedView<EditorProjectMockState,
 const spec: MockTypedViewSpec = {
   kind: "editorProject",
   route: "editorProject",
-  contract: "Runic.Translations.Editor.EditorProjectViewModel:784F15523E5F9FC7853425110F02B90ADDB9AF7CD0883E05D99B5DD87635FB67",
+  contract: "Runic.Translations.Editor.EditorProjectViewModel:03436124E1B317F004B755B4270D26782EFF6AA974533455EB9D3D86178EB5CF",
   fields: {
     previewProjectResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     createProjectResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     openWorkspaceResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
   },
   defaults: { isPreviewProjectExecuting: false, isCreateProjectExecuting: false, isOpenWorkspaceExecuting: false },
+  texts: ["previewProjectResultJson", "createProjectResultJson", "openWorkspaceResultJson"],
   commands: {
-    previewProject: { route: "PreviewProject", read: (raw: unknown) => { const wire: unknown = JSON.parse(raw as string); return bridgeWire.string(wire); } },
-    createProject: { route: "CreateProject", read: (raw: unknown) => { const wire: unknown = JSON.parse(raw as string); return bridgeWire.string(wire); } },
-    openWorkspace: { route: "OpenWorkspace", read: (raw: unknown) => { const wire: unknown = JSON.parse(raw as string); return bridgeWire.string(wire); } },
+    previewProject: { member: "previewProject", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    createProject: { member: "createProject", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    openWorkspace: { member: "openWorkspace", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
   },
   operations: {
-    previewProject: { member: "PreviewProject", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
-    createProject: { member: "CreateProject", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
-    openWorkspace: { member: "OpenWorkspace", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    previewProject: { member: "previewProject", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    createProject: { member: "createProject", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    openWorkspace: { member: "openWorkspace", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
   },
 };
 
