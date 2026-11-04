@@ -46,7 +46,7 @@ export interface EditorInterchangeMock extends MockTypedView<EditorInterchangeMo
 const spec: MockTypedViewSpec = {
   kind: "editorInterchange",
   route: "editorInterchange",
-  contract: "Runic.Translations.Editor.EditorInterchangeViewModel:784F15523E5F9FC7853425110F02B90ADDB9AF7CD0883E05D99B5DD87635FB67",
+  contract: "Runic.Translations.Editor.EditorInterchangeViewModel:AD00A5B4BE47AA9A45169F855E1B9CE367A214E3C59A59057362787C22ABD400",
   fields: {
     exportXliffResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     previewXliffImportResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
@@ -56,21 +56,22 @@ const spec: MockTypedViewSpec = {
     applyReviewJsonImportResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
   },
   defaults: { isExportXliffExecuting: false, isPreviewXliffImportExecuting: false, isApplyXliffImportExecuting: false, isExportReviewJsonExecuting: false, isPreviewReviewJsonImportExecuting: false, isApplyReviewJsonImportExecuting: false },
+  texts: ["exportXliffResultJson", "previewXliffImportResultJson", "applyXliffImportResultJson", "exportReviewJsonResultJson", "previewReviewJsonImportResultJson", "applyReviewJsonImportResultJson"],
   commands: {
-    exportXliff: { route: "ExportXliff", read: (raw: unknown) => { const wire: unknown = JSON.parse(raw as string); return bridgeWire.string(wire); } },
-    previewXliffImport: { route: "PreviewXliffImport", read: (raw: unknown) => { const wire: unknown = JSON.parse(raw as string); return bridgeWire.string(wire); } },
-    applyXliffImport: { route: "ApplyXliffImport", read: (raw: unknown) => { const wire: unknown = JSON.parse(raw as string); return bridgeWire.string(wire); } },
-    exportReviewJson: { route: "ExportReviewJson", read: (raw: unknown) => { const wire: unknown = JSON.parse(raw as string); return bridgeWire.string(wire); } },
-    previewReviewJsonImport: { route: "PreviewReviewJsonImport", read: (raw: unknown) => { const wire: unknown = JSON.parse(raw as string); return bridgeWire.string(wire); } },
-    applyReviewJsonImport: { route: "ApplyReviewJsonImport", read: (raw: unknown) => { const wire: unknown = JSON.parse(raw as string); return bridgeWire.string(wire); } },
+    exportXliff: { member: "exportXliff", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    previewXliffImport: { member: "previewXliffImport", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    applyXliffImport: { member: "applyXliffImport", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    exportReviewJson: { member: "exportReviewJson", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    previewReviewJsonImport: { member: "previewReviewJsonImport", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    applyReviewJsonImport: { member: "applyReviewJsonImport", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
   },
   operations: {
-    exportXliff: { member: "ExportXliff", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
-    previewXliffImport: { member: "PreviewXliffImport", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
-    applyXliffImport: { member: "ApplyXliffImport", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
-    exportReviewJson: { member: "ExportReviewJson", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
-    previewReviewJsonImport: { member: "PreviewReviewJsonImport", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
-    applyReviewJsonImport: { member: "ApplyReviewJsonImport", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    exportXliff: { member: "exportXliff", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    previewXliffImport: { member: "previewXliffImport", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    applyXliffImport: { member: "applyXliffImport", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    exportReviewJson: { member: "exportReviewJson", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    previewReviewJsonImport: { member: "previewReviewJsonImport", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    applyReviewJsonImport: { member: "applyReviewJsonImport", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
   },
 };
 

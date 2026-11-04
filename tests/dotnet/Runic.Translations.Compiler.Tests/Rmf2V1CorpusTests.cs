@@ -218,10 +218,18 @@ internal sealed class Rmf2V1CorpusTests
     // Re-pinned for merging TC with TE: message modules call the runtime with the requested locale, and runtime.js
     // reads getMessageLocale's content locales from its own table (messageLocaleTable) rather than the contract tables
     // that moved to dynamic.js, in both digests.
+    // Re-pinned for T1a/T1b (0.9): generated C# adds the XText(ITranslationContext) constructor and
+    // XCatalog.Registration, and gives the XText(ITranslationManager) constructor OverloadResolutionPriority(1) so
+    // new XText(null) still compiles, in both digests. Every other output is unchanged.
+    // Re-pinned for merging T1a/T1b with main (TE, TC, TD): the context constructor sits before the base-text
+    // accessor summaries and the References factories, in both digests.
+    // Re-pinned for T1g (0.9): the generated base ABI check is a call, TranslationsCompatibility.EnsureRuntimeAbi(1),
+    // in both digests.
+    // Re-pinned for merging T1g with main (TE, TC, TD) through T1a/T1b, in both digests.
     // Re-pinned for TR 0.9 batch TJ: <Class>Catalog.SourceHash and Rmf2MarkupContract are static properties rather than
     // constants, so .NET Hot Reload applies text-only catalog edits, in both digests (C# only).
-    private const string EncodedOutputDigest = "024a7aaa4be77da42198819df216ec781cd1e5f6b56134fe0cc7255777a7e10b";
-    private const string HiddenEncodedOutputDigest = "d7fcdbda2b7100bc2f7681c43fcf3e9a9442b7de59ae680f175cece8d2aa0a9b";
+    private const string EncodedOutputDigest = "2ccaf05416f0fd723ed559c43bac63ded9c6cf512952c46f6e2bf9da738973d1";
+    private const string HiddenEncodedOutputDigest = "694ae0b6c1918a67781eb1bba2f4c2f2d32bafb004d242f5c37f2ace7496e31e";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

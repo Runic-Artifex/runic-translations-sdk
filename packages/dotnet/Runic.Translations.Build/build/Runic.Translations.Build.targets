@@ -4,6 +4,8 @@
     <_Rmf2DiscoveryAssembly Condition="!Exists('$(_Rmf2DiscoveryAssembly)')">$(MSBuildThisFileDirectory)../bin/$(Configuration)/net10.0/Runic.Translations.Build.dll</_Rmf2DiscoveryAssembly>
   </PropertyGroup>
   <UsingTask TaskName="Runic.Translations.Build.Rmf2SourceDiscovery" AssemblyFile="$(_Rmf2DiscoveryAssembly)" Condition="Exists('$(_Rmf2DiscoveryAssembly)')" />
+  <!-- The version rule's dependency range for packed libraries; buildMultiTargeting imports it into the outer build. -->
+  <Import Project="Runic.Translations.Build.Pack.targets" Condition="'$(_RunicTranslationsPackTargetsImported)' != 'true'" />
   <PropertyGroup>
     <_TranslationsBuildTargetsPath>$(MSBuildThisFileFullPath)</_TranslationsBuildTargetsPath>
 

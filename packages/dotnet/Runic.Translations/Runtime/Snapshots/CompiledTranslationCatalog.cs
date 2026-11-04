@@ -180,45 +180,30 @@ public sealed class CompiledTranslationCatalog
 
     internal CompiledTranslationDefinition[] DefinitionArray => _definitions;
 
-    internal string ResolveRequestedLocale(string requestedLocale)
+    internal string ResolveRequestedLocale(string requestedLocale) => ResolveRequest(requestedLocale).Locale;
+
+    internal LocaleRequest ResolveRequest(string requestedLocale) =>
+        LocaleRequestResolver.Resolve(requestedLocale, DeclaresLocale, UnsupportedLocale, DefaultLocale, Catalog);
+
+    internal bool DeclaresLocale(string canonicalLocale) => _localeByTag.ContainsKey(canonicalLocale);
+
+    internal string? GetFallbackLocale(string canonicalLocale) => _localeByTag[canonicalLocale].FallbackLocale;
+
+    /// <summary>The declared locale tags in ordinal order.</summary>
+    internal string[] LocaleTags()
     {
-        ArgumentNullException.ThrowIfNull(requestedLocale);
-        // An empty tag, the name of the invariant culture (for example under LANG=C), names no locale.
-        // It is an unsupported locale without subtags, so the policy chooses the default locale or rejects it.
-        string canonical = string.Empty;
-        if (requestedLocale.Length != 0 && !LocaleTag.TryCanonicalize(requestedLocale, out canonical))
-        {
-            throw new ArgumentException("The requested locale is not a structurally valid BCP 47 tag.", nameof(requestedLocale));
-        }
+        var tags = new string[_locales.Length];
+        for (int i = 0; i < tags.Length; i++) tags[i] = _locales[i].Locale;
+        return tags;
+    }
 
-        if (_localeByTag.ContainsKey(canonical))
-        {
-            return canonical;
-        }
-
-        switch (UnsupportedLocale)
-        {
-            case UnsupportedLocalePolicy.Default:
-                return DefaultLocale;
-            case UnsupportedLocalePolicy.ParentsThenDefault:
-                int separator = canonical.LastIndexOf('-');
-                while (separator > 0)
-                {
-                    canonical = canonical[..separator];
-                    if (_localeByTag.ContainsKey(canonical))
-                    {
-                        return canonical;
-                    }
-
-                    separator = canonical.LastIndexOf('-');
-                }
-
-                return DefaultLocale;
-            case UnsupportedLocalePolicy.Exact:
-            default:
-                throw new TranslationNotFoundException(
-                    $"Locale '{canonical}' is not declared by catalog '{Catalog}'.");
-        }
+    /// <summary>The values a declared locale defines itself, without its fallback chain.</summary>
+    internal (string?[] Patterns, CompiledTextMessage?[] Messages) GetDirect(string canonicalLocale)
+    {
+        // Resolving the locale builds the direct values of every locale in its chain.
+        _ = Resolve(canonicalLocale);
+        LocaleState state = _localeByTag[canonicalLocale];
+        return (state.DirectPatterns!, state.DirectMessages!);
     }
 
     internal string?[] GetResolvedPatterns(string canonicalLocale) =>

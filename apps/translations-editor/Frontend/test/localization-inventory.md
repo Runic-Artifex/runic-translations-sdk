@@ -68,6 +68,7 @@ Every routine editor-owned backend notice uses the following stable resource key
 | `ui_backend_path_escape` | The requested path escapes the workspace. |
 | `ui_backend_path_link` | Translation sources cannot be symbolic links. |
 | `ui_backend_path_relative` | Workspace paths must be relative. |
+| `ui_backend_picker_failed` | The selected folder could not be opened ({$reason}). |
 | `ui_backend_picker_start` | The native folder picker could not be started. |
 | `ui_backend_picker_unavailable` | No native folder picker is available. Enter the workspace directory instead. |
 | `ui_backend_preview_key_missing` | The compiled locale has no message '{$key}'. |

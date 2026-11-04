@@ -1,0 +1,5 @@
+<Project>
+  <!-- The outer build of a multi-targeted library generates the package's .nuspec, so it needs the version rule's
+       dependency range too. The per-framework builds import build/Runic.Translations.Build.targets as usual. -->
+  <Import Project="../build/Runic.Translations.Build.Pack.targets" Condition="'$(_RunicTranslationsPackTargetsImported)' != 'true'" />
+</Project>
