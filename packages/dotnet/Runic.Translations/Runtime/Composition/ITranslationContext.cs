@@ -29,6 +29,17 @@ public interface ITranslationContext
     /// <summary>The state of every registered catalog for <see cref="RequestedLocale"/>, in registration order.</summary>
     IReadOnlyList<TranslationCatalogStatus> Catalogs { get; }
 
+    /// <summary>
+    /// The locales in which every catalog shows its own text: the intersection of the catalogs'
+    /// <see cref="TranslationCatalogStatus.SupportedLocales"/> (with the locales their overlays add), in ordinal order.
+    /// </summary>
+    /// <remarks>
+    /// Offer these in a language picker to avoid mixed-language screens. A catalog whose locales are unknown (a custom
+    /// provider) is left out of the intersection. Each catalog's own locales, whose union is every locale at least one
+    /// catalog shows, are in <see cref="Catalogs"/>.
+    /// </remarks>
+    IReadOnlyList<string> SupportedLocales { get; }
+
     /// <summary>Raised once after <see cref="SetLocaleAsync"/> published new snapshots for every catalog.</summary>
     event EventHandler<TranslationContextLocaleChangedEventArgs>? LocaleChanged;
 
@@ -43,7 +54,11 @@ public interface ITranslationContext
     /// Prepares a snapshot of every catalog for <paramref name="locale"/>, then publishes them together. When any catalog
     /// fails, or the operation is canceled, no catalog changes.
     /// </summary>
-    /// <remarks>Each catalog resolves the locale under its own <see cref="UnsupportedLocalePolicy"/>; see <see cref="Catalogs"/>.</remarks>
+    /// <remarks>
+    /// Each catalog resolves the locale under its own <see cref="UnsupportedLocalePolicy"/>; see <see cref="Catalogs"/>.
+    /// The latest call wins: a call supersedes earlier calls that have not published yet, which then complete without
+    /// changing anything.
+    /// </remarks>
     ValueTask SetLocaleAsync(string locale, CancellationToken cancellationToken = default);
 
     /// <summary>Recomposes every catalog's snapshot for the requested locale, for example after overlay packs changed.</summary>

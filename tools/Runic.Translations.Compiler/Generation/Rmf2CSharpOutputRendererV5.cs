@@ -36,6 +36,8 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("{"); writer.Indent();
         writer.Line("private readonly global::Runic.Translations.ITranslationManager __translationManager;"); writer.Blank();
         writer.Line("/// <summary>Creates accessors over a locale manager.</summary>");
+        // With the context constructor beside it, a null argument (new XText(null)) keeps choosing this constructor.
+        if (composition) writer.Line("[global::System.Runtime.CompilerServices.OverloadResolutionPriority(1)]");
         writer.Line("public " + className + "(global::Runic.Translations.ITranslationManager manager)");
         writer.Line("{"); writer.Indent();
         writer.Line("__translationManager = manager ?? throw new global::System.ArgumentNullException(nameof(manager));");

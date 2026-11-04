@@ -48,8 +48,11 @@ await translations.SetLocaleAsync("fr");        // every catalog switches togeth
 ```
 
 `translations.Catalogs` reports, per catalog, the requested locale, the locale used and whether it was resolved
-exactly, through a parent or to the default (`LocaleResolution`). Overlays are checked key by key, keep working when
-the library adds messages, and resolve locale-first. See [Catalogs from libraries](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/composition.md).
+exactly, through a parent or to the default (`LocaleResolution`); `translations.SupportedLocales` lists the locales
+every catalog shows. The latest `SetLocaleAsync` call wins over earlier ones still in flight, and contexts built from one
+builder share their catalogs' providers, so a context per window or request is cheap. Overlays are checked key by key,
+keep working when the library adds messages, and resolve locale-first. The text class now has a second one-parameter
+constructor, so register it with a factory rather than by type in a DI container. See [Catalogs from libraries](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/composition.md).
 
 ## When to choose this package
 
