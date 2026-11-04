@@ -129,6 +129,7 @@ internal static class Rmf2RuntimeValidation
         ("string" or "runic:boolean" or "integer" or "number", "select") => TextArgumentType.String,
         ("integer" or "number", "useGrouping") => TextArgumentType.String,
         ("number" or "date" or "time" or "datetime" or "runic:uuid", "style") => TextArgumentType.String,
+        ("datetime", "timeZone") => TextArgumentType.String,
         ("number", "minimumFractionDigits" or "maximumFractionDigits") => TextArgumentType.Int,
         ("runic:relative-time", "unit" or "numeric") => TextArgumentType.String,
         ("runic:list", "type" or "style") => TextArgumentType.String,

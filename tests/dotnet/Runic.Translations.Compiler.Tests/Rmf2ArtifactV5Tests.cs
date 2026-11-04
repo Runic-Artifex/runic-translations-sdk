@@ -55,7 +55,7 @@ internal sealed class Rmf2ArtifactV5Tests
             new TextArgument("count", 2L), new TextArgument("rate", .125m), TextArgument.CreateRmf2("用户", new TextArgument("unused", "Ada"))], "de");
         Assert.True(content.Nodes.Length > 0 && content.Locale == "de", "The verified linked content did not retain its effective locale.");
         CompiledRmf2Message total = verified.Messages.Single(item => item.Key.Name == "account_total").Message!.Rmf2V5!;
-        Assert.Equal("12,50%", total.Format([new TextArgument("rate", .125m)], "de"));
+        Assert.Equal("12,50\u00A0%", total.Format([new TextArgument("rate", .125m)], "de"));
         Assert.Equal(5, JsonDocument.Parse(artifact.Text).RootElement.GetProperty("artifactVersion").GetInt32());
         Rmf2SemanticV5SchemaTests.AssertValidation(Rmf2SemanticV5SchemaTests.ReadSchema("locale-artifact-v5.schema.json"),
             JsonNode.Parse(artifact.Text)!.AsObject(), true, "Emitted project locale artifact");
@@ -75,7 +75,7 @@ internal sealed class Rmf2ArtifactV5Tests
         var factory = new ExternalTranslationSnapshotFactory(new PackSource(artifact.GetUtf8Bytes()), project.Id,
             project.CallerFingerprint, requested => Contract(project, requested));
         ITranslationSnapshot snapshot = factory.CreateSnapshotAsync(catalog, "de", new DefaultTextValueFormatter(), default).AsTask().GetAwaiter().GetResult();
-        Assert.Equal("12,50%", snapshot.Format(new TranslationKey(project.Id, 1, "account_total"), [new TextArgument("rate", .125m)]));
+        Assert.Equal("12,50\u00A0%", snapshot.Format(new TranslationKey(project.Id, 1, "account_total"), [new TextArgument("rate", .125m)]));
 
         var fallbackCompilation = TranslationCompiler.CompileRmf2ProjectV5(
             Rmf2ProjectV5Tests.Project(",\"validation\":{\"translationCompleteness\":\"allow\"},\"locales\":[\"en\",\"de\",{\"tag\":\"fr\",\"fallback\":\"de\"}]"),

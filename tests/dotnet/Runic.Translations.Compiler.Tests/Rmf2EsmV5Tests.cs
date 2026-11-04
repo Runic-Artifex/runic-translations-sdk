@@ -37,28 +37,28 @@ internal sealed class Rmf2EsmV5Tests
                 import { createTextReference, decodeTextReference } from "./billing.esm-v5/transport.js";
                 const check = (condition, message) => { if (!condition) throw new Error(message); };
                 // #86: a :number input takes a finite JavaScript number as the decimal String() writes.
-                check(m.account_total({ rate: 0.125 }, { locale: "de" }) === "12,50%", "number decimal input");
+                check(m.account_total({ rate: 0.125 }, { locale: "de" }) === "12,50\u00A0%", "number decimal input");
                 check(m.account_total({ rate: 1e-7 }, { locale: "en" }) === m.account_total({ rate: "0.0000001" }, { locale: "en" }), "exponent number decimal input");
                 for (const value of [NaN, Infinity, -Infinity]) { let rejected=false; try { m.account_total({ rate: value }); } catch (error) { rejected = error instanceof TypeError; } check(rejected, `non-finite decimal accepted: ${value}`); }
                 check(createTextReference("account_total", { rate: 0.125 }).arguments.rate.value === "0.125", "number decimal reference");
                 check(createTextReference("account_total", { rate: -0 }).arguments.rate.value === "0", "negative zero decimal reference");
-                check(m.account_total({ rate: decimal("0.125") }, { locale: "de" }) === "12,50%", "exact percent formatting");
+                check(m.account_total({ rate: decimal("0.125") }, { locale: "de" }) === "12,50\u00A0%", "exact percent formatting");
                 check(m.account_total({ rate: { coefficient: 125n, scale: 3, negative: false } }, { locale: "en" }) === "12.50%", "coefficient/scale input");
                 const bill = m.account_bill({ count: 2n, rate: decimal("0.125"), "用户": "Ada" }, { locale: "de" });
                 check(bill.kind === "localized-content" && bill.locale === "de" && Object.isFrozen(bill.nodes), "structured content");
                 check(bill.nodes[0].children.map(node => node.value).join("") === "2 Rechnungen" && bill.nodes[0].attributes.ref === "invoice", "linked markup and options");
-                const plain=toPlainText(bill,{slots:{invoice:linkBinding({href:"/invoice"})}});check(plain==="2 Rechnungen: 12,5%", `plain-text markup projection: ${JSON.stringify(plain)}`);
+                const plain=toPlainText(bill,{slots:{invoice:linkBinding({href:"/invoice"})}});check(plain==="2 Rechnungen: 12,5\u00A0%", `plain-text markup projection: ${JSON.stringify(plain)}`);
                 let forgedLink=false;try{toPlainText(bill,{slots:{invoice:{kind:"runic:link",href:"javascript:alert(1)"}},annotateLinkDestinations:true});}catch{forgedLink=true;}check(forgedLink,"forged unsafe link binding accepted");
                 let hrefReads=0;const changingLink={kind:"runic:link",get href(){return ++hrefReads===1?"https://safe.example/":"javascript:alert(1)";}};const snapshottedLink=toPlainText(bill,{slots:{invoice:changingLink},annotateLinkDestinations:true});check(hrefReads===1&&snapshottedLink.includes("(https://safe.example/)"),"validated slot binding was not snapshotted before rendering");
                 const concurrent = await Promise.all([
                   runWithLocale("en", async () => { await Promise.resolve(); return m.account_total({ rate: decimal("0.125") }); }),
                   runWithLocale("de", async () => { await Promise.resolve(); return m.account_total({ rate: decimal("0.125") }); }),
                 ]);
-                check(concurrent[0] === "12.50%" && concurrent[1] === "12,50%", "request-local SSR isolation");
+                check(concurrent[0] === "12.50%" && concurrent[1] === "12,50\u00A0%", "request-local SSR isolation");
                 const raw = JSON.parse(await readFile(new URL("./artifact.json", import.meta.url), "utf8"));
                 const declared=raw.markupContract.contracts["runic:link"];let incompatible=false;try{createInlineRenderer({text:value=>value,element:element=>element.children.join("")},[{contract:{name:"runic:link",children:"none",...declared},render:()=>""}]);}catch{incompatible=true;}check(incompatible,"incompatible renderer contract accepted");
                 const decoded = decodeLocaleArtifact(raw); check(decoded.ok, decoded.reason);
-                check(formatDynamicMessage(decoded.value, "account_total", { rate: decimal("0.125") }) === "12,50%", "dynamic parity");
+                check(formatDynamicMessage(decoded.value, "account_total", { rate: decimal("0.125") }) === "12,50\u00A0%", "dynamic parity");
                 const validAst=raw.messages.account_total.ast;let reads=0;
                 const getterWrapper={contentLocale:raw.messages.account_total.contentLocale};Object.defineProperty(getterWrapper,"ast",{enumerable:true,get(){reads++;return validAst;}});
                 const getterArtifact=structuredClone(raw);getterArtifact.messages.account_total=getterWrapper;const getterDecoded=decodeLocaleArtifact(getterArtifact);check(!getterDecoded.ok&&getterDecoded.reason==="RTR0023/malformed"&&reads===0,"artifact accessor was invoked or accepted");

@@ -7,12 +7,13 @@ using System.Text;
 namespace Runic.Translations.Compiler;
 
 internal sealed record Rmf2OptionRuleV2(string Name, string InputType, bool Literal, bool Dynamic,
-    string Default, IReadOnlyList<string> Values, int? Minimum = null, int? Maximum = null)
+    string Default, IReadOnlyList<string> Values, int? Minimum = null, int? Maximum = null, string? Pattern = null)
 {
     internal bool AcceptsLiteral(Rmf2ValueV5 value)
     {
         if (!Literal) return false;
-        if (InputType == "string") return value.Kind == "string-literal" && Values.Contains(value.Value.Normalize(NormalizationForm.FormC), StringComparer.Ordinal);
+        if (InputType == "string") return value.Kind == "string-literal" && (Values.Contains(value.Value.Normalize(NormalizationForm.FormC), StringComparer.Ordinal) ||
+            Pattern is not null && Rmf2FunctionRegistryV2.IsTimeZone(value.Value));
         return value.Kind == "number-literal" && int.TryParse(value.Canonical, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int number) && number >= Minimum && number <= Maximum;
     }
 }
@@ -27,14 +28,22 @@ internal static class Rmf2FunctionRegistryV2
         Function("number", "decimal", "plural", Enum("select", "plural", false, "plural", "ordinal", "exact"), Enum("style", "decimal", true, "decimal", "percent"), Grouping(),
             new Rmf2OptionRuleV2("minimumFractionDigits", "int64", true, true, "0", Array.Empty<string>(), 0, 6),
             new Rmf2OptionRuleV2("maximumFractionDigits", "int64", true, true, "6 (decimal), 4 (percent)", Array.Empty<string>(), 0, 6)),
-        Function("date", "date", "none", Enum("style", "iso", true, "iso", "short", "long")),
-        Function("time", "time", "none", Enum("style", "iso", true, "iso", "short", "long")),
-        Function("datetime", "datetime", "none", Enum("style", "iso", true, "iso", "short", "long")),
+        Function("date", "date", "none", Enum("style", "iso", true, "iso", "short", "medium", "long", "full")),
+        Function("time", "time", "none", Enum("style", "iso", true, "iso", "short", "medium", "long", "full")),
+        Function("datetime", "datetime", "none", Enum("style", "iso", true, "iso", "short", "medium", "long", "full"),
+            new Rmf2OptionRuleV2("timeZone", "string", true, true, "local", Array.AsReadOnly(new[] { "local", "utc" }), Pattern: TimeZonePattern)),
         Function("runic:uuid", "guid", "none", Enum("style", "d", true, "d", "n", "b", "p")),
         Function("runic:boolean", "boolean", "exact", Enum("select", "exact", false, "exact")),
         Function("runic:relative-time", "decimal", "plural", Enum("unit", "day", true, "second", "minute", "hour", "day", "week", "month", "year"), Enum("numeric", "always", true, "always", "auto")),
         Function("runic:list", "list", "none", Enum("type", "conjunction", true, "conjunction", "disjunction", "unit"), Enum("style", "long", true, "long", "short", "narrow")),
     });
+
+    /// <summary>
+    /// The syntax of a <c>:datetime timeZone</c> value besides <c>local</c> and <c>utc</c>: an IANA time zone ID such as
+    /// <c>Europe/Berlin</c> or <c>Etc/GMT+5</c>, at most 64 characters. Whether the host knows the zone is checked when formatting.
+    /// </summary>
+    internal const string TimeZonePattern = "^[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z0-9_+-]+)*$";
+    internal static bool IsTimeZone(string value) => value.Length is > 0 and <= 64 && System.Text.RegularExpressions.Regex.IsMatch(value, TimeZonePattern, System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     internal static Rmf2FunctionRuleV2? Find(string name) => Functions.FirstOrDefault(function => function.Name == name);
     private static Rmf2FunctionRuleV2 Function(string name, string type, string selection, params Rmf2OptionRuleV2[] options) => new(name, type, selection, Array.AsReadOnly(options));

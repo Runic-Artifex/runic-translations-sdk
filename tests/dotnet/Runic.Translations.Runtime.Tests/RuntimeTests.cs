@@ -532,8 +532,11 @@ internal sealed class RuntimeTests
         Assert.Equal(1, factory.CallCount);
         factory.Release();
         ITranslationSnapshot[] snapshots = await Task.WhenAll(a, b);
-        Assert.Same(snapshots[0], snapshots[1]);
-        Assert.Same(snapshots[0], await provider.GetSnapshotAsync("en"));
+        // en-AU is a view of the one en snapshot that formats numbers and dates for en-AU.
+        Assert.Equal(("en", "en-AU"), (snapshots[0].Locale, snapshots[0].RequestedLocale));
+        Assert.Equal(("en", "en"), (snapshots[1].Locale, snapshots[1].RequestedLocale));
+        Assert.Same(snapshots[1], await provider.GetSnapshotAsync("en"));
+        Assert.Same(snapshots[0], await provider.GetSnapshotAsync("en-au"));
         Assert.Equal(1, factory.CallCount);
     }
 

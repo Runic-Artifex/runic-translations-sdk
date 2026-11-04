@@ -1,1 +1,15 @@
 #nullable enable
+Runic.Translations.CompiledTranslationSnapshot.RequestedLocale.get -> string!
+Runic.Translations.CompiledTranslationSnapshot.TryGetContentLocale(Runic.Translations.TranslationKey key, out string! contentLocale) -> bool
+Runic.Translations.ITranslationSnapshot.RequestedLocale.get -> string!
+Runic.Translations.ITranslationSnapshot.TryGetContentLocale(Runic.Translations.TranslationKey key, out string! contentLocale) -> bool
+Runic.Translations.LocalizedTextContent.FormattingLocale.get -> string!
+Runic.Translations.TranslationEvents
+Runic.Translations.TranslationFallbackEventArgs
+Runic.Translations.TranslationFallbackEventArgs.Catalog.get -> string!
+Runic.Translations.TranslationFallbackEventArgs.ContentLocale.get -> string!
+Runic.Translations.TranslationFallbackEventArgs.Key.get -> string!
+Runic.Translations.TranslationFallbackEventArgs.Locale.get -> string!
+Runic.Translations.TranslationFallbackEventArgs.RequestedLocale.get -> string!
+Runic.Translations.TranslationFallbackEventArgs.TranslationFallbackEventArgs(string! catalog, string! key, string! locale, string! contentLocale, string! requestedLocale) -> void
+static Runic.Translations.TranslationEvents.TranslationFallback -> System.EventHandler<Runic.Translations.TranslationFallbackEventArgs!>?

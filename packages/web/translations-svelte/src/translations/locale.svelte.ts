@@ -5,6 +5,11 @@
  */
 export interface LocaleSource<Locale extends string = string> {
   getLocale(): Locale;
+  /**
+   * The canonical tag that was requested before it resolved to `getLocale()`, such as `de-CH` for `de`. The generated
+   * `createLocaleSource` provides it; generated messages format numbers and dates in it when it shares their language.
+   */
+  getRequestedLocale?(): string;
   subscribe(listener: (locale: Locale) => void): () => void;
 }
 
@@ -23,6 +28,7 @@ export interface SvelteLocaleOptions<Locale extends string> {
 
 export class SvelteLocale<Locale extends string = string> {
   #locale: Locale;
+  #requestedLocale: string;
   #disposed = $state(false);
   readonly #source: LocaleSource<Locale>;
   readonly #requestLocale: ((locale: Locale) => void | Promise<void>) | undefined;
@@ -32,8 +38,11 @@ export class SvelteLocale<Locale extends string = string> {
     this.#source = source;
     this.#requestLocale = options.requestLocale;
     this.#locale = $state.raw(source.getLocale());
+    this.#requestedLocale = $state.raw(requestedOf(source, this.#locale));
     this.#unsubscribe = source.subscribe((locale) => {
-      if (!this.#disposed) this.#locale = locale;
+      if (this.#disposed) return;
+      this.#locale = locale;
+      this.#requestedLocale = requestedOf(this.#source, locale);
     });
   }
 
@@ -45,15 +54,24 @@ export class SvelteLocale<Locale extends string = string> {
     return this.#disposed;
   }
 
-  /** A fresh object suitable for the generated message function's options argument. */
-  get messageOptions(): Readonly<{ locale: Locale }> {
-    return { locale: this.#locale };
+  /** The tag that was requested (`de-CH` while `locale` is `de`), or `locale` when the source does not report one. */
+  get requestedLocale(): string {
+    return this.#requestedLocale;
+  }
+
+  /**
+   * A fresh object suitable for the generated message function's options argument. It carries the requested tag, so
+   * messages show the `locale` text with the requested region's numbers and dates.
+   */
+  get messageOptions(): Readonly<{ locale: string }> {
+    return { locale: this.#requestedLocale };
   }
 
   /** Pulls the authoritative value after an external settings or navigation change. */
   refresh(): Locale {
     this.#assertActive();
     this.#locale = this.#source.getLocale();
+    this.#requestedLocale = requestedOf(this.#source, this.#locale);
     return this.#locale;
   }
 
@@ -90,6 +108,11 @@ export function createSvelteLocale<Locale extends string>(
   options: SvelteLocaleOptions<Locale> = {},
 ): SvelteLocale<Locale> {
   return new SvelteLocale(source, options);
+}
+
+function requestedOf<Locale extends string>(source: LocaleSource<Locale>, locale: Locale): string {
+  const requested = typeof source.getRequestedLocale === "function" ? source.getRequestedLocale() : undefined;
+  return typeof requested === "string" && requested !== "" ? requested : locale;
 }
 
 function isMutableLocaleSource<Locale extends string>(
