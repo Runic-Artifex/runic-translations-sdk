@@ -25,9 +25,11 @@ namespace Runic.Translations;
 /// requested.
 /// </para>
 /// <para>
-/// An overlay may add locales the library lacks (<see cref="AddedLocales"/>). An added locale falls back to one locale
-/// the library declares, its default locale unless the overlay names another, and from there along the library's own
-/// fallback chain. A locale the library already declares keeps the library's chain.
+/// An overlay may add locales the library lacks (<see cref="AddedLocales"/>). An added locale falls back to the locale
+/// the overlay names for it. Without one, it falls back to its nearest parent that the library declares or an overlay
+/// adds (<c>de-CH</c> to the library's <c>de</c>), and without such a parent to the library's default locale. From the
+/// first library locale on, the library's own fallback chain applies. A locale the library already declares keeps the
+/// library's chain. Two overlays that add one locale with different fallbacks are an error.
 /// </para>
 /// </remarks>
 public sealed class TranslationOverlay
@@ -71,8 +73,10 @@ public sealed class TranslationOverlay
     /// <param name="integrityVerifier">Runs before a pack is parsed and may reject it.</param>
     /// <remarks>
     /// A pack may hold any subset of the catalog's keys and may come from a project built against another release of the
-    /// library: its contract fingerprint is not compared. A message whose content locale is another locale of the chain
-    /// (a fallback copy in the pack) applies at that locale. A pack that is malformed, names another catalog or locale,
+    /// library: its contract fingerprint is not compared. A message whose content locale is not the pack's locale (a fallback
+    /// copy that a build with relaxed completeness writes) applies only to a locale that an overlay adds; for a locale the
+    /// library declares, the library's text (or the overlay's own pack for that locale) is used, as for a user who requests
+    /// that locale. A pack that is malformed, names another catalog or locale,
     /// or is rejected by <paramref name="integrityVerifier"/> fails the locale switch with a
     /// <see cref="TranslationPackException"/>, as an external pack does.
     /// </remarks>
@@ -104,8 +108,9 @@ public sealed class TranslationOverlayLocale
     /// <summary>Declares an added locale.</summary>
     /// <param name="locale">The canonical BCP 47 tag of the added locale, such as <c>fr</c>.</param>
     /// <param name="fallbackLocale">
-    /// The library locale that keys the overlay lacks fall back to; the library's default locale when omitted. It must be a
-    /// locale the library declares.
+    /// The library locale that keys the overlay lacks fall back to. It must be a locale the library declares. When omitted,
+    /// the nearest parent that the library declares or an overlay adds (<c>de</c> for <c>de-CH</c>), else the library's
+    /// default locale.
     /// </param>
     public TranslationOverlayLocale(string locale, string? fallbackLocale = null)
     {
@@ -122,7 +127,7 @@ public sealed class TranslationOverlayLocale
     /// <summary>The canonical tag of the added locale.</summary>
     public string Locale { get; }
 
-    /// <summary>The library locale it falls back to, or <see langword="null"/> for the library's default locale.</summary>
+    /// <summary>The library locale it falls back to, or <see langword="null"/> for its nearest parent, else the library's default locale.</summary>
     public string? FallbackLocale { get; }
 
     private static bool IsCanonical(string tag) =>

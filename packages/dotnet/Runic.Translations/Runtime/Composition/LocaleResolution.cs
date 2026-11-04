@@ -34,20 +34,29 @@ internal static class LocaleRequestResolver
             case UnsupportedLocalePolicy.Default:
                 return new LocaleRequest(canonical, defaultLocale, LocaleResolution.Default);
             case UnsupportedLocalePolicy.ParentsThenDefault:
-                string candidate = canonical;
-                int separator = candidate.LastIndexOf('-');
-                while (separator > 0)
-                {
-                    candidate = candidate[..separator];
-                    if (declares(candidate)) return new LocaleRequest(canonical, candidate, LocaleResolution.Parent);
-                    separator = candidate.LastIndexOf('-');
-                }
-
-                return new LocaleRequest(canonical, defaultLocale, LocaleResolution.Default);
+                return NearestParent(canonical, declares) is { } parent
+                    ? new LocaleRequest(canonical, parent, LocaleResolution.Parent)
+                    : new LocaleRequest(canonical, defaultLocale, LocaleResolution.Default);
             case UnsupportedLocalePolicy.Exact:
             default:
                 throw new TranslationNotFoundException($"Locale '{canonical}' is not declared by catalog '{catalog}'.");
         }
+    }
+
+    /// <summary>The nearest parent of a canonical tag that <paramref name="declares"/> accepts, such as <c>de</c> for <c>de-CH</c>.</summary>
+    /// <remarks>Parents are found by removing subtags from the end; every candidate is shorter than the tag.</remarks>
+    internal static string? NearestParent(string canonicalLocale, Predicate<string> declares)
+    {
+        string candidate = canonicalLocale;
+        int separator = candidate.LastIndexOf('-');
+        while (separator > 0)
+        {
+            candidate = candidate[..separator];
+            if (declares(candidate)) return candidate;
+            separator = candidate.LastIndexOf('-');
+        }
+
+        return null;
     }
 
     /// <summary>Canonicalizes a requested tag; an empty tag, the name of the invariant culture, stays empty.</summary>

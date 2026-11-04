@@ -7,15 +7,26 @@ namespace Runic.Translations;
 
 /// <summary>Collects the catalogs and overlays of a <see cref="TranslationContext"/>.</summary>
 /// <remarks>
+/// <para>
 /// Register each catalog once, typically the application's own catalog first and then its libraries'. Overlays are
-/// attached by catalog ID and may be added before or after their catalog. A builder can build several independent
-/// contexts, for example one per window.
+/// attached by catalog ID and may be added before or after their catalog.
+/// </para>
+/// <para>
+/// A builder can build several independent contexts, for example one per window or per request. They share one provider
+/// per catalog, created on the first build: catalog data is read once, and overlay packs are loaded, checked and composed
+/// once per locale, then reused by every context. A further context costs a snapshot lookup per catalog. A context's
+/// <see cref="TranslationContext.RefreshAsync(System.Threading.CancellationToken)"/> clears the shared cache of the
+/// refreshed locale, so other contexts get the reloaded text on their next switch or refresh. Changing the builder after a
+/// build creates new providers for later builds. Building is thread-safe; changing the builder is not.
+/// </para>
 /// </remarks>
 public sealed class TranslationContextBuilder
 {
     private readonly List<(TranslationCatalogRegistration Registration, TranslationOptions? Options)> _catalogs = [];
     private readonly List<TranslationOverlay> _overlays = [];
+    private readonly Lock _entriesGate = new();
     private ITextValueFormatter? _valueFormatter;
+    private TranslationContextEntry[]? _entries;
 
     internal TranslationContextBuilder()
     {
@@ -25,22 +36,35 @@ public sealed class TranslationContextBuilder
     /// <param name="registration">The generated registration of the catalog.</param>
     /// <param name="options">The catalog's runtime options; its generated policies when omitted.</param>
     /// <remarks>
-    /// Registering the same catalog again, with the same contract fingerprint, is ignored, so independent libraries can
-    /// register a catalog they share. A second registration with another fingerprint is an error.
+    /// Registering the same catalog again, with the same contract fingerprint, is allowed, so independent libraries can
+    /// register a catalog they share. Options belong to one registration, normally the application's: a registration
+    /// without options accepts the options of another, and two registrations with different options are an error.
     /// </remarks>
-    /// <exception cref="ArgumentException">The catalog is already registered with another contract fingerprint.</exception>
+    /// <exception cref="ArgumentException">
+    /// The catalog is already registered with another contract fingerprint, or with other options.
+    /// </exception>
     public TranslationContextBuilder Add(TranslationCatalogRegistration registration, TranslationOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(registration);
-        foreach ((TranslationCatalogRegistration existing, _) in _catalogs)
+        for (int index = 0; index < _catalogs.Count; index++)
         {
+            (TranslationCatalogRegistration existing, TranslationOptions? existingOptions) = _catalogs[index];
             if (!string.Equals(existing.CatalogId, registration.CatalogId, StringComparison.Ordinal)) continue;
-            if (string.Equals(existing.ContractFingerprint, registration.ContractFingerprint, StringComparison.Ordinal)) return this;
-            throw new ArgumentException(
-                $"Catalog '{registration.CatalogId}' is already registered with another contract fingerprint.", nameof(registration));
+            if (!string.Equals(existing.ContractFingerprint, registration.ContractFingerprint, StringComparison.Ordinal))
+                throw new ArgumentException(
+                    $"Catalog '{registration.CatalogId}' is already registered with another contract fingerprint.", nameof(registration));
+            if (options is null || SameOptions(existingOptions, options)) return this;
+            if (existingOptions is not null)
+                throw new ArgumentException(
+                    $"Catalog '{registration.CatalogId}' is already registered with other options. Set a catalog's options in one registration only.",
+                    nameof(options));
+            _catalogs[index] = (existing, options);
+            _entries = null;
+            return this;
         }
 
         _catalogs.Add((registration, options));
+        _entries = null;
         return this;
     }
 
@@ -53,6 +77,7 @@ public sealed class TranslationContextBuilder
     {
         ArgumentNullException.ThrowIfNull(overlay);
         _overlays.Add(overlay);
+        _entries = null;
         return this;
     }
 
@@ -60,6 +85,7 @@ public sealed class TranslationContextBuilder
     public TranslationContextBuilder UseValueFormatter(ITextValueFormatter valueFormatter)
     {
         _valueFormatter = valueFormatter ?? throw new ArgumentNullException(nameof(valueFormatter));
+        _entries = null;
         return this;
     }
 
@@ -67,9 +93,12 @@ public sealed class TranslationContextBuilder
     /// <param name="initialLocale">The requested locale; the default locale of the first registered catalog when omitted.</param>
     /// <param name="cancellationToken">Cancels composition.</param>
     /// <exception cref="InvalidOperationException">No catalog is registered, or an overlay names a catalog that is not.</exception>
+    /// <exception cref="ArgumentException">
+    /// An overlay adds a locale with a fallback the catalog does not declare, or two overlays add one locale with different fallbacks.
+    /// </exception>
     public ValueTask<TranslationContext> BuildAsync(string? initialLocale = null, CancellationToken cancellationToken = default)
     {
-        TranslationContext.Entry[] entries = CreateEntries();
+        TranslationContextEntry[] entries = GetEntries();
         string requested = LocaleRequestResolver.Canonicalize(initialLocale ?? entries[0].Registration.DefaultLocale, nameof(initialLocale));
         return TranslationContext.CreateAsync(entries, requested, cancellationToken);
     }
@@ -87,7 +116,20 @@ public sealed class TranslationContextBuilder
         return build.IsCompletedSuccessfully ? build.Result : build.AsTask().GetAwaiter().GetResult();
     }
 
-    private TranslationContext.Entry[] CreateEntries()
+    private TranslationContextEntry[] GetEntries()
+    {
+        lock (_entriesGate)
+        {
+            return _entries ??= CreateEntries();
+        }
+    }
+
+    // Options are compared by value; a property added to TranslationOptions must be compared here too.
+    private static bool SameOptions(TranslationOptions? left, TranslationOptions? right) =>
+        ReferenceEquals(left, right) ||
+        (left is not null && right is not null && left.UnsupportedLocale == right.UnsupportedLocale && left.MissingKey == right.MissingKey);
+
+    private TranslationContextEntry[] CreateEntries()
     {
         if (_catalogs.Count == 0) throw new InvalidOperationException("A translation context needs at least one catalog.");
         var overlaysById = new Dictionary<string, List<TranslationOverlay>>(StringComparer.Ordinal);
@@ -99,7 +141,7 @@ public sealed class TranslationContextBuilder
             list.Add(overlay);
         }
 
-        var entries = new TranslationContext.Entry[_catalogs.Count];
+        var entries = new TranslationContextEntry[_catalogs.Count];
         for (int index = 0; index < entries.Length; index++)
         {
             (TranslationCatalogRegistration registration, TranslationOptions? options) = _catalogs[index];
@@ -115,7 +157,7 @@ public sealed class TranslationContextBuilder
                 supported = overlaid.SupportedLocales;
             }
 
-            entries[index] = new TranslationContext.Entry(registration, provider, supported);
+            entries[index] = new TranslationContextEntry(registration, provider, supported);
         }
 
         return entries;

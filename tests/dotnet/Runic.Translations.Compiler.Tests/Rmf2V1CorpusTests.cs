@@ -204,9 +204,10 @@ internal sealed class Rmf2V1CorpusTests
     // IReadableMessages; transport.js writes only version 2 and transport.d.ts drops the version 1 createTextReference
     // overload, in both digests.
     // Re-pinned for T1a/T1b (0.9): generated C# adds the XText(ITranslationContext) constructor and
-    // XCatalog.Registration, in both digests. Every other output is unchanged.
-    private const string EncodedOutputDigest = "b376c7cbe6a48821ea80bd38416a88e90c2ec98869260976c19d1c9262a20347";
-    private const string HiddenEncodedOutputDigest = "26590f63d92e92d8b23805cfbcd44770f53b4ab0e1abc856575c1297ee9a3124";
+    // XCatalog.Registration, and gives the XText(ITranslationManager) constructor OverloadResolutionPriority(1) so
+    // new XText(null) still compiles, in both digests. Every other output is unchanged.
+    private const string EncodedOutputDigest = "b0cfb394606951cc0b889eb00f315f116142ee0e8bdcb6f646885cb37d3605dc";
+    private const string HiddenEncodedOutputDigest = "c64033f39491d4dd6be5a6f85964f15141ce9ddf661cccff96ae2369bb8f095c";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

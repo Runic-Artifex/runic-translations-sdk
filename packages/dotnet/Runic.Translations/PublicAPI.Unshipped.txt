@@ -92,3 +92,5 @@ static Runic.Translations.TranslationOverlayDiagnostic.operator ==(Runic.Transla
 virtual Runic.Translations.TranslationProviderFactory.Invoke(Runic.Translations.ITextValueFormatter? valueFormatter, Runic.Translations.ITranslationSnapshotFactory? snapshotFactory, Runic.Translations.TranslationOptions? options) -> Runic.Translations.ITranslationProvider!
 ~override Runic.Translations.TranslationOverlayDiagnostic.Equals(object obj) -> bool
 ~override Runic.Translations.TranslationOverlayDiagnostic.ToString() -> string
+Runic.Translations.ITranslationContext.SupportedLocales.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Runic.Translations.TranslationContext.SupportedLocales.get -> System.Collections.Generic.IReadOnlyList<string!>!
