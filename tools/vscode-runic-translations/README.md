@@ -11,9 +11,36 @@ hover, definition/reference navigation, formatting and versioned resource edits.
 It synchronizes open `runic.json` buffers so mounted/slot configuration changes
 participate in refactors without requiring an intermediate save.
 
+## Install the tool
+
+The extension runs the workspace's own `runic-translations` .NET tool, so the
+language server always matches the project's Translations release. It does not
+install or restore tools for you. In the repository (or solution) root:
+
+```sh
+dotnet new tool-manifest --output .config
+dotnet tool install dotnet-runic-translations --version <VERSION>
+dotnet tool restore
+```
+
+Use the same exact version as the project's Runic Translations packages, and
+commit `.config/dotnet-tools.json`; collaborators then run only
+`dotnet tool restore`. The tool needs the .NET 10 runtime. Projects created with
+the `runic-translations` templates already contain the manifest.
+
+## Starting and status
+
 Open a trusted workspace containing a restored local `runic-translations` .NET
 tool. The extension starts `dotnet tool run runic-translations -- lsp` from the
-nearest tool-manifest directory. It does not install or restore tools for you.
+nearest tool-manifest directory.
+If the server cannot start (no tool manifest, an unrestored tool, a missing
+.NET runtime), a notification says why once per workspace folder, with
+**Show output** and **How to install the tool**; **Runic: Restart Language
+Server** tries again. The status bar shows the server state for the active
+`.mf2`, `.rmf2` or `runic.json` file and, while the server runs, the catalog ID
+and the file's locale (`Runic: app · de`). Select it, or run **Runic: Show
+Output**, for the server log.
+
 For SDK development, set `runicTranslations.serverAssembly` to the built tool DLL;
 `runicTranslations.dotnetPath` selects the installed .NET executable. Separate
 workspace folders get separate server instances. Restarting reopens unsaved
@@ -23,6 +50,23 @@ covered by one canonical recursive watch plan, so mounted add/change/delete/rena
 events outside the config directory are reconciled without duplicate nested
 watchers. Open a common containing workspace for such mounts; roots outside that
 boundary and symlink/reparse-point escapes are not watched.
+
+## Diagnostics, hover and `runic.json`
+
+Diagnostics cover the whole catalog, not only open files: while any file of a
+project is open, catalog errors and warnings in its closed translations and in
+`runic.json` appear in the Problems view, and they are cleared when the last
+file of the project closes. Each `RTR` code links to its entry in the
+[diagnostics reference](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/diagnostics.md)
+at the release tag of the tool. Hover over a message in a translation shows the
+base-locale text with its comments and `@param` descriptions.
+
+`runic.json` files are validated and completed against the project schema
+bundled with the extension, copied from the specification on every build. A
+file that declares `$schema` uses that schema instead (VS Code downloads the
+published URL); templates write the published `project-v1.schema.json` URI.
+
+## Commands and preview
 
 The Runic commands in the Command Palette provide inert example previews,
 group extraction/inlining for `.rmf2`, and explicitly source-only
@@ -50,6 +94,36 @@ the narrower transaction. Use the native language service
 for generated API usages and review source-only input/slot operations against
 application bindings. Unsupported language operations must not be treated as a
 successful whole-application rename.
+
+## VS Code and Visual Studio
+
+Both extensions use the same language server. Visual Studio keeps a smaller
+command set until the production language server (2.0).
+
+| Feature | VS Code | Visual Studio |
+| --- | --- | --- |
+| Highlighting, completion, symbols, folding, formatting | Yes | Yes |
+| Diagnostics for every project file | Yes | Yes |
+| Diagnostic documentation links | Yes | Where the IDE shows LSP code descriptions |
+| Hover with base text and description | Yes | Yes |
+| Definition, references, quick fixes | Yes | Yes |
+| F2 rename of resources and MF2 locals | Yes | Yes |
+| Unsaved `runic.json` in refactors | Yes | Yes |
+| `runic.json` schema validation | Bundled schema, or `$schema` | `$schema` (published schema) |
+| Preview Message | Command | Tools menu |
+| Change Preview Samples | Command | Sample selector in the preview window |
+| Change Preview Locale | Command | Locale selector in the preview window |
+| Rename Input in Resource Sources | Command | No (2.0) |
+| Rename Slot in Resource Sources | Command | No (2.0) |
+| Rename Resource in Resource Sources | Command | No (2.0) |
+| Extract Group to Directory | Command | No (2.0) |
+| Inline Resource into Ancestor | Command | No (2.0) |
+| Restart Language Server | Command | Tools menu |
+| Show Output | Command and status bar | Server stderr in the diagnostic trace |
+| Server state, catalog and locale | Status bar | No |
+| Start failure | One notification per folder, with install help | IDE notification on initialization failure |
+
+## Build and test
 
 Build and test inside the SDK development shell:
 

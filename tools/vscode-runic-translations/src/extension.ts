@@ -1,9 +1,23 @@
 import * as vscode from "vscode";
-import { LanguageClient, type LanguageClientOptions, type WorkspaceEdit as ProtocolEdit } from "vscode-languageclient/node";
+import { LanguageClient, State, type LanguageClientOptions, type WorkspaceEdit as ProtocolEdit } from "vscode-languageclient/node";
 import { serverLaunch, sourceWatchRoots } from "./server.js";
 import { escapeHtml, resolvePreviewHtml, type Preview, type RenderedPreview } from "./preview.js";
 import { PreviewSession, exampleSamples, sampleChoices, type Samples } from "./preview-session.js";
 import { ForwardedWatchers } from "./watchers.js";
+import { OneTimeNotice, errorSummary, statusPresentation, type DocumentInfo, type ServerState } from "./status.js";
+
+const extensionId = "runic-artifex.runic-translations";
+/**
+ * The extension reports a failed start once per workspace folder, with install guidance, so the
+ * client's own "couldn't create connection" notification is logged instead of shown while starting.
+ * Errors after a successful start keep the client's default notifications.
+ */
+class RunicLanguageClient extends LanguageClient {
+  public starting = true;
+  public override error(message: string, data?: unknown, showNotification?: boolean | "force"): void {
+    super.error(message, data, this.starting ? false : showNotification);
+  }
+}
 
 interface MessageInfo { key: string; localKey: string; isGroup: boolean; path: string[]; logicalPath: string[]; locale: string; locales: string[]; inputs: string[]; slots: string[] }
 const clients = new Map<string, Promise<LanguageClient>>();
@@ -15,6 +29,56 @@ let previewTimer: ReturnType<typeof setTimeout> | undefined;
 let previewRevision = 0;
 let previewSelection = 0;
 let refreshPreviewSource: ((uri: vscode.Uri) => void) | undefined;
+let statusItem: vscode.StatusBarItem | undefined;
+let statusRevision = 0;
+let statusTimer: ReturnType<typeof setTimeout> | undefined;
+const serverStates = new Map<string, { state: ServerState; failure?: string }>();
+const documentInfo = new Map<string, DocumentInfo>();
+const startupNotice = new OneTimeNotice();
+
+function isRunicDocument(document: vscode.TextDocument): boolean {
+  return document.uri.scheme === "file" && (document.languageId === "rmf2" || /(^|\/)runic\.json$/.test(document.uri.path));
+}
+function setServerState(key: string, state: ServerState, failure?: string) {
+  serverStates.set(key, { state, failure });
+  refreshStatus();
+}
+/** Shows the server state, the catalog and the file's locale for the active Runic document. */
+function refreshStatus() {
+  if (!statusItem) return;
+  const item = statusItem;
+  const document = vscode.window.activeTextEditor?.document;
+  const folder = document && isRunicDocument(document) ? vscode.workspace.getWorkspaceFolder(document.uri) : undefined;
+  const key = folder?.uri.toString();
+  const entry = key ? serverStates.get(key) : undefined;
+  if (!document || !key || !entry) { item.hide(); return; }
+  const revision = ++statusRevision;
+  const uri = document.uri.toString();
+  const show = (info?: DocumentInfo) => {
+    if (revision !== statusRevision) return;
+    const presentation = statusPresentation(entry.state, info, entry.failure);
+    item.text = presentation.text;
+    item.tooltip = presentation.tooltip;
+    item.backgroundColor = presentation.error ? new vscode.ThemeColor("statusBarItem.errorBackground") : undefined;
+    item.show();
+  };
+  show(documentInfo.get(uri));
+  if (entry.state !== "running") return;
+  void clients.get(key)?.then(client => client.sendRequest<DocumentInfo>("runic/documentInfo", { textDocument: { uri } }))
+    .then(info => { documentInfo.set(uri, info); show(info); }, () => { /* The document is not open on the server yet; the next change refreshes. */ });
+}
+function scheduleStatusRefresh() {
+  if (statusTimer) clearTimeout(statusTimer);
+  statusTimer = setTimeout(() => { statusTimer = undefined; refreshStatus(); }, 300);
+}
+function reportStartFailure(key: string, error: unknown) {
+  if (!startupNotice.claim(key)) return;
+  void vscode.window.showErrorMessage(`Runic Translations could not start its language server. ${errorSummary(error)}`, "Show output", "How to install the tool").then(choice => {
+    if (choice === "Show output") output.show(true);
+    // The extension page shows the README of the installed version, including "Install the tool".
+    else if (choice === "How to install the tool") void vscode.commands.executeCommand("extension.open", extensionId);
+  });
+}
 
 interface PreviewOptions { locale?: string; exampleIndex?: number; samples?: Samples }
 async function chooseSamples(preview: Preview, remembered?: Samples): Promise<Samples | undefined> {
@@ -40,48 +104,63 @@ async function clientFor(uri: vscode.Uri): Promise<LanguageClient> {
   let pending = clients.get(key);
   if (!pending) {
     pending = (async () => {
-      const config = vscode.workspace.getConfiguration("runicTranslations", uri);
-      const launch = serverLaunch(folder.uri.fsPath, config.get<string>("dotnetPath", "dotnet"), config.get<string>("serverAssembly", ""));
-      // The manifest is also synchronized by the LSP and must be watched even
-      // when a project has no translation files yet.
-      const manifestWatcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, "**/runic.json"));
-      let client: LanguageClient | undefined;
-      let started = false;
-      const forward = (uri: vscode.Uri, type: 1 | 2 | 3) => {
-        if (started) {
-          client?.sendNotification("workspace/didChangeWatchedFiles", { changes: [{ uri: uri.toString(), type }] });
-          refreshPreviewSource?.(uri);
-        }
-      };
-      const watcher = new ForwardedWatchers(
-        manifestWatcher,
-        () => sourceWatchRoots(folder.uri.fsPath),
-        root => vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(root), "**/*.{mf2,rmf2}")),
-        forward,
-      );
-      watchers.set(key, watcher);
-      const openingDocuments: Promise<void>[] = [];
-      const options: LanguageClientOptions = {
-        documentSelector: [{ scheme: "file", language: "rmf2", pattern: `${folder.uri.fsPath.replaceAll("\\", "/")}/**/*.{mf2,rmf2}` }, { scheme: "file", language: "json", pattern: `${folder.uri.fsPath.replaceAll("\\", "/")}/**/runic.json` }],
-        workspaceFolder: folder, outputChannel: output,
-        initializationOptions: { runicConfigurationSync: true },
-        // Watchers are forwarded explicitly so a manifest refresh can replace
-        // external mount subscriptions after the client has started.
-        synchronize: {},
-        middleware: { didOpen: (document, next) => {
-          const sent = next(document);
-          if (!started) openingDocuments.push(sent);
-          return sent;
-        } },
-      };
-      client = new LanguageClient("runicTranslations", `Runic: ${folder.name}`, { command: launch.command, args: launch.args, options: { cwd: launch.cwd } }, options);
-      await client.start();
-      // Initial open notifications are scheduled during client initialization.
-      // Custom requests must wait for them, including after a server restart.
-      await Promise.all(openingDocuments);
-      started = true;
-      openingDocuments.length = 0;
-      return client;
+      setServerState(key, "starting");
+      try {
+        const config = vscode.workspace.getConfiguration("runicTranslations", uri);
+        const launch = serverLaunch(folder.uri.fsPath, config.get<string>("dotnetPath", "dotnet"), config.get<string>("serverAssembly", ""));
+        // The manifest is also synchronized by the LSP and must be watched even
+        // when a project has no translation files yet.
+        const manifestWatcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, "**/runic.json"));
+        let client: LanguageClient | undefined;
+        let started = false;
+        const forward = (uri: vscode.Uri, type: 1 | 2 | 3) => {
+          if (started) {
+            client?.sendNotification("workspace/didChangeWatchedFiles", { changes: [{ uri: uri.toString(), type }] });
+            refreshPreviewSource?.(uri);
+          }
+        };
+        const watcher = new ForwardedWatchers(
+          manifestWatcher,
+          () => sourceWatchRoots(folder.uri.fsPath),
+          root => vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(root), "**/*.{mf2,rmf2}")),
+          forward,
+        );
+        watchers.set(key, watcher);
+        const openingDocuments: Promise<void>[] = [];
+        const options: LanguageClientOptions = {
+          documentSelector: [{ scheme: "file", language: "rmf2", pattern: `${folder.uri.fsPath.replaceAll("\\", "/")}/**/*.{mf2,rmf2}` }, { scheme: "file", language: "json", pattern: `${folder.uri.fsPath.replaceAll("\\", "/")}/**/runic.json` }],
+          workspaceFolder: folder, outputChannel: output,
+          initializationOptions: { runicConfigurationSync: true },
+          // Watchers are forwarded explicitly so a manifest refresh can replace
+          // external mount subscriptions after the client has started.
+          synchronize: {},
+          middleware: { didOpen: (document, next) => {
+            const sent = next(document);
+            if (!started) openingDocuments.push(sent);
+            return sent;
+          } },
+        };
+        const runic = client = new RunicLanguageClient("runicTranslations", `Runic: ${folder.name}`, { command: launch.command, args: launch.args, options: { cwd: launch.cwd } }, options);
+        runic.onDidChangeState(event => {
+          // A restart clears the map before stopping the old client; only the current client reports.
+          if (clients.get(key) !== pending) return;
+          if (event.newState === State.Running) setServerState(key, "running");
+          else if (event.newState === State.Stopped && !runic.starting) setServerState(key, "stopped");
+        });
+        try { await runic.start(); } finally { runic.starting = false; }
+        // Initial open notifications are scheduled during client initialization.
+        // Custom requests must wait for them, including after a server restart.
+        await Promise.all(openingDocuments);
+        started = true;
+        openingDocuments.length = 0;
+        setServerState(key, "running");
+        startupNotice.reset(key);
+        return runic;
+      } catch (error) {
+        setServerState(key, "failed", errorSummary(error));
+        reportStartFailure(key, error);
+        throw error;
+      }
     })();
     clients.set(key, pending);
     pending.catch(() => { if (clients.get(key) === pending) { clients.delete(key); watchers.get(key)?.dispose(); watchers.delete(key); } });
@@ -111,6 +190,12 @@ async function renamePart(part: "Input" | "Slot") {
 }
 export function activate(context: vscode.ExtensionContext) {
   output = vscode.window.createOutputChannel("Runic Translations", { log: true }); context.subscriptions.push(output);
+  const item = statusItem = vscode.window.createStatusBarItem("runicTranslations.status", vscode.StatusBarAlignment.Left, 100);
+  item.name = "Runic Translations"; item.command = "runicTranslations.showOutput";
+  context.subscriptions.push(item, { dispose: () => { if (statusTimer) clearTimeout(statusTimer); statusItem = undefined; } },
+    vscode.commands.registerCommand("runicTranslations.showOutput", () => output.show(true)),
+    vscode.window.onDidChangeActiveTextEditor(() => refreshStatus()),
+    vscode.workspace.onDidChangeTextDocument(event => { if (isRunicDocument(event.document)) scheduleStatusRefresh(); }));
   const register = (name: string, action: (options?: PreviewOptions) => Promise<unknown>) => context.subscriptions.push(vscode.commands.registerCommand(`runicTranslations.${name}`, async (options?: PreviewOptions) => { try { return await action(options); } catch (error) { output.appendLine(String(error)); await vscode.window.showErrorMessage(String(error)); } }));
   const session = previewSession = new PreviewSession({
     revision: () => previewRevision,
@@ -146,7 +231,7 @@ export function activate(context: vscode.ExtensionContext) {
   const start = (document: vscode.TextDocument) => { if (document.languageId === "rmf2" && document.uri.scheme === "file") void clientFor(document.uri).catch(error => output.appendLine(String(error))); };
   context.subscriptions.push(vscode.workspace.onDidOpenTextDocument(start), vscode.workspace.onDidGrantWorkspaceTrust(() => vscode.workspace.textDocuments.forEach(start)));
   vscode.workspace.textDocuments.forEach(start);
-  register("restart", async () => { await deactivate(); vscode.workspace.textDocuments.forEach(start); });
+  register("restart", async () => { await deactivate(); startupNotice.reset(); vscode.workspace.textDocuments.forEach(start); });
   register("renameResource", async () => {
     const { editor, client, info } = await active();
     const name = await vscode.window.showInputBox({ value: info.path.at(-1), prompt: "Rename in resource sources and runic.json only. Update application call sites separately." });
@@ -198,7 +283,9 @@ export function activate(context: vscode.ExtensionContext) {
   register("preview", openPreview);
   register("previewSamples", options => openPreview(options, true));
   register("previewLocale", options => openPreview(options, false, true));
-  return { ready: (uri: vscode.Uri) => clientFor(uri), previewState: () => session.state };
+  refreshStatus();
+  return { ready: (uri: vscode.Uri) => clientFor(uri), previewState: () => session.state,
+    status: () => statusItem?.text, serverState: (uri: vscode.Uri) => { const folder = vscode.workspace.getWorkspaceFolder(uri); return folder && serverStates.get(folder.uri.toString())?.state; } };
 }
 export async function deactivate() {
   previewSelection++;
@@ -206,6 +293,7 @@ export async function deactivate() {
   previewTimer = undefined;
   previewSession?.close(); previewPanel?.dispose(); previewPanel = undefined;
   const active = [...clients.values()]; clients.clear();
+  serverStates.clear(); documentInfo.clear(); refreshStatus();
   for (const watcher of watchers.values()) watcher.dispose(); watchers.clear();
   await Promise.all(active.map(async pending => { try { await (await pending).stop(); } catch { /* Startup failure is already reported. */ } }));
 }

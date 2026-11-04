@@ -33,8 +33,10 @@ keyboard options; the extension does not override existing IDE bindings.
 
 Within an MF2 editor:
 
-- **Tools → Runic: Preview Message** opens the native message preview. Select a locale, edit example
-  values and choose **Render preview**. The server executes its verified runtime
+- **Tools → Runic: Preview Message** opens the native message preview. The
+  **Preview locale** selector switches the language and **Sample values** offers
+  each `@example` set of the message; either change renders at once. Edit a value
+  (the selector then shows **Custom values**) and choose **Render preview**. The server executes its verified runtime
   plan. Links and actions are inert, icons use slot labels, and custom components
   use labeled spans. The extension never loads application renderers.
 - **Tools → Runic: Restart Language Server** stops and restarts the server.
@@ -45,16 +47,45 @@ Within an MF2 editor:
   transactions are available in the CLI, Editor and VS Code; this client does
   not implement a second workspace-edit engine for those commands.
 
-`runic.json` retains Visual Studio's JSON language service. Save configuration
-changes before invoking preview. Configuration-changing refactors are refused
-because this client cannot safely include unsaved JSON buffers; resource buffers remain synchronized
-through LSP. C#, TypeScript and Svelte retain their existing language services.
+`runic.json` retains Visual Studio's JSON language service, which validates it
+against the `$schema` the templates write. The extension also opens every
+`runic.json` editor buffer on the Runic server (full-text `didOpen`/`didChange`/`didClose`
+over the client's connection), so diagnostics, preview and configuration-changing
+refactors such as F2 resource rename use unsaved configuration edits, as in VS
+Code. Resource buffers are synchronized through LSP.
+Diagnostics cover every file of a project with an open file, including closed
+translations and `runic.json`. Hover over a message in a translation shows the
+base-locale text with its comments and `@param` descriptions. C#, TypeScript and Svelte retain their existing language services.
 Runic does not silently rename their application call sites.
 The client watches direct `.mf2`, grouped `.rmf2`, and manifests under the containing solution;
 when `sourceRoots` points outside the config directory, open the common
 containing workspace so those declared files remain inside the host watch
 boundary. Symlink/reparse-point mounts are rejected by the shared server rather
 than traversed.
+
+## Visual Studio and VS Code
+
+| Feature | Visual Studio | VS Code |
+| --- | --- | --- |
+| Highlighting, completion, symbols, folding, formatting | Yes | Yes |
+| Diagnostics for every project file | Yes | Yes |
+| Diagnostic documentation links | Where the IDE shows LSP code descriptions | Yes |
+| Hover with base text and description | Yes | Yes |
+| Definition, references, quick fixes | Yes | Yes |
+| F2 rename of resources and MF2 locals | Yes | Yes |
+| Unsaved `runic.json` in refactors | Yes | Yes |
+| `runic.json` schema validation | `$schema` (published schema) | Bundled schema, or `$schema` |
+| Preview Message | Tools menu | Command |
+| Change Preview Samples | Sample selector in the preview window | Command |
+| Change Preview Locale | Locale selector in the preview window | Command |
+| Rename Input, Rename Slot, Rename Resource in Resource Sources | No (2.0) | Commands |
+| Extract Group to Directory, Inline Resource into Ancestor | No (2.0) | Commands |
+| Restart Language Server | Tools menu | Command |
+| Server output | Server stderr in the diagnostic trace | Show Output command and status bar |
+| Server state, catalog and locale | No | Status bar |
+| Start failure | IDE notification on initialization failure | One notification per folder, with install help |
+
+Full command parity waits for the production language server (2.0).
 
 ## Build and package
 
