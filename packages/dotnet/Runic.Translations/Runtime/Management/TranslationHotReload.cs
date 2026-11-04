@@ -12,8 +12,9 @@ namespace Runic.Translations;
 /// .NET Hot Reload of catalog text. A text-only edit of a <c>.rmf2</c> or <c>.mf2</c> file under <c>dotnet watch</c>
 /// or a debugger regenerates the catalog's embedded locale data, which Hot Reload applies as new method bodies. This
 /// handler then drops the values the catalogs built from the old data and refreshes every live
-/// <see cref="TranslationManager"/>, which republishes its snapshot (<see cref="ITranslationManager.SnapshotPublished"/>
-/// with <see cref="TranslationSnapshotPublishReason.Refresh"/>), so bound views update.
+/// <see cref="TranslationManager"/> and <see cref="TranslationContext"/>, whose managers republish their snapshot
+/// (<see cref="ITranslationManager.SnapshotPublished"/> with <see cref="TranslationSnapshotPublishReason.Refresh"/>), so
+/// bound views update.
 /// </summary>
 /// <remarks>
 /// Nothing is tracked unless the runtime supports metadata updates (<see cref="MetadataUpdater.IsSupported"/>), which is
@@ -24,12 +25,22 @@ internal static class TranslationHotReload
 {
     private static readonly ConditionalWeakTable<CompiledTranslationCatalog, object?> Catalogs = new();
     private static readonly ConditionalWeakTable<TranslationManager, object?> Managers = new();
+    private static readonly ConditionalWeakTable<TranslationContext, object?> Contexts = new();
 
     /// <summary>Whether Hot Reload can update this process, so generated data may change after start-up.</summary>
-    internal static bool IsSupported => SupportedOverride ?? MetadataUpdater.IsSupported;
+    internal static bool IsSupported => SupportedOverrideValue.Value ?? MetadataUpdater.IsSupported;
 
-    /// <summary>Tests set this to exercise the handler in a process that Hot Reload does not update.</summary>
-    internal static bool? SupportedOverride { get; set; }
+    private static readonly System.Threading.AsyncLocal<bool?> SupportedOverrideValue = new();
+
+    /// <summary>
+    /// Tests set this to exercise the handler in a process that Hot Reload does not update. It applies to the setting
+    /// code's async flow only, so objects that tests running in parallel create stay untracked.
+    /// </summary>
+    internal static bool? SupportedOverride
+    {
+        get => SupportedOverrideValue.Value;
+        set => SupportedOverrideValue.Value = value;
+    }
 
     internal static void Track(CompiledTranslationCatalog catalog)
     {
@@ -41,6 +52,11 @@ internal static class TranslationHotReload
         if (IsSupported) Managers.AddOrUpdate(manager, null);
     }
 
+    internal static void Track(TranslationContext context)
+    {
+        if (IsSupported) Contexts.AddOrUpdate(context, null);
+    }
+
     /// <summary>Called by the runtime after an update, before <see cref="UpdateApplication"/>.</summary>
     [SuppressMessage("Style", "IDE0060:Remove unused parameter", Justification = "The MetadataUpdateHandler signature.")]
     internal static void ClearCache(Type[]? updatedTypes)
@@ -48,18 +64,19 @@ internal static class TranslationHotReload
         foreach ((CompiledTranslationCatalog catalog, _) in Catalogs) catalog.ResetDeferredData();
     }
 
-    /// <summary>Called by the runtime after an update: refreshes every live manager.</summary>
+    /// <summary>Called by the runtime after an update: refreshes every live manager and context.</summary>
     [SuppressMessage("Style", "IDE0060:Remove unused parameter", Justification = "The MetadataUpdateHandler signature.")]
     internal static void UpdateApplication(Type[]? updatedTypes)
     {
-        foreach ((TranslationManager manager, _) in Managers) _ = RefreshAsync(manager);
+        foreach ((TranslationManager manager, _) in Managers) _ = RefreshAsync(manager.RefreshAsync);
+        foreach ((TranslationContext context, _) in Contexts) _ = RefreshAsync(context.RefreshAsync);
     }
 
-    private static async Task RefreshAsync(TranslationManager manager)
+    private static async Task RefreshAsync(Func<System.Threading.CancellationToken, ValueTask> refresh)
     {
         try
         {
-            await manager.RefreshAsync().ConfigureAwait(false);
+            await refresh(default).ConfigureAwait(false);
         }
         catch (Exception exception)
         {

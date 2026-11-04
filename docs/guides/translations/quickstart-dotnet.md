@@ -121,7 +121,7 @@ dotnet watch --project Example.App/Example.App.csproj
 ```
 
 The source generator rebuilds the catalog, Hot Reload applies the new embedded
-data, and every `TranslationManager` republishes its snapshot:
+data, and every `TranslationManager` (and every manager of a `TranslationContext`) republishes its snapshot:
 `SnapshotPublished` is raised with `TranslationSnapshotPublishReason.Refresh`, so
 WPF bindings and other views that listen to it show the new text; code that
 formats again (`text.Messages.application_title`) reads it as well. This works for

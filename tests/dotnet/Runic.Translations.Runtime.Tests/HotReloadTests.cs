@@ -6,8 +6,9 @@ using TUnit.Core;
 namespace Runic.Translations.Runtime.Tests;
 
 // TranslationHotReload: after Hot Reload applies new generated locale data, live managers republish their snapshot.
-// The runtime calls ClearCache and UpdateApplication; the tests call them as it does. Hot Reload support is forced
-// only while a test creates its own catalog and manager, so the objects of tests running in parallel stay untracked.
+// The runtime calls ClearCache and UpdateApplication; the tests call them as it does. Hot Reload support is forced in
+// the test's own async flow (SupportedOverride is async-local), so the objects of tests running in parallel stay
+// untracked; the cases of this class run one at a time because they share the tracked set.
 [NotInParallel(nameof(HotReloadTests))]
 internal sealed class HotReloadTests
 {
@@ -54,6 +55,39 @@ internal sealed class HotReloadTests
         {
             TranslationHotReload.SupportedOverride = null;
         }
+    }
+
+    [Test, DisplayName("a metadata update refreshes a translation context's managers with the new generated text")]
+    public async Task UpdateRefreshesContext()
+    {
+        string data = Data("Context one");
+        TranslationHotReload.SupportedOverride = true;
+        TranslationContext context;
+        try
+        {
+            var catalog = new CompiledTranslationCatalog("hot", "en",
+                [CompiledTranslationDefinition.FromRmf2Inputs("greeting", [])],
+                [CompiledTranslationLocale.CreateDeferred("en", null, () => CompiledTranslationLocale.ReadRmf2Values(Encoding.UTF8.GetBytes(data)))]);
+            var registration = new TranslationCatalogRegistration("hot", "en", "sha256:" + new string('0', 64), "{\"version\":2,\"contracts\":{},\"messages\":{}}",
+                (valueFormatter, snapshotFactory, options) => new CompiledTranslationProvider(catalog, valueFormatter, snapshotFactory));
+            context = await TranslationContext.CreateBuilder().Add(registration).BuildAsync("en");
+        }
+        finally
+        {
+            TranslationHotReload.SupportedOverride = null;
+        }
+        ITranslationManager manager = context.GetManager("hot");
+        Assert.Equal("Context one", manager.Current.Format(Greeting, []));
+
+        var published = new TaskCompletionSource<TranslationSnapshotPublishedEventArgs>(TaskCreationOptions.RunContinuationsAsynchronously);
+        manager.SnapshotPublished += (_, args) => published.TrySetResult(args);
+        data = Data("Context two");
+        TranslationHotReload.ClearCache(null);
+        TranslationHotReload.UpdateApplication(null);
+        TranslationSnapshotPublishedEventArgs args = await published.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(TranslationSnapshotPublishReason.Refresh, args.Reason);
+        Assert.Equal("Context two", manager.Current.Format(Greeting, []));
+        GC.KeepAlive(context);
     }
 
     [Test, DisplayName("without Hot Reload a deferred locale reads its data once and is not tracked")]

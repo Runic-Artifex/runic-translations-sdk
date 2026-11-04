@@ -69,6 +69,7 @@ public sealed class TranslationContext : ITranslationContext
 
         _supportedLocales = Array.AsReadOnly(IntersectSupportedLocales(entries));
         _state = initial;
+        TranslationHotReload.Track(this);
         _notifiedVersion = initial.Version;
         _notifiedRequestedLocale = initial.RequestedLocale;
     }
