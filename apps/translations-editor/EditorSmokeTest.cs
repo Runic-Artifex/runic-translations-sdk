@@ -201,6 +201,41 @@ internal static class EditorSmokeTest
             "The UI export wrote outside the workspace.");
     }
 
+    // Export stamps an approval with its unit's current source fingerprint only while the editor's own marker (the
+    // frontend's fnv1a64 of the base value) still matches; an approval made before the source changed is exported as
+    // needs-review, and editing another key leaves it approved.
+    private static async Task ReviewStampJourneyAsync(string container)
+    {
+        // Values from review-model.ts sourceFingerprint, run with bun.
+        Require(EditorWorkspace.EditorSourceFingerprint("Hello {$name}!") == "fnv1a64:6766928709d1ff53" &&
+            EditorWorkspace.EditorSourceFingerprint("Zeile\n\"zwei\"\t\\ \u0001 \ud83d\ude00 \ud800 \u00c4") == "fnv1a64:f1a8bb5b9e6f39e5",
+            "The editor's review fingerprint differs from the frontend's.");
+        string project = Path.Combine(container, "workspace");
+        await TranslationProjectWriter.CreateAsync(TranslationProjectScaffolder.Render(
+            new TranslationProjectCreationRequest(project, "stamp-smoke", "en", "Smoke.Translations", "SmokeText",
+                [new TranslationProjectLocale("de", "en")]))).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), "title = Title\nother = Other\n").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "de.rmf2"), "title = Titel\nother = Andere\n").ConfigureAwait(false);
+        TranslationEditorStateStore.Save(project, new TranslationEditorState("stamp-smoke",
+            [new TranslationEditorStateEntry("title", "de", "approved", null, EditorWorkspace.EditorSourceFingerprint("Title"), new SortedDictionary<string, string>(StringComparer.Ordinal))],
+            []), TranslationEditorStateStore.Load(project, "stamp-smoke").Revision);
+        using var session = new EditorSession(project);
+        async Task<string> SegmentAsync()
+        {
+            EditorXliffExportResult export = await session.ExportXliffAsync("xliff").ConfigureAwait(false);
+            Require(export.Ok, "The review-stamp export failed.");
+            XDocument document = XDocument.Load(Path.Combine(project, export.Documents.Single().Path));
+            return document.Descendants().Single(element => element.Name.LocalName == "unit" && element.Attribute("id")?.Value == "title")
+                .Elements().Single(element => element.Name.LocalName == "segment").ToString(SaveOptions.DisableFormatting);
+        }
+        Require((await SegmentAsync().ConfigureAwait(false)).Contains("state=\"final\"", StringComparison.Ordinal), "A current approval was not exported as final.");
+        await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), "title = Title\nother = Other text\n").ConfigureAwait(false);
+        Require((await SegmentAsync().ConfigureAwait(false)).Contains("state=\"final\"", StringComparison.Ordinal), "Editing another key voided an approval.");
+        await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), "title = Main title\nother = Other text\n").ConfigureAwait(false);
+        Require((await SegmentAsync().ConfigureAwait(false)).Contains("subState=\"runic:needs-review\"", StringComparison.Ordinal),
+            "An approval made before the source changed was exported as current.");
+    }
+
     // commandLine is the command-line operations (Program.cs), which a frontend
     // bootstrap build does not compile.
     public static async Task<int> RunAsync(string workspacePath, IEditorCommandOperations commandLine)
@@ -212,6 +247,7 @@ internal static class EditorSmokeTest
             await MountedContextJourneyAsync(Path.Combine(container, "mounted-context")).ConfigureAwait(false);
             await MalformedManifestJourneyAsync(Path.Combine(container, "malformed-manifest")).ConfigureAwait(false);
             await InterchangeOutputJourneyAsync(Path.Combine(container, "interchange-output"), commandLine).ConfigureAwait(false);
+            await ReviewStampJourneyAsync(Path.Combine(container, "review-stamp")).ConfigureAwait(false);
             string project = Path.Combine(container, "translations");
             // Smoke tests exercise an intentionally minimal workspace. They must
             // never mutate the packaged example or a caller-provided directory.

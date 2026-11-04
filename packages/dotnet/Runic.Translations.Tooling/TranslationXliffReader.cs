@@ -1,0 +1,605 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
+using System.Xml;
+using System.Xml.Linq;
+using Runic.Translations.Compiler;
+
+namespace Runic.Translations.Tooling;
+
+/// <summary>
+/// Reads XLIFF 2.0/2.1 documents of the Runic profile, versions 2 and 3, and what translation management systems
+/// write from them. Document-level problems (not XLIFF, another catalog, another execution contract) throw
+/// <see cref="TranslationInterchangeException"/>; everything else is decided per unit.
+/// </summary>
+internal static class TranslationXliffReader
+{
+    private static readonly XNamespace Xliff = TranslationInterchange.XliffNamespace;
+
+    internal static TranslationXliffImportResult Import(ReadOnlyMemory<byte> source, TranslationInterchangeProjection? live, TranslationXliffImportOptions? options)
+    {
+        if (source.Length == 0) throw new TranslationInterchangeException("XLIFF21-EMPTY", "An XLIFF document is required.");
+        if (source.Length > TranslationInterchange.MaximumXliffBytes) throw new TranslationInterchangeException("XLIFF21-LIMIT", "The XLIFF document exceeds the byte limit.");
+        XDocument document;
+        try
+        {
+            using var stream = new MemoryStream(source.ToArray(), writable: false);
+            using XmlReader reader = XmlReader.Create(stream, new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null, IgnoreComments = true,
+                IgnoreProcessingInstructions = true, MaxCharactersInDocument = TranslationInterchange.MaximumXliffBytes,
+            });
+            document = XDocument.Load(reader, LoadOptions.PreserveWhitespace);
+        }
+        catch (XmlException exception) { throw new TranslationInterchangeException("XLIFF21-MALFORMED", "The XLIFF document is malformed.", exception); }
+
+        XElement root = document.Root ?? throw new TranslationInterchangeException("XLIFF21-ROOT", "The XLIFF document has no root element.");
+        if (root.Name != Xliff + "xliff") throw new TranslationInterchangeException("XLIFF21-ROOT", "The document is not XLIFF 2 (urn:oasis:names:tc:xliff:document:2.0).");
+        if ((string?)root.Attribute("version") is not ("2.0" or "2.1")) throw new TranslationInterchangeException("XLIFF21-VERSION", "Only XLIFF versions 2.0 and 2.1 are supported.");
+        string sourceLocale = (string?)root.Attribute("srcLang") ?? throw new TranslationInterchangeException("XLIFF21-ROOT", "The XLIFF document has no srcLang.");
+        string targetLocale = (string?)root.Attribute("trgLang") ?? throw new TranslationInterchangeException("XLIFF21-ROOT", "The XLIFF document has no trgLang; it is not a translation.");
+        XElement[] files = root.Elements(Xliff + "file").ToArray();
+        if (files.Length != 1) throw new TranslationInterchangeException("XLIFF21-FILE", "The XLIFF document must contain exactly one file.");
+        string catalog = (string?)files[0].Attribute("id") ?? throw new TranslationInterchangeException("XLIFF21-FILE", "The XLIFF file has no id; Runic exports the catalog identifier there.");
+
+        if (live is not null)
+        {
+            if (!string.Equals(catalog, live.CatalogId, StringComparison.Ordinal))
+                throw new TranslationInterchangeException("XLIFF21-CATALOG-MISMATCH", "The XLIFF file is for catalog '" + catalog + "', not '" + live.CatalogId + "'.");
+            if (!string.Equals(sourceLocale, live.SourceLocale, StringComparison.Ordinal))
+                throw new TranslationInterchangeException("XLIFF21-SOURCE-LOCALE", "The XLIFF source locale '" + sourceLocale + "' is not the base locale '" + live.SourceLocale + "'.");
+            if (string.Equals(targetLocale, live.SourceLocale, StringComparison.Ordinal))
+                throw new TranslationInterchangeException("XLIFF21-TARGET-LOCALE", "The XLIFF target locale is the base locale '" + targetLocale + "'.");
+            if (!live.Locales.Any(locale => string.Equals(locale.Tag, targetLocale, StringComparison.Ordinal)))
+                throw new TranslationInterchangeException("XLIFF21-TARGET-LOCALE", "The catalog does not declare the XLIFF target locale '" + targetLocale + "'.");
+        }
+
+        var parsed = new List<ParsedUnit>();
+        CollectUnits(files[0], parsed);
+        if (parsed.Count == 0) throw new TranslationInterchangeException("XLIFF21-FILE", "The XLIFF file contains no units.");
+        if (parsed.Count > TranslationInterchange.MaximumUnits) throw new TranslationInterchangeException("XLIFF21-LIMIT", "The XLIFF document has too many units.");
+
+        int profileVersion = ProfileVersion(parsed);
+        var losses = new List<TranslationInterchangeLoss>();
+        var context = new ImportContext(catalog, sourceLocale, targetLocale, profileVersion, live, options ?? new TranslationXliffImportOptions(), losses);
+        if (profileVersion == 2) context.FormerTextProfileFingerprint = FormerTextProfileFingerprint(catalog, sourceLocale, parsed);
+
+        var decisions = new List<UnitDecision>(parsed.Count);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (ParsedUnit unit in parsed)
+        {
+            if (!seen.Add(unit.Id)) { decisions.Add(UnitDecision.Refuse(unit.Id, "XLIFF21-DUPLICATE-UNIT", "The unit identifier '" + unit.Id + "' appears more than once.")); continue; }
+            decisions.Add(Decide(unit, context));
+        }
+        ValidateContracts(decisions, context);
+
+        var messages = new List<TranslationMf2Document>();
+        var reviews = new List<TranslationInterchangeReviewEntry>();
+        var units = new List<TranslationXliffUnitResult>(decisions.Count);
+        foreach (UnitDecision decision in decisions)
+        {
+            units.Add(new TranslationXliffUnitResult(decision.Key, decision.Outcome, decision.Code, decision.Message,
+                decision.Outcome == TranslationXliffUnitOutcome.Applied ? decision.State : null,
+                decision.SourceFingerprint, decision.SourceChanged));
+            if (decision.Outcome != TranslationXliffUnitOutcome.Applied) continue;
+            messages.Add(new TranslationMf2Document(decision.Key, Encoding.UTF8.GetBytes(decision.Pattern! + "\n")));
+            if (decision.ExplicitState)
+                reviews.Add(new TranslationInterchangeReviewEntry(decision.Key, targetLocale, decision.State, decision.Note, decision.SourceFingerprint));
+        }
+        var review = new TranslationInterchangeReview(catalog, reviews);
+        TranslationInterchange.ValidateReview(review, catalog);
+        return new TranslationXliffImportResult(catalog, sourceLocale, targetLocale,
+            messages.OrderBy(static message => message.MessageId, StringComparer.Ordinal).ToArray(),
+            review, new TranslationInterchangeReport(losses), units, profileVersion);
+    }
+
+    // ---- Parsing ----
+
+    private sealed record Inline(string? Text, string? Id, string? Equiv, string? DataRef, string? CopyOf);
+
+    private sealed class ParsedUnit
+    {
+        internal required string Id { get; init; }
+        internal bool NotTranslatable { get; set; }
+        internal UnitNote? Metadata { get; set; }
+        internal ReviewNote? Review { get; set; }
+        internal List<string> ForeignNotes { get; } = new();
+        internal List<Inline> Source { get; } = new();
+        internal List<Inline>? Target { get; set; } = new();
+        internal List<string?> States { get; } = new();
+        internal List<string> SubStates { get; } = new();
+        internal Dictionary<string, string> OriginalData { get; } = new(StringComparer.Ordinal);
+        internal bool HasMarkers { get; set; }
+        internal (string Code, string Message)? Problem { get; set; }
+    }
+
+    private sealed record UnitNote(string ExecutionProfile, int MessageGrammarVersion, string InterchangeProfile, int InterchangeProfileVersion, bool Structured, string? Description, string? Since, string? Deprecated, string[] Tags, IReadOnlyList<TranslationInterchangePlaceholder> Placeholders, string? SourceFingerprint);
+    private sealed record ReviewNote(TranslationReviewState State, string? Note, string? SourceFingerprint);
+
+    private static void CollectUnits(XElement container, List<ParsedUnit> units)
+    {
+        foreach (XElement element in container.Elements())
+        {
+            if (element.Name == Xliff + "group") { CollectUnits(element, units); continue; }
+            if (element.Name != Xliff + "unit") continue; // notes, skeleton, module metadata
+            if (units.Count > TranslationInterchange.MaximumUnits) return;
+            units.Add(ParseUnit(element));
+        }
+    }
+
+    private static ParsedUnit ParseUnit(XElement element)
+    {
+        var unit = new ParsedUnit { Id = (string?)element.Attribute("id") ?? string.Empty };
+        unit.NotTranslatable = (string?)element.Attribute("translate") == "no";
+        try
+        {
+            if (element.Element(Xliff + "notes") is { } notes) ParseNotes(notes, unit);
+            if (element.Element(Xliff + "originalData") is { } original)
+                foreach (XElement data in original.Elements(Xliff + "data"))
+                    if ((string?)data.Attribute("id") is { } id) unit.OriginalData[id] = data.Value;
+            int segments = 0;
+            foreach (XElement part in element.Elements())
+            {
+                bool segment = part.Name == Xliff + "segment";
+                if (!segment && part.Name != Xliff + "ignorable") continue;
+                XElement source = part.Element(Xliff + "source") ?? throw new UnitProblem("XLIFF21-SOURCE", "A segment has no source.");
+                XElement? target = part.Element(Xliff + "target");
+                ReadInline(source, unit.Source, unit);
+                if (segment)
+                {
+                    segments++;
+                    unit.States.Add((string?)part.Attribute("state"));
+                    if ((string?)part.Attribute("subState") is { } subState) unit.SubStates.Add(subState);
+                    if (target is null) unit.Target = null;
+                    else if (unit.Target is not null) ReadInline(target, unit.Target, unit);
+                }
+                else if (unit.Target is not null) ReadInline(target ?? source, unit.Target, unit);
+            }
+            if (segments == 0) throw new UnitProblem("XLIFF21-SEGMENT", "The unit has no segment.");
+            int length = unit.Source.Sum(static inline => inline.Text?.Length ?? 0) + (unit.Target?.Sum(static inline => inline.Text?.Length ?? 0) ?? 0);
+            if (length > TranslationInterchange.MaximumTextLength) throw new UnitProblem("XLIFF21-TEXT", "The unit text exceeds the length limit.");
+        }
+        catch (UnitProblem problem) { unit.Problem = (problem.Code, problem.Message); }
+        catch (TranslationInterchangeException exception) when (exception.Code is "XLIFF21-METADATA" or "XLIFF21-REVIEW" or "XLIFF21-TAGS" or "XLIFF21-PLACEHOLDERS")
+        { unit.Problem = (exception.Code, exception.Message); }
+        return unit;
+    }
+
+    private static void ParseNotes(XElement notes, ParsedUnit unit)
+    {
+        foreach (XElement note in notes.Elements(Xliff + "note"))
+        {
+            string? category = (string?)note.Attribute("category");
+            string value = note.Value;
+            switch (category)
+            {
+                case "runic:unit":
+                    if (unit.Metadata is not null) throw new UnitProblem("XLIFF21-METADATA", "The unit has two Runic unit notes.");
+                    unit.Metadata = ParseUnitNote(value.Trim());
+                    break;
+                case "runic:review":
+                    if (unit.Review is not null) throw new UnitProblem("XLIFF21-REVIEW", "The unit has two Runic review notes.");
+                    unit.Review = ParseReviewNote(value.Trim());
+                    break;
+                case "description":
+                    break; // Runic's readable description; the sources stay authoritative.
+                default:
+                    if (!string.IsNullOrWhiteSpace(value)) unit.ForeignNotes.Add(category ?? string.Empty);
+                    break;
+            }
+        }
+    }
+
+    private static void ReadInline(XElement container, List<Inline> output, ParsedUnit unit)
+    {
+        foreach (XNode node in container.Nodes())
+        {
+            switch (node)
+            {
+                case XText text:
+                    output.Add(new Inline(text.Value, null, null, null, null));
+                    break;
+                case XElement element when element.Name == Xliff + "ph":
+                    output.Add(new Inline(null, (string?)element.Attribute("id"), (string?)element.Attribute("equiv"), (string?)element.Attribute("dataRef"), (string?)element.Attribute("copyOf")));
+                    break;
+                case XElement element when element.Name == Xliff + "cp":
+                    string hex = (string?)element.Attribute("hex") ?? throw new UnitProblem("XLIFF21-INLINE", "A <cp> element has no hex value.");
+                    if (!int.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int code) || code is < 0 or > 0x10FFFF || code is >= 0xD800 and <= 0xDFFF)
+                        throw new UnitProblem("XLIFF21-INLINE", "A <cp> element has an invalid code point.");
+                    output.Add(new Inline(char.ConvertFromUtf32(code), null, null, null, null));
+                    break;
+                case XElement element when element.Name == Xliff + "mrk":
+                    // An annotation (a term, a comment, a translate="no" span): its content is kept, the annotation is not.
+                    unit.HasMarkers = true;
+                    ReadInline(element, output, unit);
+                    break;
+                case XElement element:
+                    throw new UnitProblem("XLIFF21-INLINE", "The inline element <" + element.Name.LocalName + "> is not supported; only <ph>, <mrk> and <cp> are.");
+            }
+        }
+    }
+
+    private static int ProfileVersion(List<ParsedUnit> units)
+    {
+        var contracts = units.Where(static unit => unit.Metadata is not null).Select(static unit => unit.Metadata!)
+            .Select(static note => (note.ExecutionProfile, note.MessageGrammarVersion, note.InterchangeProfile, note.InterchangeProfileVersion))
+            .Distinct().ToArray();
+        if (contracts.Length == 0) return TranslationInterchange.XliffProfileVersion;
+        if (contracts.Length != 1) throw new TranslationInterchangeException("XLIFF21-CONTRACT", "Every imported XLIFF unit must declare the same execution and interchange contract.");
+        var contract = contracts[0];
+        if (contract.ExecutionProfile != Rmf2ProjectCompilation.CurrentExecutionProfile || contract.MessageGrammarVersion != Rmf2ProjectCompilation.CurrentMessageGrammarVersion)
+            throw new TranslationInterchangeException("XLIFF21-CONTRACT", "The XLIFF document does not target the supported RMF2 execution contract.");
+        if (contract.InterchangeProfile != TranslationInterchange.XliffProfile || contract.InterchangeProfileVersion is not (2 or TranslationInterchange.XliffProfileVersion))
+            throw new TranslationInterchangeException("XLIFF21-PROFILE", "The XLIFF document does not use a supported closed interchange profile.");
+        return contract.InterchangeProfileVersion;
+    }
+
+    // ---- Decisions ----
+
+    private sealed class ImportContext(string catalog, string sourceLocale, string targetLocale, int profileVersion, TranslationInterchangeProjection? live, TranslationXliffImportOptions options, List<TranslationInterchangeLoss> losses)
+    {
+        internal string Catalog { get; } = catalog;
+        internal string SourceLocale { get; } = sourceLocale;
+        internal string TargetLocale { get; } = targetLocale;
+        internal int ProfileVersion { get; } = profileVersion;
+        internal TranslationInterchangeProjection? Live { get; } = live;
+        internal TranslationXliffImportOptions Options { get; } = options;
+        internal List<TranslationInterchangeLoss> Losses { get; } = losses;
+        internal string? FormerTextProfileFingerprint { get; set; }
+        internal Dictionary<string, TranslationInterchangeSourceUnit> LiveUnits { get; } =
+            live?.CanonicalUnits.ToDictionary(static unit => unit.Key, StringComparer.Ordinal) ?? new(StringComparer.Ordinal);
+    }
+
+    private sealed class UnitDecision
+    {
+        internal required string Key { get; init; }
+        internal TranslationXliffUnitOutcome Outcome { get; set; }
+        internal string? Code { get; set; }
+        internal string? Message { get; set; }
+        internal string? Pattern { get; init; }
+        internal string? SourcePattern { get; init; }
+        internal IReadOnlyList<TranslationInterchangePlaceholder> Contract { get; init; } = [];
+        internal TranslationReviewState State { get; init; }
+        internal bool ExplicitState { get; init; }
+        internal string? Note { get; init; }
+        internal string? SourceFingerprint { get; init; }
+        internal bool SourceChanged { get; init; }
+
+        internal static UnitDecision Skip(string key, string code, string message) => new() { Key = key, Outcome = TranslationXliffUnitOutcome.Skipped, Code = code, Message = message };
+        internal static UnitDecision Refuse(string key, string code, string message) => new() { Key = key, Outcome = TranslationXliffUnitOutcome.Refused, Code = code, Message = message };
+    }
+
+    private static UnitDecision Decide(ParsedUnit unit, ImportContext context)
+    {
+        string key = unit.Id;
+        string location = "/" + key;
+        if (!TranslationInterchange.IsKey(key)) return UnitDecision.Refuse(key, "XLIFF21-UNIT-ID", "The unit identifier '" + key + "' is not a Runic message key.");
+        if (unit.Problem is { } problem) return UnitDecision.Refuse(key, problem.Code, problem.Message);
+        foreach (string category in unit.ForeignNotes.Distinct(StringComparer.Ordinal))
+            context.Losses.Add(new("XLIFF21-NOTE-IGNORED", location, category.Length == 0 ? "A note without a category was ignored; the sources do not store translator notes." : "A note of category '" + category + "' was ignored; the sources do not store translator notes.", false));
+        if (unit.HasMarkers) context.Losses.Add(new("XLIFF21-MARKER-IGNORED", location, "<mrk> annotations were removed; their text was kept.", false));
+        foreach (string subState in unit.SubStates.Distinct(StringComparer.Ordinal))
+            if (subState != TranslationInterchange.NeedsReviewSubState)
+                context.Losses.Add(new("XLIFF21-SUBSTATE-IGNORED", location, "The segment subState '" + subState + "' is not a Runic state and was ignored.", false));
+
+        TranslationInterchangeSourceUnit? live = null;
+        if (context.Live is not null && !context.LiveUnits.TryGetValue(key, out live))
+            return UnitDecision.Refuse(key, "XLIFF21-UNKNOWN-KEY", "The catalog has no message '" + key + "'.");
+        if (unit.Metadata?.Structured == true || live?.Structured == true)
+            return UnitDecision.Skip(key, "XLIFF21-STRUCTURED-SKIPPED", "Messages with selectors, declarations or markup are not exchanged through XLIFF; translate them in the .rmf2 sources or the editor.");
+        if (unit.NotTranslatable)
+            return UnitDecision.Skip(key, "XLIFF21-NOT-TRANSLATABLE", "The unit is marked translate=\"no\".");
+
+        // State: the least advanced segment wins; a segment without state is XLIFF's "initial".
+        bool stateDeclared = unit.States.Any(static state => state is not null);
+        string segmentState = "translated";
+        if (stateDeclared)
+        {
+            string[] order = ["initial", "translated", "reviewed", "final"];
+            int lowest = int.MaxValue;
+            foreach (string? declared in unit.States)
+            {
+                int index = Array.IndexOf(order, declared ?? "initial");
+                if (index < 0) return UnitDecision.Refuse(key, "XLIFF21-STATE", "The segment state '" + declared + "' is not an XLIFF 2 state.");
+                lowest = Math.Min(lowest, index);
+            }
+            segmentState = order[lowest];
+        }
+        if (unit.Target is null) return UnitDecision.Skip(key, "XLIFF21-UNTRANSLATED", "The unit has no target.");
+        if (segmentState == "initial") return UnitDecision.Skip(key, "XLIFF21-UNTRANSLATED", "The unit is in the initial state.");
+
+        // Pieces of source and target; profile 2 carried MF2 syntax as plain text.
+        IReadOnlyList<TranslationInterchangePiece> sourcePieces, targetPieces;
+        string sourcePattern, targetPattern;
+        if (context.ProfileVersion == 2)
+        {
+            if (unit.Source.Any(static inline => inline.Text is null) || unit.Target.Any(static inline => inline.Text is null))
+                return UnitDecision.Refuse(key, "XLIFF21-INLINE", "Profile 2 documents carry plain text only.");
+            sourcePattern = string.Concat(unit.Source.Select(static inline => inline.Text));
+            targetPattern = string.Concat(unit.Target.Select(static inline => inline.Text));
+            IReadOnlyList<TranslationInterchangePiece>? decomposedSource = TranslationInterchangePattern.Decompose(sourcePattern);
+            IReadOnlyList<TranslationInterchangePiece>? decomposedTarget = TranslationInterchangePattern.Decompose(targetPattern);
+            if (decomposedSource is null || decomposedSource.Any(static piece => !piece.IsText) || decomposedTarget is null || decomposedTarget.Any(static piece => !piece.IsText))
+                return UnitDecision.Refuse(key, "XLIFF21-STRUCTURED-IMPORT", "A structured Runic message cannot be imported from the profile 2 text profile.");
+            sourcePieces = decomposedSource; targetPieces = decomposedTarget;
+        }
+        else
+        {
+            Dictionary<string, string> sourceIds = new(StringComparer.Ordinal);
+            if (!TryResolve(unit.Source, unit, null, sourceIds, live, out IReadOnlyList<TranslationInterchangePiece>? resolvedSource, out string? sourceProblem))
+                return UnitDecision.Refuse(key, "XLIFF21-PLACEHOLDER", sourceProblem!);
+            if (!TryResolve(unit.Target, unit, sourceIds, null, null, out IReadOnlyList<TranslationInterchangePiece>? resolvedTarget, out string? targetProblem))
+                return UnitDecision.Refuse(key, "XLIFF21-PLACEHOLDER", targetProblem!);
+            sourcePieces = resolvedSource!; targetPieces = resolvedTarget!;
+            sourcePattern = TranslationInterchangePattern.Compose(sourcePieces);
+            targetPattern = TranslationInterchangePattern.Compose(targetPieces);
+        }
+
+        bool translatedState = stateDeclared || unit.Review is not null;
+        if (TranslationInterchangePattern.IsEmpty(targetPieces) && !translatedState)
+            return UnitDecision.Skip(key, "XLIFF21-EMPTY-TARGET", "The target is empty and no state marks it as translated; the base text stays the fallback.");
+
+        // The contract the target is checked against: the live caller contract, else the one the file records,
+        // else the placeholders of the file's source.
+        IReadOnlyList<string> sourceVariables = TranslationInterchangePattern.Variables(sourcePieces);
+        IReadOnlyList<TranslationInterchangePlaceholder> contract = live?.Metadata.Placeholders ?? unit.Metadata?.Placeholders ?? [];
+        var allowed = new HashSet<string>(live is null && unit.Metadata is null ? sourceVariables : contract.Select(static placeholder => placeholder.Name), StringComparer.Ordinal);
+        if (live is null && unit.Metadata is not null && sourceVariables.Any(variable => !allowed.Contains(variable)))
+            return UnitDecision.Refuse(key, "XLIFF21-PLACEHOLDER", "The source placeholders do not match the contract that the unit records.");
+        foreach (string variable in TranslationInterchangePattern.Variables(targetPieces))
+            if (!allowed.Contains(variable))
+                return UnitDecision.Refuse(key, "XLIFF21-PLACEHOLDER", "The target uses the placeholder $" + variable + ", which the message's caller contract does not have.");
+
+        // The source the translator saw, and whether the live source changed since.
+        IReadOnlyList<TranslationInterchangePlaceholder> recordedContract = unit.Metadata?.Placeholders ?? contract;
+        string fileFingerprint = context.ProfileVersion >= 3 && unit.Metadata?.SourceFingerprint is { } recordedFingerprint
+            ? recordedFingerprint
+            : TranslationInterchangeFingerprint.UnitSource(key, sourcePattern, sourcePieces, recordedContract);
+        bool sourceChanged = live is not null && !string.Equals(fileFingerprint, live.SourceFingerprint, StringComparison.Ordinal);
+        if (sourceChanged && context.Options.SourceChangePolicy == TranslationSourceChangePolicy.Refuse)
+            return UnitDecision.Refuse(key, "XLIFF21-SOURCE-CHANGED", "The source of '" + key + "' changed after export.");
+
+        // Review state: a Runic review note that agrees with the segment state keeps its note and fingerprint;
+        // otherwise the segment state is authoritative.
+        TranslationReviewState state = MapSegmentState(segmentState, unit.SubStates.Contains(TranslationInterchange.NeedsReviewSubState), context.ProfileVersion);
+        string? note = unit.Review?.Note;
+        if (!stateDeclared && unit.Review is null)
+            context.Losses.Add(new("XLIFF21-STATE-MISSING", location, "The segment has a target but no state; it is imported as translated.", false));
+        if (unit.Review is { } review)
+        {
+            if (stateDeclared && review.State != state)
+                context.Losses.Add(new("XLIFF21-STATE-CHANGED", location, "The segment state '" + segmentState + "' replaces the Runic review state '" + TranslationReviewStates.ToWire(review.State) + "'.", false));
+            else
+            {
+                state = review.State;
+                if (state == TranslationReviewState.Approved)
+                {
+                    string? expected = context.ProfileVersion == 2 ? context.FormerTextProfileFingerprint : fileFingerprint;
+                    if (!string.Equals(review.SourceFingerprint, expected, StringComparison.Ordinal))
+                    {
+                        context.Losses.Add(new("REVIEW-STALE", location, "The approval does not match the source it was exported with; it is imported as needs-review.", false));
+                        state = TranslationReviewState.NeedsReview;
+                    }
+                }
+            }
+        }
+        if (state == TranslationReviewState.Draft) return UnitDecision.Skip(key, "XLIFF21-UNTRANSLATED", "The unit's review state is draft.");
+        if (sourceChanged)
+        {
+            context.Losses.Add(new("XLIFF21-SOURCE-CHANGED", location, "The source changed after export; the translation is imported as needs-review.", false));
+            state = TranslationReviewState.NeedsReview;
+        }
+        return new UnitDecision
+        {
+            Key = key,
+            Outcome = TranslationXliffUnitOutcome.Applied,
+            Pattern = targetPattern,
+            SourcePattern = live?.Text ?? sourcePattern,
+            Contract = contract,
+            State = state,
+            // "translated" is what an existing translation is by default; only other states become review data.
+            ExplicitState = unit.Review is not null || sourceChanged || (stateDeclared && state != TranslationReviewState.Translated),
+            Note = note,
+            SourceFingerprint = fileFingerprint,
+            SourceChanged = sourceChanged,
+        };
+    }
+
+    private static TranslationReviewState MapSegmentState(string state, bool needsReview, int profileVersion) => state switch
+    {
+        "initial" => TranslationReviewState.Draft,
+        "translated" => needsReview ? TranslationReviewState.NeedsReview : TranslationReviewState.Translated,
+        // Profile 2 wrote needs-review as "reviewed"; in XLIFF 2 it means the review is done.
+        "reviewed" => profileVersion == 2 ? TranslationReviewState.NeedsReview : TranslationReviewState.Approved,
+        _ => TranslationReviewState.Approved,
+    };
+
+    // Resolves <ph> elements to MF2 expressions: the source placeholder with the same id (or copyOf), else the
+    // element's equiv, else its originalData. Without equiv in the source, the live export's numbering is used.
+    private static bool TryResolve(List<Inline> inlines, ParsedUnit unit, Dictionary<string, string>? sourceIds, Dictionary<string, string>? record,
+        TranslationInterchangeSourceUnit? live, out IReadOnlyList<TranslationInterchangePiece>? pieces, out string? problem)
+    {
+        var result = new List<TranslationInterchangePiece>();
+        Dictionary<string, string>? liveIds = null;
+        if (live?.Pieces is { } livePieces)
+        {
+            liveIds = new(StringComparer.Ordinal);
+            int number = 0;
+            foreach (TranslationInterchangePiece piece in livePieces)
+                if (!piece.IsText) liveIds[(++number).ToString(CultureInfo.InvariantCulture)] = piece.Expression!;
+        }
+        foreach (Inline inline in inlines)
+        {
+            if (inline.Text is not null)
+            {
+                if (result.Count != 0 && result[^1].IsText) result[^1] = TranslationInterchangePiece.FromText(result[^1].Text + inline.Text);
+                else result.Add(TranslationInterchangePiece.FromText(inline.Text));
+                continue;
+            }
+            string? expression = null;
+            if (sourceIds is not null && inline.Id is not null && sourceIds.TryGetValue(inline.Id, out string? byId)) expression = byId;
+            else if (sourceIds is not null && inline.CopyOf is not null && sourceIds.TryGetValue(inline.CopyOf, out string? copied)) expression = copied;
+            else if (inline.Equiv is not null) expression = inline.Equiv;
+            else if (inline.DataRef is not null && unit.OriginalData.TryGetValue(inline.DataRef, out string? data)) expression = data;
+            else if (sourceIds is null && inline.Id is not null && liveIds is not null && liveIds.TryGetValue(inline.Id, out string? numbered)) expression = numbered;
+            if (expression is null || !TranslationInterchangePattern.IsPlaceholderExpression(expression))
+            {
+                pieces = null;
+                problem = "The placeholder <ph id=\"" + inline.Id + "\"> " + (expression is null ? "has no equiv and matches no source placeholder." : "is not one MF2 placeholder expression.");
+                return false;
+            }
+            if (record is not null && inline.Id is not null) record[inline.Id] = expression;
+            IReadOnlyList<TranslationInterchangePiece> parsed = TranslationInterchangePattern.Decompose(expression)!;
+            result.Add(parsed[0]);
+        }
+        pieces = result;
+        problem = null;
+        return true;
+    }
+
+    // Compiles every applied unit's source and target as one synthetic project: the compiler checks that the target
+    // is valid MF2 and introduces no input outside the source's caller contract. A unit with errors is refused.
+    private static void ValidateContracts(List<UnitDecision> decisions, ImportContext context)
+    {
+        for (int round = 0; round < 3; round++)
+        {
+            UnitDecision[] applied = decisions.Where(static decision => decision.Outcome == TranslationXliffUnitOutcome.Applied).ToArray();
+            if (applied.Length == 0) return;
+            string project = "{\"schemaVersion\":1,\"catalog\":" + Quote(context.Catalog) + ",\"code\":{\"namespace\":\"Runic.Interchange\",\"className\":\"Text\"},\"baseLocale\":" + Quote(context.SourceLocale) +
+                ",\"locales\":[{\"tag\":" + Quote(context.SourceLocale) + "},{\"tag\":" + Quote(context.TargetLocale) + ",\"fallback\":" + Quote(context.SourceLocale) + "}]}";
+            var messages = new List<TranslationSource>(applied.Length * 2);
+            foreach (UnitDecision decision in applied)
+            {
+                messages.Add(new TranslationSource("interchange/" + context.SourceLocale + "/" + decision.Key + ".mf2", Encoding.UTF8.GetBytes(decision.SourcePattern!)));
+                messages.Add(new TranslationSource("interchange/" + context.TargetLocale + "/" + decision.Key + ".mf2", Encoding.UTF8.GetBytes(decision.Pattern!)));
+            }
+            Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(
+                new TranslationSource("interchange/runic.json", Encoding.UTF8.GetBytes(project)), messages);
+            if (compilation.Success) return;
+            var failing = new Dictionary<string, string>(StringComparer.Ordinal);
+            bool unattributed = false;
+            foreach (TranslationDiagnostic diagnostic in compilation.Diagnostics.Where(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error))
+            {
+                string path = diagnostic.Location.Path;
+                string? key = path.StartsWith("interchange/", StringComparison.Ordinal) && path.EndsWith(".mf2", StringComparison.Ordinal)
+                    ? Path.GetFileNameWithoutExtension(path) : null;
+                if (key is null || !applied.Any(decision => decision.Key == key)) { unattributed = true; continue; }
+                failing.TryAdd(key, "[" + diagnostic.Id + "] " + diagnostic.Message);
+            }
+            foreach (UnitDecision decision in applied)
+            {
+                if (failing.TryGetValue(decision.Key, out string? message) || (unattributed && failing.Count == 0))
+                {
+                    decision.Outcome = TranslationXliffUnitOutcome.Refused;
+                    decision.Code = "XLIFF21-TARGET-INVALID";
+                    decision.Message = message ?? "The target does not satisfy the message's caller contract.";
+                }
+            }
+        }
+    }
+
+    // ---- Notes ----
+
+    private static UnitNote ParseUnitNote(string encoded)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(Convert.FromBase64String(encoded));
+            JsonElement root = document.RootElement;
+            TranslationInterchange.RequireObject(root, "XLIFF21-METADATA");
+            try { TranslationInterchange.RequireAllowed(root, "executionProfile", "messageGrammarVersion", "interchangeProfile", "interchangeProfileVersion", "structured", "description", "since", "deprecated", "tags", "placeholders", "sourceFingerprint"); }
+            catch (TranslationInterchangeException exception) { throw new TranslationInterchangeException("XLIFF21-METADATA", "Runic unit metadata is invalid.", exception); }
+            return new UnitNote(
+                TranslationInterchange.RequiredString(root, "executionProfile", "XLIFF21-METADATA"),
+                TranslationInterchange.Required(root, "messageGrammarVersion", JsonValueKind.Number, "XLIFF21-METADATA").GetInt32(),
+                TranslationInterchange.RequiredString(root, "interchangeProfile", "XLIFF21-METADATA"),
+                TranslationInterchange.Required(root, "interchangeProfileVersion", JsonValueKind.Number, "XLIFF21-METADATA").GetInt32(),
+                TranslationInterchange.RequiredBoolean(root, "structured", "XLIFF21-METADATA"),
+                TranslationInterchange.OptionalString(root, "description", "XLIFF21-METADATA"),
+                TranslationInterchange.OptionalString(root, "since", "XLIFF21-METADATA"),
+                TranslationInterchange.OptionalString(root, "deprecated", "XLIFF21-METADATA"),
+                ParseStrings(TranslationInterchange.RequiredString(root, "tags", "XLIFF21-METADATA")),
+                ParsePlaceholders(TranslationInterchange.RequiredString(root, "placeholders", "XLIFF21-METADATA")),
+                TranslationInterchange.OptionalString(root, "sourceFingerprint", "XLIFF21-METADATA"));
+        }
+        catch (Exception exception) when (exception is FormatException or JsonException or InvalidOperationException)
+        { throw new TranslationInterchangeException("XLIFF21-METADATA", "Runic unit metadata is invalid.", exception); }
+    }
+
+    private static ReviewNote ParseReviewNote(string encoded)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(Convert.FromBase64String(encoded));
+            JsonElement root = document.RootElement;
+            TranslationInterchange.RequireObject(root, "XLIFF21-REVIEW");
+            try { TranslationInterchange.RequireAllowed(root, "state", "note", "sourceFingerprint"); }
+            catch (TranslationInterchangeException exception) { throw new TranslationInterchangeException("XLIFF21-REVIEW", "Runic review metadata is invalid.", exception); }
+            return new ReviewNote(
+                TranslationInterchange.ReviewState(TranslationInterchange.RequiredString(root, "state", "XLIFF21-REVIEW"), "XLIFF21-REVIEW"),
+                TranslationInterchange.OptionalString(root, "note", "XLIFF21-REVIEW"),
+                TranslationInterchange.OptionalString(root, "sourceFingerprint", "XLIFF21-REVIEW"));
+        }
+        catch (Exception exception) when (exception is FormatException or JsonException or InvalidOperationException)
+        { throw new TranslationInterchangeException("XLIFF21-REVIEW", "Runic review metadata is invalid.", exception); }
+    }
+
+    private static string[] ParseStrings(string encoded)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(Convert.FromBase64String(encoded));
+            if (document.RootElement.ValueKind != JsonValueKind.Array) throw new TranslationInterchangeException("XLIFF21-TAGS", "Runic tag metadata is invalid.");
+            string[] result = document.RootElement.EnumerateArray().Select(item => item.ValueKind == JsonValueKind.String ? item.GetString()! : throw new TranslationInterchangeException("XLIFF21-TAGS", "Runic tag metadata is invalid.")).ToArray();
+            if (result.Length > 64 || result.Distinct(StringComparer.Ordinal).Count() != result.Length) throw new TranslationInterchangeException("XLIFF21-TAGS", "Runic tag metadata is invalid.");
+            return result;
+        }
+        catch (Exception exception) when (exception is FormatException or JsonException) { throw new TranslationInterchangeException("XLIFF21-TAGS", "Runic tag metadata is invalid.", exception); }
+    }
+
+    private static List<TranslationInterchangePlaceholder> ParsePlaceholders(string encoded)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(Convert.FromBase64String(encoded));
+            if (document.RootElement.ValueKind != JsonValueKind.Array) throw new TranslationInterchangeException("XLIFF21-PLACEHOLDERS", "Runic placeholder metadata is invalid.");
+            var result = new List<TranslationInterchangePlaceholder>();
+            foreach (JsonElement item in document.RootElement.EnumerateArray())
+            {
+                TranslationInterchange.RequireObject(item, "XLIFF21-PLACEHOLDERS");
+                result.Add(new TranslationInterchangePlaceholder(
+                    TranslationInterchange.RequiredString(item, "name", "XLIFF21-PLACEHOLDERS"),
+                    TranslationInterchange.RequiredString(item, "type", "XLIFF21-PLACEHOLDERS"),
+                    TranslationInterchange.RequiredString(item, "format", "XLIFF21-PLACEHOLDERS")));
+            }
+            if (result.Count > 32 || result.Select(static item => item.Name).Distinct(StringComparer.Ordinal).Count() != result.Count) throw new TranslationInterchangeException("XLIFF21-PLACEHOLDERS", "Runic placeholder metadata is invalid.");
+            return result;
+        }
+        catch (Exception exception) when (exception is FormatException or JsonException) { throw new TranslationInterchangeException("XLIFF21-PLACEHOLDERS", "Runic placeholder metadata is invalid.", exception); }
+    }
+
+    // Profile 2 stamped approvals with one fingerprint over every unit of the document.
+    private static string? FormerTextProfileFingerprint(string catalog, string sourceLocale, List<ParsedUnit> units)
+    {
+        if (units.Any(static unit => unit.Metadata is null || unit.Problem is not null || unit.Source.Any(static inline => inline.Text is null))) return null;
+        UnitNote contract = units[0].Metadata!;
+        return TranslationInterchangeFingerprint.TextProfile(catalog, sourceLocale, contract.ExecutionProfile, contract.MessageGrammarVersion,
+            contract.InterchangeProfile, contract.InterchangeProfileVersion,
+            units.GroupBy(static unit => unit.Id, StringComparer.Ordinal).Select(static group => group.First()).Select(static unit => new TranslationInterchangeSourceUnit(
+                unit.Id,
+                string.Concat(unit.Source.Select(static inline => inline.Text)),
+                unit.Metadata!.Structured,
+                new TranslationInterchangeUnitMetadata(unit.Metadata.Description, unit.Metadata.Since, unit.Metadata.Deprecated, unit.Metadata.Tags, unit.Metadata.Placeholders))));
+    }
+
+    private static string Quote(string value) { using var stream = new MemoryStream(); using (var writer = new Utf8JsonWriter(stream)) writer.WriteStringValue(value); return Encoding.UTF8.GetString(stream.ToArray()); }
+
+    private sealed class UnitProblem(string code, string message) : Exception(message)
+    {
+        internal string Code { get; } = code;
+    }
+}

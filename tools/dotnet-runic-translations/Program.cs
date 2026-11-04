@@ -274,17 +274,25 @@ internal static class Program
     {
         ToolCommand.Help => CommandPath.Root,
         ToolCommand.ImportText => new CommandPath(["import-text"]),
+        ToolCommand.XliffExport => new CommandPath(["xliff", "export"]),
+        ToolCommand.XliffImport => new CommandPath(["xliff", "import"]),
+        ToolCommand.ReviewMark => new CommandPath(["review", "mark"]),
         _ => new CommandPath([command.ToString().ToLowerInvariant()]),
     };
 
 
-    internal static ToolOperationResult Execute(ToolInvocation invocation, SourceUnitCache? units = null)
+    internal static ToolOperationResult Execute(ToolInvocation invocation, SourceUnitCache? units = null) =>
+        Execute(invocation.Command, result => Run(invocation, result, units));
+
+    /// <summary>Runs one command with the tool's failure policy: exceptions become their categories and codes.</summary>
+    internal static ToolOperationResult Execute(ToolCommand command, Func<ToolOperationResult, int> run)
     {
         var result = new ToolOperationResult();
+        ToolInvocation invocation = new(command, null, ToolEmission.None, null);
         try
         {
             // A failed run is a validation failure (translation diagnostics) unless it chose another category.
-            if (Run(invocation, result, units) == Success) result.ExitCategory = CommandExitCategory.Success;
+            if (run(result) == Success) result.ExitCategory = CommandExitCategory.Success;
             else if (result.ExitCategory == CommandExitCategory.Success) result.ExitCategory = CommandExitCategory.Validation;
         }
         catch (ToolOutputException exception) { result.SetHumanOutput($"error {exception.Message}\n"); result.AddDiagnostic(ToolCodes.Output, "tool-output", SafeDomainMessage(exception.Message, "The requested output could not be written."), CommandDiagnosticSeverity.Error); result.ExitCategory = CommandExitCategory.CommandFailure; }
@@ -453,6 +461,8 @@ internal static class Program
         }
         if (invocation.Command == ToolCommand.Validate)
         {
+            // The optional review file: translations that predate a source change (RTR0089).
+            WriteDiagnostics(ReviewFile.Check(inputs, compilation), result);
             result.WriteOutputLine($"validated 1 project(s) and {inputs.Messages.Count} source document(s).");
             return Success;
         }
@@ -496,6 +506,9 @@ internal static class Program
         result.ExitCategory = CommandExitCategory.CommandFailure;
         return Failed;
     }
+
+    internal static void ReportDiagnostics(IReadOnlyList<TranslationDiagnostic> diagnostics, ToolOperationResult result) =>
+        WriteDiagnostics(diagnostics, result);
 
     private static void WriteDiagnostics(IReadOnlyList<TranslationDiagnostic> diagnostics, ToolOperationResult result)
     {
@@ -568,7 +581,7 @@ internal static class ToolOutcomePresenter
     {
         foreach (CommandDiagnostic diagnostic in diagnostics)
         {
-            if (diagnostic.Code is ToolCodes.Verify or ToolCodes.UnsupportedOutput or ToolCodes.Import) return true;
+            if (diagnostic.Code is ToolCodes.Verify or ToolCodes.UnsupportedOutput or ToolCodes.Import or ToolCodes.InterchangeDocument) return true;
         }
 
         return false;
@@ -608,13 +621,19 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
             "verify" => ExecuteCompilation(request, ToolCommand.Verify, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitEsm), OmitSourceDiagnostics()),
             "schema" => Program.Execute(new ToolInvocation(ToolCommand.Schema, request.Output, ToolEmission.None, null)),
             "import-text" => ExecuteImport(request),
+            "xliff export" => ExecuteInterchange(request, ToolCommand.XliffExport, (project, result) =>
+                InterchangeOperations.Export(project, request.Output!, request.Locales ?? [], request.Review, result)),
+            "xliff import" => ExecuteInterchange(request, ToolCommand.XliffImport, (project, result) =>
+                InterchangeOperations.Import(project, request.Source!, request.SourceChanged, request.WriteReview, request.DryRun, result)),
+            "review mark" => ExecuteInterchange(request, ToolCommand.ReviewMark, (project, result) =>
+                InterchangeOperations.Mark(project, request.Keys ?? [], request.Locales![0], request.State!, request.Note, result)),
             _ => new ToolOperationResult { ExitCode = Program.UsageFailure, ExitCategory = CommandExitCategory.Usage },
         };
-        var report = new TranslationsToolCommandResult(result.Output, string.Empty) { Diagnostics = result.TranslationDiagnostics };
+        var report = new TranslationsToolCommandResult(result.Output, string.Empty) { Diagnostics = result.TranslationDiagnostics, Interchange = result.Interchange };
         if (result.ExitCode == 0) return CommandOutcome.Success(report, result.Diagnostics);
         var fault = result.Fault ?? new CommandFault(ToolCodes.CommandFailed, "The translations command could not be completed.");
         string? humanOutput = result.HumanOutput ?? (result.Output.Length == 0 ? null : result.Output + Environment.NewLine);
-        return result.TranslationDiagnostics.Count == 0
+        return result.TranslationDiagnostics.Count == 0 && result.Interchange is null
             ? CommandOutcome.Failure<TranslationsToolCommandResult>(result.ExitCategory, fault, result.Diagnostics, humanOutput)
             : CommandOutcome.Failure<TranslationsToolCommandResult>(
                 result.ExitCategory,
@@ -633,6 +652,14 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
             return Program.Usage("no runic.json in the current directory or in ./translations; pass --project <directory>.", ToolCommand.ImportText);
         return Program.Execute(new ToolInvocation(ToolCommand.ImportText, null, ToolEmission.None, null, project, request.DryRun,
             TextImport: new TextImportRequest(request.Group ?? string.Empty, request.Tables ?? [], request.BaseTexts)));
+    }
+
+    private static ToolOperationResult ExecuteInterchange(TranslationsToolCommandRequest request, ToolCommand command, Func<string, ToolOperationResult, int> run)
+    {
+        string? project = string.IsNullOrWhiteSpace(request.Project) ? DefaultProject() : request.Project;
+        if (project is null)
+            return Program.Usage("no runic.json in the current directory or in ./translations; pass --project <directory>.", command);
+        return Program.Execute(command, result => run(project, result));
     }
 
     // The translation diagnostics of a result: the payload of a success, fault.data of a failure.
@@ -692,6 +719,12 @@ internal static class ToolCodes
     internal const string Verify = "RCLI8211";
     internal const string UnsupportedOutput = "RCLI8213";
     internal const string Import = "RCLI8214";
+    /// <summary>The fault of an <c>xliff</c> or <c>review</c> command whose document cannot be used; <see cref="InterchangeDocument"/> names the problem.</summary>
+    internal const string InterchangeRejected = "RTR0091";
+    /// <summary>An XLIFF document or review file that cannot be exported, imported or read, with its interchange code.</summary>
+    internal const string InterchangeDocument = "RCLI8215";
+    /// <summary>A warning: one XLIFF unit was refused and the rest of the document applied.</summary>
+    internal const string InterchangeUnit = "RCLI8216";
 }
 
 internal sealed class ToolDiagnosticException : Exception

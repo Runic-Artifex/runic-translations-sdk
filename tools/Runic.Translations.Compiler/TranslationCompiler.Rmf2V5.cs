@@ -41,7 +41,7 @@ public static partial class TranslationCompiler
     private sealed record Rmf2ProjectEntryV5(Rmf2ProjectSourceV5 Source, Rmf2LinkedMarkupV5 Linked)
     {
         internal Rmf2TranslationV5 Translation => new(Source.Key, Source.Locale, Linked.Message, Source.Node.NameLocation,
-            Source.Node.Comments.Count == 0 ? null : string.Join("\n", Source.Node.Comments));
+            Source.Node.Comments.Count == 0 ? null : string.Join("\n", Source.Node.Comments)) { Properties = Source.Node.Properties };
     }
 
     internal static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project,
