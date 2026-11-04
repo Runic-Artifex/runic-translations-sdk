@@ -470,7 +470,7 @@ public static partial class TranslationCompiler
     }
 
     // "@param $name - description" (the dash is optional) by NFC input name; null when the entry documents none.
-    private static IReadOnlyDictionary<string, string>? ParameterDescriptionsV5(IReadOnlyList<string> properties)
+    private static Dictionary<string, string>? ParameterDescriptionsV5(IReadOnlyList<string> properties)
     {
         Dictionary<string, string>? result = null;
         foreach (string property in properties)
