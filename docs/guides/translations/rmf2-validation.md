@@ -209,16 +209,19 @@ Visual Studio UI/layout time is outside the measurement.
 ## Interchange boundary
 
 RMF2 source is the lossless representation for markup, declarations, variants
-and attached metadata. The existing closed XLIFF 2.1 text profile reports
-structured messages as semantic losses. It does not claim lossless interchange
-for arbitrary rich MF2. Review its loss report before using a text-profile export
-for translation. The import side refuses those structured units rather than
-flattening them; an approved review stamp uses the closed-text-profile
-fingerprint, while source freshness remains a separate conflict check.
+and attached metadata. The closed XLIFF 2.1 profile (version 3) exchanges plain
+messages, including placeholders as `<ph>`, losslessly and reports structured
+messages as semantic losses. It does not claim lossless interchange for arbitrary
+rich MF2. Review its loss report before using an export for translation. The
+import skips those structured units per unit rather than flattening them; review
+stamps use per-unit source fingerprints, while source freshness remains a
+separate conflict check.
 
 The editor smoke fixture covers mounted
 resource mutations, locale/fallback transactions, save/reload, deterministic
-plain XLIFF export/import, and the rule that an import never converts an RMF2
-project into direct `.mf2` files. Focused interchange tests cover approved-review fingerprints and
-structured loss/refusal. Structured preview tests route AST 5 through the
+plain XLIFF export/import, stale approvals, and the rule that an import never
+converts an RMF2 project into direct `.mf2` files. The
+[XLIFF v3 corpus](../../../specs/translations/corpus/xliff-v3/README.md) covers
+TMS-shaped, partial and stale files, placeholders and nested groups through the
+library and `runic-translations xliff import`. Structured preview tests route AST 5 through the
 verified .NET runtime with inert link, action, and custom-markup runs.

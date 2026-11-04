@@ -14,7 +14,7 @@ namespace Runic.Translations.Tool;
 internal static class TranslationsToolCommandModule
 {
     /// <summary>The translation commands, whose human output <see cref="ToolOutcomePresenter"/> writes.</summary>
-    internal static readonly string[] Commands = ["init", "lsp", "serve", "validate", "generate", "verify", "import-text", "schema"];
+    internal static readonly string[] Commands = ["init", "lsp", "serve", "validate", "generate", "verify", "import-text", "schema", "xliff export", "xliff import", "review mark"];
 
     /// <summary>Writes a catalog-level response through the standard command-line transport.</summary>
     internal static ValueTask PresentAsync(
@@ -43,7 +43,7 @@ internal static class TranslationsToolCommandModule
         var context = new CommandExecutionContext(
             EmptyServices.Instance,
             presentationConsole,
-            new CommandPath([command]),
+            new CommandPath(command.Split(' ')),
             outputMode,
             culture,
             "runic-translations");
@@ -221,6 +221,30 @@ internal sealed record TranslationsToolCommandRequest(
 
     /// <summary>The path of the JSON array of base texts without a translation that <c>import-text</c> reads.</summary>
     public string? BaseTexts { get; init; }
+
+    /// <summary>The review file that <c>xliff export</c> reads instead of the default one.</summary>
+    public string? Review { get; init; }
+
+    /// <summary>The XLIFF document that <c>xliff import</c> reads.</summary>
+    public string? Source { get; init; }
+
+    /// <summary>The <c>--source-changed</c> policy of <c>xliff import</c>: <c>needs-review</c> or <c>refuse</c>.</summary>
+    public string? SourceChanged { get; init; }
+
+    /// <summary>The <c>--fail-on</c> condition of <c>xliff import</c>: <c>refused</c> fails the command, and writes nothing, when any unit is refused.</summary>
+    public string? FailOn { get; init; }
+
+    /// <summary>Whether <c>xliff import</c> creates the review file when it does not exist.</summary>
+    public bool WriteReview { get; init; }
+
+    /// <summary>The keys that <c>review mark</c> marks.</summary>
+    public IReadOnlyList<string>? Keys { get; init; }
+
+    /// <summary>The review state that <c>review mark</c> sets.</summary>
+    public string? State { get; init; }
+
+    /// <summary>The review note that <c>review mark</c> stores.</summary>
+    public string? Note { get; init; }
 }
 
 /// <summary>Portable command payload; the standard dispatcher renders its human text or JSON envelope.</summary>
@@ -229,6 +253,10 @@ internal sealed record TranslationsToolCommandResult(string Output, string Error
 {
     /// <summary>Translation diagnostics under their own RTR codes, with source locations.</summary>
     public IReadOnlyList<TranslationsToolDiagnostic> Diagnostics { get; init; } = [];
+
+    /// <summary>The outcome of <c>xliff export</c>, <c>xliff import</c> or <c>review mark</c>; absent for other commands.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public TranslationsToolInterchange? Interchange { get; init; }
 
     /// <inheritdoc />
     public override string ToString() => Output;
@@ -249,6 +277,84 @@ internal sealed record TranslationsToolDiagnostic(string Code, string Severity, 
     /// <summary>The <c>path(line,column,endLine,endColumn): severity code: message</c> form that MSBuild and editors recognize.</summary>
     public override string ToString() => Path + "(" + Line + "," + Column + "," + EndLine + "," + EndColumn + "): " + Severity + " " + Code + ": " + Message;
 }
+
+/// <summary>The <c>interchange</c> member of the payload of <c>xliff export</c>, <c>xliff import</c> and <c>review mark</c>.</summary>
+/// <param name="Operation"><c>export</c>, <c>import</c> or <c>review-mark</c>.</param>
+/// <param name="Catalog">The catalog identifier.</param>
+internal sealed record TranslationsToolInterchange(string Operation, string Catalog)
+{
+    /// <summary>The target locale of an import or a review mark.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Locale { get; init; }
+
+    /// <summary>Whether the import wrote nothing (<c>--dry-run</c>).</summary>
+    public bool DryRun { get; init; }
+
+    /// <summary>The XLIFF documents that export wrote.</summary>
+    public IReadOnlyList<TranslationsToolInterchangeDocument> Documents { get; init; } = [];
+
+    /// <summary>Per-unit counts.</summary>
+    public TranslationsToolInterchangeCounts Units { get; init; } = new();
+
+    /// <summary>One entry per unit that was added, changed, skipped, refused, marked or demoted, or whose source changed, at most 1000.</summary>
+    public IReadOnlyList<TranslationsToolInterchangeEntry> Entries { get; init; } = [];
+
+    /// <summary>Whether more entries exist than <see cref="Entries"/> lists.</summary>
+    public bool EntriesTruncated { get; init; }
+
+    /// <summary>Notices that changed nothing, such as an ignored translator note or a demoted approval.</summary>
+    public IReadOnlyList<TranslationsToolInterchangeNotice> Notices { get; init; } = [];
+
+    /// <summary>The source files that were (or, with <c>--dry-run</c>, would be) written.</summary>
+    public IReadOnlyList<TranslationsToolInterchangeFile> Files { get; init; } = [];
+
+    /// <summary>The review file that was read or written, if any.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ReviewFile { get; init; }
+}
+
+/// <param name="Locale">The document's target locale.</param>
+/// <param name="Path">The written file.</param>
+/// <param name="Units">The units it contains.</param>
+internal sealed record TranslationsToolInterchangeDocument(string Locale, string Path, int Units);
+
+/// <summary>Per-unit counts: an applied unit is also <c>added</c>, <c>changed</c> or <c>unchanged</c>.</summary>
+internal sealed record TranslationsToolInterchangeCounts
+{
+    public int Total { get; init; }
+    public int Applied { get; init; }
+    public int Added { get; init; }
+    public int Changed { get; init; }
+    public int Unchanged { get; init; }
+    public int Skipped { get; init; }
+    public int Refused { get; init; }
+    /// <summary>Applied units whose source changed since export, imported as needs-review.</summary>
+    public int SourceChanged { get; init; }
+    /// <summary>Approvals that export wrote as needs-review because their source changed.</summary>
+    public int Demoted { get; init; }
+}
+
+/// <param name="Key">The message key.</param>
+/// <param name="Outcome"><c>added</c>, <c>changed</c>, <c>unchanged</c> (only when its source changed), <c>skipped</c>, <c>refused</c>, <c>marked</c> or <c>demoted</c>.</param>
+/// <param name="Code">The reason, such as <c>XLIFF21-UNTRANSLATED</c>; absent for an applied unit.</param>
+/// <param name="Message">The reason as text.</param>
+internal sealed record TranslationsToolInterchangeEntry(string Key, string Outcome,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Code,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Message)
+{
+    /// <summary>The review state an applied or marked unit has afterwards.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? State { get; init; }
+}
+
+/// <param name="Code">The notice code, such as <c>XLIFF21-NOTE-IGNORED</c> or <c>REVIEW-STALE</c>.</param>
+/// <param name="Location"><c>/</c> and the key.</param>
+/// <param name="Message">The notice as text.</param>
+internal sealed record TranslationsToolInterchangeNotice(string Code, string Location, string Message);
+
+/// <param name="Path">The source file, relative to the working directory where possible.</param>
+/// <param name="Change"><c>added</c> for a new file, <c>changed</c> otherwise.</param>
+internal sealed record TranslationsToolInterchangeFile(string Path, string Change);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(TranslationsToolCommandResult))]

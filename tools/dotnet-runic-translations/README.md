@@ -1,6 +1,6 @@
 # dotnet-runic-translations
 
-Create, import, validate, generate, and verify Runic Translations MF2 projects from a project-local .NET tool. Use it in developer workflows and CI to catch message errors before generated C# or ESM reaches an application.
+Create, import, validate, generate, and verify Runic Translations MF2 projects, and exchange their translations as XLIFF, from a project-local .NET tool. Use it in developer workflows and CI to catch message errors before generated C# or ESM reaches an application.
 
 ## Install locally
 
@@ -82,6 +82,97 @@ message key, `{ "Remove user {name}": "stored_remove_user" }`, for an applicatio
 that must look up text it stored in the base language. See
 [Import a text-keyed catalog](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md#import-a-text-keyed-catalog).
 
+## Exchange XLIFF with translators and TMS tools
+
+```bash
+dotnet tool run runic-translations -- xliff export --project translations --output xliff
+dotnet tool run runic-translations -- xliff import --project translations --source xliff/app.de.xliff --dry-run
+dotnet tool run runic-translations -- xliff import --project translations --source xliff/app.de.xliff
+```
+
+`xliff export` writes `<catalog>.<locale>.xliff` (XLIFF 2.1, Runic profile 3) for every locale except the base
+locale, or only for the `--locale` ones (repeatable). Each message is one unit whose `id` is the message key:
+
+- Text is text, and every placeholder is a `<ph>` whose `equiv` is its exact MF2 expression, such as
+  `Hello <ph id="1" equiv="{$name}" disp="name"/>!`. TMS tools protect these codes; import restores the
+  expression, so a placeholder round-trips losslessly.
+- The message's comment and its `@param` lines are a readable `<note category="description">`. The
+  `runic:unit` and `runic:review` notes beside it are machine data (Base64 JSON) for the import.
+- A message with selectors, declarations or markup is exported as `translate="no"` with its MF2 source and
+  reported as loss (`XLIFF21-STRUCTURED-MESSAGE`); translate it in the `.rmf2` sources or the editor.
+- An existing translation is in state `translated`, a missing one has no target. With a review file (below),
+  `approved` is `final` and `needs-review` is `translated` with `subState="runic:needs-review"`. An approval
+  whose source changed since it was made is exported as needs-review and reported (`REVIEW-STALE`); the files
+  are not changed. `--review <path>` reads another review file.
+
+`xliff import --source <file>` checks the document against the project and applies it **per unit**. It accepts
+XLIFF 2.0 and 2.1, the profile 2 files of 0.8, and what TMS tools write from an export: nested `<group>`s,
+several segments with `<ignorable>`s, `<mrk>` annotations, module metadata, unknown attributes and foreign
+notes (ignored; a dropped translator note is reported as `XLIFF21-NOTE-IGNORED`). For each unit:
+
+| Unit | Outcome |
+| --- | --- |
+| no target, or state `initial` | skipped, `XLIFF21-UNTRANSLATED` |
+| empty target, unless its state is `translated` or later | skipped, `XLIFF21-EMPTY-TARGET`; the base text stays the fallback |
+| selector, declaration or markup message, or `translate="no"` | skipped, `XLIFF21-STRUCTURED-SKIPPED` |
+| a placeholder outside the message's caller contract, an unknown inline code, invalid MF2 | refused, `XLIFF21-PLACEHOLDER`, `XLIFF21-INLINE` or `XLIFF21-TARGET-INVALID` |
+| a target `<ph>` whose `equiv` changes a placeholder (another function or options, or a literal for a variable) | refused, `XLIFF21-PLACEHOLDER-CHANGED`; a target may only use the expressions of the current source and translation, compared in canonical form |
+| a target identical to the source, with no state and no Runic review note | applied as needs-review, reported as `XLIFF21-TARGET-COPIES-SOURCE` (some tools copy the source into untranslated units); with an explicit state it keeps that state |
+| a key the catalog does not have, a duplicate unit | refused, `XLIFF21-UNKNOWN-KEY`, `XLIFF21-DUPLICATE-UNIT` |
+| its source changed since export | applied as needs-review, or refused (`XLIFF21-SOURCE-CHANGED`) with `--source-changed refuse` |
+| otherwise | applied |
+
+Applied translations are written into the sources as the editor writes them: an existing translation keeps its
+`.rmf2` file, comments and formatting and only its body changes; a missing one is added to the target locale's
+`.rmf2` beside the base file, inside its existing groups, or as the same file name in the target locale's
+directory for direct `.mf2` sources. A key added to an existing group copies the indentation of the group's
+other entries. Equivalent spellings of the same text count as unchanged. Every file is staged and the project is
+compiled before anything is written; `--dry-run` reports without writing. If a source or the review file changed
+on disk since the import read it (an editor save, a second import), nothing is written and the command fails
+with `RTR0092`; run it again. Refused units are warnings (`RCLI8216`) and the rest is applied; the command exits
+with 0. A document that cannot be used at all (another catalog or base locale, an undeclared target locale, not
+XLIFF 2, more than 8 MiB or elements nested deeper than 64 levels) fails with `RTR0092` (`RCLI8215` names the
+problem), exit code 2, and nothing is written.
+
+In CI, or for a bot that imports TMS output, add `--fail-on refused`: when any unit is refused, the command
+writes nothing and fails with `RTR0092` and exit code 2, so a refused unit (including one refused by
+`--source-changed refuse`) fails the pipeline. The JSON payload is the same, with `files` empty and the payload
+in the failure data:
+
+```bash
+dotnet tool run runic-translations -- xliff import --source xliff/app.de.xliff --source-changed refuse --fail-on refused
+```
+
+The review state comes from the segment `state` (`translated`, `translated` + `subState="runic:needs-review"`,
+`reviewed` or `final` as approved) or from the unit's `runic:review` note when both agree; a TMS state change
+wins. The `interchange` member of the JSON payload lists the counts (`added`, `changed`, `unchanged`,
+`skipped`, `refused`, `sourceChanged`), one entry per unit that was not applied unchanged with its code, the
+notices and the files written.
+
+## Track review state and stale translations
+
+```bash
+dotnet tool run runic-translations -- review mark --key greeting --locale de --state approved
+dotnet tool run runic-translations -- validate
+```
+
+The optional review file `<catalog>.review.json` beside `runic.json`
+(`runic.translations.interchange-review/2`, schema `interchange-review-v2.schema.json`) records the review
+state of translations for teams that do not use the editor. Commit it with the sources. Each entry stores the
+per-unit fingerprint of the source its translation was made or approved for (a hash of the key, the source text
+and the caller contract), so editing one message never touches the others. The source text is hashed in canonical
+MF2 form: spacing inside an expression or between a `.match`'s parts, literal quoting, option order and equivalent
+escapes do not change it; different text, placeholders, functions, options or selectors do.
+
+- `review mark --key <key>... --locale <locale> --state draft|translated|needs-review|approved [--note <text>]`
+  creates or updates entries with the fingerprint of the current source. `--key` is repeatable.
+- `xliff import` updates the file when it exists, or creates it with `--review`. A translation of a changed
+  source keeps the fingerprint of the source the translator saw.
+- `validate` warns with `RTR0090` at the translation when its entry's fingerprint is not the current one:
+  the translation predates a source change. Review it, then run `review mark`. An unreadable review file is
+  the warning `RTR0091`. Without the file nothing is reported.
+- `xliff export` reads it for the XLIFF review state (see above).
+
 ## Other commands
 
 ```text
@@ -91,7 +182,7 @@ runic-translations serve
 ```
 
 - `verify` renders in isolation and byte-compares the selected expected output, including extra-file detection.
-- `schema` copies the bundled source, artifact, manifest, normalized-AST, capability and tool payload schemas.
+- `schema` copies the bundled source, artifact, manifest, normalized-AST, capability, review-file and tool payload schemas.
 - `serve` is a persistent compiler for development servers, used by `@runic-artifex/vite-plugin-runic-translations`. It keeps unchanged sources parsed and compiled between requests, so a request after an edit recompiles only the edited files. See [serve protocol](#serve-protocol).
 - `lsp` runs the RMF2 language server over standard input/output for the VS Code and Visual Studio extensions. It is hidden from help, and its protocol subset and custom methods are outside the 1.0 compatibility rules until the production language server (2.0).
 
@@ -120,8 +211,8 @@ The envelope's payload is `runic.translations.tool/1` for every command except
 are published as `translations-tool-v1.schema.json` and
 `translations-support-v1.schema.json` (written by `schema`). The `output` and
 `error` members of `runic.translations.tool/1` are display text, not a format to
-parse; read `diagnostics` and the envelope's `exitCode` instead. Later releases
-may add members; readers ignore members they do not know.
+parse; read `diagnostics`, `interchange` (for `xliff` and `review`) and the envelope's `exitCode` instead.
+Later releases may add members; readers ignore members they do not know.
 
 The exit codes are the same in every Runic tool:
 

@@ -22,21 +22,34 @@ internal sealed record TranslationInterchangeProjection(
     IReadOnlyList<TranslationInterchangeSourceUnit> CanonicalUnits,
     IReadOnlyList<TranslationInterchangeLocale> Locales,
     IReadOnlyList<TranslationDiagnostic> Diagnostics,
-    string SourceFreshness,
-    string TextProfileFingerprint)
+    string SourceFreshness)
 {
     internal bool Success => !Diagnostics.Any(static diagnostic =>
         diagnostic.Severity == TranslationDiagnosticSeverity.Error);
+
+    /// <summary>The per-unit source fingerprint of every canonical key.</summary>
+    internal IReadOnlyDictionary<string, string> SourceFingerprints =>
+        CanonicalUnits.ToDictionary(static unit => unit.Key, static unit => unit.SourceFingerprint, StringComparer.Ordinal);
 }
 
+/// <param name="Pieces">The plain-message pieces, or <see langword="null"/> for a structured message.</param>
+/// <param name="SourceFingerprint">The per-unit fingerprint of the key, the source text and the caller contract.</param>
 internal sealed record TranslationInterchangeSourceUnit(
     string Key,
     string Text,
     bool Structured,
     TranslationInterchangeUnitMetadata Metadata,
-    bool Document = false);
+    bool Document = false)
+{
+    internal IReadOnlyList<TranslationInterchangePiece>? Pieces { get; init; }
+    internal string SourceFingerprint { get; init; } = string.Empty;
+}
 
-internal sealed record TranslationInterchangeTargetUnit(string Key, string Text, bool Structured);
+internal sealed record TranslationInterchangeTargetUnit(string Key, string Text, bool Structured)
+{
+    internal IReadOnlyList<TranslationInterchangePiece>? Pieces { get; init; }
+    internal TextSourceLocation? Location { get; init; }
+}
 
 internal sealed record TranslationInterchangeLocale(
     string Tag,
@@ -48,7 +61,11 @@ internal sealed record TranslationInterchangeUnitMetadata(
     string? Since,
     string? Deprecated,
     IReadOnlyList<string> Tags,
-    IReadOnlyList<TranslationInterchangePlaceholder> Placeholders);
+    IReadOnlyList<TranslationInterchangePlaceholder> Placeholders)
+{
+    /// <summary>The documented parameters, each <c>$name - text</c>, shown in the readable description note.</summary>
+    internal IReadOnlyList<string> Parameters { get; init; } = Array.Empty<string>();
+}
 
 internal sealed record TranslationInterchangePlaceholder(string Name, string Type, string Format);
 
@@ -80,20 +97,36 @@ internal static class TranslationInterchangeProjectionAdapter
             {
                 if (!sourceByKey.TryGetValue(contract.Key, out Rmf2TranslationV5? source))
                     throw new TranslationInterchangeException("XLIFF21-CANONICAL", "The compiled v5 project is missing a direct canonical source resource.");
+                string raw = RawSyntax(source.Message);
+                bool document = contract.Content == Rmf2DocumentProfileV5.Document;
+                IReadOnlyList<TranslationInterchangePiece>? pieces = document || IsStructured(source.Message)
+                    ? null
+                    : TranslationInterchangePattern.Decompose(raw);
+                TranslationInterchangePlaceholder[] placeholders = contract.Inputs
+                    .OrderBy(static input => input.Name, StringComparer.Ordinal)
+                    .Select(static input => new TranslationInterchangePlaceholder(input.Name, input.Type, string.Empty))
+                    .ToArray();
                 return new TranslationInterchangeSourceUnit(
                     contract.Key,
-                    RawSyntax(source.Message),
-                    IsStructured(source.Message),
+                    raw,
+                    pieces is null,
                     new TranslationInterchangeUnitMetadata(
                         source.Description,
                         null,
                         null,
                         Array.Empty<string>(),
-                        contract.Inputs
-                            .OrderBy(static input => input.Name, StringComparer.Ordinal)
-                            .Select(static input => new TranslationInterchangePlaceholder(input.Name, input.Type, string.Empty))
-                            .ToArray()),
-                    contract.Content == Rmf2DocumentProfileV5.Document);
+                        placeholders)
+                    {
+                        Parameters = source.Properties
+                            .Where(static property => property.StartsWith("param ", StringComparison.Ordinal))
+                            .Select(static property => property["param ".Length..].Trim())
+                            .ToArray(),
+                    },
+                    document)
+                {
+                    Pieces = pieces,
+                    SourceFingerprint = TranslationInterchangeFingerprint.UnitSource(contract.Key, raw, pieces, placeholders),
+                };
             })
             .ToArray();
         TranslationInterchangeLocale[] locales = project.Locales
@@ -104,8 +137,16 @@ internal static class TranslationInterchangeProjectionAdapter
                 locale.DirectResources
                     .Where(resource => canonicalKeys.Contains(resource.Key))
                     .OrderBy(static resource => resource.Key, StringComparer.Ordinal)
-                    .Select(static resource => new TranslationInterchangeTargetUnit(
-                        resource.Key, RawSyntax(resource.Message), IsStructured(resource.Message)))
+                    .Select(static resource =>
+                    {
+                        string raw = RawSyntax(resource.Message);
+                        IReadOnlyList<TranslationInterchangePiece>? pieces = IsStructured(resource.Message) ? null : TranslationInterchangePattern.Decompose(raw);
+                        return new TranslationInterchangeTargetUnit(resource.Key, raw, pieces is null)
+                        {
+                            Pieces = pieces,
+                            Location = resource.SourceLocation,
+                        };
+                    })
                     .ToArray()))
             .ToArray();
 
@@ -121,12 +162,6 @@ internal static class TranslationInterchangeProjectionAdapter
         IReadOnlyList<TranslationDiagnostic> diagnostics,
         string? sourceFreshness)
     {
-        string textFingerprint = TranslationInterchangeFingerprint.TextProfile(
-            catalog, sourceLocale, Rmf2ProjectCompilation.CurrentExecutionProfile,
-            Rmf2ProjectCompilation.CurrentMessageGrammarVersion,
-            TranslationInterchange.XliffProfile,
-            TranslationInterchange.XliffProfileVersion,
-            canonical);
         var projection = new TranslationInterchangeProjection(
             catalog,
             sourceLocale,
@@ -137,8 +172,7 @@ internal static class TranslationInterchangeProjectionAdapter
             canonical,
             locales,
             diagnostics,
-            sourceFreshness ?? string.Empty,
-            textFingerprint);
+            sourceFreshness ?? string.Empty);
         return projection with
         {
             SourceFreshness = sourceFreshness ?? TranslationInterchangeFingerprint.ProjectionSource(projection),
@@ -148,17 +182,54 @@ internal static class TranslationInterchangeProjectionAdapter
     private static string RawSyntax(Rmf2MessageV5 message) =>
         Encoding.UTF8.GetString(message.Syntax.Source.GetUtf8Bytes());
 
+    // Profile v3: placeholders are plain (exchanged as <ph>); declarations, selectors and markup are structured.
     private static bool IsStructured(Rmf2MessageV5 message) =>
         message.Declarations.Count != 0 ||
         message.Selectors.Count != 0 ||
         message.Variants.Count != 1 ||
-        message.Variants[0].Nodes.Any(static node => node is not Rmf2TextV5);
+        message.Variants[0].Nodes.Any(static node => node is not Rmf2TextV5 and not Rmf2ExpressionNodeV5);
 
 }
 
 internal static class TranslationInterchangeFingerprint
 {
     private const string TextProfileDomain = "runic.xliff21.closed-text-profile/2";
+    private const string UnitSourceDomain = "runic.translations.unit-source/1";
+
+    /// <summary>
+    /// The per-unit source fingerprint: the key, the source text and the caller contract (input names and types).
+    /// The text is hashed in canonical form (<see cref="TranslationInterchangePattern.CanonicalMessage"/>): equivalent
+    /// escapes, spacing inside an expression, literal quoting and option order do not change it; a different
+    /// placeholder, function, option value, selector or pattern text does.
+    /// </summary>
+    internal static string UnitSource(
+        string key,
+        string rawSource,
+        IReadOnlyList<TranslationInterchangePiece>? pieces,
+        IEnumerable<TranslationInterchangePlaceholder> contract)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("profile", UnitSourceDomain);
+            writer.WriteString("key", key);
+            writer.WriteString("source", pieces is null
+                ? TranslationInterchangePattern.CanonicalMessage(rawSource)
+                : TranslationInterchangePattern.Compose(TranslationInterchangePattern.Canonical(pieces)));
+            writer.WriteStartArray("inputs");
+            foreach (TranslationInterchangePlaceholder input in contract.OrderBy(static input => input.Name, StringComparer.Ordinal))
+            {
+                writer.WriteStartObject();
+                writer.WriteString("name", input.Name);
+                writer.WriteString("type", input.Type);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+        return Hash(stream.ToArray());
+    }
     private const string ProjectionSourceDomain = "runic.xliff21.projection-source/2";
 
     internal static string TextProfile(

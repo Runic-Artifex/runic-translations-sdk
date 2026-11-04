@@ -176,11 +176,14 @@ public static class ArtifactInspector
             TranslationXliffImportResult import = TranslationInterchange.ImportXliff21(content);
             ArtifactInspectionFinding[] findings = import.Report.Losses
                 .Select(static loss => new ArtifactInspectionFinding(loss.Code, loss.Location + ": " + loss.Message))
+                .Concat(import.Units.Where(static unit => unit.Outcome == TranslationXliffUnitOutcome.Refused)
+                    .Select(static unit => new ArtifactInspectionFinding(unit.Code!, "/" + unit.Key + ": " + unit.Message)))
                 .OrderBy(static finding => finding.Code, StringComparer.Ordinal)
                 .ThenBy(static finding => finding.Message, StringComparer.Ordinal)
                 .ToArray();
             return new ArtifactInspection(kind, null, import.CatalogId, import.TargetLocale, null, content.Length,
-                import.Review.Entries.Count > 0, null, 0, import.Messages.Count, 0, import.Messages.Count,
+                import.Review.Entries.Count > 0, null, 0, import.Messages.Count,
+                import.Units.Count(static unit => unit.Code == "XLIFF21-STRUCTURED-SKIPPED"), import.Units.Count,
                 import.Review.Entries.Count, findings);
         }
         catch (TranslationInterchangeException exception)
