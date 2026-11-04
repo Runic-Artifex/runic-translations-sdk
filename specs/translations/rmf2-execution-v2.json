@@ -131,7 +131,9 @@
           "values": [
             "iso",
             "short",
-            "long"
+            "medium",
+            "long",
+            "full"
           ]
         }
       }
@@ -148,7 +150,9 @@
           "values": [
             "iso",
             "short",
-            "long"
+            "medium",
+            "long",
+            "full"
           ]
         }
       }
@@ -165,8 +169,22 @@
           "values": [
             "iso",
             "short",
-            "long"
+            "medium",
+            "long",
+            "full"
           ]
+        },
+        "timeZone": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": true,
+          "default": "local",
+          "values": [
+            "local",
+            "utc"
+          ],
+          "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z0-9_+-]+)*$",
+          "maximumLength": 64
         }
       }
     },
@@ -307,6 +325,27 @@
     "moreItems": "start pattern for the first two items, middle pattern for each inner item, end pattern for the last item",
     "contextual": "es, case-insensitive: a y separator of the 2 or end pattern becomes e before a last item starting with i, or with hi not followed by a or e; otherwise an o separator becomes u before a last item starting with o, ho or 8, or equal to 11 or starting with 11 and a space (ICU)",
     "conformance": "corpus/rmf2-list-conformance.json"
+  },
+  "formattingLocale": {
+    "rule": "numbers, percentages, dates and times format in the requested locale when its language subtag equals the content locale's (and the scripts match when both are explicit); otherwise in the content locale",
+    "contentLocale": "plural, ordinal, list and relative-time data, and the locale reported on content, stay on the message's effective content locale",
+    "requested": "the canonical tag the caller asked for, before it was resolved to a catalog locale"
+  },
+  "percent": {
+    "pattern": "the formatting locale's positive and negative percent patterns from platform globalization: prefix, digits and suffix",
+    "symbols": "the locale's percent sign and minus sign; a space in the pattern is U+00A0",
+    "conformance": "corpus/rmf2-date-percent-conformance.json"
+  },
+  "dateTimeFormat": {
+    "iso": "invariant: date yyyy-MM-dd, time HH:mm:ss, datetime UTC yyyy-MM-ddTHH:mm:ssZ; timeZone does not apply",
+    "dateStyles": "short, medium, long and full are the CLDR date lengths of the formatting locale from platform globalization",
+    "yearWidth": "a Gregorian year is written with at least four digits, so short dates show the full year",
+    "timeStyles": "short is the CLDR short time; medium, long and full are the CLDR medium time, because a wall-clock time has no zone name",
+    "datetime": "the date in the style, a space, and the time in the style, both in the timeZone",
+    "timeZone": "local (default) is the host's time zone, utc is UTC, any other value is an IANA time zone ID; an unknown zone is an evaluation error",
+    "digits": "Latin digits, as for numbers",
+    "spaces": "U+202F is written as U+0020",
+    "conformance": "corpus/rmf2-date-percent-conformance.json"
   },
   "selection": {
     "numericRank": [

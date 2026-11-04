@@ -52,15 +52,22 @@ public sealed class LocalizedTextContent
 {
     private readonly LocalizedTextContentNode[] _nodes;
 
-    internal LocalizedTextContent(IReadOnlyList<LocalizedTextContentNode> nodes, string locale = "en")
+    internal LocalizedTextContent(IReadOnlyList<LocalizedTextContentNode> nodes, string locale = "en", string? formattingLocale = null)
     {
         Locale = locale;
+        FormattingLocale = formattingLocale ?? locale;
         _nodes = new LocalizedTextContentNode[nodes.Count];
         for (int index = 0; index < nodes.Count; index++) _nodes[index] = nodes[index];
     }
 
     /// <summary>The effective content locale, including whole-message fallback.</summary>
     public string Locale { get; }
+
+    /// <summary>
+    /// The locale that numbers, percentages, dates and times were formatted in: the requested locale when it shares
+    /// the content locale's language (a <c>de-CH</c> user reading <c>de</c> text), otherwise <see cref="Locale"/>.
+    /// </summary>
+    public string FormattingLocale { get; }
 
     /// <summary>The balanced semantic node stream.</summary>
     public ReadOnlyMemory<LocalizedTextContentNode> Nodes => (LocalizedTextContentNode[])_nodes.Clone();

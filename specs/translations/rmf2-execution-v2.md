@@ -142,7 +142,8 @@ option permits a typed dynamic value.
 | `number` | `style` | string: `decimal`, `percent` | `decimal` |
 | `number` | `minimumFractionDigits` | int64: 0..6 | 0 |
 | `number` | `maximumFractionDigits` | int64: 0..6 | 6 for decimal; 4 for percent |
-| `date`, `time`, `datetime` | `style` | string: `iso`, `short`, `long` | `iso` |
+| `date`, `time`, `datetime` | `style` | string: `iso`, `short`, `medium`, `long`, `full` | `iso` |
+| `datetime` | `timeZone` | string: `local`, `utc` or an IANA time zone ID (at most 64 characters matching `^[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z0-9_+-]+)*$`) | `local` |
 | `runic:uuid` | `style` | string: `d`, `n`, `b`, `p` | `d` |
 | `runic:relative-time` | `unit` | string: `second`, `minute`, `hour`, `day`, `week`, `month`, `year` | `day` |
 | `runic:relative-time` | `numeric` | string: `always`, `auto` | `always` |
@@ -251,6 +252,59 @@ range, and cross-option checks. Invalid dynamic values are evaluation errors;
 they never select a different enum, clamp precision, silently use defaults, or
 coerce caller types. Defaults apply only to omitted options. The runtime branch
 must map this error to its public error API without turning it into output.
+
+### Localized formatting
+
+Numbers, percentages, dates and times format in the **formatting locale**: the
+canonical requested tag (the one the caller asked for, such as `de-CH`, before it
+resolves to a catalog locale) when its language subtag equals the message's
+effective content locale's, and the scripts match when both tags name one;
+otherwise the content locale. Plural and ordinal rules, list patterns, relative
+time and the locale reported on content stay on the content locale. Content
+reports both (`.NET LocalizedTextContent.Locale`/`FormattingLocale`, ESM
+`locale`/`formatLocale`).
+
+Percentages use the formatting locale's positive or negative percent pattern from
+platform globalization (.NET `NumberFormatInfo.PercentPositivePattern`,
+`PercentNegativePattern`, `PercentSymbol` and `NegativeSign`; ESM the prefix and
+suffix around the digits of `Intl.NumberFormat` `formatToParts` with
+`style: "percent"`). A space in the pattern is U+00A0. The digits are the visible
+decimal, grouped as described under [digit grouping](#digit-grouping).
+
+Localized dates and times come from platform globalization by these rules:
+
+| Function | `short` | `medium` | `long` | `full` |
+| --- | --- | --- | --- | --- |
+| `date` | CLDR short date | CLDR medium date | CLDR long date | CLDR full date |
+| `time` | CLDR short time | CLDR medium time | CLDR medium time | CLDR medium time |
+| `datetime` | date and time in the style, joined by U+0020, in `timeZone` | | | |
+
+- A Gregorian year is written with at least four digits, so short dates show the
+  full year (.NET's short date pattern; ESM replaces a shorter year field).
+- A `time` is a wall-clock time without a zone, so the longer styles do not add a
+  zone name.
+- `timeZone=local` is the host's zone (.NET `TimeZoneInfo.Local`, ESM the default
+  `Intl` zone), `utc` is UTC and any other value is an IANA ID (.NET
+  `TimeZoneInfo.FindSystemTimeZoneById`). An unknown zone, or a wall-clock year
+  outside 1..9999, is an evaluation error. `iso` is always UTC and ignores
+  `timeZone`.
+- Digits are Latin, as for numbers; U+202F is written as U+0020.
+- Without platform locale data (.NET `InvariantGlobalization`), the invariant
+  culture's patterns apply instead of an error, as for numbers.
+
+The conformance corpus
+[`corpus/rmf2-date-percent-conformance.json`](corpus/rmf2-date-percent-conformance.json)
+gives every supported locale family's styles, time zones, percentages and
+formatting-locale cases; .NET and ESM must produce each expected string. Its
+documented tolerance is the space character (U+0020, U+00A0, U+202F), which
+platform ICU versions write differently. Platform data can also differ for
+non-Gregorian default calendars and, in ESM, for dates before the Gregorian
+reform of 1582, where `Intl` uses the Julian calendar.
+
+The ESM runtime also accepts a `Date` or an ISO 8601 string with seconds, an
+optional fraction and `Z` or an offset for a `datetime` input. It drops
+sub-second digits and keeps the canonical UTC carrier, so the transport form
+stays `yyyy-MM-ddTHH:mm:ssZ`.
 
 ## Annotations and markup
 

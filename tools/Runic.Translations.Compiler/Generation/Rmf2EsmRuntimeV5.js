@@ -28,6 +28,51 @@ export function configureLocaleResolver(resolver) {
 
 export function getLocale() { return resolveLocale(localeResolver()); }
 
+// The canonical tag the locale resolver asks for, before it resolves to a catalog locale: "de-CH" where getLocale()
+// gives "de". Numbers, percentages, dates and times format in it when its language matches a message's content locale.
+export function getRequestedLocale() { return requestedTag(localeResolver()); }
+function requestedTag(requested) {
+  if (typeof requested !== "string") throw new RangeError("A locale string is required.");
+  if (requested === "") return resolveLocale(requested);
+  const canonical = canonicalLocale(requested); if (canonical === null) throw new RangeError(`Invalid locale '${requested}'.`);
+  return canonical;
+}
+
+// The locale numbers, percentages, dates and times format in: the requested tag when its language subtag equals the
+// content locale's (and the scripts match when both name one), else the content locale. Plural, ordinal, list and
+// relative-time data stay on the content locale. The .NET runtime applies the same rule.
+function formattingLocale(requested, content) {
+  if (requested === content || typeof requested !== "string" || requested === "") return content;
+  const canonical = canonicalLocale(requested); if (canonical === null) return content;
+  const left = canonical.split("-"), right = content.split("-");
+  if (left[0].toLowerCase() !== right[0].toLowerCase()) return content;
+  const script = parts => parts.length > 1 && /^[A-Za-z]{4}$/.test(parts[1]) ? parts[1].toLowerCase() : null;
+  return script(left) !== null && script(right) !== null && script(left) !== script(right) ? content : canonical;
+}
+
+// Listeners for messages that show the text of a fallback locale, for development overlays and telemetry. A listener
+// receives the message key, the catalog locale it was requested in and the locale whose text it shows; a listener
+// that throws never affects formatting.
+const fallbackListeners = new Set();
+export function onFallback(listener) {
+  if (typeof listener !== "function") throw new TypeError("A fallback listener must be a function.");
+  const entry = { listener }; fallbackListeners.add(entry);
+  return () => { fallbackListeners.delete(entry); };
+}
+function reportFallback(key, locale, content) {
+  if (fallbackListeners.size === 0 || content === locale) return;
+  for (const { listener } of [...fallbackListeners]) { try { listener(key, locale, content); } catch { /* Formatting is complete. */ } }
+}
+
+// The locales of a message for a request: the locale whose text it shows (for the lang attribute of a string message)
+// and the locale its numbers and dates format in.
+export function getMessageLocale(key, options) {
+  const entry = rmf2Contract.messages?.[key]; if (!entry || !Object.hasOwn(messageContracts, key)) throw new RangeError(`Unknown message '${key}'.`);
+  const requested = options?.locale === undefined ? getRequestedLocale() : requestedTag(options.locale), locale = resolveLocale(requested);
+  const contentLocale = entry.contentLocales?.[locale] ?? locale;
+  return Object.freeze({ key, locale: contentLocale, formatLocale: formattingLocale(requested, contentLocale) });
+}
+
 export function createLocaleSource(options = {}) {
   if (!isRecord(options)) throw new TypeError("Locale source options must be an object.");
   let current = resolveLocale(options.initialLocale ?? baseLocale); const listeners = new Set();
@@ -127,12 +172,32 @@ function coerceInput(value, type, name) {
     case "decimal": return exactDecimal(value);
     case "date": if (typeof value === "string" && validDate(value)) return value; break;
     case "time": if (typeof value === "string" && validTime(value)) return value; break;
-    case "datetime": if (typeof value === "string" && validDateTime(value)) return value; break;
+    case "datetime": { const instant = coerceInstant(value); if (instant !== null) return instant; break; }
     case "guid": if (typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) return value.toLowerCase(); break;
     // A frozen snapshot, so later changes to the caller's array cannot affect formatting.
     case "list": if (Array.isArray(value)) { const items = Array.from(value); if (items.every(item => typeof item === "string")) return Object.freeze(items); } break;
   }
   throw new TypeError(`Input '${name}' does not contain its declared ${type} carrier.`);
+}
+
+// A date-time input: a valid Date, or an ISO 8601 string with seconds, an optional fraction and Z or an offset of at
+// most 14 hours. The carrier is the canonical UTC yyyy-MM-ddTHH:mm:ssZ of the transport form, so sub-second digits
+// are dropped.
+function coerceInstant(value) {
+  let milliseconds;
+  if (value instanceof Date) milliseconds = value.getTime();
+  else if (typeof value !== "string") return null;
+  else if (validDateTime(value)) return value;
+  else {
+    const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(?:\.\d{1,9})?(?:Z|([+-])(\d{2}):(\d{2}))$/.exec(value);
+    if (!match || !validDate(match[1]) || !validTime(match[2])) return null;
+    const hours = Number(match[4] ?? 0), minutes = Number(match[5] ?? 0);
+    if (minutes > 59 || hours * 60 + minutes > 14 * 60) return null;
+    milliseconds = Date.parse(`${match[1]}T${match[2]}Z`) - (match[3] === "-" ? -1 : 1) * (hours * 60 + minutes) * 60000;
+  }
+  if (!Number.isFinite(milliseconds)) return null;
+  const text = new Date(Math.floor(milliseconds / 1000) * 1000).toISOString().replace(/\.000Z$/, "Z");
+  return validDateTime(text) ? text : null;
 }
 
 function validateInputs(inputs, contract) {
@@ -148,6 +213,7 @@ function optionType(fn, name) {
   if (["string", "runic:boolean", "integer", "number"].includes(fn) && name === "select") return "string";
   if ((fn === "integer" || fn === "number") && name === "useGrouping") return "string";
   if (["number", "date", "time", "datetime", "runic:uuid"].includes(fn) && name === "style") return "string";
+  if (fn === "datetime" && name === "timeZone") return "string";
   if (fn === "number" && ["minimumFractionDigits", "maximumFractionDigits"].includes(name)) return "int64";
   if (fn === "runic:relative-time" && ["unit", "numeric"].includes(name)) return "string";
   if (fn === "runic:list" && ["type", "style"].includes(name)) return "string";
@@ -200,8 +266,8 @@ function contextFor(wrapper, inputs, contract) {
 function validateResolvedOptions(fn, options) {
   const allowed = {
     string: { select: ["exact"] }, "runic:boolean": { select: ["exact"] }, integer: { select: ["plural", "ordinal", "exact"], useGrouping: ["auto", "always", "never", "min2"] },
-    number: { select: ["plural", "ordinal", "exact"], style: ["decimal", "percent"], useGrouping: ["auto", "always", "never", "min2"] }, date: { style: ["iso", "short", "long"] },
-    time: { style: ["iso", "short", "long"] }, datetime: { style: ["iso", "short", "long"] }, "runic:uuid": { style: ["d", "n", "b", "p"] },
+    number: { select: ["plural", "ordinal", "exact"], style: ["decimal", "percent"], useGrouping: ["auto", "always", "never", "min2"] }, date: { style: ["iso", "short", "medium", "long", "full"] },
+    time: { style: ["iso", "short", "medium", "long", "full"] }, datetime: { style: ["iso", "short", "medium", "long", "full"], timeZone: null }, "runic:uuid": { style: ["d", "n", "b", "p"] },
     "runic:relative-time": { unit: ["second", "minute", "hour", "day", "week", "month", "year"], numeric: ["always", "auto"] },
     "runic:list": { type: ["conjunction", "disjunction", "unit"], style: ["long", "short", "narrow"] },
   }[fn];
@@ -209,6 +275,7 @@ function validateResolvedOptions(fn, options) {
   for (const name of Object.keys(options)) {
     if (!Object.hasOwn(allowed, name) && !(fn === "number" && ["minimumFractionDigits", "maximumFractionDigits"].includes(name))) throw new TypeError("Unknown formatter option.");
     if (fn === "number" && ["minimumFractionDigits", "maximumFractionDigits"].includes(name)) { if (typeof options[name] !== "bigint" || options[name] < 0n || options[name] > 6n) throw new RangeError("Fraction digits are outside 0..6."); }
+    else if (allowed[name] === null) { if (!validTimeZone(options[name])) throw new RangeError("Invalid time zone."); }
     else if (!allowed[name].includes(options[name])) throw new RangeError("Invalid formatter option value.");
   }
   if (fn === "number") {
@@ -217,19 +284,20 @@ function validateResolvedOptions(fn, options) {
   }
 }
 
-function formatResolved(value, locale) {
+// locale is the formatting locale of numbers, percentages, dates and times; contentLocale gives lists and relative time.
+function formatResolved(value, locale, contentLocale = locale) {
   const fn = value.format.function, options = value.format.options;
   switch (fn) {
     case "string": return value.carrier;
     case "runic:boolean": return value.carrier ? "true" : "false";
     case "integer": return formatInteger(value.carrier, locale, options.useGrouping ?? "auto");
     case "number": return formatDecimal(value.type === "int64" ? decimalFromInteger(value.carrier) : value.carrier, locale, options);
-    case "date": return formatTemporal(value.carrier, fn, options.style ?? "iso", locale);
-    case "time": return formatTemporal(value.carrier, fn, options.style ?? "iso", locale);
-    case "datetime": return formatTemporal(value.carrier, fn, options.style ?? "iso", locale);
+    case "date": return formatTemporal(value.carrier, fn, options.style ?? "iso", locale, "local");
+    case "time": return formatTemporal(value.carrier, fn, options.style ?? "iso", locale, "local");
+    case "datetime": return formatTemporal(value.carrier, fn, options.style ?? "iso", locale, options.timeZone ?? "local");
     case "runic:uuid": { const canonical = value.carrier; const style = options.style ?? "d"; if (style === "d") return canonical; if (style === "n") return canonical.replaceAll("-", ""); if (style === "b") return `{${canonical}}`; return `(${canonical})`; }
-    case "runic:relative-time": return formatRelative(value.type === "int64" ? decimalFromInteger(value.carrier) : value.carrier, options.unit ?? "day", options.numeric ?? "always", locale);
-    case "runic:list": return formatList(value.carrier, options.type ?? "conjunction", options.style ?? "long", locale);
+    case "runic:relative-time": return formatRelative(value.type === "int64" ? decimalFromInteger(value.carrier) : value.carrier, options.unit ?? "day", options.numeric ?? "always", contentLocale);
+    case "runic:list": return formatList(value.carrier, options.type ?? "conjunction", options.style ?? "long", contentLocale);
     default: throw new TypeError("Unknown formatter.");
   }
 }
@@ -254,8 +322,28 @@ function formatDecimal(value, locale, options) {
   const visible = visibleNumber(value, options), percent = (options.style ?? "decimal") === "percent";
   const digits = visible.coefficient.toString().padStart(visible.scale + 1, "0");
   const whole = digits.slice(0, digits.length - visible.scale), fraction = digits.slice(digits.length - visible.scale);
-  const symbols = numberSymbols(locale);
-  return `${visible.negative ? symbols.minus : ""}${groupDigits(whole, options.useGrouping ?? "auto", symbols, locale)}${fraction ? symbols.decimal + fraction : ""}${percent ? "%" : ""}`;
+  const symbols = numberSymbols(locale), digitText = `${groupDigits(whole, options.useGrouping ?? "auto", symbols, locale)}${fraction ? symbols.decimal + fraction : ""}`;
+  if (!percent) return `${visible.negative ? symbols.minus : ""}${digitText}`;
+  const pattern = percentPattern(locale)[visible.negative ? 1 : 0];
+  return pattern[0] + digitText + pattern[1];
+}
+
+// The locale's positive and negative percent patterns as [prefix, suffix] pairs around the digits, with its percent
+// and minus signs, from Intl.NumberFormat; a space in the pattern is U+00A0, as .NET writes it.
+const percentPatternCache = new Map();
+function percentPattern(locale) {
+  let pattern = percentPatternCache.get(locale);
+  if (pattern) return pattern;
+  const format = new Intl.NumberFormat(locale, { style: "percent", numberingSystem: "latn", maximumFractionDigits: 0 });
+  const split = value => {
+    const parts = format.formatToParts(value), numeric = ["integer", "group", "decimal", "fraction"];
+    const first = parts.findIndex(part => numeric.includes(part.type)), last = parts.findLastIndex(part => numeric.includes(part.type));
+    const text = list => list.map(part => part.value).join("").replace(/[ \u202F]/g, "\u00A0");
+    return Object.freeze([text(parts.slice(0, first)), text(parts.slice(last + 1))]);
+  };
+  pattern = Object.freeze([split(0.5), split(-0.5)]);
+  if (percentPatternCache.size < 64) percentPatternCache.set(locale, pattern);
+  return pattern;
 }
 
 // Ungrouped integers stay invariant; the grouping strategies use the locale's sign, separator and group sizes.
@@ -350,18 +438,61 @@ function contextualListSeparator(language, two, end, separator, last) {
   return separator;
 }
 
-function formatTemporal(value, type, style, locale) {
+// Localized dates and times from Intl, by the rules the .NET runtime applies to platform data: a date in its CLDR
+// length with a Gregorian year of at least four digits (so short dates show the full year); a wall-clock time in the
+// short or else the medium CLDR length, which has no zone name; a date-time as its date and time in the time zone,
+// joined by a space. Digits are Latin, as for numbers, and U+202F is written as a space, as V8 writes it.
+function formatTemporal(value, type, style, locale, timeZone) {
   if (style === "iso") return value;
-  const date = type === "date" ? new Date(`${value}T00:00:00Z`) : type === "time" ? new Date(`1970-01-01T${value}Z`) : new Date(value);
-  if (type === "date") return new Intl.DateTimeFormat(locale, { dateStyle: style, timeZone: "UTC" }).format(date);
-  if (type === "time") return new Intl.DateTimeFormat(locale, { timeStyle: style, timeZone: "UTC" }).format(date);
-  return new Intl.DateTimeFormat(locale, { dateStyle: style, timeStyle: style, timeZone: "UTC" }).format(date);
+  if (type === "date") return formatWallDate(Number(value.slice(0, 4)), Number(value.slice(5, 7)), Number(value.slice(8, 10)), style, locale);
+  if (type === "time") return formatWallTime(Number(value.slice(0, 2)), Number(value.slice(3, 5)), Number(value.slice(6, 8)), style, locale);
+  const wall = wallClock(new Date(value), timeZone);
+  return `${formatWallDate(wall.year, wall.month, wall.day, style, locale)} ${formatWallTime(wall.hour, wall.minute, wall.second, style, locale)}`;
 }
 
-export function formatCompiledMessage(key, wrapper, inputs, requestedLocale) {
+const temporalFormatCache = new Map();
+function temporalFormat(locale, kind, style, timeZone) {
+  const cacheKey = `${locale}\u0000${kind}\u0000${style}\u0000${timeZone ?? ""}`;
+  let format = temporalFormatCache.get(cacheKey);
+  if (format) return format;
+  const options = kind === "date" ? { dateStyle: style, timeZone: "UTC", numberingSystem: "latn" }
+    : kind === "time" ? { timeStyle: style, timeZone: "UTC", numberingSystem: "latn" }
+    : { calendar: "gregory", numberingSystem: "latn", hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric", ...(timeZone === undefined ? {} : { timeZone }) };
+  format = new Intl.DateTimeFormat(kind === "zone" ? "en-US" : locale, options);
+  if (temporalFormatCache.size < 256) temporalFormatCache.set(cacheKey, format);
+  return format;
+}
+
+function utcDate(year, month, day, hour = 0, minute = 0, second = 0) { const date = new Date(0); date.setUTCFullYear(year, month - 1, day); date.setUTCHours(hour, minute, second, 0); return date; }
+
+function formatWallDate(year, month, day, style, locale) {
+  const format = temporalFormat(locale, "date", style), gregorian = format.resolvedOptions().calendar === "gregory";
+  return format.formatToParts(utcDate(year, month, day)).map(part => part.type === "year" && gregorian && /^\d{1,3}$/.test(part.value) ? String(year).padStart(4, "0") : part.value).join("").replaceAll("\u202F", " ");
+}
+
+function formatWallTime(hour, minute, second, style, locale) {
+  return temporalFormat(locale, "time", style === "short" ? "short" : "medium").format(utcDate(1970, 1, 1, hour, minute, second)).replaceAll("\u202F", " ");
+}
+
+// The wall-clock fields of an instant in "local" (the host's zone), "utc" or an IANA zone. An unknown zone throws a
+// RangeError, and so does a wall-clock year outside 1..9999, as in .NET.
+function wallClock(instant, timeZone) {
+  const zone = timeZone === "local" ? undefined : timeZone === "utc" ? "UTC" : timeZone;
+  const fields = Object.create(null);
+  for (const part of temporalFormat("en-US", "zone", "", zone).formatToParts(instant)) if (part.type !== "literal") fields[part.type] = part.value;
+  const year = fields.era === "BC" ? 1 - Number(fields.year) : Number(fields.year);
+  if (!(year >= 1 && year <= 9999)) throw new RangeError("The date-time is outside the supported range in its time zone.");
+  return { year, month: Number(fields.month), day: Number(fields.day), hour: Number(fields.hour) % 24, minute: Number(fields.minute), second: Number(fields.second) };
+}
+
+function validTimeZone(value) { return typeof value === "string" && value.length > 0 && value.length <= 64 && /^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$/.test(value); }
+
+// requestedLocale is the tag the caller asked for (de-CH), resolvedLocale the catalog locale it resolved to (de),
+// which defaults to the requested one; the wrapper's content locale differs from it after a fallback.
+export function formatCompiledMessage(key, wrapper, inputs, requestedLocale, resolvedLocale = requestedLocale) {
   const contract = messageContracts[key]; if (!contract || !wrapper) throw new RangeError(`Unknown message '${key}'.`);
   if (!validatedMessages.has(wrapper)) throw new TypeError("A validated v5 message is required.");
-  const context = contextFor(wrapper, inputs, contract), locale = wrapper.contentLocale;
+  const context = contextFor(wrapper, inputs, contract), locale = wrapper.contentLocale, formatLocale = formattingLocale(requestedLocale, locale);
   const selections = wrapper.ast.selectors.map(selector => {
     const resolved = context.resolve(selector.value, selector.type);
     if (!["int64", "decimal"].includes(selector.type)) return { resolved, canonical: canonicalCarrier(resolved.carrier, selector.type), category: null };
@@ -382,18 +513,19 @@ export function formatCompiledMessage(key, wrapper, inputs, requestedLocale) {
     if (matches && (selectedRanks === null || compareRanks(ranks, selectedRanks) > 0)) { selected = variant; selectedRanks = ranks; selectedIndex = variantIndex; }
   }
   if (!selected) throw new RangeError("Message has no matching variant.");
-  const built = buildNodes(selected.nodes, context, locale, `v${selectedIndex}.`);
+  const built = buildNodes(selected.nodes, context, formatLocale, locale, `v${selectedIndex}.`);
+  if (typeof resolvedLocale === "string") reportFallback(key, resolvedLocale, locale);
   if (!contract.structured) { if (built.some(node => node.kind !== "text")) throw new TypeError("Structured content cannot be formatted as text."); return built.map(node => node.value).join(""); }
   const kind = rmf2Contract.messages?.[key]?.content === "document" ? "localized-document" : "localized-content";
-  return Object.freeze({ kind, key, locale, nodes: Object.freeze(built) });
+  return Object.freeze({ kind, key, locale, formatLocale, nodes: Object.freeze(built) });
 }
 
-function buildNodes(nodes, context, locale, path) {
+function buildNodes(nodes, context, locale, contentLocale, path) {
   const roots = [], stack = [{ children: roots }];
   for (let index = 0; index < nodes.length; index++) {
     const node = nodes[index], parent = stack.at(-1).children;
     if (node.kind === "text") parent.push({ kind: "text", value: node.value, annotations: [] });
-    else if (node.kind === "expression") parent.push({ kind: "text", value: formatResolved(context.expression(node.expression), locale), annotations: annotations(node.expression.annotations) });
+    else if (node.kind === "expression") parent.push({ kind: "text", value: formatResolved(context.expression(node.expression), locale, contentLocale), annotations: annotations(node.expression.annotations) });
     else if (node.markupKind === "open") { const element = { kind: "element", name: node.name, attributes: markupOptions(node.options, context), annotations: annotations(node.annotations), closingAnnotations: [], standalone: false, occurrence: path + index, children: [] }; parent.push(element); stack.push(element); }
     else if (node.markupKind === "standalone") parent.push({ kind: "element", name: node.name, attributes: markupOptions(node.options, context), annotations: annotations(node.annotations), closingAnnotations: [], standalone: true, occurrence: path + index, children: [] });
     else { if (stack.length === 1 || stack.at(-1).name !== node.name) throw new TypeError("Unbalanced markup."); stack.at(-1).closingAnnotations = annotations(node.annotations); stack.pop(); }
@@ -458,8 +590,9 @@ export async function decodeLocalePackV5(content, expectedLocale, integrityVerif
 export function formatDynamicMessageV5(artifact, key, inputs = Object.create(null), options) {
   if (!artifact || !decodedArtifacts.has(artifact)) throw new TypeError("A validated v5 locale artifact is required.");
   if (!Object.hasOwn(artifact.messages, key)) throw new RangeError(`Locale artifact has no message '${key}'.`);
-  const requested = resolveLocale(options?.locale ?? artifact.locale); if (requested !== artifact.locale) throw new RangeError("A dynamic locale artifact can only format its own locale.");
-  return formatCompiledMessage(key, artifact.messages[key], inputs, requested);
+  const requested = options?.locale === undefined ? artifact.locale : requestedTag(options.locale);
+  if (resolveLocale(requested) !== artifact.locale) throw new RangeError("A dynamic locale artifact can only format its own locale.");
+  return formatCompiledMessage(key, artifact.messages[key], inputs, requested, artifact.locale);
 }
 
 export function decodeWireValue(value, type) {
@@ -468,6 +601,8 @@ export function decodeWireValue(value, type) {
     if (type === "int64") { if (typeof value !== "string" || !/^-?(?:0|[1-9][0-9]*)$/.test(value)) return failure(); const parsed = BigInt(value); if (parsed < minimumInt64 || parsed > maximumInt64) return failure(); return success(parsed); }
     if (type === "boolean") return typeof value === "boolean" ? success(value) : failure();
     if (typeof value !== "string" || value.length > 16384) return failure();
+    // The transport form of a date-time stays exactly UTC yyyy-MM-ddTHH:mm:ssZ; callers' wider inputs do not apply.
+    if (type === "datetime") return validDateTime(value) ? success(value) : failure();
     return success(coerceInput(value, type, "wire"));
   } catch { return failure(); }
 }

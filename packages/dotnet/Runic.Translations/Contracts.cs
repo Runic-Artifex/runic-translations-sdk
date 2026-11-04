@@ -43,6 +43,80 @@ public interface ITranslationSnapshot
         placeholders = default;
         return false;
     }
+    /// <summary>
+    /// The canonical locale tag that was requested before it resolved to <see cref="Locale"/>, such as <c>de-CH</c> for a
+    /// <c>de</c> snapshot. Messages format numbers, percentages, dates and times in it when its language matches the
+    /// message's content locale. Snapshots that do not track it return <see cref="Locale"/>.
+    /// </summary>
+    string RequestedLocale => Locale;
+    /// <summary>
+    /// Attempts to get the effective content locale of a message: the locale whose text it shows, which differs from
+    /// <see cref="Locale"/> after a fallback. Use it for the <c>lang</c> of a string message. Snapshots that cannot tell
+    /// return false.
+    /// </summary>
+    bool TryGetContentLocale(TranslationKey key, out string contentLocale)
+    {
+        contentLocale = string.Empty;
+        return false;
+    }
+}
+
+/// <summary>Process-wide notifications from the translation runtime, intended for development overlays and telemetry.</summary>
+public static class TranslationEvents
+{
+    private static EventHandler<TranslationFallbackEventArgs>? s_fallback;
+
+    /// <summary>
+    /// Raised when a snapshot formats an RMF2 message whose text comes from another locale through the catalog's
+    /// fallback chain, because the message has no translation in the snapshot's locale. Without subscribers it costs
+    /// nothing. Handlers run synchronously on the formatting thread with a <see langword="null"/> sender; a handler that
+    /// throws never affects formatting.
+    /// </summary>
+    public static event EventHandler<TranslationFallbackEventArgs>? TranslationFallback
+    {
+        add { lock (Gate) s_fallback += value; }
+        remove { lock (Gate) s_fallback -= value; }
+    }
+
+    private static readonly object Gate = new();
+
+    internal static bool HasFallbackListeners => Volatile.Read(ref s_fallback) is not null;
+
+    internal static void RaiseFallback(TranslationFallbackEventArgs notification)
+    {
+        EventHandler<TranslationFallbackEventArgs>? handlers = Volatile.Read(ref s_fallback);
+        if (handlers is null) return;
+        foreach (Delegate handler in handlers.GetInvocationList())
+        {
+            try { ((EventHandler<TranslationFallbackEventArgs>)handler)(null, notification); }
+            catch (Exception) { /* Formatting is complete; a listener cannot change it. */ }
+        }
+    }
+}
+
+/// <summary>A message that formatted with the text of a fallback locale.</summary>
+public sealed class TranslationFallbackEventArgs : EventArgs
+{
+    /// <summary>Creates fallback event data.</summary>
+    public TranslationFallbackEventArgs(string catalog, string key, string locale, string contentLocale, string requestedLocale)
+    {
+        Catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+        Key = key ?? throw new ArgumentNullException(nameof(key));
+        Locale = locale ?? throw new ArgumentNullException(nameof(locale));
+        ContentLocale = contentLocale ?? throw new ArgumentNullException(nameof(contentLocale));
+        RequestedLocale = requestedLocale ?? throw new ArgumentNullException(nameof(requestedLocale));
+    }
+
+    /// <summary>The catalog identifier.</summary>
+    public string Catalog { get; }
+    /// <summary>The message key name.</summary>
+    public string Key { get; }
+    /// <summary>The catalog locale the message was requested in, which has no translation of it.</summary>
+    public string Locale { get; }
+    /// <summary>The locale whose text was shown.</summary>
+    public string ContentLocale { get; }
+    /// <summary>The canonical tag that was requested before it resolved to <see cref="Locale"/>.</summary>
+    public string RequestedLocale { get; }
 }
 
 /// <summary>Creates immutable snapshots for requested locales.</summary>
@@ -75,7 +149,9 @@ public interface ITranslationManager
     /// The provider resolves <paramref name="locale"/>, so an empty locale (the invariant culture's name) selects the
     /// default locale unless the catalog's <see cref="UnsupportedLocalePolicy"/> is
     /// <see cref="UnsupportedLocalePolicy.Exact"/>. Requesting the active locale completes without composing a snapshot; use
-    /// <see cref="RefreshAsync"/> to reload replacement bytes for the active locale.
+    /// <see cref="RefreshAsync"/> to reload replacement bytes for the active locale. The active locale is the requested tag
+    /// (<see cref="ITranslationSnapshot.RequestedLocale"/>): switching from <c>de</c> to <c>de-CH</c> keeps the <c>de</c>
+    /// text but formats numbers and dates for Switzerland, so it publishes a snapshot and raises <see cref="LocaleChanged"/>.
     /// </remarks>
     ValueTask SetLocaleAsync(string locale, CancellationToken cancellationToken = default);
     /// <summary>

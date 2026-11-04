@@ -118,6 +118,52 @@ hours = about {$hours :number maximumFractionDigits=1} hours
 code = Code {$code :integer useGrouping=never}
 ```
 
+`{$rate :number style=percent}` uses the locale's percent pattern and signs, so
+0.5 is `50%` in English, `50 %` in German and French (with a no-break space) and
+`%50` in Turkish.
+
+`:date`, `:time` and `:datetime` write `iso` by default (`2026-11-04`,
+`13:05:09`, `2026-11-04T13:05:09Z`); the localized styles are the CLDR lengths
+`short`, `medium`, `long` and `full` of the platform's locale data:
+
+| Style | `:date` (English) | `:time` (English) |
+| --- | --- | --- |
+| `short` | `11/4/2026` | `1:05 PM` |
+| `medium` | `Nov 4, 2026` | `1:05:09 PM` |
+| `long` | `November 4, 2026` | `1:05:09 PM` |
+| `full` | `Wednesday, November 4, 2026` | `1:05:09 PM` |
+
+A short date always shows the full year. A time has no zone, so `long` and
+`full` write it as `medium` does. `:datetime` writes the date and the time in the
+style, separated by a space (`11/4/2026 1:05 PM`), in the host's local time zone
+unless `timeZone` names another one: `utc`, `local` (the default) or an IANA ID
+such as `Europe/Berlin`, as a literal or a `:string` input. An unknown zone is a
+formatting error. `iso` is always UTC.
+
+```rmf2
+due = Due {$date :date style=medium}
+meeting = Starts {$at :datetime style=short timeZone=|Europe/Berlin|}
+local =
+  .input {$zone :string}
+  {{Your time: {$at :datetime style=long timeZone=$zone}}}
+```
+
+Numbers, percentages, dates and times format in the **requested** locale when
+it shares the language of the message's text, and in the text's locale
+otherwise. A `de-CH` user reading the catalog's `de` text sees Swiss separators
+(`1’234.5` rather than `1.234,5`) and percentages (`50%`), and an `en-GB` user reading
+`en` text sees `04/11/2026`. Plural and ordinal rules, lists and relative time
+stay on the text's locale. Content objects report both locales: .NET
+`LocalizedTextContent.Locale` and `FormattingLocale`, ESM `locale` and
+`formatLocale`. A string message's text locale (for `lang`) comes from .NET
+`ITranslationSnapshot.TryGetContentLocale` or ESM `getMessageLocale(key)`.
+
+When a message shows the text of a fallback locale, because it has no
+translation in the requested one, .NET raises the static
+`TranslationEvents.TranslationFallback` event and ESM calls the listeners added
+with `onFallback((key, locale, contentLocale) => ...)`. Use them for development
+overlays or telemetry; without listeners they cost nothing.
+
 `:runic:list` joins a list of strings with the content locale's CLDR list
 patterns, like `Intl.ListFormat`. `type` is `conjunction` (default),
 `disjunction` or `unit`, and `style` is `long` (default), `short` or `narrow`:

@@ -203,8 +203,12 @@ internal sealed class Rmf2V1CorpusTests
     // (GeneratedCatalogSupport, CompiledRmf2*, TranslationsCompatibility) and the readable surface implements
     // IReadableMessages; transport.js writes only version 2 and transport.d.ts drops the version 1 createTextReference
     // overload, in both digests.
-    private const string EncodedOutputDigest = "3c0d6e68105b785be90716051494fd03c97212bb7b7f61c4f395d1e8a7ea7ed1";
-    private const string HiddenEncodedOutputDigest = "ab003375e12da228bf01aa8eba793b64f51a8244c25313c042c754f50ae347d6";
+    // Re-pinned for TR 0.9 batch TC: runtime.js formats localized dates, times, time zones and percentages by the shared
+    // rules, in the requested locale when it shares the content language, accepts Date and offset date-time inputs and
+    // exports getRequestedLocale, getMessageLocale and onFallback; message modules pass the requested locale;
+    // transport.js writes a Date input; runtime.d.ts and messages.d.ts declare them, in both digests.
+    private const string EncodedOutputDigest = "8b0817cfac99dd805964681e3fbe23bfb3df032d552b99df8971ab261a1dc137";
+    private const string HiddenEncodedOutputDigest = "0f61bf990a3ec0d327d2ef41e767fa21f41fbb76cad1647b92e433cbfdc59152";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]
