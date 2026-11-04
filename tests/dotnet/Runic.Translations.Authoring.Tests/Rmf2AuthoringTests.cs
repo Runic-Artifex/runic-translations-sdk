@@ -13,6 +13,46 @@ internal sealed class Rmf2AuthoringTests
 {
     private static TranslationSource Source(string path, string text) => new(path, Encoding.UTF8.GetBytes(text));
     private static TranslationSource Project() => Source("runic.json", "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\"}");
+    [Test, DisplayName("InsertMessage copies the indentation of the group's existing children")]
+    [Arguments(2)]
+    [Arguments(4)]
+    [Arguments(3)]
+    public void InsertMessageCopiesGroupIndentation(int width)
+    {
+        string pad = new(' ', width);
+        string text = "cart {\n" + pad + "empty = Leer\n" + pad + "# The total.\n" + pad + "total = Summe\n}\nother = Andere\n";
+        string inserted = Encoding.UTF8.GetString(Rmf2ResourceWriter.InsertMessage(Source("de.rmf2", text), ["cart", "items"], "Artikel"));
+        Assert.Equal("cart {\n" + pad + "empty = Leer\n" + pad + "# The total.\n" + pad + "total = Summe\n" + pad + "items = Artikel\n}\nother = Andere\n", inserted);
+
+        // New inner groups use the same step; multi-line bodies are indented below their entry.
+        string nested = Encoding.UTF8.GetString(Rmf2ResourceWriter.InsertMessage(Source("de.rmf2", text), ["cart", "checkout", "hint"], "Zeile eins\nZeile zwei"));
+        Assert.Equal("cart {\n" + pad + "empty = Leer\n" + pad + "# The total.\n" + pad + "total = Summe\n" +
+            pad + "checkout {\n" + pad + pad + "hint =\n" + pad + pad + "  Zeile eins\n" + pad + pad + "  Zeile zwei\n" + pad + "}\n}\nother = Andere\n", nested);
+
+        // An inner group indented within an outer one: the inner group's own children set the indentation.
+        string deep = "shop {\n" + pad + "cart {\n" + pad + pad + "empty = Leer\n" + pad + "}\n}\n";
+        Assert.Equal("shop {\n" + pad + "cart {\n" + pad + pad + "empty = Leer\n" + pad + pad + "items = Artikel\n" + pad + "}\n}\n",
+            Encoding.UTF8.GetString(Rmf2ResourceWriter.InsertMessage(Source("de.rmf2", deep), ["shop", "cart", "items"], "Artikel")));
+        Assert.True(Rmf2ResourceReader.Read(Source("de.rmf2", nested)).Success, "The inserted lines do not read back.");
+    }
+
+    [Test, DisplayName("InsertMessage indents an empty group's first child by two spaces and refuses tab-indented sources")]
+    public void InsertMessageEmptyGroupAndTabs()
+    {
+        Assert.Equal("cart {\n  items = Artikel\n}\n",
+            Encoding.UTF8.GetString(Rmf2ResourceWriter.InsertMessage(Source("de.rmf2", "cart {\n}\n"), ["cart", "items"], "Artikel")));
+        Assert.Equal("    cart {\n      items = Artikel\n    }\n",
+            Encoding.UTF8.GetString(Rmf2ResourceWriter.InsertMessage(Source("de.rmf2", "    cart {\n    }\n"), ["cart", "items"], "Artikel")));
+        // RMF2 does not allow tabs in structural indentation, so there is no tab indentation to copy: the source is
+        // reported as invalid, as validate reports it, instead of being rewritten.
+        Assert.Throws<TranslationAuthoringException>(
+            () => Rmf2ResourceWriter.InsertMessage(Source("de.rmf2", "cart {\n\tempty = Leer\n}\n"), ["cart", "items"], "Artikel"),
+            "Tabs are not allowed in structural indentation.");
+        // A tab inside message text is content and is kept.
+        Assert.Equal("cart {\n    empty = Leer\tvoll\n    items = Artikel\n}\n",
+            Encoding.UTF8.GetString(Rmf2ResourceWriter.InsertMessage(Source("de.rmf2", "cart {\n    empty = Leer\tvoll\n}\n"), ["cart", "items"], "Artikel")));
+    }
+
     [Test, DisplayName("RMF2 syntax cache reuses only unchanged bounded source snapshots")]
     public void SyntaxCache()
     {

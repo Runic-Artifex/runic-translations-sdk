@@ -31,7 +31,10 @@ public sealed class RunicLanguageClient : ILanguageClient, ILanguageClientCustom
     private JsonRpc? rpc;
     public string Name => "Runic MF2";
     public IEnumerable<string> ConfigurationSections => Array.Empty<string>();
-    public object? InitializationOptions => null;
+    // runic.json buffers are synchronized by ConfigurationBuffers, so the server accepts
+    // configuration-changing refactors from this client.
+    public object? InitializationOptions => new { runicConfigurationSync = true };
+    internal ConfigurationBuffers Configuration { get; } = new();
     public IEnumerable<string> FilesToWatch => new[] { "**/*.mf2", "**/*.rmf2", "**/runic.json" };
     public bool ShowNotificationOnInitializeFailed => true;
     public object? MiddleLayer => null;
@@ -58,10 +61,13 @@ public sealed class RunicLanguageClient : ILanguageClient, ILanguageClientCustom
         return new Connection(process.StandardOutput.BaseStream, process.StandardInput.BaseStream);
     }
     public async Task OnLoadedAsync() { if (StartAsync != null) await StartAsync.InvokeAsync(this, EventArgs.Empty); }
-    public Task OnServerInitializedAsync() => Task.CompletedTask;
+    // The configuration buffers open once both the custom-message connection and the
+    // initialize handshake exist, in whichever order Visual Studio reports them.
+    private bool initialized;
+    public Task OnServerInitializedAsync() { initialized = true; if (rpc != null) Configuration.Attach(rpc); return Task.CompletedTask; }
     public Task<InitializationFailureContext?> OnServerInitializeFailedAsync(ILanguageClientInitializationInfo initializationState)
         => Task.FromResult<InitializationFailureContext?>(new InitializationFailureContext { FailureMessage = "Runic could not initialize. Restore the project's local runic-translations tool, or set RUNIC_TRANSLATIONS_SERVER to the built tool DLL before starting Visual Studio. See ActivityLog and Runic server output for details." });
-    public Task AttachForCustomMessageAsync(JsonRpc jsonRpc) { rpc = jsonRpc; return Task.CompletedTask; }
+    public Task AttachForCustomMessageAsync(JsonRpc jsonRpc) { rpc = jsonRpc; if (initialized) Configuration.Attach(rpc); return Task.CompletedTask; }
     internal Task<JObject> RequestAsync(string method, object parameters, CancellationToken cancellationToken)
         => (rpc ?? throw new InvalidOperationException("The Runic language server is not ready.")).InvokeWithParameterObjectAsync<JObject>(method, parameters, cancellationToken);
     internal async Task RestartAsync()
@@ -73,7 +79,8 @@ public sealed class RunicLanguageClient : ILanguageClient, ILanguageClientCustom
     public void Dispose() => DisposeProcess();
     private void DisposeProcess()
     {
-        rpc = null;
+        rpc = null; initialized = false;
+        Configuration.Attach(null);
         if (process == null) return;
         try { if (!process.HasExited) process.Kill(); } catch (InvalidOperationException) { }
         process.Dispose(); process = null;

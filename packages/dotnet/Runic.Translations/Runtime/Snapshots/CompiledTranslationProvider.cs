@@ -133,7 +133,8 @@ public sealed class CompiledTranslationProvider : ITranslationProvider, ITransla
         try
         {
             ITranslationSnapshot snapshot = await task.WaitAsync(cancellationToken).ConfigureAwait(false);
-            // The cached snapshot serves every request that resolves to its locale; record this one.
+            // The cached snapshot serves every request that resolves to its locale; record this one, so a regional request
+            // (de-CH for de) formats numbers and dates in its own locale.
             return snapshot is CompiledTranslationSnapshot compiled ? compiled.ForRequest(request) : snapshot;
         }
         finally

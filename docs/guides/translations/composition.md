@@ -102,6 +102,12 @@ foreach (TranslationCatalogStatus catalog in translations.Catalogs)
 `TranslationManager` and for external packs. A snapshot from a custom `ITranslationSnapshotFactory` reports what it
 implements; the interface's defaults report its locale as `Exact`.
 
+The requested locale is also the one numbers, percentages, dates and times format in when it shares the message's
+language (see [localized formatting](../../../specs/translations/rmf2-execution-v2.md#localized-formatting)): a `de-CH` request shows the `de` text with Swiss separators. A switch from
+`de` to `de-CH` therefore publishes new snapshots and raises `LocaleChanged` on every manager and on the context,
+although each catalog stays on `de`. Managers raise `LocaleChanged` whenever the resolved locale or the requested tag
+changes.
+
 `translations.SupportedLocales` lists the locales in which every catalog shows its own text (with the locales overlays
 add): offer these in a language picker to avoid mixed-language screens. Each catalog's own locales are in
 `Catalogs[i].SupportedLocales`.

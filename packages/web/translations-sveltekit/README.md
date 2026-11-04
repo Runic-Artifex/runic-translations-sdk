@@ -88,6 +88,37 @@ redirects non-canonical URLs, such as `/en/about` in unprefixed mode or
 calls during the request use the request's locale and concurrent renders stay
 isolated.
 
+The handle also stores the tag the visitor asked for in
+`event.locals.requestedLocale`, such as `de-CH` when `Accept-Language: de-CH`
+resolves to `de`, and passes it to `runWithLocale`. Messages then show the `de`
+text with Swiss numbers and dates. For the URL strategy and the default locale
+the requested tag is the locale itself.
+
+`timeZone=local` dates format in the server's zone during SSR unless the
+`timeZone` option supplies the visitor's, for example from a cookie that the
+app sets in the browser:
+
+```ts
+export const handle = createLocaleHandle(routing, {
+	runWithLocale,
+	timeZone: (event) => event.cookies.get('tz')
+});
+```
+
+```svelte
+<!-- in the root layout: set the cookie for later requests -->
+<script>
+	import { onMount } from 'svelte';
+	onMount(() => {
+		document.cookie = `tz=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}; path=/; max-age=31536000; samesite=lax`;
+	});
+</script>
+```
+
+On the first request no cookie exists yet, so SSR uses the server's zone and
+hydration can show different text. Render such dates in the browser only, or use
+an explicit `timeZone`, where that matters.
+
 `createLocaleHandle` options:
 
 | Option | Default | Meaning |
@@ -99,7 +130,9 @@ isolated.
 | `canonicalRedirect` | `true` | Redirects to the canonical localized URL. |
 | `redirectStatus` | `307` | Status code for canonical redirects. |
 | `localsKey` | `'locale'` | Property of `event.locals` that receives the locale. |
-| `setLocale` | none | `(event, locale) => void` that replaces the `locals` assignment. |
+| `requestedLocaleKey` | `'requestedLocale'` | Property of `event.locals` that receives the requested tag (`de-CH` for `de`). Use `false` to disable. |
+| `timeZone` | none | `(event) => zone`, the IANA zone `timeZone=local` formats in during SSR. A zone the server does not know is ignored. |
+| `setLocale` | none | `(event, locale, { requestedLocale, timeZone }) => void` that replaces the `locals` assignments. |
 | `htmlLanguageToken` | `'%runic.locale%'` | Placeholder replaced in `app.html`. Use `false` to disable. |
 
 The reroute hook removes the locale prefix before route matching, so one
@@ -122,6 +155,12 @@ export const load: LayoutServerLoad = ({ locals }) => ({
 `localeFromLocals(locals, routing, key?)` returns the typed locale or throws if
 the handle didn't set a supported one. Declare `locale` in `App.Locals` in
 `src/app.d.ts`.
+
+`requestedLocaleFromLocals(locals, routing, key?, localeKey?)` returns the
+requested tag, or the locale when the handle stored none. Return it from the
+layout load too and create the browser's locale source with
+`createLocaleSource({ initialLocale: data.requestedLocale })`, so hydration
+formats numbers and dates as the server did.
 
 ## Navigation
 

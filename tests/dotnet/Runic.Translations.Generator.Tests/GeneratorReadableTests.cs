@@ -91,23 +91,28 @@ internal sealed class GeneratorReadableTests
 
             internal @AppTextMessages(global::@Example.@Translations.@AppText text) => this.__text = text;
 
-            /// <summary>Formats <c>application.title</c>.</summary>
+            /// <summary>AppText</summary>
+            /// <remarks>Formats <c>application.title</c>.</remarks>
             public string @application_title => this.__text.r_6170706c69636174696f6e_r_7469746c65;
 
-            /// <summary>Formats <c>cart.items</c>.</summary>
+            /// <summary>{$count} items</summary>
+            /// <remarks>Formats <c>cart.items</c>.</remarks>
             /// <param name="count">Input <c>count</c>.</param>
             public string @cart_items(long @count) =>
                 this.__text.r_63617274_r_6974656d73(r_636f756e74: @count);
 
-            /// <summary>Formats <c>checkout.help</c>.</summary>
+            /// <summary>Read the {#link ref=guide}guide{/link} or {#action ref=retry}retry{/action}.</summary>
+            /// <remarks>Formats <c>checkout.help</c>.</remarks>
             public global::Runic.Translations.LocalizedTextContent<global::@Example.@Translations.@AppTextSlots.@checkout_help> @checkout_help => new(this.__text.r_636865636b6f7574_r_68656c70);
 
-            /// <summary>Formats <c>greeting</c>.</summary>
+            /// <summary>Hello {$name}</summary>
+            /// <remarks>Formats <c>greeting</c>.</remarks>
             /// <param name="name">Input <c>name</c>.</param>
             public string @greeting(string @name) =>
                 this.__text.r_6772656574696e67(r_6e616d65: @name);
 
-            /// <summary>Formats <c>profile.badge</c>.</summary>
+            /// <summary>Badge for {$user-name}</summary>
+            /// <remarks>Formats <c>profile.badge</c>.</remarks>
             /// <param name="r_757365722d6e616d65">Input <c>user-name</c>.</param>
             public string @profile_badge(string @r_757365722d6e616d65) =>
                 this.__text.r_70726f66696c65_r_6261646765(r_757365722d6e616d65: @r_757365722d6e616d65);

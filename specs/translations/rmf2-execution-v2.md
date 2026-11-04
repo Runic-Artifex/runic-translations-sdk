@@ -142,7 +142,8 @@ option permits a typed dynamic value.
 | `number` | `style` | string: `decimal`, `percent` | `decimal` |
 | `number` | `minimumFractionDigits` | int64: 0..6 | 0 |
 | `number` | `maximumFractionDigits` | int64: 0..6 | 6 for decimal; 4 for percent |
-| `date`, `time`, `datetime` | `style` | string: `iso`, `short`, `long` | `iso` |
+| `date`, `time`, `datetime` | `style` | string: `iso`, `short`, `medium`, `long`, `full` | `iso` |
+| `datetime` | `timeZone` | string: `local`, `utc` or an IANA time zone ID (at most 64 characters matching `^[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z0-9_+-]+)*$`) | `local` |
 | `runic:uuid` | `style` | string: `d`, `n`, `b`, `p` | `d` |
 | `runic:relative-time` | `unit` | string: `second`, `minute`, `hour`, `day`, `week`, `month`, `year` | `day` |
 | `runic:relative-time` | `numeric` | string: `always`, `auto` | `always` |
@@ -251,6 +252,97 @@ range, and cross-option checks. Invalid dynamic values are evaluation errors;
 they never select a different enum, clamp precision, silently use defaults, or
 coerce caller types. Defaults apply only to omitted options. The runtime branch
 must map this error to its public error API without turning it into output.
+
+### Localized formatting
+
+Numbers, percentages, dates and times format in the **formatting locale**: the
+canonical requested tag (the one the caller asked for, such as `de-CH`, before it
+resolves to a catalog locale) without its extensions and private-use subtags,
+when its language subtag equals the message's effective content locale's and
+both tags have the same **implied script**; otherwise the content locale. The
+implied script is the tag's explicit script, else the CLDR likely script of its
+language and region (`sr` → Cyrl, `sr-ME` → Latn, `zh` → Hans, `zh-TW` → Hant), else
+none. So `sr-Latn` over Cyrillic `sr` text, `zh-TW` over `zh` text and `zh-CN` over
+`zh-Hant` text format in the content locale, while `zh-TW` over `zh-Hant` and
+`de-CH` over `de` format in the requested one. The likely scripts come from CLDR
+48.2 for the languages CLDR writes in more than one script (`az bs ff ha kk ks ku
+ky mn ms pa sd shi sr tg ug uz vai yue zh`); a language without an entry has no
+implied script, so its tags match only when neither names a script.
+
+Extensions are dropped because the runtimes would apply them differently
+(`en-US-u-ca-buddhist` and `ja-JP-u-ca-japanese` format Gregorian dates as `en-US`
+and `ja-JP`; `-u-nu-` and `-u-hc-` are dropped too) and requested tags can come
+from untrusted input. Plural and ordinal rules, list patterns, relative time and
+the locale reported on content stay on the content locale. Content reports both
+(`.NET LocalizedTextContent.Locale`/`FormattingLocale`, ESM
+`locale`/`formatLocale`).
+
+Percentages use the formatting locale's positive or negative percent pattern from
+platform globalization (.NET `NumberFormatInfo.PercentPositivePattern`,
+`PercentNegativePattern`, `PercentSymbol` and `NegativeSign`; ESM the prefix and
+suffix around the digits of `Intl.NumberFormat` `formatToParts` with
+`style: "percent"`). A space in the pattern is U+00A0. The digits are the visible
+decimal, grouped as described under [digit grouping](#digit-grouping).
+
+Localized dates and times come from platform globalization by these rules:
+
+| Function | `short` | `medium` | `long` | `full` |
+| --- | --- | --- | --- | --- |
+| `date` | CLDR short date | CLDR medium date | CLDR long date | CLDR full date |
+| `time` | CLDR short time | CLDR medium time | CLDR medium time | CLDR medium time |
+| `datetime` | date and time in the style, joined by U+0020, in `timeZone` | | | |
+
+- A year is written in full, so short dates show the full year (.NET's short
+  date pattern; ESM replaces a shorter year field): a Gregorian year with at
+  least four digits, another calendar's year as its full number (Thai Buddhist
+  `4/11/2569`).
+- A `time` is a wall-clock time without a zone, so the longer styles do not add a
+  zone name.
+- `timeZone=local` is the host's zone (.NET `TimeZoneInfo.Local`, which .NET
+  caches until `TimeZoneInfo.ClearCachedData()`; ESM the default `Intl` zone, read
+  on every call). In ESM a resolver installed with `configureTimeZoneResolver`,
+  such as the server entry's request-scoped `runWithLocale(locale, operation, {
+  timeZone })`, supplies the zone instead; a zone it returns that the engine does
+  not know is ignored. `utc` is UTC and any other value is an IANA ID (.NET
+  `TimeZoneInfo.FindSystemTimeZoneById`). `iso` is always UTC and ignores
+  `timeZone`.
+- A zone the platform cannot resolve is an evaluation error whose message starts
+  `The time zone '<id>' is not available.` in both runtimes (.NET
+  `TranslationFormatException`, ESM `RangeError`); there is no fallback to UTC.
+  This covers unknown IDs and IDs missing from the platform's zone data: .NET
+  reads tzdata on Linux and macOS (images without tzdata, such as chiseled or
+  distroless ones, resolve no IANA zone and treat `local` as UTC) and converts
+  IANA IDs to Windows zones through ICU on Windows (NLS and invariant mode
+  resolve none). Windows zone data also lacks most historical rules, so instants
+  before about 2000 can differ from ESM's tzdata. A wall-clock year outside
+  1..9999 is an evaluation error too.
+- Digits are Latin, as for numbers; U+202F is written as U+0020, and a run of
+  one bidirectional mark (U+200E, U+200F, U+061C) is written once.
+- Without platform locale data (.NET `InvariantGlobalization`), the invariant
+  culture's patterns apply instead of an error, as for numbers.
+- .NET must run in ICU mode, the default on every platform, for these rules.
+  Windows NLS mode (`System.Globalization.UseNls`) lists other date patterns, so
+  there `medium` dates are the short pattern and `long` dates the full one, and
+  IANA zones are unavailable (see above); its output is not conformance-tested.
+
+The conformance corpus
+[`corpus/rmf2-date-percent-conformance.json`](corpus/rmf2-date-percent-conformance.json)
+gives every supported locale family's styles, time zones, percentages and
+formatting-locale cases; .NET and ESM must produce each expected string. Its
+documented tolerance covers characters that platform ICU versions write
+differently for the same punctuation: the space (U+0020, U+00A0, U+202F) and the
+apostrophe (U+0027, U+2019, as in the `de-CH` group separator `1'234`). Every
+other character must match exactly, except that a case can list `alternates`:
+the exact output of a platform ICU whose locale data differs. CI runs the corpus on Linux, Windows
+(`icu.dll`) and macOS (Apple's ICU), with the ESM half in Bun and Node. Platform
+data can also differ for
+non-Gregorian default calendars and, in ESM, for dates before the Gregorian
+reform of 1582, where `Intl` uses the Julian calendar.
+
+The ESM runtime also accepts a `Date` or an ISO 8601 string with seconds, an
+optional fraction and `Z` or an offset for a `datetime` input. It drops
+sub-second digits and keeps the canonical UTC carrier, so the transport form
+stays `yyyy-MM-ddTHH:mm:ssZ`.
 
 ## Annotations and markup
 

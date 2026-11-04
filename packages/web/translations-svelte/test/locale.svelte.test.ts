@@ -61,6 +61,32 @@ describe("Svelte locale adapter", () => {
     expect(host.unsubscribe).toHaveBeenCalledOnce();
   });
 
+  test("reports a source's requested tag and passes it to message calls", () => {
+    let locale: TestLocale = "de", requested = "de-CH";
+    const listeners = new Set<(value: TestLocale) => void>();
+    const regional: MutableLocaleSource<TestLocale> = {
+      getLocale: () => locale,
+      getRequestedLocale: () => requested,
+      setLocale(next) {
+        locale = next; requested = next;
+        for (const listener of listeners) listener(locale);
+      },
+      subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; },
+    };
+    const state = createSvelteLocale(regional);
+    expect([state.locale, state.requestedLocale, state.messageOptions.locale]).toEqual(["de", "de-CH", "de-CH"]);
+    regional.setLocale("en");
+    expect([state.locale, state.requestedLocale, state.messageOptions.locale]).toEqual(["en", "en", "en"]);
+    requested = "en-GB";
+    expect(state.refresh()).toBe("en");
+    expect(state.requestedLocale).toBe("en-GB");
+    state.dispose();
+
+    const plain = createSvelteLocale(source("de").value);
+    expect([plain.requestedLocale, plain.messageOptions.locale]).toEqual(["de", "de"]);
+    plain.dispose();
+  });
+
   test("keeps independently created request states isolated", () => {
     const englishSource = source("en");
     const germanSource = source("de");

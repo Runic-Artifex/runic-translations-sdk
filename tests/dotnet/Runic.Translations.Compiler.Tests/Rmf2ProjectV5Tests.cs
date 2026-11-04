@@ -88,7 +88,7 @@ internal sealed class Rmf2ProjectV5Tests
         Assert.True(bill.Structured, "Structured output obligation missing.");
         var german = linked.Locales.Single(locale => locale.Tag == "de").ResolvedResources.Single(resource => resource.Key == "account_total");
         var runtime = Rmf2RuntimeV5Tests.Lower(german.Message);
-        Assert.Equal("12,50%", runtime.Format([new("rate", .125m)], "de"));
+        Assert.Equal("12,50\u00A0%", runtime.Format([new("rate", .125m)], "de"));
         var billRuntime = Rmf2RuntimeV5Tests.Lower(linked.Locales.Single(locale => locale.Tag == "de").ResolvedResources.Single(resource => resource.Key == "account_bill").Message);
         Assert.True(billRuntime.FormatContent([new("count", 2L), new("rate", .125m)], "de").Nodes.Length > 0, "Linked rich message could not execute.");
         var reversed = TranslationCompiler.CompileRmf2ProjectV5(project, sources.Reverse()).Project!;

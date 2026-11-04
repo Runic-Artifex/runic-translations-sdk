@@ -361,6 +361,29 @@ internal sealed class CompositionTests
         Assert.Equal("grid en>fr|context en>fr", string.Join("|", seen), "only the winning switch raises events");
     }
 
+    [Test, DisplayName("a regional switch over the same catalog locale (de to de-CH) raises LocaleChanged and formats for the region")]
+    public async Task RegionalSwitchRaisesLocaleChanged()
+    {
+        TranslationContext context = await TranslationContext.CreateBuilder()
+            .Add(GridV1.Registration)
+            .BuildAsync("de");
+        var seen = new List<string>();
+        context.GetManager(GridId).LocaleChanged += (_, change) =>
+            seen.Add("grid " + change.OldLocale + ">" + change.NewLocale + " " + change.RequestedLocale + " " + change.LocaleResolution);
+        context.GetManager(GridId).SnapshotPublished += (_, published) => seen.Add("published " + published.RequestedLocale + " " + published.Reason);
+        context.LocaleChanged += (_, change) => seen.Add("context " + change.OldRequestedLocale + ">" + change.RequestedLocale);
+        string german = Text(context, GridId, "rows", new TextArgument("count", 1234567L));
+
+        await context.SetLocaleAsync("de-CH");
+        Assert.Equal("grid de>de de-CH Parent|published de-CH LocaleChanged|context de>de-CH", string.Join("|", seen), "events");
+        string swiss = Text(context, GridId, "rows", new TextArgument("count", 1234567L));
+        Assert.Equal(1234567L.ToString("#,0", System.Globalization.CultureInfo.GetCultureInfo("de-CH")) + " Zeilen", swiss, "Swiss grouping");
+        Assert.True(german != swiss, "de and de-CH group digits differently: " + german);
+
+        await context.SetLocaleAsync("de-CH");
+        Assert.Equal(3, seen.Count, "the same request raises nothing");
+    }
+
     [Test, DisplayName("events follow publication order and subscribers end on the latest locale when a handler switches again")]
     public async Task OverlappingSwitchEvents()
     {
@@ -382,8 +405,8 @@ internal sealed class CompositionTests
         await context.SetLocaleAsync("de");
         await nested!;
         // The grid's and the context's de events were superseded before they were raised; the fr events start from
-        // what each subscriber last saw (the grid shows en for fr, so it raises nothing).
-        Assert.Equal("app en>de|app de>fr|context en>fr", string.Join("|", seen), "events");
+        // what each subscriber last saw (the grid shows en for fr, but the requested tag changed from en to fr).
+        Assert.Equal("app en>de|app de>fr|grid en>en|context en>fr", string.Join("|", seen), "events");
         Assert.Equal("fr|fr|en", context.RequestedLocale + "|" + context.GetManager("app").CurrentLocale + "|" + context.GetManager(GridId).CurrentLocale,
             "final state");
     }

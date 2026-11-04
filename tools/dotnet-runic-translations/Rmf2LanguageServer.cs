@@ -30,6 +30,29 @@ internal sealed class Rmf2LanguageServer
     private bool _shutdown;
     private bool _fileOperations;
     private bool _configurationSync;
+    private bool _codeDescriptionSupport;
+    private readonly IRmf2ReviewStateSource _reviewState = IRmf2ReviewStateSource.None;
+    // Open buffers by file (FileKey). Clients spell one file's URI differently from .NET
+    // (`file:///c%3A/...` and percent-encoded `+ @ ( ) !` in VS Code), so whether a file is
+    // open, and which URI its publications use, is decided by its path, never by URI text.
+    private readonly Dictionary<string, string> _bufferPaths = new(PathComparer);
+    // Catalog diagnostics of project files that are not open buffers, per file. Several projects
+    // can compile one file (shared source roots); each contributes its own diagnostics, and the
+    // client receives their union, so one project's update or clear never erases another's.
+    private readonly Dictionary<string, ProjectFile> _projectFiles = new(PathComparer);
+    // The files each project contributes diagnostics to.
+    private readonly Dictionary<string, HashSet<string>> _projectFileDiagnostics = new(PathComparer);
+    // Diagnostics publications not yet sent, the latest per URI in the order they were made.
+    // A publication computed while a newer state revision is queued is held back, not dropped:
+    // the newest revision sends whatever it did not supersede, so no clear is ever lost.
+    private readonly Dictionary<string, (long Sequence, JsonObject Params)> _outbox = new(StringComparer.Ordinal);
+    private long _outboxSequence;
+    // Whether each project uses the direct MF2 layout, which decides a file's locale. Recorded
+    // whenever the project is loaded and dropped on project, configuration and watched-file
+    // changes, so runic/documentInfo does not read the catalog from disk on every editor switch.
+    private readonly Dictionary<string, bool> _projectLayouts = new(PathComparer);
+    private const int MaximumPublishedProjectFiles = 2_000;
+    private static readonly Regex DocumentedDiagnosticId = new("^RTR[0-9]{4}$", RegexOptions.CultureInvariant);
     private readonly List<string> _workspaceRoots = new();
     // Windows file systems are case-insensitive and clients disagree on drive
     // letter case (`file:///c%3A/...` versus `C:\...`). Project identity follows
@@ -101,7 +124,14 @@ internal sealed class Rmf2LanguageServer
                 }
                 finally
                 {
-                    lock (_revisionGate) { if (id is not null) pending.Remove(id.ToJsonString()); item.Cancellation.Dispose(); }
+                    lock (_revisionGate)
+                    {
+                        if (id is not null) pending.Remove(id.ToJsonString());
+                        item.Cancellation.Dispose();
+                        // A newer state revision is queued: it sends these publications, or
+                        // supersedes them, once it has been processed.
+                        if (item.Revision == _latestRevision) SendPublications();
+                    }
                 }
             }
             return 0;
@@ -146,6 +176,7 @@ internal sealed class Rmf2LanguageServer
         if (method == "initialize")
         {
             _configurationSync = args["initializationOptions"]?["runicConfigurationSync"]?.GetValue<bool>() == true;
+            _codeDescriptionSupport = args["capabilities"]?["textDocument"]?["publishDiagnostics"]?["codeDescriptionSupport"]?.GetValue<bool>() == true;
             if (args["workspaceFolders"] is JsonArray folders)
                 foreach (var folder in folders) _workspaceRoots.Add(LocalPath(folder!["uri"]!.GetValue<string>()));
             else if (args["rootUri"] is JsonValue rootUri) _workspaceRoots.Add(LocalPath(rootUri.GetValue<string>()));
@@ -241,10 +272,30 @@ internal sealed class Rmf2LanguageServer
             bool configuration = Path.GetFileName(LocalPath(uri)).Equals("runic.json", StringComparison.OrdinalIgnoreCase);
             try
             {
+                string? closedProject = !configuration && _buffers.ContainsKey(uri) ? BufferProject(uri, out _) : null;
                 _buffers.Remove(uri); _reportedBufferFailures.Remove(uri);
+                string key = FileKey(LocalPath(uri));
+                if (_bufferPaths.TryGetValue(key, out string? mapped) && mapped == uri)
+                {
+                    _bufferPaths.Remove(key);
+                    // The client may still have the file open under another spelling of its URI.
+                    string? other = _buffers.Keys.Order(StringComparer.Ordinal).FirstOrDefault(candidate => PathComparer.Equals(FileKey(LocalPath(candidate)), key));
+                    if (other is not null) _bufferPaths[key] = other;
+                }
                 if (configuration) _bufferProjects.Clear(); else _bufferProjects.Remove(uri);
+                if (configuration) _projectLayouts.Clear(); else if (closedProject is not null) _projectLayouts.Remove(closedProject);
                 Publish(uri, new JsonArray());
+                // Diagnostics other projects report for the saved file return to the client.
+                PublishProjectFile(key);
                 if (configuration) QueueGlobalDiagnosticsRefresh();
+                else if (closedProject is not null)
+                {
+                    // The closed file is still a project file: while its project has open buffers,
+                    // its saved content is validated again and its diagnostics stay in the Problems view.
+                    string[] remaining = BufferUris(closedProject).ToArray();
+                    if (remaining.Length > 0) ValidateAndPublish(closedProject, remaining);
+                    else ClearProjectFileDiagnostics(closedProject);
+                }
             }
             finally { FlushGlobalDiagnosticsRefresh(); }
             return null;
@@ -275,6 +326,7 @@ internal sealed class Rmf2LanguageServer
             finally { FlushGlobalDiagnosticsRefresh(); }
             return null;
         }
+        if (method == "runic/documentInfo") return DocumentInfo(uri);
         if (Path.GetFileName(LocalPath(uri)) == "runic.json") return null;
         if (method == "textDocument/codeAction")
         {
@@ -382,24 +434,43 @@ internal sealed class Rmf2LanguageServer
             if (entry is null) return null;
             string path = LocalPath(uri); var workspace = Workspace(path);
             string key = string.Join('_', workspace.LogicalPath(path, entry));
-            string content = entry.MessageSyntax is { } messageSyntax ? workspace.LanguageService.Hover(messageSyntax, MessageOffset(entry, atByte)) ?? key : key;
+            string summary = entry.MessageSyntax is { } messageSyntax ? workspace.LanguageService.Hover(messageSyntax, MessageOffset(entry, atByte)) ?? key : key;
+            var contractLines = new List<string>();
+            Rmf2ResourceNode? baseEntry = null;
+            string? reviewState = null;
+            string locale = workspace.Locale(path);
+            if (!entry.IsGroup)
+            {
+                // Translator context: the base-locale source of the same logical message, read from
+                // the workspace (open buffers included), so it is shown even when the catalog has errors.
+                IReadOnlyList<string> logical = workspace.LogicalPath(path, entry);
+                if (!string.Equals(locale, workspace.BaseLocale, StringComparison.OrdinalIgnoreCase))
+                    baseEntry = workspace.Documents.Where(document => string.Equals(workspace.Locale(document.Source.Path), workspace.BaseLocale, StringComparison.OrdinalIgnoreCase))
+                        .SelectMany(document => document.Nodes.Where(node => !node.IsGroup && workspace.LogicalPath(document.Source.Path, node).SequenceEqual(logical, StringComparer.Ordinal)))
+                        .FirstOrDefault();
+                reviewState = _reviewState.Describe(ProjectDirectory(path, allowExternalAncestor: true), key, locale);
+            }
             Rmf2ProjectCompilation compiled = workspace.Validate();
             if (compiled.Success && !entry.IsGroup)
             {
-                string locale = workspace.Locale(path);
                 Rmf2ProjectV5 project = compiled.Project!;
                 Rmf2TranslationV5? value = project.Locales.FirstOrDefault(item => item.Tag == locale)?.ResolvedResources.FirstOrDefault(item => item.Key == key);
                 Rmf2MessageContractV5? contract = project.CanonicalMessages.Concat(project.ExtraMessages).FirstOrDefault(item => item.Key == key);
-                if (value is not null) content += "\nContent locale: " + value.ContentLocale;
-                if (contract is { Inputs.Count: > 0 }) content += "\nInputs: " + string.Join(", ", contract.Inputs.Select(input => "$" + input.Name + ": " + input.Type));
-                if (contract is not null) content += "\nContent: " + contract.Content;
+                if (value is not null) contractLines.Add("Content locale: " + value.ContentLocale);
+                if (contract is { Inputs.Count: > 0 }) contractLines.Add("Inputs: " + string.Join(", ", contract.Inputs.Select(input => "$" + input.Name + ": " + input.Type)));
+                if (contract is not null) contractLines.Add("Content: " + contract.Content);
                 // The locked block structure translations must keep, one skeleton per distinct source variant.
                 if (contract is { Content: Rmf2DocumentProfileV5.Document })
-                    content += "\nStructure: " + string.Join(" | ", contract.Skeletons.Select(skeleton => skeleton.Length == 0 ? "(empty)" : skeleton));
+                    contractLines.Add("Structure: " + string.Join(" | ", contract.Skeletons.Select(skeleton => skeleton.Length == 0 ? "(empty)" : skeleton)));
                 string? fallback = project.Locales.FirstOrDefault(item => item.Tag == locale)?.FallbackTag;
-                if (fallback is not null) content += "\nFallback: " + fallback;
+                if (fallback is not null) contractLines.Add("Fallback: " + fallback);
             }
-            content += "\n" + string.Join("\n", entry.Comments) + "\n" + string.Join("\n", entry.Properties);
+            string content = new Rmf2HoverContent {
+                Summary = summary, BaseLocale = workspace.BaseLocale, BaseText = baseEntry?.Message,
+                BaseComments = baseEntry?.Comments ?? [],
+                BaseParameters = baseEntry?.Properties.Where(property => property.StartsWith("param ", StringComparison.Ordinal)).ToArray() ?? [],
+                ReviewState = reviewState, Contract = contractLines, Comments = entry.Comments, Properties = entry.Properties,
+            }.Render();
             return new JsonObject { ["contents"] = new JsonObject { ["kind"] = "plaintext", ["value"] = content } };
         }
         if (method is "textDocument/definition" or "textDocument/references" && entry?.MessageSyntax is { } symbolSyntax)
@@ -416,7 +487,7 @@ internal sealed class Rmf2LanguageServer
                 return new JsonArray(selected.Select(reference => {
                     var bytes = reference.Document.Source.GetUtf8Bytes();
                     string text = Utf8.GetString(bytes);
-                    return (JsonNode)new JsonObject { ["uri"] = new Uri(reference.Document.Source.Path).AbsoluteUri,
+                    return (JsonNode)new JsonObject { ["uri"] = ClientUri(reference.Document.Source.Path),
                         ["range"] = new JsonObject {
                             ["start"] = Position(text, Utf8.GetCharCount(bytes.AsSpan(0, reference.Resource.MessageByteMap[reference.Location.StartByte]))),
                             ["end"] = Position(text, Utf8.GetCharCount(bytes.AsSpan(0, reference.Resource.MessageByteMap[reference.Location.StartByte + reference.Location.LengthBytes]))),
@@ -430,7 +501,7 @@ internal sealed class Rmf2LanguageServer
             if (entry is null) return new JsonArray();
             string path = LocalPath(uri); var workspace = Workspace(path); var logical = workspace.LogicalPath(path, entry);
             return new JsonArray(workspace.Documents.SelectMany(document => document.Nodes.Where(node => workspace.LogicalPath(document.Source.Path, node).SequenceEqual(logical, StringComparer.Ordinal))
-                .Select(node => (JsonNode)new JsonObject { ["uri"] = new Uri(document.Source.Path).AbsoluteUri, ["range"] = Range(new Buffer(Utf8.GetString(document.Source.GetUtf8Bytes()), 0, document), node.NameLocation) })).ToArray());
+                .Select(node => (JsonNode)new JsonObject { ["uri"] = ClientUri(document.Source.Path), ["range"] = Range(new Buffer(Utf8.GetString(document.Source.GetUtf8Bytes()), 0, document), node.NameLocation) })).ToArray());
         }
         if (method == "textDocument/completion")
         {
@@ -443,6 +514,38 @@ internal sealed class Rmf2LanguageServer
         }
         return null;
     }
+    // The owning catalog and the file's locale, for a client's status display. A file that no
+    // project owns, or a project whose manifest cannot be read yet, answers with null members
+    // rather than an error: the client shows the state, not a failure.
+    private JsonObject DocumentInfo(string uri)
+    {
+        string path = LocalPath(uri);
+        bool configuration = Path.GetFileName(path).Equals("runic.json", StringComparison.OrdinalIgnoreCase);
+        string? project = configuration ? Path.GetDirectoryName(Path.GetFullPath(path)) : BufferProject(uri, out _);
+        var result = new JsonObject { ["project"] = null, ["catalog"] = null, ["baseLocale"] = null, ["locale"] = null };
+        if (project is null) return result;
+        string manifestPath = Path.Combine(project, "runic.json");
+        result["project"] = ClientUri(manifestPath);
+        try
+        {
+            byte[] bytes = TryGetBuffer(manifestPath, out _, out Buffer? manifestBuffer) ? Utf8.GetBytes(manifestBuffer.Text) : File.ReadAllBytes(manifestPath);
+            if (JsonNode.Parse(bytes) is JsonObject manifest)
+            {
+                if (manifest["catalog"] is JsonValue catalog && catalog.TryGetValue(out string? catalogId)) result["catalog"] = catalogId;
+                if (manifest["baseLocale"] is JsonValue baseLocale && baseLocale.TryGetValue(out string? baseTag)) result["baseLocale"] = baseTag;
+            }
+            if (!configuration)
+            {
+                // The locale depends only on the path and the project's layout. The layout is
+                // recorded whenever the project is validated, which every edit already does.
+                if (!_projectLayouts.TryGetValue(project, out bool direct)) direct = Workspace(project, BufferUris(project).ToArray()).IsDirect;
+                result["locale"] = Rmf2Workspace.Locale(path, direct);
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or InvalidOperationException or ArgumentException or TranslationAuthoringException or ToolUsageException or ToolDiagnosticException) { }
+        return result;
+    }
+
     // Physical source location of a message byte range.
     private static TextSourceLocation MessageLocation(Buffer buffer, Rmf2ResourceNode node, int from, int to)
     {
@@ -490,10 +593,24 @@ internal sealed class Rmf2LanguageServer
     // TranslationSource uses portable separators, including on Windows. Buffer overlays
     // must use the same key as disk sources or the workspace receives duplicates.
     private static string LocalPath(string uri) => new Uri(uri).LocalPath.Replace('\\', '/');
+    // One key per file, whatever URI spelling or relative form names it; compared with PathComparer.
+    internal static string FileKey(string path) => Path.GetFullPath(path).Replace('\\', '/');
+
+    // The open buffer of a file, found by path rather than by the URI text the client chose.
+    private bool TryGetBuffer(string path, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? uri,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Buffer? buffer)
+    {
+        buffer = null;
+        return _bufferPaths.TryGetValue(FileKey(path), out uri) && _buffers.TryGetValue(uri, out buffer);
+    }
+
+    // The URI the client uses for an open file; .NET's form for a closed one.
+    private string ClientUri(string path) => TryGetBuffer(path, out string? uri, out _) ? uri : new Uri(path).AbsoluteUri;
 
     private void RefreshProjectIndex(bool rescanWorkspace)
     {
         _bufferProjects.Clear();
+        _projectLayouts.Clear();
         if (rescanWorkspace)
             ReplaceProjectIndex(_workspaceRoots, _diskProjectDirectories, MaximumProjectIndexEntries, _revisionGate, null, _requestCancellation);
         _projectDirectories.Clear();
@@ -589,7 +706,7 @@ internal sealed class Rmf2LanguageServer
     {
         string path = Path.Combine(directory, "runic.json");
         if (IsRegularManifestFile(path)) return true;
-        return !PathEntryExists(path) && _buffers.ContainsKey(new Uri(path).AbsoluteUri);
+        return !PathEntryExists(path) && TryGetBuffer(path, out _, out _);
     }
 
     private bool IsSafeWorkspacePath(string path)
@@ -651,7 +768,7 @@ internal sealed class Rmf2LanguageServer
         while (directory is not null && IsWithin(root, directory))
         {
             string config = Path.Combine(directory, "runic.json");
-            bool buffered = _buffers.ContainsKey(new Uri(config).AbsoluteUri) && (!PathEntryExists(config) || IsRegularManifestFile(config));
+            bool buffered = TryGetBuffer(config, out _, out _) && (!PathEntryExists(config) || IsRegularManifestFile(config));
             if (IsRegularManifestFile(config) || buffered) return directory;
             if (string.Equals(directory, root, StringComparison.Ordinal)) break;
             directory = Path.GetDirectoryName(directory);
@@ -724,7 +841,7 @@ internal sealed class Rmf2LanguageServer
         string projectPath = Path.Combine(directory, "runic.json");
         if (PathEntryExists(projectPath) && !IsRegularManifestFile(projectPath)) return [];
         byte[] bytes;
-        if (_buffers.TryGetValue(new Uri(projectPath).AbsoluteUri, out Buffer? projectBuffer)) bytes = Utf8.GetBytes(projectBuffer.Text);
+        if (TryGetBuffer(projectPath, out _, out Buffer? projectBuffer)) bytes = Utf8.GetBytes(projectBuffer.Text);
         else
         {
             try { bytes = File.ReadAllBytes(projectPath); }
@@ -755,7 +872,7 @@ internal sealed class Rmf2LanguageServer
         string projectPath = Path.Combine(directory, "runic.json");
         if (!IsRegularManifestFile(projectPath))
             throw new InvalidOperationException("Translation project manifests must be regular non-linked runic.json files.");
-        _buffers.TryGetValue(new Uri(projectPath).AbsoluteUri, out var projectBuffer);
+        TryGetBuffer(projectPath, out _, out Buffer? projectBuffer);
         CompilerInputs inputs = InputFiles.ReadProject(directory, projectBuffer is null ? null : new TranslationSource(projectPath, Utf8.GetBytes(projectBuffer.Text)));
         var sources = inputs.Messages.Select(s => new TranslationSource(Path.GetFullPath(s.Path), s.GetUtf8Bytes())).ToDictionary(s => s.Path, SourcePathComparer);
         // A project outside every workspace root was reached through the
@@ -787,7 +904,9 @@ internal sealed class Rmf2LanguageServer
         string root = directory;
         foreach (string file in sources.Keys)
             while (!IsWithin(root, file)) root = Path.GetDirectoryName(root)!;
-        return _syntaxCache.Create(root, new TranslationSource(Path.GetFullPath(inputs.Project.Path), inputs.Project.GetUtf8Bytes()), sources.Values, _requestCancellation);
+        Rmf2Workspace workspace = _syntaxCache.Create(root, new TranslationSource(Path.GetFullPath(inputs.Project.Path), inputs.Project.GetUtf8Bytes()), sources.Values, _requestCancellation);
+        _projectLayouts[directory] = workspace.IsDirect;
+        return workspace;
     }
 
     private IEnumerable<string> BufferUris(string projectDirectory)
@@ -806,10 +925,12 @@ internal sealed class Rmf2LanguageServer
         var edits = new JsonArray();
         foreach (var edit in plan.Edits)
         {
-            string path = Path.GetFullPath(edit.RelativePath, plan.Root); string uri = new Uri(path).AbsoluteUri;
+            string path = Path.GetFullPath(edit.RelativePath, plan.Root);
+            // An open document is edited under the URI the client opened it with.
+            TryGetBuffer(path, out string? openUri, out Buffer? buffer);
+            string uri = openUri ?? new Uri(path).AbsoluteUri;
             if (edit.Kind == TranslationWorkspaceEditKind.Create) edits.Add((JsonNode)new JsonObject { ["kind"] = "create", ["uri"] = uri });
             if (edit.Kind == TranslationWorkspaceEditKind.Delete) { edits.Add((JsonNode)new JsonObject { ["kind"] = "delete", ["uri"] = uri }); continue; }
-            _buffers.TryGetValue(uri, out Buffer? buffer);
             string before = edit.Kind == TranslationWorkspaceEditKind.Create ? "" : buffer?.Text ?? File.ReadAllText(path, Utf8);
             edits.Add((JsonNode)new JsonObject {
                 ["textDocument"] = new JsonObject { ["uri"] = uri, ["version"] = buffer is null ? null : JsonValue.Create(buffer.Version) },
@@ -832,32 +953,48 @@ internal sealed class Rmf2LanguageServer
             ? Rmf2ResourceReader.AnalyzeDirect(source)
             : Rmf2ResourceReader.Analyze(source);
         var buffer = new Buffer(text, version, syntax); _buffers[uri] = buffer;
+        _bufferPaths[FileKey(LocalPath(uri))] = uri;
         if (configuration)
         {
             // A configuration overlay can add, remove, or remount source roots.
             // Rebuild ownership before validating every resulting project group;
             // otherwise buffers from the old mapping retain stale diagnostics.
             _bufferProjects.Clear();
+            _projectLayouts.Clear();
             QueueGlobalDiagnosticsRefresh();
             return;
         }
         _bufferProjects.Remove(uri);
-        IReadOnlyList<TranslationDiagnostic> catalogDiagnostics = Array.Empty<TranslationDiagnostic>();
-        string[] group = [uri];
-        try
+        string? project = BufferProject(uri, out Exception? unresolved);
+        if (project is null)
         {
-            string project = BufferProject(uri, out Exception? unresolved) ?? throw unresolved!;
-            group = BufferUris(project).ToArray();
-            catalogDiagnostics = Workspace(project, group).Validate().Diagnostics;
-            // A later failure after recovery is worth reporting again.
-            _reportedBufferFailures.Remove(uri);
-        }
-        catch (Exception error) when (error is ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or InvalidOperationException or IOException or FormatException or OverflowException or TranslationFormatException or TranslationPackException or TranslationContractException or System.Text.Json.JsonException or TranslationAuthoringException) {
             // Without a resolvable project only the buffer's own syntax
             // diagnostics are published; the reason is logged, not swallowed.
-            ReportBufferFailure(uri, error);
+            ReportBufferFailure(uri, unresolved!);
+            PublishDiagnostics(Array.Empty<TranslationDiagnostic>(), [uri], null);
+            return;
         }
-        PublishDiagnostics(catalogDiagnostics, group);
+        ValidateAndPublish(project, BufferUris(project).ToArray());
+    }
+
+    // Validates one project with its open buffers overlaid and publishes the result for every
+    // project file: the open buffers and, from disk, the closed files that carry diagnostics.
+    private void ValidateAndPublish(string project, IReadOnlyCollection<string> group)
+    {
+        IReadOnlyList<TranslationDiagnostic> diagnostics = Array.Empty<TranslationDiagnostic>();
+        try
+        {
+            diagnostics = Workspace(project, group).Validate().Diagnostics;
+            // A later failure after recovery is worth reporting again.
+            foreach (string uri in group) _reportedBufferFailures.Remove(uri);
+        }
+        catch (Exception error) when (error is ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or InvalidOperationException or IOException or FormatException or OverflowException or TranslationFormatException or TranslationPackException or TranslationContractException or System.Text.Json.JsonException or TranslationAuthoringException)
+        {
+            foreach (string uri in group) ReportBufferFailure(uri, error);
+            if (TryGetBuffer(Path.Combine(project, "runic.json"), out string? configUri, out Buffer? config))
+                diagnostics = ConfigDiagnostics(new TranslationSource(LocalPath(configUri), Utf8.GetBytes(config.Text)));
+        }
+        PublishDiagnostics(diagnostics, group, project);
     }
 
     private void QueueGlobalDiagnosticsRefresh(bool rescanWorkspace = false)
@@ -872,17 +1009,14 @@ internal sealed class Rmf2LanguageServer
         bool rescanWorkspace = _projectIndexRescanPending;
         RefreshDiagnostics(rescanWorkspace);
         if (rescanWorkspace) _projectIndexRescanPending = false;
-        // The reader can queue a newer state revision while the scan or project
-        // validations are running. Publications were suppressed in that case;
-        // retain the dirty bit so the newest state notification retries once.
-        lock (_revisionGate)
-            if (_processedRevision == _latestRevision) _globalDiagnosticsRefreshPending = false;
+        // A state revision queued meanwhile does not lose these results: its
+        // publications wait in the outbox until the newest revision sends them.
+        _globalDiagnosticsRefreshPending = false;
     }
 
     private void RefreshDiagnostics(bool rescanWorkspace)
     {
         RefreshProjectIndex(rescanWorkspace);
-        if (_buffers.Count == 0) return;
         var groups = new SortedDictionary<string, List<string>>(PathComparer);
         var unresolved = new List<string>();
         foreach (string uri in _buffers.Keys.Order(StringComparer.Ordinal))
@@ -892,48 +1026,160 @@ internal sealed class Rmf2LanguageServer
             if (!groups.TryGetValue(project, out List<string>? group)) groups.Add(project, group = []);
             group.Add(uri);
         }
-        foreach (var group in groups)
-        {
-            IReadOnlyList<TranslationDiagnostic> diagnostics = Array.Empty<TranslationDiagnostic>();
-            try { diagnostics = Workspace(group.Key, group.Value).Validate().Diagnostics; }
-            catch (Exception error) when (error is ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or InvalidOperationException or IOException or FormatException or OverflowException or TranslationFormatException or TranslationPackException or TranslationContractException or System.Text.Json.JsonException or TranslationAuthoringException)
-            {
-                foreach (string uri in group.Value) ReportBufferFailure(uri, error);
-                string configUri = new Uri(Path.Combine(group.Key, "runic.json")).AbsoluteUri;
-                if (_buffers.TryGetValue(configUri, out Buffer? config))
-                    diagnostics = ConfigDiagnostics(new TranslationSource(LocalPath(configUri), Utf8.GetBytes(config.Text)));
-            }
-            PublishDiagnostics(diagnostics, group.Value);
-        }
+        // A project without open buffers no longer owns diagnostics in the client.
+        foreach (string project in _projectFileDiagnostics.Keys.Where(project => !groups.ContainsKey(project)).ToArray())
+            ClearProjectFileDiagnostics(project);
+        foreach (var group in groups) ValidateAndPublish(group.Key, group.Value);
         // An unresolved buffer has no project whose catalog diagnostics can be
         // attributed safely. Publish only its own syntax diagnostics.
-        foreach (string uri in unresolved) PublishDiagnostics(Array.Empty<TranslationDiagnostic>(), [uri]);
+        foreach (string uri in unresolved) PublishDiagnostics(Array.Empty<TranslationDiagnostic>(), [uri], null);
     }
 
-    private void PublishDiagnostics(IReadOnlyList<TranslationDiagnostic> catalogDiagnostics, IEnumerable<string> uris)
+    private void PublishDiagnostics(IReadOnlyList<TranslationDiagnostic> catalogDiagnostics, IEnumerable<string> uris, string? project)
     {
+        // Closed files first: a file that has just been opened withdraws its closed-file
+        // publication here, before its buffer publication below, so a client that maps both
+        // URI spellings to one resource never applies the withdrawal after the buffer's diagnostics.
+        if (project is not null) PublishProjectFileDiagnostics(project, catalogDiagnostics);
         foreach (string uri in uris)
         {
             if (!_buffers.TryGetValue(uri, out Buffer? current)) continue;
-            string path = LocalPath(uri);
-            var diagnostics = current.Syntax.Diagnostics.Concat(catalogDiagnostics.Where(d => PathComparer.Equals(Path.GetFullPath(d.Location.Path).Replace('\\', '/'), path)))
+            string path = FileKey(LocalPath(uri));
+            PublishProjectFile(path);
+            var diagnostics = current.Syntax.Diagnostics.Concat(catalogDiagnostics.Where(d => PathComparer.Equals(DiagnosticPath(d), path)))
                 .DistinctBy(d => (d.Id, d.Location.StartByte, d.Location.LengthBytes, d.Message));
-            Publish(uri, new JsonArray(diagnostics.Select(d => (JsonNode)new JsonObject {
-                ["range"] = Range(current, d.Location), ["severity"] = d.Severity switch { TranslationDiagnosticSeverity.Error => 1, TranslationDiagnosticSeverity.Warning => 2, _ => 3 },
-                ["code"] = d.Id, ["source"] = "runic-rmf2", ["message"] = d.Message,
-            }).ToArray()));
+            Publish(uri, new JsonArray(diagnostics.Select(d => (JsonNode)Diagnostic(d, Range(current, d.Location))).ToArray()));
         }
+    }
+
+    // Catalog diagnostics located in project files that are not open (a translation that lacks a
+    // message, a closed runic.json) are published from the saved file, so the Problems view shows
+    // the whole catalog rather than only the open buffers.
+    private void PublishProjectFileDiagnostics(string project, IReadOnlyList<TranslationDiagnostic> catalogDiagnostics)
+    {
+        var files = catalogDiagnostics.Where(d => !string.IsNullOrEmpty(d.Location.Path))
+            .GroupBy(DiagnosticPath, PathComparer)
+            .Where(file => !_bufferPaths.ContainsKey(file.Key))
+            .OrderBy(file => file.Key, StringComparer.Ordinal)
+            .Take(MaximumPublishedProjectFiles);
+        if (!_projectFileDiagnostics.TryGetValue(project, out HashSet<string>? contributed))
+            _projectFileDiagnostics[project] = contributed = new HashSet<string>(PathComparer);
+        var current = new HashSet<string>(PathComparer);
+        foreach (var file in files)
+        {
+            _requestCancellation.ThrowIfCancellationRequested();
+            var located = file.DistinctBy(d => (d.Id, d.Location.StartByte, d.Location.LengthBytes, d.Message)).ToArray();
+            // Keystrokes in another file revalidate the project; a closed file is read again only
+            // when its diagnostics or its saved content changed since the last publication.
+            string? stamp = FileStamp(file.Key);
+            if (stamp is null) continue;
+            string fingerprint = stamp + "\n" + string.Join("\n", located.Select(d => string.Join('\u001f', d.Id, d.Severity, d.Location.StartByte, d.Location.LengthBytes, d.Message)));
+            if (_projectFiles.TryGetValue(file.Key, out ProjectFile? entry) && entry.Contributions.TryGetValue(project, out var previous) && previous.Fingerprint == fingerprint)
+            {
+                current.Add(file.Key);
+                continue;
+            }
+            if (!TryReadProjectFile(file.Key, out string text, out TranslationSource? encoded)) continue;
+            var payload = new JsonArray(located.Select(d => (JsonNode)Diagnostic(d, encoded is null ? EmptyRange() : Range(text, encoded, d.Location))).ToArray());
+            if (entry is null) _projectFiles[file.Key] = entry = new ProjectFile();
+            entry.Contributions[project] = (fingerprint, payload);
+            current.Add(file.Key); contributed.Add(file.Key);
+            PublishProjectFile(file.Key);
+        }
+        foreach (string file in contributed.Where(file => !current.Contains(file)).ToArray())
+            RemoveProjectFileContribution(project, contributed, file);
+        if (contributed.Count == 0) _projectFileDiagnostics.Remove(project);
+    }
+
+    private void ClearProjectFileDiagnostics(string project)
+    {
+        if (!_projectFileDiagnostics.Remove(project, out HashSet<string>? contributed)) return;
+        foreach (string file in contributed.ToArray()) RemoveProjectFileContribution(project, contributed, file);
+    }
+
+    private void RemoveProjectFileContribution(string project, HashSet<string> contributed, string file)
+    {
+        contributed.Remove(file);
+        if (_projectFiles.TryGetValue(file, out ProjectFile? entry) && entry.Contributions.Remove(project)) PublishProjectFile(file);
+    }
+
+    // Publishes the union of every project's diagnostics for a closed file, or withdraws the
+    // closed-file publication when the file is open or no project reports it any more.
+    private void PublishProjectFile(string file)
+    {
+        if (!_projectFiles.TryGetValue(file, out ProjectFile? entry)) return;
+        bool open = _bufferPaths.TryGetValue(file, out string? bufferUri);
+        if (open || entry.Contributions.Count == 0)
+        {
+            // An open file's diagnostics come from its buffer under the client's URI. Clearing
+            // the same URI would erase them; another spelling of it is cleared before the
+            // buffer is published (PublishDiagnostics publishes closed files first).
+            if (entry.SentUri is { } sent && sent != bufferUri) Publish(sent, new JsonArray());
+            entry.SentUri = null;
+            if (entry.Contributions.Count == 0) _projectFiles.Remove(file);
+            return;
+        }
+        entry.SentUri ??= new Uri(file).AbsoluteUri;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var union = new JsonArray();
+        foreach (var contribution in entry.Contributions.OrderBy(item => item.Key, StringComparer.Ordinal))
+            foreach (JsonNode? diagnostic in contribution.Value.Payload)
+                if (seen.Add(diagnostic!.ToJsonString())) union.Add(diagnostic.DeepClone());
+        Publish(entry.SentUri, union);
+    }
+
+    private static string? FileStamp(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            if (!info.Exists || (info.Attributes & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != 0) return null;
+            return info.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) + ":" + info.LastWriteTimeUtc.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return null; }
+    }
+
+    // Reads a closed project file for diagnostic ranges. A linked or unreadable file is skipped;
+    // a file that is not valid UTF-8 (RTR0001) is published at its start.
+    private static bool TryReadProjectFile(string path, out string text, out TranslationSource? encoded)
+    {
+        text = ""; encoded = null;
+        if (!TryGetPathAttributes(path, out FileAttributes attributes) || (attributes & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != 0) return false;
+        byte[] bytes;
+        try { bytes = File.ReadAllBytes(path); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return false; }
+        try { text = Utf8.GetString(bytes); encoded = new TranslationSource(path, bytes); }
+        catch (DecoderFallbackException) { text = ""; encoded = null; }
+        return true;
+    }
+
+    private static string DiagnosticPath(TranslationDiagnostic diagnostic) => FileKey(diagnostic.Location.Path);
+
+    private JsonObject Diagnostic(TranslationDiagnostic diagnostic, JsonObject range)
+    {
+        var result = new JsonObject {
+            ["range"] = range, ["severity"] = diagnostic.Severity switch { TranslationDiagnosticSeverity.Error => 1, TranslationDiagnosticSeverity.Warning => 2, _ => 3 },
+            ["code"] = diagnostic.Id, ["source"] = "runic-rmf2", ["message"] = diagnostic.Message,
+        };
+        // Every RTR ID has an entry in docs/guides/translations/diagnostics.md; the link names
+        // the release tag of this tool, as the C# generator's help links do.
+        if (_codeDescriptionSupport && DocumentedDiagnosticId.IsMatch(diagnostic.Id))
+            result["codeDescription"] = new JsonObject { ["href"] = RunicReleaseLinks.Diagnostic(diagnostic.Id) };
+        return result;
     }
 
     private IReadOnlyList<TranslationDiagnostic> ConfigDiagnostics(TranslationSource project)
         => TranslationCompiler.CompileRmf2ProjectV5(project, Array.Empty<TranslationSource>(), null, _requestCancellation).Diagnostics;
-    private void Publish(string uri, JsonArray diagnostics)
+    // Queues a publication; the latest per URI replaces an earlier unsent one and moves to the end.
+    private void Publish(string uri, JsonArray diagnostics) =>
+        _outbox[uri] = (++_outboxSequence, new JsonObject { ["uri"] = uri, ["version"] = _buffers.TryGetValue(uri, out var buffer) ? JsonValue.Create(buffer.Version) : null, ["diagnostics"] = diagnostics });
+
+    // Caller holds _revisionGate and has processed the latest state revision.
+    private void SendPublications()
     {
-        lock (_revisionGate)
-        {
-            if (_processedRevision != _latestRevision) return;
-            Send(new JsonObject { ["jsonrpc"] = "2.0", ["method"] = "textDocument/publishDiagnostics", ["params"] = new JsonObject { ["uri"] = uri, ["version"] = _buffers.TryGetValue(uri, out var buffer) ? JsonValue.Create(buffer.Version) : null, ["diagnostics"] = diagnostics } });
-        }
+        foreach (var publication in _outbox.Values.OrderBy(item => item.Sequence))
+            Send(new JsonObject { ["jsonrpc"] = "2.0", ["method"] = "textDocument/publishDiagnostics", ["params"] = publication.Params });
+        _outbox.Clear();
     }
     private JsonObject SemanticTokens(Buffer buffer)
     {
@@ -972,11 +1218,14 @@ internal sealed class Rmf2LanguageServer
         }
         return new JsonObject { ["data"] = data, ["resultId"] = buffer.Version.ToString(System.Globalization.CultureInfo.InvariantCulture) };
     }
-    private JsonObject Range(Buffer buffer, TextSourceLocation location)
+    private JsonObject Range(Buffer buffer, TextSourceLocation location) => Range(buffer.Text, buffer.Encoded, location);
+    private JsonObject Range(string text, TranslationSource encoded, TextSourceLocation location)
     {
-        Rmf2DiagnosticSpan span = Rmf2DiagnosticActions.GetSpan(buffer.Encoded, location);
-        return new JsonObject { ["start"] = Position(buffer.Text, span.StartUtf16), ["end"] = Position(buffer.Text, span.StartUtf16 + span.LengthUtf16) };
+        Rmf2DiagnosticSpan span = Rmf2DiagnosticActions.GetSpan(encoded, location);
+        return new JsonObject { ["start"] = Position(text, span.StartUtf16), ["end"] = Position(text, span.StartUtf16 + span.LengthUtf16) };
     }
+    private static JsonObject EmptyRange() => new() {
+        ["start"] = new JsonObject { ["line"] = 0, ["character"] = 0 }, ["end"] = new JsonObject { ["line"] = 0, ["character"] = 0 } };
     private JsonObject QuickFixAction(string uri, Buffer buffer, Rmf2DiagnosticQuickFix fix, bool preferred)
     {
         // Repairs were authorized by the shared compiler against this immutable buffer syntax.
@@ -1039,6 +1288,13 @@ internal sealed class Rmf2LanguageServer
         // The UTF-8 source of Text, encoded once per buffer: folding ranges and the outline map
         // many block locations of one immutable buffer.
         internal TranslationSource Encoded => _encoded ??= new TranslationSource(Syntax.Source.Path, Utf8.GetBytes(Text));
+    }
+    private sealed class ProjectFile
+    {
+        // Per project directory: a fingerprint of the diagnostics and the saved file, and their payload.
+        internal Dictionary<string, (string Fingerprint, JsonArray Payload)> Contributions { get; } = new(PathComparer);
+        // The URI of the closed-file publication the client currently shows, if any.
+        internal string? SentUri { get; set; }
     }
     private sealed class PlatformSourcePathComparer : IEqualityComparer<string>
     {

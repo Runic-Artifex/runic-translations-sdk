@@ -179,6 +179,19 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
     private ConcurrentDictionary<string, CompiledTranslationSnapshot>? _requestViews;
 
     /// <inheritdoc />
+    public bool TryGetContentLocale(TranslationKey key, out string contentLocale)
+    {
+        if (TryGetKeyIndex(key, out int index) && _messages[index] is CompiledTextMessage message)
+        {
+            contentLocale = message.Rmf2V5?.ContentLocale ?? message.ContentLocale ?? Locale;
+            return true;
+        }
+
+        contentLocale = string.Empty;
+        return false;
+    }
+
+    /// <inheritdoc />
     public bool TryGet(TranslationKey key, out string pattern)
     {
         if (TryGetKeyIndex(key, out int index) && _patterns[index] is string resolved)
@@ -216,7 +229,9 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         }
 
         if (message.Rmf2V5 is null) ValidateArguments(_definitions[index], arguments);
-        return CompiledTextMessageRuntime.Format(message, arguments, Locale, _valueFormatter);
+        string text = CompiledTextMessageRuntime.Format(message, arguments, Locale, _valueFormatter, requestedLocale: RequestedLocale);
+        ReportFallback(index, message);
+        return text;
     }
 
     /// <inheritdoc />
@@ -229,7 +244,9 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         // that contract-wide FormatContent surface.
         if (!message.HasMarkup && message.Rmf2V5 is null) throw new TranslationFormatException("The resource does not produce structured content.");
         if (message.Rmf2V5 is null) ValidateArguments(_definitions[index], arguments);
-        return CompiledTextMessageRuntime.FormatContent(message, arguments, Locale, _valueFormatter);
+        LocalizedTextContent content = CompiledTextMessageRuntime.FormatContent(message, arguments, Locale, _valueFormatter, requestedLocale: RequestedLocale);
+        ReportFallback(index, message);
+        return content;
     }
 
     /// <inheritdoc />
@@ -333,6 +350,14 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         }
 
         return -1;
+    }
+
+    // Raised after a successful format, as the ESM runtime reports after building the message. Only RMF2 v5 messages
+    // record their effective content locale; the event costs nothing without subscribers.
+    private void ReportFallback(int index, CompiledTextMessage message)
+    {
+        if (TranslationEvents.HasFallbackListeners && message.Rmf2V5?.ContentLocale is string content && !string.Equals(content, Locale, StringComparison.Ordinal))
+            TranslationEvents.RaiseFallback(new TranslationFallbackEventArgs(Catalog, _definitions[index].Name, Locale, content, RequestedLocale));
     }
 
     private bool TryGetKeyIndex(TranslationKey key, out int index)
