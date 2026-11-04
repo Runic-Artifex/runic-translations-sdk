@@ -3,8 +3,15 @@
 `--emit-esm` emits `{catalog}.esm-v5/` beneath the selected output directory.
 Its module inventory is `web-module-manifest-v3.json` and its ESM ABI is 4. Each
 canonical message has an injectively named internal module under `messages/`;
-`messages.js` exposes the tree-shakable application namespace `m` and
-`messages.d.ts` supplies exact-key, typed inputs.
+`messages.js` exposes the application namespace `m` and `messages.d.ts`
+supplies exact-key, typed inputs. `m` is a module namespace object
+(`export * as m from "./messages/_index.js"`, where `_index.js` re-exports each
+message module under its key), so a bundler keeps only the messages an
+application calls as `m.key()`. A key that is not an ASCII identifier is an
+ES2022 string export name. Passing `m` as a whole, as a text-reference handler
+map or to `Object.keys`, keeps every message. Like the frozen object of earlier
+releases, `m` cannot be extended or assigned to, but `Object.isFrozen(m)` is
+`false` because module namespace properties are reported as writable.
 `runtime.js` owns locale canonicalization, fallback, explicit locale overrides,
 input validation, and portable scalar formatting. Generated messages consume the
 compiler AST and never parse authoring patterns or fetch JSON.
@@ -15,7 +22,15 @@ such as `["Hello ", ["name"]]`; any other message is minified AST JSON. A locale
 whose message comes from its fallback shares the fallback's object instead of a
 copy. The runtime rebuilds the same normalized AST from the parts and validates
 every message when its module loads, so the encoding does not change what a
-message formats. For a catalog of about 1,300 messages in two locales, the
+message formats. Each message module also carries its own contract (inputs,
+content profile and slots), and its data sits in a `/* @__PURE__ */` call, so a
+bundle holds only the contracts and text of the messages it calls. The catalog's
+whole contract tables (`rmf2Contract`, `messageContracts`) are in `dynamic.js`,
+which only applications that decode locale artifacts import. For the
+Translations Editor's catalog (759 messages, two locales), a Vite build that
+calls one message through `m` shrank from 1,024,952 bytes to 65,790 bytes
+(786,138 to 46,490 minified), the same as importing that message's module
+directly; `runtime.js` shrank from 270,049 to 98,162 bytes. For a catalog of about 1,300 messages in two locales, the
 minified bundle of all messages shrank from 2.0 MB to 0.93 MB, of which
 0.32 MB is `runtime.js`.
 

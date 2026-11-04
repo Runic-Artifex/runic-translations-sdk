@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -261,7 +262,8 @@ internal sealed class Rmf2EsmV5Tests
             string script = Path.Combine(directory, "integer-options.mjs");
             File.WriteAllText(script, """
                 import { m } from "./app.esm-v5/messages.js";
-                import { bindMarkup, createInlineRenderer, defineMarkup, rmf2Contract, rmf2RuntimeAbiVersion } from "./app.esm-v5/runtime.js";
+                import { bindMarkup, createInlineRenderer, defineMarkup, rmf2RuntimeAbiVersion } from "./app.esm-v5/runtime.js";
+                import { rmf2Contract } from "./app.esm-v5/dynamic.js";
                 const check=(condition,message)=>{if(!condition)throw new Error(message);};
                 check(rmf2RuntimeAbiVersion===3&&rmf2Contract.version===2,"contract markers");
                 const exported=rmf2Contract.contracts["app:step"];
@@ -308,6 +310,58 @@ internal sealed class Rmf2EsmV5Tests
         finally { Directory.Delete(directory, true); }
     }
 
+    // L4-8: a Vite production build through the shipping plugin of a large compiled catalog keeps only the message the
+    // application calls through m, the same bytes as importing that message module directly, within runtime.js plus
+    // the module; no other message's text and none of the catalog's contract tables (which name every key).
+    [Test, DisplayName("RMF2 v5 ESM namespace m tree-shakes to the called message in a Vite build of compiler output")]
+    public void NamespaceTreeShaking()
+    {
+        const int count = 400;
+        var english = new StringBuilder("greet = Hello {$name}, welcome\n");
+        var german = new StringBuilder("greet = Hallo {$name}, willkommen\n");
+        for (int index = 0; index < count; index++)
+        {
+            english.Append(CultureInfo.InvariantCulture, $"message_{index:D3} = Unused sentinel {index:D3}\n");
+            german.Append(CultureInfo.InvariantCulture, $"message_{index:D3} = Ungenutzter Platzhalter {index:D3}\n");
+        }
+        const string json = """{"schemaVersion":1,"catalog":"budget","code":{"namespace":"Example","className":"BudgetText"},"baseLocale":"en","locales":["en","de"]}""";
+        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(json)),
+            [new("translations/en.rmf2", Encoding.UTF8.GetBytes(english.ToString())), new("translations/de.rmf2", Encoding.UTF8.GetBytes(german.ToString()))]);
+        Assert.True(compilation.Success, string.Join("; ", compilation.Diagnostics.Select(item => item.Message)));
+        IReadOnlyList<TranslationGeneratedOutput> outputs = TranslationOutputRenderer.RenderRmf2V5EsmModules(compilation.Project!);
+        string module = "messages/" + Rmf2GeneratedNamesV1.Identifier("greet") + ".js";
+        int budget = outputs.Single(item => item.RelativePath == "budget.esm-v5/runtime.js").GetUtf8Bytes().Length +
+            outputs.Single(item => item.RelativePath == "budget.esm-v5/" + module).GetUtf8Bytes().Length;
+        string directory = Write(outputs);
+        try
+        {
+            string plugin = RepositoryPaths.Resolve("packages", "web", "vite-plugin-runic-translations", "dist", "index.js");
+            File.WriteAllText(Path.Combine(directory, "namespace.js"), "import { m } from \"virtual:runic-translations/budget\";\nexport const result = m.greet({ name: \"Ada\" });\n");
+            File.WriteAllText(Path.Combine(directory, "direct.js"), "import { " + Rmf2GeneratedNamesV1.Identifier("greet") + " as greet } from \"./budget.esm-v5/" + module + "\";\nexport const result = greet({ name: \"Ada\" });\n");
+            string script = Path.Combine(directory, "budget.mjs");
+            File.WriteAllText(script, "import { createRequire } from \"node:module\";\nimport { readFile } from \"node:fs/promises\";\nimport { join } from \"node:path\";\n" +
+                "const plugin = " + JsonString(plugin) + ", budget = " + budget.ToString(CultureInfo.InvariantCulture) + ";\n" + """
+                const { runicTranslations } = await import(plugin);
+                const { build } = await import(createRequire(plugin).resolve("vite"));
+                const root = import.meta.dirname, sizes = {};
+                for (const name of ["namespace", "direct"]) {
+                  const outDir = join(root, "dist-" + name);
+                  await build({ configFile: false, root, logLevel: "silent", plugins: [runicTranslations({ manifest: join(root, "budget.esm-v5", "web-module-manifest-v3.json") })],
+                    build: { outDir, minify: false, lib: { entry: join(root, name + ".js"), formats: ["es"], fileName: () => "bundle.js" } } });
+                  const bundle = await readFile(join(outDir, "bundle.js"), "utf8"); sizes[name] = Buffer.byteLength(bundle);
+                  if (!bundle.includes("Hello ") || !bundle.includes("Hallo ")) throw new Error(name + ": the called message is missing");
+                  for (const text of ["Unused sentinel", "Ungenutzter Platzhalter", "message_"]) if (bundle.includes(text)) throw new Error(name + ": the bundle contains " + text);
+                  const { result } = await import(join(outDir, "bundle.js")); if (result !== "Hello Ada, welcome") throw new Error(name + ": " + result);
+                }
+                console.log(JSON.stringify({ budget, ...sizes }));
+                if (sizes.namespace > sizes.direct + 64) throw new Error(`m.greet() bundles ${sizes.namespace} B, its module alone ${sizes.direct} B`);
+                if (sizes.namespace > budget) throw new Error(`m.greet() bundles ${sizes.namespace} B, over runtime.js plus its module (${budget} B)`);
+                """, new UTF8Encoding(false));
+            Run("bun", [script], directory);
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
     [Test, DisplayName("RMF2 v5 ESM preserves hostile NFC caller names without prototype mutation")]
     public void HostileNames()
     {
@@ -327,7 +381,7 @@ internal sealed class Rmf2EsmV5Tests
                 import { m } from "./app.esm-v5/messages.js";
                 const inputs=Object.create(null); inputs.__proto__="p"; inputs.constructor="c"; inputs["user-name"]="u"; inputs["用户"]="雪";
                 if(m.x(inputs)!==" p c u 雪 ")throw new Error("hostile names failed");
-                if(m["__proto__"]()!=="Proto"||m.constructor()!=="Constructor"||Object.getPrototypeOf(m)!==null)throw new Error("hostile message keys failed");
+                if(m["__proto__"]()!=="Proto"||m.constructor()!=="Constructor"||"toString" in m||"hasOwnProperty" in m)throw new Error("hostile message keys failed");
                 if(({}).polluted!==undefined||Object.getPrototypeOf(inputs)!==null)throw new Error("prototype pollution");
                 """, new UTF8Encoding(false));
             Run("bun", [script], directory);
@@ -493,8 +547,8 @@ internal sealed class Rmf2EsmV5Tests
         Rmf2ProjectV5 project = compilation.Project!;
         IReadOnlyList<TranslationGeneratedOutput> outputs = TranslationOutputRenderer.RenderRmf2V5EsmModules(project);
         string Module(string key) => outputs.Single(output => output.RelativePath.EndsWith("/" + Rmf2GeneratedNamesV1.Identifier(key) + ".js", StringComparison.Ordinal)).Text;
-        Assert.True(Module("title").Contains("messages[\"de\"] = freezeGeneratedText(\"title\", \"de\", \"Aktualisierungen\");", StringComparison.Ordinal), Module("title"));
-        Assert.True(Module("greet").Contains("freezeGeneratedPattern(\"greet\", \"en\", [\"Hello \", [\"name\"], \", welcome to \", [\"place\"]])", StringComparison.Ordinal), Module("greet"));
+        Assert.True(Module("title").Contains("messages[\"de\"] = freezeGeneratedText(contract, \"de\", \"Aktualisierungen\");", StringComparison.Ordinal), Module("title"));
+        Assert.True(Module("greet").Contains("freezeGeneratedPattern(contract, \"en\", [\"Hello \", [\"name\"], \", welcome to \", [\"place\"]])", StringComparison.Ordinal), Module("greet"));
         Assert.True(Module("plural").Contains("messages[\"de\"] = messages[\"en\"];", StringComparison.Ordinal), Module("plural"));
         Assert.True(Module("plural").Contains("JSON.parse(", StringComparison.Ordinal), Module("plural"));
         Assert.True(Module("count").Contains("JSON.parse(", StringComparison.Ordinal), Module("count"));
