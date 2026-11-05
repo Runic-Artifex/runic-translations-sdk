@@ -226,8 +226,9 @@ internal sealed class Rmf2V1CorpusTests
     // Re-pinned for T1g (0.9): the generated base ABI check is a call, TranslationsCompatibility.EnsureRuntimeAbi(1),
     // in both digests.
     // Re-pinned for merging T1g with main (TE, TC, TD) through T1a/T1b, in both digests.
+    // Re-pinned for T1c (0.9): the shared locale channel in runtime.js, server.js and transport.js, in both digests.
     private const string EncodedOutputDigest = "00a1b3aab47fa4d06bdafd69840be91b99c84bb688b6e1aff342b32aedb8326a";
-    private const string HiddenEncodedOutputDigest = "2b7c3a87b91fbddfc92f1655605f1e4e804729fd8644747a9dd758ba408b3e63";
+    private const string HiddenEncodedOutputDigest = "e1ce1576e6a145f5cbf0d4fce59c2746a6d2d8c354ff76b3c8ea34b1bf8a0dba";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]
