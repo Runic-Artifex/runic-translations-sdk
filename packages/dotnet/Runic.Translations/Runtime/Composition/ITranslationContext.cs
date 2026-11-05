@@ -61,6 +61,21 @@ public interface ITranslationContext
     /// </remarks>
     ValueTask SetLocaleAsync(string locale, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Negotiates a locale for an ordered preference list, such as the operating system's user languages, and switches
+    /// every catalog to it as <see cref="SetLocaleAsync"/> does.
+    /// </summary>
+    /// <remarks>
+    /// The locale is chosen with CLDR likely subtags and parent locales (<see cref="LocaleNegotiation"/>) among
+    /// <see cref="SupportedLocales"/>, so every catalog shows its own text; when no preference matches those, among the
+    /// locales of each catalog in registration order (the first catalog with a match decides); else the first catalog's
+    /// default locale. The chosen locale is then requested, so the catalogs report it as
+    /// <see cref="LocaleResolution.Exact"/> where they declare it.
+    /// </remarks>
+    /// <param name="preferredLocales">The preferences, most preferred first; invalid tags are skipped.</param>
+    /// <param name="cancellationToken">Cancels this caller's wait.</param>
+    ValueTask SetLocaleFromPreferencesAsync(IEnumerable<string> preferredLocales, CancellationToken cancellationToken = default);
+
     /// <summary>Recomposes every catalog's snapshot for the requested locale, for example after overlay packs changed.</summary>
     ValueTask RefreshAsync(CancellationToken cancellationToken = default);
 

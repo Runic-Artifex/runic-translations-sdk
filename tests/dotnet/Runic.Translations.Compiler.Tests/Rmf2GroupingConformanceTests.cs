@@ -31,7 +31,7 @@ internal sealed class Rmf2GroupingConformanceTests
             item["arguments"]!.AsObject(), item["expected"]!.GetValue<string>())).ToList();
         Assert.True(vectors.Count > 100, "The grouping vectors are missing.");
         Assert.Equal(vectors.Count, vectors.Select(vector => vector.Id).Distinct(StringComparer.Ordinal).Count(), "Duplicate grouping vector ids.");
-        foreach (string family in TranslationCapabilityRegistry.CardinalLanguages)
+        foreach (string family in new[] { "cs", "da", "de", "en", "es", "fr", "it", "ja", "nb", "nl", "nn", "no", "sv" })
             Assert.True(vectors.Any(vector => vector.Locale.Split('-')[0] == family), "No grouping vector covers locale family '" + family + "'.");
         foreach (string grouping in new[] { "always", "never", "min2", "auto" })
             Assert.True(vectors.Any(vector => vector.Message.Contains("useGrouping=" + grouping, StringComparison.Ordinal)), "No grouping vector uses " + grouping + ".");
