@@ -1,4 +1,5 @@
 import { createContext, onDestroy } from "svelte";
+import { setActiveLocale } from "./active-locale.js";
 import {
   createSvelteLocale,
   type LocaleSource,
@@ -30,6 +31,7 @@ export function createLocaleContext<Locale extends string = string>(): LocaleCon
     options: Readonly<{ dispose?: boolean }> = {},
   ): SvelteLocale<Locale> {
     set(state);
+    setActiveLocale(state);
     onDestroy(() => {
       if (options.dispose ?? true) state.dispose();
     });

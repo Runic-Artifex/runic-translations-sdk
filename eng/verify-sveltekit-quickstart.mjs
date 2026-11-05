@@ -75,7 +75,7 @@ export async function verifySvelteKitQuickStart({ directory, npmArchives, nugetC
 }
 
 function assertPage(html, locale, title, label) {
-  assert.match(html, new RegExp(`<html lang="${locale}"`), `${label}: expected lang="${locale}"`);
+  assert.match(html, new RegExp(`<html lang="${locale}" dir="ltr"`), `${label}: expected lang="${locale}" dir="ltr"`);
   assert.match(html, new RegExp(`<h1>${title}</h1>`), `${label}: expected the ${locale} title`);
 }
 

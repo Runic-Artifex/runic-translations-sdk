@@ -145,7 +145,15 @@ internal static class Rmf2CSharpOutputRendererV5
             writer.Line("throw new global::System.InvalidOperationException(\"RTR0024: Generated translation code is incompatible with the referenced runtime ABI.\");"); writer.Unindent();
         }
         writer.Line("global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2ProjectV5.RuntimeAbiVersion + ");");
-        writer.Line("return new global::Runic.Translations.CompiledTranslationProvider(" + className + "CatalogData.CreateDefinition().WithOptions(options), valueFormatter, snapshotFactory);");
+        // runtime.bidiIsolation: a runtime with the composition surface (0.9.0 and later) also has WithBidiIsolation, whose
+        // catalogs decide per locale by default.
+        string bidi = !composition ? "" : project.BidiIsolation switch
+        {
+            TranslationBidiIsolation.On => ".WithBidiIsolation(true)",
+            TranslationBidiIsolation.Off => ".WithBidiIsolation(false)",
+            _ => "",
+        };
+        writer.Line("return new global::Runic.Translations.CompiledTranslationProvider(" + className + "CatalogData.CreateDefinition()" + bidi + ".WithOptions(options), valueFormatter, snapshotFactory);");
         writer.Unindent(); writer.Line("}"); writer.Blank();
         writer.Line("public static async global::System.Threading.Tasks.ValueTask<global::Runic.Translations.ITranslationManager> CreateManagerAsync("); writer.Indent();
         writer.Line("string? initialLocale = null,");

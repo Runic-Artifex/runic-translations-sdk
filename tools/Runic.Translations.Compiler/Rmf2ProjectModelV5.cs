@@ -104,6 +104,11 @@ internal sealed record Rmf2ProjectV5(string Id, string CodeNamespace, string Cla
     internal bool ReferenceFallbackText { get; init; } = true;
     /// <summary>The <c>validation.pluralCategories</c> policy of each locale, for tools that check translations they import.</summary>
     internal IReadOnlyDictionary<string, TranslationPolicy> PluralCategoryPolicies { get; init; } = new Dictionary<string, TranslationPolicy>();
+
+    // runtime.bidiIsolation: generated code isolates placeholders with MF2's default bidi strategy always (on), never (off),
+    // or, by default, when the locale a format call runs in is written right to left, which the runtime decides per call, so
+    // an RTL overlay on an LTR catalog is isolated too.
+    internal TranslationBidiIsolation BidiIsolation { get; init; } = TranslationBidiIsolation.Default;
 }
 
 internal static class Rmf2ProjectV5EmissionEligibility

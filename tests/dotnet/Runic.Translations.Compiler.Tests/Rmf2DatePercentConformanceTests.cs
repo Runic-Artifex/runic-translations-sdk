@@ -52,7 +52,7 @@ internal sealed class Rmf2DatePercentConformanceTests
             source.Append("vector").Append(index).Append(" =\n");
             foreach (string line in vectors[index].Message.Split('\n')) source.Append("  ").Append(line).Append('\n');
         }
-        return Rmf2EsmV5Tests.CompileProject("dates", locale, [locale], false, (locale, source.ToString()));
+        return Rmf2EsmV5Tests.CompileProject("dates", locale, [locale], false, "off", (locale, source.ToString()));
     }
 
     private static TextArgument[] Arguments(JsonObject values) => values.OrderBy(item => item.Key, StringComparer.Ordinal).Select(item =>

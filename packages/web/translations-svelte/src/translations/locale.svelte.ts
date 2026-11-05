@@ -1,3 +1,5 @@
+import { textDirection, type TextDirection } from "./direction.js";
+
 /**
  * Structural copy of the framework-neutral Runic Translations locale contract.
  * Keeping this structural avoids making generated translations a runtime
@@ -10,6 +12,11 @@ export interface LocaleSource<Locale extends string = string> {
    * `createLocaleSource` provides it; generated messages format numbers and dates in it when it shares their language.
    */
   getRequestedLocale?(): string;
+  /**
+   * The writing direction of a locale. The generated `createLocaleSource` provides the runtime's `localeDirection`, from
+   * the catalog's pinned CLDR data; without it, `SvelteLocale.direction` uses `textDirection`.
+   */
+  localeDirection?(locale: string): "ltr" | "rtl";
   subscribe(listener: (locale: Locale) => void): () => void;
 }
 
@@ -52,6 +59,18 @@ export class SvelteLocale<Locale extends string = string> {
 
   get disposed(): boolean {
     return this.#disposed;
+  }
+
+  /**
+   * The writing direction of `locale` (`rtl` for `ar`), the same as SvelteKit's `%runic.dir%`: from the source's
+   * `localeDirection` when it has one, else `textDirection`. `LocalizedDocument` uses it as its default `pageDirection`.
+   */
+  get direction(): TextDirection {
+    const locale = this.#locale;
+    if (typeof this.#source.localeDirection === "function") {
+      try { return this.#source.localeDirection(locale) === "rtl" ? "rtl" : "ltr"; } catch { /* An unknown tag: use textDirection. */ }
+    }
+    return textDirection(locale);
   }
 
   /** The tag that was requested (`de-CH` while `locale` is `de`), or `locale` when the source does not report one. */

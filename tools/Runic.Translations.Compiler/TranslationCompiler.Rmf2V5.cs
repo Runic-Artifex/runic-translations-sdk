@@ -303,6 +303,7 @@ public static partial class TranslationCompiler
             Rmf2ProjectMarkupV5.Export(usedContracts, contracts.Concat(extraContracts).ToArray(), linkedLocales), HashV5(Encoding.UTF8.GetBytes(callerContract)), SourceHashV5(project, sources))
             {
                 ReferenceFallbackText = manifest.ReferenceFallbackText,
+                BidiIsolation = manifest.BidiIsolation,
                 PluralCategoryPolicies = locales.ToDictionary(locale => locale.Tag, locale => manifest.Policy(locale.Tag, ValidationMembers.PluralCategories), StringComparer.Ordinal),
             });
 

@@ -60,7 +60,7 @@ internal static class Rmf2EsmOutputRendererV5
         writer.Line("export const locales = Object.freeze(" + JsonSerializer.Serialize(project.Locales.Select(item => item.Tag).OrderBy(item => item, StringComparer.Ordinal)) + ");");
         writer.Line("const unsupportedLocalePolicy = " + GenerationSupport.JsonString(project.UnsupportedLocale.ToString()) + ";");
         // Only the CLDR data of the catalog's languages is embedded.
-        writer.Line(TranslationCapabilityRegistry.EsmLocaleSource(project.Locales.Select(item => item.Tag)));
+        writer.Line(TranslationCapabilityRegistry.EsmLocaleSource(project.Locales.Select(item => item.Tag), project.BidiIsolation));
         // Only the markup contracts: per-message contracts live in the message modules and dynamic.js.
         writer.Line("const markupContracts = freezeTrusted(JSON.parse(" + GenerationSupport.JsonString(MarkupContractsJson(project)) + "));");
         // The renderers' table of structured messages; a function, so a bundle without a renderer drops it.
@@ -292,6 +292,8 @@ internal static class Rmf2EsmOutputRendererV5
         export declare function negotiateLocale(preferences: Iterable<string>): Locale;
         /** The text direction of any BCP 47 locale tag's script, for the page's `dir` attribute. */
         export declare function localeDirection(locale: string): "ltr" | "rtl";
+        /** Removes the bidi isolation controls U+2066–U+2069 that formatting puts around placeholders, for plain-text sinks such as terminals, logs and tests. */
+        export declare function removeBidiIsolates(text: string): string;
         export declare function getLocale(): Locale;
         /** The canonical tag the locale resolver asks for, before it resolves to a catalog locale (`de-CH` where `getLocale()` gives `de`). */
         export declare function getRequestedLocale(): string;
@@ -303,7 +305,7 @@ internal static class Rmf2EsmOutputRendererV5
         /** Sets the zone that `timeZone=local` formats in, such as the browser's zone that an SSR request carries in a cookie; `undefined`, or a zone the engine does not know, means the host's zone. Returns a function that removes the resolver. */
         export declare function configureTimeZoneResolver(resolver: () => string | null | undefined): () => void;
         /** `getLocale()` is the catalog locale and `getRequestedLocale()` the canonical tag it was set to (`initialLocale: "de-CH"` gives `de` and `de-CH`), which numbers and dates format in. `setLocale` with the current catalog locale keeps a regional requested tag, so a locale-prefixed navigation to `/de` keeps Swiss formatting. */
-        export declare function createLocaleSource(options?: { initialLocale?: string }): Readonly<{ getLocale(): Locale; getRequestedLocale(): string; setLocale(locale: Locale): void; subscribe(listener: (locale: Locale) => void): () => void }>;
+        export declare function createLocaleSource(options?: { initialLocale?: string }): Readonly<{ getLocale(): Locale; getRequestedLocale(): string; localeDirection(locale: string): "ltr" | "rtl"; setLocale(locale: Locale): void; subscribe(listener: (locale: Locale) => void): () => void }>;
         export declare function linkBinding(options: { href: string }): LinkBinding;
         export declare function actionBinding(options: { onActivate: () => void }): ActionBinding;
         export declare function iconBinding(options: { asset: unknown; decorative: true } | { asset: unknown; decorative: false; accessibleName: (locale: string) => string }): IconBinding;
@@ -317,7 +319,7 @@ internal static class Rmf2EsmOutputRendererV5
         export declare function toPlainText<S extends Record<string,string>>(content: LocalizedContent<S> | LocalizedDocument<S>, options: { slots: SlotBindings<S>; allowActionLabels?: boolean; annotateLinkDestinations?: boolean; custom?: readonly MarkupBinding<string>[]; listMarker?: string }): string;
         export declare function createDomInlineRenderer(document: Document, bindings?: readonly MarkupBinding<Node>[]): InlineRenderer<Node>;
         export interface DomDocumentRenderer extends DocumentRenderer<Node> { setContent<S extends Record<string,string>>(target: Element | DocumentFragment, content: LocalizedDocument<S>, options: { slots: SlotBindings<S> }): void; clearContent(target: Element | DocumentFragment): void; extend(bindings: readonly MarkupBinding<Node>[]): DomDocumentRenderer; }
-        export declare function createDomDocumentRenderer(document: Document, options?: { headingBase?: number; custom?: readonly MarkupBinding<Node>[] }): DomDocumentRenderer;
+        export declare function createDomDocumentRenderer(document: Document, options?: { headingBase?: number; custom?: readonly MarkupBinding<Node>[]; /** The page's direction: a top-level block whose content locale has the other direction gets dir. By default the document's <html dir> when it is "ltr" or "rtl", else the active locale's (getLocale()). */ pageDirection?: "ltr" | "rtl" }): DomDocumentRenderer;
         """ + ProjectMarkupType(project);
 
     // The project's own markup contracts (runic.json), typed by name so bindMarkup(projectMarkup["app:tag"], ...)

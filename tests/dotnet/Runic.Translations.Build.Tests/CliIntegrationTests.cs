@@ -464,16 +464,17 @@ internal sealed class CliIntegrationTests
             import { localeDirection } from "./generated/app.esm-v5/runtime.js";
             const checks = [
               [m.save({ name: "Ada" }, { locale: "en-XA" }), "[Śààṽéé Ada]"],
-              [m.save({ name: "Ada" }, { locale: "ar-XB" }), "[\u202ESave \u202CAda]"],
+              [m.save({ name: "Ada" }, { locale: "ar-XB" }), "[\u202ESave \u202C\u2068Ada\u2069]"],
               [m.save({ name: "Ada" }, { locale: "en" }), "Save Ada"],
               [localeDirection("ar-XB"), "rtl"],
               [localeDirection("en-XA"), "ltr"],
               // ar-XB selects with the Arabic rules: 2 is "two", which the base text does not have, and every ordinal is
-              // "other" (GeneratorTests.PseudoLocalesFollowTheBuildProperty checks the same strings in .NET).
+              // "other" (GeneratorTests.PseudoLocalesFollowTheBuildProperty checks the same strings in .NET). ar-XB is right to
+              // left, so its placeholders are isolated by default.
               [m.items({ count: 1 }, { locale: "ar-XB" }), "[\u202EOne item\u202C]"],
-              [m.items({ count: 2 }, { locale: "ar-XB" }), "[2\u202E items\u202C]"],
+              [m.items({ count: 2 }, { locale: "ar-XB" }), "[\u20672\u2069\u202E items\u202C]"],
               [m.items({ count: 0 }, { locale: "ar-XB" }), "[\u202ENo items\u202C]"],
-              [m.place({ n: 1 }, { locale: "ar-XB" }), "[1\u202Eth\u202C]"],
+              [m.place({ n: 1 }, { locale: "ar-XB" }), "[\u20671\u2069\u202Eth\u202C]"],
               [m.place({ n: 2 }, { locale: "en-XA" }), "[2ńď]"],
               [m.place({ n: 2 }, { locale: "en" }), "2nd"],
             ];

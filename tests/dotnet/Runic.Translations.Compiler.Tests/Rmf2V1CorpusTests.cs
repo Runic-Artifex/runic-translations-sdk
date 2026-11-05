@@ -240,11 +240,21 @@ internal sealed class Rmf2V1CorpusTests
     // Re-pinned for merging the TJ Hot Reload review with TB (#131), in both digests.
     // Re-pinned for merging the formatting follow-ups (#148) with main (TJ, TI), and for their review (ESM caches by CLDR
     // data ID, relative time in the formatting locale, ungrouped integers in the locale's digits), in both digests.
+    // Re-pinned for T2f (0.9): runtime.js carries the catalog's bidiIsolation, isolates placeholders with MF2's default
+    // bidi strategy, accepts u:dir on every function, takes a locale's direction from the pinned likely subtags first and
+    // gives createDomDocumentRenderer a pageDirection; runtime.d.ts declares it;
+    // the C# output of this left-to-right corpus is unchanged, in both digests.
+    // Re-pinned for the T2f review: runtime.js carries bidiIsolation as "default", "on" or "off" and decides "default" per
+    // call from the requested, catalog and content locales, isolates list items, rejects a variable u:dir, exports
+    // removeBidiIsolates, adds localeDirection to createLocaleSource and defaults pageDirection to <html dir> or the active
+    // locale; runtime.d.ts declares them; the C# output of this corpus (default) is unchanged, in both digests.
+    // Re-pinned for merging T2f (#146) with main (TJ, TI, #148), in both digests.
     // Re-pinned for T1f (0.9): Registration also creates the readable surface, beside the readable surface only.
     // Re-pinned for merging T1f (#145) with main (TJ Hot Reload), beside the readable surface only.
     // Re-pinned for merging T1f (#145) with the formatting follow-ups (#148), beside the readable surface only.
-    private const string EncodedOutputDigest = "bc5220c7cc2787e5182c30836ee79e18d4e2156cb11a4ad312465eab580996d8";
-    private const string HiddenEncodedOutputDigest = "ec32c5dab9019520d4987a1a65abc2e820d3aca76676c71410a3be41e3fc97ab";
+    // Re-pinned for merging T2f (#146) with T1f (#145), beside the readable surface only.
+    private const string EncodedOutputDigest = "f42f706f506fd6c76273b95b757ed69cee9cf53345770172d81f5469696e8e73";
+    private const string HiddenEncodedOutputDigest = "d434d31b2cc68fe59d8f674128cb769e7d2598f629bd65811a65d8bb566353ee";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

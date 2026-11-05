@@ -83,6 +83,17 @@ The current release contract is exercised by eleven complementary fixtures:
   comparison writes it with `--test-parameter update-engine-coverage=true` and
   fails when Node, or Bun on Linux, covers a different set under the recorded
   ICU version;
+- [`rmf2-bidi-conformance.json`](rmf2-bidi-conformance.json) is the cross-backend
+  oracle for [placeholder isolation](../rmf2-execution-v2.md#bidirectional-text):
+  MF2's default bidi strategy in left-to-right (`en`) and right-to-left (`ar`,
+  `he`) messages, with the catalog's `bidiIsolation` on, off and default (decided
+  per call, including a right-to-left request on a left-to-right catalog through
+  `requestedLocale`), every `u:dir` value, lists with isolated items, relative
+  time, percentages, right-to-left dates, negative numbers in native digits
+  (`ar-EG`'s ALM and `fa`'s LRM before the minus sign, inside the isolate),
+  literals, local aliases and explicit functions. Expectations use `\u2066`
+  to `\u2069` escapes and must format exactly in the same four routes as the list
+  corpus;
 - [`transport-v2-persisted-references.json`](transport-v2-persisted-references.json)
   is the cross-backend oracle for [persisted text references](../transport-v2.md):
   references written against the `writer` catalog are resolved by the changed

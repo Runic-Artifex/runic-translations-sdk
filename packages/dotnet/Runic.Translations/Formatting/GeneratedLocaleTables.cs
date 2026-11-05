@@ -314,4 +314,11 @@ internal static class GeneratedLocaleTables
         "wal", "wbp", "wo", "xh", "xnr", "xog", "yav", "yi", "yo", "yo-BJ", "yrl", "yue", "yue-Hans", "za", "zgh",
         "zh", "zh-HK", "zh-Hant", "zh-Hant-HK", "zh-Latn", "zh-MO", "zh-SG", "zu"
     ];
+    /// <summary>CLDR's right-to-left scripts (ISO 15924), sorted: a locale is right-to-left when its script, explicit or likely, is one of them.</summary>
+    internal static readonly string[] RightToLeftScripts =
+    [
+        "Adlm", "Arab", "Armi", "Avst", "Chrs", "Cprt", "Elym", "Gara", "Hatr", "Hebr", "Hung", "Khar", "Lydi",
+        "Mand", "Mani", "Mend", "Merc", "Mero", "Narb", "Nbat", "Nkoo", "Orkh", "Ougr", "Palm", "Phli", "Phlp",
+        "Phnx", "Prti", "Rohg", "Samr", "Sarb", "Sidt", "Sogd", "Sogo", "Syrc", "Thaa", "Yezi"
+    ];
 }
