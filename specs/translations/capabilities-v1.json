@@ -58,21 +58,525 @@
   },
   "locales": [
     {
-      "tag": "cs",
+      "tag": "aa",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ab",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "af",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "agq",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ak",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "am",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "an",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ann",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "apc",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ar",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "arn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ars",
       "cardinal": true,
       "ordinal": true,
       "relativeTime": false,
+      "list": false
+    },
+    {
+      "tag": "as",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "asa",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ast",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "az",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "az-Arab",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "az-Cyrl",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ba",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "bal",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "bal-Latn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "bas",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "be",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "bem",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "bew",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "bez",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "bg",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "bgc",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "bgn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "bho",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "blo",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "blt",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "bm",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "bm-Nkoo",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "bn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "bo",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "bqi",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "br",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "brx",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "bs",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "bs-Cyrl",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "bss",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "bua",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "byn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ca",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "cad",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "cch",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ccp",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ce",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ceb",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "cgg",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "cho",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "chr",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "cic",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ckb",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "co",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "cop",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "cs",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "csw",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "cu",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "cv",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "cy",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "da",
       "cardinal": true,
       "ordinal": true,
-      "relativeTime": false,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "dav",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "de",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "dje",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "doi",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "dsb",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "dua",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "dv",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "dyo",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "dz",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ebu",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ee",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "el",
       "cardinal": true,
       "ordinal": true,
       "relativeTime": true,
@@ -86,7 +590,91 @@
       "list": true
     },
     {
+      "tag": "en-Dsrt",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "en-Shaw",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "eo",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
       "tag": "es",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "et",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "eu",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ewo",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "fa",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ff",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ff-Adlm",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "fi",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "fil",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "fo",
       "cardinal": true,
       "ordinal": true,
       "relativeTime": true,
@@ -100,7 +688,245 @@
       "list": true
     },
     {
+      "tag": "frr",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "fur",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "fy",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ga",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "gaa",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "gd",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "gez",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "gl",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "gn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "gsw",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "gu",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "guw",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": false,
+      "list": false
+    },
+    {
+      "tag": "guz",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "gv",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ha",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ha-Arab",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "haw",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "he",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "hi",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "hi-Latn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "hnj",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "hr",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "hsb",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "hu",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "hy",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ia",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "id",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ie",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ig",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ii",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "io",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "is",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
       "tag": "it",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "iu",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "iu-Latn",
       "cardinal": true,
       "ordinal": true,
       "relativeTime": true,
@@ -110,42 +936,1673 @@
       "tag": "ja",
       "cardinal": true,
       "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "jbo",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "jgo",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "jmc",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "jv",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "jw",
+      "cardinal": true,
+      "ordinal": true,
       "relativeTime": false,
+      "list": false
+    },
+    {
+      "tag": "ka",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kaa",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kaa-Latn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kab",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kaj",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kam",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kcg",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kde",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kea",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kek",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ken",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kgp",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "khq",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ki",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kk",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kk-Arab",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kkj",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kl",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kln",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "km",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ko",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kok",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kok-Latn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kpe",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ks",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ks-Deva",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ksb",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ksf",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ksh",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ku",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ku-Arab",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kw",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kxv",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kxv-Deva",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kxv-Orya",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "kxv-Telu",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ky",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "la",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "lag",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "lb",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "lg",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "lij",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "lkt",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "lld",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "lmo",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ln",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "lo",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "lrc",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "lt",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ltg",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "lu",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "luo",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "luy",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "lv",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "lzz",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mai",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mas",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mdf",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mer",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mfe",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mg",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mgh",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mgo",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mhn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mi",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mic",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mk",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ml",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mn-Mong",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mni",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mni-Mtei",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mo",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": false,
+      "list": false
+    },
+    {
+      "tag": "moh",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mr",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ms",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ms-Arab",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mt",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mua",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mus",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mww",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "my",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "myv",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "mzn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "nah",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": false,
+      "list": false
+    },
+    {
+      "tag": "naq",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "nb",
       "cardinal": true,
       "ordinal": true,
-      "relativeTime": false,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "nd",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "nds",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ne",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "nl",
       "cardinal": true,
       "ordinal": true,
-      "relativeTime": false,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "nmg",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "nn",
       "cardinal": true,
       "ordinal": true,
-      "relativeTime": false,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "nnh",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "no",
       "cardinal": true,
       "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "nqo",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "nr",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "nso",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "nus",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "nv",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ny",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "nyn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "oc",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "oka",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "om",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "or",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "os",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "osa",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "pa",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "pa-Arab",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "pap",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "pcm",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "pi",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "pis",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "pl",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "pms",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "prg",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ps",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "pt",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "qu",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "quc",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "raj",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "rhg",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "rif",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "rm",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "rn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ro",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "rof",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ru",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "rw",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "rwk",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sa",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sah",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "saq",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sat",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sat-Deva",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sbp",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sc",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "scn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sd",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sd-Deva",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sdh",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "se",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "seh",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ses",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sg",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sgs",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sh",
+      "cardinal": true,
+      "ordinal": true,
       "relativeTime": false,
+      "list": false
+    },
+    {
+      "tag": "shi",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "shi-Latn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "shn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "si",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sid",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sk",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "skr",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sl",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sma",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "smi",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": false,
+      "list": false
+    },
+    {
+      "tag": "smj",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "smn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sms",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "so",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sq",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sr",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sr-Latn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ss",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ssy",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "st",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "su",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "suz",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "suz-Sunu",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     },
     {
       "tag": "sv",
       "cardinal": true,
       "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "sw",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "syr",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "szl",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ta",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "te",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "teo",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "tg",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "th",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ti",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "tig",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "tk",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "tl",
+      "cardinal": true,
+      "ordinal": true,
       "relativeTime": false,
+      "list": false
+    },
+    {
+      "tag": "tn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "to",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "tok",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "tpi",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "tr",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "trv",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "trw",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ts",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "tt",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "twq",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "tyv",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "tzm",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ug",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "uk",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "und",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": false,
+      "list": false
+    },
+    {
+      "tag": "ur",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "uz",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "uz-Arab",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "uz-Cyrl",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "vai",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "vai-Latn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ve",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "vec",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "vi",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "vmw",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "vo",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "vun",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "wa",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "wae",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "wal",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "wbp",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "wo",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "xh",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "xnr",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "xog",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "yav",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "yi",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "yo",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "yrl",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "yue",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "yue-Hans",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "za",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "zgh",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "zh",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "zh-Hant",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "zh-Latn",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "zu",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
       "list": true
     }
   ]

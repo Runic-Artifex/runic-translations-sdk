@@ -21,6 +21,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Pinned CLDR list patterns and relative time, deflated (eng/generate-cldr.mjs). -->
+    <EmbeddedResource Include="Formatting/GeneratedLocaleData.bin" LogicalName="Runic.Translations.GeneratedLocaleData.bin" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Update="README.md" Pack="true" PackagePath="\" />
     <None Include="..\..\..\specs\translations\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
     <None Include="..\..\..\specs\translations\cldr\LICENSE" Pack="true" PackagePath="licenses" />

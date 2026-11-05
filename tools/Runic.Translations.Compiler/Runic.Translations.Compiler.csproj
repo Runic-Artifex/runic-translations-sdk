@@ -14,11 +14,17 @@
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <!-- These names deliberately mirror the normative serialized descriptor vocabulary. -->
     <NoWarn>$(NoWarn);CA1720</NoWarn>
+    <!-- Selects the compiler namespace in the CLDR locale sources shared with the runtime. -->
+    <DefineConstants>$(DefineConstants);RUNIC_TRANSLATIONS_COMPILER</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="Generation/Rmf2EsmRuntimeV5.js" />
     <EmbeddedResource Include="Generation/Rmf2EsmTransportV5.js" />
+    <!-- The pinned CLDR locale tables and algorithm are shared with the runtime (eng/generate-cldr.mjs). -->
+    <Compile Include="../../packages/dotnet/Runic.Translations/Formatting/CldrLocales.cs" Link="Cldr/CldrLocales.cs" />
+    <Compile Include="../../packages/dotnet/Runic.Translations/Formatting/GeneratedLocaleTables.cs" Link="Cldr/GeneratedLocaleTables.cs" />
+    <EmbeddedResource Include="../../packages/dotnet/Runic.Translations/Formatting/GeneratedLocaleData.bin" LogicalName="Runic.Translations.Compiler.GeneratedLocaleData.bin" Link="Cldr/GeneratedLocaleData.bin" />
     <None Update="README.md" Pack="true" PackagePath="\" />
     <None Include="..\..\specs\translations\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
     <None Include="..\..\specs\translations\cldr\LICENSE" Pack="true" PackagePath="licenses" />
