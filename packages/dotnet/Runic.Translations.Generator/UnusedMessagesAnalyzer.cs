@@ -31,8 +31,9 @@ public sealed class UnusedMessagesAnalyzer : DiagnosticAnalyzer
     public override void Initialize(AnalysisContext context)
     {
         context.EnableConcurrentExecution();
-        // Calls inside generated code (the readable members forward to the encoded ones) are not uses.
-        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
+        // Generated code counts (XAML .g.cs files, other source generators), except the catalog's own generated types,
+        // whose readable members and reference factories forward to the encoded ones.
+        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze);
         context.RegisterCompilationStartAction(static start =>
         {
             if (!start.Options.AnalyzerConfigOptionsProvider.GlobalOptions.TryGetValue(EnableProperty, out string? enabled) ||
@@ -41,6 +42,7 @@ public sealed class UnusedMessagesAnalyzer : DiagnosticAnalyzer
             if (keyType is null) return;
             var catalogs = new List<Catalog>();
             var members = new Dictionary<ISymbol, (Catalog Catalog, string[] Keys)>(SymbolEqualityComparer.Default);
+            var generated = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
             foreach (INamedTypeSymbol keys in Types(start.Compilation.Assembly.GlobalNamespace))
             {
                 if (!keys.IsStatic || !keys.Name.EndsWith(KeySuffix, StringComparison.Ordinal) || keys.Name.Length == KeySuffix.Length) continue;
@@ -51,6 +53,9 @@ public sealed class UnusedMessagesAnalyzer : DiagnosticAnalyzer
                 var catalog = new Catalog((keys.ContainingNamespace.IsGlobalNamespace ? "" : keys.ContainingNamespace.ToDisplayString() + ".") + className,
                     properties.Select(property => Decode(property.Name)!).Distinct(StringComparer.Ordinal).OrderBy(static key => key, StringComparer.Ordinal).ToArray());
                 catalogs.Add(catalog);
+                generated.Add(keys);
+                foreach (string suffix in GeneratedSuffixes)
+                    foreach (INamedTypeSymbol type in keys.ContainingNamespace.GetTypeMembers(className + suffix)) generated.Add(type);
                 foreach (IPropertySymbol property in properties) members[property] = (catalog, [Decode(property.Name)!]);
                 INamedTypeSymbol? text = keys.ContainingNamespace.GetTypeMembers(className).FirstOrDefault();
                 if (text is null) continue;
@@ -72,6 +77,7 @@ public sealed class UnusedMessagesAnalyzer : DiagnosticAnalyzer
             var used = new ConcurrentDictionary<(Catalog, string), byte>();
             start.RegisterOperationAction(operation =>
             {
+                if (operation.IsGeneratedCode && InCatalogType(operation.ContainingSymbol, generated)) return;
                 ISymbol? target = operation.Operation switch
                 {
                     IInvocationOperation invocation => invocation.TargetMethod,
@@ -91,6 +97,18 @@ public sealed class UnusedMessagesAnalyzer : DiagnosticAnalyzer
                                 "Message '" + key + "' of " + catalog.Name + " is not referenced from the C# code of this project. Remove it, or ignore this if it is used by key, from XAML, from another assembly or from the web."));
             });
         });
+    }
+
+    // The types the translations generator writes for a catalog X: X, XKeys, XMessages, XCatalog, XCatalogData, XSlots.
+    private static readonly string[] GeneratedSuffixes = ["", "Messages", "Catalog", "CatalogData", "Slots"];
+
+    // Whether generated code belongs to a catalog's generated types (a user's partial X in a hand-written file is not
+    // generated code, so its uses count).
+    private static bool InCatalogType(ISymbol? symbol, HashSet<INamedTypeSymbol> generated)
+    {
+        for (INamedTypeSymbol? type = symbol as INamedTypeSymbol ?? symbol?.ContainingType; type is not null; type = type.ContainingType)
+            if (generated.Contains(type.OriginalDefinition)) return true;
+        return false;
     }
 
     private sealed class Catalog(string name, string[] keys)

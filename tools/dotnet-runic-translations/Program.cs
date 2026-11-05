@@ -666,13 +666,38 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
         return Program.Execute(ToolCommand.Validate, result =>
         {
             int exit = Program.Success;
-            foreach (string project in projects)
-                if (Program.RunInto(new ToolInvocation(ToolCommand.Validate, null, ToolEmission.None, null, project), result) != Program.Success) exit = 1;
-            if (request.Sarif is { Length: > 0 } sarif)
+            var faults = new List<string>();
+            try
             {
-                string path = Path.GetFullPath(sarif, Environment.CurrentDirectory);
-                InterchangeOperations.WriteFile(path, SarifReport.Render(result.AllTranslationDiagnostics, Program.Version));
-                result.WriteOutputLine($"wrote {InputFiles.DisplayPath(path, Path.GetFullPath(Environment.CurrentDirectory))} ({result.AllTranslationDiagnostics.Count} result(s)).");
+                foreach (string project in projects)
+                {
+                    try
+                    {
+                        if (Program.RunInto(new ToolInvocation(ToolCommand.Validate, null, ToolEmission.None, null, project), result) != Program.Success) exit = 1;
+                    }
+                    // A project that cannot be read (no runic.json, an inaccessible file) does not stop the others: with
+                    // several projects it is reported, and the SARIF report records it as a run-level notification.
+                    catch (Exception exception) when (exception is ToolUsageException or IOException or UnauthorizedAccessException or ArgumentException)
+                    {
+                        faults.Add($"The project '{project}' could not be validated: {exception.Message}");
+                        if (projects.Count == 1) throw;
+                        result.WriteOutputLine($"runic-translations: {faults[^1]}");
+                        result.AddDiagnostic(exception is ToolUsageException ? ToolCodes.Usage : ToolCodes.Io, exception is ToolUsageException ? "tool-usage" : "io", faults[^1], CommandDiagnosticSeverity.Error);
+                        if (result.ExitCategory is CommandExitCategory.Success or CommandExitCategory.Validation)
+                            result.ExitCategory = exception is ToolUsageException or ArgumentException ? CommandExitCategory.Usage : CommandExitCategory.CommandFailure;
+                        exit = 1;
+                    }
+                }
+            }
+            finally
+            {
+                if (request.Sarif is { Length: > 0 } sarif)
+                {
+                    string currentDirectory = Path.GetFullPath(Environment.CurrentDirectory);
+                    string path = Path.GetFullPath(sarif, currentDirectory);
+                    InterchangeOperations.WriteFile(path, SarifReport.Render(result.AllTranslationDiagnostics, Program.Version, currentDirectory, faults));
+                    result.WriteOutputLine($"wrote {InputFiles.DisplayPath(path, currentDirectory)} ({result.AllTranslationDiagnostics.Count} result(s)).");
+                }
             }
             return exit;
         });

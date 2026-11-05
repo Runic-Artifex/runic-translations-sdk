@@ -140,6 +140,9 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
   let compilation: Promise<unknown> = Promise.resolve();
   let lastChange: { readonly key: string; readonly change: Promise<Change> } | undefined;
   let logger: Logger | undefined;
+  // reportUnused logs once per build environment, not once per output: `build.rollupOptions.output` may list several,
+  // and library mode bundles each of `build.lib.formats` separately. A watch rebuild reports again.
+  const reportedEnvironments = new Set<string>();
 
   async function generate(project: CompilerProject): Promise<void> {
     if (service && !service.disabledReason) {
@@ -363,6 +366,10 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       logger = config.logger;
     },
 
+    watchChange() {
+      reportedEnvironments.clear();
+    },
+
     closeBundle() {
       cleanupServer?.();
     },
@@ -370,8 +377,12 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
     // Message modules that tree-shaking left out of every chunk are messages this build never reads.
     generateBundle(_, bundle) {
       if (!options.reportUnused || !entries || !catalog) return;
+      const environment = environmentName(this);
+      if (reportedEnvironments.has(environment)) return;
       const report = unusedMessages(entries.messages, bundle);
-      if (!report || report.unused.length === 0) return;
+      if (!report) return;
+      reportedEnvironments.add(environment);
+      if (report.unused.length === 0) return;
       const shown = report.unused.slice(0, 20).join(", ") + (report.unused.length > 20 ? `, and ${report.unused.length - 20} more` : "");
       const message = `[runic-translations] ${report.unused.length} of ${report.total} messages of catalog "${catalog}" are not used by this build: ${shown}.`;
       if (logger) logger.info(message, { timestamp: true });
@@ -429,6 +440,11 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       return invalidate(this.environment.moduleGraph, change, update.timestamp);
     },
   };
+}
+
+// The Vite environment a hook runs in ("client", "ssr" or a custom one).
+function environmentName(context: unknown): string {
+  return (context as { readonly environment?: { readonly name?: string } }).environment?.name ?? "client";
 }
 
 /**

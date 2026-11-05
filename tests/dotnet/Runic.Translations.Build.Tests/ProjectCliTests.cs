@@ -1,7 +1,9 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
+using Json.Schema;
 using TUnit.Core;
 
 namespace Runic.Translations.Build.Tests;
@@ -82,6 +84,7 @@ internal sealed class ProjectCliTests
         JsonElement[] results = run.GetProperty("results").EnumerateArray().ToArray();
         Assert.True(results.Any(item => item.GetProperty("ruleId").GetString() == "RTR0096" && item.GetProperty("level").GetString() == "warning" &&
             item.GetProperty("locations")[0].GetProperty("physicalLocation").GetProperty("artifactLocation").GetProperty("uri").GetString() == "lib/de.rmf2"), run.GetRawText());
+        ValidateSarif(sarif.RootElement);
         Assert.True(run.GetProperty("tool").GetProperty("driver").GetProperty("rules").EnumerateArray().All(rule => rule.GetProperty("helpUri").GetString()!.EndsWith("#" + rule.GetProperty("id").GetString()!.ToLowerInvariant(), StringComparison.Ordinal)),
             "A SARIF rule does not link its reference entry.");
 
@@ -90,6 +93,125 @@ internal sealed class ProjectCliTests
         ProcessResult failing = TestFixture.RunTool(temporary, "validate", "--project", "app", "--project", "lib", "--sarif", "out/failing.sarif");
         Assert.Equal(2, failing.ExitCode, failing.Combined);
         Assert.Contains("\"RTR0016\"", File.ReadAllText(temporary.Resolve("out", "failing.sarif")));
+
+        // A later project that cannot be read: the earlier one is still reported, and the run records the failure.
+        File.WriteAllText(temporary.Resolve("lib", "de.rmf2"), "greeting = Hallo!\n");
+        ProcessResult missing = TestFixture.RunTool(temporary, "validate", "--project", "app", "--project", "nowhere", "--sarif", "out/missing.sarif");
+        Assert.Equal(2, missing.ExitCode, missing.Combined);
+        Assert.Contains("app/de.rmf2(3,1,3,9): warning RTR0090", missing.StandardError);
+        using JsonDocument partial = JsonDocument.Parse(File.ReadAllText(temporary.Resolve("out", "missing.sarif")));
+        ValidateSarif(partial.RootElement);
+        JsonElement partialRun = partial.RootElement.GetProperty("runs")[0];
+        Assert.True(partialRun.GetProperty("results").EnumerateArray().Any(item => item.GetProperty("ruleId").GetString() == "RTR0090"), partialRun.GetRawText());
+        JsonElement invocation = partialRun.GetProperty("invocations")[0];
+        Assert.True(!invocation.GetProperty("executionSuccessful").GetBoolean() &&
+            invocation.GetProperty("toolExecutionNotifications")[0].GetProperty("message").GetProperty("text").GetString()!.Contains("'nowhere'", StringComparison.Ordinal), invocation.GetRawText());
+    }
+
+    [Test, DisplayName("CLI validate --sarif writes encoded URIs relative to the repository root, from any directory")]
+    public void SarifUrisAreRelativeToTheRepositoryRoot()
+    {
+        using TemporaryDirectory temporary = CopyProject("My App/translations");
+        Directory.CreateDirectory(temporary.Resolve(".git"));
+        Directory.CreateDirectory(temporary.Resolve("tools", "ci"));
+        File.WriteAllText(temporary.Resolve("My App", "translations", "de.rmf2"), "greeting = Hallo!\n");
+        string root = new Uri(temporary.Path.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar).AbsoluteUri;
+
+        ProcessResult fromRoot = TestFixture.RunTool(temporary, "validate", "--project", "My App/translations", "--sarif", "root.sarif");
+        Assert.Equal(0, fromRoot.ExitCode, fromRoot.Combined);
+        ProcessResult fromSubdirectory = Processes.DotNet(temporary.Resolve("tools", "ci"), RepositoryPaths.ToolAssembly,
+            "validate", "--project", "../../My App/translations", "--sarif", "../../sub.sarif");
+        Assert.Equal(0, fromSubdirectory.ExitCode, fromSubdirectory.Combined);
+        foreach (string report in new[] { "root.sarif", "sub.sarif" })
+        {
+            using JsonDocument sarif = JsonDocument.Parse(File.ReadAllText(temporary.Resolve(report)));
+            ValidateSarif(sarif.RootElement);
+            JsonElement run = sarif.RootElement.GetProperty("runs")[0];
+            Assert.Equal(root, run.GetProperty("originalUriBaseIds").GetProperty("%SRCROOT%").GetProperty("uri").GetString(), report);
+            JsonElement location = run.GetProperty("results").EnumerateArray().First(item => item.GetProperty("ruleId").GetString() == "RTR0096")
+                .GetProperty("locations")[0].GetProperty("physicalLocation").GetProperty("artifactLocation");
+            Assert.Equal("My%20App/translations/de.rmf2", location.GetProperty("uri").GetString(), report);
+            Assert.Equal("%SRCROOT%", location.GetProperty("uriBaseId").GetString(), report);
+        }
+    }
+
+    // The report against the OASIS SARIF 2.1.0 schema, with formats (uri, uri-reference) checked.
+    private static readonly Lazy<JsonSchema> SarifSchema = new(() => JsonSchema.FromFile(
+        RepositoryPaths.Resolve("tests", "dotnet", "Runic.Translations.Build.Tests", "Fixtures", "sarif-schema-2.1.0.json"), new BuildOptions { Dialect = Dialect.Draft07 }));
+
+    private static void ValidateSarif(JsonElement report)
+    {
+        EvaluationResults result = SarifSchema.Value.Evaluate(report, new EvaluationOptions { OutputFormat = OutputFormat.List, RequireFormatValidation = true });
+        Assert.True(result.IsValid, "The SARIF report does not validate: " + string.Join("; ", (result.Details ?? []).Where(detail => detail.Errors is { Count: > 0 })
+            .Select(detail => detail.InstanceLocation + ": " + string.Join(", ", detail.Errors!.Values))));
+    }
+
+    [Test, DisplayName("CLI status counts stale translations as validate reports them, and warns about an unreadable review file")]
+    public void StatusStaleMatchesValidate()
+    {
+        using TemporaryDirectory temporary = CopyProject();
+        // The stale approval of farewell stays stale when its translation is removed: validate keeps warning (RTR0090).
+        File.WriteAllText(temporary.Resolve("translations", "de.rmf2"), File.ReadAllText(temporary.Resolve("translations", "de.rmf2")).Replace("farewell = Auf Wiedersehen\n", "", StringComparison.Ordinal));
+        ProcessResult validate = TestFixture.RunTool(temporary, "validate");
+        int warnings = validate.StandardError.Split('\n').Count(line => line.Contains("warning RTR0090", StringComparison.Ordinal));
+        Assert.Equal(1, warnings, validate.Combined);
+        ProcessResult status = TestFixture.RunTool(temporary, "status", "--format", "json");
+        Assert.Equal(0, status.ExitCode, status.Combined);
+        using (JsonDocument report = JsonDocument.Parse(status.StandardOutput))
+            Assert.Equal(warnings, report.RootElement.GetProperty("payload").GetProperty("projects")[0].GetProperty("locales").EnumerateArray()
+                .Single(locale => locale.GetProperty("locale").GetString() == "de").GetProperty("stale").GetInt32(), status.StandardOutput);
+
+        File.WriteAllText(temporary.Resolve("translations", "shop.review.json"), "{ not json");
+        ProcessResult unreadable = TestFixture.RunTool(temporary, "status");
+        Assert.Equal(0, unreadable.ExitCode, unreadable.Combined);
+        Assert.Contains("RTR0091", unreadable.Combined);
+    }
+
+    [Test, DisplayName("CLI locale add keeps CRLF line endings, and remove lists directories and files outside the project")]
+    public void LocaleEditsKeepTheFile()
+    {
+        using TemporaryDirectory temporary = CopyProject();
+        string path = temporary.Resolve("translations", "runic.json");
+        File.WriteAllText(path, File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\n", "\r\n", StringComparison.Ordinal)
+            .Replace("\"locales\": [\"en\", { \"tag\": \"de\", \"fallback\": \"en\" }]", "\"locales\": [\r\n    \"en\",\r\n    { \"tag\": \"de\", \"fallback\": \"en\" }\r\n  ]", StringComparison.Ordinal));
+        Assert.Equal(0, TestFixture.RunTool(temporary, "locale", "add", "fr").ExitCode, "fr was not added.");
+        string crlf = File.ReadAllText(path);
+        Assert.True(crlf.Contains("{ \"tag\": \"fr\", \"fallback\": \"en\" }", StringComparison.Ordinal) && !crlf.Replace("\r\n", "", StringComparison.Ordinal).Contains('\n'),
+            "runic.json has mixed line endings: " + crlf.Replace("\r", "\\r", StringComparison.Ordinal));
+
+        // A source root outside the runic.json directory is part of the project; its files are marked.
+        Directory.CreateDirectory(temporary.Resolve("shared"));
+        File.WriteAllText(temporary.Resolve("shared", "en.rmf2"), "shared_title = Shared\n");
+        File.WriteAllText(temporary.Resolve("shared", "de.rmf2"), "shared_title = Geteilt\n");
+        File.WriteAllText(path, File.ReadAllText(path).Replace("\"baseLocale\"", "\"sourceRoots\": [{ \"path\": \".\" }, { \"path\": \"../shared\", \"namespace\": [\"shared\"] }],\r\n  \"baseLocale\"", StringComparison.Ordinal));
+        ProcessResult dryRun = TestFixture.RunTool(temporary, "locale", "remove", "de", "--dry-run");
+        Assert.Equal(0, dryRun.ExitCode, dryRun.Combined);
+        Assert.Contains("would delete translations/de.rmf2.", dryRun.StandardOutput);
+        Assert.Contains("would delete shared/de.rmf2 (outside the project directory).", dryRun.StandardOutput);
+        Assert.True(File.Exists(temporary.Resolve("shared", "de.rmf2")), "The dry run deleted a file.");
+        ProcessResult removed = TestFixture.RunTool(temporary, "locale", "remove", "de");
+        Assert.Equal(0, removed.ExitCode, removed.Combined);
+        Assert.True(!File.Exists(temporary.Resolve("shared", "de.rmf2")) && !File.ReadAllText(path).Contains("\"de\"", StringComparison.Ordinal), removed.Combined);
+    }
+
+    [Test, DisplayName("CLI locale remove lists and removes the emptied locale directory of direct .mf2 sources")]
+    public void LocaleRemoveDirectDirectory()
+    {
+        using var temporary = new TemporaryDirectory();
+        Directory.CreateDirectory(temporary.Resolve("translations", "en"));
+        Directory.CreateDirectory(temporary.Resolve("translations", "de"));
+        File.WriteAllText(temporary.Resolve("translations", "runic.json"),
+            "{\"schemaVersion\":1,\"catalog\":\"shop\",\"code\":{\"namespace\":\"Shop\",\"className\":\"ShopText\"},\"baseLocale\":\"en\",\"locales\":[\"en\",\"de\"],\"validation\":{\"translationCompleteness\":\"allow\"}}\n");
+        File.WriteAllText(temporary.Resolve("translations", "en", "title.mf2"), "Shop\n");
+        File.WriteAllText(temporary.Resolve("translations", "de", "title.mf2"), "Laden\n");
+        ProcessResult valid = TestFixture.RunTool(temporary, "validate");
+        Assert.Equal(0, valid.ExitCode, "The direct fixture does not validate: " + valid.Combined);
+        ProcessResult dryRun = TestFixture.RunTool(temporary, "locale", "remove", "de", "--dry-run");
+        Assert.Equal(0, dryRun.ExitCode, dryRun.Combined);
+        Assert.Contains("would delete translations/de/title.mf2.", dryRun.StandardOutput);
+        Assert.Contains("would remove the directory translations/de/.", dryRun.StandardOutput);
+        Assert.Equal(0, TestFixture.RunTool(temporary, "locale", "remove", "de").ExitCode, "de was not removed.");
+        Assert.True(!Directory.Exists(temporary.Resolve("translations", "de")), "The emptied locale directory remains.");
     }
 
     [Test, DisplayName("CLI locale add and remove edit runic.json in place, its files and the review file")]

@@ -40,6 +40,7 @@ internal static class StatusCommandModule
             catch (ToolUsageException exception) { return Usage(exception.Message); }
 
             var reports = new List<TranslationsStatusProject>();
+            var warnings = new List<CommandDiagnostic>();
             foreach (string path in paths)
             {
                 CompilerInputs inputs = InputFiles.ReadProject(path);
@@ -52,19 +53,19 @@ internal static class StatusCommandModule
                         new CommandFault(ToolCodes.CommandFailed, $"The catalog of {inputs.Project.Path} does not compile ({errors} error(s)); run runic-translations validate."),
                         diagnostics: [], humanOutput: $"runic-translations: the catalog of {inputs.Project.Path} does not compile ({errors} error(s)); run runic-translations validate.\n");
                 }
-                reports.Add(Report(inputs, compilation, thresholds));
+                reports.Add(Report(inputs, compilation, thresholds, warnings));
             }
             foreach (string locale in thresholds.Keys)
                 if (locale != "*" && !reports.Any(report => report.Locales.Any(item => string.Equals(item.Locale, locale, StringComparison.OrdinalIgnoreCase) && item.Locale != report.BaseLocale)))
                     return Usage($"--min-coverage names '{locale}', which is not a translated locale of the project(s).");
 
             var result = new TranslationsStatusResult(reports) { BelowThreshold = reports.Any(static report => report.Locales.Any(static locale => locale.BelowThreshold)) };
-            if (!result.BelowThreshold) return CommandOutcome.Success(result);
+            if (!result.BelowThreshold) return CommandOutcome.Success(result, warnings);
             string below = string.Join(", ", reports.SelectMany(static report => report.Locales.Where(static locale => locale.BelowThreshold)
                 .Select(locale => report.Catalog + " " + locale.Locale + " " + Percent(locale.Coverage) + " < " + Percent(locale.MinimumCoverage!.Value))));
             return CommandOutcome.Failure<TranslationsStatusResult>(CommandExitCategory.CommandFailure,
                 new CommandFault(ToolCodes.CoverageBelowThreshold, "Translation coverage is below its minimum: " + below + "."),
-                diagnostics: [],
+                diagnostics: warnings,
                 humanOutput: result.ToHumanOutput() + "\n",
                 failureData: CommandFailureData.Create(PayloadType, result, StatusCommandJsonContext.Default.TranslationsStatusResult));
         }
@@ -104,17 +105,26 @@ internal static class StatusCommandModule
         return thresholds;
     }
 
-    private static TranslationsStatusProject Report(CompilerInputs inputs, Rmf2ProjectCompilation compilation, Dictionary<string, double> thresholds)
+    private static TranslationsStatusProject Report(CompilerInputs inputs, Rmf2ProjectCompilation compilation, Dictionary<string, double> thresholds, List<CommandDiagnostic> warnings)
     {
         Rmf2ProjectV5 project = compilation.Project!;
         string[] keys = project.CanonicalMessages.Select(static contract => contract.Key).ToArray();
         var locales = project.Locales.ToDictionary(static locale => locale.Tag, StringComparer.Ordinal);
         var own = project.Locales.ToDictionary(static locale => locale.Tag, static locale => locale.DirectResources.Select(static resource => resource.Key).ToHashSet(StringComparer.Ordinal), StringComparer.Ordinal);
 
-        // The optional review file: translations that predate a change to their source, as validate's RTR0090.
+        // The optional review file: translations that predate a change to their source, counted as validate's RTR0090
+        // reports them. An unreadable file is a warning (RTR0091), as in validate, and the stale column stays empty.
         string reviewPath = ReviewFile.PathFor(inputs, project.Id);
-        TranslationInterchangeReview? review = ReviewFile.Read(reviewPath, project.Id);
-        IReadOnlyDictionary<string, string>? fingerprints = review is null ? null : TranslationInterchange.ComputeSourceFingerprints(compilation);
+        TranslationInterchangeReview? review = null;
+        try { review = ReviewFile.Read(reviewPath, project.Id); }
+        catch (TranslationInterchangeException exception)
+        {
+            // Command diagnostics carry RCLI codes; the message names validate's RTR0091.
+            warnings.Add(new CommandDiagnostic(ToolCodes.Diagnostic, "review-file", $"{ReviewFile.InvalidCode}: the review file {InputFiles.DisplayPath(reviewPath, Path.GetFullPath(Environment.CurrentDirectory))} cannot be read ({exception.Code}): {exception.Message}",
+                CommandDiagnosticPhase.Execution, CommandDiagnosticSeverity.Warning));
+        }
+        ILookup<string, (TranslationInterchangeReviewEntry Entry, Rmf2TranslationV5? Translation)>? stale = review is null ? null
+            : ReviewFile.Stale(project, compilation, review).ToLookup(static item => item.Entry.Locale, StringComparer.Ordinal);
 
         var reports = new List<TranslationsStatusLocale>();
         foreach (Rmf2LocaleV5 locale in project.Locales.OrderBy(locale => locale.Tag == project.DefaultLocale ? 0 : 1).ThenBy(static locale => locale.Tag, StringComparer.Ordinal))
@@ -128,16 +138,13 @@ internal static class StatusCommandModule
                 for (string? next = locale.FallbackTag; next is not null && next != project.DefaultLocale && visited.Add(next) && locales.TryGetValue(next, out Rmf2LocaleV5? parent); next = parent.FallbackTag)
                     if (own[next].Contains(key)) { fallback++; break; }
             }
-            int? stale = null;
-            if (review is not null && locale.Tag != project.DefaultLocale)
-                stale = review.Entries.Count(entry => entry.Locale == locale.Tag && entry.SourceFingerprint is not null && own[locale.Tag].Contains(entry.Key) &&
-                    fingerprints!.TryGetValue(entry.Key, out string? current) && !string.Equals(current, entry.SourceFingerprint, StringComparison.Ordinal));
+            int? staleCount = stale is null || locale.Tag == project.DefaultLocale ? null : stale[locale.Tag].Count();
             double coverage = keys.Length == 0 ? 100 : Math.Floor((translated + fallback) * 10000.0 / keys.Length) / 100;
             double? minimum = locale.Tag == project.DefaultLocale ? null
                 : thresholds.TryGetValue(locale.Tag, out double exact) ? exact : thresholds.TryGetValue("*", out double all) ? all : null;
             reports.Add(new TranslationsStatusLocale(locale.Tag, locale.FallbackTag, translated, fallback, keys.Length - translated - fallback, coverage)
             {
-                Stale = stale,
+                Stale = staleCount,
                 MinimumCoverage = minimum,
                 BelowThreshold = minimum is { } threshold && coverage < threshold,
             });

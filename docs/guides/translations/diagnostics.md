@@ -574,10 +574,12 @@ Message is not referenced from C# code. Information from
 `<RunicTranslationsReportUnusedMessages>true</RunicTranslationsReportUnusedMessages>`:
 no C# code of the project uses the message through its readable member
 (`Text.Messages.greeting`), its encoded member, its `References` factory or its
-key property. It is reported at the end of a full compilation, so `dotnet build`
-(with `-v:n` or a binary log for information messages) and full-solution
-analysis show it. A message used only by key, from XAML, from another assembly
-or from the web is reported too; the ESM side has its own report in
+key property; uses in generated code, such as XAML `.g.cs` files or other source
+generators, count, while the catalog's own generated types do not. It is
+reported at the end of a full compilation, so `dotnet build` (with `-v:n` or a
+binary log for information messages) and full-solution analysis show it. A
+message used only by a key string, from XAML markup that no generated code reads,
+from another assembly or from the web is reported too; the ESM side has its own report in
 `vite-plugin-runic-translations` (`reportUnused`). Remove the message from every
 locale, or keep it and leave the report off.
 

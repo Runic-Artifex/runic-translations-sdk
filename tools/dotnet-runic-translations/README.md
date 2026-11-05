@@ -29,7 +29,11 @@ representation is inferred from source files and cannot be mixed.
 `--project` is repeatable: `validate --project src/App/translations --project src/Lib/translations` validates
 each catalog and reports their diagnostics together (exit 2 when any fails). `--sarif <file>` also writes every
 diagnostic as a SARIF 2.1.0 report (one rule per RTR code, linked to its reference entry; UTF-16 columns), for
-GitHub code scanning or other CI annotations. It is written when validation fails too.
+GitHub code scanning or other CI annotations. Artifact URIs are percent-encoded and relative to `%SRCROOT%`, the
+repository root (the nearest directory with `.git` above the working directory, else the working directory),
+which `originalUriBaseIds` declares; a file outside it gets an absolute `file:` URI. So the report is the same
+wherever in the repository `validate` runs. It is written when validation fails too, and when one of several
+projects cannot be read: the others are still validated, and the run's `invocations` record the failure.
 
 ```bash
 dotnet tool run runic-translations -- validate --project src/App/translations --project src/Lib/translations --sarif artifacts/translations.sarif
@@ -44,7 +48,8 @@ dotnet tool run runic-translations -- status --min-coverage de=100,fr=80 --forma
 
 `status` lists, per catalog and locale, the messages the locale translates, those a fallback locale other than
 the base locale serves (`de-CH` from `de`), those missing (shown in the base locale), and with a review file
-(below) the stale ones, translations whose source changed since they were recorded:
+(below) the stale ones, translations whose source changed since they were recorded, counted as `validate`
+reports them (`RTR0090`; an unreadable review file is the warning `RTR0091` and leaves the column empty):
 
 ```text
 shop (translations/runic.json): 10 message(s), base locale en
@@ -73,9 +78,12 @@ dotnet tool run runic-translations -- locale remove fr --dry-run
 with `--fallback` or when the list has object entries) and creates an empty `<tag>.rmf2` beside every
 base-locale `.rmf2` file. It writes nothing when the project would not compile with it. The new locale is
 untranslated, so `validate` reports `RTR0010` until it is translated, unless the locale entry relaxes
-`validation.translationCompleteness`. `locale remove <tag>` removes the entry, deletes the locale's `.rmf2`
-files (or its `<tag>/` `.mf2` files) and its review entries; it refuses the base locale and a locale that
-another locale falls back to. Both accept `--project` and `--dry-run`.
+`validation.translationCompleteness`. `locale remove <tag>` deletes the locale's `.rmf2` files (or its `<tag>/`
+`.mf2` files and the directories that become empty), then removes the entry and its review entries; if a file
+cannot be deleted, the locale stays declared and the command can run again. It refuses the base locale and a
+locale that another locale falls back to. Both accept `--project` and `--dry-run`, which lists the files and
+directories and marks those outside the `runic.json` directory (from `sourceRoots`). Edits to `runic.json` keep
+its line endings.
 
 ## Generate C# and ESM
 

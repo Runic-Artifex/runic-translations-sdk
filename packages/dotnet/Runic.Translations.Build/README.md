@@ -157,9 +157,11 @@ Choose this package for generated C# and whenever MSBuild owns input classificat
 
 Set `<RunicTranslationsReportUnusedMessages>true</RunicTranslationsReportUnusedMessages>` to report, as the
 information `RTR0100`, every message that no C# code of the project references through its readable member,
-encoded member, `References` factory or key property. The analyzer runs at the end of a full compilation:
-`dotnet build -v:n` (or a binary log) and full-solution analysis in the IDE show it. Messages used only by key,
-from XAML, from another assembly or from the web are reported too, so read the list as candidates. The web side
+encoded member, `References` factory or key property, including generated code such as the `.g.cs` files of XAML
+or other source generators (only the catalog's own generated types are skipped). The analyzer runs at the end of a
+full compilation: `dotnet build -v:n` (or a binary log) and full-solution analysis in the IDE show it. Messages used
+only by a key string, from XAML markup that no generated code reads, from another assembly or from the web are
+reported too, so read the list as candidates. The web side
 has `reportUnused` in `@runic-artifex/vite-plugin-runic-translations`.
 
 ## Important build behavior

@@ -381,16 +381,19 @@ internal sealed class Rmf2EsmV5Tests
                 const { runicTranslations } = await import(plugin);
                 const { build, createLogger } = await import(createRequire(plugin).resolve("vite"));
                 const root = import.meta.dirname;
-                async function run(reportUnused) {
+                async function run(reportUnused, formats = ["es"]) {
                   const messages = [], logger = createLogger("info");
                   logger.info = message => { messages.push(message); };
                   await build({ configFile: false, root, logLevel: "info", customLogger: logger, plugins: [runicTranslations({ manifest: join(root, "unused.esm-v5", "web-module-manifest-v3.json"), reportUnused })],
-                    build: { outDir: join(root, "dist"), minify: false, lib: { entry: join(root, "app.js"), formats: ["es"], fileName: () => "bundle.js" } } });
+                    build: { outDir: join(root, "dist"), minify: false, lib: { entry: join(root, "app.js"), name: "app", formats, fileName: format => "bundle." + format + ".js" } } });
                   return messages.filter(message => message.includes("[runic-translations]"));
                 }
                 const reported = await run(true);
                 const expected = '[runic-translations] 2 of 3 messages of catalog "unused" are not used by this build: settings_farewell, title.';
                 if (reported.length !== 1 || !reported[0].endsWith(expected)) throw new Error("unexpected report: " + JSON.stringify(reported));
+                // Several outputs of one environment report once.
+                const outputs = await run(true, ["es", "cjs"]);
+                if (outputs.length !== 1 || !outputs[0].endsWith(expected)) throw new Error("not reported once per environment: " + JSON.stringify(outputs));
                 if ((await run(false)).length !== 0) throw new Error("reported without reportUnused");
                 """, new UTF8Encoding(false));
             Run("bun", [script], directory);

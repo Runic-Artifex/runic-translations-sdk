@@ -30,7 +30,7 @@ internal static class LocaleCommandModule
         operations.Execute(new("locale add", Project: project, DryRun: dryRun) { Tag = tag, Fallback = fallback });
 
     [Command("locale remove", Description = "Remove a locale from runic.json, delete its source files and its review entries.",
-        LongDescription = "Removes the locale's entry from runic.json (keeping its formatting), deletes its <tag>.rmf2 files or <tag>/ .mf2 files and its entries in <catalog>.review.json. The base locale and a locale that another locale falls back to cannot be removed. Use --dry-run to list the files first.\n\nExit codes: 0 success; 1 command failure, such as an inaccessible file; 2 invalid invocation or a locale that cannot be removed; 3 internal failure; 130 cancelled.",
+        LongDescription = "Removes the locale's entry from runic.json (keeping its formatting), deletes its <tag>.rmf2 files or <tag>/ .mf2 files and its entries in <catalog>.review.json. The base locale and a locale that another locale falls back to cannot be removed. The files are deleted first, then runic.json is updated; if a file cannot be deleted, the locale stays declared and the command can be run again. Use --dry-run to list the files and directories first; files outside the runic.json directory (from sourceRoots) are marked.\n\nExit codes: 0 success; 1 command failure, such as an inaccessible file; 2 invalid invocation or a locale that cannot be removed; 3 internal failure; 130 cancelled.",
         Examples = ["runic-translations locale remove fr --dry-run", "runic-translations locale remove fr"])]
     [CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
     internal static CommandOutcome<TranslationsToolCommandResult> Remove(
@@ -65,14 +65,14 @@ internal static class LocaleOperations
         byte[] bytes = manifest.Source.GetUtf8Bytes();
         string updated;
         if (manifest.Locales is { } locales && locales.Value.Kind == JsonKind.Array)
-            updated = InsertItem(bytes, locales.Value, entry);
+            updated = InsertItem(bytes, locales.Value, entry, NewLine(bytes));
         else
         {
             // Without "locales" the compiler declares the locales it finds; the list now names them explicitly.
             string indent = LineIndent(bytes, manifest.BaseProperty.NameSpan.Start);
             int end = manifest.BaseProperty.Value.Span.Start + manifest.BaseProperty.Value.Span.Length;
             string list = "[" + string.Join(", ", declared.Select(Quote).Append(entry)) + "]";
-            updated = Encoding.UTF8.GetString(bytes, 0, end) + ",\n" + indent + "\"locales\": " + list + Encoding.UTF8.GetString(bytes, end, bytes.Length - end);
+            updated = Encoding.UTF8.GetString(bytes, 0, end) + "," + NewLine(bytes) + indent + "\"locales\": " + list + Encoding.UTF8.GetString(bytes, end, bytes.Length - end);
         }
 
         // An empty <tag>.rmf2 beside every base-locale .rmf2 file; direct .mf2 projects need no file yet.
@@ -139,33 +139,53 @@ internal static class LocaleOperations
         // The locale's sources: <tag>.rmf2 files, or the .mf2 files below a <tag>/ directory of a source root.
         string current = Path.GetFullPath(Environment.CurrentDirectory);
         var deleted = new List<string>();
+        // The directories between a direct .mf2 file and its <tag>/ directory, which go when they become empty.
+        var directories = new List<string>();
         foreach (TranslationSource source in inputs.Messages)
         {
             string full = Path.GetFullPath(source.Path, current);
             bool grouped = source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase);
-            string? owner = grouped ? Path.GetFileNameWithoutExtension(full) : DirectLocale(full, inputs.SourceRoots ?? []);
-            if (owner is not null && TranslationCompiler.TryCanonicalizeLocale(owner, out string canonical) && string.Equals(canonical, locale, StringComparison.OrdinalIgnoreCase)) deleted.Add(full);
+            (string Owner, string Directory)? direct = grouped ? null : DirectLocale(full, inputs.SourceRoots ?? []);
+            string? owner = grouped ? Path.GetFileNameWithoutExtension(full) : direct?.Owner;
+            if (owner is null || !TranslationCompiler.TryCanonicalizeLocale(owner, out string canonical) || !string.Equals(canonical, locale, StringComparison.OrdinalIgnoreCase)) continue;
+            deleted.Add(full);
+            if (direct is { } localeDirectory)
+                for (string? directory = Path.GetDirectoryName(full); directory is not null && directory.Length >= localeDirectory.Directory.Length; directory = Path.GetDirectoryName(directory))
+                {
+                    if (!directories.Contains(directory, StringComparer.Ordinal)) directories.Add(directory);
+                    if (string.Equals(directory, localeDirectory.Directory, StringComparison.Ordinal)) break;
+                }
         }
+        // Deepest first, and only those that hold nothing but what is deleted.
+        var deletedSet = new HashSet<string>(deleted, StringComparer.Ordinal);
+        var emptied = new HashSet<string>(StringComparer.Ordinal);
+        foreach (string directory in directories.OrderByDescending(static directory => directory.Length))
+            if (Directory.Exists(directory) && Directory.EnumerateFileSystemEntries(directory).All(entry => deletedSet.Contains(entry) || emptied.Contains(entry))) emptied.Add(directory);
 
         string reviewPath = ReviewFile.PathFor(inputs, ReadCatalog(manifest));
         TranslationInterchangeReview? review = ReviewFile.Read(reviewPath, ReadCatalog(manifest));
         int reviewEntries = review?.Entries.Count(entry => string.Equals(entry.Locale, locale, StringComparison.OrdinalIgnoreCase)) ?? 0;
+        string projectDirectory = Path.GetDirectoryName(Path.GetFullPath(manifest.Source.Path, current))!;
         if (!dryRun)
         {
-            InterchangeOperations.WriteFile(Path.GetFullPath(manifest.Source.Path, current), Encoding.UTF8.GetBytes(updated));
+            // The files go first: if one cannot be deleted, runic.json still declares the locale, and running the
+            // command again finishes the removal. A read-only file is refused before anything is deleted.
             foreach (string path in deleted)
-            {
-                File.Delete(path);
-                // A direct .mf2 locale directory that is now empty goes too.
-                string? directory = Path.GetDirectoryName(path);
-                if (!path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase) && directory is not null && Directory.Exists(directory) && !Directory.EnumerateFileSystemEntries(directory).Any())
-                    Directory.Delete(directory);
-            }
+                if (File.Exists(path) && File.GetAttributes(path).HasFlag(FileAttributes.ReadOnly))
+                    throw new IOException($"{InputFiles.DisplayPath(path, current)} is read-only; nothing was deleted.");
+            foreach (string path in deleted) File.Delete(path);
+            foreach (string directory in emptied.OrderByDescending(static directory => directory.Length))
+                if (Directory.Exists(directory) && !Directory.EnumerateFileSystemEntries(directory).Any()) Directory.Delete(directory);
+            InterchangeOperations.WriteFile(Path.GetFullPath(manifest.Source.Path, current), Encoding.UTF8.GetBytes(updated));
             if (review is not null && reviewEntries != 0)
                 ReviewFile.Write(reviewPath, new TranslationInterchangeReview(review.CatalogId, review.Entries.Where(entry => !string.Equals(entry.Locale, locale, StringComparison.OrdinalIgnoreCase))));
         }
         result.WriteOutputLine($"{(dryRun ? "would remove" : "removed")} locale {locale} from {manifest.Source.Path}.");
-        foreach (string path in deleted) result.WriteOutputLine($"{(dryRun ? "would delete" : "deleted")} {InputFiles.DisplayPath(path, current)}.");
+        // Sources outside the runic.json directory (sourceRoots such as ../shared) are part of the project, and marked.
+        foreach (string path in deleted)
+            result.WriteOutputLine($"{(dryRun ? "would delete" : "deleted")} {InputFiles.DisplayPath(path, current)}{(IsWithin(path, projectDirectory) ? "" : " (outside the project directory)")}.");
+        foreach (string directory in emptied.OrderByDescending(static directory => directory.Length))
+            result.WriteOutputLine($"{(dryRun ? "would remove the directory" : "removed the directory")} {InputFiles.DisplayPath(directory, current)}/{(IsWithin(directory, projectDirectory) ? "" : " (outside the project directory)")}.");
         if (reviewEntries != 0) result.WriteOutputLine($"{(dryRun ? "would remove" : "removed")} {reviewEntries} review entr{(reviewEntries == 1 ? "y" : "ies")} from {InputFiles.DisplayPath(reviewPath, current)}.");
         return 0;
     }
@@ -204,7 +224,7 @@ internal static class LocaleOperations
             : throw new ToolUsageException($"{what} '{value}' is not a valid BCP 47 locale tag.");
 
     // Inserts an item after the last one: on its own line, indented like the last item, when the list is one per line.
-    private static string InsertItem(byte[] bytes, JsonValue array, string entry)
+    private static string InsertItem(byte[] bytes, JsonValue array, string entry, string newLine)
     {
         int close = array.Span.Start + array.Span.Length - 1;
         if (array.Items.Count == 0)
@@ -212,7 +232,7 @@ internal static class LocaleOperations
         JsonValue last = array.Items[^1];
         int end = last.Span.Start + last.Span.Length;
         bool multiline = Encoding.UTF8.GetString(bytes, array.Span.Start, array.Items[0].Span.Start - array.Span.Start).Contains('\n');
-        string separator = multiline ? ",\n" + LineIndent(bytes, last.Span.Start) : ", ";
+        string separator = multiline ? "," + newLine + LineIndent(bytes, last.Span.Start) : ", ";
         return Encoding.UTF8.GetString(bytes, 0, end) + separator + entry + Encoding.UTF8.GetString(bytes, end, bytes.Length - end);
     }
 
@@ -227,6 +247,13 @@ internal static class LocaleOperations
         return Encoding.UTF8.GetString(bytes, 0, from) + Encoding.UTF8.GetString(bytes, to, bytes.Length - to);
     }
 
+    // The file's own line ending: CRLF when its first line ends with one, so an edit adds no mixed endings.
+    private static string NewLine(byte[] bytes)
+    {
+        int lf = Array.IndexOf(bytes, (byte)'\n');
+        return lf > 0 && bytes[lf - 1] == (byte)'\r' ? "\r\n" : "\n";
+    }
+
     private static string LineIndent(byte[] bytes, int position)
     {
         int start = position;
@@ -236,8 +263,8 @@ internal static class LocaleOperations
         return Encoding.UTF8.GetString(bytes, start, end - start);
     }
 
-    // The locale directory of a direct .mf2 source: its first directory below the source root that contains it.
-    private static string? DirectLocale(string path, IReadOnlyList<string> roots)
+    // The locale of a direct .mf2 source and its directory: the first directory below the source root that contains it.
+    private static (string Owner, string Directory)? DirectLocale(string path, IReadOnlyList<string> roots)
     {
         foreach (string root in roots)
         {
@@ -245,9 +272,15 @@ internal static class LocaleOperations
             string relative = Path.GetRelativePath(full, path);
             if (relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative)) continue;
             string[] segments = relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            return segments.Length > 1 ? segments[0] : null;
+            return segments.Length > 1 ? (segments[0], Path.Combine(full, segments[0])) : null;
         }
         return null;
+    }
+
+    private static bool IsWithin(string path, string directory)
+    {
+        string relative = Path.GetRelativePath(directory, path);
+        return !Path.IsPathRooted(relative) && relative != ".." && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) && !relative.StartsWith("../", StringComparison.Ordinal);
     }
 
     private static string Quote(string value) => "\"" + value + "\"";
