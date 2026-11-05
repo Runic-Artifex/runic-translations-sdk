@@ -4474,3 +4474,42 @@ ui {
       {{The library catalog already has the locale {$locale}.}}
   }
 }
+ui {
+  backend {
+    library_invalid_locale =
+      .input {$locale :string}
+      {{'{$locale}' is not a valid BCP 47 locale tag, such as fr or de-CH.}}
+  }
+}
+ui {
+  backend {
+    library_conflict =
+      .input {$path :string}
+      {{'{$path}' changed on disk since the library was loaded (an edit in another editor or the command line); nothing was written. Reload the library to see the current overrides; your typed text is kept.}}
+  }
+}
+ui {
+  library {
+    new_override = new override, written on Save
+  }
+}
+ui {
+  library {
+    cancel = Cancel
+  }
+}
+ui {
+  library {
+    reload = Reload library
+  }
+}
+ui {
+  library {
+    project_changed_title = runic.json changed
+  }
+}
+ui {
+  library {
+    project_changed_unsaved = A library catalog was added to runic.json "overrides". Your unsaved changes are kept; reload the workspace once they are saved.
+  }
+}

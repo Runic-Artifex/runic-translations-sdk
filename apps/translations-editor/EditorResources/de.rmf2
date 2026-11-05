@@ -4474,3 +4474,42 @@ ui {
       {{Der Bibliothekskatalog hat die Sprache {$locale} bereits.}}
   }
 }
+ui {
+  backend {
+    library_invalid_locale =
+      .input {$locale :string}
+      {{'{$locale}' ist kein gültiges BCP-47-Sprachkürzel wie fr oder de-CH.}}
+  }
+}
+ui {
+  backend {
+    library_conflict =
+      .input {$path :string}
+      {{'{$path}' wurde seit dem Laden der Bibliothek auf dem Datenträger geändert (in einem anderen Editor oder über die Befehlszeile); es wurde nichts geschrieben. Laden Sie die Bibliothek neu, um die aktuellen Überschreibungen zu sehen; Ihr eingegebener Text bleibt erhalten.}}
+  }
+}
+ui {
+  library {
+    new_override = neue Überschreibung, wird beim Speichern geschrieben
+  }
+}
+ui {
+  library {
+    cancel = Abbrechen
+  }
+}
+ui {
+  library {
+    reload = Bibliothek neu laden
+  }
+}
+ui {
+  library {
+    project_changed_title = runic.json wurde geändert
+  }
+}
+ui {
+  library {
+    project_changed_unsaved = Ein Bibliothekskatalog wurde zu "overrides" in runic.json hinzugefügt. Ihre ungespeicherten Änderungen bleiben erhalten; laden Sie den Arbeitsbereich neu, sobald sie gespeichert sind.
+  }
+}

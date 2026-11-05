@@ -11,7 +11,7 @@
     malformedDocuments,
     reviewError,
     onrepair,
-    catalogId,
+    currentManifest,
     catalogs = [],
     libraries = [],
     onswitchcatalog,
@@ -20,15 +20,16 @@
     malformedDocuments: EditorDocument[];
     reviewError?: string;
     onrepair: (document: EditorDocument) => void;
-    /** The open catalog; the workspace's other catalogs and the open project's library catalogs are listed (T5d). */
-    catalogId?: string;
+    /** The open project's runic.json; the workspace's other projects and the open project's library catalogs are listed (T5d). */
+    currentManifest?: string;
     catalogs?: EditorCatalogSummary[];
     libraries?: EditorLibrarySummary[];
     onswitchcatalog?: (catalog: EditorCatalogSummary) => void;
     onopenlibrary?: (catalog: string) => void;
   } = $props();
 
-  const others = $derived(catalogs.filter((catalog) => catalog.id !== catalogId));
+  // By runic.json, not catalog ID: a second project with the open project's catalog ID (a sample, a test copy) is listed too.
+  const others = $derived(catalogs.filter((catalog) => catalog.manifestPaths[0] !== currentManifest));
 
   const ui = getUiText();
 </script>

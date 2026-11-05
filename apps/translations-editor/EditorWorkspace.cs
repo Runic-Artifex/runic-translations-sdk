@@ -164,6 +164,7 @@ internal sealed class EditorWorkspace : IDisposable
     // Callers that already hold _gate (commit paths) reload through this core.
     private async Task<WorkspaceSnapshot> LoadCoreAsync(CancellationToken cancellationToken)
     {
+        Volatile.Write(ref _discoveredProjects, null);
         TranslationPendingTransaction? pending = TranslationWorkspaceTransaction.GetPending(_root);
         if (pending is not null)
         {
@@ -1603,6 +1604,36 @@ internal sealed class EditorWorkspace : IDisposable
     /// <summary>Checks that an absolute path is inside the workspace and crosses no link, as every editor write is (library overrides).</summary>
     internal void EnsureWritable(string fullPath) => ContainedPath(NormalizeRelativePath(Path.GetRelativePath(_root, Path.GetFullPath(fullPath))));
 
+    /// <summary>A path relative to the workspace root, with forward slashes.</summary>
+    internal string RelativePath(string fullPath) => NormalizeRelativePath(Path.GetRelativePath(_root, Path.GetFullPath(fullPath)));
+
+    /// <summary>
+    /// Runs a write of the editor's own outside the document save path (library overrides listing a catalog in runic.json)
+    /// and records the files it wrote with their new bytes (null: deleted) as known revisions, so the external-change check
+    /// does not report the editor's own change. Holds the workspace gate, so no check runs between the write and the record.
+    /// </summary>
+    internal void WriteOwnFiles(Action write, IReadOnlyList<(string Path, byte[]? Bytes)> written)
+    {
+        ArgumentNullException.ThrowIfNull(write);
+        _gate.Wait();
+        try
+        {
+            ThrowIfDisposed();
+            write();
+            foreach ((string path, byte[]? bytes) in written)
+            {
+                string relative = RelativePath(path);
+                if (!_knownRevisions.ContainsKey(relative)) continue;
+                if (bytes is null) _knownRevisions.Remove(relative);
+                else _knownRevisions[relative] = Revision(bytes);
+            }
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     private string ContainedPath(string relativePath)
     {
         if (Path.IsPathRooted(relativePath)) throw new EditorUserException(EditorNotice.Create("ui_backend_path_relative"));
@@ -1659,12 +1690,19 @@ internal sealed class EditorWorkspace : IDisposable
         return null;
     }
 
-    // Every runic.json below the root, by the language server's project-index rules (Tooling).
+    // Every runic.json below the root, by the language server's project-index rules (Tooling). The walk is reused until a
+    // full load or a watcher event on a runic.json, so several projects with none chosen do not re-walk the tree per call.
     private IReadOnlyList<string> DiscoverProjects()
     {
-        try { return TranslationProjectDiscovery.Discover(_root); }
-        catch (Exception exception) when (exception is InvalidOperationException or IOException or UnauthorizedAccessException) { return []; }
+        if (Volatile.Read(ref _discoveredProjects) is { } cached) return cached;
+        IReadOnlyList<string> projects;
+        try { projects = TranslationProjectDiscovery.Discover(_root); }
+        catch (Exception exception) when (exception is InvalidOperationException or IOException or UnauthorizedAccessException) { projects = []; }
+        Volatile.Write(ref _discoveredProjects, projects);
+        return projects;
     }
+
+    private IReadOnlyList<string>? _discoveredProjects;
 
     // A catalog summary of a project that is not open: its ID and counts from a compilation of its sources on disk.
     private EditorCatalogSummary SummarizeProject(string configPath, CancellationToken cancellationToken)
@@ -1679,14 +1717,58 @@ internal sealed class EditorWorkspace : IDisposable
             foreach (string sourceRoot in UsableSourceRoots(layout.SourceRoots, null))
                 foreach (string path in EnumerateSourceFiles(sourceRoot, ".mf2").Concat(EnumerateSourceFiles(sourceRoot, ".rmf2")).Where(path => !layout.IsOverrideSource(path)).Order(StringComparer.Ordinal))
                     sources.Add(new TranslationSource(NormalizeRelativePath(Path.GetRelativePath(_root, path)), ReadSourceBytes(path)));
+            // Full loads summarize every other project; one is compiled again only when its runic.json or a source changed.
+            var hash = new SummaryHash();
+            hash.Append(bytes);
+            foreach (TranslationSource source in sources) { hash.Append(Encoding.UTF8.GetBytes("\0" + source.Path + "\0")); hash.Append(source.GetUtf8Bytes()); }
+            string revision = hash.Finish();
+            lock (_summaries)
+                if (_summaries.TryGetValue(relative, out var cached) && cached.Revision == revision) return cached.Summary;
             Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource(relative, bytes), sources, null, cancellationToken);
             int errors = compilation.Diagnostics.Count(item => item.Severity == TranslationDiagnosticSeverity.Error);
-            return new EditorCatalogSummary(compilation.Project?.Id ?? id ?? relative, [relative], sources.Count, compilation.Project?.Locales.Count ?? 0,
+            var summary = new EditorCatalogSummary(compilation.Project?.Id ?? id ?? relative, [relative], sources.Count, compilation.Project?.Locales.Count ?? 0,
                 compilation.Project?.CanonicalMessages.Count ?? 0, errors, compilation.Diagnostics.Count - errors, compilation.Success);
+            lock (_summaries) _summaries[relative] = (revision, summary);
+            return summary;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or DecoderFallbackException or EditorUserException or TranslationAuthoringException)
         {
             return new EditorCatalogSummary(relative, [relative], 0, 0, 0, 1, 0, false);
+        }
+    }
+
+    private readonly Dictionary<string, (string Revision, EditorCatalogSummary Summary)> _summaries = new(StringComparer.Ordinal);
+    private (string Config, string Stamp, TranslationDependencyResolution Resolution)? _dependencies;
+
+    private sealed class SummaryHash
+    {
+        private readonly System.Security.Cryptography.IncrementalHash _hash = System.Security.Cryptography.IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        internal void Append(byte[] bytes) => _hash.AppendData(bytes);
+        internal string Finish() { using (_hash) return Convert.ToHexStringLower(_hash.GetHashAndReset()); }
+    }
+
+    // The dependency resolution of the selected project, reused while runic.json and the restore and install inputs
+    // (project.assets.json, node_modules state; their size and time) are unchanged, so a full load does not parse a large
+    // project.assets.json again.
+    private TranslationDependencyResolution ResolveDependencies(string config)
+    {
+        byte[] bytes = File.ReadAllBytes(config);
+        if (_dependencies is { } cached && cached.Config == config && cached.Stamp == DependencyStamp(bytes, cached.Resolution.Inputs)) return cached.Resolution;
+        TranslationDependencyResolution resolution = TranslationDependencyCatalogs.Resolve(config, bytes);
+        _dependencies = (config, DependencyStamp(bytes, resolution.Inputs), resolution);
+        return resolution;
+
+        static string DependencyStamp(byte[] manifest, IReadOnlyList<string> inputs)
+        {
+            var stamp = new StringBuilder(Revision(manifest));
+            foreach (string input in inputs)
+            {
+                var file = new FileInfo(input);
+                if (file.Exists) stamp.Append('|').Append(file.Length).Append(':').Append(file.LastWriteTimeUtc.Ticks);
+                else if (Directory.Exists(input)) stamp.Append("|d").Append(Directory.GetLastWriteTimeUtc(input).Ticks);
+                else stamp.Append("|-");
+            }
+            return stamp.ToString();
         }
     }
 
@@ -1697,7 +1779,7 @@ internal sealed class EditorWorkspace : IDisposable
         if (FindMf2ProjectConfig() is not { } config) return new List<EditorLibrarySummary>();
         try
         {
-            TranslationDependencyResolution resolution = TranslationDependencyCatalogs.Resolve(config);
+            TranslationDependencyResolution resolution = ResolveDependencies(config);
             var result = new List<EditorLibrarySummary>();
             foreach (string id in resolution.Catalogs.Select(static item => item.Catalog).Concat(resolution.Overrides.Select(static item => item.Catalog)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
             {
@@ -1729,14 +1811,14 @@ internal sealed class EditorWorkspace : IDisposable
         // scan: it would fail again on every check. The load reports those as
         // manifest diagnostics. The manifest itself stays in the inventory, so
         // fixing it is reported and rediscovers the sources.
-        IReadOnlyList<string> sourceRoots = UsableSourceRoots(
-            TranslationManifestReader.Read(File.ReadAllBytes(config), Path.GetDirectoryName(config)!).SourceRoots, null);
+        TranslationManifestLayout inventoryLayout = TranslationManifestReader.Read(File.ReadAllBytes(config), Path.GetDirectoryName(config)!);
+        IReadOnlyList<string> sourceRoots = UsableSourceRoots(inventoryLayout.SourceRoots, null);
         var result = new Dictionary<string, byte[]>(StringComparer.Ordinal)
         {
             [NormalizeRelativePath(Path.GetRelativePath(_root, config))] = ReadSourceBytes(ContainedPath(NormalizeRelativePath(Path.GetRelativePath(_root, config)))),
         };
         foreach (string sourceRoot in sourceRoots)
-            foreach (string path in EnumerateSourceFiles(sourceRoot, ".mf2").Concat(EnumerateSourceFiles(sourceRoot, ".rmf2")))
+            foreach (string path in EnumerateSourceFiles(sourceRoot, ".mf2").Concat(EnumerateSourceFiles(sourceRoot, ".rmf2")).Where(path => !inventoryLayout.IsOverrideSource(path)))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 string relative = NormalizeRelativePath(Path.GetRelativePath(_root, path));
@@ -1772,6 +1854,8 @@ internal sealed class EditorWorkspace : IDisposable
         string relativePath = NormalizeRelativePath(Path.GetRelativePath(_root, fullPath));
         if (relativePath == ".." || relativePath.StartsWith("../", StringComparison.Ordinal)) return;
         if (relativePath.StartsWith(".runic-translations/", StringComparison.Ordinal)) return;
+        if (membershipChanged || string.Equals(Path.GetFileName(fullPath), "runic.json", StringComparison.OrdinalIgnoreCase))
+            Volatile.Write(ref _discoveredProjects, null);
         _pendingChanges.TryAdd(relativePath, 0);
         Interlocked.Exchange(ref _reconcileRequested, 1);
     }

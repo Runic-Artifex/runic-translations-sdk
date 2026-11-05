@@ -270,19 +270,23 @@ try {
   await sortRow.getByRole("button", { name: "Override", exact: true }).click();
   const overrideText = sortRow.locator('[data-layer="override"]');
   await waitFor(async () => await overrideText.count() === 1 && (await overrideText.inputValue()) === "Sortieren nach {$column}", "override seeded with the library text");
-  assert.match(await readFile(overridePath, "utf8"), /header \{\n  # Acme\.Table 1\.0\.0, base locale en:\n[^]*  sort = Sortieren nach \{\$column\}\n\}/);
+  // The override is written on its first Save, not on the click.
+  assert.equal(await lstat(overridePath).then(() => true, () => false), false, "Override wrote the file before Save.");
   await overrideText.fill("Sortiert nach {$column}");
   await sortRow.getByRole("button", { name: "Save", exact: true }).click();
-  await waitFor(async () => (await readFile(overridePath, "utf8")).includes("sort = Sortiert nach {$column}"), "override text saved to disk");
+  await waitFor(async () => await lstat(overridePath).then(() => true, () => false) && (await readFile(overridePath, "utf8")).includes("sort = Sortiert nach {$column}"), "override text saved to disk");
+  assert.match(await readFile(overridePath, "utf8"), /header \{\n  # Acme\.Table 1\.0\.0, base locale en:\n[^]*  sort = Sortiert nach \{\$column\}\n\}/);
   await sortRow.locator('[data-badge="overridden"]').waitFor();
   await sortRow.getByRole("button", { name: "Revert to library", exact: true }).click();
   await waitFor(async () => !(await lstat(overridePath).then(() => true, () => false)), "override source removed by Revert to library");
   await sortRow.getByRole("button", { name: "Override", exact: true }).waitFor();
-  await libraryDialog.getByTestId("library-new-locale").fill("de-CH");
+  // Typed in another spelling: the canonical de-CH is added and selected, not the base locale.
+  await libraryDialog.getByTestId("library-new-locale").fill("de_ch");
   await libraryDialog.getByRole("button", { name: "Add locale", exact: true }).click();
   await waitFor(async () => (await libraryDialog.locator('[data-locale="de-CH"]').count()) === 1 &&
     (await libraryDialog.locator('[data-locale="de-CH"]').innerText()).includes("Added by you, falls back to de"), "app-added de-CH with its fallback");
   assert.match(await libraryDialog.locator('[data-coverage="de-CH"]').innerText(), /^0 of 2 in its own text/);
+  assert.match(await libraryDialog.locator('[data-locale="de-CH"]').getAttribute("class") ?? "", /border-primary/, "The added locale is not selected.");
   if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "library-catalog.png"), fullPage: true });
   await page.keyboard.press("Escape");
   assert.deepEqual(pageErrors, [], "The production editor reported uncaught browser errors in the library catalog.");

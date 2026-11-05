@@ -277,7 +277,8 @@ function mockLibraryView(): EditorLibraryView {
       const overridden = mockOverrides.filter(item => item.locale === tag).length;
       const libraryTranslated = library ? mockLibraryMessages.length : 0;
       return { tag, fallback: tag === "en" ? undefined : tag.startsWith("de-") ? "de" : "en", origin: library ? "library" as const : "application" as const,
-        messages: mockLibraryMessages.length, libraryTranslated, overridden, covered: library ? libraryTranslated : overridden, pending: !library && overridden === 0 };
+        messages: mockLibraryMessages.length, libraryTranslated, overridden, covered: library ? libraryTranslated : overridden, pending: !library && overridden === 0,
+        revision: overridden > 0 || mockAddedLocales.includes(tag) ? `mock-source-${tag}-${mockOverrides.filter(item => item.locale === tag).map(item => item.text).join("|")}` : undefined };
     }),
     messages: mockLibraryMessages.map(message => ({ ...message, texts: { ...message.texts },
       overrides: mockOverrides.filter(item => item.key === message.key).map(item => ({ locale: item.locale, text: item.text,
@@ -290,19 +291,22 @@ function mockLibraryView(): EditorLibraryView {
 function mockLibrary(operation: string, value: Record<string, unknown>): EditorLibraryResult {
   const request = value as unknown as EditorLibraryOverrideRequest;
   if ((value.catalog as string) !== "acme.table") return { ok: false, message: { code: "ui_backend_library_missing", args: [{ name: "catalog", value: String(value.catalog) }] } };
-  const index = mockOverrides.findIndex(item => item.key === request.key && item.locale === request.locale);
+  const canonical = (tag: string) => { try { return Intl.getCanonicalLocales(tag.trim().replace(/_/g, "-"))[0]; } catch { return undefined; } };
+  const locale = typeof value.locale === "string" ? canonical(value.locale) : undefined;
+  if (typeof value.locale === "string" && !locale) return { ok: false, message: { code: "ui_backend_library_invalid_locale", args: [{ name: "locale", value: value.locale }] } };
+  const index = mockOverrides.findIndex(item => item.key === request.key && item.locale === locale);
   switch (operation) {
     case "OverrideLibraryMessage": {
       const message = mockLibraryMessages.find(item => item.key === request.key)!;
-      if (index < 0) mockOverrides.push({ key: request.key, locale: request.locale, text: request.text ?? message.texts[request.locale] ?? message.texts[request.locale.split("-")[0]] ?? message.baseText });
+      if (index < 0) mockOverrides.push({ key: request.key, locale: locale!, text: request.text ?? message.texts[locale!] ?? message.texts[locale!.split("-")[0]] ?? message.baseText });
       break;
     }
     case "SaveLibraryOverride": if (index >= 0) mockOverrides[index] = { ...mockOverrides[index], text: request.text ?? "" }; break;
     case "RevertLibraryOverride": mockOverrides = mockOverrides.filter((_, position) => position !== index); break;
     case "KeepLibraryOverride": if (index >= 0) mockOverrides[index] = { ...mockOverrides[index], changed: false }; break;
-    case "AddLibraryLocale": if (!mockAddedLocales.includes(value.locale as string)) mockAddedLocales = [...mockAddedLocales, value.locale as string]; break;
+    case "AddLibraryLocale": if (!mockAddedLocales.includes(locale!)) mockAddedLocales = [...mockAddedLocales, locale!]; break;
   }
-  return { ok: true, library: mockLibraryView() };
+  return { ok: true, library: mockLibraryView(), locale };
 }
 
 async function checkExternalChanges() {

@@ -24,7 +24,9 @@ namespace Runic.Translations.Editor;
 internal sealed record EditorLibrarySummary(string Catalog, string? Package, string? Version, string? Origin, bool Overridden, string? Problem, int OverrideSources);
 
 /// <summary>A locale of a library catalog: the library's (<c>library</c>) or one the application adds (<c>application</c>).</summary>
-internal sealed record EditorLibraryLocale(string Tag, string? Fallback, string Origin, int Messages, int LibraryTranslated, int Overridden, int Covered, bool Pending);
+/// <param name="Revision">The revision of the locale's override source, or null when it has none: an override's first save sends it.</param>
+internal sealed record EditorLibraryLocale(string Tag, string? Fallback, string Origin, int Messages, int LibraryTranslated, int Overridden, int Covered, bool Pending,
+    string? Revision = null);
 
 /// <summary>An override of a message in one locale (layer 1).</summary>
 /// <param name="Path">The override source, relative to the workspace root.</param>
@@ -44,12 +46,17 @@ internal sealed record EditorLibraryView(string Catalog, string? Package, string
     string? LibraryError);
 
 /// <param name="ProjectChanged">Whether runic.json changed (the catalog was added to <c>overrides</c>), so the workspace should reload.</param>
-internal sealed record EditorLibraryResult(bool Ok, EditorNotice? Message, EditorLibraryView? Library, bool ProjectChanged = false);
+/// <param name="Locale">The canonical tag of the locale the operation added or wrote (<c>fr-ca</c> → <c>fr-CA</c>), or null.</param>
+/// <param name="Conflict">Whether the operation was refused because a file changed since the dialog loaded it: reload the library.</param>
+internal sealed record EditorLibraryResult(bool Ok, EditorNotice? Message, EditorLibraryView? Library, bool ProjectChanged = false, string? Locale = null, bool Conflict = false);
 
 internal sealed record EditorLibraryRequest(string Catalog);
 
 /// <param name="Text">The override's text: for <c>override</c> the initial text (null: the library's text), for <c>save</c> the new text.</param>
-/// <param name="ExpectedRevision">For <c>save</c>, the override source's revision the text was edited from.</param>
+/// <param name="ExpectedRevision">
+/// The revision of the override source the request was made from: the override's for save, revert and keep, the locale's
+/// (<see cref="EditorLibraryLocale.Revision"/>, empty when it has none) for override. A file that changed since is refused.
+/// </param>
 internal sealed record EditorLibraryOverrideRequest(string Catalog, string Key, string Locale, string? Text = null, string? ExpectedRevision = null);
 
 internal sealed record EditorLibraryLocaleRequest(string Catalog, string Locale);
@@ -62,61 +69,72 @@ internal sealed partial class EditorSession
     public Task<EditorLibraryResult> LoadLibraryAsync(EditorLibraryRequest request, CancellationToken cancellationToken = default) =>
         WithLibraryAsync(request.Catalog, (context, _) => Task.FromResult(context.Result()), cancellationToken);
 
-    /// <summary>Override: adds the message to the locale's override source, seeded with the library's text, and records the library text.</summary>
+    /// <summary>
+    /// Override: adds the message to the locale's override source with the text the user saved (the library's text when
+    /// null), records the library text it was written for, and lists the catalog in runic.json when needed, all in one plan.
+    /// </summary>
     public Task<EditorLibraryResult> OverrideLibraryMessageAsync(EditorLibraryOverrideRequest request, CancellationToken cancellationToken = default) =>
         WithLibraryAsync(request.Catalog, (context, token) =>
         {
-            bool declared = context.Declare();
-            context.Apply(TranslationOverrideChanges.Override(context.Catalog, [request.Key], request.Locale, request.Text));
-            return Task.FromResult(context.Reload(token).Result() with { ProjectChanged = declared });
+            string locale = CanonicalLibraryLocale(request.Locale);
+            context.RequireRevision(context.Target.SourcePath(locale), request.ExpectedRevision);
+            string? text = request.Text?.Replace("\r\n", "\n", StringComparison.Ordinal);
+            TranslationOverridePlan plan = TranslationOverrideChanges.Override(context.Catalog, [request.Key], locale, text);
+            if (text is not null) context.RequireParses(plan, token);
+            bool declared = context.Apply(plan);
+            return Task.FromResult(context.Reload(token).Result() with { ProjectChanged = declared, Locale = locale });
         }, cancellationToken);
 
     /// <summary>Saves the text of an override, refusing when its source changed since <c>ExpectedRevision</c>.</summary>
     public Task<EditorLibraryResult> SaveLibraryOverrideAsync(EditorLibraryOverrideRequest request, CancellationToken cancellationToken = default) =>
         WithLibraryAsync(request.Catalog, (context, token) =>
         {
-            TranslationLibraryOverride item = context.Catalog.Override(request.Key, request.Locale)
-                ?? throw new EditorUserException(EditorNotice.Create("ui_backend_library_not_overridden", ("key", request.Key), ("locale", request.Locale)));
+            TranslationLibraryOverride item = context.Override(request);
             TranslationSource source = context.Catalog.OverrideSources.Single(candidate => candidate.Path == item.Path);
-            if (request.ExpectedRevision is not null && request.ExpectedRevision != LibraryRevision(source.GetUtf8Bytes()))
-                throw new EditorUserException(EditorNotice.Create("ui_backend_document_conflict", ("path", context.Relative(item.Path))));
             string text = (request.Text ?? throw new ArgumentException("Text is required.")).Replace("\r\n", "\n", StringComparison.Ordinal);
-            byte[] bytes = Rmf2ResourceWriter.SetMessage(source, request.Key, text);
-            Rmf2ResourceDocument check = Rmf2ResourceReader.Analyze(new TranslationSource(item.Path, bytes), null, token);
-            if (!check.Success) throw new EditorUserException(EditorNotice.Create("ui_backend_library_invalid_text", ("detail", check.Diagnostics[0].Message)));
-            context.Apply(new TranslationOverridePlan(item.Path, bytes, null));
-            return Task.FromResult(context.Reload(token).Result());
+            var plan = new TranslationOverridePlan(Path.GetFullPath(item.Path), Rmf2ResourceWriter.SetMessage(source, request.Key, text), source.GetUtf8Bytes());
+            context.RequireParses(plan, token);
+            context.Apply(plan);
+            return Task.FromResult(context.Reload(token).Result() with { Locale = item.Locale });
         }, cancellationToken);
 
-    /// <summary>Revert to library: removes the override and its review entry.</summary>
+    /// <summary>Revert to library: removes the override and its review entry, refusing when the override changed since it was shown.</summary>
     public Task<EditorLibraryResult> RevertLibraryOverrideAsync(EditorLibraryOverrideRequest request, CancellationToken cancellationToken = default) =>
         WithLibraryAsync(request.Catalog, (context, token) =>
         {
-            context.Apply(TranslationOverrideChanges.Revert(context.Catalog, request.Key, request.Locale));
-            return Task.FromResult(context.Reload(token).Result());
+            TranslationLibraryOverride item = context.Override(request);
+            context.Apply(TranslationOverrideChanges.Revert(context.Catalog, item.Key, item.Locale));
+            return Task.FromResult(context.Reload(token).Result() with { Locale = item.Locale });
         }, cancellationToken);
 
-    /// <summary>Keep override: records that the override was checked against the library's current base text.</summary>
+    /// <summary>Keep override: records that the override was checked against the library's current text, refusing when it changed since it was shown.</summary>
     public Task<EditorLibraryResult> KeepLibraryOverrideAsync(EditorLibraryOverrideRequest request, CancellationToken cancellationToken = default) =>
         WithLibraryAsync(request.Catalog, (context, token) =>
         {
-            context.ApplyReview(TranslationOverrideChanges.Keep(context.Catalog, [request.Key], request.Locale));
-            return Task.FromResult(context.Reload(token).Result());
+            TranslationLibraryOverride item = context.Override(request);
+            context.Apply(TranslationOverrideChanges.Keep(context.Catalog, [item.Key], item.Locale));
+            return Task.FromResult(context.Reload(token).Result() with { Locale = item.Locale });
         }, cancellationToken);
 
     /// <summary>
     /// Adds a locale to a library catalog that the library lacks (L5-16): its override source with commented templates. It
     /// falls back by the one-hop rule of the compiler and both runtimes, and the build adds it with its first override.
+    /// The result names the canonical tag (<c>fr-ca</c> → <c>fr-CA</c>).
     /// </summary>
     public Task<EditorLibraryResult> AddLibraryLocaleAsync(EditorLibraryLocaleRequest request, CancellationToken cancellationToken = default) =>
         WithLibraryAsync(request.Catalog, (context, token) =>
         {
-            if (context.Catalog.Locales.Any(locale => string.Equals(locale.Tag, request.Locale, StringComparison.OrdinalIgnoreCase)))
-                throw new EditorUserException(EditorNotice.Create("ui_backend_library_locale_exists", ("locale", request.Locale)));
-            bool declared = context.Declare();
-            context.Apply(TranslationOverrideChanges.Scaffold(context.Catalog, request.Locale));
-            return Task.FromResult(context.Reload(token).Result() with { ProjectChanged = declared });
+            string locale = CanonicalLibraryLocale(request.Locale);
+            if (context.Catalog.Locales.Any(item => string.Equals(item.Tag, locale, StringComparison.OrdinalIgnoreCase)) ||
+                File.Exists(context.Target.SourcePath(locale)))
+                throw new EditorUserException(EditorNotice.Create("ui_backend_library_locale_exists", ("locale", locale)));
+            bool declared = context.Apply(TranslationOverrideChanges.Scaffold(context.Catalog, locale));
+            return Task.FromResult(context.Reload(token).Result() with { ProjectChanged = declared, Locale = locale });
         }, cancellationToken);
+
+    private static string CanonicalLibraryLocale(string locale) =>
+        !string.IsNullOrWhiteSpace(locale) && TranslationCompiler.TryCanonicalizeLocale(locale.Trim().Replace('_', '-'), out string tag) ? tag
+            : throw new EditorUserException(EditorNotice.Create("ui_backend_library_invalid_locale", ("locale", locale)));
 
     private async Task<EditorLibraryResult> WithLibraryAsync(string catalog, Func<LibraryContext, CancellationToken, Task<EditorLibraryResult>> operation, CancellationToken cancellationToken)
     {
@@ -132,6 +150,12 @@ internal sealed partial class EditorSession
                 return new EditorLibraryResult(false, EditorNotice.Create("ui_backend_library_unavailable", ("catalog", catalog), ("detail", target.Problem ?? "")), null);
             var context = new LibraryContext(_workspace, config, target, TranslationLibraryCatalog.Load(target, null, cancellationToken));
             return await operation(context, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TranslationOverrideConflictException exception)
+        {
+            // A file changed since the dialog loaded it (an edit in VS Code, the command line): nothing was written; the
+            // dialog keeps the user's text and offers to reload.
+            return new EditorLibraryResult(false, EditorNotice.Create("ui_backend_library_conflict", ("path", _workspace.RelativePath(exception.Path))), null, Conflict: true);
         }
         catch (Exception exception) when (exception is EditorUserException or ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException or TranslationAuthoringException or TranslationInterchangeException)
         {
@@ -150,34 +174,50 @@ internal sealed partial class EditorSession
         internal TranslationOverrideTarget Target { get; private set; } = target;
         internal TranslationLibraryCatalog Catalog { get; private set; } = catalog;
 
-        internal string Relative(string path) => Path.GetRelativePath(workspace.Root, Path.GetFullPath(path)).Replace('\\', '/');
+        internal string Relative(string path) => workspace.RelativePath(path);
 
-        // Lists the catalog in runic.json "overrides" when it is not yet; returns whether runic.json changed.
-        internal bool Declare()
+        // The override a request names, refused when its source changed since the revision the dialog showed.
+        internal TranslationLibraryOverride Override(EditorLibraryOverrideRequest request)
         {
-            if (Target.Listed) return false;
-            byte[]? bytes = TranslationOverrideChanges.Declare(new TranslationSource(config, File.ReadAllBytes(config)), Target.Catalog, Target.Dependency!.Package);
-            if (bytes is null) return false;
-            workspace.EnsureWritable(config);
-            string temporary = config + "." + Guid.NewGuid().ToString("N") + ".tmp";
-            try { File.WriteAllBytes(temporary, bytes); File.Move(temporary, config, overwrite: true); }
-            finally { if (File.Exists(temporary)) File.Delete(temporary); }
-            Target = Target with { Listed = true, Problem = null };
-            return true;
+            TranslationLibraryOverride item = Catalog.Override(request.Key, request.Locale)
+                ?? throw new EditorUserException(EditorNotice.Create("ui_backend_library_not_overridden", ("key", request.Key), ("locale", request.Locale)));
+            RequireRevision(item.Path, request.ExpectedRevision ?? throw new ArgumentException("The override's revision is required."));
+            return item;
         }
 
-        internal void Apply(TranslationOverridePlan plan)
+        // The source at path as the catalog read it must be the one the dialog showed ("" or null revision: it had none).
+        internal void RequireRevision(string path, string? expected)
         {
-            // Override sources and their review file are written only inside the workspace.
+            if (expected is null) return;
+            string full = new TranslationSource(Path.GetFullPath(path), []).Path;
+            TranslationSource? source = Catalog.OverrideSources.FirstOrDefault(candidate => candidate.Path == full);
+            string current = source is null ? "" : LibraryRevision(source.GetUtf8Bytes());
+            if (!string.Equals(current, expected, StringComparison.Ordinal))
+                throw new TranslationOverrideConflictException(Path.GetFullPath(path), "The override source changed since it was shown.");
+        }
+
+        // A text the user typed must leave the override source parseable.
+        internal void RequireParses(TranslationOverridePlan plan, CancellationToken cancellationToken)
+        {
+            Rmf2ResourceDocument check = Rmf2ResourceReader.Analyze(new TranslationSource(plan.Path, plan.Bytes ?? []), null, cancellationToken);
+            if (!check.Success) throw new EditorUserException(EditorNotice.Create("ui_backend_library_invalid_text", ("detail", check.Diagnostics[0].Message)));
+        }
+
+        // Writes a plan, listing the catalog in runic.json "overrides" in the same plan when it is not yet. Every file is
+        // written only inside the workspace, and the editor records runic.json as its own write, not an external change.
+        // Returns whether runic.json changed.
+        internal bool Apply(TranslationOverridePlan plan)
+        {
+            plan = TranslationOverrideChanges.Declaring(plan, config, Target);
             workspace.EnsureWritable(plan.Path);
             workspace.EnsureWritable(Target.ReviewPath);
-            TranslationOverrideChanges.Apply(plan, Target);
-        }
-
-        internal void ApplyReview(TranslationInterchangeReview review)
-        {
-            workspace.EnsureWritable(Target.ReviewPath);
-            TranslationReviewFile.Write(Target.ReviewPath, review);
+            if (plan.ProjectPath is not null) workspace.EnsureWritable(plan.ProjectPath);
+            TranslationOverrideTarget listed = Target with { Listed = true, Problem = null };
+            workspace.WriteOwnFiles(() => TranslationOverrideChanges.Apply(plan, listed),
+                plan.ProjectPath is null ? [] : [(plan.ProjectPath, plan.ProjectBytes)]);
+            if (plan.ProjectPath is null) return false;
+            Target = listed;
+            return true;
         }
 
         internal LibraryContext Reload(CancellationToken cancellationToken)
@@ -194,8 +234,13 @@ internal sealed partial class EditorSession
                 message.Content, message.Structured, message.BaseText, message.Description, message.Texts,
                 catalog.Overrides.Where(item => item.Key == message.Key).Select(item => new EditorLibraryOverride(item.Locale, item.Text, Relative(item.Path),
                     revisions.GetValueOrDefault(item.Path, ""), item.Changed, item.Known)).ToArray())).ToArray();
-            EditorLibraryLocale[] locales = catalog.Locales.Select(static locale => new EditorLibraryLocale(locale.Tag, locale.Fallback,
-                locale.Origin == TranslationLibraryLocaleOrigin.Library ? "library" : "application", locale.Messages, locale.LibraryTranslated, locale.Overridden, locale.Covered, locale.Pending)).ToArray();
+            var sourcePaths = revisions.Keys.ToHashSet(StringComparer.Ordinal);
+            EditorLibraryLocale[] locales = catalog.Locales.Select(locale =>
+            {
+                string path = new TranslationSource(Target.SourcePath(locale.Tag), []).Path;
+                return new EditorLibraryLocale(locale.Tag, locale.Fallback, locale.Origin == TranslationLibraryLocaleOrigin.Library ? "library" : "application",
+                    locale.Messages, locale.LibraryTranslated, locale.Overridden, locale.Covered, locale.Pending, sourcePaths.Contains(path) ? revisions[path] : null);
+            }).ToArray();
             EditorDiagnostic[] diagnostics = catalog.Diagnostics.Select(diagnostic => new EditorDiagnostic(diagnostic.Id,
                 diagnostic.Severity switch { TranslationDiagnosticSeverity.Error => "error", TranslationDiagnosticSeverity.Warning => "warning", _ => "info" },
                 diagnostic.Message, Relative(diagnostic.Location.Path), diagnostic.Location.Line, diagnostic.Location.Column, diagnostic.Location.EndLine, diagnostic.Location.EndColumn,

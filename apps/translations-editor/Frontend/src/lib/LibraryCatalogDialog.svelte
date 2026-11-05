@@ -15,9 +15,11 @@
   let {
     open = $bindable(false),
     busy = false,
+    project = "",
     libraries,
     library,
     notice,
+    conflict = false,
     locale = $bindable(""),
     onselect,
     onoverride,
@@ -25,19 +27,27 @@
     onrevert,
     onkeep,
     onaddlocale,
+    onreload,
   }: {
     open?: boolean;
     busy?: boolean;
+    /** The open project's runic.json: drafts are kept per project, so two projects that override one library do not share them. */
+    project?: string;
     libraries: EditorLibrarySummary[];
     library?: EditorLibraryView;
     notice?: UiNotice;
+    /** The last write was refused because a file changed since the dialog loaded it; the drafts are kept. */
+    conflict?: boolean;
     locale?: string;
     onselect(catalog: string): void;
-    onoverride(key: string, locale: string): void;
-    onsave(key: string, locale: string, text: string, revision: string): void;
-    onrevert(key: string, locale: string): void;
-    onkeep(key: string, locale: string): void;
+    /** Creates the override with the text the user saved, from the locale's override source at `revision` ("" when it has none). Resolves whether it was written. */
+    onoverride(key: string, locale: string, text: string, revision: string): Promise<boolean>;
+    /** Resolves whether the text was saved; the draft stays until then and after a failure. */
+    onsave(key: string, locale: string, text: string, revision: string): Promise<boolean>;
+    onrevert(key: string, locale: string, revision: string): void;
+    onkeep(key: string, locale: string, revision: string): void;
     onaddlocale(locale: string): void;
+    onreload(): void;
   } = $props();
 
   const ui = getUiText();
@@ -45,7 +55,25 @@
   let edits = $state<Record<string, string>>({});
 
   const current = $derived(library?.locales.find((item) => item.tag === locale) ?? library?.locales[0]);
-  const editKey = (message: EditorLibraryMessage) => `${library?.catalog}\n${current?.tag}\n${message.key}`;
+  const editKey = (message: EditorLibraryMessage) => `${project}\n${library?.catalog}\n${current?.tag}\n${message.key}`;
+
+  // Override opens the text pre-filled with the library's text; the override is written on the first Save, so a click
+  // alone does not pin the library's current translation.
+  function beginOverride(message: EditorLibraryMessage): void {
+    edits[editKey(message)] = libraryText(message).text;
+  }
+
+  async function save(message: EditorLibraryMessage, create: boolean): Promise<void> {
+    const key = editKey(message);
+    const text = edits[key];
+    if (text === undefined || current === undefined) return;
+    const tag = current.tag;
+    const override = message.overrides.find((item) => item.locale === tag);
+    const ok = create || !override
+      ? await onoverride(message.key, tag, text, current.revision ?? "")
+      : await onsave(message.key, tag, text, override.revision);
+    if (ok && edits[key] === text) delete edits[key];
+  }
 
   // The library text the locale shows: its own, else the first on its fallback chain the library translates.
   function libraryText(message: EditorLibraryMessage): { text: string; from: string } {
@@ -88,7 +116,14 @@
       </div>
     {/if}
 
-    {#if notice}<Alert.Root variant="destructive"><Alert.Description>{displayNotice(notice, ui)}</Alert.Description></Alert.Root>{/if}
+    {#if notice}
+      <Alert.Root variant="destructive" data-testid="library-notice">
+        <Alert.Description>
+          {displayNotice(notice, ui)}
+          {#if conflict}<Button size="sm" variant="outline" class="mt-2" disabled={busy} data-action="reload-library" onclick={onreload}>{ui.text("ui_library_reload")}</Button>{/if}
+        </Alert.Description>
+      </Alert.Root>
+    {/if}
 
     {#if library}
       {#if !library.listed}<Alert.Root><Alert.Description>{ui.text("ui_library_not_listed")}</Alert.Description></Alert.Root>{/if}
@@ -142,22 +177,31 @@
                   {#if current.tag !== library.baseLocale}<small class="block text-muted-foreground">{ui.text("ui_library_base_text", { locale: library.baseLocale })}: {message.baseText}</small>{/if}
                 </td>
                 <td class="py-2">
-                  {#if override}
+                  {#if override || edits[editKey(message)] !== undefined}
                     <div class="mb-1 flex flex-wrap gap-1">
-                      <Badge variant="secondary" data-badge="overridden">{ui.text("ui_library_overridden")}</Badge>
-                      {#if override.changed}<Badge variant="destructive" data-badge="changed">{ui.text("ui_library_changed")}</Badge>{/if}
+                      {#if override}
+                        <Badge variant="secondary" data-badge="overridden">{ui.text("ui_library_overridden")}</Badge>
+                        {#if override.changed}<Badge variant="destructive" data-badge="changed">{ui.text("ui_library_changed")}</Badge>{/if}
+                      {:else}
+                        <Badge variant="outline" data-badge="new-override">{ui.text("ui_library_new_override")}</Badge>
+                      {/if}
                     </div>
                     <Textarea class="min-h-16 font-mono text-xs" data-layer="override" aria-label={`${message.path} ${current.tag}`}
-                      value={edits[editKey(message)] ?? override.text}
+                      value={edits[editKey(message)] ?? override?.text ?? ""}
                       oninput={(event) => edits[editKey(message)] = event.currentTarget.value} />
                     <div class="mt-1 flex flex-wrap gap-1">
-                      <Button size="sm" disabled={busy || (edits[editKey(message)] ?? override.text) === override.text}
-                        onclick={() => { onsave(message.key, current.tag, edits[editKey(message)] ?? override.text, override.revision); delete edits[editKey(message)]; }}>{ui.text("ui_library_save")}</Button>
-                      <Button size="sm" variant="outline" disabled={busy} onclick={() => { delete edits[editKey(message)]; onrevert(message.key, current.tag); }}>{ui.text("ui_library_revert")}</Button>
-                      {#if override.changed}<Button size="sm" variant="outline" disabled={busy} onclick={() => onkeep(message.key, current.tag)}>{ui.text("ui_library_keep")}</Button>{/if}
+                      {#if override}
+                        <Button size="sm" disabled={busy || (edits[editKey(message)] ?? override.text) === override.text}
+                          onclick={() => void save(message, false)}>{ui.text("ui_library_save")}</Button>
+                        <Button size="sm" variant="outline" disabled={busy} onclick={() => { delete edits[editKey(message)]; onrevert(message.key, current.tag, override.revision); }}>{ui.text("ui_library_revert")}</Button>
+                        {#if override.changed}<Button size="sm" variant="outline" disabled={busy} onclick={() => onkeep(message.key, current.tag, override.revision)}>{ui.text("ui_library_keep")}</Button>{/if}
+                      {:else}
+                        <Button size="sm" disabled={busy} data-action="create-override" onclick={() => void save(message, true)}>{ui.text("ui_library_save")}</Button>
+                        <Button size="sm" variant="outline" disabled={busy} onclick={() => delete edits[editKey(message)]}>{ui.text("ui_library_cancel")}</Button>
+                      {/if}
                     </div>
                   {:else}
-                    <Button size="sm" variant="outline" disabled={busy} onclick={() => onoverride(message.key, current.tag)}>{ui.text("ui_library_override")}</Button>
+                    <Button size="sm" variant="outline" disabled={busy} onclick={() => beginOverride(message)}>{ui.text("ui_library_override")}</Button>
                   {/if}
                 </td>
               </tr>

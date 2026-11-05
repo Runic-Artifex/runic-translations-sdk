@@ -147,15 +147,24 @@ dependency's `runicTranslations`), found through the restore output and
 first. **Libraries…** shows a library catalog in two layers: the library's text
 (layer 0) is read-only, and your overrides (layer 1) are the
 `translations/overrides/<catalog>/<locale>.rmf2` files the build compiles into
-the application. **Override** adds a message to that file, seeded with the text
-the locale shows now and with the library's base text as comments; the first
-override of a catalog adds it to runic.json `"overrides"`. An override shows an
+the application. **Override** opens the message's text, pre-filled with the text
+the locale shows now; **Save** writes it to that file with the library's base
+text as comments, so a click alone does not pin the library's current text. The
+first override of a catalog adds it to runic.json `"overrides"` in the same
+write, which the editor does not report as an external change; with unsaved work
+the page asks you to reload once it is saved. An override shows an
 **Overridden** badge, can be edited and saved, and **Revert to library** removes
-it. Each override records the library's base text it was written for
-(`translations/overrides/<catalog>/<catalog>.review.json`); after a library
-update that changes it, the override is marked **Library text changed since
-override** (`RTR0090`) until you **Keep override**. **Add locale** adds a locale
-the library lacks; it falls back by the rule of the compiler and both runtimes
+it. Each override records the library text it was written for, its base text and
+the locale's text (`translations/overrides/<catalog>/<catalog>.review.json`);
+after a library update that changes either, the override is marked **Library
+text changed since override** (`RTR0090`) until you **Keep override**. Save,
+Override, Revert and Keep send the revision of the file they were shown from: if
+it changed on disk meanwhile (an edit in VS Code, the command line), nothing is
+written, your typed text stays, and **Reload library** shows the current state.
+A text that is not valid RMF2 is refused and stays in place with the error.
+Catalogs and drafts are kept per `runic.json`. **Add locale** adds a locale
+the library lacks (the tag is canonicalized, `fr-ca` becomes `fr-CA`, and
+selected); it falls back by the rule of the compiler and both runtimes
 (its nearest CLDR parent among the library's and your locales, then the library
 locale CLDR likely subtags match, then the base locale) and is built once it has
 its first override. Each locale shows how many of the library's messages it shows

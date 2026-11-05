@@ -177,6 +177,8 @@ export interface EditorLibraryLocale {
   overridden: number;
   covered: number;
   pending: boolean;
+  /** The revision of the locale's override source, absent when it has none; an override's first save sends it. */
+  revision?: string;
 }
 
 /** An override (layer 1) of a library message in one locale. */
@@ -224,6 +226,10 @@ export interface EditorLibraryResult {
   library?: EditorLibraryView;
   /** runic.json changed (the catalog joined "overrides"); reload the workspace. */
   projectChanged?: boolean;
+  /** The canonical tag of the locale the operation added or wrote (fr-ca → fr-CA). */
+  locale?: string;
+  /** The write was refused because a file changed since the dialog loaded it; reload the library. */
+  conflict?: boolean;
 }
 
 export interface EditorLibraryOverrideRequest {

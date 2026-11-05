@@ -293,9 +293,19 @@
   let libraryBusy = $state(false);
   let libraryView = $state.raw<import("#lib/contracts.js").EditorLibraryView>();
   let libraryNotice = $state<import("#lib/ui-text.js").UiNotice>();
+  let libraryConflict = $state(false);
   let libraryLocale = $state("");
-  // The selection of each catalog of a workspace, restored when the user switches back to it (L5-4).
+  // runic.json changed through a library operation (the catalog joined "overrides") while there was unsaved work, so the
+  // workspace was not reloaded: the page says so and offers the reload once the work is saved.
+  let projectReloadPending = $state(false);
+  // The selection of each catalog of a workspace, restored when the user switches back to it (L5-4); keyed by the
+  // catalog's runic.json, since two projects (an app and a copy of it) can share a catalog ID.
   const catalogViews = new Map<string, { key: string; locale: string; filter: MessageFilter; query: string; mode: EditorMode }>();
+  const catalogViewKey = (value: WorkspaceSnapshot) => `${value.root}\n${currentManifest(value)}`;
+  // The open project's runic.json: the first catalog summary is the open one.
+  function currentManifest(value: WorkspaceSnapshot | undefined): string {
+    return value?.catalogs[0]?.manifestPaths[0] ?? value?.catalog?.id ?? "";
+  }
   let interchangeBusy = $state(false);
   let xliffDirectory = $state("");
   let xliffImportPath = $state("");
@@ -684,6 +694,7 @@
       recoveryReloadMessage = undefined;
       externalChanges = [];
       externalFileChanges = [];
+      projectReloadPending = false;
     } catch (error) {
       clientError = errorNotice(error);
     } finally {
@@ -709,7 +720,7 @@
     if (resetSelection || !next.catalog?.locales.some((locale) => locale.tag === selectedLocale)) {
       selectedLocale = next.catalog?.defaultLocale ?? next.catalog?.locales[0]?.tag ?? "";
     }
-    const remembered = resetSelection && next.catalog ? catalogViews.get(`${next.root}\n${next.catalog.id}`) : undefined;
+    const remembered = resetSelection && next.catalog ? catalogViews.get(catalogViewKey(next)) : undefined;
     if (remembered) {
       if (nextRows.some((row) => row.key === remembered.key)) selectedKey = remembered.key;
       if (next.catalog?.locales.some((locale) => locale.tag === remembered.locale)) selectedLocale = remembered.locale;
@@ -1822,7 +1833,7 @@
 
   function rememberCatalogView(): void {
     if (snapshot?.catalog)
-      catalogViews.set(`${snapshot.root}\n${snapshot.catalog.id}`, { key: selectedKey, locale: selectedLocale, filter, query, mode });
+      catalogViews.set(catalogViewKey(snapshot), { key: selectedKey, locale: selectedLocale, filter, query, mode });
   }
 
   async function openLibrary(catalog: string): Promise<void> {
@@ -1830,21 +1841,35 @@
     await runLibrary(() => bridge.loadLibrary(catalog));
   }
 
-  async function runLibrary(operation: () => Promise<import("#lib/contracts.js").EditorLibraryResult>): Promise<void> {
-    if (libraryBusy) return;
+  // Runs a library operation; resolves whether it succeeded. A refused write (a file changed since the dialog loaded it)
+  // keeps the dialog's drafts and offers a reload.
+  async function runLibrary(operation: () => Promise<import("#lib/contracts.js").EditorLibraryResult>): Promise<boolean> {
+    if (libraryBusy) return false;
     libraryBusy = true;
     libraryNotice = undefined;
+    libraryConflict = false;
     try {
       const result = await operation();
-      if (!result.ok) libraryNotice = result.message ?? notice("ui_backend_external_error");
+      if (!result.ok) {
+        libraryNotice = result.message ?? notice("ui_backend_external_error");
+        libraryConflict = result.conflict === true;
+      }
       if (result.library) {
         libraryView = result.library;
-        if (!result.library.locales.some((locale) => locale.tag === libraryLocale)) libraryLocale = result.library.locales[0]?.tag ?? "";
+        // The canonical tag the backend wrote (fr-ca → fr-CA), else the current one if it still exists.
+        if (result.locale && result.library.locales.some((locale) => locale.tag === result.locale)) libraryLocale = result.locale;
+        else if (!result.library.locales.some((locale) => locale.tag === libraryLocale)) libraryLocale = result.library.locales[0]?.tag ?? "";
       }
-      // The catalog joined runic.json "overrides": the project changed on disk.
-      if (result.projectChanged) await loadWorkspace(false);
+      // The catalog joined runic.json "overrides": the project changed on disk. With unsaved work the reload waits, and
+      // the page says so.
+      if (result.projectChanged) {
+        if (hasUnsavedWork) projectReloadPending = true;
+        else await loadWorkspace(false);
+      }
+      return result.ok;
     } catch (error) {
       libraryNotice = errorNotice(error) as import("#lib/ui-text.js").UiNotice;
+      return false;
     } finally {
       libraryBusy = false;
     }
@@ -2268,6 +2293,17 @@
   <InlinePreview {nodes} />
 {/snippet}
 
+{#if projectReloadPending}
+  <Alert.Root class="mx-4 mt-2" data-testid="project-reload-pending">
+    <Alert.Title>{ui.text("ui_library_project_changed_title")}</Alert.Title>
+    <Alert.Description class="flex flex-wrap items-center gap-2">
+      <p>{ui.text("ui_library_project_changed_unsaved")}</p>
+      <Button size="xs" onclick={() => void loadWorkspace(true)}>{ui.text("ui_page_external_changes_reload_files")}</Button>
+      <Button variant="ghost" size="xs" onclick={() => projectReloadPending = false}>{ui.text("ui_page_keep_current_view")}</Button>
+    </Alert.Description>
+  </Alert.Root>
+{/if}
+
 {#if externalChanges.length > 0}
   <div class="pointer-events-none fixed inset-x-2 bottom-2 z-50 mx-auto max-w-[calc(100vw-1rem)] sm:inset-x-4 sm:bottom-4 sm:max-w-4xl">
     <Alert.Root class="pointer-events-auto pr-4 shadow-xl" aria-live="polite">
@@ -2453,7 +2489,7 @@
         {malformedDocuments}
         reviewError={snapshot.review?.error}
         onrepair={beginRepair}
-        catalogId={snapshot.catalog.id}
+        currentManifest={currentManifest(snapshot)}
         catalogs={snapshot.catalogs}
         libraries={snapshot.libraries ?? []}
         onswitchcatalog={(catalog) => void openWorkspace(catalog.manifestPaths[0] ?? catalog.id)}
@@ -2850,15 +2886,18 @@
   bind:open={libraryOpen}
   bind:locale={libraryLocale}
   busy={libraryBusy}
+  project={`${snapshot?.root ?? ""}\n${currentManifest(snapshot)}`}
   libraries={snapshot?.libraries ?? []}
   library={libraryView}
   notice={libraryNotice}
+  conflict={libraryConflict}
   onselect={(catalog) => void runLibrary(() => bridge.loadLibrary(catalog))}
-  onoverride={(key, locale) => void runLibrary(() => bridge.overrideLibraryMessage({ catalog: libraryView!.catalog, key, locale }))}
-  onsave={(key, locale, text, expectedRevision) => void runLibrary(() => bridge.saveLibraryOverride({ catalog: libraryView!.catalog, key, locale, text, expectedRevision }))}
-  onrevert={(key, locale) => void runLibrary(() => bridge.revertLibraryOverride({ catalog: libraryView!.catalog, key, locale }))}
-  onkeep={(key, locale) => void runLibrary(() => bridge.keepLibraryOverride({ catalog: libraryView!.catalog, key, locale }))}
-  onaddlocale={(locale) => void runLibrary(async () => { const result = await bridge.addLibraryLocale(libraryView!.catalog, locale); if (result.ok) libraryLocale = locale; return result; })}
+  onoverride={(key, locale, text, expectedRevision) => runLibrary(() => bridge.overrideLibraryMessage({ catalog: libraryView!.catalog, key, locale, text, expectedRevision }))}
+  onsave={(key, locale, text, expectedRevision) => runLibrary(() => bridge.saveLibraryOverride({ catalog: libraryView!.catalog, key, locale, text, expectedRevision }))}
+  onrevert={(key, locale, expectedRevision) => void runLibrary(() => bridge.revertLibraryOverride({ catalog: libraryView!.catalog, key, locale, expectedRevision }))}
+  onkeep={(key, locale, expectedRevision) => void runLibrary(() => bridge.keepLibraryOverride({ catalog: libraryView!.catalog, key, locale, expectedRevision }))}
+  onaddlocale={(locale) => void runLibrary(() => bridge.addLibraryLocale(libraryView!.catalog, locale))}
+  onreload={() => void runLibrary(() => bridge.loadLibrary(libraryView!.catalog))}
 />
 
 <InterchangeDialog
