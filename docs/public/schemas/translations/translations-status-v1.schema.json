@@ -112,6 +112,15 @@
         },
         "belowThreshold": {
           "type": "boolean"
+        },
+        "completeness": {
+          "type": "string",
+          "enum": [
+            "allow",
+            "warning",
+            "error"
+          ],
+          "description": "The locale's effective validation.translationCompleteness policy: how validate reports its missing messages. Absent for the base locale."
         }
       }
     }

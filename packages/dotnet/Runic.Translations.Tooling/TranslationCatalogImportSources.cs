@@ -9,7 +9,7 @@ using System.Text.RegularExpressions;
 using System.Xml;
 using Runic.Translations.Compiler;
 
-namespace Runic.Translations.Tool;
+namespace Runic.Translations.Tooling;
 
 /// <summary>One message read from a migration source and already written as an MF2 pattern.</summary>
 /// <param name="SourceKey">The key as the source file names it, such as <c>settings.title</c> or <c>Errors.NotFound</c>.</param>
@@ -28,23 +28,25 @@ internal sealed class ImportSourceException(string code, string message) : Excep
 }
 
 /// <summary>What a migration import reports besides the applied messages: skipped and refused messages and notices.</summary>
-internal sealed class ImportReport
+/// <param name="baseDirectory">The directory the source path is resolved against, and notices name files relative to.</param>
+internal sealed class ImportReport(string baseDirectory)
 {
-    internal List<TranslationsToolInterchangeEntry> Entries { get; } = [];
-    internal List<TranslationsToolInterchangeNotice> Notices { get; } = [];
+    internal string BaseDirectory { get; } = Path.GetFullPath(baseDirectory);
+    internal List<TranslationImportEntry> Entries { get; } = [];
+    internal List<TranslationImportNotice> Notices { get; } = [];
     internal int Skipped { get; private set; }
     internal int Refused { get; private set; }
 
     internal void Skip(string locale, string key, string code, string message)
     {
         Skipped++;
-        Entries.Add(new(key, "skipped", code, message) { Locale = locale });
+        Entries.Add(new(locale, key, "skipped", code, message));
     }
 
     internal void Refuse(string locale, string key, string code, string message)
     {
         Refused++;
-        Entries.Add(new(key, "refused", code, message) { Locale = locale });
+        Entries.Add(new(locale, key, "refused", code, message));
     }
 
     internal void Notice(string location, string code, string message) => Notices.Add(new(code, location, message));
@@ -110,7 +112,7 @@ internal static class ImportMapping
     }
 
     /// <summary>A simple pattern, quoted when an unquoted one would lose outer whitespace, a leading <c>.</c> or a line break.</summary>
-    internal static string Frame(string body) => TextCatalogImport.NeedsQuotes(body) ? "{{" + body + "}}" : body;
+    internal static string Frame(string body) => NeedsQuotes(body) ? "{{" + body + "}}" : body;
 
     /// <summary>Whether the pattern reads back unchanged from an RMF2 entry, as <c>import-text</c> checks.</summary>
     internal static bool ReadsBack(string pattern)
@@ -128,10 +130,19 @@ internal static class ImportMapping
         return File.ReadAllBytes(path);
     }
 
-    /// <summary>A source path relative to the working directory, or absolute when it lies outside it.</summary>
-    internal static string Display(string fullPath)
+    /// <summary>Whether an unquoted pattern of <paramref name="text"/> would lose outer whitespace, a leading <c>.</c> or a line break.</summary>
+    internal static bool NeedsQuotes(string text) =>
+        text.Length == 0 || text[0] == '.' || IsFramingSpace(text[0]) || IsFramingSpace(text[^1]) ||
+        text.Contains('\n') || text.Contains('\r');
+
+    // Whitespace and bidirectional marks that MF2 or RMF2 framing may trim around an unquoted pattern.
+    private static bool IsFramingSpace(char value) =>
+        char.IsWhiteSpace(value) || value is '؜' or '‎' or '‏' or (>= '⁦' and <= '⁩');
+
+    /// <summary>A source path relative to the base directory (the working directory of the command line), or absolute when it lies outside it.</summary>
+    internal static string Display(string fullPath, string baseDirectory)
     {
-        string relative = Path.GetRelativePath(Path.GetFullPath(Environment.CurrentDirectory), fullPath);
+        string relative = Path.GetRelativePath(baseDirectory, fullPath);
         return (relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) || Path.IsPathRooted(relative)
             ? fullPath : relative).Replace('\\', '/');
     }
@@ -149,11 +160,11 @@ internal static class ResxImport
     /// <summary>The files to import: a neutral file and its declared satellites, or one satellite.</summary>
     internal static List<ImportedFile> Read(string path, ImportLocales locales, ImportReport report)
     {
-        string full = Path.GetFullPath(path);
-        if (Directory.Exists(full)) throw new ToolUsageException($"--from resx expects a .resx file, not the directory '{path}'.");
-        if (!File.Exists(full)) throw new ToolUsageException($"the file '{path}' does not exist.");
+        string full = Path.GetFullPath(path, report.BaseDirectory);
+        if (Directory.Exists(full)) throw new TranslationToolingUsageException($"--from resx expects a .resx file, not the directory '{path}'.");
+        if (!File.Exists(full)) throw new TranslationToolingUsageException($"the file '{path}' does not exist.");
         if (!string.Equals(Path.GetExtension(full), ".resx", StringComparison.OrdinalIgnoreCase))
-            throw new ToolUsageException($"--from resx expects a .resx file, not '{path}'.");
+            throw new TranslationToolingUsageException($"--from resx expects a .resx file, not '{path}'.");
         string directory = Path.GetDirectoryName(full)!;
         string stem = Path.GetFileNameWithoutExtension(full);
         int dot = stem.LastIndexOf('.');
@@ -163,9 +174,9 @@ internal static class ResxImport
             // A satellite such as Strings.de.resx: only this file.
             string? locale = locales.Declared(stem[(dot + 1)..]);
             if (locale is null)
-                throw new ToolUsageException($"the locale '{stem[(dot + 1)..]}' of '{path}' is not declared in runic.json.");
+                throw new TranslationToolingUsageException($"the locale '{stem[(dot + 1)..]}' of '{path}' is not declared in runic.json.");
             if (locale == locales.BaseLocale)
-                throw new ToolUsageException($"'{path}' names the base locale '{locale}'; import the neutral .resx file for it.");
+                throw new TranslationToolingUsageException($"'{path}' names the base locale '{locale}'; import the neutral .resx file for it.");
             files.Add(ReadFile(full, locale, false, report));
             return files;
         }
@@ -179,7 +190,7 @@ internal static class ResxImport
             string? locale = locales.Declared(name);
             if (locale is null)
             {
-                report.Notice(ImportMapping.Display(satellite), "IMPORT-LOCALE", $"The locale '{name}' is not declared in runic.json; the file was not imported.");
+                report.Notice(ImportMapping.Display(satellite, report.BaseDirectory), "IMPORT-LOCALE", $"The locale '{name}' is not declared in runic.json; the file was not imported.");
                 continue;
             }
             if (locale == locales.BaseLocale || !locales.Selected(locale)) continue;
@@ -191,7 +202,7 @@ internal static class ResxImport
     // Comments become descriptions in the base locale only; a satellite's comments describe the same message.
     private static ImportedFile ReadFile(string path, string locale, bool isBase, ImportReport report)
     {
-        string display = ImportMapping.Display(path);
+        string display = ImportMapping.Display(path, report.BaseDirectory);
         byte[] bytes = ImportMapping.ReadBytes(path, display);
         var messages = new List<ImportedMessage>();
         int read = 0;
@@ -337,7 +348,7 @@ internal static class I18nextImport
     /// <summary>The files to import from a JSON file or a <c>locales/</c> directory (<c>&lt;lng&gt;/&lt;ns&gt;.json</c> or <c>&lt;lng&gt;.json</c>).</summary>
     internal static List<ImportedFile> Read(string path, ImportLocales locales, ImportReport report)
     {
-        string full = Path.GetFullPath(path);
+        string full = Path.GetFullPath(path, report.BaseDirectory);
         var candidates = new List<(string Path, string Locale, string? Namespace)>();
         if (File.Exists(full))
         {
@@ -346,7 +357,7 @@ internal static class I18nextImport
             if (locales.IsLocale(stem)) candidates.Add((full, stem, null));
             else if (locales.IsLocale(parent)) candidates.Add((full, parent, stem));
             else if (locales.Single is { } single) candidates.Add((full, single, null));
-            else throw new ToolUsageException($"the locale of '{path}' is not in its name (<lng>.json or <lng>/<namespace>.json); pass one --locale.");
+            else throw new TranslationToolingUsageException($"the locale of '{path}' is not in its name (<lng>.json or <lng>/<namespace>.json); pass one --locale.");
         }
         else if (Directory.Exists(full))
         {
@@ -359,9 +370,9 @@ internal static class I18nextImport
                     candidates.Add((file, Path.GetFileName(directory), Path.GetFileNameWithoutExtension(file)));
             }
             if (candidates.Count == 0)
-                throw new ToolUsageException($"'{path}' contains no <lng>.json or <lng>/<namespace>.json files.");
+                throw new TranslationToolingUsageException($"'{path}' contains no <lng>.json or <lng>/<namespace>.json files.");
         }
-        else throw new ToolUsageException($"the file or directory '{path}' does not exist.");
+        else throw new TranslationToolingUsageException($"the file or directory '{path}' does not exist.");
 
         var files = new List<ImportedFile>();
         foreach ((string file, string name, string? ns) in candidates)
@@ -369,7 +380,7 @@ internal static class I18nextImport
             string? locale = locales.Declared(name);
             if (locale is null)
             {
-                report.Notice(ImportMapping.Display(file), "IMPORT-LOCALE", $"The locale '{name}' is not declared in runic.json; the file was not imported.");
+                report.Notice(ImportMapping.Display(file, report.BaseDirectory), "IMPORT-LOCALE", $"The locale '{name}' is not declared in runic.json; the file was not imported.");
                 continue;
             }
             if (!locales.Selected(locale)) continue;
@@ -380,7 +391,7 @@ internal static class I18nextImport
 
     private static ImportedFile ReadFile(string path, string locale, string? ns, ImportReport report)
     {
-        string display = ImportMapping.Display(path);
+        string display = ImportMapping.Display(path, report.BaseDirectory);
         byte[] bytes = ImportMapping.ReadBytes(path, display);
         // Windows editors often save JSON with a UTF-8 byte order mark, which JsonDocument does not skip.
         ReadOnlyMemory<byte> json = bytes.AsSpan().StartsWith((ReadOnlySpan<byte>)[0xEF, 0xBB, 0xBF]) ? bytes.AsMemory(3) : bytes;
@@ -602,5 +613,61 @@ internal static class I18nextImport
         string variable = ImportMapping.Segment(name.Replace('.', '_'));
         if (variable != name) report.Notice(location, "I18NEXT-INTERPOLATION", $"The placeholder {{{{{name}}}}} is the input ${variable}.");
         return "{$" + variable + function + "}";
+    }
+}
+
+/// <summary>The parts of runic.json an import (<c>import</c>, <c>import-text</c>) needs: locales and source roots.</summary>
+internal sealed record ImportManifest(string BaseLocale, IReadOnlyList<string> Locales, IReadOnlyList<(string Path, IReadOnlyList<string> Namespace)> Roots)
+{
+    internal static ImportManifest Read(ReadOnlyMemory<byte> utf8, string root)
+    {
+        JsonDocument document;
+        try { document = JsonDocument.Parse(utf8); }
+        catch (JsonException) { throw new TranslationToolingUsageException("runic.json is not valid JSON; run validate for its diagnostics."); }
+        using (document)
+        {
+            JsonElement project = document.RootElement;
+            if (project.ValueKind != JsonValueKind.Object || !project.TryGetProperty("baseLocale", out JsonElement baseLocale) || baseLocale.ValueKind != JsonValueKind.String)
+                throw new TranslationToolingUsageException("runic.json must declare a baseLocale string.");
+            string declaredBase = baseLocale.GetString()!;
+            var locales = new List<string> { declaredBase };
+            if (project.TryGetProperty("locales", out JsonElement declared) && declared.ValueKind == JsonValueKind.Array)
+                foreach (JsonElement item in declared.EnumerateArray())
+                {
+                    string? tag = item.ValueKind == JsonValueKind.String ? item.GetString()
+                        : item.ValueKind == JsonValueKind.Object && item.TryGetProperty("tag", out JsonElement value) && value.ValueKind == JsonValueKind.String ? value.GetString()
+                        : null;
+                    if (tag is not null && !locales.Contains(tag, StringComparer.OrdinalIgnoreCase)) locales.Add(tag);
+                }
+            var roots = new List<(string, IReadOnlyList<string>)>();
+            if (!project.TryGetProperty("sourceRoots", out JsonElement mounts))
+                roots.Add((Path.GetFullPath(root), []));
+            else if (mounts.ValueKind == JsonValueKind.Array)
+                foreach (JsonElement mount in mounts.EnumerateArray())
+                {
+                    if (mount.ValueKind != JsonValueKind.Object || !mount.TryGetProperty("path", out JsonElement path) || path.ValueKind != JsonValueKind.String) continue;
+                    var segments = new List<string>();
+                    if (mount.TryGetProperty("namespace", out JsonElement names) && names.ValueKind == JsonValueKind.Array)
+                        foreach (JsonElement name in names.EnumerateArray())
+                            if (name.ValueKind == JsonValueKind.String) segments.Add(name.GetString()!);
+                    roots.Add((Path.GetFullPath(path.GetString()!, root), segments));
+                }
+            return new ImportManifest(declaredBase, locales, roots);
+        }
+    }
+
+    /// <summary>The namespace segments of a directory: its source root's namespace and the directories below it.</summary>
+    internal string[]? Namespace(string directory)
+    {
+        foreach ((string path, IReadOnlyList<string> prefix) in Roots)
+        {
+            string relative = System.IO.Path.GetRelativePath(path, directory);
+            if (relative == "." || System.IO.Path.IsPathRooted(relative) || relative == ".." ||
+                relative.StartsWith(".." + System.IO.Path.DirectorySeparatorChar, StringComparison.Ordinal) ||
+                relative.StartsWith(".." + System.IO.Path.AltDirectorySeparatorChar, StringComparison.Ordinal))
+                continue;
+            return prefix.Concat(relative.Split(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar)).ToArray();
+        }
+        return null;
     }
 }

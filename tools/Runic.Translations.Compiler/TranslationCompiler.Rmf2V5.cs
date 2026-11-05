@@ -430,6 +430,7 @@ public static partial class TranslationCompiler
                 ReferenceFallbackText = manifest.ReferenceFallbackText,
                 BidiIsolation = manifest.BidiIsolation,
                 PluralCategoryPolicies = locales.ToDictionary(locale => locale.Tag, locale => manifest.Policy(locale.Tag, ValidationMembers.PluralCategories), StringComparer.Ordinal),
+                CompletenessPolicies = locales.ToDictionary(locale => locale.Tag, locale => manifest.Policy(locale.Tag, ValidationMembers.TranslationCompleteness), StringComparer.Ordinal),
                 FormatCurrencies = manifest.FormatCurrencies.Order(StringComparer.Ordinal).ToArray(),
                 FormatUnits = manifest.FormatUnits.Order(StringComparer.Ordinal).ToArray(),
             });
