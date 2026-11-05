@@ -34,9 +34,11 @@ internal sealed class ManifestModel
 
     /// <summary>The policy of a <c>validation</c> member for a locale: the locale entry's own value, else the project's.</summary>
     /// <remarks>Called per message and locale, so the locale overrides are indexed once, on first use after the manifest is read.</remarks>
-    internal TranslationPolicy Policy(string locale, string member)
+    internal TranslationPolicy Policy(string locale, string member) => Relaxed ? TranslationPolicy.Allow : DeclaredPolicy(locale, member);
+
+    /// <summary>The policy runic.json declares for a locale, also when <see cref="Relaxed"/> lets every check pass.</summary>
+    internal TranslationPolicy DeclaredPolicy(string locale, string member)
     {
-        if (Relaxed) return TranslationPolicy.Allow;
         if (_localePolicies is null)
         {
             var policies = new Dictionary<string, Dictionary<string, TranslationPolicy>>(System.StringComparer.OrdinalIgnoreCase);

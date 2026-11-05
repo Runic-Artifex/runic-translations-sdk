@@ -19,6 +19,11 @@ internal sealed class PreviewWindow : Window
     private readonly string uri;
     private readonly JObject info;
     private readonly ComboBox locales = new();
+    // The locale a user requests (de-CH for de text) and the zone timeZone=local formats in; empty keeps the catalog
+    // locale and the host's zone. The server reports how it formatted below the text.
+    private readonly TextBox requestedLocale = new();
+    private readonly TextBox timeZone = new();
+    private readonly TextBlock formatting = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0) };
     // The message's @example sets, then "Custom values"; editing a value selects "Custom values".
     private readonly ComboBox examples = new() { Margin = new Thickness(0, 0, 0, 6) };
     private readonly List<JObject> exampleValues = new();
@@ -37,11 +42,22 @@ internal sealed class PreviewWindow : Window
         var panel = new StackPanel { Margin = new Thickness(16) };
         panel.Children.Add(new TextBlock { Text = "Locale" });
         foreach (var locale in (JArray)info["locales"]!) locales.Items.Add(locale.ToString());
+        // runic.json pseudoLocales: the server generates them from the base locale, as a --pseudo-locales build does.
+        var pseudoLocales = (info["pseudoLocales"] as JArray ?? new JArray()).Select(locale => locale.ToString()).ToArray();
+        foreach (string locale in pseudoLocales) locales.Items.Add(locale);
         locales.SelectedItem = info.Value<string>("locale"); AutomationProperties.SetName(locales, "Preview locale");
         panel.Children.Add(locales);
+        if (pseudoLocales.Length != 0)
+            panel.Children.Add(new TextBlock { Text = string.Join(", ", pseudoLocales) + ": pseudo-locales, generated from the base locale (read-only).", TextWrapping = TextWrapping.Wrap });
+        panel.Children.Add(new TextBlock { Text = "Regional locale (requested, such as de-CH; empty: the locale above)", Margin = new Thickness(0, 8, 0, 0) });
+        AutomationProperties.SetName(requestedLocale, "Preview regional locale");
+        panel.Children.Add(requestedLocale);
+        panel.Children.Add(new TextBlock { Text = "Time zone for timeZone=local (utc or an IANA zone such as Europe/Zurich; empty: this computer's)", Margin = new Thickness(0, 8, 0, 0) });
+        AutomationProperties.SetName(timeZone, "Preview time zone");
+        panel.Children.Add(timeZone);
         panel.Children.Add(examplesLabel);
         AutomationProperties.SetName(examples, "Preview samples");
-        panel.Children.Add(examples); panel.Children.Add(inputs); panel.Children.Add(render); panel.Children.Add(status); panel.Children.Add(result);
+        panel.Children.Add(examples); panel.Children.Add(inputs); panel.Children.Add(render); panel.Children.Add(status); panel.Children.Add(result); panel.Children.Add(formatting);
         panel.Children.Add(new TextBlock { Text = "Links and actions are inert. Icons and custom components use labeled placeholders. Save runic.json before previewing configuration changes.", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 16, 0, 0) });
         Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         render.Click += (_, _) => { _ = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.RunAsync(RenderAsync); };
@@ -53,6 +69,9 @@ internal sealed class PreviewWindow : Window
             Fill(exampleValues[examples.SelectedIndex]);
             _ = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.RunAsync(RenderAsync);
         };
+        // Enter in the regional locale or time zone field renders again.
+        foreach (TextBox field in new[] { requestedLocale, timeZone })
+            field.KeyDown += (_, args) => { if (loaded && args.Key == Key.Enter) _ = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory.RunAsync(RenderAsync); };
         Closed += (_, _) => lifetime.Cancel();
     }
     internal async Task LoadAsync()
@@ -97,16 +116,33 @@ internal sealed class PreviewWindow : Window
         try
         {
             var values = new JObject(); foreach (var pair in samples) values[pair.Key] = pair.Value.Text;
-            var preview = await client.RequestAsync("workspace/executeCommand", new { command = "runic.renderPreview", arguments = new object[] { uri, info.Value<string>("key")!, locales.SelectedItem.ToString()!, values } }, lifetime.Token);
+            string? requested = string.IsNullOrWhiteSpace(requestedLocale.Text) ? null : requestedLocale.Text.Trim();
+            string? zone = string.IsNullOrWhiteSpace(timeZone.Text) ? null : timeZone.Text.Trim();
+            var preview = await client.RequestAsync("workspace/executeCommand", new { command = "runic.renderPreview", arguments = new object?[] { uri, info.Value<string>("key")!, locales.SelectedItem.ToString()!, values, requested, zone } }, lifetime.Token);
             if (lifetime.IsCancellationRequested) return;
             result.Inlines.Clear();
             foreach (JObject run in (JArray)preview["runs"]!) result.Inlines.Add(Build(run));
+            result.FlowDirection = preview.Value<string>("direction") == "rtl" ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
+            formatting.Text = Describe(preview);
             status.Text = "";
         }
         catch (OperationCanceledException) { }
         catch (Exception error) { result.Inlines.Clear(); status.Text = error.Message; }
         finally { render.IsEnabled = true; }
     }
+    // "de · requested de-CH (parent) · formats in de-CH · time zone Europe/Zurich", as the VS Code panel shows it.
+    private static string Describe(JObject preview)
+    {
+        string locale = preview.Value<string>("locale") ?? "";
+        var parts = new List<string> { locale };
+        string? requested = preview.Value<string>("requestedLocale"), resolution = preview.Value<string>("resolution");
+        string? formattingLocale = preview.Value<string>("formattingLocale"), zone = preview.Value<string>("timeZone");
+        if (requested is not null && requested != locale) parts.Add("requested " + requested + (resolution is null ? "" : " (" + resolution + ")"));
+        if (formattingLocale is not null && formattingLocale != locale) parts.Add("formats in " + formattingLocale);
+        if (zone is not null) parts.Add("time zone " + zone);
+        return string.Join(" · ", parts);
+    }
+
     private static Inline Build(JObject run)
     {
         if (run["text"]?.Type == JTokenType.String) return new Run(run.Value<string>("text"));

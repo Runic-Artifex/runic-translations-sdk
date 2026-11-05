@@ -36,7 +36,12 @@ Within an MF2 editor:
 - **Tools → Runic: Preview Message** opens the native message preview. The
   **Preview locale** selector switches the language and **Sample values** offers
   each `@example` set of the message; either change renders at once. Edit a value
-  (the selector then shows **Custom values**) and choose **Render preview**. The server executes its verified runtime
+  (the selector then shows **Custom values**) and choose **Render preview**. The locale selector also lists the
+  pseudo-locales that `runic.json` configures (`pseudoLocales`), generated from the base locale as a
+  `--pseudo-locales` build does. **Preview regional locale** formats numbers and dates for the locale a user requests
+  (`de-CH` for `de` text) and **Preview time zone** sets the zone `timeZone=local` formats in (`utc` or an IANA
+  zone; empty is this computer's); press Enter to render. A line below the text names the requested locale, the
+  locale it formatted in and the time zone. The server executes its verified runtime
   plan. Links and actions are inert, icons use slot labels, and custom components
   use labeled spans. The extension never loads application renderers.
 - **Tools → Runic: Restart Language Server** stops and restarts the server.
@@ -78,6 +83,8 @@ than traversed.
 | Preview Message | Tools menu | Command |
 | Change Preview Samples | Sample selector in the preview window | Command |
 | Change Preview Locale | Locale selector in the preview window | Command |
+| Pseudo-locales (`pseudoLocales`) in the preview | Locale selector in the preview window | Change Preview Locale |
+| Regional locale and time zone of the preview | Fields in the preview window | Commands |
 | Rename Input, Rename Slot, Rename Resource in Resource Sources | No (2.0) | Commands |
 | Extract Group to Directory, Inline Resource into Ancestor | No (2.0) | Commands |
 | Restart Language Server | Tools menu | Command |

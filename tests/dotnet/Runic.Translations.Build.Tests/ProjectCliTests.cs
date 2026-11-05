@@ -71,6 +71,32 @@ internal sealed class ProjectCliTests
         }
     }
 
+    [Test, DisplayName("CLI status reports a catalog whose translations are incomplete under the default policy, and refuses broken syntax")]
+    public void StatusReportsIncompleteTranslations()
+    {
+        using var temporary = new TemporaryDirectory();
+        File.WriteAllText(temporary.Resolve("runic.json"), """{"schemaVersion":1,"catalog":"app","code":{"namespace":"E","className":"T"},"baseLocale":"en","locales":["en","de"]}""");
+        File.WriteAllText(temporary.Resolve("en.rmf2"), "a = A\nb = B\n");
+        File.WriteAllText(temporary.Resolve("de.rmf2"), "a = A-de\n");
+        // validate fails (RTR0010 is an error by default); status still counts what is translated.
+        Assert.True(TestFixture.RunTool(temporary, "validate").ExitCode != 0, "the fixture must not validate");
+        ProcessResult json = TestFixture.RunTool(temporary, "status", "--format", "json");
+        Assert.Equal(0, json.ExitCode, json.Combined);
+        using JsonDocument envelope = JsonDocument.Parse(json.StandardOutput);
+        JsonElement payload = envelope.RootElement.GetProperty("payload");
+        PayloadSchemas.Validate(PayloadSchemas.Status, payload);
+        JsonElement german = payload.GetProperty("projects")[0].GetProperty("locales").EnumerateArray().Single(locale => locale.GetProperty("locale").GetString() == "de");
+        Assert.Equal(1, german.GetProperty("missing").GetInt32());
+        Assert.Equal(50, german.GetProperty("coverage").GetDouble());
+        // The declared policy, not the relaxed compilation's.
+        Assert.Equal("error", german.GetProperty("completeness").GetString());
+
+        File.WriteAllText(temporary.Resolve("de.rmf2"), "a = {$broken\n");
+        ProcessResult broken = TestFixture.RunTool(temporary, "status");
+        Assert.Equal(2, broken.ExitCode, broken.Combined);
+        Assert.Contains("does not compile", broken.Combined);
+    }
+
     [Test, DisplayName("CLI validate checks several projects and writes every diagnostic as SARIF")]
     public void ValidateSeveralProjectsWithSarif()
     {

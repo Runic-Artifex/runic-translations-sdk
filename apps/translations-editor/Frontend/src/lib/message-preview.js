@@ -5,9 +5,17 @@
  * @param {string} content
  * @param {string} key
  * @param {string} locale
+ * @param {{ requestedLocale?: string, timeZone?: string }} [formatting] The locale a user requests (`de-CH` for `de`
+ * text: numbers and dates format in it) and the zone `timeZone=local` formats in; empty values are omitted.
  */
-export function createMessagePreviewRequest(path, content, key, locale) {
-  return Object.freeze({ path, content, key, locale });
+export function createMessagePreviewRequest(path, content, key, locale, formatting = {}) {
+  const requestedLocale = formatting.requestedLocale?.trim() || undefined;
+  const timeZone = formatting.timeZone?.trim() || undefined;
+  return Object.freeze({
+    path, content, key, locale,
+    ...(requestedLocale === undefined ? {} : { requestedLocale }),
+    ...(timeZone === undefined ? {} : { timeZone }),
+  });
 }
 
 /**
@@ -118,8 +126,8 @@ export function createMessagePreviewOwnership() {
 /**
  * Runs the host request sequence for a captured selection. The selected v5
  * contract receives a second request carrying prototype-safe samples.
- * @param {(path: string, content: string, locale: string, key: string, samplesJson?: string) => Promise<any>} previewMessage
- * @param {{ readonly path: string, readonly content: string, readonly key: string, readonly locale: string }} request
+ * @param {(path: string, content: string, locale: string, key: string, samplesJson?: string, requestedLocale?: string, timeZone?: string) => Promise<any>} previewMessage
+ * @param {{ readonly path: string, readonly content: string, readonly key: string, readonly locale: string, readonly requestedLocale?: string, readonly timeZone?: string }} request
  * @param {Record<string, string>} previousSamples
  * @param {(type: string) => string} defaultSample
  * @param {() => boolean} [isCurrent]
@@ -135,7 +143,7 @@ export async function routeMessagePreview(previewMessage, request, previousSampl
   for (const input of ast.inputs) {
     samples[input.name] = previewSampleOr(previousSamples, input.name, defaultSample(input.type));
   }
-  const rendered = await previewMessage(request.path, request.content, request.locale, request.key, JSON.stringify(samples));
+  const rendered = await previewMessage(request.path, request.content, request.locale, request.key, JSON.stringify(samples), request.requestedLocale, request.timeZone);
   return { initial, ast, samples, rendered };
 }
 
@@ -163,30 +171,62 @@ export function parseMessageArtifact(astJson) {
   return /** @type {import("./message-model").MessageArtifact} */ (/** @type {unknown} */ (ast));
 }
 
+// How the host formatted a preview (eng/translations/Rmf2Preview.cs), each member optional.
+const formattingKeys = ["requestedLocale", "resolution", "formattingLocale", "direction", "timeZone"];
+
+/**
+ * @typedef {{ requestedLocale?: string, resolution?: "exact" | "parent" | "related", formattingLocale?: string, direction?: "ltr" | "rtl", timeZone?: string }} PreviewFormatting
+ */
+
 /**
  * Converts the compiler host's JSON preview runs to the same inert semantic
  * result consumed by InlinePreview. Markup names and options remain data.
  * @param {string} renderedJson
  * A document message adds a `blocks` tree; its `runs` member is only the
  * plain-text fallback for clients without a document preview and is ignored.
- * @returns {{ kind: "text", value: string } | { kind: "content", nodes: PreviewNode[] } | { kind: "document", blocks: PreviewBlock[] }}
+ * The host also reports how it formatted: the requested locale, how it relates to the shown locale, the formatting
+ * locale, the direction and the time zone; they are returned as `formatting`.
+ * @returns {({ kind: "text", value: string } | { kind: "content", nodes: PreviewNode[] } | { kind: "document", blocks: PreviewBlock[] }) & { formatting?: PreviewFormatting }}
  */
 export function parseRenderedMessagePreview(renderedJson) {
   const document = JSON.parse(renderedJson);
+  const keys = isRecord(document) ? Object.keys(document).filter((key) => !formattingKeys.includes(key)) : [];
   if (!isRecord(document) || typeof document.key !== "string" ||
       typeof document.locale !== "string" || !Array.isArray(document.runs) ||
-      !hasExactKeys(document, ["key", "locale", "runs"]) && !hasExactKeys(document, ["key", "locale", "runs", "blocks"])) {
+      !sameKeys(keys, ["key", "locale", "runs"]) && !sameKeys(keys, ["key", "locale", "runs", "blocks"])) {
     throw new TypeError("The compiler host returned an invalid rendered message preview.");
   }
+  const formatting = renderedFormatting(document);
   if ("blocks" in document) {
     const blocks = document.blocks;
     if (!Array.isArray(blocks)) throw new TypeError("The compiler host returned an invalid rendered message preview.");
-    return { kind: "document", blocks: blocks.map(renderedBlock) };
+    return { kind: "document", blocks: blocks.map(renderedBlock), ...formatting };
   }
   const nodes = document.runs.map(renderedRun);
   return hasMarkup(nodes)
-    ? { kind: "content", nodes }
-    : { kind: "text", value: flattenPreview(nodes) };
+    ? { kind: "content", nodes, ...formatting }
+    : { kind: "text", value: flattenPreview(nodes), ...formatting };
+}
+
+/** @param {Record<string, unknown>} document @returns {{ formatting?: PreviewFormatting }} */
+function renderedFormatting(document) {
+  /** @type {PreviewFormatting} */
+  const formatting = {};
+  for (const key of formattingKeys) {
+    if (!(key in document)) continue;
+    const value = document[key];
+    const valid = typeof value === "string" && value.length > 0 &&
+      (key !== "resolution" || ["exact", "parent", "related"].includes(value)) &&
+      (key !== "direction" || value === "ltr" || value === "rtl");
+    if (!valid) throw new TypeError("The compiler host returned an invalid rendered message preview.");
+    /** @type {Record<string, string>} */ (formatting)[key] = value;
+  }
+  return Object.keys(formatting).length === 0 ? {} : { formatting };
+}
+
+/** @param {string[]} keys @param {string[]} expected */
+function sameKeys(keys, expected) {
+  return keys.length === expected.length && keys.every((key) => expected.includes(key));
 }
 
 /** @param {unknown} value @returns {PreviewBlock} */

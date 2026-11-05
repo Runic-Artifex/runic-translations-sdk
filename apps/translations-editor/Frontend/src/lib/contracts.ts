@@ -31,6 +31,67 @@ export interface EditorCatalog {
   defaultLocale: string;
   locales: EditorLocale[];
   layers: EditorLayer[];
+  /** runic.json `pseudoLocales` (`en-XA`, `ar-XB`): generated from the base locale for previews, never edited. */
+  pseudoLocales?: string[];
+}
+
+/** Import from .resx or i18next through the runic-translations importer: a dry run first. */
+export interface EditorCatalogImportRequest {
+  from: "resx" | "i18next";
+  /** The .resx file, or the i18next JSON file or locales directory; relative to the workspace root, or absolute. */
+  source: string;
+  overwrite?: boolean;
+}
+
+export interface EditorCatalogImportPlan {
+  ok: boolean;
+  message?: EditorNotice;
+  confirmationToken?: string;
+  from: string;
+  source: string;
+  locales: Array<{ locale: string; added: number; changed: number; unchanged: number; kept: number }>;
+  /** Added, changed and kept messages, then the skipped and refused ones with their reason. */
+  entries: Array<{ locale: string; key: string; outcome: "added" | "changed" | "kept" | "skipped" | "refused"; code?: string; message?: string }>;
+  entriesOverflowed: boolean;
+  files: string[];
+  skipped: number;
+  refused: number;
+  diagnostics: EditorDiagnostic[];
+}
+
+/** The add-language picker's suggestions: the SDK's pinned CLDR locales, by CLDR data ID. */
+export interface EditorLocaleCatalog {
+  cldrVersion: string;
+  locales: string[];
+}
+
+/** What a typed locale tag means, from the SDK's CLDR data. */
+export interface EditorLocaleDescription {
+  valid: boolean;
+  canonical?: string;
+  /** The CLDR data ID through likely subtags: `zh-TW` → `zh-Hant-TW`. */
+  dataId?: string;
+  /** The nearest CLDR locale with data; absent when CLDR has none (root only). */
+  cldrLocale?: string;
+  direction: "ltr" | "rtl";
+  /** The plural categories (`one`, `few`, …) a translation in this locale selects. */
+  cardinal: string[];
+  ordinal: string[];
+  message?: EditorNotice;
+  /** The script-level locale for a region tag whose CLDR data is in another script: `zh-TW` → `zh-Hant`. */
+  suggested?: string;
+  /** The open catalog's `runtime.unsupportedLocale` policy; absent when the catalog does not compile. */
+  unsupportedLocale?: "exact" | "parentsThenDefault" | "default";
+  /** The requested tags the runtime would resolve to the typed locale under that policy. */
+  matches?: EditorLocaleMatches;
+  /** The requested tags the runtime would resolve to the suggested locale. */
+  suggestedMatches?: EditorLocaleMatches;
+}
+
+/** Requested tags that reach a locale: the first few (the tag itself, then the shortest) and how many in all. */
+export interface EditorLocaleMatches {
+  tags: string[];
+  count: number;
 }
 
 export interface EditorMessageEntry {
@@ -89,6 +150,8 @@ export interface WorkspaceSnapshot {
   pendingTransaction?: EditorPendingTransaction;
   review?: EditorReviewSnapshot;
   history?: EditorHistoryState;
+  /** `runic-translations status` for the saved files; absent while runic.json, the base locale or a translation's syntax has errors. */
+  status?: EditorStatusProject;
   /** The library catalogs the open project can override (T5d). */
   libraries?: EditorLibrarySummary[];
 }
@@ -169,6 +232,35 @@ export interface EditorLibraryOverrideRequest {
   locale: string;
   text?: string;
   expectedRevision?: string;
+}
+
+/** One project of `runic-translations status` (`runic.translations.status/1`). */
+export interface EditorStatusProject {
+  project: string;
+  catalog: string;
+  baseLocale: string;
+  messages: number;
+  locales: EditorStatusLocale[];
+  reviewFile?: string;
+}
+
+export interface EditorStatusLocale {
+  locale: string;
+  fallbackLocale?: string;
+  /** Messages the locale translates itself. */
+  translated: number;
+  /** Messages a fallback locale other than the base locale serves. */
+  fallback: number;
+  /** Messages shown in the base locale. */
+  missing: number;
+  /** Translated plus fallback, as a percentage of the base locale's messages, rounded down to two decimals. */
+  coverage: number;
+  /** Translations whose source changed since the review file recorded them; absent without a review file. */
+  stale?: number;
+  minimumCoverage?: number;
+  belowThreshold: boolean;
+  /** The locale's `validation.translationCompleteness`: how validate reports its missing messages. Absent for the base locale. */
+  completeness?: "allow" | "warning" | "error";
 }
 
 export interface EditorPendingTransaction {

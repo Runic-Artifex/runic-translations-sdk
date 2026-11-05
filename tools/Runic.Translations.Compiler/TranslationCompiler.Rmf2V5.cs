@@ -72,6 +72,20 @@ public static partial class TranslationCompiler
     }
 
     /// <summary>
+    /// Compiles with the pseudo-locales generated, adding <paramref name="simulatedPseudoLocales"/> as if runic.json
+    /// declared them in <c>pseudoLocales</c> (the editor's pseudo-localization simulation). runic.json is read as by
+    /// any other compile; a tag that is not a supported pseudo-locale, or that runic.json declares as a locale, is ignored.
+    /// </summary>
+    internal static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project,
+        IEnumerable<TranslationSource> messages, TranslationCompilerOptions? options, IReadOnlyCollection<string> simulatedPseudoLocales, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(messages);
+        ArgumentNullException.ThrowIfNull(simulatedPseudoLocales);
+        return CompileRmf2ProjectV5(project, Materialize(messages), null, options ?? new TranslationCompilerOptions(), cancellationToken, true, simulatedPseudoLocales: simulatedPseudoLocales);
+    }
+
+    /// <summary>
     /// Links a project from per-source units (<see cref="Rmf2SourceUnitV5"/>), reusing their parse and
     /// lowering work. Units built with other options are recompiled, so the result is always identical
     /// to compiling the units' sources directly.
@@ -139,7 +153,8 @@ public static partial class TranslationCompiler
 
     private static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project, TranslationSource[] sources,
         IReadOnlyDictionary<TranslationSource, Rmf2SourceUnitV5>? units, TranslationCompilerOptions options, CancellationToken cancellationToken,
-        bool pseudoLocales = false, TranslationSource[]? overlaySources = null, IReadOnlyCollection<string>? keepLocales = null)
+        bool pseudoLocales = false, TranslationSource[]? overlaySources = null, IReadOnlyCollection<string>? keepLocales = null,
+        IReadOnlyCollection<string>? simulatedPseudoLocales = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var diagnostics = new DiagnosticBag();
@@ -149,6 +164,11 @@ public static partial class TranslationCompiler
         ParsedJson parsed = StrictJsonParser.Parse(project, diagnostics, options, cancellationToken);
         ManifestModel? manifest = parsed.Root is null ? null : ReadMf2Project(parsed, diagnostics, options);
         if (manifest is null || Failed()) return Result();
+        foreach (string simulated in simulatedPseudoLocales ?? [])
+            if (Array.Find(Rmf2PseudoLocalesV5.Supported, supported => string.Equals(supported, simulated, StringComparison.OrdinalIgnoreCase)) is { } tag &&
+                !manifest.PseudoLocales.Exists(pseudo => string.Equals(pseudo.Tag, tag, StringComparison.OrdinalIgnoreCase)) &&
+                !manifest.Locales.Exists(locale => string.Equals(locale.Tag, tag, StringComparison.OrdinalIgnoreCase)))
+                manifest.PseudoLocales.Add(new LocaleModel(tag, null, manifest.DefaultLocaleSpan, manifest.DefaultLocaleSpan));
         JsonValue config = parsed.Root!;
         var markup = new Rmf2ProjectMarkupV5(config, project, diagnostics);
         if (Failed()) return Result();
@@ -430,9 +450,10 @@ public static partial class TranslationCompiler
                 ReferenceFallbackText = manifest.ReferenceFallbackText,
                 BidiIsolation = manifest.BidiIsolation,
                 PluralCategoryPolicies = locales.ToDictionary(locale => locale.Tag, locale => manifest.Policy(locale.Tag, ValidationMembers.PluralCategories), StringComparer.Ordinal),
-                CompletenessPolicies = locales.ToDictionary(locale => locale.Tag, locale => manifest.Policy(locale.Tag, ValidationMembers.TranslationCompleteness), StringComparer.Ordinal),
                 FormatCurrencies = manifest.FormatCurrencies.Order(StringComparer.Ordinal).ToArray(),
                 FormatUnits = manifest.FormatUnits.Order(StringComparer.Ordinal).ToArray(),
+                // As declared, also in a relaxed compilation: status reports it for catalogs whose translations are incomplete.
+                CompletenessPolicies = locales.ToDictionary(locale => locale.Tag, locale => manifest.DeclaredPolicy(locale.Tag, ValidationMembers.TranslationCompleteness), StringComparer.Ordinal),
             });
 
         Rmf2ProjectEntryV5? Compile(Rmf2ProjectSourceV5 source, IReadOnlyList<Rmf2InputV5>? callerInputs)

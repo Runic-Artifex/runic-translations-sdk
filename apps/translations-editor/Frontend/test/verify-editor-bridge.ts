@@ -27,7 +27,7 @@ const workspace = mockEditorWorkspace(bridge, {
   state: {
     loadResultJson: "null", checkExternalChangesResultJson: "null", pickWorkspaceResultJson: "null",
     previewMutationResultJson: "null", applyMutationResultJson: "null", recoverTransactionResultJson: "null",
-    undoResultJson: "null", redoResultJson: "null",
+    undoResultJson: "null", redoResultJson: "null", listLocalesResultJson: "null", describeLocaleResultJson: "null",
   },
   commands: {
     load: (_state, input) => {

@@ -42,6 +42,35 @@ const serverText = parseRenderedMessagePreview(JSON.stringify({
 }));
 assert.deepEqual(serverText, { kind: "text", value: "Rendered by the compiler" });
 
+// The host reports how it formatted (requested locale, resolution, formatting locale, direction, time zone).
+const formatted = parseRenderedMessagePreview(JSON.stringify({
+  key: "price", locale: "de", runs: [{ text: "1'234.5" }],
+  requestedLocale: "de-CH", resolution: "parent", formattingLocale: "de-CH", direction: "ltr", timeZone: "Europe/Zurich",
+}));
+assert.deepEqual(formatted, { kind: "text", value: "1'234.5", formatting: {
+  requestedLocale: "de-CH", resolution: "parent", formattingLocale: "de-CH", direction: "ltr", timeZone: "Europe/Zurich" } });
+assert.throws(
+  () => parseRenderedMessagePreview('{"key":"k","locale":"de","runs":[],"direction":"up"}'),
+  /invalid rendered message preview/,
+  "An unknown direction was accepted.",
+);
+assert.throws(
+  () => parseRenderedMessagePreview('{"key":"k","locale":"de","runs":[],"resolution":"guess"}'),
+  /invalid rendered message preview/,
+  "An unknown resolution was accepted.",
+);
+const formattedRequest = createMessagePreviewRequest("de.rmf2", "price = x", "price", "de", { requestedLocale: " de-CH ", timeZone: "" });
+assert.equal(formattedRequest.requestedLocale, "de-CH");
+assert.equal(formattedRequest.timeZone, undefined, "An empty time zone must mean the host's zone.");
+const formattingCalls = [];
+await routeMessagePreview(async (...call) => {
+  formattingCalls.push(call);
+  return call[4] === undefined
+    ? { success: true, locale: "de", astJson: JSON.stringify({ astVersion: 5, profile: "rmf2-execution-v2", inputs: [] }), diagnostics: [] }
+    : { success: true, locale: "de", renderedJson: "{}", diagnostics: [] };
+}, createMessagePreviewRequest("de.rmf2", "price = x", "price", "de", { requestedLocale: "de-CH", timeZone: "utc" }), {}, () => "");
+assert.deepEqual(formattingCalls[1].slice(5), ["de-CH", "utc"], "The requested locale and time zone did not reach the rendering request.");
+
 const serverContent = parseRenderedMessagePreview(JSON.stringify({
   key: "rich",
   locale: "en",

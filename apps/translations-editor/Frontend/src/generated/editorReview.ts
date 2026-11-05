@@ -38,7 +38,7 @@ const members: BridgeMemberDecoders<EditorReviewState> = {
   saveReviewResultJson: (wire: unknown) => bridgeWire.string(wire),
   isSaveReviewExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorReviewViewModel:83945A3DE56E0BAD4D52C6CD17A2DE35ED7D15629509AFB9A236CA3543CD8A5E";
+const bridgeContract = "Runic.Translations.Editor.EditorReviewViewModel:038EF687035CE7BA203C5B35C0FC6FE8C52706385336A981E5058A8BA7500500";
 const saveReviewOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 
 /**

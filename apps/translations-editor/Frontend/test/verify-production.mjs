@@ -1,5 +1,6 @@
 import { readFile, readdir } from "node:fs/promises";
 import { extname } from "node:path";
+import { gzipSync } from "node:zlib";
 
 const build = new URL("../build/", import.meta.url);
 const generated = await readFile(new URL("../src/generated/editor.ts", import.meta.url), "utf8");
@@ -28,7 +29,15 @@ if (bundled.includes("node:fs") || bundled.includes("Runic.Translations.Compiler
   throw new Error("Server/compiler implementation details leaked into the browser bundle.");
 }
 
-console.log(`PASS: static SvelteKit client contains the Views bootstrap and generated editor client (${scripts.length} scripts).`);
+// Size budget (L5-27). The editor reads its UI text through the tree-shakable `m` namespace by key (ui-text.ts), so
+// every message is kept, as it should be: about 270 KiB gzip with 0.9's catalog. The budget leaves room for growth
+// but catches a regression such as a second copy of the catalog, the full CLDR data or unused Svelte components.
+const budget = 360 * 1024;
+const compressed = (await Promise.all(scripts.map(async (file) => gzipSync(await readFile(file)).length))).reduce((sum, size) => sum + size, 0);
+if (compressed > budget)
+  throw new Error(`The editor client is ${Math.round(compressed / 1024)} KiB gzip, over its ${budget / 1024} KiB budget.`);
+
+console.log(`PASS: static SvelteKit client contains the Views bootstrap and generated editor client (${scripts.length} scripts, ${Math.round(compressed / 1024)} KiB gzip of ${budget / 1024} KiB).`);
 
 async function collect(directory, result) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {

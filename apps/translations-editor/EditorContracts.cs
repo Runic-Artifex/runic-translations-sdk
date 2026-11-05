@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Runic.Translations.Authoring;
 using Runic.Translations.Compiler;
+using Runic.Translations.Tooling;
 
 namespace Runic.Translations.Editor;
 
@@ -9,11 +10,32 @@ internal sealed record EditorCatalog(
     int SchemaVersion,
     string DefaultLocale,
     IReadOnlyList<EditorLocale> Locales,
-    IReadOnlyList<EditorLayer> Layers);
+    IReadOnlyList<EditorLayer> Layers,
+    // runic.json pseudoLocales (en-XA, ar-XB): generated from the base locale for previews, never edited.
+    IReadOnlyList<string>? PseudoLocales = null);
 
 internal sealed record EditorLocale(string Tag, string? Fallback);
 
 internal sealed record EditorLayer(string Name, int Priority);
+
+// The add-language picker's suggestions: the SDK's pinned CLDR locales by data ID (EditorLocales).
+internal sealed record EditorLocaleCatalog(string CldrVersion, IReadOnlyList<string> Locales);
+
+// A typed locale tag: canonical form, CLDR data ID through likely subtags (zh-TW -> zh-Hant-TW), the CLDR locale its
+// data comes from (null: none, only root), text direction, and the plural and ordinal categories it needs. Suggested is
+// the script-level locale for a region tag (zh-TW -> zh-Hant); with a compiled catalog, UnsupportedLocale is its policy
+// and Matches/SuggestedMatches the requested tags the runtime would resolve to the typed and the suggested locale.
+internal sealed record EditorLocaleDescription(bool Valid, string? Canonical, string? DataId, string? CldrLocale,
+    string Direction, IReadOnlyList<string> Cardinal, IReadOnlyList<string> Ordinal, EditorNotice? Message)
+{
+    public string? Suggested { get; init; }
+    public string? UnsupportedLocale { get; init; }
+    public EditorLocaleMatches? Matches { get; init; }
+    public EditorLocaleMatches? SuggestedMatches { get; init; }
+}
+
+// Requested tags that resolve to a locale: the first few (the tag itself, then the shortest) and how many in all.
+internal sealed record EditorLocaleMatches(IReadOnlyList<string> Tags, int Count);
 
 internal sealed record EditorCatalogSummary(
     string Id,
@@ -77,7 +99,10 @@ internal sealed record WorkspaceSnapshot(
     bool Success,
     EditorPendingTransaction? PendingTransaction,
     EditorReviewSnapshot? Review,
-    EditorHistoryState? History)
+    EditorHistoryState? History,
+    // runic-translations status for the saved files (TranslationStatus): the same numbers and per-locale completeness
+    // policy as the command line. Null when runic.json, the base locale or a translation's syntax has errors.
+    TranslationsStatusProject? Status = null)
 {
     /// <summary>The library catalogs the open project can override (T5d).</summary>
     public IReadOnlyList<EditorLibrarySummary> Libraries { get; init; } = [];
@@ -298,6 +323,28 @@ internal sealed record EditorXliffImportPlan(
     bool ChangesOverflowed,
     IReadOnlyList<EditorInterchangeRefusal> Refusals);
 
+// Import from .resx or i18next through Tooling's importer (runic-translations import): a dry run first.
+internal sealed record EditorCatalogImportRequest(string From, string Source, bool Overwrite = false);
+
+internal sealed record EditorCatalogImportLocale(string Locale, int Added, int Changed, int Unchanged, int Kept);
+
+// One message the import adds, changes, keeps (it exists with other text), skips or refuses, with the reason.
+internal sealed record EditorCatalogImportEntry(string Locale, string Key, string Outcome, string? Code, string? Message);
+
+internal sealed record EditorCatalogImportPlan(
+    bool Ok,
+    EditorNotice? Message,
+    string? ConfirmationToken,
+    string From,
+    string Source,
+    IReadOnlyList<EditorCatalogImportLocale> Locales,
+    IReadOnlyList<EditorCatalogImportEntry> Entries,
+    bool EntriesOverflowed,
+    IReadOnlyList<string> Files,
+    int Skipped,
+    int Refused,
+    IReadOnlyList<EditorDiagnostic> Diagnostics);
+
 internal sealed record EditorReviewChange(string Key, string Locale, string Kind, string? StateBefore, string? StateAfter);
 
 internal sealed record EditorReviewImportPlan(
@@ -337,6 +384,9 @@ internal sealed record PreparedInterchangeDocument(
 [JsonSerializable(typeof(WorkspaceSnapshot))]
 [JsonSerializable(typeof(ValidationResult))]
 [JsonSerializable(typeof(EditorMessagePreview))]
+[JsonSerializable(typeof(EditorLocaleCatalog))]
+[JsonSerializable(typeof(EditorLocaleDescription))]
+[JsonSerializable(typeof(EditorLocaleMatches))]
 [JsonSerializable(typeof(EditorReviewSnapshot))]
 [JsonSerializable(typeof(EditorReviewSaveRequest))]
 [JsonSerializable(typeof(EditorReviewOperationResult))]
@@ -363,6 +413,8 @@ internal sealed record PreparedInterchangeDocument(
 [JsonSerializable(typeof(EditorInterchangeRefusal))]
 [JsonSerializable(typeof(EditorReviewImportPlan))]
 [JsonSerializable(typeof(EditorReviewChange))]
+[JsonSerializable(typeof(EditorCatalogImportRequest))]
+[JsonSerializable(typeof(EditorCatalogImportPlan))]
 [JsonSerializable(typeof(EditorLocalStateEntry[]))]
 [JsonSerializable(typeof(EditorDocumentDraft))]
 [JsonSerializable(typeof(EditorMessageOperation))]

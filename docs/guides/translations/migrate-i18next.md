@@ -50,6 +50,20 @@ reported as `kept` (`IMPORT-EXISTS`). Run with `--dry-run` first to see them.
 `--overwrite` replaces their text with the JSON text instead; each such message
 keeps its file, group and comments, and only its text changes.
 
+
+The project may be partly translated, and so may the import: a message whose
+translation the import does not bring is left untranslated, and `validate`
+reports it (`RTR0010`) until it is translated, as after `locale add`. The import
+lists those messages per locale (`untranslated de: 3 message(s) (…)`, and
+`interchange.untranslated` with `--format json`). Only errors in `runic.json`, the
+base locale or a message's syntax stop the import. Other errors the catalog already
+had, such as an obsolete translation (`RTR0011`), neither refuse a message nor fail
+the import; each is reported as an `IMPORT-PREEXISTING` notice, and `validate`
+still reports it.
+The Translations Editor (an optional step of the new-project wizard, and
+**Interchange**) and the VS Code command **Runic: Import .resx or i18next
+Catalog** run the same importer, with a dry run before anything is written.
+
 ## What is mapped
 
 | i18next | RMF2 |

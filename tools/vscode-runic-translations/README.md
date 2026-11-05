@@ -104,6 +104,18 @@ or another one the application adds), then runs the workspace's local `runic-tra
 message to `translations/overrides/<catalog>/<locale>.rmf2`, seeded with the library's text and with the base text as
 comments, records that base text, lists the catalog in runic.json `"overrides"` when needed, and opens the file at the
 message.
+**Show Translation Status** shows `runic-translations status` for the project:
+per locale the messages translated, served by a fallback locale, missing and
+stale, the coverage, and whether missing translations are errors or warnings
+(the locale's `validation.translationCompleteness`), the same report as the
+command line and the Translations Editor. The status bar adds the coverage of
+the active file's locale (`Runic: app · de 87.5%`, details in the tooltip); it
+follows saved changes.
+
+**Import .resx or i18next Catalog** migrates an existing catalog into the
+project's `.rmf2` sources with `runic-translations import`: it runs a dry run
+first, shows its outcome per message in **Runic: Show Output**, and imports
+after you confirm, optionally replacing the text of messages that already exist.
 
 The Runic commands in the Command Palette provide inert example previews,
 group extraction/inlining for `.rmf2`, and explicitly source-only
@@ -117,7 +129,17 @@ loaded by the extension.
 selected locale and values are remembered per message during the extension
 session; reopening a preview reuses them. **Change Preview Samples** lets you
 choose another example or edit custom values. **Change Preview Locale** switches
-the open panel's language. Samples for the
+the open panel's language; it also lists the pseudo-locales that `runic.json`
+configures (`pseudoLocales`: `en-XA`, `ar-XB`), which the server generates from
+the base locale exactly as a `--pseudo-locales` build does (read-only).
+**Change Preview Regional Locale** sets the locale a user requests, such as
+`de-CH` for `de` text: numbers and dates then format as the runtime formats a
+`de-CH` request that resolved to `de`. **Change Preview Time Zone** sets the zone
+that `timeZone=local`, the default of `:datetime` styles, formats in (`utc`, an
+IANA zone, or the host's). The panel names the requested locale, how it relates
+to the shown locale (exact, parent or related), the locale numbers and dates
+formatted in and the time zone, and lays the text out in the locale's direction.
+The regional locale and time zone stay for the next message. Samples for the
 128 most recently previewed message/locale combinations are retained. The panel refreshes from
 the latest unsaved resource/configuration buffers and watched source changes.
 Out-of-order requests and cancelled selections cannot replace a newer preview.
@@ -150,6 +172,9 @@ command set until the production language server (2.0).
 | Preview Message | Command | Tools menu |
 | Change Preview Samples | Command | Sample selector in the preview window |
 | Change Preview Locale | Command | Locale selector in the preview window |
+| Pseudo-locales (`pseudoLocales`) in the preview | Change Preview Locale | Locale selector in the preview window |
+| Change Preview Regional Locale | Command | Regional locale field in the preview window |
+| Change Preview Time Zone | Command | Time zone field in the preview window |
 | Rename Input in Resource Sources | Command | No (2.0) |
 | Rename Slot in Resource Sources | Command | No (2.0) |
 | Rename Resource in Resource Sources | Command | No (2.0) |
@@ -159,11 +184,13 @@ command set until the production language server (2.0).
 | Import XLIFF (dry run) | Command | No (2.0) |
 | Override sources of library catalogs (diagnostics, completion, hover, definition) | Yes, library sources open read-only | Yes, except definition into library sources |
 | Override Library Message… | Command | No (2.0) |
+| Show Translation Status | Command, coverage in the status bar | No (2.0) |
+| Import .resx or i18next Catalog | Command (dry run first) | No (2.0) |
 | Review state in hover | Yes | Yes |
 | Mark reviewed quick fix (`RTR0090`) | Yes | Where the IDE runs code-action commands |
 | Restart Language Server | Command | Tools menu |
 | Show Output | Command and status bar | Server stderr in the diagnostic trace |
-| Server state, catalog and locale | Status bar | No |
+| Server state, catalog, locale and coverage | Status bar | No |
 | Start failure | One notification per folder, with install help | IDE notification on initialization failure |
 
 ## Build and test

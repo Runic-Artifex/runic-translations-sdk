@@ -23,7 +23,7 @@ internal static class StatusCommandModule
     internal const string PayloadType = "runic.translations.status/1";
 
     [Command(Command, Description = "Report translation coverage per locale.",
-        LongDescription = "For every locale: messages translated in the locale, served by a fallback locale other than the base locale, missing (shown in the base locale), and stale (translations whose source changed since they were recorded in <catalog>.review.json, when that file exists). Coverage is translated plus fallback, as a percentage of the base locale's messages. --min-coverage <locale>=<percent> (repeatable or comma-separated; * for every translated locale) fails the command with exit 1 when a locale is below its threshold.\n\nExit codes: 0 success; 1 a locale is below its --min-coverage, or a file is inaccessible; 2 invalid invocation or a catalog that does not compile (run validate); 3 internal failure; 130 cancelled.",
+        LongDescription = "For every locale: messages translated in the locale, served by a fallback locale other than the base locale, missing (shown in the base locale), and stale (translations whose source changed since they were recorded in <catalog>.review.json, when that file exists). Coverage is translated plus fallback, as a percentage of the base locale's messages. --min-coverage <locale>=<percent> (repeatable or comma-separated; * for every translated locale) fails the command with exit 1 when a locale is below its threshold.\n\nExit codes: 0 success; 1 a locale is below its --min-coverage, or a file is inaccessible; 2 invalid invocation, or a catalog whose runic.json, base locale or translation syntax has errors (run validate); missing translations and the other validation policies do not stop the report; 3 internal failure; 130 cancelled.",
         Examples = ["runic-translations status", "runic-translations status --min-coverage de=100,fr=80", "runic-translations status --project src/App/translations --project src/Lib/translations --format json"])]
     [CommandResult(PayloadType, typeof(StatusCommandJsonContext))]
     internal static CommandOutcome<TranslationsStatusResult> Status(
@@ -45,14 +45,16 @@ internal static class StatusCommandModule
                 CompilerInputs inputs = InputFiles.ReadProject(path);
                 Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, inputs.Messages);
                 compilation = TranslationManifestReader.WithManifestErrors(compilation, inputs.Project.Path, inputs.ManifestError);
-                if (!compilation.Success || compilation.Project is null)
+                // Incomplete translations (RTR0010, an error by default) and other policy errors do not stop the report.
+                Rmf2ProjectCompilation? counted = TranslationStatus.ForStatus(compilation, inputs.Project, inputs.Messages);
+                if (counted is null)
                 {
                     int errors = compilation.Diagnostics.Count(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error);
                     return CommandOutcome.Failure<TranslationsStatusResult>(CommandExitCategory.Validation,
                         new CommandFault(ToolCodes.CommandFailed, $"The catalog of {inputs.Project.Path} does not compile ({errors} error(s)); run runic-translations validate."),
                         diagnostics: [], humanOutput: $"runic-translations: the catalog of {inputs.Project.Path} does not compile ({errors} error(s)); run runic-translations validate.\n");
                 }
-                reports.Add(Report(inputs, compilation, thresholds, warnings));
+                reports.Add(Report(inputs, counted, thresholds, warnings));
             }
             foreach (string locale in thresholds.Keys)
                 if (locale != "*" && !reports.Any(report => report.Locales.Any(item => string.Equals(item.Locale, locale, StringComparison.OrdinalIgnoreCase) && item.Locale != report.BaseLocale)))
