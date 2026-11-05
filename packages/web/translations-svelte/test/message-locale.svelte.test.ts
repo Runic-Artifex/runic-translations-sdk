@@ -4,7 +4,8 @@ import { flushSync, mount, unmount } from "svelte";
 import { describe, expect, test } from "vitest";
 import { createSvelteLocale, useMessageLocale, type MutableLocaleSource } from "../src/translations/index.js";
 import MessageLocaleFixture from "./MessageLocaleFixture.svelte";
-import { configureLocaleResolver, getLocale } from "./message-runtime.js";
+import SharedLocaleFixture from "./SharedLocaleFixture.svelte";
+import { configureLocaleResolver, getLocale, library } from "./message-runtime.js";
 
 describe("useMessageLocale", () => {
   test("re-renders message calls when the application's locale changes, without keying the page", async () => {
@@ -71,5 +72,63 @@ describe("useMessageLocale", () => {
     expect(() => useMessageLocale(() => { installed = true; return () => {}; }, () => "de")).toThrow();
     expect(installed).toBe(false);
     expect(getLocale()).toBe("en");
+  });
+
+  test("with the locale alone, sets the shared locale channel that every catalog reads", async () => {
+    const channel = () => (globalThis as Record<symbol, { version: number; resolver: unknown } | undefined>)[Symbol.for("runic.translations.locale")];
+    const state = $state({ locale: "de" });
+    const component = mount(SharedLocaleFixture, { target: document.body, props: { state } });
+    flushSync();
+    expect(document.querySelector("p")?.textContent).toBe("Keine Zeilen");
+    expect(channel()?.version).toBe(1);
+    state.locale = "en";
+    flushSync();
+    expect(document.querySelector("p")?.textContent).toBe("No rows");
+
+    // A nested call wins while it is mounted; the outer one applies again after it is destroyed.
+    const inner = $state({ locale: "de" });
+    const nested = mount(SharedLocaleFixture, { target: document.body, props: { state: inner } });
+    flushSync();
+    expect(library.empty()).toBe("Keine Zeilen");
+    await unmount(nested);
+    expect(library.empty()).toBe("No rows");
+
+    await unmount(component);
+    expect(channel()?.resolver).toBe(null);
+  });
+
+  test("with a SvelteLocale alone, the shared channel gets the requested tag", async () => {
+    let current = "de";
+    const listeners = new Set<(locale: string) => void>();
+    const source: MutableLocaleSource<string> = {
+      getLocale: () => current,
+      getRequestedLocale: () => (current === "de" ? "de-CH" : current),
+      setLocale(locale) { current = locale; for (const listener of listeners) listener(locale); },
+      subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+    };
+    const locale = createSvelteLocale(source);
+    const component = mount(SharedLocaleFixture, { target: document.body, props: { state: { locale: "en" }, locale } });
+    flushSync();
+    expect(document.querySelector("span")?.textContent).toBe("de-CH");
+    source.setLocale("en");
+    flushSync();
+    expect(document.querySelector("span")?.textContent).toBe("en");
+    await unmount(component);
+    locale.dispose();
+  });
+
+  test("replaces a channel value that is not an object", async () => {
+    const key = Symbol.for("runic.translations.locale");
+    const host = globalThis as Record<symbol, unknown>;
+    const saved = host[key];
+    host[key] = 42;
+    try {
+      const component = mount(SharedLocaleFixture, { target: document.body, props: { state: { locale: "de" } } });
+      flushSync();
+      expect(library.empty()).toBe("Keine Zeilen");
+      await unmount(component);
+    } finally {
+      host[key] = saved;
+    }
   });
 });

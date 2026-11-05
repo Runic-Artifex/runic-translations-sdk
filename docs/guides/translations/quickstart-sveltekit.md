@@ -54,6 +54,9 @@ Create `translations/en.rmf2`:
 home {
   title = Welcome to Runic
   greeting = Hello, {$name}!
+  total =
+    .input {$amount :number}
+    {{Total: {$amount}}}
 }
 ```
 
@@ -63,6 +66,9 @@ Create `translations/de.rmf2`:
 home {
   title = Willkommen bei Runic
   greeting = Hallo, {$name}!
+  total =
+    .input {$amount :number}
+    {{Summe: {$amount}}}
 }
 ```
 
@@ -155,7 +161,12 @@ export const handle = createLocaleHandle(routing, { runWithLocale });
 The handle resolves the locale and stores it in `event.locals.locale`. It
 redirects non-canonical URLs and replaces `%runic.locale%` in `app.html`.
 Passing the generated `runWithLocale` gives each request its own locale for
-message calls in the rest of the request.
+message calls in the rest of the request. It also stores the tag the visitor
+asked for in `event.locals.requestedLocale`, such as `de-CH` when a
+`Accept-Language: de-CH` preference resolves to `de`; messages then show the
+`de` text with Swiss numbers and dates. One `runWithLocale` serves every catalog
+in the app, including those of component libraries built with Runic
+Translations 0.9 or later.
 
 Create `src/hooks.ts`:
 
@@ -179,6 +190,7 @@ declare global {
 	namespace App {
 		interface Locals {
 			locale: Locale;
+			requestedLocale: string;
 		}
 	}
 }
@@ -206,17 +218,20 @@ export const localeContext = createLocaleContext<Locale>();
 Read the request locale in `src/routes/+layout.server.ts`:
 
 ```ts
-import { localeFromLocals } from '@runic-artifex/translations-sveltekit';
+import { localeFromLocals, requestedLocaleFromLocals } from '@runic-artifex/translations-sveltekit';
 import { routing } from '#lib/i18n.ts';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = ({ locals }) => ({
-	locale: localeFromLocals(locals, routing)
+	locale: localeFromLocals(locals, routing),
+	requestedLocale: requestedLocaleFromLocals(locals, routing)
 });
 ```
 
 `localeFromLocals` throws if the handle did not run or stored an unsupported
 value, so a missing hook fails loudly instead of rendering the base locale.
+`requestedLocaleFromLocals` returns the requested tag (`de-CH` for `de`), so the
+browser formats numbers and dates as the server did.
 
 Replace `src/routes/+layout.svelte`:
 
@@ -226,6 +241,7 @@ Replace `src/routes/+layout.svelte`:
 		createLocaleNavigation,
 		synchronizeLocaleWithNavigation
 	} from '@runic-artifex/translations-sveltekit/navigation';
+	import { useMessageLocale } from '@runic-artifex/translations-svelte';
 	import { createLocaleSource } from 'virtual:runic-translations/app/runtime';
 	import { routing } from '#lib/i18n.ts';
 	import { localeContext } from '#lib/locale.ts';
@@ -234,13 +250,15 @@ Replace `src/routes/+layout.svelte`:
 
 	let { data, children }: LayoutProps = $props();
 
-	// The root layout owns one locale source, seeded from the server's locale.
+	// The root layout owns one locale source, seeded from the server's requested tag.
 	// svelte-ignore state_referenced_locally
-	const source = createLocaleSource({ initialLocale: data.locale });
+	const source = createLocaleSource({ initialLocale: data.requestedLocale });
 	synchronizeLocaleWithNavigation(source, routing);
 	const locale = localeContext.provide(source, {
 		requestLocale: createLocaleNavigation(routing)
 	});
+	// Every catalog's m.*() follows this locale, libraries' included.
+	useMessageLocale(locale);
 
 	$effect(() => {
 		document.documentElement.lang = locale.locale;
@@ -256,8 +274,13 @@ Replace `src/routes/+layout.svelte`:
 
 The favicon lines come from the `sv create` template. The generated runtime
 types the source with the catalog's locales (`"de" | "en"`), so it fits the
-routing's `Locale` without a cast. `synchronizeLocaleWithNavigation` updates
-the source after every client-side navigation. `requestLocale` makes `locale.setLocale('de')`
+routing's `Locale` without a cast. Seeded with `de-CH`, it reports `de` as its
+locale and keeps `de-CH` as the requested tag, which numbers and dates format
+in. `synchronizeLocaleWithNavigation` updates
+the source after every client-side navigation. `useMessageLocale(locale)` makes
+the generated `m.*()` calls of every catalog on the page read the locale, so
+templates update in place when it changes; on the server, `runWithLocale`
+supplies the request's locale instead. `requestLocale` makes `locale.setLocale('de')`
 navigate to the German URL instead of changing state in place. The `$effect`
 keeps `<html lang>` correct after client-side navigation; the handle sets it
 for server-rendered responses.
@@ -276,8 +299,9 @@ Replace `src/routes/+page.svelte`:
 	const locale = localeContext.use();
 </script>
 
-<h1>{m.home_title(locale.messageOptions)}</h1>
-<p>{m.home_greeting({ name: 'Ada' }, locale.messageOptions)}</p>
+<h1>{m.home_title()}</h1>
+<p>{m.home_greeting({ name: 'Ada' })}</p>
+<p>{m.home_total({ amount: '1234.5' })}</p>
 
 <nav>
 	{#each routing.locales as next (next)}
@@ -290,9 +314,13 @@ Replace `src/routes/+page.svelte`:
 ```
 
 `gotoLocale` navigates to the current page in the requested locale, for example
-from `/about` to `/de/about`. Components pass `locale.messageOptions` so that
-the same call renders correctly on the server and in the browser.
-`routing.localizeUrl` builds links that stay in the current locale.
+from `/about` to `/de/about`. The same call renders correctly on the server and
+in the browser: `runWithLocale` supplies the locale during SSR and
+`useMessageLocale` after hydration. The total shows `1,234.5` in English,
+`1.234,5` for `de`, and Swiss grouping for `de-CH`. To format one call in
+another locale, pass `{ locale }` as its options, such as
+`locale.messageOptions`. `routing.localizeUrl` builds links that stay in the
+current locale.
 
 Server-only code doesn't need explicit options. The handle wraps every request
 in `runWithLocale`, so a plain call in a server `load` uses that request's
