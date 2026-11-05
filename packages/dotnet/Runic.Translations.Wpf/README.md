@@ -291,14 +291,14 @@ instead:
 ```xml
 <ControlTemplate TargetType="local:GridHeader">
   <StackPanel>
-    <TextBlock Text="{rt:Message grid_title, Catalog=acme-grid}"/>
-    <TextBlock Text="{rt:Message grid_rows, Catalog=acme-grid, Arg0={Binding RowCount, RelativeSource={RelativeSource TemplatedParent}}}"/>
+    <TextBlock Text="{rt:Message grid_title, Catalog=acme.grid}"/>
+    <TextBlock Text="{rt:Message grid_rows, Catalog=acme.grid, Arg0={Binding RowCount, RelativeSource={RelativeSource TemplatedParent}}}"/>
   </StackPanel>
 </ControlTemplate>
 ```
 
 To use the catalog for every message and rich message in a template, set it once
-on the template's root: `rt:TranslationProperties.Source="{rt:CatalogSource acme-grid}"`.
+on the template's root: `rt:TranslationProperties.Source="{rt:CatalogSource acme.grid}"`.
 
 The application registers the library's catalog in its translation context (see
 [catalogs from libraries](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/composition.md))

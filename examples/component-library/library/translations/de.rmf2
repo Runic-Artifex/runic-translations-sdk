@@ -1,0 +1,10 @@
+storage {
+  title = Speicher
+  empty = Noch keine Dateien
+  files =
+    .input {$count :integer}
+    .match $count
+    one {{Eine Datei}}
+    *   {{{$count} Dateien}}
+  usage = {$used :unit unit=gigabyte} von {$total :unit unit=gigabyte} belegt
+}

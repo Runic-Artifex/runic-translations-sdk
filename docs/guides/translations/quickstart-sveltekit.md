@@ -461,3 +461,5 @@ generates `.runic/` before `npm run check` reads its declarations.
   every routing, handle, and navigation option.
 - [ESM backend](esm.md): the generated `/runtime` and `/server` entry points.
 - [RMF2 guide](rmf2.md): plurals, selectors, and inline markup.
+- [Ship translations in a library](libraries.md): component libraries with their own catalogs, overridden and
+  rendered on the server in the request's locale.

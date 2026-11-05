@@ -118,7 +118,7 @@ the `interchange` member of the payload (`format: "resx"`, schema
 | `IMPORT-NO-BASE` | refused | A translation whose key has no base message. |
 | `IMPORT-INVALID` | refused | The message does not compile; the reason names the RTR code, for example a translation that uses `{2}` while its base text has only `{0}` (`RTR0016`). |
 | `IMPORT-KEY-COLLISION` | refused | Two keys map to the same RMF2 name. |
-| `RESX-FORMAT` | notice | A format such as `{0:d}`, `{0:C}` or an alignment `{0,10}` was dropped: add `:date`, `:time`, `:datetime` or `:number` yourself. |
+| `RESX-FORMAT` | notice | A format such as `{0:d}`, `{0:C}` or an alignment `{0,10}` was dropped: add `:date`, `:time`, `:datetime`, `:number` or, for `{0:C}`, `:currency currency=EUR` with the amount's ISO code yourself (`{0:C}` takes the currency of the current culture, a message names it). |
 | `RESX-BRACE` | notice | A `{` or `}` that is not part of a format item was kept as text. |
 | `IMPORT-LOCALE` | notice | A satellite of a locale that `runic.json` does not declare. |
 

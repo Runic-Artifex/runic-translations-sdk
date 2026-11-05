@@ -354,6 +354,13 @@ test("dependencies: runic.json overrides and locales regenerate the dependency c
     assert.equal((await reloaded).type, "full-reload");
     assert.match((await dependencyCalls()).at(-1), /--locales\|en,de,it$/);
 
+    // "from" may list the library's NuGet package and npm package, so the runic.json of a .NET build serves this build too.
+    await writeFile(config, JSON.stringify({ schemaVersion: 1, catalog: "app", baseLocale: "en", locales: ["en", "fr"], overrides: [{ catalog: "acme.grid", from: ["Acme.Grid", "@acme/grid"] }] }));
+    const listed = new Promise((resolve, reject) => { const timer = setTimeout(() => reject(new Error("No reload")), 5000); reloads.once("reload", value => { clearTimeout(timer); resolve(value); }); });
+    watcher.emit("change", config);
+    assert.equal((await listed).type, "full-reload");
+    assert.match((await dependencyCalls()).at(-1), /--overrides\|.*acme\.grid\|--locales\|en,fr$/);
+
     // An override of a catalog no dependency ships is an error, as RTR0104 is in a .NET build.
     await writeFile(config, JSON.stringify({ schemaVersion: 1, catalog: "app", baseLocale: "en", overrides: [{ catalog: "acme.grid", from: "@acme/grid" }, { catalog: "acme.menu", from: "@acme/menu" }] }));
     const failed = new Promise((resolve, reject) => { const timer = setTimeout(() => reject(new Error("No error")), 5000); reloads.once("reload", value => { clearTimeout(timer); resolve(value); }); });
@@ -361,6 +368,14 @@ test("dependencies: runic.json overrides and locales regenerate the dependency c
     const error = await failed;
     assert.equal(error.type, "error");
     assert.match(error.err.message, /RTR0104: Catalog 'acme\.menu' to override is not shipped by any dependency/);
+
+    // A list without the dependency's npm package is RTR0104 too.
+    await writeFile(config, JSON.stringify({ schemaVersion: 1, catalog: "app", baseLocale: "en", overrides: [{ catalog: "acme.grid", from: ["Acme.Grid"] }] }));
+    const unlisted = new Promise((resolve, reject) => { const timer = setTimeout(() => reject(new Error("No error")), 5000); reloads.once("reload", value => { clearTimeout(timer); resolve(value); }); });
+    watcher.emit("change", config);
+    const mismatch = await unlisted;
+    assert.equal(mismatch.type, "error");
+    assert.match(mismatch.err.message, /RTR0104: Catalog 'acme\.grid' comes from package '@acme\/grid', not 'Acme\.Grid'/);
     plugin.closeBundle();
   } finally { await rm(root, { recursive: true, force: true }); }
 });

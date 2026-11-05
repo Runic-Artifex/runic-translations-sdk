@@ -45,7 +45,7 @@ one context. `SetLocaleAsync` prepares every catalog's snapshot and publishes th
 TranslationContext translations = await TranslationContext.CreateBuilder()
     .Add(AppTextCatalog.Registration)
     .Add(GridTextCatalog.Registration)          // a library's generated registration
-    .AddOverlay(TranslationOverlay.FromPacks("acme-grid", packSource,
+    .AddOverlay(TranslationOverlay.FromPacks("acme.grid", packSource,
         addedLocales: [new TranslationOverlayLocale("fr")]))
     .BuildAsync(initialLocale: "de");
 
@@ -59,7 +59,7 @@ or to the default (`LocaleResolution`); `translations.SupportedLocales` lists th
 `SetLocaleFromPreferencesAsync` chooses among them for a preference list. The latest `SetLocaleAsync` call wins over earlier ones still in flight, and contexts built from one
 builder share their catalogs' providers, so a context per window or request is cheap. Overlays are checked key by key,
 keep working when the library adds messages, and resolve locale-first. The text class now has a second one-parameter
-constructor, so register it with a factory rather than by type in a DI container. See [Catalogs from libraries](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/composition.md).
+constructor, so register it with a factory rather than by type in a DI container. See [Catalogs from libraries](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/composition.md) and [Ship translations in a library](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/libraries.md).
 
 ## Right-to-left text
 
@@ -92,6 +92,8 @@ Open and closed sets: the markup bindings (`InlineLinkBinding`, `InlineActionBin
 - [Runtime and generated C# example](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/tests/dotnet/Runic.Translations.PackageTests/Program.cs)
 - [NativeAOT example](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/tests/dotnet/Runic.Translations.AotTests)
 - [RMF2 project guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md)
+- [Translate a Runic Views app](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/runic-views.md)
+- [Ship translations in a library](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/libraries.md)
 - [Ship translation updates without a release](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/ota.md)
 - [External translation pack contract](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/specs/translations/wave-b/external-packs.md)
 - [Issues and support](https://github.com/Runic-Artifex/runic-translations-sdk/issues)

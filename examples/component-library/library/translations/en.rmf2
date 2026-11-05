@@ -1,0 +1,14 @@
+# The storage meter: how much of the user's quota is in use.
+storage {
+  title = Storage
+  # Shown while the user has no files.
+  empty = No files yet
+  files =
+    .input {$count :integer}
+    .match $count
+    one {{One file}}
+    *   {{{$count} files}}
+  # @param used Gigabytes in use.
+  # @param total The quota in gigabytes.
+  usage = {$used :unit unit=gigabyte} of {$total :unit unit=gigabyte} used
+}

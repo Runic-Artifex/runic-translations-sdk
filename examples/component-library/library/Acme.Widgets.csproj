@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- A component library with its own catalog (translations/), shipped as a NuGet package. The same directory is
+       also the npm package @acme/widgets (package.json); both ship the catalog's sources. -->
+  <PropertyGroup>
+    <PackageId>Acme.Widgets</PackageId>
+    <Version>1.0.0</Version>
+    <Description>Storage widgets with English and German text.</Description>
+    <!-- Packs runic/acme.widgets/ (runic.json, sources, contract.json) and buildTransitive/Acme.Widgets.props, so an
+         application can override the library's text at build time. The catalog ID is the package ID in lower case. -->
+    <RunicTranslationsPackCatalog>true</RunicTranslationsPackCatalog>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Runic.Translations" Version="$(RunicTranslationsVersion)" />
+    <!-- A development dependency: packing removes it from the package's dependencies. -->
+    <PackageReference Include="Runic.Translations.Build" Version="$(RunicTranslationsVersion)" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The npm half of the library; not part of the NuGet package. -->
+    <None Remove="dist/**;node_modules/**" />
+  </ItemGroup>
+</Project>

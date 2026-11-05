@@ -225,6 +225,9 @@ dotnet tool run runic-translations -- xliff import --project translations --sour
 dotnet tool run runic-translations -- xliff import --project translations --source xliff/app.de.xliff
 ```
 
+[Work with translators and translation tools](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/translators.md)
+walks through a translation round and the TMS settings; this section is the reference.
+
 `xliff export` writes `<catalog>.<locale>.xliff` (XLIFF 2.1, Runic profile 3) for every locale except the base
 locale, or only for the `--locale` ones (repeatable). Each message is one unit whose `id` is the message key:
 

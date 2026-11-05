@@ -410,7 +410,7 @@ Translation XAML keys under an explicit source are not checked. Static keys are 
 <Page Update="Views/Checkout.xaml" Catalog="app" />
 ```
 
-A message that names its catalog (`{rt:Message key, Catalog=acme-grid}`), and content under `rt:TranslationProperties.Source="{rt:CatalogSource acme-grid}"`, is checked against that catalog when it is the local or a referenced project's catalog. Otherwise the build cannot load it, and this diagnostic names the catalog and its first key once per file.
+A message that names its catalog (`{rt:Message key, Catalog=acme.grid}`), and content under `rt:TranslationProperties.Source="{rt:CatalogSource acme.grid}"`, is checked against that catalog when it is the local or a referenced project's catalog. Otherwise the build cannot load it, and this diagnostic names the catalog and its first key once per file.
 
 Keys of another catalog cannot be checked by the build; the WPF adapter still checks them when the XAML loads. Informational diagnostics appear in the IDE's error list but not in command-line build output; to see them there, raise the severity with `dotnet_diagnostic.RTR0085.severity = warning` in `.editorconfig` or a global analyzer config.
 
@@ -693,8 +693,10 @@ failing, as for overlay packs.
 Library catalog to override is not available. runic.json `overrides` lists a
 catalog that no referenced package packs (`Catalog 'acme.grid' to override is
 not packed by any referenced package`), a catalog that another package ships
-than `from` names, or an entry that names the project's own catalog, a catalog
-twice or an invalid package ID. Reference the package, and pack the library
+than the ones `from` names (a string, or an array of a library's NuGet and npm
+packages, of which each build matches its own), or an entry that names the
+project's own catalog, a catalog twice, a package twice in `from` or an invalid
+package ID. Reference the package, and pack the library
 with `<RunicTranslationsPackCatalog>true</RunicTranslationsPackCatalog>`
 (Runic.Translations.Build 0.9.0 or later), which ships its `runic.json`,
 sources and contract under `runic/<catalog>/`. It is also the error when the

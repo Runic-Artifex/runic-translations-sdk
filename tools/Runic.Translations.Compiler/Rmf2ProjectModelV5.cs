@@ -136,8 +136,11 @@ internal sealed record Rmf2ProjectV5(string Id, string CodeNamespace, string Cla
         Rmf2FormatDataV1.Select(locales, Rmf2FormatDataV1.Collect(messages, FormatCurrencies, FormatUnits), numbers);
 }
 
-/// <summary>An <c>overrides</c> entry of runic.json: a library catalog and the NuGet or npm package that ships it.</summary>
-internal sealed record Rmf2OverrideV5(string Catalog, string From);
+/// <summary>
+/// An <c>overrides</c> entry of runic.json: a library catalog and the packages that ship it, one or more NuGet package IDs
+/// and npm package names (a library shipped both ways lists both). A build matches the packages of its own ecosystem.
+/// </summary>
+internal sealed record Rmf2OverrideV5(string Catalog, IReadOnlyList<string> From);
 
 internal static class Rmf2ProjectV5EmissionEligibility
 {

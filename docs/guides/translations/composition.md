@@ -8,7 +8,8 @@ application that uses the library needs three things from it:
 - a way to see when a catalog shows text in another locale than the one requested.
 
 `TranslationContext` provides the first and third, and `TranslationOverlay` the second. The library itself needs no
-code for either.
+code for either. [Ship translations in a library](libraries.md) is the library author's guide for .NET and the web,
+with the [component-library example](../../../examples/component-library/README.md).
 
 ## The library
 
@@ -24,7 +25,7 @@ public sealed class GridHeader(ITranslationContext translations)
 }
 ```
 
-`new GridText(context)` uses the manager of the `acme-grid` catalog in that context and throws
+`new GridText(context)` uses the manager of the `acme.grid` catalog in that context and throws
 `KeyNotFoundException` when the application did not register the catalog. The constructor over an
 `ITranslationManager` stays, for code that manages one catalog itself, and keeps priority for a `null` argument, so
 `new GridText(null)` still compiles.
@@ -90,7 +91,7 @@ once, and overlay packs are loaded, checked and composed once per locale. A cont
 costs a snapshot lookup per catalog. Keep the builder and call `BuildAsync` for each window or request; a new builder
 starts with empty caches.
 
-Each catalog keeps its own `ITranslationManager`, which `translations.GetManager("acme-grid")` returns, so adapters such
+Each catalog keeps its own `ITranslationManager`, which `translations.GetManager("acme.grid")` returns, so adapters such
 as the WPF `TranslationSource` keep working. A manager's `SetLocaleAsync` switches the whole context; its `RefreshAsync`
 recomposes only its catalog. Managers raise `LocaleChanged` and `SnapshotPublished` as before, and the context then
 raises its own `LocaleChanged` once. Events are raised in publication order; when switches overlap, only the latest
@@ -124,13 +125,13 @@ TranslationSource.Default = TranslationSource.ForCatalog(AppTextCatalog.CatalogI
 
 ```xml
 <ControlTemplate TargetType="local:DataGridHeader">
-  <TextBlock Text="{rt:Message grid_title, Catalog=acme-grid}"/>
+  <TextBlock Text="{rt:Message grid_title, Catalog=acme.grid}"/>
 </ControlTemplate>
 ```
 
 `TranslationSource.ForCatalog(id)` returns one source per catalog over the context's manager and the catalog's generated
 readable surface (`XCatalog.Registration` creates it), so library text follows the application's locale switches. Set
-`rt:TranslationProperties.Source="{rt:CatalogSource acme-grid}"` on a template root to use the catalog for every message
+`rt:TranslationProperties.Source="{rt:CatalogSource acme.grid}"` on a template root to use the catalog for every message
 and rich message below it. The library's build checks the keys against its own catalog. See the
 [WPF README](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/packages/dotnet/Runic.Translations.Wpf/README.md#control-libraries).
 
@@ -196,11 +197,13 @@ translations/
   overrides/acme.grid/fr.rmf2  French, a locale the library lacks
 ```
 
-Override files use the library's full logical keys, as its catalog shows them. `from` names the NuGet package (or npm
-package) that packs the catalog. The build validates every override message against that packed catalog, as a
+Override files use the library's full logical keys, as its catalog shows them. `from` names the package that packs the
+catalog: its NuGet package ID, its npm package name, or an array of both for a library shipped both ways
+(`"from": ["Acme.Grid", "@acme/grid"]`), so one `runic.json` serves a .NET and a Vite build. Each build matches the
+packages of its own kind; NuGet IDs never contain `@` or `/`. The build validates every override message against that packed catalog, as a
 translation of the library's base locale: a key the library does not have is `RTR0103` (with a suggestion for a typo),
 changed inputs are `RTR0016`/`RTR0065`, markup in a plain-text message `RTR0103`, and the quality checks
-`RTR0094`–`RTR0098` apply. A catalog that no referenced package packs, or another `from`, is `RTR0104`. Files under
+`RTR0094`–`RTR0098` apply. A catalog that none of the packages in `from` packs for this build is `RTR0104`. Files under
 `translations/overrides/` are never part of the application's own catalog.
 
 - **Library updates.** The build validates against the library release it compiles with, so a release that removes an
@@ -260,8 +263,9 @@ the one the build compiled against skips a message whose key it no longer has in
 locale-first.
 
 On the web, the same `overrides` and `translations/overrides/` apply to npm library catalogs through the Vite plugin's
-`dependencies: "auto"`, which regenerates each library catalog with them, filtered to the application's locales. The
-rules match the .NET build: an override of a catalog no dependency ships is `RTR0104`, added locales fall back by the same
+`dependencies: "auto"`, which regenerates each library catalog with them, filtered to the application's locales. A
+`runic.json` that a .NET and a Vite build share lists both of a library's packages in `from`. The rules match the .NET
+build: an override of a catalog that no dependency named in `from` ships is `RTR0104`, added locales fall back by the same
 chain, and libraries are discovered transitively through the libraries that ship catalogs (see
 [the plugin's README](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/packages/web/vite-plugin-runic-translations#library-catalogs-from-dependencies)).
 
@@ -269,14 +273,14 @@ chain, and libraries are discovered transitively through the libraries that ship
 
 An overlay holds the application's messages for a library catalog. Besides the compiled overlays of
 [build-time overrides](#build-time-overrides), it comes from locale artifacts v5, the
-`acme-grid.<locale>.locale-v5.json` files that `runic-translations generate` writes for a project with the library's
+`acme.grid.<locale>.locale-v5.json` files that `runic-translations generate` writes for a project with the library's
 catalog ID, for example downloaded ones:
 
 ```csharp
 TranslationContext translations = await TranslationContext.CreateBuilder()
     .Add(AppTextCatalog.Registration)
     .Add(GridTextCatalog.Registration)
-    .AddOverlay(TranslationOverlay.FromPacks("acme-grid", packSource,
+    .AddOverlay(TranslationOverlay.FromPacks("acme.grid", packSource,
         addedLocales: [new TranslationOverlayLocale("fr", fallbackLocale: "en")]))
     .BuildAsync("fr");
 ```

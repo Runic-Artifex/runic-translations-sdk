@@ -14,3 +14,11 @@
 /examples/bun/operation-history/generated/
 /examples/bun/operation-history/history/current.log
 /packages/web/translations-sveltekit/test/generated-*/
+/examples/component-library/.config/
+/examples/component-library/NuGet.config
+/examples/component-library/packages/
+/examples/component-library/library/*.tgz
+/examples/component-library/web/.runic/
+/examples/component-library/web/build/
+/examples/shared-catalog/Frontend/.config/
+/examples/shared-catalog/Frontend/.runic/
