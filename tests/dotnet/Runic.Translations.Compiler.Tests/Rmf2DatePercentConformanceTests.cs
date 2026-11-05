@@ -32,6 +32,10 @@ internal sealed class Rmf2DatePercentConformanceTests
             item["message"]!.GetValue<string>(), item["arguments"]!.AsObject(), item["expected"]!.GetValue<string>(),
             item["alternates"]?.AsArray().Select(value => value!.GetValue<string>()).ToArray() ?? [])).ToList();
         Assert.True(vectors.Count > 100, "The date and percent vectors are missing.");
+        // An alternate is the output of a named platform ICU; the note says which, so the corpus stays strict otherwise.
+        foreach (JsonNode? item in corpus["cases"]!.AsArray())
+            if (item!["alternates"] is not null)
+                Assert.True(item["note"]?.GetValue<string>() is { Length: > 0 }, "The alternates of '" + item["id"] + "' have no note naming the platform.");
         Assert.Equal(vectors.Count, vectors.Select(vector => vector.Id).Distinct(StringComparer.Ordinal).Count(), "Duplicate date and percent vector ids.");
         // Every 0.8 locale family has date, time and percent vectors; the other CLDR locales use the same rules.
         foreach (string family in new[] { "cs", "da", "de", "en", "es", "fr", "it", "ja", "nb", "nl", "nn", "no", "sv" })
@@ -159,7 +163,7 @@ internal sealed class Rmf2DatePercentConformanceTests
 
     // The documented tolerance: platform ICU versions may write U+0020, U+00A0 or U+202F for the same space, and U+0027
     // or U+2019 for the same apostrophe (the de-CH group separator). Everything else must match exactly.
-    private static bool Matches(string expected, string actual) =>
+    internal static bool Matches(string expected, string actual) =>
         string.Equals(expected, actual, StringComparison.Ordinal) || string.Equals(Tolerant(expected), Tolerant(actual), StringComparison.Ordinal);
     private static string Tolerant(string value) => value.Replace('\u00A0', ' ').Replace('\u202F', ' ').Replace('\u2019', '\'');
 }
