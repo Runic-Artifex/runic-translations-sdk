@@ -126,7 +126,21 @@ data, and every `TranslationManager` (and every manager of a `TranslationContext
 WPF bindings and other views that listen to it show the new text; code that
 formats again (`text.Messages.application_title`) reads it as well. This works for
 a translations library referenced by the app as well as for a catalog in the app
-project. A snapshot that code captured earlier keeps its text.
+project. A snapshot that code captured earlier keeps its text. Other locales
+that were loaded before are built again from the new data when the app next
+switches to them, and only the catalogs whose generated code changed are
+reloaded.
+
+The edit can also change the generated markup contract (a new translation, or
+a document message whose block structure changed). `XCatalog.Registration`
+reads the contract again, so overlays are checked against the new one. A
+renderer you link yourself follows it when you link the generated property
+through a function:
+
+```csharp
+// Follows Hot Reload; Link(AppTextCatalog.Rmf2MarkupContract) keeps the startup contract.
+Rmf2MarkupContract contract = Rmf2MarkupContract.Link(() => AppTextCatalog.Rmf2MarkupContract);
+```
 
 A text-only edit changes a message's text, its translations or its variants, but
 not the caller contract: adding or removing a message, an input or a slot changes

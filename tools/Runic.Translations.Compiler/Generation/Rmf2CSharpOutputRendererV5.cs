@@ -111,7 +111,8 @@ internal static class Rmf2CSharpOutputRendererV5
         {
             writer.Line("/// <summary>Describes this catalog to a translation context: its ID, contract and provider factory.</summary>");
             writer.Line("public static global::Runic.Translations.TranslationCatalogRegistration Registration { get; } = new global::Runic.Translations.TranslationCatalogRegistration(");
-            writer.Indent(); writer.Line("CatalogId, DefaultLocale, ContractFingerprint, Rmf2MarkupContract, CreateProvider);"); writer.Unindent();
+            // The contract through a lambda: Hot Reload changes the property, but never re-runs this static initializer.
+            writer.Indent(); writer.Line("CatalogId, DefaultLocale, ContractFingerprint, static () => Rmf2MarkupContract, CreateProvider);"); writer.Unindent();
             writer.Blank();
         }
         writer.Line("public static global::Runic.Translations.ITranslationProvider CreateProvider("); writer.Indent();

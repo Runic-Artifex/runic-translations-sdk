@@ -219,6 +219,9 @@ public sealed class CompiledTranslationLocale
     /// <summary>Whether the values are created on first use and have not been created yet.</summary>
     internal bool IsDeferred => Volatile.Read(ref _values) is null;
 
+    /// <summary>The type whose code creates the deferred values (Hot Reload matches it with the updated types).</summary>
+    internal Type? FactoryType => _valueFactory?.Method.DeclaringType;
+
     internal CompiledTranslationValue[] ValueArray
     {
         get

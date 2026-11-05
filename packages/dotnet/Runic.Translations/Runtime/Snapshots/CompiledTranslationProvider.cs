@@ -80,6 +80,14 @@ public sealed class CompiledTranslationProvider : ITranslationProvider, ITransla
                 candidate.Dispose();
             }
 
+            // Hot Reload replaced the generated data after this snapshot was started: build it again, for every locale,
+            // not only the one a manager refreshes.
+            if (entry.Generation != _catalog.Generation)
+            {
+                RemoveIfCurrent(canonicalLocale, entry);
+                continue;
+            }
+
             if (entry.TryAddWaiter())
             {
                 Task<ITranslationSnapshot> task = entry.Task;
@@ -174,6 +182,8 @@ public sealed class CompiledTranslationProvider : ITranslationProvider, ITransla
         {
             _owner = owner;
             _canonicalLocale = canonicalLocale;
+            // Read before the snapshot reads the data, so a snapshot that may have read replaced data is never current.
+            Generation = owner._catalog.Generation;
             _task = new Lazy<Task<ITranslationSnapshot>>(
                 () => ObserveCompletion(owner.CreateSnapshotAsync(
                     this,
@@ -183,6 +193,9 @@ public sealed class CompiledTranslationProvider : ITranslationProvider, ITransla
         }
 
         internal Task<ITranslationSnapshot> Task => _task.Value;
+
+        /// <summary>The catalog's <see cref="CompiledTranslationCatalog.Generation"/> when this entry was created.</summary>
+        internal int Generation { get; }
 
         internal bool TryAddWaiter()
         {

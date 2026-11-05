@@ -33,7 +33,8 @@ contract once and pass the `Rmf2MarkupContract`; custom factories and the theme
 go in an options object:
 
 ```csharp
-Rmf2MarkupContract contract = Rmf2MarkupContract.Link(AppTextCatalog.Rmf2MarkupContract);
+// Linked through a function, the contract follows a .NET Hot Reload edit of the catalog.
+Rmf2MarkupContract contract = Rmf2MarkupContract.Link(() => AppTextCatalog.Rmf2MarkupContract);
 var renderer = new WpfInlineRenderer(contract, Navigate,
     new WpfInlineRendererOptions { Custom = factories, Theme = ApplyTheme });
 var documents = new WpfDocumentRenderer(contract, Navigate) { HeadingBase = 2 };
@@ -41,7 +42,9 @@ var documents = new WpfDocumentRenderer(contract, Navigate) { HeadingBase = 2 };
 
 `WpfDocumentRendererOptions` carries the document renderer's factories and
 `TextElement` theme. A linked contract is immutable and can be shared by any
-number of renderers.
+number of renderers; one linked through a function is replaced as a whole when
+a Hot Reload update changes the generated contract, and a contract linked from
+the JSON string keeps the startup contract.
 
 Icons use `InlineIconBinding` with a `Func<FrameworkElement>` that creates a fresh
 asset for every render. Meaningful icons require a localized accessible name;

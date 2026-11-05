@@ -19,13 +19,14 @@ internal sealed class OverlayTranslationProvider : ITranslationProvider, ITransl
     // An added locale and the next locale of its chain: its explicit fallback, else its nearest declared or added parent,
     // else the catalog's default locale.
     private readonly Dictionary<string, string> _addedLocales = new(StringComparer.Ordinal);
-    private readonly ConcurrentDictionary<string, CompiledTranslationSnapshot> _snapshots = new(StringComparer.Ordinal);
+    // Each snapshot with the catalog generation and contract link version it was composed from (Hot Reload).
+    private readonly ConcurrentDictionary<string, Composed> _snapshots = new(StringComparer.Ordinal);
 
-    internal OverlayTranslationProvider(CompiledTranslationCatalog catalog, string markupContract, ITextValueFormatter valueFormatter,
+    internal OverlayTranslationProvider(CompiledTranslationCatalog catalog, Rmf2MarkupContract markup, ITextValueFormatter valueFormatter,
         IReadOnlyList<TranslationOverlay> overlays)
     {
         _catalog = catalog;
-        _markup = Rmf2MarkupContract.Link(markupContract);
+        _markup = markup;
         _valueFormatter = valueFormatter;
         _overlays = new TranslationOverlay[overlays.Count];
         // Explicit fallbacks per added locale; null when no overlay names one.
@@ -78,13 +79,23 @@ internal sealed class OverlayTranslationProvider : ITranslationProvider, ITransl
         cancellationToken.ThrowIfCancellationRequested();
         LocaleRequest request = LocaleRequestResolver.Resolve(requestedLocale, Declares, _catalog.UnsupportedLocale, _catalog.DefaultLocale,
             _catalog.Catalog);
-        if (!_snapshots.TryGetValue(request.Locale, out CompiledTranslationSnapshot? snapshot))
+        if (!_snapshots.TryGetValue(request.Locale, out Composed? composed) || !composed.IsCurrent(this))
         {
-            snapshot = await ComposeAsync(request.Locale, cancellationToken).ConfigureAwait(false);
-            snapshot = _snapshots.GetOrAdd(request.Locale, snapshot);
+            // Read before composing, so a snapshot that may have read replaced data is never current.
+            int generation = _catalog.Generation, linkVersion = _markup.LinkVersion;
+            CompiledTranslationSnapshot snapshot = await ComposeAsync(request.Locale, cancellationToken).ConfigureAwait(false);
+            var created = new Composed(snapshot, generation, linkVersion);
+            // A caller that composed the same locale first wins, unless its composition is out of date.
+            composed = _snapshots.AddOrUpdate(request.Locale, created, (_, existing) => existing.IsCurrent(this) ? existing : created);
         }
 
-        return snapshot.ForRequest(request);
+        return composed.Snapshot.ForRequest(request);
+    }
+
+    private sealed record Composed(CompiledTranslationSnapshot Snapshot, int Generation, int LinkVersion)
+    {
+        internal bool IsCurrent(OverlayTranslationProvider owner) =>
+            Generation == owner._catalog.Generation && LinkVersion == owner._markup.LinkVersion;
     }
 
     void ITranslationSnapshotCacheInvalidator.InvalidateSnapshot(string canonicalLocale) => _snapshots.TryRemove(canonicalLocale, out _);
@@ -156,9 +167,16 @@ internal sealed class OverlayTranslationProvider : ITranslationProvider, ITransl
             }
         }
 
-        var library = new (string?[] Patterns, CompiledTextMessage?[] Messages)?[chain.Count];
-        for (int index = 0; index < chain.Count; index++)
-            if (_catalog.DeclaresLocale(chain[index])) library[index] = _catalog.GetDirect(chain[index]);
+        // The library values of every chain locale from the same generated data: read again if Hot Reload replaced it.
+        var library = new LocaleValues?[chain.Count];
+        int generation;
+        do
+        {
+            generation = _catalog.Generation;
+            for (int index = 0; index < chain.Count; index++)
+                if (_catalog.DeclaresLocale(chain[index])) library[index] = _catalog.GetDirect(chain[index]);
+        }
+        while (generation != _catalog.Generation);
 
         var patterns = new string?[definitions.Length];
         var messages = new CompiledTextMessage?[definitions.Length];
