@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using Json.Schema;
 using TUnit.Core;
@@ -24,6 +25,28 @@ internal sealed class SchemaTests
             using JsonDocument document = JsonDocument.Parse(json);
             EvaluationResults result = schema.Evaluate(document.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
             Assert.Equal(expected, result.IsValid, context + ": " + result);
+        }
+    }
+
+    // The VS Code extension bundles this schema (package-assets.mjs) and runic.json files reference its published copy,
+    // so every member the compiler accepts must be in it, for completion and validation (L5-14).
+    [Test, DisplayName("project schema declares every runic.json member the compiler accepts")]
+    public void ProjectSchemaCoversCompilerMembers()
+    {
+        using JsonDocument schema = ReadSchema("project-v1.schema.json");
+        JsonElement root = schema.RootElement, definitions = root.GetProperty("$defs");
+        AssertMembers(root, TranslationCompiler.Mf2ProjectMembers, "runic.json");
+        AssertMembers(definitions.GetProperty("code"), TranslationCompiler.CodeMembers, "code");
+        AssertMembers(definitions.GetProperty("locale"), TranslationCompiler.LocaleMembers, "locales[]");
+        AssertMembers(definitions.GetProperty("runtime"), TranslationCompiler.RuntimeMembers, "runtime");
+        AssertMembers(definitions.GetProperty("validation"), ValidationMembers.All, "validation");
+        AssertMembers(root.GetProperty("properties").GetProperty("formats"), TranslationCompiler.FormatsMembers, "formats");
+
+        static void AssertMembers(JsonElement schemaObject, string[] accepted, string context)
+        {
+            string[] declared = schemaObject.GetProperty("properties").EnumerateObject().Select(static property => property.Name).Order(StringComparer.Ordinal).ToArray();
+            Assert.Equal(string.Join(",", accepted.Order(StringComparer.Ordinal)), string.Join(",", declared),
+                context + ": the schema's members differ from those the compiler accepts");
         }
     }
 

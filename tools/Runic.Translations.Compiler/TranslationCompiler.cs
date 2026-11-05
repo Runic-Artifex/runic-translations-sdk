@@ -7,11 +7,11 @@ namespace Runic.Translations.Compiler;
 
 public static partial class TranslationCompiler
 {
-    private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceRoots", "markup", "pseudoLocales", "formats" };
-    private static readonly string[] FormatsMembers = { "currencies", "units" };
-    private static readonly string[] CodeMembers = { "namespace", "className", "visibility", "referenceFallbackText" };
-    private static readonly string[] LocaleMembers = { "tag", "fallback", "validation" };
-    private static readonly string[] RuntimeMembers = { "unsupportedLocale", "missingKey", "bidiIsolation" };
+    internal static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceRoots", "markup", "pseudoLocales", "formats" };
+    internal static readonly string[] FormatsMembers = { "currencies", "units" };
+    internal static readonly string[] CodeMembers = { "namespace", "className", "visibility", "referenceFallbackText" };
+    internal static readonly string[] LocaleMembers = { "tag", "fallback", "validation" };
+    internal static readonly string[] RuntimeMembers = { "unsupportedLocale", "missingKey", "bidiIsolation" };
 
     /// <summary>Compiles a convention-based Runic project whose messages are standard MF2 files.</summary>
     /// <remarks>
