@@ -34,9 +34,9 @@ internal sealed record TranslationDependencyCatalog(string Catalog, string Packa
     /// <summary>The packed <c>contract.json</c> (the base locale's locale artifact v5), or null when the package has none (npm).</summary>
     internal string? ContractPath => File.Exists(Path.Combine(Root, "contract.json")) ? Path.Combine(Root, "contract.json") : null;
 
-    /// <summary>Whether <paramref name="package"/> (runic.json <c>overrides[].from</c>) names this package.</summary>
-    internal bool IsFrom(string? package) => package is null ||
-        string.Equals(package, Package, Origin == TranslationDependencyOrigin.NuGet ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    /// <summary>Whether one of <paramref name="packages"/> (runic.json <c>overrides[].from</c>) names this package.</summary>
+    internal bool IsFrom(IReadOnlyList<string>? packages) => packages is null ||
+        packages.Any(package => string.Equals(package, Package, Origin == TranslationDependencyOrigin.NuGet ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
 
     /// <summary>"Acme.Grid 1.2.0" or "@acme/grid@1.2.0".</summary>
     internal string Display => Origin == TranslationDependencyOrigin.NuGet ? Package + " " + Version : Package + "@" + Version;
@@ -173,16 +173,17 @@ internal static class TranslationDependencyCatalogs
             if (!TranslationReviewFile.IsFileName(item.Catalog) || targets.Any(target => target.Catalog == item.Catalog)) continue;
             TranslationDependencyCatalog[] shipped = catalogs.Where(catalog => catalog.Catalog == item.Catalog).ToArray();
             TranslationDependencyCatalog[] from = shipped.Where(catalog => catalog.IsFrom(item.From)).ToArray();
+            string named = "'" + string.Join("' or '", item.From) + "'";
             string? problem = null;
             if (from.Length == 0)
                 problem = shipped.Length == 0
-                    ? $"Catalog '{item.Catalog}' to override is not packed by any installed package; reference '{item.From}' and restore (dotnet restore, npm install). " +
+                    ? $"Catalog '{item.Catalog}' to override is not packed by any installed package; reference {named} and restore (dotnet restore, npm install). " +
                       "Library catalogs are found in the restore output obj/project.assets.json (or artifacts/obj/<project>/ with UseArtifactsOutput) and in node_modules; " +
                       "a custom BaseIntermediateOutputPath, MSBuildProjectExtensionsPath or ArtifactsPath, and Yarn Plug'n'Play, are not searched."
-                    : $"Catalog '{item.Catalog}' comes from package '{string.Join("', '", shipped.Select(static catalog => catalog.Package))}', not '{item.From}'; correct \"from\" in runic.json.";
+                    : $"Catalog '{item.Catalog}' comes from package '{string.Join("', '", shipped.Select(static catalog => catalog.Package))}', not {named}; correct \"from\" in runic.json.";
             else if (conflicts.TryGetValue(item.Catalog, out string? conflict))
                 problem = conflict;
-            targets.Add(new TranslationOverrideTarget(item.Catalog, item.From, Path.Combine(overridesDirectory, item.Catalog), from.FirstOrDefault(), problem));
+            targets.Add(new TranslationOverrideTarget(item.Catalog, string.Join(", ", item.From), Path.Combine(overridesDirectory, item.Catalog), from.FirstOrDefault(), problem));
         }
         if (overridesRoot is not null && Directory.Exists(overridesRoot))
             foreach (string child in Directory.EnumerateDirectories(overridesRoot).Order(StringComparer.Ordinal))

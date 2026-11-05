@@ -32,6 +32,23 @@ internal sealed class TranslationLibraryCatalogTests
         Require(resolution.OverrideOf(Path.Combine(fixture.ProjectDirectory, "en.rmf2")) is null, "An application source maps to an override target.");
     }
 
+    [Test, DisplayName("overrides[].from as an array (NuGet and npm package) resolves the catalog in either ecosystem")]
+    [Arguments(false)]
+    [Arguments(true)]
+    public void ResolvesFromList(bool npm)
+    {
+        using PackedLibraryFixture fixture = PackedLibraryFixture.Create(npm);
+        string from = npm ? "\"@acme/table\"" : "\"Acme.Table\"";
+        File.WriteAllText(fixture.ProjectPath, File.ReadAllText(fixture.ProjectPath).Replace(from, """["Acme.Table", "@acme/table"]""", StringComparison.Ordinal));
+        TranslationOverrideTarget target = TranslationDependencyCatalogs.Resolve(fixture.ProjectPath).Overrides.Single();
+        Require(target.Dependency is not null && target.Problem is null, "A list-valued from does not resolve: " + target);
+        Require(target.From == "Acme.Table, @acme/table", "Wrong from: " + target.From);
+
+        File.WriteAllText(fixture.ProjectPath, File.ReadAllText(fixture.ProjectPath).Replace("""["Acme.Table", "@acme/table"]""", """["Other.Package", "@other/package"]""", StringComparison.Ordinal));
+        string? problem = TranslationDependencyCatalogs.Resolve(fixture.ProjectPath).Override("acme.table")!.Problem;
+        Require(problem is not null && problem.Contains("not 'Other.Package' or '@other/package'", StringComparison.Ordinal), "Wrong-package problem missing: " + problem);
+    }
+
     [Test, DisplayName("an override of a catalog no installed package ships, or from another package, reports the build's problem")]
     public void UnresolvedTargets()
     {
