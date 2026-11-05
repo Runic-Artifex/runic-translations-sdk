@@ -237,6 +237,60 @@ render it as semantic HTML with `createDomDocumentRenderer` (see
 reject a pack whose document message has a block structure outside the
 generated contract as `RTR0023/document-structure-mismatch`.
 
+### Overlays
+
+`installOverlay(artifact, options?)` from `/dynamic` installs a locale artifact
+as application text that the ordinary `m.*()` calls use before the catalog's
+own text. Use it for an application's wording of a library's messages, for a
+locale the library lacks, and for translation updates downloaded at run time
+(`installLocalePack`, which reads downloaded pack bytes with the same limits
+and integrity callback as `decodeLocalePack`). The artifact is the `<catalog>.<locale>.locale-v5.json` that
+`runic-translations generate --emit-json` writes for a project with the
+catalog's ID, such as the application's own overlay project. Its contract
+fingerprint is not compared: each message is checked by key against this
+catalog's contract, as the .NET `TranslationOverlay` does.
+
+```ts
+import { installOverlay } from 'virtual:runic-translations/acme-grid/dynamic';
+
+const result = installOverlay(await (await fetch('/acme-grid.fr.locale-v5.json')).json());
+if (!result.ok) console.error(result.reason);           // structurally invalid: nothing installed
+else for (const skipped of result.value.diagnostics) console.warn(skipped); // { catalog, locale, key, reason }
+```
+
+- **Per key.** A message whose key the catalog no longer has (`unknown-key`),
+  whose inputs differ in name or type (`incompatible-inputs`), whose content
+  kind differs (`content-kind-changed`), or whose markup the catalog's contract
+  rejects, including markup in a message the catalog formats as plain text
+  (`incompatible-markup`), is skipped and reported; the catalog's text applies.
+  A message of an added locale that needs plural, list or relative-time data
+  this runtime does not embed is skipped as `unsupported-locale-data`; the
+  generated runtime embeds the data of the catalog's own languages. The set of
+  reasons is open.
+- **Locale-first.** For each locale of the requested locale's chain, the
+  overlays come first, then the catalog, and only then the next locale. A
+  library's German text therefore beats an English override when German is
+  requested.
+- **Added locales.** An artifact of a locale the catalog lacks adds it:
+  `resolveLocale` and `getLocale` accept it, and its missing keys fall back to
+  `options.fallbackLocale` (a locale the catalog declares), else its nearest
+  declared or added parent, else the base locale. Two installs of one locale
+  with different fallbacks throw a `RangeError`. The generated `Locale` type does
+  not list added locales.
+- **Fallback copies.** A message whose content locale is not the artifact's
+  own locale (a build with relaxed completeness writes such copies) applies
+  only to a locale an overlay adds.
+- **Order and removal.** A later install of the same locale wins per key.
+  `result.value.remove()` uninstalls an artifact. `onOverlayChange(listener)`
+  runs after every install and removal, so a page can render again.
+- **Bundle size.** Message functions only test whether an overlay is installed;
+  the overlay code and the catalog's contract tables are in `/dynamic`, so a
+  page that never imports `installOverlay` does not bundle them.
+
+`getMessageLocale` and `onFallback` report the locale of the text that applies,
+overlays included. Overlays are state of the catalog's runtime module: on a
+server they apply to every request.
+
 An integer input (`:integer`) takes a safe-integer JavaScript `number` or a
 `bigint`, which covers the full signed integer contract. A decimal input
 (`:number`, `:runic:relative-time`) takes a finite JavaScript `number`, a

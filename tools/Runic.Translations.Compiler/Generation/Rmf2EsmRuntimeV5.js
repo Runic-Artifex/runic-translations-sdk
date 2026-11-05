@@ -10,6 +10,9 @@ const contractCopies = new WeakMap();
 let structuredMessages;
 const dynamicContracts = new WeakMap();
 const decodedArtifacts = new WeakSet();
+// The overlays that dynamic.js installs (installOverlay, installLocalePack), or null before the first one. Message functions,
+// resolveLocale and getMessageLocale only test it, so a page that never installs an overlay bundles none of the overlay code.
+let overlays = null;
 // The shared locale channel: one locale for every generated catalog on a page or in a server process, and for every copy of
 // this runtime, so an application and its libraries switch together. Its shape is a protocol between runtimes of different
 // compiler releases and the Svelte adapter, so members are only ever added: { version: 1, resolver, storage }. resolver is
@@ -143,7 +146,12 @@ export function getMessageLocale(key, options) {
   messageLocales ??= freezeTrusted(messageLocaleTable());
   const entry = typeof key === "string" && Object.hasOwn(messageLocales, key) ? messageLocales[key] : undefined; if (!entry) throw new RangeError(`Unknown message '${key}'.`);
   const requested = options?.locale === undefined ? getRequestedLocale() : requestedTag(options.locale), locale = resolveLocale(requested);
-  const contentLocale = Object.hasOwn(entry, locale) ? entry[locale] : locale;
+  let contentLocale = Object.hasOwn(entry, locale) ? entry[locale] : locale;
+  if (overlays !== null) {
+    // The catalog has its own text at a locale whose content the table does not redirect.
+    const found = overlays.find(key, locale, step => !Object.hasOwn(entry, step));
+    contentLocale = typeof found === "string" ? (Object.hasOwn(entry, found) ? entry[found] : found) : found.contentLocale;
+  }
   return Object.freeze({ key, locale: contentLocale, formatLocale: formattingLocale(requested, contentLocale) });
 }
 
@@ -165,13 +173,16 @@ export function createLocaleSource(options = {}) {
   });
 }
 
+// A locale the catalog declares or an installed overlay adds.
+function supportsLocale(tag) { return localeSet.has(tag) || overlays !== null && overlays.added.has(tag); }
+
 export function resolveLocale(requested) {
   if (typeof requested !== "string") throw new RangeError("A locale string is required.");
   // An empty tag (the invariant culture, an unset lang) names no locale, so the unsupported-locale policy applies to it.
   const canonical = requested === "" ? "" : canonicalLocale(requested); if (canonical === null) throw new RangeError(`Invalid locale '${requested}'.`);
-  if (localeSet.has(canonical)) return canonical;
+  if (supportsLocale(canonical)) return canonical;
   if (unsupportedLocalePolicy === "ParentsThenDefault") {
-    let parent = canonical; while (parent.includes("-")) { parent = parent.slice(0, parent.lastIndexOf("-")); if (localeSet.has(parent)) return parent; }
+    let parent = canonical; while (parent.includes("-")) { parent = parent.slice(0, parent.lastIndexOf("-")); if (supportsLocale(parent)) return parent; }
     return baseLocale;
   }
   if (unsupportedLocalePolicy === "Default") return baseLocale;
@@ -604,6 +615,16 @@ function localTimeZone() {
 
 function validTimeZone(value) { return typeof value === "string" && value.length > 0 && value.length <= 64 && /^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$/.test(value); }
 
+// A generated message function: messages holds the message's compiled text by catalog locale. The requested tag (de-CH)
+// chooses the formatting locale of numbers and dates, the catalog locale (de) the text. With overlays installed, the text is
+// the first of each chain locale's overlay text and the catalog's own text (locale-first).
+export function formatMessage(key, messages, inputs, options) {
+  const requested = options?.locale ?? getRequestedLocale(), locale = resolveLocale(requested);
+  let wrapper = messages[locale];
+  if (overlays !== null) { const found = overlays.find(key, locale, step => messages[step]?.contentLocale === step); wrapper = typeof found === "string" ? messages[found] : found; }
+  return formatCompiledMessage(key, wrapper, inputs, requested, locale);
+}
+
 // requestedLocale is the tag the caller asked for (de-CH), resolvedLocale the catalog locale it resolved to (de),
 // which defaults to the requested one; the wrapper's content locale differs from it after a fallback.
 export function formatCompiledMessage(key, wrapper, inputs, requestedLocale, resolvedLocale = requestedLocale) {
@@ -726,14 +747,19 @@ export function decodeLocaleArtifactV5(value, tables) {
 
 export async function decodeLocalePackV5(content, expectedLocale, integrityVerifier, tables) {
   if (!isRecord(tables?.rmf2Contract) || !isRecord(tables.messageContracts)) throw new TypeError("The catalog's contract tables are required; import decodeLocalePack from dynamic.js.");
+  const read = await readLocalePack(content, integrityVerifier); if (!read.ok) return read;
+  const result = decodeLocaleArtifactV5(read.value, tables); if (!result.ok) return result;
+  return result.value.locale === expectedLocale ? result : failure("RTR0023/locale-mismatch");
+}
+
+// Untrusted pack bytes to a JSON value: size, the integrity callback on its own copy, depth, UTF-8 and duplicate members.
+async function readLocalePack(content, integrityVerifier) {
   if (!(content instanceof Uint8Array) || content.byteLength === 0) return failure("RTR0023/malformed");
   if (content.byteLength > limits.maximumDocumentBytes) return failure("RTR0023/limit-exceeded");
   const snapshot = new Uint8Array(content);
   if (integrityVerifier) { try { if (!await integrityVerifier(new Uint8Array(snapshot))) return failure("RTR0023/integrity-rejected"); } catch { return failure("RTR0023/integrity-rejected"); } }
   if (!withinJsonDepth(snapshot, limits.maximumDepth)) return failure("RTR0023/limit-exceeded");
-  let value; try { const text = new TextDecoder("utf-8", { fatal: true }).decode(snapshot); if (hasDuplicateJsonProperties(text)) return failure("RTR0023/malformed"); value = JSON.parse(text); } catch { return failure("RTR0023/malformed"); }
-  const result = decodeLocaleArtifactV5(value, tables); if (!result.ok) return result;
-  return result.value.locale === expectedLocale ? result : failure("RTR0023/locale-mismatch");
+  try { const text = new TextDecoder("utf-8", { fatal: true }).decode(snapshot); if (hasDuplicateJsonProperties(text)) return failure("RTR0023/malformed"); return success(JSON.parse(text)); } catch { return failure("RTR0023/malformed"); }
 }
 
 export function formatDynamicMessageV5(artifact, key, inputs = Object.create(null), options) {
@@ -742,6 +768,152 @@ export function formatDynamicMessageV5(artifact, key, inputs = Object.create(nul
   const requested = options?.locale === undefined ? artifact.locale : requestedTag(options.locale);
   if (resolveLocale(requested) !== artifact.locale) throw new RangeError("A dynamic locale artifact can only format its own locale.");
   return formatCompiledMessage(key, artifact.messages[key], inputs, requested, artifact.locale);
+}
+
+// Overlays: application-owned messages for this catalog, such as an application's text for a library's keys, a locale the
+// library lacks, or a pack downloaded at run time (dynamic.js installOverlay and installLocalePack). As in .NET's
+// TranslationOverlay, an artifact is checked key by key against the catalog's contract and not by its fingerprint, so a pack
+// built for another release of the catalog keeps the keys both releases share. A key the catalog no longer has, or whose
+// inputs, content kind or markup differ, is skipped with a diagnostic and the catalog's text applies. Resolution is
+// locale-first: for each locale of the requested locale's chain, the overlays (the latest install first), then the catalog,
+// and only then the next locale. A locale the catalog lacks is added; it falls back to the locale its install names, else
+// to its nearest declared or added parent, else to the base locale, and from the first catalog locale on the catalog's
+// chain applies.
+function overlayState(tables) {
+  if (overlays !== null) return overlays;
+  const entries = [], listeners = new Set(), cache = new Map(), added = new Map(), fallbacks = tables.localeFallbacks;
+  const nextOf = tag => {
+    const explicit = added.get(tag); if (explicit !== null) return explicit;
+    for (let parent = tag; parent.includes("-");) { parent = parent.slice(0, parent.lastIndexOf("-")); if (localeSet.has(parent) || added.has(parent)) return parent; }
+    return baseLocale;
+  };
+  const chain = locale => {
+    const steps = [], seen = new Set(); let current = locale;
+    while (added.has(current) && !seen.has(current)) { seen.add(current); steps.push(current); current = nextOf(current); }
+    for (; typeof current === "string" && !seen.has(current); current = Object.hasOwn(fallbacks, current) ? fallbacks[current] : null) { seen.add(current); steps.push(current); }
+    return steps;
+  };
+  overlays = {
+    entries, listeners, added,
+    // The overlay message for key at locale, or the catalog locale whose own text applies; owns(step) tells whether the
+    // catalog has its own text for the key at a catalog locale.
+    find(key, locale, owns) {
+      const id = locale + "\u0000" + key; if (cache.has(id)) return cache.get(id);
+      let found = baseLocale;
+      search: for (const step of chain(locale)) {
+        for (let index = entries.length - 1; index >= 0; index--) if (entries[index].locale === step && entries[index].own.has(key)) { found = entries[index].own.get(key); break search; }
+        if (!localeSet.has(step)) { for (let index = entries.length - 1; index >= 0; index--) { const copy = entries[index].copies.get(step)?.get(key); if (copy) { found = copy; break search; } } continue; }
+        if (owns(step)) { found = step; break; }
+      }
+      cache.set(id, found); return found;
+    },
+    changed() {
+      added.clear(); cache.clear();
+      for (const entry of entries) if (!localeSet.has(entry.locale)) { const explicit = added.get(entry.locale) ?? null; added.set(entry.locale, explicit ?? entry.fallback); }
+      for (const listener of [...listeners]) { try { listener(); } catch { /* The overlays are installed. */ } }
+    },
+  };
+  return overlays;
+}
+
+export function installOverlayV5(value, tables, options) {
+  if (!isRecord(tables?.rmf2Contract) || !isRecord(tables.messageContracts) || !isRecord(tables.localeFallbacks)) throw new TypeError("The catalog's contract tables are required; import installOverlay from dynamic.js.");
+  if (options !== undefined && !isRecord(options)) throw new TypeError("Overlay options must be an object.");
+  const fallback = options?.fallbackLocale ?? null;
+  if (fallback !== null && (typeof fallback !== "string" || !localeSet.has(fallback))) throw new RangeError(`An added locale must fall back to a locale the catalog declares, not '${fallback}'.`);
+  const captured = snapshotJson(value, limits.maximumDepth, limits.maximumDocumentBytes);
+  if (!captured.ok) return failure(`RTR0023/${captured.reason}`);
+  const snapshot = captured.value, envelope = validateOverlayEnvelope(snapshot); if (envelope) return failure(envelope);
+  const locale = snapshot.locale, declared = localeSet.has(locale);
+  if (!declared && fallback === locale) throw new RangeError("A locale cannot fall back to itself.");
+  const state = overlayState(tables);
+  // A locale the catalog declares keeps the catalog's chain, so a library release that adds the locale keeps the overlay working.
+  if (!declared && fallback !== null) for (const entry of state.entries)
+    if (entry.locale === locale && entry.fallback !== null && entry.fallback !== fallback) throw new RangeError(`Locale '${locale}' is already added with fallback '${entry.fallback}'.`);
+  const own = new Map(), copies = new Map(), diagnostics = [], markup = snapshot.markupContract.messages;
+  for (const key of Object.keys(snapshot.messages)) {
+    const message = snapshot.messages[key];
+    if (!isRecord(message) || typeof message.contentLocale !== "string" || canonicalLocale(message.contentLocale) !== message.contentLocale || !isRecord(message.ast)) return failure("RTR0023/malformed-pattern");
+    // The artifact's own contract states each message's content locale and kind.
+    const linked = isRecord(markup) && Object.hasOwn(markup, key) && isRecord(markup[key]) ? markup[key] : undefined;
+    if (!linked || !isRecord(linked.contentLocales) || linked.contentLocales[locale] !== message.contentLocale) return failure("RTR0023/argument-contract-mismatch");
+    const copy = message.contentLocale !== locale;
+    // A fallback copy (a build with relaxed completeness) is not application text for a locale the catalog declares.
+    if (copy && localeSet.has(message.contentLocale)) continue;
+    const report = reason => { diagnostics.push(Object.freeze({ catalog, locale: message.contentLocale, key, reason })); };
+    if (!Object.hasOwn(tables.messageContracts, key)) { report("unknown-key"); continue; }
+    const contract = dynamicContract(tables, key), inputs = orderedInputs(message.ast.inputs, contract.inputs);
+    if (inputs === null) { report("incompatible-inputs"); continue; }
+    if ((linked.content ?? "inline") !== contract.content) { report("content-kind-changed"); continue; }
+    const wrapper = { contentLocale: message.contentLocale, ast: { ...message.ast, inputs } };
+    const error = validateMessageWrapper(wrapper, contract, null, key, tag => tag === message.contentLocale);
+    if (error === "argument-contract-mismatch" || error === "document-structure-mismatch") { report("incompatible-markup"); continue; }
+    if (error) return failure(`RTR0023/${error}`);
+    // Generated functions format a message without markup as a string, so an overlay cannot add markup to it.
+    if (!contract.structured && wrapper.ast.variants.some(variant => variant.nodes.some(node => node.kind === "markup"))) { report("incompatible-markup"); continue; }
+    // This runtime embeds the plural, list and relative-time data of the catalog's languages only.
+    if (!localeSet.has(message.contentLocale) && !hasLocaleData(message.contentLocale, wrapper.ast)) { report("unsupported-locale-data"); continue; }
+    const result = cloneFreeze(wrapper); validatedMessages.set(result, contract);
+    if (!copy) own.set(key, result);
+    else { let table = copies.get(message.contentLocale); if (!table) copies.set(message.contentLocale, table = new Map()); table.set(key, result); }
+  }
+  const entry = Object.freeze({ locale, fallback: declared ? null : fallback, own, copies });
+  state.entries.push(entry); state.changed();
+  let installed = true;
+  const remove = () => { if (!installed) return; installed = false; state.entries.splice(state.entries.indexOf(entry), 1); state.changed(); };
+  return success(Object.freeze({ catalog, locale, contractFingerprint: snapshot.contractFingerprint, messages: own.size, diagnostics: Object.freeze(diagnostics), remove }));
+}
+
+export async function installLocalePackV5(content, tables, options) {
+  if (options !== undefined && !isRecord(options)) throw new TypeError("Pack options must be an object.");
+  const { locale, integrityVerifier, fallbackLocale } = options ?? {};
+  if (integrityVerifier !== undefined && typeof integrityVerifier !== "function") throw new TypeError("The integrity verifier must be a function.");
+  const read = await readLocalePack(content, integrityVerifier); if (!read.ok) return read;
+  if (locale !== undefined && (!isRecord(read.value) || read.value.locale !== locale)) return failure("RTR0023/locale-mismatch");
+  return installOverlayV5(read.value, tables, fallbackLocale === undefined ? undefined : { fallbackLocale });
+}
+
+export function onOverlayChangeV5(listener, tables) {
+  if (typeof listener !== "function") throw new TypeError("An overlay listener must be a function.");
+  const state = overlayState(tables), entry = () => listener(); state.listeners.add(entry);
+  return () => { state.listeners.delete(entry); };
+}
+
+// A locale artifact v5 of this catalog from any release: the fingerprint is read, not compared, and the locale may be one
+// the catalog lacks. Its markup contract must be version 2; each message is checked against this catalog's contract.
+function validateOverlayEnvelope(value) {
+  const members = ["artifactVersion","messageGrammarVersion","profile","catalog","locale","contractFingerprint","messages","markupContract"];
+  if (!isRecord(value)) return "RTR0023/malformed";
+  if (Object.keys(value).some(name => !members.includes(name))) return "RTR0023/unknown-member";
+  if (!members.every(name => Object.hasOwn(value, name))) return "RTR0023/malformed";
+  if (value.artifactVersion !== 5) return "RTR0023/artifact-version-mismatch";
+  if (value.messageGrammarVersion !== 5 || value.profile !== profile) return "RTR0023/message-grammar-version-mismatch";
+  if (!isRecord(value.markupContract) || value.markupContract.version !== 2) return "RTR0023/markup-contract-version-mismatch";
+  if (value.catalog !== catalog) return "RTR0023/catalog-mismatch";
+  if (typeof value.contractFingerprint !== "string" || !/^sha256:[0-9a-f]{64}$/.test(value.contractFingerprint)) return "RTR0023/malformed";
+  if (typeof value.locale !== "string" || canonicalLocale(value.locale) !== value.locale) return "RTR0023/locale-mismatch";
+  if (!isRecord(value.messages)) return "RTR0023/malformed"; if (Object.keys(value.messages).length > limits.maximumMessages) return "RTR0023/limit-exceeded";
+  return null;
+}
+
+// The message's inputs in the contract's order, or null when their names or types differ from the contract's.
+function orderedInputs(inputs, expected) {
+  if (!Array.isArray(inputs) || inputs.length !== expected.length) return null;
+  const ordered = [];
+  for (const input of expected) { const match = inputs.find(item => isRecord(item) && item.name === input.name); if (!match || match.type !== input.type) return null; ordered.push(match); }
+  return ordered;
+}
+
+// Whether this runtime has the CLDR data a message needs in a locale the catalog does not declare.
+function hasLocaleData(locale, ast) {
+  const language = locale.toLowerCase().split("-")[0], functions = new Set();
+  const collect = expression => { if (isRecord(expression) && typeof expression.function === "string") functions.add(expression.function); };
+  for (const declaration of ast.declarations) collect(declaration.expression);
+  for (const variant of ast.variants) for (const node of variant.nodes) if (node.kind === "expression") collect(node.expression);
+  const plural = ast.selectors.some(selector => selector.function !== "exact") || functions.has("runic:relative-time");
+  if (plural && !Object.hasOwn(generatedPluralRules, language)) return false;
+  if (functions.has("runic:relative-time") && !Object.hasOwn(generatedLocaleData.relativeTime, language)) return false;
+  return !functions.has("runic:list") || Object.hasOwn(generatedLocaleData.list, language);
 }
 
 export function decodeWireValue(value, type) {
@@ -771,11 +943,12 @@ function validateEnvelope(value, rmf2Contract) {
   return null;
 }
 
-function validateMessageWrapper(wrapper, contract, artifactLocale, key) {
+// accepts tests the content locale; by default it must be one of the catalog's locales.
+function validateMessageWrapper(wrapper, contract, artifactLocale, key, accepts = null) {
   if (!contract || !isRecord(wrapper)) return "malformed-pattern";
   const wrapperMembers=["contentLocale","ast"];
   if (Object.keys(wrapper).some(name=>!wrapperMembers.includes(name))) return "unknown-member";
-  if (!wrapperMembers.every(name=>Object.hasOwn(wrapper,name)) || typeof wrapper.contentLocale !== "string" || !localeSet.has(wrapper.contentLocale)) return "malformed-pattern";
+  if (!wrapperMembers.every(name=>Object.hasOwn(wrapper,name)) || typeof wrapper.contentLocale !== "string" || !(accepts === null ? localeSet.has(wrapper.contentLocale) : accepts(wrapper.contentLocale))) return "malformed-pattern";
   if (artifactLocale !== null && contract.contentLocales?.[artifactLocale] !== wrapper.contentLocale) return "argument-contract-mismatch";
   const ast = wrapper.ast, astMembers=["astVersion","profile","inputs","declarations","selectors","variants"];
   if (!isRecord(ast)) return "malformed-pattern";
