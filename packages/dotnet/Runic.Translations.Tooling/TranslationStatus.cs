@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.Json.Serialization;
+using System.Threading;
 using Runic.Translations.Compiler;
 
 namespace Runic.Translations.Tooling;
@@ -80,6 +81,24 @@ internal static class TranslationStatus
         {
             ReviewFile = review is null ? null : reviewFile,
         };
+    }
+
+    /// <summary>
+    /// The compilation a status report counts from: <paramref name="compilation"/> when it succeeded; else the same sources
+    /// compiled without <c>validation</c> policies, as review data is (<see cref="TranslationReviewFile.ForReview"/>), so a
+    /// catalog whose translations are incomplete (RTR0010, an error under the default <c>translationCompleteness</c>) or
+    /// break another policy still reports its coverage. Null when that compilation fails too: runic.json, the base locale
+    /// or a translation's syntax has errors.
+    /// </summary>
+    internal static Rmf2ProjectCompilation? ForStatus(Rmf2ProjectCompilation compilation, TranslationSource project, IEnumerable<TranslationSource> sources,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(compilation);
+        if (compilation.Success && compilation.Project is not null) return compilation;
+        // RTR0052: a source-root layout error the caller added (TranslationManifestReader); the sources are incomplete.
+        if (compilation.Diagnostics.Any(static diagnostic => diagnostic.Id == "RTR0052")) return null;
+        Rmf2ProjectCompilation relaxed = TranslationCompiler.CompileRmf2ProjectV5(project, sources, new TranslationCompilerOptions { RelaxedValidation = true }, cancellationToken);
+        return relaxed.Success && relaxed.Project is not null ? relaxed : null;
     }
 
     internal static string Percent(double value) => value.ToString("0.##", CultureInfo.InvariantCulture) + "%";
