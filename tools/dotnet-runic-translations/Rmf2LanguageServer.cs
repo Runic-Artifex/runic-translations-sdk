@@ -718,7 +718,8 @@ internal sealed partial class Rmf2LanguageServer
                         else
                         {
                             string name = Path.GetFileName(entry);
-                            if (name is not (".git" or ".worktrees" or "node_modules" or "bin" or "obj" or "dist" or "artifacts" or ".cache" or ".direnv" or ".vs" or ".runic" or ".runic-translations"))
+                            // The same skipped directories as the Translations Editor's catalog discovery.
+                            if (!TranslationProjectDiscovery.IsSkipped(name))
                                 pending.Add(entry);
                         }
                     }
