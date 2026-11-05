@@ -109,10 +109,12 @@ See [Pseudo-locales](https://github.com/Runic-Artifex/runic-translations-sdk/blo
 
 `generate --overrides <directory>` compiles the project, a library catalog, with an application's override sources (the
 `<locale>.rmf2` files of `translations/overrides/<catalog>/`), each checked against the library's key (`RTR0103`).
-`--locales <list>` keeps only the library locales that these application locales resolve to, with their fallbacks and
-the base locale. `--shared-runtime` writes ESM whose `runtime.js` takes its code from `runtime-core.js` beside the
-catalog directory, shared by every catalog generated into the same output directory. The Vite plugin's
-`dependencies: "auto"` uses all three.
+`--locales <list>` keeps only the library locales that these application locales resolve to as the runtimes resolve a
+requested locale (the locale itself, else by CLDR likely subtags and parent locales: `zh-TW` keeps `zh-Hant`), with their
+fallbacks and the base locale; an invalid tag is a usage error. `--shared-runtime` writes ESM whose `runtime.js` takes
+its code from `runtime-core.js` beside the catalog directory, shared by every catalog generated into the same output
+directory. With any of the three, `generate --emit-esm` owns `<catalog>.esm-v5/` and removes files there that it did not
+write. The Vite plugin's `dependencies: "auto"` uses all three.
 
 `--contract <file>` with `--emit-json` (and no other `--emit-*` option) builds
 translation packs for a release that has already shipped. `<file>` is a locale

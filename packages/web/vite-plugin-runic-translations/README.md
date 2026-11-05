@@ -88,22 +88,50 @@ A library package ships its catalog for applications with three things in its `p
 - the library's own code imports its catalog by a relative path (`./translations/acme.grid.esm-v5/messages.js`), not a
   virtual ID. Catalog IDs that start with `runic-` are reserved for the `@runic-artifex` packages.
 
-`runicTranslations({ dependencies: "auto" })` finds every direct dependency of the application's `package.json` that
-declares `runicTranslations`, and regenerates its catalog into `<output>/dependencies/` with the same compiler command
-as project mode:
+`runicTranslations({ dependencies: "auto" })` finds the application's `package.json` (the nearest at or above Vite's
+`root`), every dependency it declares that declares `runicTranslations`, and, transitively, the dependencies those
+libraries declare (`dependencies`, `peerDependencies`, `optionalDependencies`) that declare it too. A package without
+`runicTranslations` is not followed, so a catalog library that the application reaches only through such a package is
+not found: add it to the application's dependencies. A declared dependency that is not installed is reported as a
+warning. Each catalog is regenerated into `<output>/dependencies/` with the same compiler command as project mode:
 
 - with the application's overrides: runic.json `"overrides": [{ "catalog": "acme.grid", "from": "@acme/grid" }]` and
   `translations/overrides/acme.grid/<locale>.rmf2`, validated against the library's catalog key by key, which may add
-  locales the library lacks;
-- filtered to `locales` (default: the locales of the project's runic.json): only the library locales these resolve to,
-  their fallbacks and the library's base locale are bundled;
+  locales the library lacks. As in a .NET build, an override of a catalog that no discovered dependency ships, or from
+  another package than `from`, fails the build (`RTR0104`), and a directory under `translations/overrides/` that
+  runic.json does not list is ignored with a warning. A locale the overrides add falls back as on .NET: to its nearest
+  CLDR parent among the library's and the added locales (`de-CH` to an added `de`), else to the library's base locale;
+- filtered to `locales` (default: the locales of the project's runic.json): only the library locales the runtimes resolve
+  these to (the locale itself, else by CLDR likely subtags and parent locales, so `zh-TW` keeps a library's `zh-Hant` and
+  `en-GB` its `en-001`), their fallbacks and the library's base locale are bundled. An invalid tag is an error;
 - over one `runtime-core.js` that all regenerated catalogs share, so the runtime code is bundled once.
+
+The regenerated catalog must keep the contract fingerprint of the library's prebuilt one; if the package's `runic/`
+sources do not match its prebuilt catalog, the build fails instead of loading the prebuilt modules with a second
+runtime. An import of a prebuilt module that the regenerated catalog lacks is an error for the same reason. Regenerating
+replaces the catalog's directory under `<output>/dependencies/` completely, so no stale module remains.
+
+**Copies of one library.** Catalogs are deduplicated by catalog ID. Copies of the same package and version (for example
+one nested in another library's `node_modules`) share one regenerated catalog, and the imports of every copy that
+discovery reaches are redirected to it. Two versions of a package with one catalog, or two packages with one catalog ID,
+fail the build: install one version (`npm dedupe`, or `overrides`/`resolutions` in the application's `package.json`). A
+copy that discovery does not reach keeps its prebuilt catalog and runtime; the plugin warns when such a copy is imported.
+
+**Package managers.** Discovery reads `node_modules`, which npm, pnpm (through its symlinks), Bun and Yarn with
+`nodeLinker: node-modules` create. Yarn Plug'n'Play creates none, so `dependencies: "auto"` fails there with an error;
+set `nodeLinker: node-modules` in `.yarnrc.yml`, or leave `dependencies` off, and the libraries keep their prebuilt
+catalogs without the application's overrides and locale filtering.
 
 The library's imports of its own catalog modules are redirected to the regenerated ones, the catalog is also available as
 `virtual:runic-translations/acme.grid`, and its declarations are written to `<output>/dependencies/acme.grid.d.ts`, which
 the application's `virtual.d.ts` references; nothing is written into `node_modules`. These packages are excluded from
-Vite's dependency pre-bundling and are not externalized for server rendering, so the plugin sees their imports. Editing
-an override or a library source in the development server regenerates the dependencies and reloads the page.
+Vite's dependency pre-bundling and are not externalized for server rendering, so the plugin sees their imports.
+
+**Development server.** Editing an override, or changing runic.json `overrides` or `locales`, regenerates the
+dependencies and reloads the page; a new directory under `translations/overrides/` is picked up as well. While runic.json
+is invalid in the middle of an edit, the plugin reports it once and keeps its last valid overrides and locales. Library
+sources are watched only outside `node_modules` (a workspace-linked library); Vite does not watch `node_modules`, so after
+changing an installed package, restart the development server.
 
 The plugin ignores manifest members, entrypoints and asset members that a later compiler adds within ESM ABI 4, so a
 library built by a newer compiler patch still loads.

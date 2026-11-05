@@ -121,9 +121,10 @@ public static partial class TranslationCompiler
     /// <see cref="Rmf2ProjectV5.OverlayKeys"/> lists the overridden keys. The contract fingerprint is the library's.
     /// </remarks>
     /// <param name="locales">
-    /// The application's locales, or <see langword="null"/> for all: the result keeps the library locales they resolve to (the
-    /// locale itself, else its nearest declared parent by truncation), their fallback chains and the base locale, and drops
-    /// the others, so an application that supports two locales does not ship a library's thirty.
+    /// The application's locales, or <see langword="null"/> for all: the result keeps the library locales they resolve to as the
+    /// runtimes resolve a requested locale (the locale itself, else the CLDR likely-subtag and parent-locale match, such as
+    /// <c>zh-Hant</c> for <c>zh-TW</c>), their fallback chains and the base locale, and drops the others, so an application
+    /// that supports two locales does not ship a library's thirty.
     /// </param>
     internal static Rmf2ProjectCompilation CompileRmf2OverlayV5(TranslationSource libraryProject, IEnumerable<TranslationSource> librarySources,
         IEnumerable<TranslationSource> overrideSources, TranslationCompilerOptions? options = null, IReadOnlyCollection<string>? locales = null,
@@ -361,13 +362,16 @@ public static partial class TranslationCompiler
         if (keepLocales is not null)
         {
             var declared = locales.ToDictionary(locale => locale.Tag, StringComparer.OrdinalIgnoreCase);
+            string[] available = locales.Select(locale => locale.Tag).Order(StringComparer.Ordinal).ToArray();
             var kept = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { manifest.DefaultLocale };
             foreach (string requested in keepLocales)
             {
+                // The CLI rejects an invalid tag before compiling.
                 if (!TryCanonicalizeLocale(requested, out string tag)) continue;
-                string? current = tag;
-                while (current is not null && !declared.ContainsKey(current))
-                    current = current.LastIndexOf('-') is > 0 and var dash ? current[..dash] : null;
+                // The locale the runtimes resolve the application locale to (LocaleNegotiation.Match, the ESM matchLocale): the
+                // locale itself, else CLDR likely subtags and parent locales (zh-TW to zh-Hant, sr-ME to sr-Latn, en-GB to
+                // en-001), else a truncation with the same likely script. A subset that keeps it resolves to it too.
+                string? current = declared.ContainsKey(tag) ? tag : CldrLocales.Match(tag, available) ?? CldrLocales.Truncate(tag, available);
                 // The locale and its fallback chain; the graph was validated, the bound only guards against a cycle.
                 for (int hops = 0; current is not null && hops <= locales.Length && declared.TryGetValue(current, out var model); hops++)
                 {

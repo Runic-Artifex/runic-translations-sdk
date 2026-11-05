@@ -226,6 +226,31 @@ internal static class ArtifactFiles
         return stream.ReadByte() == -1;
     }
 
+    /// <summary>
+    /// Deletes the files below <paramref name="directory"/> (relative to <paramref name="outputPath"/>) that are not among
+    /// <paramref name="artifacts"/>, and the directories that become empty: the output of a catalog that one generator owns
+    /// completely, such as <c>&lt;catalog&gt;.esm-v5/</c> of a dependency catalog, keeps no module of an earlier generation.
+    /// </summary>
+    internal static int RemoveStale(string outputPath, string directory, IReadOnlyList<ToolArtifact> artifacts)
+    {
+        string outputRoot = Path.GetFullPath(outputPath), root = ResolveContainedPath(outputRoot, directory);
+        if (!Directory.Exists(root)) return 0;
+        var declared = new HashSet<string>(StringComparer.Ordinal);
+        foreach (ToolArtifact artifact in Normalize(artifacts)) declared.Add(artifact.RelativePath);
+        int removed = 0;
+        foreach (string file in new List<string>(EnumerateOutputFiles(root)))
+        {
+            if (declared.Contains(NormalizePath(Path.GetRelativePath(outputRoot, file)))) continue;
+            File.Delete(file);
+            removed++;
+        }
+        var directories = new List<string>(Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories));
+        directories.Sort(static (left, right) => right.Length.CompareTo(left.Length));
+        foreach (string empty in directories)
+            if (!Directory.EnumerateFileSystemEntries(empty).GetEnumerator().MoveNext()) Directory.Delete(empty);
+        return removed;
+    }
+
     private static IEnumerable<string> EnumerateOutputFiles(string outputRoot)
     {
         var pending = new SortedSet<string>(StringComparer.Ordinal) { Path.GetFullPath(outputRoot) };

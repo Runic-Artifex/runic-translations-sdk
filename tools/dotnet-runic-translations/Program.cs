@@ -528,6 +528,13 @@ internal static class Program
         {
             ArtifactFiles.WriteAtomically(invocation.OutputPath!, artifacts);
             result.WriteOutputLine($"generated {artifacts.Count} artifact(s).");
+            // A dependency catalog (--overrides, --locales, --shared-runtime) owns its <catalog>.esm-v5/ directory: modules of
+            // keys or locales an earlier generation had are removed, so nothing stale can satisfy an import.
+            if ((invocation.OverridesPath is not null || invocation.Locales is not null || invocation.SharedRuntime) && (invocation.Emission & ToolEmission.Esm) != 0)
+            {
+                int removed = ArtifactFiles.RemoveStale(invocation.OutputPath!, compilation.Project.Id + ".esm-v5", artifacts);
+                if (removed != 0) result.WriteOutputLine($"removed {removed} stale file(s) from {compilation.Project.Id}.esm-v5.");
+            }
             return Success;
         }
 
@@ -775,6 +782,14 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
             return Program.Usage("no runic.json in the current directory or in ./translations; pass --project <directory>.", command);
         if ((request.Overrides is not null || request.TargetLocales is not null || request.SharedRuntime) && request.Contract is not null)
             return Program.Usage("--overrides, --locales and --shared-runtime cannot be combined with --contract.", command);
+        if (request.TargetLocales is { } targetLocales)
+        {
+            // A typo would otherwise ship the library's base text only.
+            if (targetLocales.Count == 0) return Program.Usage("--locales needs at least one locale tag.", command);
+            foreach (string locale in targetLocales)
+                if (!TranslationCompiler.TryCanonicalizeLocale(locale, out _))
+                    return Program.Usage($"--locales: '{locale}' is not a valid BCP 47 locale tag.", command);
+        }
         return Program.Execute(new ToolInvocation(command, output, emission, null, project, OmitSourceDiagnostics: omitSourceDiagnostics, PseudoLocales: request.PseudoLocales,
             ContractPath: request.Contract, OverridesPath: request.Overrides, Locales: request.TargetLocales, SharedRuntime: request.SharedRuntime));
     }

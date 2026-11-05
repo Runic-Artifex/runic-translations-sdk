@@ -129,6 +129,31 @@ internal sealed class CliIntegrationTests
         Assert.Equal("verify", verified.RootElement.GetProperty("command").GetString());
     }
 
+    [Test, DisplayName("generate of a dependency catalog rejects invalid --locales and removes stale modules of its catalog")]
+    public void DependencyCatalogGeneration()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("library"));
+        File.WriteAllText(temporary.Resolve("library", "runic.json"), """
+            { "schemaVersion": 1, "catalog": "acme.grid", "code": { "namespace": "Acme.Grid", "className": "GridText" }, "baseLocale": "en", "locales": ["en", "de"] }
+            """, new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("library", "en.rmf2"), "empty = No rows\n", new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("library", "de.rmf2"), "empty = Keine Zeilen\n", new UTF8Encoding(false));
+
+        ProcessResult invalid = TestFixture.RunTool(temporary, "generate", "--project", "library", "--output", "dependencies", "--emit-esm", "--locales", "en,de_DE!");
+        Assert.True(invalid.ExitCode != 0 && invalid.Combined.Contains("'de_DE!' is not a valid BCP 47 locale tag", StringComparison.Ordinal), invalid.Combined);
+        Assert.False(Directory.Exists(temporary.Resolve("dependencies")), "nothing generated for an invalid locale");
+
+        Directory.CreateDirectory(temporary.Resolve("dependencies", "acme.grid.esm-v5", "messages"));
+        File.WriteAllText(temporary.Resolve("dependencies", "acme.grid.esm-v5", "messages", "stale.js"), "export {};\n", new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("dependencies", "other.js"), "export {};\n", new UTF8Encoding(false));
+        ProcessResult generate = TestFixture.RunTool(temporary, "generate", "--project", "library", "--output", "dependencies", "--emit-esm", "--shared-runtime", "--locales", "en");
+        Assert.Equal(0, generate.ExitCode, generate.Combined);
+        Assert.False(File.Exists(temporary.Resolve("dependencies", "acme.grid.esm-v5", "messages", "stale.js")), "the stale module is removed: " + generate.Combined);
+        Assert.True(File.Exists(temporary.Resolve("dependencies", "acme.grid.esm-v5", "messages.js")) && File.Exists(temporary.Resolve("dependencies", "runtime-core.js")), generate.Combined);
+        Assert.True(File.Exists(temporary.Resolve("dependencies", "other.js")), "files outside the catalog's directory stay");
+    }
+
     [Test, DisplayName("CLI help and invalid invocation use stable exit codes")]
     public void HelpAndUsageExitCodes()
     {

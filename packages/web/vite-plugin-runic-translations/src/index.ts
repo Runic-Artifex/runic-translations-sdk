@@ -1,12 +1,17 @@
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import type { HotUpdateOptions, Logger, Plugin, ViteDevServer } from "vite";
 import { CompilerUnavailable, PersistentCompiler } from "./compiler-service.js";
 import { discoverDependencyCatalogs, type DependencyCatalog } from "./dependencies.js";
+
+interface ApplicationSettings {
+  readonly locales?: readonly string[];
+  readonly overrides: ReadonlyMap<string, { readonly from: string; readonly directory: string }>;
+}
 
 
 export interface RunicTranslationsOptions {
@@ -165,6 +170,11 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
   let dependencyEntries = new Map<string, Entries>();
   let dependencyPaths: ReadonlySet<string> = new Set();
   let dependencyRegeneration: Promise<void> = Promise.resolve();
+  // The settings the dependency catalogs were last generated with, to regenerate when runic.json changes them.
+  let dependencySettingsKey: string | undefined;
+  let dependencyWarnings: readonly string[] = [];
+  let settingsCache: { readonly stamp: string; readonly value: ApplicationSettings } | undefined;
+  const reportedWarnings = new Set<string>();
   const explicitSources = new Set((options.sourceFiles ?? []).map(path => resolve(path)));
   let sourceRoots: readonly string[] = compiler?.sourceRoots ?? [];
   let watchRoots: readonly string[] = compiler?.watchRoots ?? sourceRoots;
@@ -234,11 +244,44 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
     return `${prefix}${id}/${kind}`;
   }
 
+  function warn(message: string): void {
+    if (reportedWarnings.has(message)) return;
+    reportedWarnings.add(message);
+    if (logger) logger.warn(`[runic-translations] ${message}`, { timestamp: true });
+    else console.warn(`[runic-translations] ${message}`);
+  }
+
   // The application's locales (the option, else its runic.json locales) and overrides per catalog (runic.json overrides).
-  function applicationSettings(): { readonly locales?: readonly string[]; readonly overrides: ReadonlyMap<string, { readonly from: string; readonly directory: string }> } {
+  // Read once per change of runic.json; while it is invalid (mid-edit in the development server), the last valid settings
+  // stay in effect and the problem is reported once.
+  function applicationSettings(): ApplicationSettings {
+    if (!compiler) return { locales: options.locales, overrides: new Map() };
+    let stamp: string;
+    try {
+      const status = statSync(compiler.config);
+      stamp = `${status.mtimeMs}:${status.size}`;
+    } catch (error) {
+      if (settingsCache) return settingsCache.value;
+      throw error;
+    }
+    if (settingsCache?.stamp === stamp) return settingsCache.value;
+    let value: ApplicationSettings;
+    try {
+      value = readApplicationSettings(compiler);
+    } catch (error) {
+      if (!settingsCache) throw error;
+      warn(`${compiler.config} cannot be read (${(error as Error).message}); its last valid overrides and locales stay in effect.`);
+      settingsCache = { stamp, value: settingsCache.value };
+      return settingsCache.value;
+    }
+    settingsCache = { stamp, value };
+    return value;
+  }
+
+  function readApplicationSettings(project: CompilerProject): ApplicationSettings {
     const overrides = new Map<string, { from: string; directory: string }>();
-    if (!compiler) return { locales: options.locales, overrides };
-    const settings = JSON.parse(readFileSync(compiler.config, "utf8")) as { baseLocale?: unknown; locales?: unknown; overrides?: unknown };
+    const settings = JSON.parse(readFileSync(project.config, "utf8")) as { baseLocale?: unknown; locales?: unknown; overrides?: unknown };
+    if (!settings || typeof settings !== "object" || Array.isArray(settings)) throw new Error("runic.json must contain a JSON object.");
     let locales = options.locales;
     if (locales === undefined && Array.isArray(settings.locales))
       locales = settings.locales.map(item => typeof item === "string" ? item : (item as { tag?: unknown })?.tag).filter((tag): tag is string => typeof tag === "string");
@@ -246,8 +289,19 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
     if (Array.isArray(settings.overrides))
       for (const entry of settings.overrides as { catalog?: unknown; from?: unknown }[])
         if (typeof entry?.catalog === "string" && typeof entry.from === "string")
-          overrides.set(entry.catalog, { from: entry.from, directory: join(compiler.project, "overrides", entry.catalog) });
+          overrides.set(entry.catalog, { from: entry.from, directory: join(project.project, "overrides", entry.catalog) });
     return { locales, overrides };
+  }
+
+  function settingsKey(settings: ApplicationSettings): string {
+    return JSON.stringify([settings.locales ?? null, [...settings.overrides].map(([catalog, { from }]) => [catalog, from])]);
+  }
+
+  // The directories whose files make up the dependency catalogs: the libraries' packed sources and the application's
+  // overrides (the whole overrides directory, so a new catalog directory is seen).
+  function dependencyWatchPaths(settings: ApplicationSettings): string[] {
+    return [...dependencyCatalogs.map(dependency => dirname(dependency.project)), ...(compiler ? [join(compiler.project, "overrides")] : []),
+      ...[...settings.overrides.values()].map(item => item.directory)];
   }
 
   // The declarations of the dependency catalogs, referenced from the application's declarations.
@@ -259,12 +313,29 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
   // runtime, then checks each regenerated manifest. A failure keeps the last validated catalogs.
   function regenerateDependencies(): Promise<void> {
     const next = dependencyRegeneration.catch(() => undefined).then(async () => {
-      if (dependencyCatalogs.length === 0) return;
-      const { locales, overrides } = applicationSettings();
+      if (options.dependencies !== "auto") return;
+      const settings = applicationSettings();
+      const { locales, overrides } = settings;
+      // As RTR0104 in a .NET build: every override must name a catalog that a dependency ships, from the package it names.
       for (const [overridden, { from }] of overrides) {
         const dependency = dependencyCatalogs.find(item => item.catalog === overridden);
-        if (dependency && dependency.packageName !== from)
-          throw new Error(`runic.json overrides catalog '${overridden}' from '${from}', but dependency '${dependency.packageName}' ships it.`);
+        if (!dependency)
+          throw new Error(`RTR0104: Catalog '${overridden}' to override is not shipped by any dependency; add '${from}' to the application's ` +
+            `package.json dependencies (its package.json must declare runicTranslations), or correct "catalog" in runic.json.`);
+        if (dependency.packageName !== from)
+          throw new Error(`RTR0104: Catalog '${overridden}' comes from package '${dependency.packageName}', not '${from}'; correct "from" in runic.json.`);
+      }
+      // Override sources of a catalog that runic.json does not list are ignored, as in a .NET build.
+      if (compiler) {
+        const root = join(compiler.project, "overrides");
+        if (existsSync(root))
+          for (const entry of readdirSync(root, { withFileTypes: true }))
+            if (entry.isDirectory() && !overrides.has(entry.name))
+              warn(`RTR0104: translations/overrides/${entry.name} is not listed in runic.json "overrides"; its sources are ignored.`);
+      }
+      if (dependencyCatalogs.length === 0) {
+        dependencySettingsKey = settingsKey(settings);
+        return;
       }
       const entriesByCatalog = new Map<string, Entries>();
       const paths = new Set<string>();
@@ -277,6 +348,14 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
         const loaded = await loadManifest(manifest);
         if (loaded.document.catalog !== dependency.catalog)
           throw new Error(`The regenerated catalog of '${dependency.packageName}' is '${loaded.document.catalog}', not '${dependency.catalog}'.`);
+        // Overrides and locale filtering keep the library's contract, so a different fingerprint means the package's packed
+        // sources are not those its prebuilt catalog was built from: its code could import modules the regeneration lacks.
+        for (const copy of dependency.copies)
+          if (copy.contractFingerprint !== loaded.document.contractFingerprint)
+            throw new Error(`The catalog '${dependency.catalog}' regenerated from the packed runic.json of '${dependency.packageName}@${dependency.version}' ` +
+              `has contract fingerprint ${loaded.document.contractFingerprint}, but the prebuilt catalog its code imports (${copy.prebuiltRoot}) has ` +
+              `${copy.contractFingerprint}: the package's runic/ sources do not match its prebuilt catalog. Ask its author to republish it ` +
+              `with both generated from the same sources, or leave dependencies off.`);
         if (typeDeclarationsPath) {
           const declarations = await safeTypeDeclarationsPath(join(dependencyOutput, `${dependency.catalog}.d.ts`), manifest, loaded.assets, applicationOutput);
           await writeTypeDeclarations(declarations, dependency.catalog, loaded.root, loaded.assets, loaded.typesEntry);
@@ -286,17 +365,27 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       }
       dependencyEntries = entriesByCatalog;
       dependencyPaths = paths;
+      dependencySettingsKey = settingsKey(settings);
+      server?.watcher.add(dependencyWatchPaths(settings));
     });
     dependencyRegeneration = next;
     return next;
   }
 
-  // The regenerated module for an import of a library's prebuilt catalog module, or undefined.
-  function redirect(path: string): string | undefined {
+  // The regenerated module for an import of a module of a library's prebuilt catalog (any installed copy of it), undefined
+  // for a path outside every prebuilt catalog, and an error for a module the regenerated catalog lacks: falling through to
+  // the prebuilt module would load a second runtime for the same catalog.
+  async function redirect(path: string): Promise<{ readonly target?: string; readonly error?: string } | undefined> {
     for (const dependency of dependencyCatalogs) {
-      if (!isWithin(dependency.prebuiltRoot, path)) continue;
-      const target = join(dependencyOutput, `${dependency.catalog}.esm-v5`, relative(dependency.prebuiltRoot, path));
-      if (dependencyPaths.has(target) || existsSync(target)) return target;
+      for (const copy of dependency.copies) {
+        if (!isWithin(copy.prebuiltRoot, path)) continue;
+        const relativePath = relative(copy.prebuiltRoot, path);
+        const directory = join(dependencyOutput, `${dependency.catalog}.esm-v5`);
+        const target = join(existsSync(directory) ? await realpath(directory) : directory, relativePath);
+        if (dependencyPaths.has(target)) return { target };
+        return { error: `'${dependency.packageName}' imports '${toVitePath(relativePath)}' of its prebuilt catalog '${dependency.catalog}', which the ` +
+          `regenerated catalog does not have. The package's packed runic/ sources do not match its prebuilt catalog.` };
+      }
     }
     return undefined;
   }
@@ -306,6 +395,33 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
     const { overrides } = applicationSettings();
     return dependencyCatalogs.some(dependency => isWithin(dirname(dependency.project), path) ||
       (overrides.get(dependency.catalog) !== undefined && isWithin(overrides.get(dependency.catalog)!.directory, path)));
+  }
+
+  // An importer inside another installed copy of a discovered package (node_modules/<name>/ outside every discovered copy)
+  // keeps its prebuilt catalog and runtime, next to the regenerated one.
+  function warnUndiscoveredCopy(importer: string): void {
+    for (const dependency of dependencyCatalogs) {
+      const marker = `${sep}node_modules${sep}${dependency.packageName.split("/").join(sep)}${sep}`;
+      const at = importer.lastIndexOf(marker);
+      if (at < 0 || dependency.copies.some(copy => isWithin(copy.packageRoot, importer))) continue;
+      warn(`Another copy of '${dependency.packageName}' (${importer.slice(0, at + marker.length - 1)}) is imported, which dependency discovery did not reach: ` +
+        `it keeps its prebuilt catalog '${dependency.catalog}' and runtime, without the application's overrides. Install one copy (npm dedupe), ` +
+        `or add the package that depends on it to the application's dependencies.`);
+    }
+  }
+
+  // runic.json changed: regenerate the dependency catalogs when their overrides or locales did, and reload.
+  function settingsChanged(target: ViteDevServer): void {
+    if (dependencySettingsKey === undefined || settingsKey(applicationSettings()) === dependencySettingsKey) return;
+    const previous = new Set(dependencyPaths);
+    const previousCatalogs = [...dependencyEntries.keys()];
+    void regenerateDependencies().then(() => {
+      const change = { catalogs: previousCatalogs, generatedPaths: new Set([...previous, ...dependencyPaths]) };
+      for (const graph of graphsOf(target)) invalidate(graph, change);
+      target.ws.send({ type: "full-reload" });
+    }).catch((error: Error) => {
+      target.ws.send({ type: "error", err: { message: error.message, stack: error.stack ?? "", plugin: "runic-translations" } });
+    });
   }
 
   function isSource(path: string): boolean {
@@ -363,13 +479,17 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
     // or leave them to Node during server rendering.
     config(config) {
       if (options.dependencies !== "auto") return undefined;
-      dependencyCatalogs = discoverDependencyCatalogs(resolve(options.cwd ?? config.root ?? process.cwd()));
-      const names = dependencyCatalogs.map(dependency => dependency.packageName);
+      // The nearest package.json at or above the Vite root (which may be a subdirectory such as src).
+      const discovery = discoverDependencyCatalogs(resolve(options.cwd ?? process.cwd(), config.root ?? "."));
+      dependencyCatalogs = discovery.catalogs;
+      dependencyWarnings = discovery.warnings;
+      const names = [...new Set(dependencyCatalogs.map(dependency => dependency.packageName))];
       return names.length === 0 ? undefined : { optimizeDeps: { exclude: names }, ssr: { noExternal: names } };
     },
 
     configResolved(config) {
       logger = config.logger;
+      for (const message of dependencyWarnings) warn(message);
       if (options.pseudoLocales === undefined) pseudoLocales = config.mode === "development";
     },
 
@@ -409,17 +529,19 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
           value.ws.send({ type: "error", err: { message: error.message, stack: error.stack ?? "", plugin: "runic-translations" } });
         });
       };
+      // runic.json "overrides" and "locales" decide what the dependency catalogs contain.
+      const configChanged = (path: string) => {
+        if (compiler && options.dependencies === "auto" && resolve(path) === resolve(compiler.config)) settingsChanged(value);
+      };
       server.watcher.on("add", membershipChanged);
       server.watcher.on("unlink", membershipChanged);
-      if (dependencyCatalogs.length !== 0) {
-        const { overrides } = applicationSettings();
-        server.watcher.add([...dependencyCatalogs.map(dependency => dirname(dependency.project)),
-          ...dependencyCatalogs.flatMap(dependency => overrides.get(dependency.catalog)?.directory ?? [])]);
-      }
+      server.watcher.on("change", configChanged);
+      if (options.dependencies === "auto") server.watcher.add(dependencyWatchPaths(applicationSettings()));
       const currentService = service;
       const cleanup = () => {
         value.watcher.off("add", membershipChanged);
         value.watcher.off("unlink", membershipChanged);
+        value.watcher.off("change", configChanged);
         void currentService?.close();
       };
       server.httpServer?.once("close", cleanup);
@@ -471,13 +593,14 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       // A library's import of its own catalog goes to the regenerated catalog.
       if (dependencyCatalogs.length !== 0 && importer && !id.startsWith("\0")) {
         const from = importer.replace(/[?#].*$/, "");
-        if (dependencyCatalogs.some(dependency => isWithin(dependency.packageRoot, from))) {
+        if (dependencyCatalogs.some(dependency => dependency.copies.some(copy => isWithin(copy.packageRoot, from)))) {
           const resolved = id.startsWith(".") ? resolve(dirname(from), id)
             : (await (this as unknown as { resolve(source: string, importer: string, options: { skipSelf: boolean }): Promise<{ id: string } | null> })
               .resolve(id, importer, { skipSelf: true }))?.id.replace(/[?#].*$/, "");
-          const target = resolved ? redirect(resolved) : undefined;
-          if (target) return target;
-        }
+          const redirected = resolved ? await redirect(resolved) : undefined;
+          if (redirected?.error) this.error(redirected.error);
+          if (redirected?.target) return redirected.target;
+        } else warnUndiscoveredCopy(from);
       }
       return null;
     },

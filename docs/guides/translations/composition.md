@@ -209,8 +209,8 @@ changed inputs are `RTR0016`/`RTR0065`, markup in a plain-text message `RTR0103`
 - **Added locales.** A locale the overrides add (`fr`, `de-CH`) falls back to its nearest CLDR parent among the
   library's locales and the added ones (`de-CH` to an added `de`, `zh-TW` to `zh-Hant`, never `sr-Latn-RS` to a
   Cyrillic `sr`), else to the library locale that CLDR likely subtags match, else to the library's base locale. The
-  build validates each added locale against that chain, and the generated overlay names the fallback, so the runtime
-  follows the same chain.
+  build validates each added locale against that chain, and the generated overlay names the fallback, so the .NET runtime
+  and the web (Vite `dependencies: "auto"`) follow the same chain.
 - **Packages only.** A library that the application references with `ProjectReference`, for example in the same
   solution, cannot be overridden yet (`RTR0104`): reference its package.
 - **Built-in catalogs.** `Runic.Translations.CommandLine` packs `runic-command-line`, so
@@ -235,7 +235,9 @@ the one the build compiled against skips a message whose key it no longer has in
 locale-first.
 
 On the web, the same `overrides` and `translations/overrides/` apply to npm library catalogs through the Vite plugin's
-`dependencies: "auto"`, which regenerates each library catalog with them, filtered to the application's locales (see
+`dependencies: "auto"`, which regenerates each library catalog with them, filtered to the application's locales. The
+rules match the .NET build: an override of a catalog no dependency ships is `RTR0104`, added locales fall back by the same
+chain, and libraries are discovered transitively through the libraries that ship catalogs (see
 [the plugin's README](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/packages/web/vite-plugin-runic-translations#library-catalogs-from-dependencies)).
 
 ## Overriding library text
