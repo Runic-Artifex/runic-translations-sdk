@@ -74,6 +74,9 @@ export interface EditorDiagnostic {
   span?: EditorDiagnosticSpan;
   sourceRevision?: string;
   quickFixes?: EditorDiagnosticQuickFix[];
+  /** The message row a per-message check is about (RTR0010, RTR0090, RTR0094–RTR0098, or a diagnostic at a message name). */
+  key?: string;
+  locale?: string;
 }
 
 export interface WorkspaceSnapshot {
@@ -100,8 +103,11 @@ export interface EditorReviewEntry {
   locale: string;
   state: EditorReviewState;
   note?: string;
+  /** The SDK per-unit fingerprint of the source this state was recorded for; omitted to record the current source. */
   sourceFingerprint?: string;
   samples: Record<string, string>;
+  /** The source changed since this state was recorded (RTR0090). Computed by the backend. */
+  stale?: boolean;
 }
 
 export interface EditorTerminologyEntry {
@@ -117,6 +123,8 @@ export interface EditorReviewSnapshot {
   error?: string;
   entries: EditorReviewEntry[];
   terminology: EditorTerminologyEntry[];
+  /** A one-time notice, such as the move of editor approvals into the SDK review file. */
+  notice?: EditorNotice;
 }
 
 export interface EditorReviewSaveRequest {

@@ -64,7 +64,9 @@ internal sealed record EditorDiagnostic(
     int EndLine,
     int EndColumn,
     EditorNotice? Notice = null,
-    Rmf2DiagnosticSpan? Span = null, string? SourceRevision = null, IReadOnlyList<Rmf2DiagnosticQuickFix>? QuickFixes = null);
+    Rmf2DiagnosticSpan? Span = null, string? SourceRevision = null, IReadOnlyList<Rmf2DiagnosticQuickFix>? QuickFixes = null,
+    // The message row a per-message check is about (RTR0010, RTR0090, RTR0094-RTR0098, or a diagnostic at a message name).
+    string? Key = null, string? Locale = null);
 
 internal sealed record WorkspaceSnapshot(
     string Root,
@@ -85,7 +87,10 @@ internal sealed record EditorReviewEntry(
     string State,
     string? Note,
     string? SourceFingerprint,
-    IReadOnlyDictionary<string, string> Samples);
+    IReadOnlyDictionary<string, string> Samples,
+    // The SDK per-unit fingerprint (SourceFingerprint) no longer matches the current source (RTR0090). Ignored on save;
+    // a saved entry without a SourceFingerprint is stamped with the current one.
+    bool Stale = false);
 
 internal sealed record EditorTerminologyEntry(string Source, string Preferred, string? Locale, string? Note);
 
@@ -94,7 +99,9 @@ internal sealed record EditorReviewSnapshot(
     string? Revision,
     string? Error,
     IReadOnlyList<EditorReviewEntry> Entries,
-    IReadOnlyList<EditorTerminologyEntry> Terminology);
+    IReadOnlyList<EditorTerminologyEntry> Terminology,
+    // A one-time notice, such as the move of version 1 editor approvals into the review file.
+    EditorNotice? Notice = null);
 
 internal sealed record EditorReviewSaveRequest(
     string? ExpectedRevision,
@@ -291,8 +298,9 @@ internal sealed record PreparedInterchangeImport(
     string CatalogId,
     string ExpectedSourceFreshness,
     IReadOnlyList<PreparedInterchangeDocument> Documents,
-    IReadOnlyList<TranslationEditorStateEntry> MergedEntries,
-    string? ExpectedSidecarRevision);
+    // The review file after the import (null: unchanged) and the review revision it was computed from.
+    byte[]? ReviewBytes,
+    string? ExpectedReviewRevision);
 
 internal sealed record PreparedInterchangeDocument(
     string Path,

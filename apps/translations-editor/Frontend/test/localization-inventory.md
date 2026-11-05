@@ -92,6 +92,9 @@ Every routine editor-owned backend notice uses the following stable resource key
 | `ui_backend_refusal_8` | The document targets locale '{$value1}', which the open catalog does not define. |
 | `ui_backend_refusal_9` | The document targets default locale '{$value1}', which is canonical source text and cannot be imported through XLIFF. |
 | `ui_backend_review_compile` | Review export requires a successfully compiled catalog. |
+| `ui_backend_review_migrated` | Moved {$count} review states to {$path}; {$demoted} changed sources need review again. |
+| `ui_backend_review_migration_pending` | The editor's review states move to {$path} once the catalog compiles without errors. |
+| `ui_backend_review_save_compile` | Saving review states requires a successfully compiled catalog. |
 | `ui_backend_review_file_changed` | The review file changed after it was previewed. Import it again. |
 | `ui_backend_saved_reload` | The document was saved; reload the workspace to refresh it. |
 | `ui_backend_select_catalog_mutation` | Select a catalog before changing locales or keys. |

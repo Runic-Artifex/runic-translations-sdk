@@ -352,7 +352,7 @@ same policy. For Translations:
   translations transport: a 1.x reader must read every message any 1.x writer
   produced, including persisted messages, and writers emit a new transport
   version only on request until every supported reader accepts it. The editor's
-  own state file (`runic.translations.editor-state/1`) belongs to the editor
+  own state file (`runic.translations.editor-state/2`) belongs to the editor
   product and is not an SDK contract. The `serve` protocol
   (`runic-translations-serve/1`, schema `translations-serve-v1`) is a contract
   between the Vite plugin and the tool of the same release only.

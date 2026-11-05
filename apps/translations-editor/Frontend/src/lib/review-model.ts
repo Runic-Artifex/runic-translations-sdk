@@ -1,10 +1,11 @@
 import type { UiText } from "./ui-text";
 import type {
+  EditorDiagnostic,
   EditorReviewEntry,
   EditorReviewState,
   EditorTerminologyEntry,
 } from "./contracts";
-import type { ResourceValue, TranslationRow } from "./resource-model";
+import type { TranslationRow } from "./resource-model";
 import {
   compatibleSemantics,
   containsSemanticTerm,
@@ -13,11 +14,15 @@ import {
   semanticTokens,
 } from "./semantic-review";
 
+// Editor-only checks (identical, whitespace, terminology, bidi) beside the SDK's diagnostics for the row
+// ("diagnostic": the compiler's RTR0010 and RTR0094–RTR0098, and RTR0090 for a stale review state).
 export interface QualityIssue {
-  kind: "missing" | "identical" | "whitespace" | "terminology" | "stale" | "bidi";
+  kind: "identical" | "whitespace" | "terminology" | "bidi" | "diagnostic";
   key: string;
   locale: string;
   message: string;
+  code?: string;
+  diagnostic?: EditorDiagnostic;
 }
 
 export interface TranslationSuggestion {
@@ -25,17 +30,6 @@ export interface TranslationSuggestion {
   source: string;
   translation: string;
   score: number;
-}
-
-export function sourceFingerprint(value: ResourceValue | undefined): string | undefined {
-  if (value === undefined) return undefined;
-  const text = stableJson(value);
-  let hash = 0xcbf29ce484222325n;
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= BigInt(text.charCodeAt(index));
-    hash = BigInt.asUintN(64, hash * 0x100000001b3n);
-  }
-  return "fnv1a64:" + hash.toString(16).padStart(16, "0");
 }
 
 export function reviewIdentity(key: string, locale: string): string {
@@ -53,32 +47,42 @@ export function effectiveReviewState(
   return entry?.state ?? (translated ? "translated" : "draft");
 }
 
-export function isStale(entry: EditorReviewEntry | undefined, currentSource: ResourceValue | undefined): boolean {
-  const fingerprint = sourceFingerprint(currentSource);
-  return entry?.sourceFingerprint !== undefined &&
-    fingerprint !== undefined &&
-    entry.sourceFingerprint !== fingerprint;
+// "Stale" is the SDK's definition, computed by the backend from the review file's per-unit fingerprint (RTR0090).
+export function isStale(entry: EditorReviewEntry | undefined): boolean {
+  return entry?.stale === true;
+}
+
+// RTR0090 follows the workflow being edited: once a stale state is set again (or the entry removed), its warning goes,
+// before the review file is saved and the catalog reloaded.
+export function withCurrentReview(diagnostics: readonly EditorDiagnostic[], reviews: Map<string, EditorReviewEntry>): EditorDiagnostic[] {
+  return diagnostics.filter((diagnostic) => diagnostic.id !== "RTR0090" || diagnostic.key === undefined || diagnostic.locale === undefined ||
+    isStale(reviews.get(reviewIdentity(diagnostic.key, diagnostic.locale))));
+}
+
+// The diagnostics attached to one row of the given locale, in the order the backend reports them.
+export function rowDiagnostics(diagnostics: readonly EditorDiagnostic[], key: string, locale: string): EditorDiagnostic[] {
+  return diagnostics.filter((diagnostic) => diagnostic.key === key && diagnostic.locale === locale);
 }
 
 export function qualityIssues(
   rows: TranslationRow[],
   sourceLocale: string,
   locale: string,
-  reviewEntries: EditorReviewEntry[],
+  diagnostics: readonly EditorDiagnostic[],
   terminology: EditorTerminologyEntry[],
   ui?: UiText,
 ): QualityIssue[] {
-  const reviews = reviewMap(reviewEntries);
   const result: QualityIssue[] = [];
+  const keys = new Set(rows.map((row) => row.key));
+  for (const diagnostic of diagnostics) {
+    if (diagnostic.locale !== locale || diagnostic.key === undefined || !keys.has(diagnostic.key)) continue;
+    result.push({ kind: "diagnostic", key: diagnostic.key, locale, code: diagnostic.id, message: diagnostic.message, diagnostic });
+  }
   for (const row of rows) {
     const sourceEntry = row.cells[sourceLocale]?.entry;
     const targetEntry = row.cells[locale]?.entry;
-    const source = sourceEntry?.value;
     const target = targetEntry?.value;
-    if (target === undefined) {
-      result.push({ kind: "missing", key: row.key, locale, message: (ui?.text("ui_quality_missing") ?? "Translation is missing.") });
-      continue;
-    }
+    if (target === undefined) continue;
     const sourceSemantic = reviewSemantics(sourceEntry);
     const targetSemantic = reviewSemantics(targetEntry);
     if (sourceSemantic !== undefined && targetSemantic !== undefined) {
@@ -100,13 +104,9 @@ export function qualityIssues(
         }
       }
     }
-    const review = reviews.get(reviewIdentity(row.key, locale));
-    if (isStale(review, source)) {
-      result.push({ kind: "stale", key: row.key, locale, message: (ui?.text("ui_quality_stale") ?? "Source changed after this review state was recorded.") });
-    }
   }
   return result.sort((left, right) =>
-    left.key.localeCompare(right.key) || left.kind.localeCompare(right.kind));
+    left.key.localeCompare(right.key) || left.kind.localeCompare(right.kind) || (left.code ?? "").localeCompare(right.code ?? ""));
 }
 
 // Bidi/mixed-direction findings: invisible bidirectional control characters
@@ -169,17 +169,8 @@ export function qualityReportCsv(issues: QualityIssue[]): string {
   const escape = (value: string) => '"' + value.replaceAll('"', '""') + '"';
   return [
     ["key", "locale", "kind", "message"].map(escape).join(","),
-    ...issues.map((issue) => [issue.key, issue.locale, issue.kind, issue.message].map(escape).join(",")),
+    ...issues.map((issue) => [issue.key, issue.locale, issue.code ?? issue.kind, issue.message].map(escape).join(",")),
   ].join("\n") + "\n";
-}
-
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return "[" + value.map(stableJson).join(",") + "]";
-  if (typeof value === "object" && value !== null) {
-    return "{" + Object.entries(value).sort(([left], [right]) => left.localeCompare(right))
-      .map(([name, child]) => JSON.stringify(name) + ":" + stableJson(child)).join(",") + "}";
-  }
-  return JSON.stringify(value);
 }
 
 function similarity(left: Set<string>, right: Set<string>): number {

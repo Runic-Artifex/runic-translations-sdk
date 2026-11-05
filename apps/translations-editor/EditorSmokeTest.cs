@@ -6,6 +6,7 @@ using ReactiveUI.Primitives.Signals;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Runic.Translations.Internal;
+using Runic.Translations.Tooling;
 using Microsoft.Extensions.DependencyInjection;
 using ReactiveUI.Primitives.Concurrency;
 using Runic.Application.Testing;
@@ -206,25 +207,46 @@ internal static class EditorSmokeTest
             "The UI export wrote outside the workspace.");
     }
 
-    // Export stamps an approval with its unit's current source fingerprint only while the editor's own marker (the
-    // frontend's fnv1a64 of the base value) still matches; an approval made before the source changed is exported as
-    // needs-review, and editing another key leaves it approved.
+    // Version 1 editor approvals move into the SDK review file (<catalog>.review.json beside runic.json) on first open:
+    // an approval whose recorded base value still matches stays approved, the rest become needs-review, with one notice.
+    // Afterwards "stale" is the SDK per-unit fingerprint (RTR0090): editing another key leaves an approval current,
+    // editing its own source makes it stale, and marking it again records the current source.
     private static async Task ReviewStampJourneyAsync(string container)
     {
-        // Values from review-model.ts sourceFingerprint, run with bun.
+        // Values from the pre-0.9 review-model.ts sourceFingerprint, run with bun.
         Require(EditorWorkspace.EditorSourceFingerprint("Hello {$name}!") == "fnv1a64:6766928709d1ff53" &&
-            EditorWorkspace.EditorSourceFingerprint("Zeile\n\"zwei\"\t\\ \u0001 \ud83d\ude00 \ud800 \u00c4") == "fnv1a64:f1a8bb5b9e6f39e5",
-            "The editor's review fingerprint differs from the frontend's.");
+            EditorWorkspace.EditorSourceFingerprint("Zeile\n\"zwei\"\t\\ \u0001 😀 \ud800 Ä") == "fnv1a64:f1a8bb5b9e6f39e5",
+            "The editor's former review fingerprint differs from the frontend's.");
         string project = Path.Combine(container, "workspace");
         await TranslationProjectWriter.CreateAsync(TranslationProjectScaffolder.Render(
             new TranslationProjectCreationRequest(project, "stamp-smoke", "en", "Smoke.Translations", "SmokeText",
                 [new TranslationProjectLocale("de", "en")]))).ConfigureAwait(false);
         await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), "title = Title\nother = Other\n").ConfigureAwait(false);
         await File.WriteAllTextAsync(Path.Combine(project, "de.rmf2"), "title = Titel\nother = Andere\n").ConfigureAwait(false);
-        TranslationEditorStateStore.Save(project, new TranslationEditorState("stamp-smoke",
-            [new TranslationEditorStateEntry("title", "de", "approved", null, EditorWorkspace.EditorSourceFingerprint("Title"), new SortedDictionary<string, string>(StringComparer.Ordinal))],
-            []), TranslationEditorStateStore.Load(project, "stamp-smoke").Revision);
+        string sidecar = Path.Combine(project, ".runic-translations", "stamp-smoke.editor-state.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(sidecar)!);
+        await File.WriteAllTextAsync(sidecar, "{\"$schema\":\"runic.translations.editor-state/1\",\"catalog\":\"stamp-smoke\",\"messages\":{" +
+            "\"title\":{\"de\":{\"state\":\"approved\",\"note\":\"Checked\",\"sourceFingerprint\":\"" + EditorWorkspace.EditorSourceFingerprint("Title") + "\"}}," +
+            "\"other\":{\"de\":{\"state\":\"approved\",\"sourceFingerprint\":\"" + EditorWorkspace.EditorSourceFingerprint("Previous") + "\"}}}," +
+            "\"terminology\":[{\"source\":\"Title\",\"preferred\":\"Titel\"}]}").ConfigureAwait(false);
         using var session = new EditorSession(project);
+        WorkspaceSnapshot opened = await session.LoadAsync().ConfigureAwait(false);
+        EditorReviewSnapshot review = opened.Review ?? throw new InvalidOperationException("The migrated workspace has no review snapshot.");
+        Require(review.Notice is { Code: "ui_backend_review_migrated" } notice && notice.Args.Single(arg => arg.Name == "count").Value == "2" &&
+            notice.Args.Single(arg => arg.Name == "demoted").Value == "1" && review.Path == "stamp-smoke.review.json",
+            "The move of editor approvals into the review file was not announced once: " + review.Notice);
+        Require(review.Entries.Single(entry => entry.Key == "title") is { State: "approved", Note: "Checked", Stale: false } &&
+            review.Entries.Single(entry => entry.Key == "other") is { State: "needs-review", Stale: false } && review.Terminology.Single().Preferred == "Titel",
+            "The current approval was not kept or the stale one was not demoted.");
+        TranslationInterchangeReview file = TranslationReviewFile.Read(Path.Combine(project, "stamp-smoke.review.json"), "stamp-smoke")
+            ?? throw new InvalidOperationException("The review file was not written.");
+        Require(file.Entries.Count == 2 && file.Entries.All(entry => entry.Note is null && entry.SourceFingerprint?.StartsWith("sha256:", StringComparison.Ordinal) == true),
+            "The review file entries do not carry the SDK fingerprint, or the editor note moved into the review file.");
+        string rewritten = await File.ReadAllTextAsync(sidecar).ConfigureAwait(false);
+        Require(rewritten.Contains("editor-state/2", StringComparison.Ordinal) && !rewritten.Contains("\"state\"", StringComparison.Ordinal) && rewritten.Contains("Checked", StringComparison.Ordinal),
+            "The editor state was not rewritten as version 2 with the note kept: " + rewritten);
+        Require((await session.LoadAsync().ConfigureAwait(false)).Review?.Notice is null, "The migration notice was repeated.");
+
         async Task<string> SegmentAsync()
         {
             EditorXliffExportResult export = await session.ExportXliffAsync("xliff").ConfigureAwait(false);
@@ -234,16 +256,36 @@ internal static class EditorSmokeTest
                 .Elements().Single(element => element.Name.LocalName == "segment").ToString(SaveOptions.DisableFormatting);
         }
         Require((await SegmentAsync().ConfigureAwait(false)).Contains("state=\"final\"", StringComparison.Ordinal), "A current approval was not exported as final.");
+        EditorReviewFileResult copy = await session.ExportReviewJsonAsync(null).ConfigureAwait(false);
+        Require(copy.Ok && (await File.ReadAllTextAsync(Path.Combine(project, copy.Path!)).ConfigureAwait(false)).Contains("\"Checked\"", StringComparison.Ordinal),
+            "The exported review data lost the editor's note.");
         await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), "title = Title\nother = Other text\n").ConfigureAwait(false);
         Require((await SegmentAsync().ConfigureAwait(false)).Contains("state=\"final\"", StringComparison.Ordinal), "Editing another key voided an approval.");
         await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), "title = Main title\nother = Other text\n").ConfigureAwait(false);
         Require((await SegmentAsync().ConfigureAwait(false)).Contains("subState=\"runic:needs-review\"", StringComparison.Ordinal),
             "An approval made before the source changed was exported as current.");
+        WorkspaceSnapshot changed = await session.LoadAsync().ConfigureAwait(false);
+        Require(changed.Review!.Entries.Single(entry => entry.Key == "title").Stale &&
+            changed.Diagnostics.Any(diagnostic => diagnostic is { Id: "RTR0090", Key: "title", Locale: "de" }),
+            "A stale approval was not marked stale or reported as RTR0090 on its row.");
+
+        // Marking it again (no fingerprint in the request) records the current source.
+        EditorReviewSnapshot before = changed.Review!;
+        EditorReviewOperationResult saved = await session.SaveReviewAsync(new EditorReviewSaveRequest(before.Revision,
+            before.Entries.Select(entry => entry.Key == "title" ? entry with { SourceFingerprint = null } : entry).ToArray(), before.Terminology)).ConfigureAwait(false);
+        Require(saved.Ok && saved.Review!.Entries.Single(entry => entry.Key == "title") is { State: "approved", Stale: false, Note: "Checked" },
+            "Marking a stale approval again did not record the current source: " + saved.Message);
+        Require(!(await session.LoadAsync().ConfigureAwait(false)).Diagnostics.Any(diagnostic => diagnostic is { Id: "RTR0090", Key: "title" }), "RTR0090 remained after the review.");
+        Require((await session.UndoAsync().ConfigureAwait(false)).Ok &&
+            (await session.LoadAsync().ConfigureAwait(false)).Review!.Entries.Single(entry => entry.Key == "title").Stale,
+            "Undo did not restore the earlier review file.");
+        // A write by runic-translations review mark changes the same revision, so it conflicts with an unsaved editor change.
+        Require(saved.Review!.Revision != before.Revision, "Saving did not change the review revision.");
     }
 
-    // An approval imported from XLIFF records the editor's marker of the current base value, so a later change to
-    // that value exports it as needs-review, as for an approval made in the editor. A key the import adds to an
-    // existing group copies the group's 4-space indentation.
+    // An XLIFF import goes through the Tooling plan: a key the import adds to an existing group copies the group's
+    // 4-space indentation, the approval lands in the review file with the per-unit fingerprint of the source the file
+    // showed, and a unit whose source changed since export is imported as needs-review instead of refusing the file.
     private static async Task ImportedApprovalJourneyAsync(string container)
     {
         string project = Path.Combine(container, "workspace");
@@ -278,9 +320,9 @@ internal static class EditorSmokeTest
         string german = await File.ReadAllTextAsync(Path.Combine(project, "de.rmf2")).ConfigureAwait(false);
         Require(german.StartsWith("cart {\n    empty = Leer\n    items = Artikel\n}\n", StringComparison.Ordinal) && german.Contains("title = Titel\n", StringComparison.Ordinal),
             "The editor import did not copy the group's indentation: " + german);
-        TranslationEditorStateEntry imported = TranslationEditorStateStore.Load(project, "import-smoke").State.Entries.Single(entry => entry.Key == "title" && entry.Locale == "de");
-        Require(imported.State == "approved" && imported.SourceFingerprint == EditorWorkspace.EditorSourceFingerprint("Title"),
-            "The imported approval was stored without the editor's marker of its base value.");
+        EditorReviewEntry imported = (await session.LoadAsync().ConfigureAwait(false)).Review!.Entries.Single(entry => entry.Key == "title" && entry.Locale == "de");
+        Require(imported is { State: "approved", Stale: false } && File.Exists(Path.Combine(project, "import-smoke.review.json")),
+            "The imported approval was not recorded in the review file for the current source.");
 
         async Task<string> SegmentAsync()
         {
@@ -294,6 +336,12 @@ internal static class EditorSmokeTest
         await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), "title = Main title\ncart {\n    empty = Empty\n    items = Items\n}\n").ConfigureAwait(false);
         Require((await SegmentAsync().ConfigureAwait(false)).Contains("subState=\"runic:needs-review\"", StringComparison.Ordinal),
             "An imported approval whose base text changed was exported as current.");
+
+        // The exported file still shows "Title"; after the source changed, its unit is imported as needs-review.
+        EditorXliffImportPlan changedSource = await session.PreviewXliffImportAsync(relative).ConfigureAwait(false);
+        Require(changedSource.Ok && changedSource.Refusals.Count == 0 &&
+            changedSource.Changes.Any(change => change is { Key: "title", Kind: "state-change", StateAfter: "needs-review" }),
+            "A unit whose source changed since export refused the import or was not demoted: " + string.Join("; ", changedSource.Refusals.Select(refusal => refusal.Code)));
     }
 
     // commandLine is the command-line operations (Program.cs), which a frontend

@@ -539,6 +539,34 @@ ui {
 }
 ui {
   backend {
+    review_migrated =
+      .input {$count :integer select=plural}
+      .input {$demoted :integer select=plural}
+      .input {$path :string}
+      .match $count $demoted
+      one 0 {{Moved one review state to {$path}.}}
+      one * {{Moved one review state to {$path}; its source changed, so it needs review again.}}
+      * 0 {{Moved {$count} review states to {$path}.}}
+      * one {{Moved {$count} review states to {$path}; one changed source needs review again.}}
+      * * {{Moved {$count} review states to {$path}; {$demoted} changed sources need review again.}}
+
+  }
+}
+ui {
+  backend {
+    review_migration_pending =
+      .input {$path :string}
+      {{The editor's review states move to {$path} once the catalog compiles without errors.}}
+
+  }
+}
+ui {
+  backend {
+    review_save_compile = Saving review states requires a successfully compiled catalog.
+  }
+}
+ui {
+  backend {
     review_file_changed = The review file changed after it was previewed. Import it again.
   }
 }

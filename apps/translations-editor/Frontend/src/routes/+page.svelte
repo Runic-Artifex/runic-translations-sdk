@@ -116,8 +116,8 @@
     qualityReportCsv,
     reviewIdentity,
     reviewMap,
-    sourceFingerprint,
     translationSuggestions,
+    withCurrentReview,
   } from "#lib/review-model.js";
   import {
     readUiSimulation,
@@ -292,11 +292,12 @@
     };
   }));
   let reviewIndex = $derived(reviewMap(reviewEntries));
+  // The SDK's diagnostics for each row (RTR0010, RTR0090, RTR0094–RTR0098) beside the editor-only checks.
   let localeQuality = $derived(qualityIssues(
     rows,
     snapshot?.catalog?.defaultLocale ?? "",
     selectedLocale,
-    reviewEntries,
+    withCurrentReview(validation?.diagnostics ?? snapshot?.diagnostics ?? [], reviewIndex),
     terminology,
     ui,
   ));
@@ -320,7 +321,7 @@
     { value: "missing" as const, label: labels.missing, count: rows.filter((row) => row.cells[selectedLocale]?.entry === undefined).length },
     { value: "structured" as const, label: labels.structured, count: rows.filter((row) => row.structured).length },
     { value: "needs-review" as const, label: labels.review, count: rows.filter((row) => effectiveReviewState(reviewIndex.get(reviewIdentity(row.key, selectedLocale)), row.cells[selectedLocale]?.entry !== undefined) === "needs-review").length },
-    { value: "stale" as const, label: labels.stale, count: rows.filter((row) => isStale(reviewIndex.get(reviewIdentity(row.key, selectedLocale)), row.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.value)).length },
+    { value: "stale" as const, label: labels.stale, count: rows.filter((row) => isStale(reviewIndex.get(reviewIdentity(row.key, selectedLocale)))).length },
     { value: "quality" as const, label: ui.text("ui_page_quality_title"), count: qualityKeySet.size },
   ]);
   let visibleRows = $derived.by(() => {
@@ -331,7 +332,7 @@
       if (filter === "structured" && !row.structured) return false;
       const review = reviewIndex.get(reviewIdentity(row.key, selectedLocale));
       if (filter === "needs-review" && effectiveReviewState(review, cell?.entry !== undefined) !== "needs-review") return false;
-      if (filter === "stale" && !isStale(review, row.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.value)) return false;
+      if (filter === "stale" && !isStale(review)) return false;
       if (filter === "quality" && !qualityKeySet.has(row.key)) return false;
       return searchMatches.has(row);
     });
@@ -347,7 +348,7 @@
       preview: preview(cell?.entry, ui),
       missing: cell?.entry === undefined,
       structured: row.structured,
-      stale: isStale(rowReview, row.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.value),
+      stale: isStale(rowReview),
       needsReview: effectiveReviewState(rowReview, cell?.entry !== undefined) === "needs-review",
     };
   }));
@@ -355,12 +356,9 @@
   let currentCell = $derived(selectedRow?.cells[selectedLocale]);
   let sourceContext = $derived(selectedRow?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.context);
   let currentExamples = $derived(currentCell?.entry?.context?.examples.length ? currentCell.entry.context.examples : sourceContext?.examples ?? []);
-  let currentSourceValue = $derived(
-    selectedRow?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.value,
-  );
   let currentReview = $derived(reviewIndex.get(reviewIdentity(selectedKey, selectedLocale)));
   let currentReviewState = $derived(effectiveReviewState(currentReview, currentCell?.entry !== undefined));
-  let currentIsStale = $derived(isStale(currentReview, currentSourceValue));
+  let currentIsStale = $derived(isStale(currentReview));
   let currentQuality = $derived(localeQualityFindings.filter((issue) => issue.key === selectedKey));
   let memorySuggestions = $derived(translationSuggestions(
     rows,
@@ -604,7 +602,7 @@
     terminology = structuredClone(next.review?.terminology ?? []);
     reviewRevision = next.review?.revision;
     reviewDirty = false;
-    reviewMessage = next.review?.error;
+    reviewMessage = next.review?.notice ?? next.review?.error;
   }
 
   function confirmDiscardUnsavedWork(messageKey: string): boolean {
@@ -904,8 +902,10 @@
       locale,
       state: patch.state ?? existing?.state ?? effectiveReviewState(undefined, row?.cells[locale]?.entry !== undefined),
       note: patch.note ?? existing?.note,
-      sourceFingerprint: patch.sourceFingerprint ?? existing?.sourceFingerprint,
+      // A patch that names sourceFingerprint (undefined) records the state for the current source when saved.
+      sourceFingerprint: "sourceFingerprint" in patch ? patch.sourceFingerprint : existing?.sourceFingerprint,
       samples: createPreviewSamples(patch.samples ?? existing?.samples),
+      stale: "sourceFingerprint" in patch ? false : existing?.stale,
     };
     reviewEntries = index < 0
       ? [...reviewEntries, next]
@@ -917,7 +917,7 @@
   function setCurrentReviewState(state: EditorReviewState): void {
     updateReview(selectedKey, selectedLocale, {
       state,
-      sourceFingerprint: sourceFingerprint(currentSourceValue),
+      sourceFingerprint: undefined,
       samples: createPreviewSamples(previewSamples),
     });
   }
@@ -938,8 +938,9 @@
         locale: selectedLocale,
         state,
         note: existing?.note,
-        sourceFingerprint: sourceFingerprint(row.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.value),
+        sourceFingerprint: undefined,
         samples: createPreviewSamples(existing?.samples),
+        stale: false,
       };
       const index = next.findIndex((candidate) => reviewIdentity(candidate.key, candidate.locale) === identity);
       if (index < 0) next.push(entry);
@@ -2304,6 +2305,7 @@
             onreport={() => reportDialogOpen = true}
             onqualityfilter={() => filter = "quality"}
             onsuggestion={applySuggestion}
+            onfix={(diagnostic, fix) => void applyDiagnosticFix(diagnostic, fix)}
           />
 
           <EditorModeSwitcher

@@ -12,7 +12,11 @@ namespace Runic.Translations.Editor;
 
 internal static partial class TranslationEditorStateStore
 {
-    public const string Schema = "runic.translations.editor-state/1";
+    // Version 2 holds what only the editor knows: notes, preview samples and terminology. Review states and source
+    // fingerprints live in the SDK review file (<catalog>.review.json, through Tooling); a version 1 file still carries
+    // them, and the editor moves them into the review file once (EditorReviewStore).
+    public const string Schema = "runic.translations.editor-state/2";
+    public const string SchemaV1 = "runic.translations.editor-state/1";
     public const int MaximumBytes = 8 * 1024 * 1024;
     public const int MaximumEntries = 50_000;
     public const int MaximumTerms = 2_000;
@@ -25,7 +29,7 @@ internal static partial class TranslationEditorStateStore
         string path = RelativePath(catalogId);
         string fullPath = Resolve(root, path, forWrite: false);
         TranslationEditorState empty = new(catalogId, [], []);
-        if (!File.Exists(fullPath)) return new TranslationEditorStateLoadResult(path, null, empty, null);
+        if (!File.Exists(fullPath)) return new TranslationEditorStateLoadResult(path, null, empty, null, 0);
         try
         {
             byte[] bytes = ReadBounded(fullPath);
@@ -34,8 +38,8 @@ internal static partial class TranslationEditorStateStore
             JsonElement value = document.RootElement;
             RequireObject(value, "The editor state root must be an object.");
             RequireExactMembers(value, "$schema", "catalog", "messages", "terminology");
-            if (RequiredString(value, "$schema") != Schema)
-                throw new TranslationEditorStateException($"Unsupported editor-state schema. Expected '{Schema}'.");
+            string schema = RequiredString(value, "$schema");
+            int version = schema == Schema ? 2 : schema == SchemaV1 ? 1 : throw new TranslationEditorStateException($"Unsupported editor-state schema. Expected '{Schema}'.");
             if (!string.Equals(RequiredString(value, "catalog"), catalogId, StringComparison.Ordinal))
                 throw new TranslationEditorStateException("The editor-state catalog does not match the selected catalog.");
 
@@ -51,12 +55,17 @@ internal static partial class TranslationEditorStateStore
                 {
                     RequireName(locale.Name, "locale");
                     RequireObject(locale.Value, "Each locale state must be an object.");
-                    RequireAllowedMembers(locale.Value, "state", "note", "sourceFingerprint", "samples");
-                    string state = RequiredString(locale.Value, "state");
-                    if (!States.Contains(state, StringComparer.Ordinal))
-                        throw new TranslationEditorStateException($"Unknown review state '{state}'.");
+                    string? state = null, sourceFingerprint = null;
+                    if (version == 1)
+                    {
+                        RequireAllowedMembers(locale.Value, "state", "note", "sourceFingerprint", "samples");
+                        state = RequiredString(locale.Value, "state");
+                        if (!States.Contains(state, StringComparer.Ordinal))
+                            throw new TranslationEditorStateException($"Unknown review state '{state}'.");
+                        sourceFingerprint = OptionalString(locale.Value, "sourceFingerprint", 256);
+                    }
+                    else RequireAllowedMembers(locale.Value, "note", "samples");
                     string? note = OptionalString(locale.Value, "note", 16_384);
-                    string? sourceFingerprint = OptionalString(locale.Value, "sourceFingerprint", 256);
                     var samples = new SortedDictionary<string, string>(StringComparer.Ordinal);
                     if (locale.Value.TryGetProperty("samples", out JsonElement sampleValue))
                     {
@@ -100,13 +109,13 @@ internal static partial class TranslationEditorStateStore
                 int source = StringComparer.Ordinal.Compare(left.Source, right.Source);
                 return source != 0 ? source : StringComparer.Ordinal.Compare(left.Locale, right.Locale);
             });
-            return new TranslationEditorStateLoadResult(path, revision, new TranslationEditorState(catalogId, entries, terms), null);
+            return new TranslationEditorStateLoadResult(path, revision, new TranslationEditorState(catalogId, entries, terms), null, version);
         }
         catch (Exception exception) when (exception is JsonException or DecoderFallbackException or TranslationEditorStateException or IOException)
         {
             string? revision = null;
             try { revision = Revision(File.ReadAllBytes(fullPath)); } catch (IOException) { }
-            return new TranslationEditorStateLoadResult(path, revision, empty, exception.Message);
+            return new TranslationEditorStateLoadResult(path, revision, empty, exception.Message, 0);
         }
     }
 
@@ -139,7 +148,26 @@ internal static partial class TranslationEditorStateStore
         {
             if (File.Exists(temporary)) File.Delete(temporary);
         }
-        return new TranslationEditorStateLoadResult(path, Revision(bytes), state, null);
+        TranslationEditorStateEntry[] kept = state.Entries.Where(static entry => entry.Note is not null || entry.Samples.Count > 0)
+            .Select(static entry => entry with { State = null, SourceFingerprint = null }).ToArray();
+        return new TranslationEditorStateLoadResult(path, Revision(bytes), state with { Entries = kept }, null, 2);
+    }
+
+    /// <summary>The bytes <see cref="Save"/> would write for <paramref name="state"/>.</summary>
+    public static byte[] RenderBytes(TranslationEditorState state)
+    {
+        ValidateState(state);
+        return StrictUtf8.GetBytes(Render(state));
+    }
+
+    /// <summary>Removes the editor-state file when it still has <paramref name="expectedRevision"/>; a missing file is fine.</summary>
+    public static void Delete(string root, string catalogId, string? expectedRevision)
+    {
+        string fullPath = Resolve(root, RelativePath(catalogId), forWrite: true);
+        if (!File.Exists(fullPath)) return;
+        if (!string.Equals(Revision(ReadBounded(fullPath)), expectedRevision, StringComparison.Ordinal))
+            throw new TranslationEditorStateException("The editor-state sidecar changed on disk. Reload before saving review data.");
+        File.Delete(fullPath);
     }
 
     private static string Render(TranslationEditorState state)
@@ -148,14 +176,15 @@ internal static partial class TranslationEditorStateStore
         foreach (TranslationEditorStateEntry entry in state.Entries.OrderBy(static item => item.Key, StringComparer.Ordinal)
             .ThenBy(static item => item.Locale, StringComparer.Ordinal))
         {
+            // Review states belong to the SDK review file; an entry without a note or samples has nothing to keep here.
+            if (entry.Note is null && entry.Samples.Count == 0) continue;
             if (messages[entry.Key] is not JsonObject locales)
             {
                 locales = new JsonObject();
                 messages.Add(entry.Key, locales);
             }
-            var value = new JsonObject { ["state"] = entry.State };
+            var value = new JsonObject();
             if (entry.Note is not null) value.Add("note", entry.Note);
-            if (entry.SourceFingerprint is not null) value.Add("sourceFingerprint", entry.SourceFingerprint);
             if (entry.Samples.Count > 0)
             {
                 var samples = new JsonObject();
@@ -193,7 +222,7 @@ internal static partial class TranslationEditorStateStore
         {
             RequireName(entry.Key, "message key");
             RequireName(entry.Locale, "locale");
-            if (!States.Contains(entry.State, StringComparer.Ordinal))
+            if (entry.State is not null && !States.Contains(entry.State, StringComparer.Ordinal))
                 throw new TranslationEditorStateException($"Unknown review state '{entry.State}'.");
             if (!identities.Add(entry.Key + "\0" + entry.Locale))
                 throw new TranslationEditorStateException("Duplicate message/locale editor-state entry.");

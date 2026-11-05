@@ -539,6 +539,34 @@ ui {
 }
 ui {
   backend {
+    review_migrated =
+      .input {$count :integer select=plural}
+      .input {$demoted :integer select=plural}
+      .input {$path :string}
+      .match $count $demoted
+      one 0 {{Ein Prüfstatus wurde nach {$path} verschoben.}}
+      one * {{Ein Prüfstatus wurde nach {$path} verschoben; seine Quelle hat sich geändert, er muss erneut geprüft werden.}}
+      * 0 {{{$count} Prüfstatus wurden nach {$path} verschoben.}}
+      * one {{{$count} Prüfstatus wurden nach {$path} verschoben; eine geänderte Quelle muss erneut geprüft werden.}}
+      * * {{{$count} Prüfstatus wurden nach {$path} verschoben; {$demoted} geänderte Quellen müssen erneut geprüft werden.}}
+
+  }
+}
+ui {
+  backend {
+    review_migration_pending =
+      .input {$path :string}
+      {{Die Prüfstatus des Editors werden nach {$path} verschoben, sobald der Katalog fehlerfrei kompiliert.}}
+
+  }
+}
+ui {
+  backend {
+    review_save_compile = Zum Speichern von Prüfstatus muss der Katalog erfolgreich kompilieren.
+  }
+}
+ui {
+  backend {
     review_file_changed = Die Prüfdatei wurde nach der Vorschau geändert. Importieren Sie sie erneut.
   }
 }
