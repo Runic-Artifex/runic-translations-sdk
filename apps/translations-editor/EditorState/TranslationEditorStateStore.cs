@@ -160,6 +160,34 @@ internal static partial class TranslationEditorStateStore
         return StrictUtf8.GetBytes(Render(state));
     }
 
+    /// <summary>
+    /// Copies the editor-state file, which still has <paramref name="expectedRevision"/>, to
+    /// <c>.runic-translations/&lt;catalog&gt;.editor-state.v1.json</c> before the move to version 2 rewrites it, so an older
+    /// editor build can still read it and nothing the move dropped is lost. An existing backup is kept: it is the original
+    /// version 1 file of a move that did not finish. Returns the backup's workspace-relative path.
+    /// </summary>
+    public static string BackupVersion1(string root, string catalogId, string? expectedRevision)
+    {
+        string fullPath = Resolve(root, RelativePath(catalogId), forWrite: false);
+        string backupPath = RelativePath(catalogId)[..^".json".Length] + ".v1.json";
+        string backup = Resolve(root, backupPath, forWrite: true);
+        if (File.Exists(backup)) return backupPath;
+        byte[] bytes = ReadBounded(fullPath);
+        if (!string.Equals(Revision(bytes), expectedRevision, StringComparison.Ordinal))
+            throw new TranslationEditorStateException("The editor-state sidecar changed on disk. Reload before saving review data.");
+        string temporary = Path.Combine(Path.GetDirectoryName(backup)!, $".{Path.GetFileName(backup)}.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            File.WriteAllBytes(temporary, bytes);
+            File.Move(temporary, backup, false);
+        }
+        finally
+        {
+            if (File.Exists(temporary)) File.Delete(temporary);
+        }
+        return backupPath;
+    }
+
     /// <summary>Removes the editor-state file when it still has <paramref name="expectedRevision"/>; a missing file is fine.</summary>
     public static void Delete(string root, string catalogId, string? expectedRevision)
     {

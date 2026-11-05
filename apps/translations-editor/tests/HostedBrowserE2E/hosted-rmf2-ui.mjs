@@ -197,7 +197,7 @@ try {
 
   // Review states live in the SDK review file beside runic.json, the same file runic-translations review mark and
   // xliff import write. An entry recorded for another source is stale (RTR0090) in the row's quality checks;
-  // approving it in the workflow records the current source, and notes stay in the editor's own state.
+  // approving it in the workflow records the source the editor loaded, and the note goes onto the review entry.
   stage = "sdk-review-file";
   const reviewPath = join(workspace, "runic-hosted-e2e.review.json");
   const staleFingerprint = "sha256:" + "0".repeat(64);
@@ -222,12 +222,22 @@ try {
     return entry?.state === "approved" && entry.sourceFingerprint?.startsWith("sha256:") && entry.sourceFingerprint !== staleFingerprint;
   }, "approval recorded in the SDK review file for the current source");
   await workflow.getByText("Source changed", { exact: true }).waitFor({ state: "detached" });
-  const editorState = await readFile(join(workspace, ".runic-translations", "runic-hosted-e2e.editor-state.json"), "utf8");
-  assert.ok(editorState.includes("runic.translations.editor-state/2") && editorState.includes("Checked against the new source"),
-    "The editor note was not kept in the editor state.");
-  assert.ok(!editorState.includes('"state"') && !(await readFile(reviewPath, "utf8")).includes("Checked against"),
-    "Review states and editor notes were mixed between the two files.");
+  const saved = JSON.parse(await readFile(reviewPath, "utf8")).entries.find(item => item.key === "common_save" && item.locale === "en");
+  assert.equal(saved?.note, "Checked against the new source", "The note of a row with a review entry is not on the review entry.");
+  const editorStatePath = join(workspace, ".runic-translations", "runic-hosted-e2e.editor-state.json");
+  const editorState = await readFile(editorStatePath, "utf8").catch(() => "");
+  assert.ok(!editorState.includes('"state"') && !editorState.includes("Checked against"),
+    "Review states or the review entry's note were written to the editor state.");
   if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "review-file-en.png"), fullPage: true });
+
+  // Another writer (runic-translations review mark, the language server) changes the review file: the editor's
+  // external-change check reloads the review data without a workspace reload.
+  stage = "sdk-review-file-external";
+  const external = JSON.parse(await readFile(reviewPath, "utf8"));
+  external.entries = external.entries.map(item => item.key === "common_save" && item.locale === "en" ? { ...item, note: "Changed by the CLI" } : item);
+  await writeFile(reviewPath, JSON.stringify(external, null, 2) + "\n");
+  await page.getByText("The review file changed on disk; the review data was reloaded.").first().waitFor({ timeout: 15_000 });
+  await waitFor(async () => (await page.locator("#review-note").inputValue()) === "Changed by the CLI", "external review note shown in the workflow");
 
   // The interface language switch sets the window's locale through the ViewModel, the page follows it, and the
   // choice survives a reload from the native editor state.

@@ -44,7 +44,81 @@ export function effectiveReviewState(
   entry: EditorReviewEntry | undefined,
   translated: boolean,
 ): EditorReviewState {
-  return entry?.state ?? (translated ? "translated" : "draft");
+  // A row with only a note or samples has no recorded state: it is what the translation's presence says.
+  return entry !== undefined && entry.implicit !== true ? entry.state : (translated ? "translated" : "draft");
+}
+
+// The same review data (as EditorReviewStore.SameEntry): state unless both are inferred, note, fingerprint and samples.
+export function sameReviewEntry(left: EditorReviewEntry | undefined, right: EditorReviewEntry | undefined): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  const leftImplicit = left.implicit === true;
+  if (leftImplicit !== (right.implicit === true) || (!leftImplicit && left.state !== right.state)) return false;
+  if ((left.note ?? undefined) !== (right.note ?? undefined) || (left.sourceFingerprint ?? undefined) !== (right.sourceFingerprint ?? undefined)) return false;
+  const leftSamples = Object.entries(left.samples ?? {});
+  const rightSamples = right.samples ?? {};
+  return leftSamples.length === Object.keys(rightSamples).length &&
+    leftSamples.every(([name, value]) => Object.hasOwn(rightSamples, name) && rightSamples[name] === value);
+}
+
+function sameTerminology(left: readonly EditorTerminologyEntry[], right: readonly EditorTerminologyEntry[]): boolean {
+  return left.length === right.length && left.every((term, index) => term.source === right[index].source &&
+    term.preferred === right[index].preferred && (term.locale ?? undefined) === (right[index].locale ?? undefined) &&
+    (term.note ?? undefined) === (right[index].note ?? undefined));
+}
+
+export interface ReviewRebase {
+  entries: EditorReviewEntry[];
+  terminology: EditorTerminologyEntry[];
+  /** The new starting point: the incoming data, except where an entry changed on both sides (kept as it was). */
+  baseEntries: EditorReviewEntry[];
+  baseTerminology: EditorTerminologyEntry[];
+  /** "key (locale)" of each entry, or "terminology", changed both here and in the incoming data; saving refuses them. */
+  conflicts: string[];
+}
+
+// Unsaved review edits on top of review data another writer saved (the command line, the language server): an entry
+// the user did not change takes the incoming value; one only the user changed keeps the user's. An entry changed on
+// both sides keeps the user's value and its old starting point, so the save reports the conflict instead of losing it.
+export function rebaseReview(
+  local: readonly EditorReviewEntry[],
+  base: readonly EditorReviewEntry[],
+  incoming: readonly EditorReviewEntry[],
+  localTerminology: readonly EditorTerminologyEntry[],
+  baseTerminology: readonly EditorTerminologyEntry[],
+  incomingTerminology: readonly EditorTerminologyEntry[],
+): ReviewRebase {
+  const mine = reviewMap([...local]);
+  const original = reviewMap([...base]);
+  const theirs = reviewMap([...incoming]);
+  const identities = [...new Set([...original.keys(), ...mine.keys(), ...theirs.keys()])].sort();
+  const entries: EditorReviewEntry[] = [];
+  const baseEntries: EditorReviewEntry[] = [];
+  const conflicts: string[] = [];
+  for (const identity of identities) {
+    const o = original.get(identity), m = mine.get(identity), t = theirs.get(identity);
+    let next: EditorReviewEntry | undefined;
+    let start: EditorReviewEntry | undefined = t;
+    if (sameReviewEntry(m, o)) next = t;
+    else if (sameReviewEntry(t, o) || sameReviewEntry(m, t)) next = m;
+    else {
+      next = m;
+      start = o;
+      const named = (m ?? t ?? o)!;
+      conflicts.push(`${named.key} (${named.locale})`);
+    }
+    if (next !== undefined) entries.push(next);
+    if (start !== undefined) baseEntries.push(start);
+  }
+  let terminology: EditorTerminologyEntry[];
+  let terminologyBase: EditorTerminologyEntry[] = [...incomingTerminology];
+  if (sameTerminology(localTerminology, baseTerminology)) terminology = [...incomingTerminology];
+  else if (sameTerminology(incomingTerminology, baseTerminology) || sameTerminology(localTerminology, incomingTerminology)) terminology = [...localTerminology];
+  else {
+    terminology = [...localTerminology];
+    terminologyBase = [...baseTerminology];
+    conflicts.push("terminology");
+  }
+  return { entries, terminology, baseEntries, baseTerminology: terminologyBase, conflicts };
 }
 
 // "Stale" is the SDK's definition, computed by the backend from the review file's per-unit fingerprint (RTR0090).

@@ -92,9 +92,11 @@ Every routine editor-owned backend notice uses the following stable resource key
 | `ui_backend_refusal_8` | The document targets locale '{$value1}', which the open catalog does not define. |
 | `ui_backend_refusal_9` | The document targets default locale '{$value1}', which is canonical source text and cannot be imported through XLIFF. |
 | `ui_backend_review_compile` | Review export requires a successfully compiled catalog. |
-| `ui_backend_review_migrated` | Moved {$count} review states to {$path}; {$demoted} changed sources need review again. |
-| `ui_backend_review_migration_pending` | The editor's review states move to {$path} once the catalog compiles without errors. |
-| `ui_backend_review_save_compile` | Saving review states requires a successfully compiled catalog. |
+| `ui_backend_review_migrated` | Review states moved to {$path}: {$count}. Need review again because their source changed: {$demoted}. Dropped for removed or renamed messages and locales: {$dropped}. Already in the review file, which was kept: {$kept}. The previous editor state is saved as {$backup}. |
+| `ui_backend_review_migration_pending` | The editor's review states move to {$path} once runic.json and the base locale have no errors; until then they are shown read-only. |
+| `ui_backend_review_unstamped` | Review states without the base text they were reviewed against cannot be recorded ({$count}: {$entries}). Fix the errors in runic.json or the base locale, reload, then set them again. |
+| `ui_backend_review_conflict` | These review entries changed both here and on disk: {$entries}. Discard your review changes or reload, then set them again. |
+| `ui_backend_review_saved_stale` | Review data saved. {$count} states were recorded for base text that changed on disk after it was loaded, so they show as stale (RTR0090). |
 | `ui_backend_review_file_changed` | The review file changed after it was previewed. Import it again. |
 | `ui_backend_saved_reload` | The document was saved; reload the workspace to refresh it. |
 | `ui_backend_select_catalog_mutation` | Select a catalog before changing locales or keys. |

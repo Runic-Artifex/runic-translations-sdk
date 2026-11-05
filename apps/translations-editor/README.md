@@ -65,16 +65,33 @@ is imported as needs-review. Only document-level problems (another catalog, an
 undeclared or the base locale, an unreadable file) refuse the whole import.
 
 Review states live in the SDK review file `<catalog>.review.json` beside
-`runic.json`, the file `runic-translations review mark`, `xliff import` and
-`validate` use. Each state records the per-unit fingerprint of the source it was
-set for; when that source changes, the row is marked **Source changed** and its
-quality checks show `RTR0090`. Setting the state again records the current
-source. Notes, preview samples and terminology stay in the editor's own
+`runic.json`, the file `runic-translations review mark`, `xliff import`,
+`validate` and the language server use. Each state records the per-unit
+fingerprint of the base text the editor loaded when you set it; when that source
+changes, the row is marked **Source changed** and its quality checks show
+`RTR0090`. If the base text changed on disk after the editor loaded it, saving
+records your state for the text you saw, so it shows as stale instead of
+approving text nobody reviewed. Review data works while the catalog has errors
+elsewhere, such as a locale that misses keys: only errors in `runic.json` or the
+base locale stop review states from being recorded. A row's note is stored on its
+review entry, so an edited or cleared note (also one from XLIFF) is what export
+writes; a note or preview samples alone create no review entry. Preview samples,
+terminology and the notes of rows without a review entry stay in the editor's own
 `.runic-translations/<catalog>.editor-state.json` (`runic.translations.editor-state/2`).
+
+The editor checks the review file for changes by other writers while it is open:
+without unsaved review changes it reloads the review data; with them, your
+changes are kept on top of the file's, and saving refuses only an entry that
+changed both in the editor and on disk.
+
 When the editor opens a project with a version 1 editor state, it moves the
 review states into the review file once: an approval whose base text is
 unchanged stays approved, every other recorded state whose base text changed
-becomes needs-review, and a one-line notice says how many moved.
+becomes needs-review, and states of removed or renamed messages are dropped. The
+version 1 file is kept as `.runic-translations/<catalog>.editor-state.v1.json`,
+and a notice counts the states that moved, need review, were dropped or were
+already in the review file. Until `runic.json` and the base locale have no
+errors, the version 1 states are shown read-only.
 
 The quality filter and each row's quality checks show the compiler's
 per-message diagnostics (`RTR0010` untranslated, `RTR0094`–`RTR0098`, and

@@ -472,7 +472,8 @@ the translation was made, imported or approved. The C# source generator does not
 report it. Review the translation, then record it with
 `runic-translations review mark --key <key> --locale <locale> --state approved`
 (or `needs-review`). The Translations Editor reads the same file: it marks the
-row **Source changed**, and setting the state again records the current source. See
+row **Source changed**, and setting the state again records the source it shows, also
+while other locales are incomplete. See
 [review state](../../../tools/dotnet-runic-translations/README.md#track-review-state-and-stale-translations).
 
 ## RTR0091
@@ -527,7 +528,7 @@ grammar. Under `:integer` only the categories integers reach are expected:
 `one`, `few` and `*` are a complete Czech integer plural, while French still
 needs `many` (1000000). Add a variant for each listed category; for a message
 with one selector, the Translations Editor offers a quick fix that adds them as
-copies of the `*` variant. A selector whose keys are all
+copies of the `*` variant, also while the catalog has errors elsewhere. A selector whose keys are all
 exact numbers and `*` chose not to use categories and is not checked. A warning
 by default; `validation.pluralCategories` sets the policy (with `RTR0094`).
 

@@ -26,6 +26,7 @@
     EditorProjectPlan,
     EditorReviewFileResult,
     EditorReviewEntry,
+    EditorReviewSnapshot,
     EditorReviewImportPreview,
     EditorReviewState,
     EditorTerminologyEntry,
@@ -119,6 +120,7 @@
     reviewMap,
     translationSuggestions,
     withCurrentReview,
+    rebaseReview,
   } from "#lib/review-model.js";
   import {
     readUiSimulation,
@@ -229,6 +231,10 @@
   let previewRequest = $state.raw<PreviewRequest>();
   let reviewEntries = $state<EditorReviewEntry[]>([]);
   let terminology = $state<EditorTerminologyEntry[]>([]);
+  // The review data the unsaved edits started from: a save (or a review file another writer changed) re-applies only
+  // the user's changes on top of the files on disk.
+  let reviewBaseEntries: EditorReviewEntry[] = [];
+  let reviewBaseTerminology: EditorTerminologyEntry[] = [];
   let reviewRevision = $state<string>();
   let reviewDirty = $state(false);
   let reviewSaving = $state(false);
@@ -277,7 +283,8 @@
     comparedExternalChange !== undefined || repairDocument !== undefined || terminologyDialogOpen || reportDialogOpen || aboutDialogOpen,
   );
   let editorMutationBlocked = $derived(historyBusy || saving || reviewSaving || loading || recoveryBusy || openingWorkspace);
-  let reviewMutationBlocked = $derived(editorMutationBlocked || reviewSaving);
+  // Version 1 editor approvals waiting to move into the review file are shown read-only.
+  let reviewMutationBlocked = $derived(editorMutationBlocked || reviewSaving || snapshot?.review?.migrationPending === true);
   let rows = $derived(buildRows(snapshot, drafts, parsedDrafts));
   let messageSearch = $derived(createMessageSearchIndex(rows));
   let localeSummaries = $derived.by(() => (snapshot?.catalog?.locales ?? []).map((locale) => {
@@ -542,6 +549,7 @@
     if (loading || openingWorkspace || saving || snapshot === undefined) return;
     try {
       const result = await bridge.checkExternalChanges();
+      if (result.review !== undefined && !reviewSaving) applyExternalReview(result.review);
       if (result.paths.length > 0) {
         externalChanges = [...new Set([...externalChanges, ...result.paths])].sort();
         externalFileChanges = [
@@ -598,15 +606,41 @@
     rememberProject(next);
   }
 
+  function cloneReviewEntries(entries: readonly EditorReviewEntry[]): EditorReviewEntry[] {
+    return entries.map((entry) => ({ ...structuredClone(entry), samples: createPreviewSamples(entry.samples) }));
+  }
+
   function installReview(next: WorkspaceSnapshot): void {
-    reviewEntries = (next.review?.entries ?? []).map((entry) => ({
-      ...structuredClone(entry),
-      samples: createPreviewSamples(entry.samples),
-    }));
+    reviewEntries = cloneReviewEntries(next.review?.entries ?? []);
     terminology = structuredClone(next.review?.terminology ?? []);
+    reviewBaseEntries = cloneReviewEntries(next.review?.entries ?? []);
+    reviewBaseTerminology = structuredClone(next.review?.terminology ?? []);
     reviewRevision = next.review?.revision;
     reviewDirty = false;
     reviewMessage = next.review?.notice ?? next.review?.error;
+  }
+
+  // Another writer (runic-translations review mark or xliff import, the language server) changed the review file.
+  // Without unsaved review edits the new data is installed; with them, the edits are kept on top of it. The editor
+  // keeps the fingerprints of the base text it shows: those change only when the catalog is reloaded.
+  function applyExternalReview(incoming: EditorReviewSnapshot): void {
+    if (snapshot === undefined) return;
+    const fingerprints = snapshot.review?.fingerprints;
+    snapshot.review = { ...incoming, fingerprints };
+    if (!reviewDirty) {
+      installReview(snapshot);
+      reviewMessage = notice("ui_feedback_review_external");
+      return;
+    }
+    const rebased = rebaseReview(reviewEntries, reviewBaseEntries, incoming.entries, terminology, reviewBaseTerminology, incoming.terminology);
+    reviewEntries = cloneReviewEntries(rebased.entries);
+    terminology = rebased.terminology;
+    reviewBaseEntries = cloneReviewEntries(rebased.baseEntries);
+    reviewBaseTerminology = rebased.baseTerminology;
+    reviewRevision = incoming.revision;
+    reviewMessage = rebased.conflicts.length === 0
+      ? notice("ui_feedback_review_external_kept")
+      : notice("ui_feedback_review_external_conflict", { entries: rebased.conflicts.slice(0, 10).join(", ") });
   }
 
   function confirmDiscardUnsavedWork(messageKey: string): boolean {
@@ -901,15 +935,19 @@
     const index = reviewEntries.findIndex((entry) => reviewIdentity(entry.key, entry.locale) === identity);
     const row = rows.find((candidate) => candidate.key === key);
     const existing = index < 0 ? undefined : reviewEntries[index];
+    const setsState = patch.state !== undefined;
     const next: EditorReviewEntry = {
       key,
       locale,
-      state: patch.state ?? existing?.state ?? effectiveReviewState(undefined, row?.cells[locale]?.entry !== undefined),
-      note: patch.note ?? existing?.note,
-      // A patch that names sourceFingerprint (undefined) records the state for the current source when saved.
-      sourceFingerprint: "sourceFingerprint" in patch ? patch.sourceFingerprint : existing?.sourceFingerprint,
+      state: patch.state ?? effectiveReviewState(existing, row?.cells[locale]?.entry !== undefined),
+      // An empty note clears it, also a note that came from XLIFF.
+      note: "note" in patch ? (patch.note === "" ? undefined : patch.note) : existing?.note,
+      // A state the user sets is recorded for the base text the editor loaded.
+      sourceFingerprint: setsState ? patch.sourceFingerprint : existing?.sourceFingerprint,
       samples: createPreviewSamples(patch.samples ?? existing?.samples),
-      stale: "sourceFingerprint" in patch ? false : existing?.stale,
+      stale: setsState ? patch.sourceFingerprint !== currentFingerprint(key) : existing?.stale,
+      // A note or samples alone record no review state.
+      implicit: setsState ? false : existing?.implicit ?? true,
     };
     reviewEntries = index < 0
       ? [...reviewEntries, next]
@@ -918,10 +956,23 @@
     reviewMessage = undefined;
   }
 
+  // The SDK per-unit fingerprint of the base message as the editor loaded it (undefined: the base locale has errors).
+  function currentFingerprint(key: string): string | undefined {
+    return snapshot?.review?.fingerprints?.[key];
+  }
+
+  // Review states are recorded for the base text the reviewer saw; without its fingerprint none can be recorded.
+  function reviewStatesBlocked(): boolean {
+    if (snapshot?.review?.fingerprints !== undefined) return false;
+    reviewMessage = notice("ui_review_states_need_base");
+    return true;
+  }
+
   function setCurrentReviewState(state: EditorReviewState): void {
+    if (reviewMutationBlocked || reviewStatesBlocked()) return;
     updateReview(selectedKey, selectedLocale, {
       state,
-      sourceFingerprint: undefined,
+      sourceFingerprint: currentFingerprint(selectedKey),
       samples: createPreviewSamples(previewSamples),
     });
   }
@@ -931,7 +982,7 @@
   }
 
   function markVisible(state: EditorReviewState): void {
-    if (reviewMutationBlocked) return;
+    if (reviewMutationBlocked || reviewStatesBlocked()) return;
     let next = [...reviewEntries];
     const byIdentity = reviewMap(next);
     for (const row of visibleRows) {
@@ -942,9 +993,10 @@
         locale: selectedLocale,
         state,
         note: existing?.note,
-        sourceFingerprint: undefined,
+        sourceFingerprint: currentFingerprint(row.key),
         samples: createPreviewSamples(existing?.samples),
         stale: false,
+        implicit: false,
       };
       const index = next.findIndex((candidate) => reviewIdentity(candidate.key, candidate.locale) === identity);
       if (index < 0) next.push(entry);
@@ -965,20 +1017,23 @@
         expectedRevision: reviewRevision,
         entries: reviewEntries.map((entry) => ({ ...entry, samples: createPreviewSamples(entry.samples) })),
         terminology: terminology.map((term) => ({ ...term })),
+        original: reviewBaseEntries.map((entry) => ({ ...entry, samples: createPreviewSamples(entry.samples) })),
+        originalTerminology: reviewBaseTerminology.map((term) => ({ ...term })),
       });
       if (!result.ok || result.review === undefined) {
         reviewMessage = result.message ?? notice("ui_feedback_review_save_failed");
         return;
       }
-      reviewEntries = result.review.entries.map((entry) => ({
-        ...structuredClone(entry),
-        samples: createPreviewSamples(entry.samples),
-      }));
+      reviewEntries = cloneReviewEntries(result.review.entries);
       terminology = structuredClone(result.review.terminology);
+      reviewBaseEntries = cloneReviewEntries(result.review.entries);
+      reviewBaseTerminology = structuredClone(result.review.terminology);
       reviewRevision = result.review.revision;
       reviewDirty = false;
-      reviewMessage = notice("ui_feedback_workflow_saved");
-      if (snapshot !== undefined) snapshot.review = result.review;
+      // A state recorded for base text that changed on disk since it was loaded is saved as stale; say so.
+      reviewMessage = result.review.notice ?? notice("ui_feedback_workflow_saved");
+      // The editor keeps the fingerprints of the base text it shows until the catalog is reloaded.
+      if (snapshot !== undefined) snapshot.review = { ...result.review, fingerprints: snapshot.review?.fingerprints ?? result.review.fingerprints };
       if (snapshot !== undefined) snapshot.history = result.history;
     } catch (error) {
       reviewMessage = errorNotice(error);

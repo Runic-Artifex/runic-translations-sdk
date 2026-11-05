@@ -26,6 +26,7 @@ internal sealed class EditorWorkspace : IDisposable
     private readonly Dictionary<string, string> _knownRevisions = new(StringComparer.Ordinal);
     private string? _catalogId;
     private int _watcherOverflowed;
+    private string? _knownReviewRevision;
     private int _reconcileRequested;
     private bool _disposed;
 
@@ -123,7 +124,7 @@ internal sealed class EditorWorkspace : IDisposable
             // baseline so a later rename/delete of a newly added mount file
             // still reports the old path as removed.
             ReplaceKnownRevisions(current);
-            return new EditorExternalChanges(overflowed, changed, changes);
+            return new EditorExternalChanges(overflowed, changed, changes, await ExternalReviewAsync(cancellationToken).ConfigureAwait(false));
         }
         finally
         {
@@ -444,11 +445,11 @@ internal sealed class EditorWorkspace : IDisposable
         {
             ThrowIfDisposed();
             if (_catalogId is null) return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_select_catalog_review"), null, null);
-            // Review entries record the per-unit fingerprint of the source on disk, so the catalog must compile (as for review mark).
+            // Notes, samples and terminology always save. Review states carry the fingerprint of the source the user
+            // reviewed (from the snapshot); the review compilation tells which of them predate a change on disk, and it
+            // works while translations are incomplete or invalid (TranslationReviewFile.ForReview).
             WorkspaceState state = await ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
-            if (!state.Compilation.Success || state.Compilation.Project is null)
-                return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_review_save_compile"), null, null);
-            EditorReviewSnapshot saved = ReviewStore(_catalogId).Save(request, state.Compilation);
+            EditorReviewSnapshot saved = KnownReview(ReviewStore(_catalogId).Save(request, ReviewCompilation(state, cancellationToken)));
             return new EditorReviewOperationResult(true, null, saved, null);
         }
         catch (Exception exception) when (exception is TranslationEditorStateException or TranslationInterchangeException or IOException or UnauthorizedAccessException or ArgumentException)
@@ -735,7 +736,8 @@ internal sealed class EditorWorkspace : IDisposable
                 !string.Equals(currentCatalog.SourceFreshness, prepared.ExpectedSourceFreshness, StringComparison.Ordinal))
                 return Failure("conflict", EditorNotice.Create("ui_backend_import_catalog_changed"));
             EditorReviewStore store = ReviewStore(prepared.CatalogId);
-            if (!string.Equals(store.CurrentRevision(), prepared.ExpectedReviewRevision, StringComparison.Ordinal))
+            (string? reviewRevision, byte[]? reviewBytes) = store.CurrentState();
+            if (!string.Equals(reviewRevision, prepared.ExpectedReviewRevision, StringComparison.Ordinal))
                 return Failure("conflict", EditorNotice.Create("ui_backend_import_sidecar_changed"));
 
             foreach (PreparedInterchangeDocument document in prepared.Documents)
@@ -761,9 +763,10 @@ internal sealed class EditorWorkspace : IDisposable
                     File.Move(temporaryPath, fullPath, true);
                     committed.Add((document, fullPath));
                 }
-                if (prepared.ReviewBytes is not null) store.WriteReview(prepared.ReviewBytes);
+                // Compare-and-swap: a review file another writer changed since the check is not overwritten.
+                if (prepared.ReviewBytes is not null) store.WriteReview(prepared.ReviewBytes, reviewBytes);
             }
-            catch (Exception exception) when (exception is TranslationEditorStateException or IOException or UnauthorizedAccessException)
+            catch (Exception exception) when (exception is TranslationEditorStateException or TranslationInterchangeException or IOException or UnauthorizedAccessException)
             {
                 bool rolledBack = await RollBackInterchangeDocumentsAsync(committed, CancellationToken.None).ConfigureAwait(false);
                 return rolledBack
@@ -897,10 +900,15 @@ internal sealed class EditorWorkspace : IDisposable
                 !string.Equals(currentCatalog.SourceFreshness, prepared.ExpectedSourceFreshness, StringComparison.Ordinal))
                 return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_import_catalog_changed"), null, null);
             EditorReviewStore store = ReviewStore(prepared.CatalogId);
-            if (!string.Equals(store.CurrentRevision(), prepared.ExpectedReviewRevision, StringComparison.Ordinal))
+            (string? reviewRevision, byte[]? reviewBytes) = store.CurrentState();
+            if (!string.Equals(reviewRevision, prepared.ExpectedReviewRevision, StringComparison.Ordinal))
                 return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_import_sidecar_changed"), null, null);
-            if (prepared.ReviewBytes is not null) store.WriteReview(prepared.ReviewBytes);
-            return new EditorReviewOperationResult(true, null, store.Load(currentState.Compilation), null);
+            if (prepared.ReviewBytes is not null) store.WriteReview(prepared.ReviewBytes, reviewBytes);
+            return new EditorReviewOperationResult(true, null, KnownReview(store.Load(currentState.Compilation)), null);
+        }
+        catch (TranslationInterchangeException exception) when (exception.Code == TranslationReviewFile.ChangedCode)
+        {
+            return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_import_sidecar_changed"), null, null);
         }
         catch (TranslationInterchangeException)
         {
@@ -979,10 +987,48 @@ internal sealed class EditorWorkspace : IDisposable
 
     // The base-locale value of every key as the editor's frontend fingerprinted it before 0.9: an .rmf2 entry's
     // message, a direct .mf2 file's content. Used only to move version 1 editor approvals (EditorReviewStore).
-    private static Dictionary<string, string> BaseValues(WorkspaceState state)
+    // The compilation review data is computed from: the state's own when it succeeded, else the same sources compiled
+    // without validation policies, else the base locale alone (TranslationReviewFile.ForReview). Cached per state.
+    private static Rmf2ProjectCompilation ReviewCompilation(WorkspaceState state, CancellationToken cancellationToken = default)
+    {
+        if (state.ReviewCompilation is { } cached) return cached;
+        WorkspaceFile? manifest = state.Files.Find(static file => file.Kind == DocumentKind.Manifest);
+        Rmf2ProjectCompilation review = manifest is null ? state.Compilation : TranslationReviewFile.ForReview(state.Compilation, Source(manifest.Path, manifest.Content),
+            state.Files.Where(static file => file.Kind == DocumentKind.Resource).Select(static file => Source(file.Path, file.Content)).ToArray(), null, cancellationToken);
+        state.ReviewCompilation = review;
+        return review;
+    }
+
+    // The review data when another writer (runic-translations review mark or xliff import, the language server's
+    // "Mark reviewed") changed the review file since the frontend received it; null when unchanged. Read without
+    // moving the external-change baseline, so source changes are still reported on their own.
+    private async Task<EditorReviewSnapshot?> ExternalReviewAsync(CancellationToken cancellationToken)
+    {
+        if (_catalogId is null || FindMf2ProjectConfig() is not { } projectPath) return null;
+        var store = new EditorReviewStore(_root, projectPath, _catalogId);
+        if (string.Equals(store.CurrentRevision(), _knownReviewRevision, StringComparison.Ordinal)) return null;
+        try
+        {
+            WorkspaceState state = await ReadStateAsync(null, null, cancellationToken, resetBaseline: false).ConfigureAwait(false);
+            return KnownReview(store.Load(ReviewCompilation(state, cancellationToken)));
+        }
+        catch (Exception exception) when (exception is TranslationEditorStateException or TranslationInterchangeException or EditorUserException or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    // Remembers the review revision the frontend has, so the external-change poll reports another writer's change.
+    private EditorReviewSnapshot KnownReview(EditorReviewSnapshot snapshot)
+    {
+        _knownReviewRevision = snapshot.Revision;
+        return snapshot;
+    }
+
+    private static Dictionary<string, string> BaseValues(WorkspaceState state, Rmf2ProjectCompilation reviewCompilation)
     {
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (state.Compilation.Project is not { } project) return values;
+        if (reviewCompilation.Project is not { } project) return values;
         var files = state.Files.Where(static file => file.Kind == DocumentKind.Resource).ToDictionary(static file => file.Path, StringComparer.Ordinal);
         var nodes = new Dictionary<string, IReadOnlyList<Rmf2ResourceNode>>(StringComparer.Ordinal);
         foreach (Rmf2TranslationV5 resource in project.Locales.Single(locale => locale.Tag == project.DefaultLocale).DirectResources)
@@ -1129,22 +1175,26 @@ internal sealed class EditorWorkspace : IDisposable
         }
     }
 
+    // A read of the files on disk (no replacement) becomes the baseline of the external-change check, unless
+    // resetBaseline is false (the check itself reads the catalog to report a review file another writer changed).
     private Task<WorkspaceState> ReadStateAsync(
         string? replacementPath,
         string? replacementContent,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool resetBaseline = true)
     {
         string? projectConfig = FindMf2ProjectConfig();
         if (projectConfig is null)
             throw new EditorUserException(EditorNotice.Create("ui_backend_project_required"));
-        return ReadMf2StateAsync(projectConfig, replacementPath, replacementContent, cancellationToken);
+        return ReadMf2StateAsync(projectConfig, replacementPath, replacementContent, cancellationToken, resetBaseline);
     }
 
     private Task<WorkspaceState> ReadMf2StateAsync(
         string configPath,
         string? replacementPath,
         string? replacementContent,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool resetBaseline = true)
     {
         string projectRoot = Path.GetDirectoryName(configPath)!;
         string configRelativePath = NormalizeRelativePath(Path.GetRelativePath(_root, configPath));
@@ -1218,7 +1268,7 @@ internal sealed class EditorWorkspace : IDisposable
             }
         }
         _catalogId = rmf2?.Id ?? catalogId;
-        if (replacementPath is null)
+        if (replacementPath is null && resetBaseline)
         {
             _knownRevisions.Clear();
             foreach (WorkspaceFile file in files) _knownRevisions[file.Path] = file.Revision;
@@ -1278,7 +1328,8 @@ internal sealed class EditorWorkspace : IDisposable
         if (_catalogId is not null)
         {
             EditorReviewStore store = ReviewStore(_catalogId);
-            try { review = store.Load(state.Compilation, BaseValues(state)); }
+            Rmf2ProjectCompilation reviewCompilation = ReviewCompilation(state);
+            try { review = KnownReview(store.Load(reviewCompilation, BaseValues(state, reviewCompilation))); }
             catch (Exception exception) when (exception is TranslationEditorStateException or TranslationInterchangeException or IOException or UnauthorizedAccessException)
             {
                 review = new EditorReviewSnapshot(store.DisplayPath, null, exception.Message, [], []);
@@ -1295,18 +1346,20 @@ internal sealed class EditorWorkspace : IDisposable
     {
         var compilation = state.Compilation;
         List<TranslationDiagnostic> diagnostics = [.. compilation.Diagnostics];
-        if (compilation.Success && _catalogId is not null && FindMf2ProjectConfig() is { } projectPath)
+        // RTR0090 and the message rows come from the review compilation, so they stay while translations are incomplete.
+        Rmf2ProjectCompilation reviewCompilation = ReviewCompilation(state, cancellationToken);
+        if (reviewCompilation.Success && _catalogId is not null && FindMf2ProjectConfig() is { } projectPath)
         {
             EditorReviewStore store = new(_root, projectPath, _catalogId);
             try
             {
-                if (store.ReadReview().Review is { } review) diagnostics.AddRange(TranslationReviewFile.StaleDiagnostics(compilation, review));
+                if (store.ReadReview().Review is { } review) diagnostics.AddRange(TranslationReviewFile.StaleDiagnostics(reviewCompilation, review));
             }
             catch (TranslationInterchangeException exception) { diagnostics.Add(TranslationReviewFile.InvalidDiagnostic(store.DisplayPath, exception)); }
             catch (Exception exception) when (exception is TranslationEditorStateException or IOException or UnauthorizedAccessException) { /* The review snapshot reports it. */ }
         }
         var rows = new Dictionary<(string Path, int Start), (string Key, string Locale)>();
-        foreach (Rmf2LocaleV5 locale in compilation.Project?.Locales ?? [])
+        foreach (Rmf2LocaleV5 locale in (compilation.Project ?? reviewCompilation.Project)?.Locales ?? [])
             foreach (Rmf2TranslationV5 resource in locale.DirectResources)
                 rows.TryAdd((resource.SourceLocation.Path, resource.SourceLocation.StartByte), (resource.Key, locale.Tag));
         var sources = state.Files.ToDictionary(file => file.Path, file => Source(file.Path, file.Content), StringComparer.Ordinal);
@@ -1721,5 +1774,8 @@ internal sealed class EditorWorkspace : IDisposable
     private sealed record WorkspaceState(
         List<WorkspaceFile> Files,
         Rmf2ProjectCompilation Compilation,
-        IReadOnlyList<EditorCatalogSummary> Catalogs);
+        IReadOnlyList<EditorCatalogSummary> Catalogs)
+    {
+        internal Rmf2ProjectCompilation? ReviewCompilation { get; set; }
+    }
 }

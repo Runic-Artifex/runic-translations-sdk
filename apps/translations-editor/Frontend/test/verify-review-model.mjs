@@ -45,6 +45,31 @@ assert(model.withCurrentReview(diagnostics, reviewed).every((item) => item.id !=
   "An RTR0090 warning stayed after the stale state was set again.");
 assert(model.withCurrentReview(diagnostics, model.reviewMap([{ key: "Action.Save", locale: "de", state: "approved", samples: {}, stale: true }])).length === diagnostics.length,
   "An RTR0090 warning was dropped for a still stale state.");
+// A row with only a note has no recorded state; the translation's presence decides it.
+assert(model.effectiveReviewState({ key: "k", locale: "de", state: "draft", samples: {}, implicit: true }, true) === "translated" &&
+  model.effectiveReviewState({ key: "k", locale: "de", state: "approved", samples: {} }, false) === "approved",
+  "An implicit (note-only) entry's inferred state was treated as recorded.");
+
+// Unsaved review edits on top of a review file another writer changed: untouched entries take the file's value, the
+// user's changes are kept, and an entry changed on both sides is reported and keeps its old starting point.
+{
+  const entry = (key, state, note) => ({ key, locale: "de", state, note, sourceFingerprint: "sha256:" + key, samples: {} });
+  const base = [entry("a", "translated"), entry("b", "translated"), entry("c", "translated")];
+  const local = [entry("a", "approved"), entry("b", "translated"), entry("c", "needs-review"), entry("d", "approved")];
+  const incoming = [entry("a", "translated"), entry("b", "approved", "CLI"), entry("c", "approved"), entry("e", "draft")];
+  const terms = [{ source: "Save", preferred: "Speichern" }];
+  const rebased = model.rebaseReview(local, base, incoming, terms, [], terms);
+  const states = rebased.entries.map((item) => `${item.key}=${item.state}${item.note ? "/" + item.note : ""}`).join(",");
+  assert(states === "a=approved,b=approved/CLI,c=needs-review,d=approved,e=draft", "The rebase lost a change: " + states);
+  assert(rebased.conflicts.join() === "c (de)", "The rebase did not report the entry changed on both sides: " + rebased.conflicts.join());
+  assert(rebased.baseEntries.find((item) => item.key === "c")?.state === "translated" && rebased.baseEntries.find((item) => item.key === "b")?.note === "CLI",
+    "The new starting point is not the incoming data except for the conflicting entry.");
+  assert(rebased.terminology.length === 1 && rebased.conflicts.length === 1, "Terminology added alike on both sides was a conflict.");
+  assert(model.sameReviewEntry({ ...entry("x", "draft"), implicit: true }, { ...entry("x", "translated"), implicit: true }) &&
+    !model.sameReviewEntry(entry("x", "draft"), entry("x", "translated")),
+    "The inferred state of note-only entries was compared, or a recorded state was not.");
+}
+
 assert(model.qualityReportCsv(issues).startsWith('"key","locale","kind","message"\n'),
   "The quality report is not a deterministic quoted CSV document.");
 

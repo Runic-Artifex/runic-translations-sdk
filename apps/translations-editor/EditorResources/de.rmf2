@@ -540,15 +540,13 @@ ui {
 ui {
   backend {
     review_migrated =
-      .input {$count :integer select=plural}
-      .input {$demoted :integer select=plural}
+      .input {$count :integer}
+      .input {$demoted :integer}
+      .input {$dropped :integer}
+      .input {$kept :integer}
       .input {$path :string}
-      .match $count $demoted
-      one 0 {{Ein Prüfstatus wurde nach {$path} verschoben.}}
-      one * {{Ein Prüfstatus wurde nach {$path} verschoben; seine Quelle hat sich geändert, er muss erneut geprüft werden.}}
-      * 0 {{{$count} Prüfstatus wurden nach {$path} verschoben.}}
-      * one {{{$count} Prüfstatus wurden nach {$path} verschoben; eine geänderte Quelle muss erneut geprüft werden.}}
-      * * {{{$count} Prüfstatus wurden nach {$path} verschoben; {$demoted} geänderte Quellen müssen erneut geprüft werden.}}
+      .input {$backup :string}
+      {{Nach {$path} verschobene Prüfstatus: {$count}. Erneut zu prüfen, weil sich die Quelle geändert hat: {$demoted}. Verworfen für entfernte oder umbenannte Meldungen und Sprachen: {$dropped}. Bereits in der Prüfdatei, die beibehalten wurde: {$kept}. Der bisherige Editorzustand ist als {$backup} gesichert.}}
 
   }
 }
@@ -556,13 +554,35 @@ ui {
   backend {
     review_migration_pending =
       .input {$path :string}
-      {{Die Prüfstatus des Editors werden nach {$path} verschoben, sobald der Katalog fehlerfrei kompiliert.}}
+      {{Die Prüfstatus des Editors werden nach {$path} verschoben, sobald runic.json und die Basissprache fehlerfrei sind; bis dahin sind sie schreibgeschützt.}}
 
   }
 }
 ui {
   backend {
-    review_save_compile = Zum Speichern von Prüfstatus muss der Katalog erfolgreich kompilieren.
+    review_unstamped =
+      .input {$count :integer}
+      .input {$entries :string}
+      {{Prüfstatus ohne den Basistext, gegen den geprüft wurde, können nicht gespeichert werden ({$count}: {$entries}). Beheben Sie die Fehler in runic.json oder der Basissprache, laden Sie neu und setzen Sie sie erneut.}}
+
+  }
+}
+ui {
+  backend {
+    review_conflict =
+      .input {$entries :string}
+      {{Diese Prüfeinträge wurden hier und auf dem Datenträger geändert: {$entries}. Verwerfen Sie Ihre Prüfänderungen oder laden Sie neu und setzen Sie sie erneut.}}
+
+  }
+}
+ui {
+  backend {
+    review_saved_stale =
+      .input {$count :integer select=plural}
+      .match $count
+      one {{Prüfdaten gespeichert. Ein Status wurde für einen Basistext gespeichert, der sich nach dem Laden auf dem Datenträger geändert hat; er gilt daher als veraltet (RTR0090).}}
+      * {{Prüfdaten gespeichert. {$count} Status wurden für einen Basistext gespeichert, der sich nach dem Laden auf dem Datenträger geändert hat; sie gelten daher als veraltet (RTR0090).}}
+
   }
 }
 ui {
@@ -1581,6 +1601,24 @@ ui {
 ui {
   feedback {
     workflow_saved = Workflow-Begleitdatei gespeichert
+  }
+}
+ui {
+  feedback {
+    review_external = Die Prüfdatei wurde auf dem Datenträger geändert; die Prüfdaten wurden neu geladen.
+  }
+}
+ui {
+  feedback {
+    review_external_kept = Die Prüfdatei wurde auf dem Datenträger geändert; Ihre ungespeicherten Prüfänderungen bleiben darüber erhalten.
+  }
+}
+ui {
+  feedback {
+    review_external_conflict =
+      .input {$entries :string}
+      {{Die Prüfdatei wurde auf dem Datenträger geändert, und diese Einträge wurden hier und dort geändert: {$entries}. Das Speichern lehnt sie ab; verwerfen Sie Ihre Prüfänderungen, um die Fassung der Datei zu übernehmen.}}
+
   }
 }
 ui {
@@ -3646,6 +3684,11 @@ ui {
 ui {
   resource {
     not_translated = Nicht übersetzt
+  }
+}
+ui {
+  review {
+    states_need_base = Prüfstatus können nicht gespeichert werden, solange runic.json oder die Basissprache Fehler enthält. Notizen, Beispiele und Terminologie werden weiterhin gespeichert.
   }
 }
 ui {
