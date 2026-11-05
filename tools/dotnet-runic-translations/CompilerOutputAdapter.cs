@@ -38,9 +38,11 @@ internal static class CompilerOutputAdapter
     }
 
     // generate --emit-json --contract: packs for a shipped release, for the locales it declares, and their asset manifest.
+    // omittedLocales: current locales the shipped release lacks; droppedLocales: shipped locales the current sources lack.
     internal static IReadOnlyList<ToolArtifact> RenderForContract(Rmf2ProjectV5 project, Rmf2ShippedContractV5 shipped,
-        ICollection<Rmf2ContractPackSkipV5> skipped, out IReadOnlyList<string> omittedLocales)
+        ICollection<Rmf2ContractPackSkipV5> skipped, out IReadOnlyList<string> omittedLocales, out IReadOnlyList<string> droppedLocales)
     {
+        droppedLocales = shipped.Locales.Where(locale => !project.Locales.Any(item => item.Tag == locale)).Order(StringComparer.Ordinal).ToArray();
         var outputs = new List<TranslationGeneratedOutput>();
         var omitted = new List<string>();
         foreach (string locale in project.Locales.Select(static item => item.Tag).OrderBy(static item => item, StringComparer.Ordinal))

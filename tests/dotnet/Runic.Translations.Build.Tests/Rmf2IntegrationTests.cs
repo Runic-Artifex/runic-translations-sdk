@@ -245,6 +245,15 @@ internal sealed class Rmf2IntegrationTests
         }
         ProcessResult verify = TestFixture.RunTool(temporary, "verify", "--project", "translations", "--output", "packs", "--emit-json", "--contract", "shipped/app.de.locale-v5.json");
         Assert.Equal(0, verify.ExitCode, verify.Combined);
+        Assert.Contains("contract: the shipped release is taken to accept the message features of 0.8.0", packs.Combined);
+
+        // A later release drops German: no German pack, and the command says the release keeps its own German text.
+        File.WriteAllText(temporary.Resolve("translations/runic.json"), Project[..^1] + ",\"locales\":[\"en\"]}");
+        File.Delete(temporary.Resolve("translations/de.rmf2"));
+        ProcessResult dropped = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "dropped", "--emit-json", "--contract", "shipped/app.de.locale-v5.json");
+        Assert.Equal(0, dropped.ExitCode, dropped.Combined);
+        Assert.Contains("contract: de: the current sources no longer declare this locale", dropped.Combined);
+        Assert.Equal("app.asset-manifest-v1.json|app.en.locale-v5.json", string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("dropped"))));
 
         ProcessResult esm = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "mixed", "--emit-esm", "--contract", "shipped/app.de.locale-v5.json");
         Assert.Equal(2, esm.ExitCode, esm.Combined); Assert.Contains("--contract", esm.Combined);

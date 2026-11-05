@@ -15,8 +15,10 @@ namespace Runic.Translations.Compiler.Generation;
 internal sealed class Rmf2ShippedContractV5
 {
     private Rmf2ShippedContractV5(string catalog, string fingerprint, string markupContract,
-        IReadOnlyDictionary<string, IReadOnlyList<Rmf2InputV5>> inputs, JsonElement markupMessages, JsonElement markupContracts, IReadOnlySet<string> locales)
+        IReadOnlyDictionary<string, IReadOnlyList<Rmf2InputV5>> inputs, JsonElement markupMessages, JsonElement markupContracts, IReadOnlySet<string> locales,
+        int featureLevel)
     {
+        FeatureLevel = featureLevel;
         Catalog = catalog;
         ContractFingerprint = fingerprint;
         MarkupContract = markupContract;
@@ -34,6 +36,10 @@ internal sealed class Rmf2ShippedContractV5
     internal JsonElement MarkupMessages { get; }
     internal JsonElement MarkupContracts { get; }
     internal IReadOnlySet<string> Locales { get; }
+    // The release level (Rmf2ReleaseFeaturesV5) whose message features the shipped release accepts: the newest its own messages
+    // use, at least the first v5 release. Its artifacts name no compiler version, so a release that never used a feature of a
+    // later level is taken to be the earlier one; packs then leave such messages out.
+    internal int FeatureLevel { get; }
 
     /// <summary>Reads a locale artifact v5; throws <see cref="FormatException"/> when it is not one.</summary>
     internal static Rmf2ShippedContractV5 Parse(ReadOnlySpan<byte> json)
@@ -50,9 +56,13 @@ internal sealed class Rmf2ShippedContractV5
             if (markup.ValueKind != JsonValueKind.Object || !markup.TryGetProperty("version", out JsonElement markupVersion) || markupVersion.GetInt32() != Rmf2ProjectV5.MarkupContractVersion)
                 throw new FormatException("The contract was built for another Runic markup contract version.");
             var inputs = new SortedDictionary<string, IReadOnlyList<Rmf2InputV5>>(StringComparer.Ordinal);
+            int featureLevel = 0;
             foreach (System.Text.Json.JsonProperty message in root.GetProperty("messages").EnumerateObject())
+            {
                 inputs.Add(message.Name, message.Value.GetProperty("ast").GetProperty("inputs").EnumerateArray()
                     .Select(input => new Rmf2InputV5(input.GetProperty("name").GetString()!, input.GetProperty("type").GetString()!)).ToArray());
+                featureLevel = Math.Max(featureLevel, Math.Min(Rmf2ReleaseFeaturesV5.LevelOf(message.Value.GetProperty("ast"), out _), Rmf2ReleaseFeaturesV5.Newest));
+            }
             JsonElement messages = markup.TryGetProperty("messages", out JsonElement value) ? value.Clone() : default;
             JsonElement contracts = markup.TryGetProperty("contracts", out JsonElement definitions) ? definitions.Clone() : default;
             // The release's locales: every message maps each of them to its content locale.
@@ -61,7 +71,7 @@ internal sealed class Rmf2ShippedContractV5
                 foreach (System.Text.Json.JsonProperty message in messages.EnumerateObject())
                     if (message.Value.TryGetProperty("contentLocales", out JsonElement contentLocales))
                         foreach (System.Text.Json.JsonProperty locale in contentLocales.EnumerateObject()) locales.Add(locale.Name);
-            return new Rmf2ShippedContractV5(catalog, fingerprint, markup.GetRawText(), inputs, messages, contracts, locales);
+            return new Rmf2ShippedContractV5(catalog, fingerprint, markup.GetRawText(), inputs, messages, contracts, locales, featureLevel);
         }
         catch (Exception exception) when (exception is JsonException or KeyNotFoundException or InvalidOperationException)
         {
@@ -70,8 +80,8 @@ internal sealed class Rmf2ShippedContractV5
     }
 }
 
-/// <summary>A message left out of a pack for a shipped contract, and why.</summary>
-internal sealed record Rmf2ContractPackSkipV5(string Locale, string Key, string Reason);
+/// <summary>A message left out of a pack for a shipped contract, why, and for some reasons what in particular.</summary>
+internal sealed record Rmf2ContractPackSkipV5(string Locale, string Key, string Reason, string? Detail = null);
 
 /// <summary>
 /// Locale artifacts v5 for an older shipped release of a catalog: only the messages that release accepts, stamped with its
@@ -113,11 +123,20 @@ internal static class Rmf2ContractPackV5
                 Rmf2MessageContractV5 contract = contracts[resource.Key];
                 string? reason = Incompatibility(resource, contract, localeTag, shipped, currentMessages, currentContracts, out IReadOnlyList<Rmf2InputV5>? inputs);
                 if (reason is not null) { skipped.Add(new(localeTag, resource.Key, reason)); continue; }
+                // The shipped release's input order, which its loaders compare by position.
+                using JsonDocument ast = JsonDocument.Parse(Rmf2MessageJsonV5.Serialize(resource.Message with { Inputs = inputs! }));
+                // An exact-pack loader rejects the whole pack for one function, option or option value it does not know, so a
+                // message that needs a later release than the shipped one is left out.
+                int level = Rmf2ReleaseFeaturesV5.LevelOf(ast.RootElement, out string? feature);
+                if (level > shipped.FeatureLevel)
+                {
+                    skipped.Add(new(localeTag, resource.Key, "unsupported-function", feature + " needs " + Rmf2ReleaseFeaturesV5.Describe(level)));
+                    continue;
+                }
+
                 writer.WriteStartObject(resource.Key);
                 writer.WriteString("contentLocale", resource.ContentLocale);
                 writer.WritePropertyName("ast");
-                // The shipped release's input order, which its loaders compare by position.
-                using JsonDocument ast = JsonDocument.Parse(Rmf2MessageJsonV5.Serialize(resource.Message with { Inputs = inputs! }));
                 ast.RootElement.WriteTo(writer);
                 writer.WriteEndObject();
             }
@@ -163,4 +182,129 @@ internal static class Rmf2ContractPackV5
 
     private static string? MemberText(JsonElement value, string name) =>
         value.ValueKind == JsonValueKind.Object && value.TryGetProperty(name, out JsonElement member) ? member.GetRawText() : null;
+}
+
+/// <summary>
+/// The message features (functions, their options and the values of enumerated options) that the locale artifact loaders of
+/// each release accept in a v5 message: the generated .NET pack loader and the ESM runtime's <c>decodeLocaleArtifact</c>. A
+/// loader rejects a whole artifact that uses one it does not know (<c>argument-contract-mismatch</c>), so packs for a shipped
+/// release leave such messages out. Each level lists what it adds; add a level when a release extends the v5 message model,
+/// such as the runtime's <c>validateResolvedOptions</c> and <c>optionType</c> (Rmf2ReleaseFeaturesTests compares the newest
+/// level with the ESM runtime).
+/// </summary>
+internal static class Rmf2ReleaseFeaturesV5
+{
+    // Function → option → accepted literal values; null accepts any value of the option's type.
+    private static readonly (string Release, Dictionary<string, Dictionary<string, string[]?>> Adds)[] Levels =
+    [
+        ("0.8.0", new(StringComparer.Ordinal)
+        {
+            ["string"] = new(StringComparer.Ordinal) { ["select"] = ["exact"] },
+            ["runic:boolean"] = new(StringComparer.Ordinal) { ["select"] = ["exact"] },
+            ["integer"] = new(StringComparer.Ordinal) { ["select"] = ["plural", "ordinal", "exact"], ["useGrouping"] = ["auto", "always", "never", "min2"] },
+            ["number"] = new(StringComparer.Ordinal)
+            {
+                ["select"] = ["plural", "ordinal", "exact"], ["style"] = ["decimal", "percent"], ["useGrouping"] = ["auto", "always", "never", "min2"],
+                ["minimumFractionDigits"] = null, ["maximumFractionDigits"] = null,
+            },
+            ["date"] = new(StringComparer.Ordinal) { ["style"] = ["iso", "short", "long"] },
+            ["time"] = new(StringComparer.Ordinal) { ["style"] = ["iso", "short", "long"] },
+            ["datetime"] = new(StringComparer.Ordinal) { ["style"] = ["iso", "short", "long"] },
+            ["runic:uuid"] = new(StringComparer.Ordinal) { ["style"] = ["d", "n", "b", "p"] },
+            ["runic:relative-time"] = new(StringComparer.Ordinal)
+            {
+                ["unit"] = ["second", "minute", "hour", "day", "week", "month", "year"], ["numeric"] = ["always", "auto"],
+            },
+            ["runic:list"] = new(StringComparer.Ordinal) { ["type"] = ["conjunction", "disjunction", "unit"], ["style"] = ["long", "short", "narrow"] },
+        }),
+        // Localized date and time styles and time zones (TC).
+        ("0.9.0", new(StringComparer.Ordinal)
+        {
+            ["date"] = new(StringComparer.Ordinal) { ["style"] = ["medium", "full"] },
+            ["time"] = new(StringComparer.Ordinal) { ["style"] = ["medium", "full"] },
+            ["datetime"] = new(StringComparer.Ordinal) { ["style"] = ["medium", "full"], ["timeZone"] = null },
+        }),
+    ];
+
+    /// <summary>The newest level this compiler knows.</summary>
+    internal static int Newest => Levels.Length - 1;
+
+    internal static string Release(int level) => Levels[Math.Clamp(level, 0, Newest)].Release;
+
+    internal static string Describe(int level) => level > Newest ? "a release newer than " + Levels[Newest].Release : Release(level);
+
+    /// <summary>
+    /// The first level that accepts every function, option and literal option value of a message's AST, or
+    /// <see cref="Newest"/> + 1 for one that no known level accepts; <paramref name="feature"/> names the newest one it uses.
+    /// </summary>
+    internal static int LevelOf(JsonElement ast, out string? feature)
+    {
+        int level = 0;
+        string? newest = null;
+        void Expression(JsonElement expression)
+        {
+            if (expression.ValueKind != JsonValueKind.Object || !expression.TryGetProperty("function", out JsonElement function) || function.GetString() is not { } name) return;
+            Use(FunctionLevel(name), ":" + name);
+            if (!expression.TryGetProperty("options", out JsonElement options) || options.ValueKind != JsonValueKind.Array) return;
+            foreach (JsonElement option in options.EnumerateArray())
+            {
+                string optionName = option.GetProperty("name").GetString()!;
+                JsonElement value = option.GetProperty("value");
+                // A string-literal or number-literal; an input or local variable is a dynamic value.
+                string? literal = value.TryGetProperty("kind", out JsonElement kind) && kind.GetString() is not ("input" or "local") && value.TryGetProperty("value", out JsonElement text)
+                    ? text.ValueKind == JsonValueKind.String ? text.GetString() : text.GetRawText()
+                    : null;
+                Use(OptionLevel(name, optionName, literal), ":" + name + " " + optionName + (literal is null ? "" : "=" + literal));
+            }
+        }
+
+        void Use(int needed, string what)
+        {
+            if (needed <= level) return;
+            level = needed;
+            newest = what;
+        }
+
+        if (ast.TryGetProperty("declarations", out JsonElement declarations))
+            foreach (JsonElement declaration in declarations.EnumerateArray())
+                if (declaration.TryGetProperty("expression", out JsonElement expression)) Expression(expression);
+        if (ast.TryGetProperty("variants", out JsonElement variants))
+            foreach (JsonElement variant in variants.EnumerateArray())
+                foreach (JsonElement node in variant.GetProperty("nodes").EnumerateArray())
+                    if (node.TryGetProperty("kind", out JsonElement kind) && kind.GetString() == "expression" && node.TryGetProperty("expression", out JsonElement expression))
+                        Expression(expression);
+        feature = newest;
+        return level;
+    }
+
+    private static int FunctionLevel(string function)
+    {
+        for (int index = 0; index < Levels.Length; index++)
+            if (Levels[index].Adds.ContainsKey(function)) return index;
+        return Levels.Length;
+    }
+
+    // A dynamic value (an input or local variable) is checked when the message formats, so only its option name counts.
+    private static int OptionLevel(string function, string option, string? literal)
+    {
+        for (int index = 0; index < Levels.Length; index++)
+            if (Levels[index].Adds.TryGetValue(function, out Dictionary<string, string[]?>? options) && options.TryGetValue(option, out string[]? values) &&
+                (values is null || literal is null || values.Contains(literal, StringComparer.Ordinal)))
+                return index;
+        return Levels.Length;
+    }
+
+    /// <summary>The newest level's functions, options and values, merged over every level, for the comparison with the runtime.</summary>
+    internal static SortedDictionary<string, SortedDictionary<string, string[]?>> Accepted()
+    {
+        var result = new SortedDictionary<string, SortedDictionary<string, string[]?>>(StringComparer.Ordinal);
+        foreach ((_, Dictionary<string, Dictionary<string, string[]?>> adds) in Levels)
+            foreach ((string function, Dictionary<string, string[]?> options) in adds)
+            {
+                if (!result.TryGetValue(function, out SortedDictionary<string, string[]?>? merged)) result[function] = merged = new(StringComparer.Ordinal);
+                foreach ((string option, string[]? values) in options)
+                    merged[option] = values is null || (merged.TryGetValue(option, out string[]? earlier) && earlier is null) ? null : [.. (earlier ?? []), .. values];
+            }
+        return result;
+    }
 }

@@ -63,6 +63,19 @@ the command prints one line with the locale, the key and the reason:
 | `content-kind-changed` | The message is a document in one release and inline text in the other. |
 | `incompatible-markup` | The message's markup, slots or document structure differ. |
 | `content-locale-changed` | The locale's text for the message comes from another locale than in the release: it is newly translated, or the translation was removed. An exact-pack loader rejects such a message. |
+| `unsupported-function` | The message uses a function, option or option value that the release's loaders do not know, such as `{$when :date style=medium}` for a 0.8 release. The line names it and the release that added it. |
+
+An exact-pack loader rejects a whole pack for one message it cannot read, so
+these messages are left out rather than written. A locale artifact does not
+record the compiler release that built it, so the command takes the release to
+accept the message features of the newest release its own messages use (at
+least 0.8.0) and prints that assumption first. A release that never used a
+later feature, such as a 0.9 release without a `medium` date, is therefore
+treated as the earlier one, and messages with that feature wait for the next
+release.
+
+A locale the release declares but the current sources no longer do gets no
+pack, and the command says so: the release keeps its own text for it.
 
 These packs load in the exact-pack loaders of that release and as overlays.
 For releases on 0.9 or later, a plain pack installed as an overlay also applies
@@ -172,8 +185,11 @@ async function updateTranslations(locale: string) {
 }
 ```
 
-A later pack of the same locale wins per key, so install the new pack before
-removing the old one. `onOverlayChange` runs after every install and removal;
+Installs are tried in installation order, as .NET tries overlays in the order
+they were added: an earlier install of the same locale wins per key. So install
+the new pack and then remove the one it replaces, as above; the old text
+applies until then. Install the application's own wording overlay before any
+downloaded pack, so packs never replace it. `onOverlayChange` runs after every install and removal;
 components that rendered before the update render again when they read
 reactive state, so in Svelte keep a counter in `$state`, increment it in the
 listener, and read it where the text is rendered, or switch the locale after

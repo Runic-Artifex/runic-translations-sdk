@@ -497,10 +497,14 @@ internal static class Program
                     return Failed;
                 }
                 var skipped = new List<Rmf2ContractPackSkipV5>();
-                artifacts = CompilerOutputAdapter.RenderForContract(compilation.Project, shipped, skipped, out IReadOnlyList<string> omittedLocales);
+                artifacts = CompilerOutputAdapter.RenderForContract(compilation.Project, shipped, skipped, out IReadOnlyList<string> omittedLocales,
+                    out IReadOnlyList<string> droppedLocales);
                 // What the shipped release keeps showing its own text for.
+                result.WriteOutputLine($"contract: the shipped release is taken to accept the message features of {Rmf2ReleaseFeaturesV5.Release(shipped.FeatureLevel)}, the newest its artifact uses; messages that need a later release are left out.");
                 foreach (string locale in omittedLocales) result.WriteOutputLine($"contract: {locale}: the shipped release does not declare this locale; no pack written.");
-                foreach (Rmf2ContractPackSkipV5 skip in skipped) result.WriteOutputLine($"contract: {skip.Locale} {skip.Key}: {skip.Reason}.");
+                foreach (string locale in droppedLocales) result.WriteOutputLine($"contract: {locale}: the current sources no longer declare this locale; the shipped release keeps its own text for it.");
+                foreach (Rmf2ContractPackSkipV5 skip in skipped)
+                    result.WriteOutputLine($"contract: {skip.Locale} {skip.Key}: {skip.Reason}" + (skip.Detail is null ? "." : $" ({skip.Detail})."));
             }
         }
         catch (ToolDiagnosticException exception)

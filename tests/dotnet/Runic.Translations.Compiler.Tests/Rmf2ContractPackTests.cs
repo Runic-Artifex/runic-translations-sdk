@@ -89,4 +89,126 @@ internal sealed class Rmf2ContractPackTests
         }
         finally { Directory.Delete(directory, true); }
     }
+
+    [Test, DisplayName("RMF2 v5 contract packs leave out messages that need a later release's functions or options")]
+    public void UnsupportedFunctions()
+    {
+        // A shipped release whose messages use only 0.8.0 features: a date in the long style.
+        static Rmf2ProjectV5 Release(string style, string extra = "") => Rmf2EsmV5Tests.CompileProject("shop", "en", ["en", "de"], false,
+            ("en", $"updated =\n  .input {{$when :date style={style}}}\n  {{{{Updated {{$when}}}}}}\ntitle = Shop\n{extra}"),
+            ("de", $"updated =\n  .input {{$when :date style={style}}}\n  {{{{Aktualisiert {{$when}}}}}}\ntitle = Laden\n{extra}"));
+        var old = Rmf2ShippedContractV5.Parse(Rmf2LocaleArtifactV5.Render(Release("long"), "en").GetUtf8Bytes());
+        Assert.Equal("0.8.0", Rmf2ReleaseFeaturesV5.Release(old.FeatureLevel));
+        var skipped = new List<Rmf2ContractPackSkipV5>();
+        TranslationGeneratedOutput pack = Rmf2ContractPackV5.Render(Release("medium"), "de", old, skipped)!;
+        Assert.Equal("de updated unsupported-function :date style=medium needs 0.9.0",
+            string.Join('|', skipped.Select(item => $"{item.Locale} {item.Key} {item.Reason} {item.Detail}")));
+        using (JsonDocument document = JsonDocument.Parse(pack.GetUtf8Bytes()))
+            Assert.Equal("title", string.Join('|', document.RootElement.GetProperty("messages").EnumerateObject().Select(item => item.Name)));
+
+        // A release whose own messages use a 0.9.0 feature accepts it; a dynamic option value is checked when it formats.
+        var newer = Rmf2ShippedContractV5.Parse(Rmf2LocaleArtifactV5.Render(Release("long", "stamp =\n  .input {$at :datetime timeZone=UTC}\n  {{{$at}}}\n"), "en").GetUtf8Bytes());
+        Assert.Equal("0.9.0", Rmf2ReleaseFeaturesV5.Release(newer.FeatureLevel));
+        skipped.Clear();
+        Rmf2ContractPackV5.Render(Release("medium", "stamp =\n  .input {$at :datetime timeZone=UTC}\n  {{{$at}}}\n"), "de", newer, skipped);
+        Assert.Equal(0, skipped.Count, string.Join('|', skipped));
+    }
+
+    [Test, DisplayName("RMF2 v5 release feature table: its newest level is what the ESM runtime accepts")]
+    public void ReleaseFeatureTable()
+    {
+        // The runtime's validateResolvedOptions table, evaluated as it is written; the fraction digits and timeZone are checked
+        // apart from its enumerations (optionType), as null (any value) in the feature table.
+        string runtime = File.ReadAllText(RepositoryPaths.Resolve("tools", "Runic.Translations.Compiler", "Generation", "Rmf2EsmRuntimeV5.js"));
+        int start = runtime.IndexOf("const allowed = {", StringComparison.Ordinal), end = runtime.IndexOf("}[fn];", start, StringComparison.Ordinal);
+        Assert.True(start > 0 && end > start, "validateResolvedOptions table not found");
+        string directory = Path.Combine(Path.GetTempPath(), "runic-features-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            string script = Path.Combine(directory, "table.mjs");
+            File.WriteAllText(script, "const allowed = " + runtime[(start + "const allowed = ".Length)..(end + 1)] + ";\n" +
+                "allowed.number.minimumFractionDigits = null; allowed.number.maximumFractionDigits = null;\n" +
+                "console.log(JSON.stringify(allowed));\n", new UTF8Encoding(false));
+            var info = new System.Diagnostics.ProcessStartInfo("bun") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, WorkingDirectory = directory };
+            info.ArgumentList.Add(script);
+            using var process = System.Diagnostics.Process.Start(info)!;
+            string output = process.StandardOutput.ReadToEnd(), error = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+            Assert.Equal(0, process.ExitCode, error);
+            using JsonDocument actual = JsonDocument.Parse(output);
+            string Describe(IEnumerable<(string Function, string Option, string[]? Values)> items) => string.Join('\n', items
+                .Select(item => item.Function + " " + item.Option + " " + (item.Values is null ? "*" : string.Join(',', item.Values.Order(StringComparer.Ordinal))))
+                .Order(StringComparer.Ordinal));
+            string runtimeTable = Describe(actual.RootElement.EnumerateObject().SelectMany(function => function.Value.EnumerateObject().Select(option =>
+                (function.Name, option.Name, option.Value.ValueKind == JsonValueKind.Null ? null : option.Value.EnumerateArray().Select(value => value.GetString()!).ToArray()))));
+            string featureTable = Describe(Rmf2ReleaseFeaturesV5.Accepted().SelectMany(function => function.Value.Select(option => (function.Key, option.Key, option.Value))));
+            Assert.Equal(runtimeTable, featureTable, "add a level to Rmf2ReleaseFeaturesV5 for what the runtime newly accepts");
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
+    [Test, DisplayName("RMF2 v5 contract packs load in the web runtime of a real 0.8.0 release")]
+    public void PreviousReleaseWebLoader()
+    {
+        // tests/fixtures/translations/generated-0.8.0: the shipped release, generated by the published 0.8.0 tool.
+        string fixture = RepositoryPaths.Resolve("tests", "fixtures", "translations", "generated-0.8.0");
+        var shipped = Rmf2ShippedContractV5.Parse(File.ReadAllBytes(Path.Combine(fixture, "output", "acme-grid.en.locale-v5.json")));
+        Assert.Equal("0.8.0", Rmf2ReleaseFeaturesV5.Release(shipped.FeatureLevel));
+        Rmf2ProjectV5 current = CurrentOfPreviousRelease(fixture);
+        var skipped = new List<Rmf2ContractPackSkipV5>();
+        TranslationGeneratedOutput german = Rmf2ContractPackV5.Render(current, "de", shipped, skipped)!;
+        Rmf2ContractPackV5.Render(current, "en", shipped, skipped);
+        Assert.Equal("de grid_new content-locale-changed|de grid_updated unsupported-function|en grid_updated unsupported-function",
+            string.Join('|', skipped.Select(item => $"{item.Locale} {item.Key} {item.Reason}").Order(StringComparer.Ordinal)));
+
+        string directory = Path.Combine(Path.GetTempPath(), "runic-previous-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            Rmf2EsmCompositionTests.CopyPreviousRelease(directory);
+            File.WriteAllBytes(Path.Combine(directory, "pack.de.json"), german.GetUtf8Bytes());
+            File.WriteAllBytes(Path.Combine(directory, "plain.de.json"), Rmf2LocaleArtifactV5.Render(current, "de").GetUtf8Bytes());
+            string script = Path.Combine(directory, "test.mjs");
+            File.WriteAllText(script, """
+                import { readFile } from "node:fs/promises";
+                import { decodeLocalePack, formatDynamicMessage } from "./acme-grid.esm-v5/dynamic.js";
+                const check = (condition, message) => { if (!condition) throw new Error(message); };
+                const equal = (actual, expected, message) => check(actual === expected, `${message}: ${JSON.stringify(actual)} !== ${JSON.stringify(expected)}`);
+                const read = async name => new Uint8Array(await readFile(new URL(name, import.meta.url)));
+                const pack = await read("pack.de.json");
+
+                // 0.8.0's exact-fingerprint loader accepts the contract pack.
+                const decoded = await decodeLocalePack(pack, "de");
+                check(decoded.ok, JSON.stringify(decoded));
+                equal(formatDynamicMessage(decoded.value, "grid_empty"), "Leer", "fixed text");
+                equal(formatDynamicMessage(decoded.value, "grid_rows", { count: 1 }), "1 Zeile", "plural");
+                equal(formatDynamicMessage(decoded.value, "grid_total", { amount: "1234.5" }), "Summe 1.234,5", "number");
+                check(!Object.hasOwn(decoded.value.messages, "grid_updated"), "the medium date is left out");
+
+                // With the medium date message the 0.8.0 loader rejects the whole pack, so leaving it out keeps the others.
+                const plain = JSON.parse(new TextDecoder().decode(await read("plain.de.json")));
+                const forced = JSON.parse(new TextDecoder().decode(pack));
+                forced.messages = { ...forced.messages, grid_updated: plain.messages.grid_updated };
+                const rejected = await decodeLocalePack(new TextEncoder().encode(JSON.stringify(forced)), "de");
+                equal(rejected.ok, false, "a message with a newer option rejects the pack"); equal(rejected.reason, "RTR0023/argument-contract-mismatch", "reason");
+                console.log("ok");
+                """, new UTF8Encoding(false));
+            Rmf2EsmV5Tests.Run("bun", [script], directory);
+            Rmf2EsmV5Tests.Run("node", [script], directory);
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
+    // The fixture's catalog one release later: German grid_empty fixed, grid_new newly translated, grid_updated in the medium
+    // date style that 0.9 added.
+    internal static Rmf2ProjectV5 CurrentOfPreviousRelease(string fixture)
+    {
+        string Source(string locale) => File.ReadAllText(Path.Combine(fixture, "source", locale + ".rmf2")).ReplaceLineEndings("\n").Replace("style=long", "style=medium", StringComparison.Ordinal);
+        Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("translations/runic.json", File.ReadAllBytes(Path.Combine(fixture, "source", "runic.json"))), [
+            new("translations/en.rmf2", Encoding.UTF8.GetBytes(Source("en"))),
+            new("translations/de.rmf2", Encoding.UTF8.GetBytes(Source("de").Replace("grid_empty = Keine Zeilen", "grid_empty = Leer", StringComparison.Ordinal) + "grid_new = Neue Spalte\n"))]);
+        Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Message)));
+        return result.Project!;
+    }
 }
