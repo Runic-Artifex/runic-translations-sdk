@@ -240,8 +240,11 @@ internal sealed class Rmf2V1CorpusTests
     // Re-pinned for merging the TJ Hot Reload review with TB (#131), in both digests.
     // Re-pinned for merging the formatting follow-ups (#148) with main (TJ, TI), and for their review (ESM caches by CLDR
     // data ID, relative time in the formatting locale, ungrouped integers in the locale's digits), in both digests.
+    // Re-pinned for T1f (0.9): Registration also creates the readable surface, beside the readable surface only.
+    // Re-pinned for merging T1f (#145) with main (TJ Hot Reload), beside the readable surface only.
+    // Re-pinned for merging T1f (#145) with the formatting follow-ups (#148), beside the readable surface only.
     private const string EncodedOutputDigest = "bc5220c7cc2787e5182c30836ee79e18d4e2156cb11a4ad312465eab580996d8";
-    private const string HiddenEncodedOutputDigest = "661b93615c055b0420174b0db3a248dbacf01fa0a5c6ae87f960a12e90cd5d85";
+    private const string HiddenEncodedOutputDigest = "ec32c5dab9019520d4987a1a65abc2e820d3aca76676c71410a3be41e3fc97ab";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]
@@ -262,7 +265,7 @@ internal sealed class Rmf2V1CorpusTests
             TranslationOutputRenderer.RenderRmf2V5CSharpKeys(project, readableSurface),
             TranslationOutputRenderer.RenderRmf2V5CSharpAccessors(project, readableSurface),
             TranslationOutputRenderer.RenderRmf2V5CSharpCatalogData(project),
-            TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(project),
+            TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(project, readableSurface: readableSurface),
             .. TranslationOutputRenderer.RenderRmf2V5EsmModules(project),
         ];
         return Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(
