@@ -613,10 +613,15 @@ message. The other checks of a translation apply to an override too and keep
 their own IDs: a changed or new input is `RTR0016` or `RTR0065`, a changed
 document structure `RTR0074`, the quality checks `RTR0094`–`RTR0098`.
 
-The build validates overrides against the library version it compiles with. At
-run time the compiled overlay is checked key by key again, so a later library
-release that removes an overridden key skips that message and reports it in
-`TranslationCatalogStatus.OverlayDiagnostics` (`UnknownKey`) instead of failing.
+The build validates overrides against the library version it compiles with, so
+updating to a library release that removed an overridden key fails the
+application's build with this error until you delete the override. Only the
+run-time checks skip such keys: a compiled overlay is checked key by key again
+when a snapshot is composed, so when the application runs with a library
+assembly other than the one it was built against, a message whose key that
+assembly lacks is skipped and reported in
+`TranslationCatalogStatus.OverlayDiagnostics` (`UnknownKey`) instead of
+failing, as for overlay packs.
 
 ## RTR0104
 
@@ -631,7 +636,11 @@ sources and contract under `runic/<catalog>/`. It is also the error when the
 packed catalog does not compile with the application's
 Runic.Translations.Build (use one at least as new as the library's), when
 overrides need a newer `Runic.Translations` runtime, and when packing a catalog
-fails. Override sources under `translations/overrides/<catalog>/` for a catalog
+fails, for example because the library packs its own
+`buildTransitive/<PackageId>.props` (set `RunicTranslationsPackCatalogProps` to
+`false` and import `runic/<catalog>/catalog.props` from it). A library that a
+project references with `ProjectReference` cannot be overridden yet: reference
+its package. Override sources under `translations/overrides/<catalog>/` for a catalog
 that `overrides` does not list are ignored with this ID as a warning.
 
 ## RTR0105
@@ -649,6 +658,11 @@ Catalog ID is reserved. Catalog IDs that start with `runic-` belong to the
 first-party Runic packages (`Runic.*` on NuGet, `@runic-artifex/*` on npm), such
 as `runic-command-line`; packing another package's catalog with such an ID
 fails. Name the catalog after the package.
+
+On NuGet the check runs when the library is packed and compares the package ID
+prefix, so it relies on nuget.org reserving the `Runic.` ID prefix for the
+Runic organization. On npm the Vite plugin checks the `@runic-artifex` scope,
+which only its owners can publish to.
 
 ## RCLI8201
 

@@ -41,8 +41,13 @@ warns otherwise, and `runic-` IDs are reserved for the Runic packages, `RTR0106`
 `runic/acme.grid/` with the catalog's `runic.json`, its sources and `contract.json` (the base locale's locale artifact
 v5, which describes every key's inputs and markup), and `buildTransitive/Acme.Grid.props`, which declares the packed
 catalog to a project that references the package. An application then overrides the library's text at build time
-([below](#build-time-overrides)). A library that packs its own `buildTransitive/<PackageId>.props` sets
-`RunicTranslationsPackCatalogProps` to `false` and imports `../runic/<catalog>/catalog.props` from its file.
+([below](#build-time-overrides)). A multi-targeted library packs its catalog once.
+
+NuGet imports `buildTransitive/<PackageId>.props` instead of `build/<PackageId>.props`, so when the library packs its
+own `build/<PackageId>.props`, the generated file imports it; its settings then also reach projects that reference the
+library transitively. A library that packs its own `buildTransitive/<PackageId>.props` sets
+`RunicTranslationsPackCatalogProps` to `false` and imports `../runic/<catalog>/catalog.props` from its file; without
+the property, packing fails with `RTR0104` rather than packing two files at one path.
 
 The library's package does not depend on `Runic.Translations.Build`: it is a development dependency, and packing
 removes it from the package's dependencies even when the reference has no `PrivateAssets="all"`.
@@ -198,6 +203,20 @@ changed inputs are `RTR0016`/`RTR0065`, markup in a plain-text message `RTR0103`
 `RTR0094`–`RTR0098` apply. A catalog that no referenced package packs, or another `from`, is `RTR0104`. Files under
 `translations/overrides/` are never part of the application's own catalog.
 
+- **Library updates.** The build validates against the library release it compiles with, so a release that removes an
+  overridden key fails the application's build (`RTR0103`) until you delete that override. Only the run-time checks
+  skip such a key and report it (see below).
+- **Added locales.** A locale the overrides add (`fr`, `de-CH`) falls back to its nearest CLDR parent among the
+  library's locales and the added ones (`de-CH` to an added `de`, `zh-TW` to `zh-Hant`, never `sr-Latn-RS` to a
+  Cyrillic `sr`), else to the library locale that CLDR likely subtags match, else to the library's base locale. The
+  build validates each added locale against that chain, and the generated overlay names the fallback, so the runtime
+  follows the same chain.
+- **Packages only.** A library that the application references with `ProjectReference`, for example in the same
+  solution, cannot be overridden yet (`RTR0104`): reference its package.
+- **Built-in catalogs.** `Runic.Translations.CommandLine` packs `runic-command-line`, so
+  `"overrides": [{ "catalog": "runic-command-line", "from": "Runic.Translations.CommandLine" }]` replaces its built-in
+  help and error text.
+
 The overrides compile into the application's assembly as `AppTextCatalog.Overlays`, one compiled overlay per library
 catalog. Attach them where the library catalogs are registered:
 
@@ -211,9 +230,9 @@ TranslationContext translations = TranslationContext.CreateBuilder()
 
 A compiled overlay (`TranslationOverlay.IsCompiled`) loads without I/O, so `Build` composes synchronously and
 `Runic.Translations.Hosting` needs no `InitializeRunicTranslationsAsync` for it (`AddOverlays(ShopTextCatalog.Overlays)`).
-It follows every rule of the next section: it is checked key by key again at run time, so a later library release that
-removes an overridden key skips that message instead of failing, and it resolves locale-first. A locale the overrides
-add (`fr`) falls back as an added locale does.
+It follows every rule of the next section: it is checked key by key again at run time, so a library assembly other than
+the one the build compiled against skips a message whose key it no longer has instead of failing, and it resolves
+locale-first.
 
 ## Overriding library text
 

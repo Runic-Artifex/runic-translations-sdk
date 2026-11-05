@@ -56,6 +56,29 @@ internal sealed class Rmf2OverrideTests
         Assert.Equal("de", result.Project!.Locales.Single(locale => locale.Tag == "de-CH").FallbackTag, "de-CH falls back to de");
     }
 
+    private static readonly string[] AddedTags = ["de-CH", "de", "zh-TW", "zh-Hant", "es-MX", "es-419", "sr-Latn-RS", "pt-BR"];
+
+    [Test, DisplayName("added locales fall back by the runtimes' rule, to added parents too, whatever the file order")]
+    public void AddedLocaleFallbacks()
+    {
+        // The library declares en only; the application adds de and de-CH (de-CH.rmf2 sorts before de.rmf2), zh-Hant and
+        // zh-TW, es-419 and es-MX, sr-Latn-RS (never the Cyrillic sr) and pt-BR (no parent added: the base locale).
+        const string english = "{ \"schemaVersion\": 1, \"catalog\": \"acme-grid\", \"code\": { \"namespace\": \"Acme.Grid\", \"className\": \"GridText\" }, \"baseLocale\": \"en\", \"locales\": [\"en\", \"sr\"] }";
+        Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2OverlayV5(
+            new TranslationSource("packages/acme.grid/runic/acme-grid/runic.json", Encoding.UTF8.GetBytes(english)),
+            [new TranslationSource("packages/acme.grid/runic/acme-grid/en.rmf2", Encoding.UTF8.GetBytes("empty = No rows\ntitle = Grid\n")),
+             new TranslationSource("packages/acme.grid/runic/acme-grid/sr.rmf2", Encoding.UTF8.GetBytes("empty = Нема редова\ntitle = Мрежа\n"))],
+            AddedTags.Select(locale =>
+                new TranslationSource("translations/overrides/acme-grid/" + locale + ".rmf2", Encoding.UTF8.GetBytes("title = " + locale + "\n"))));
+        Assert.True(result.Success, Describe(result));
+        Rmf2ProjectV5 overlay = result.Project!;
+        Assert.Equal("de>en|de-CH>de|es-419>en|es-MX>es-419|pt-BR>en|sr-Latn-RS>en|zh-Hant>en|zh-TW>zh-Hant",
+            string.Join("|", overlay.OverlayAddedLocales.Select(locale => locale + ">" + overlay.Locales.Single(item => item.Tag == locale).FallbackTag)), "fallbacks");
+        // The generated overlay names each fallback, so the .NET runtime follows the compiler's chain.
+        string registration = Rmf2CSharpOutputRendererV5.RenderRegistration(CompileLibrary().Project!, overlays: [overlay]).Text;
+        Assert.True(registration.Contains("new global::Runic.Translations.TranslationOverlayLocale(\"de-CH\", \"de\")", StringComparison.Ordinal), registration);
+    }
+
     [Test, DisplayName("overrides that do not match the library's keys are errors in the override source")]
     public void RejectsMismatches()
     {

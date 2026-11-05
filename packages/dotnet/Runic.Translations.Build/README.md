@@ -44,10 +44,16 @@ then adds `runic/<catalog>/` (its `runic.json`, sources and `contract.json`) and
 `RunicTranslationsPackedCatalog` item to every project that references the
 package. Name the catalog after the package in lower case (`RTR0105` warns
 otherwise); `runic-` catalog IDs are reserved for the Runic packages
-(`RTR0106`). A library that packs its own `buildTransitive/<PackageId>.props`
-sets `RunicTranslationsPackCatalogProps` to `false` and imports
-`../runic/<catalog>/catalog.props` from it. Packing removes the package's
-dependency on `Runic.Translations.Build`, a development dependency.
+(`RTR0106`, which relies on nuget.org reserving the `Runic.` ID prefix for the
+Runic organization). NuGet imports `buildTransitive/<PackageId>.props` instead
+of `build/<PackageId>.props`, so when the library packs its own
+`build/<PackageId>.props`, the generated file imports it; its settings then
+also reach projects that reference the library transitively. A library that
+packs its own `buildTransitive/<PackageId>.props` sets
+`RunicTranslationsPackCatalogProps` to `false` and imports
+`../runic/<catalog>/catalog.props` from it; packing fails with `RTR0104`
+otherwise. Packing removes the package's dependency on
+`Runic.Translations.Build`, a development dependency.
 
 An application overrides a packed catalog in its own `runic.json`:
 `"overrides": [{ "catalog": "acme.grid", "from": "Acme.Grid" }]`, with the
@@ -55,7 +61,10 @@ override sources in `translations/overrides/acme.grid/<locale>.rmf2`, which are
 not part of the application's catalog. The source generator validates them
 against the packed catalog (`RTR0103`, `RTR0104` and the usual translation
 checks) and compiles them into `AppTextCatalog.Overlays`, which the application
-attaches with `TranslationContextBuilder.AddOverlays`. See
+attaches with `TranslationContextBuilder.AddOverlays`. An override of a key the
+library no longer has fails the build (`RTR0103`): delete it when you update the
+library. Only packed catalogs of referenced packages can be overridden; a
+library referenced with `ProjectReference` reports `RTR0104`. See
 [Catalogs from libraries](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/composition.md#build-time-overrides).
 
 ## Check WPF XAML at build time

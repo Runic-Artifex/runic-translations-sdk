@@ -26,7 +26,7 @@ namespace Runic.Translations;
 /// </para>
 /// <para>
 /// An overlay may add locales the library lacks (<see cref="AddedLocales"/>). An added locale falls back to the locale
-/// the overlay names for it. Without one, it falls back to its nearest parent that the library declares or an overlay
+/// the overlay names for it, a library locale or another added one. Without one, it falls back to its nearest parent that the library declares or an overlay
 /// adds (<c>de-CH</c> to the library's <c>de</c>), and without such a parent to the library's default locale. From the
 /// first library locale on, the library's own fallback chain applies. A locale the library already declares keeps the
 /// library's chain. Two overlays that add one locale with different fallbacks are an error.
@@ -139,9 +139,10 @@ public sealed class TranslationOverlayLocale
     /// <summary>Declares an added locale.</summary>
     /// <param name="locale">The canonical BCP 47 tag of the added locale, such as <c>fr</c>.</param>
     /// <param name="fallbackLocale">
-    /// The library locale that keys the overlay lacks fall back to. It must be a locale the library declares. When omitted,
-    /// the nearest parent that the library declares or an overlay adds (<c>de</c> for <c>de-CH</c>), else the library's
-    /// default locale.
+    /// The locale that keys the overlay lacks fall back to. It must be a locale the library declares or another locale that
+    /// an overlay of the catalog adds (<c>de</c> for <c>de-CH</c> when both are added), without a cycle. When omitted, the
+    /// nearest parent that the library declares or an overlay adds (<c>de</c> for <c>de-CH</c>), else the library locale
+    /// that CLDR likely subtags match, else the library's default locale.
     /// </param>
     public TranslationOverlayLocale(string locale, string? fallbackLocale = null)
     {
@@ -158,7 +159,7 @@ public sealed class TranslationOverlayLocale
     /// <summary>The canonical tag of the added locale.</summary>
     public string Locale { get; }
 
-    /// <summary>The library locale it falls back to, or <see langword="null"/> for its nearest parent, else the library's default locale.</summary>
+    /// <summary>The library or added locale it falls back to, or <see langword="null"/> for its nearest parent, else the library's default locale.</summary>
     public string? FallbackLocale { get; }
 
     private static bool IsCanonical(string tag) =>
