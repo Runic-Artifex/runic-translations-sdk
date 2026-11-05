@@ -88,6 +88,23 @@ active and the workspace has several. Both run the workspace's local
 `runic-translations xliff` tool, the same code as the Translations Editor; apply
 an import with `runic-translations xliff import` or the editor.
 
+## Library catalogs and overrides
+
+An application overrides the text of a library catalog that an installed package packs (runic.json `"overrides"`,
+`translations/overrides/<catalog>/<locale>.rmf2`). The language server finds the library in the restore output
+(`obj/project.assets.json`) or in `node_modules`, as the build and the Vite plugin do, and treats override sources as
+overlays on it: an unknown key (`RTR0103`), changed inputs and markup in a plain-text message are reported as the build
+reports them, completion offers the library's keys and inputs, hover shows the library's base text (and its text in the
+file's locale, or the fallback of a locale the application adds), and **Go to Definition** opens the library's source as
+a read-only document. A library update that changes the base text of an overridden message is reported (`RTR0090`).
+Restore the project first; without the package the override sources report `RTR0104`.
+
+**Override Library Message…** asks for an installed library catalog, one of its messages and a locale (a library locale,
+or another one the application adds), then runs the workspace's local `runic-translations overrides add`: it adds the
+message to `translations/overrides/<catalog>/<locale>.rmf2`, seeded with the library's text and with the base text as
+comments, records that base text, lists the catalog in runic.json `"overrides"` when needed, and opens the file at the
+message.
+
 The Runic commands in the Command Palette provide inert example previews,
 group extraction/inlining for `.rmf2`, and explicitly source-only
 input/slot/resource renames. Preview asks the server to execute the selected
@@ -140,6 +157,8 @@ command set until the production language server (2.0).
 | Inline Resource into Ancestor | Command | No (2.0) |
 | Export XLIFF | Command | No (2.0) |
 | Import XLIFF (dry run) | Command | No (2.0) |
+| Override sources of library catalogs (diagnostics, completion, hover, definition) | Yes, library sources open read-only | Yes, except definition into library sources |
+| Override Library Message… | Command | No (2.0) |
 | Review state in hover | Yes | Yes |
 | Mark reviewed quick fix (`RTR0090`) | Yes | Where the IDE runs code-action commands |
 | Restart Language Server | Command | Tools menu |

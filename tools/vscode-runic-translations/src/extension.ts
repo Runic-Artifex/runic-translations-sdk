@@ -7,6 +7,7 @@ import { escapeHtml, resolvePreviewHtml, type Preview, type RenderedPreview } fr
 import { PreviewSession, exampleSamples, sampleChoices, type Samples } from "./preview-session.js";
 import { ForwardedWatchers } from "./watchers.js";
 import { OneTimeNotice, errorSummary, statusPresentation, type DocumentInfo, type ServerState } from "./status.js";
+import { libraryCatalogChoices, libraryDocumentProject, libraryLocaleChoices, libraryMessageChoices, libraryScheme, messageLine, overrideSourcePath, overridesAddArguments, type LibraryCatalogs } from "./libraries.js";
 
 const extensionId = "runic-artifex.runic-translations";
 /**
@@ -351,6 +352,42 @@ export function activate(context: vscode.ExtensionContext) {
     const summary = result.split("\n").find(line => line.startsWith("dry run: ")) ?? "Dry run finished.";
     output.show(true);
     void vscode.window.showInformationMessage(`${summary} Nothing was written; run runic-translations xliff import or the Translations Editor to apply it.`);
+  });
+  // Library catalogs (T5d): "Go to Definition" in an override source opens the library's source as a read-only
+  // runic-library: document, read through the language server of the application's folder.
+  context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider(libraryScheme, {
+    provideTextDocumentContent: async uri => {
+      const project = libraryDocumentProject(uri.query);
+      if (!project) throw new Error("The library document names no project.");
+      const client = await clientFor(vscode.Uri.parse(project));
+      return (await client.sendRequest<{ text: string }>("runic/libraryDocument", { uri: uri.toString() })).text;
+    },
+  }));
+  // Override library message…: choose an installed library catalog, a message and a locale; runic-translations overrides
+  // add writes translations/overrides/<catalog>/<locale>.rmf2 seeded with the library's text (listing the catalog in
+  // runic.json "overrides" when needed), and the file opens at the message.
+  register("overrideLibraryMessage", async () => {
+    const chosen = await interchangeFolder();
+    if (!chosen) return;
+    const { folder, project } = chosen;
+    const client = await clientFor(vscode.Uri.file(project));
+    const result = await client.sendRequest<LibraryCatalogs>("runic/libraryCatalogs", { uri: vscode.Uri.file(project).toString() });
+    for (const warning of result.warnings) output.appendLine(warning);
+    const catalogs = libraryCatalogChoices(result);
+    if (!catalogs.length) throw new Error("No installed package packs a library catalog. Restore the project (dotnet restore, npm install) first.");
+    const catalog = (await vscode.window.showQuickPick(catalogs, { placeHolder: "Library catalog to override", matchOnDescription: true }))?.value;
+    if (!catalog) return;
+    const message = (await vscode.window.showQuickPick(libraryMessageChoices(catalog), { placeHolder: `Message of ${catalog.catalog} to override`, matchOnDescription: true, matchOnDetail: true }))?.value;
+    if (!message) return;
+    const other = { label: "Another locale…", description: "a locale the library lacks", value: "" };
+    let locale = (await vscode.window.showQuickPick([...libraryLocaleChoices(catalog, message), other], { placeHolder: `Locale to override ${message.path} in` }))?.value;
+    if (locale === "") locale = await vscode.window.showInputBox({ prompt: "BCP 47 locale tag the application adds, such as fr or de-CH", validateInput: value => /^[A-Za-z]{2,8}([-_][A-Za-z0-9]{1,8})*$/.test(value) ? undefined : "Use a BCP 47 locale tag." });
+    if (!locale) return;
+    if (!message.overridden.includes(locale)) await runTool(folder, overridesAddArguments(project, catalog.catalog, locale, message.key));
+    const path = overrideSourcePath(project, catalog.catalog, locale);
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(path));
+    const line = messageLine(document.getText(), message.path);
+    await vscode.window.showTextDocument(document, { selection: new vscode.Range(line, 0, line, 0) });
   });
   register("preview", openPreview);
   register("previewSamples", options => openPreview(options, true));

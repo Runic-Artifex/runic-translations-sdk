@@ -1,8 +1,11 @@
 /** Language-server state of one workspace folder, as the status bar item shows it. */
 export type ServerState = "starting" | "running" | "stopped" | "failed";
 
-/** The `runic/documentInfo` answer: the owning catalog and the file's locale (null when unknown). */
-export interface DocumentInfo { project: string | null; catalog: string | null; baseLocale: string | null; locale: string | null }
+/**
+ * The `runic/documentInfo` answer: the owning catalog and the file's locale (null when unknown). For an override source of a
+ * library catalog, `catalog` is the library's and `library` names its package and version.
+ */
+export interface DocumentInfo { project: string | null; catalog: string | null; baseLocale: string | null; locale: string | null; library?: string | null }
 
 export interface StatusPresentation { text: string; tooltip: string; error: boolean }
 
@@ -20,7 +23,7 @@ export function errorSummary(error: unknown): string {
 export function statusPresentation(state: ServerState, info?: DocumentInfo, failure?: string): StatusPresentation {
   const lines = [`Runic language server: ${state}`];
   if (state === "failed" && failure) lines.push(failure);
-  if (info?.catalog) lines.push(`Catalog: ${info.catalog}`);
+  if (info?.catalog) lines.push(`Catalog: ${info.catalog}${info.library ? ` (library ${info.library}, overridden by the application)` : ""}`);
   if (info?.locale) lines.push(`Locale: ${info.locale}${info.baseLocale && info.baseLocale.toLowerCase() === info.locale.toLowerCase() ? " (base)" : ""}`);
   else if (info?.baseLocale) lines.push(`Base locale: ${info.baseLocale}`);
   lines.push(state === "failed" ? "Select to show the output." : "Select to show the Runic Translations output.");
