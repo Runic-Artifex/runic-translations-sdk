@@ -10,3 +10,6 @@ grid_total =
   .input {$amount :number}
   {{Total {$amount}}}
 grid_new = New column
+grid_updated =
+  .input {$when :date style=long}
+  {{Updated {$when}}}

@@ -10,4 +10,7 @@ export declare const m: Readonly<{
     readonly "grid_total": (inputs: Readonly<{
         readonly "amount": Rmf2Decimal | string | number;
     }>, options?: MessageOptions) => string;
+    readonly "grid_updated": (inputs: Readonly<{
+        readonly "when": string;
+    }>, options?: MessageOptions) => string;
 }>;
