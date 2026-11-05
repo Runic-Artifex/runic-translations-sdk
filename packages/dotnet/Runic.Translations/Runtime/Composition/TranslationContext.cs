@@ -42,6 +42,7 @@ public sealed class TranslationContext : ITranslationContext
     private readonly TranslationContextEntry[] _entries;
     private readonly Dictionary<string, int> _indexById;
     private readonly ContextManager[] _managers;
+    private readonly string[] _commonLocales;
     private readonly ReadOnlyCollection<string> _supportedLocales;
 
     // Guards _state writes, _switchSequence and _pendingSwitch. Never held while user code runs.
@@ -67,7 +68,8 @@ public sealed class TranslationContext : ITranslationContext
             _managers[index] = new ContextManager(this, index, initial.Snapshots[index]);
         }
 
-        _supportedLocales = Array.AsReadOnly(IntersectSupportedLocales(entries));
+        _commonLocales = IntersectSupportedLocales(entries);
+        _supportedLocales = Array.AsReadOnly(_commonLocales);
         _state = initial;
         _notifiedVersion = initial.Version;
         _notifiedRequestedLocale = initial.RequestedLocale;
@@ -123,6 +125,27 @@ public sealed class TranslationContext : ITranslationContext
 
         registration = null;
         return false;
+    }
+
+    /// <inheritdoc />
+    public ValueTask SetLocaleFromPreferencesAsync(IEnumerable<string> preferredLocales, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(preferredLocales);
+        cancellationToken.ThrowIfCancellationRequested();
+        return SetLocaleAsync(NegotiateLocale(preferredLocales), cancellationToken);
+    }
+
+    // The preferences are enumerated once, since they may come from a single-use sequence.
+    private string NegotiateLocale(IEnumerable<string> preferredLocales)
+    {
+        string[] preferences = [.. preferredLocales];
+        if (_commonLocales.Length != 0 && LocaleNegotiation.Negotiate(preferences, _commonLocales) is { } common) return common;
+        foreach (TranslationContextEntry entry in _entries)
+        {
+            if (entry.SupportedLocales.Length != 0 && LocaleNegotiation.Negotiate(preferences, entry.SupportedLocales) is { } own) return own;
+        }
+
+        return _entries[0].Registration.DefaultLocale;
     }
 
     /// <inheritdoc />
@@ -470,6 +493,9 @@ public sealed class TranslationContext : ITranslationContext
 
         public ValueTask SetLocaleAsync(string locale, CancellationToken cancellationToken = default) =>
             _context.SetLocaleAsync(locale, cancellationToken);
+
+        public ValueTask SetLocaleFromPreferencesAsync(IEnumerable<string> preferredLocales, CancellationToken cancellationToken = default) =>
+            _context.SetLocaleFromPreferencesAsync(preferredLocales, cancellationToken);
 
         public ValueTask RefreshAsync(CancellationToken cancellationToken = default) => _context.RefreshAsync(_index, cancellationToken);
 

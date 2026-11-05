@@ -2,84 +2,163 @@
 #nullable enable
 namespace Runic.Translations;
 
-internal sealed record GeneratedRelativeTimeUnit(string Name, string One, string Other);
-internal sealed record GeneratedRelativeTimeLocale(string Language, string[] AutoDay, string Past, string Future, GeneratedRelativeTimeUnit[] Units);
-/// <summary>CLDR list separators: for each type (conjunction, disjunction, unit) and style (long, short, narrow), the start, middle, end and two-item separators.</summary>
-internal sealed record GeneratedListLocale(string Language, string[] Separators);
-
-internal static class GeneratedLocaleData
+internal static partial class GeneratedLocaleData
 {
     internal const string CldrVersion = "48.2";
-    internal static readonly GeneratedRelativeTimeLocale[] RelativeTimeLocales =
-    [
-        new("de", ["gestern", "heute", "morgen"], "vor {0} {unit}", "in {0} {unit}", [new("second", "Sekunde", "Sekunden"), new("minute", "Minute", "Minuten"), new("hour", "Stunde", "Stunden"), new("day", "Tag", "Tagen"), new("week", "Woche", "Wochen"), new("month", "Monat", "Monaten"), new("year", "Jahr", "Jahren")]),
-        new("en", ["yesterday", "today", "tomorrow"], "{0} {unit} ago", "in {0} {unit}", [new("second", "second", "seconds"), new("minute", "minute", "minutes"), new("hour", "hour", "hours"), new("day", "day", "days"), new("week", "week", "weeks"), new("month", "month", "months"), new("year", "year", "years")]),
-        new("es", ["ayer", "hoy", "mañana"], "hace {0} {unit}", "dentro de {0} {unit}", [new("second", "segundo", "segundos"), new("minute", "minuto", "minutos"), new("hour", "hora", "horas"), new("day", "día", "días"), new("week", "semana", "semanas"), new("month", "mes", "meses"), new("year", "año", "años")]),
-        new("fr", ["hier", "aujourd’hui", "demain"], "il y a {0} {unit}", "dans {0} {unit}", [new("second", "seconde", "secondes"), new("minute", "minute", "minutes"), new("hour", "heure", "heures"), new("day", "jour", "jours"), new("week", "semaine", "semaines"), new("month", "mois", "mois"), new("year", "an", "ans")]),
-        new("it", ["ieri", "oggi", "domani"], "{0} {unit} fa", "tra {0} {unit}", [new("second", "secondo", "secondi"), new("minute", "minuto", "minuti"), new("hour", "ora", "ore"), new("day", "giorno", "giorni"), new("week", "settimana", "settimane"), new("month", "mese", "mesi"), new("year", "anno", "anni")]),
-    ];
-    internal static readonly GeneratedListLocale[] ListLocales =
-    [
-        new("cs", [", ", ", ", " a\u00a0", " a\u00a0", ", ", ", ", " a\u00a0", " a\u00a0", ", ", ", ", ", ", ", ", ", ", ", ", " nebo ", " nebo ", ", ", ", ", " nebo ", " nebo ", ", ", ", ", " nebo ", " nebo ", ", ", ", ", " a\u00a0", " a\u00a0", ", ", ", ", " a\u00a0", ", ", " ", " ", " ", " "]),
-        new("da", [", ", ", ", " og ", " og ", ", ", ", ", " og ", " og ", ", ", ", ", " og ", " og ", ", ", ", ", " eller ", " eller ", ", ", ", ", " el. ", " el. ", ", ", ", ", " el. ", " el. ", ", ", ", ", " og ", " og ", ", ", ", ", " og ", " og ", ", ", ", ", " og ", " og "]),
-        new("de", [", ", ", ", " und ", " und ", ", ", ", ", " und ", " und ", ", ", ", ", " und ", " und ", ", ", ", ", " oder ", " oder ", ", ", ", ", " oder ", " oder ", ", ", ", ", " oder ", " oder ", ", ", ", ", " und ", ", ", ", ", ", ", " und ", ", ", ", ", ", ", " und ", ", "]),
-        new("en", [", ", ", ", ", and ", " and ", ", ", ", ", ", & ", " & ", ", ", ", ", ", ", ", ", ", ", ", ", ", or ", " or ", ", ", ", ", ", or ", " or ", ", ", ", ", ", or ", " or ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", " ", " ", " ", " "]),
-        new("es", [", ", ", ", " y ", " y ", ", ", ", ", " y ", " y ", ", ", ", ", " y ", " y ", ", ", ", ", " o ", " o ", ", ", ", ", " o ", " o ", ", ", ", ", " o ", " o ", ", ", ", ", " y ", " y ", ", ", ", ", ", ", " y ", " ", " ", " ", " "]),
-        new("fr", [", ", ", ", " et ", " et ", ", ", ", ", " et ", " et ", ", ", ", ", ", ", ", ", ", ", ", ", " ou ", " ou ", ", ", ", ", " ou ", " ou ", ", ", ", ", " ou ", " ou ", ", ", ", ", " et ", " et ", ", ", ", ", " et ", " et ", " ", " ", " ", " "]),
-        new("it", [", ", ", ", " e ", " e ", ", ", ", ", " e ", " e ", ", ", ", ", " e ", " e ", ", ", ", ", " o ", " o ", ", ", ", ", " o ", " o ", ", ", ", ", " o ", " o ", ", ", ", ", " e ", " e ", ", ", ", ", " e ", " e ", " ", " ", " ", " "]),
-        new("ja", ["、", "、", "、", "、", "、", "、", "、", "、", "、", "、", "、", "、", "、", "、", "、または", "または", "、", "、", "、または", "または", "、", "、", "、または", "または", " ", " ", " ", " ", " ", " ", " ", " ", "", "", "", ""]),
-        new("nb", [", ", ", ", " og ", " og ", ", ", ", ", " og ", " og ", ", ", ", ", " og ", " og ", ", ", ", ", " eller ", " eller ", ", ", ", ", " eller ", " eller ", ", ", ", ", " eller ", " eller ", ", ", ", ", " og ", " og ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", "]),
-        new("nl", [", ", ", ", " en ", " en ", ", ", ", ", " & ", " & ", ", ", ", ", ", ", ", ", ", ", ", ", " of ", " of ", ", ", ", ", " of ", " of ", ", ", ", ", " of ", " of ", ", ", ", ", " en ", " en ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", "]),
-        new("nn", [", ", ", ", " og ", " og ", ", ", ", ", " og ", " og ", ", ", ", ", " og ", " og ", ", ", ", ", " eller ", " eller ", ", ", ", ", " eller ", " eller ", ", ", ", ", " eller ", " eller ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", " ", " ", " ", " "]),
-        new("no", [", ", ", ", " og ", " og ", ", ", ", ", " og ", " og ", ", ", ", ", " og ", " og ", ", ", ", ", " eller ", " eller ", ", ", ", ", " eller ", " eller ", ", ", ", ", " eller ", " eller ", ", ", ", ", " og ", " og ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", "]),
-        new("sv", [", ", ", ", " och ", " och ", ", ", ", ", " och ", " och ", ", ", ", ", ", ", ", ", ", ", ", ", " eller ", " eller ", ", ", ", ", " eller ", " eller ", ", ", ", ", " eller ", " eller ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", ", " ", " ", " ", " "]),
-    ];
 
-    // POSIX-style tags such as en_US select the same language family as en-US.
-    internal static string Language(string locale) => locale.Split('-', '_')[0].ToLowerInvariant();
-
-    /// <summary>Applies the pinned CLDR rules to the operands of a visible decimal, or returns null for an unsupported language.</summary>
-    internal static string? SelectPlural(string language, bool ordinal, in PluralOperands operands) => language switch
+    /// <summary>Applies a pinned CLDR plural rule set (an index from <see cref="CldrLocales.PluralRule"/>) to the operands of a visible decimal.</summary>
+    internal static string ApplyPluralRule(int rule, in PluralOperands operands) => rule switch
     {
-        "cs" => ordinal ? AlwaysOther(in operands) : CardinalCs(in operands),
-        "da" => ordinal ? AlwaysOther(in operands) : CardinalDa(in operands),
-        "de" => ordinal ? AlwaysOther(in operands) : CardinalDe(in operands),
-        "en" => ordinal ? OrdinalEn(in operands) : CardinalDe(in operands),
-        "es" => ordinal ? AlwaysOther(in operands) : CardinalEs(in operands),
-        "fr" => ordinal ? OrdinalFr(in operands) : CardinalFr(in operands),
-        "it" => ordinal ? OrdinalIt(in operands) : CardinalIt(in operands),
-        "ja" => ordinal ? AlwaysOther(in operands) : AlwaysOther(in operands),
-        "nb" => ordinal ? AlwaysOther(in operands) : CardinalNb(in operands),
-        "nl" => ordinal ? AlwaysOther(in operands) : CardinalDe(in operands),
-        "nn" => ordinal ? AlwaysOther(in operands) : CardinalNb(in operands),
-        "no" => ordinal ? AlwaysOther(in operands) : CardinalNb(in operands),
-        "sv" => ordinal ? OrdinalSv(in operands) : CardinalDe(in operands),
-        _ => null,
+        0 => Rule0(in operands),
+        1 => Rule1(in operands),
+        2 => Rule2(in operands),
+        3 => Rule3(in operands),
+        4 => Rule4(in operands),
+        5 => Rule5(in operands),
+        6 => Rule6(in operands),
+        7 => Rule7(in operands),
+        8 => Rule8(in operands),
+        9 => Rule9(in operands),
+        10 => Rule10(in operands),
+        11 => Rule11(in operands),
+        12 => Rule12(in operands),
+        13 => Rule13(in operands),
+        14 => Rule14(in operands),
+        15 => Rule15(in operands),
+        16 => Rule16(in operands),
+        17 => Rule17(in operands),
+        18 => Rule18(in operands),
+        19 => Rule19(in operands),
+        20 => Rule20(in operands),
+        21 => Rule21(in operands),
+        22 => Rule22(in operands),
+        23 => Rule23(in operands),
+        24 => Rule24(in operands),
+        25 => Rule25(in operands),
+        26 => Rule26(in operands),
+        27 => Rule27(in operands),
+        28 => Rule28(in operands),
+        29 => Rule29(in operands),
+        30 => Rule30(in operands),
+        31 => Rule31(in operands),
+        32 => Rule32(in operands),
+        33 => Rule33(in operands),
+        34 => Rule34(in operands),
+        35 => Rule35(in operands),
+        36 => Rule36(in operands),
+        37 => Rule37(in operands),
+        38 => Rule38(in operands),
+        39 => Rule39(in operands),
+        40 => Rule40(in operands),
+        41 => Rule41(in operands),
+        42 => Rule42(in operands),
+        43 => Rule43(in operands),
+        44 => Rule44(in operands),
+        45 => Rule45(in operands),
+        46 => Rule46(in operands),
+        47 => Rule47(in operands),
+        48 => Rule48(in operands),
+        49 => Rule49(in operands),
+        50 => Rule50(in operands),
+        51 => Rule51(in operands),
+        52 => Rule52(in operands),
+        53 => Rule53(in operands),
+        54 => Rule54(in operands),
+        55 => Rule55(in operands),
+        56 => Rule56(in operands),
+        57 => Rule57(in operands),
+        58 => Rule58(in operands),
+        59 => Rule59(in operands),
+        60 => Rule60(in operands),
+        61 => Rule61(in operands),
+        62 => Rule62(in operands),
+        _ => throw new System.ArgumentOutOfRangeException(nameof(rule)),
     };
 
-    /// <summary>CLDR <c>minimumGroupingDigits</c> of a language family: 1 for every language without pinned data.</summary>
-    internal static int MinimumGroupingDigits(string language) => language switch
+    private static string Rule0(in PluralOperands o)
     {
-        "es" => 2,
-        "it" => 2,
-        _ => 1,
-    };
-
-    internal static GeneratedRelativeTimeLocale? FindRelativeTime(string language)
-    {
-        for (int index = 0; index < RelativeTimeLocales.Length; index++)
-            if (RelativeTimeLocales[index].Language == language) return RelativeTimeLocales[index];
-        return null;
+        return "other";
     }
 
-    internal static GeneratedListLocale? FindList(string language)
+    private static string Rule1(in PluralOperands o)
     {
-        for (int index = 0; index < ListLocales.Length; index++)
-            if (ListLocales[index].Language == language) return ListLocales[index];
-        return null;
+        if (o.T == 0UL && o.I == 1UL) return "one"; // n = 1
+        return "other";
     }
 
-    private static string CardinalCs(in PluralOperands o)
+    private static string Rule2(in PluralOperands o)
+    {
+        if (o.T == 0UL && o.I >= 0UL && o.I <= 1UL) return "one"; // n = 0..1
+        return "other";
+    }
+
+    private static string Rule3(in PluralOperands o)
+    {
+        if (o.I == 0UL || (o.T == 0UL && o.I == 1UL)) return "one"; // i = 0 or n = 1
+        return "other";
+    }
+
+    private static string Rule4(in PluralOperands o)
+    {
+        if (o.T == 0UL && o.I == 0UL) return "zero"; // n = 0
+        if (o.T == 0UL && o.I == 1UL) return "one"; // n = 1
+        if (o.T == 0UL && o.I == 2UL) return "two"; // n = 2
+        if (o.T == 0UL && (o.I % 100UL) >= 3UL && (o.I % 100UL) <= 10UL) return "few"; // n % 100 = 3..10
+        if (o.T == 0UL && (o.I % 100UL) >= 11UL && (o.I % 100UL) <= 99UL) return "many"; // n % 100 = 11..99
+        return "other";
+    }
+
+    private static string Rule5(in PluralOperands o)
+    {
+        if (o.I == 1UL && o.V == 0) return "one"; // i = 1 and v = 0
+        return "other";
+    }
+
+    private static string Rule6(in PluralOperands o)
+    {
+        if (o.T == 0UL && (o.I % 10UL) == 1UL && !(o.T == 0UL && (o.I % 100UL) == 11UL)) return "one"; // n % 10 = 1 and n % 100 != 11
+        if (o.T == 0UL && (o.I % 10UL) >= 2UL && (o.I % 10UL) <= 4UL && !(o.T == 0UL && (o.I % 100UL) >= 12UL && (o.I % 100UL) <= 14UL)) return "few"; // n % 10 = 2..4 and n % 100 != 12..14
+        if ((o.T == 0UL && (o.I % 10UL) == 0UL) || (o.T == 0UL && (o.I % 10UL) >= 5UL && (o.I % 10UL) <= 9UL) || (o.T == 0UL && (o.I % 100UL) >= 11UL && (o.I % 100UL) <= 14UL)) return "many"; // n % 10 = 0 or n % 10 = 5..9 or n % 100 = 11..14
+        return "other";
+    }
+
+    private static string Rule7(in PluralOperands o)
+    {
+        if (o.T == 0UL && o.I == 0UL) return "zero"; // n = 0
+        if (o.T == 0UL && o.I == 1UL) return "one"; // n = 1
+        return "other";
+    }
+
+    private static string Rule8(in PluralOperands o)
+    {
+        if (o.T == 0UL && (o.I % 10UL) == 1UL && !(o.T == 0UL && ((o.I % 100UL) == 11UL || (o.I % 100UL) == 71UL || (o.I % 100UL) == 91UL))) return "one"; // n % 10 = 1 and n % 100 != 11,71,91
+        if (o.T == 0UL && (o.I % 10UL) == 2UL && !(o.T == 0UL && ((o.I % 100UL) == 12UL || (o.I % 100UL) == 72UL || (o.I % 100UL) == 92UL))) return "two"; // n % 10 = 2 and n % 100 != 12,72,92
+        if (o.T == 0UL && (((o.I % 10UL) >= 3UL && (o.I % 10UL) <= 4UL) || (o.I % 10UL) == 9UL) && !(o.T == 0UL && (((o.I % 100UL) >= 10UL && (o.I % 100UL) <= 19UL) || ((o.I % 100UL) >= 70UL && (o.I % 100UL) <= 79UL) || ((o.I % 100UL) >= 90UL && (o.I % 100UL) <= 99UL)))) return "few"; // n % 10 = 3..4,9 and n % 100 != 10..19,70..79,90..99
+        if (!(o.T == 0UL && o.I == 0UL) && o.T == 0UL && (o.I % 1000000UL) == 0UL) return "many"; // n != 0 and n % 1000000 = 0
+        return "other";
+    }
+
+    private static string Rule9(in PluralOperands o)
+    {
+        if ((o.V == 0 && (o.I % 10UL) == 1UL && (o.I % 100UL) != 11UL) || ((o.F % 10UL) == 1UL && (o.F % 100UL) != 11UL)) return "one"; // v = 0 and i % 10 = 1 and i % 100 != 11 or f % 10 = 1 and f % 100 != 11
+        if ((o.V == 0 && (o.I % 10UL) >= 2UL && (o.I % 10UL) <= 4UL && !((o.I % 100UL) >= 12UL && (o.I % 100UL) <= 14UL)) || ((o.F % 10UL) >= 2UL && (o.F % 10UL) <= 4UL && !((o.F % 100UL) >= 12UL && (o.F % 100UL) <= 14UL))) return "few"; // v = 0 and i % 10 = 2..4 and i % 100 != 12..14 or f % 10 = 2..4 and f % 100 != 12..14
+        return "other";
+    }
+
+    private static string Rule10(in PluralOperands o)
+    {
+        if (o.I == 1UL && o.V == 0) return "one"; // i = 1 and v = 0
+        if ((o.E == 0 && o.I != 0UL && (o.I % 1000000UL) == 0UL && o.V == 0) || (!(o.E >= 0 && o.E <= 5))) return "many"; // e = 0 and i != 0 and i % 1000000 = 0 and v = 0 or e != 0..5
+        return "other";
+    }
+
+    private static string Rule11(in PluralOperands o)
+    {
+        if ((o.V == 0 && (o.I == 1UL || o.I == 2UL || o.I == 3UL)) || (o.V == 0 && !(((o.I % 10UL) == 4UL || (o.I % 10UL) == 6UL || (o.I % 10UL) == 9UL))) || (o.V != 0 && !(((o.F % 10UL) == 4UL || (o.F % 10UL) == 6UL || (o.F % 10UL) == 9UL)))) return "one"; // v = 0 and i = 1,2,3 or v = 0 and i % 10 != 4,6,9 or v != 0 and f % 10 != 4,6,9
+        return "other";
+    }
+
+    private static string Rule12(in PluralOperands o)
     {
         if (o.I == 1UL && o.V == 0) return "one"; // i = 1 and v = 0
         if (o.I >= 2UL && o.I <= 4UL && o.V == 0) return "few"; // i = 2..4 and v = 0
@@ -87,24 +166,259 @@ internal static class GeneratedLocaleData
         return "other";
     }
 
-    private static string AlwaysOther(in PluralOperands o)
+    private static string Rule13(in PluralOperands o)
     {
+        if (o.T == 0UL && o.I == 0UL) return "zero"; // n = 0
+        if (o.T == 0UL && o.I == 1UL) return "one"; // n = 1
+        if (o.T == 0UL && o.I == 2UL) return "two"; // n = 2
+        if (o.T == 0UL && o.I == 3UL) return "few"; // n = 3
+        if (o.T == 0UL && o.I == 6UL) return "many"; // n = 6
         return "other";
     }
 
-    private static string CardinalDa(in PluralOperands o)
+    private static string Rule14(in PluralOperands o)
     {
         if ((o.T == 0UL && o.I == 1UL) || (o.T != 0UL && (o.I == 0UL || o.I == 1UL))) return "one"; // n = 1 or t != 0 and i = 0,1
         return "other";
     }
 
-    private static string CardinalDe(in PluralOperands o)
+    private static string Rule15(in PluralOperands o)
     {
-        if (o.I == 1UL && o.V == 0) return "one"; // i = 1 and v = 0
+        if ((o.V == 0 && (o.I % 100UL) == 1UL) || (o.F % 100UL) == 1UL) return "one"; // v = 0 and i % 100 = 1 or f % 100 = 1
+        if ((o.V == 0 && (o.I % 100UL) == 2UL) || (o.F % 100UL) == 2UL) return "two"; // v = 0 and i % 100 = 2 or f % 100 = 2
+        if ((o.V == 0 && (o.I % 100UL) >= 3UL && (o.I % 100UL) <= 4UL) || ((o.F % 100UL) >= 3UL && (o.F % 100UL) <= 4UL)) return "few"; // v = 0 and i % 100 = 3..4 or f % 100 = 3..4
         return "other";
     }
 
-    private static string OrdinalEn(in PluralOperands o)
+    private static string Rule16(in PluralOperands o)
+    {
+        if (o.T == 0UL && o.I == 1UL) return "one"; // n = 1
+        if ((o.E == 0 && o.I != 0UL && (o.I % 1000000UL) == 0UL && o.V == 0) || (!(o.E >= 0 && o.E <= 5))) return "many"; // e = 0 and i != 0 and i % 1000000 = 0 and v = 0 or e != 0..5
+        return "other";
+    }
+
+    private static string Rule17(in PluralOperands o)
+    {
+        if ((o.I == 0UL || o.I == 1UL)) return "one"; // i = 0,1
+        return "other";
+    }
+
+    private static string Rule18(in PluralOperands o)
+    {
+        if ((o.I == 0UL || o.I == 1UL)) return "one"; // i = 0,1
+        if ((o.E == 0 && o.I != 0UL && (o.I % 1000000UL) == 0UL && o.V == 0) || (!(o.E >= 0 && o.E <= 5))) return "many"; // e = 0 and i != 0 and i % 1000000 = 0 and v = 0 or e != 0..5
+        return "other";
+    }
+
+    private static string Rule19(in PluralOperands o)
+    {
+        if (o.T == 0UL && o.I == 1UL) return "one"; // n = 1
+        if (o.T == 0UL && o.I == 2UL) return "two"; // n = 2
+        if (o.T == 0UL && o.I >= 3UL && o.I <= 6UL) return "few"; // n = 3..6
+        if (o.T == 0UL && o.I >= 7UL && o.I <= 10UL) return "many"; // n = 7..10
+        return "other";
+    }
+
+    private static string Rule20(in PluralOperands o)
+    {
+        if (o.T == 0UL && (o.I == 1UL || o.I == 11UL)) return "one"; // n = 1,11
+        if (o.T == 0UL && (o.I == 2UL || o.I == 12UL)) return "two"; // n = 2,12
+        if (o.T == 0UL && ((o.I >= 3UL && o.I <= 10UL) || (o.I >= 13UL && o.I <= 19UL))) return "few"; // n = 3..10,13..19
+        return "other";
+    }
+
+    private static string Rule21(in PluralOperands o)
+    {
+        if (o.V == 0 && (o.I % 10UL) == 1UL) return "one"; // v = 0 and i % 10 = 1
+        if (o.V == 0 && (o.I % 10UL) == 2UL) return "two"; // v = 0 and i % 10 = 2
+        if (o.V == 0 && ((o.I % 100UL) == 0UL || (o.I % 100UL) == 20UL || (o.I % 100UL) == 40UL || (o.I % 100UL) == 60UL || (o.I % 100UL) == 80UL)) return "few"; // v = 0 and i % 100 = 0,20,40,60,80
+        if (o.V != 0) return "many"; // v != 0
+        return "other";
+    }
+
+    private static string Rule22(in PluralOperands o)
+    {
+        if ((o.I == 1UL && o.V == 0) || (o.I == 0UL && o.V != 0)) return "one"; // i = 1 and v = 0 or i = 0 and v != 0
+        if (o.I == 2UL && o.V == 0) return "two"; // i = 2 and v = 0
+        return "other";
+    }
+
+    private static string Rule23(in PluralOperands o)
+    {
+        if ((o.T == 0UL && (o.I % 10UL) == 1UL && (o.I % 100UL) != 11UL) || ((o.T % 10UL) == 1UL && (o.T % 100UL) != 11UL)) return "one"; // t = 0 and i % 10 = 1 and i % 100 != 11 or t % 10 = 1 and t % 100 != 11
+        return "other";
+    }
+
+    private static string Rule24(in PluralOperands o)
+    {
+        if (o.T == 0UL && o.I == 1UL) return "one"; // n = 1
+        if (o.T == 0UL && o.I == 2UL) return "two"; // n = 2
+        return "other";
+    }
+
+    private static string Rule25(in PluralOperands o)
+    {
+        if (o.T == 0UL && o.I == 0UL) return "zero"; // n = 0
+        if (o.T == 0UL && o.I == 1UL) return "one"; // n = 1
+        if ((o.T == 0UL && ((o.I % 100UL) == 2UL || (o.I % 100UL) == 22UL || (o.I % 100UL) == 42UL || (o.I % 100UL) == 62UL || (o.I % 100UL) == 82UL)) || (o.T == 0UL && (o.I % 1000UL) == 0UL && o.T == 0UL && (((o.I % 100000UL) >= 1000UL && (o.I % 100000UL) <= 20000UL) || (o.I % 100000UL) == 40000UL || (o.I % 100000UL) == 60000UL || (o.I % 100000UL) == 80000UL)) || (!(o.T == 0UL && o.I == 0UL) && o.T == 0UL && (o.I % 1000000UL) == 100000UL)) return "two"; // n % 100 = 2,22,42,62,82 or n % 1000 = 0 and n % 100000 = 1000..20000,40000,60000,80000 or n != 0 and n % 1000000 = 100000
+        if (o.T == 0UL && ((o.I % 100UL) == 3UL || (o.I % 100UL) == 23UL || (o.I % 100UL) == 43UL || (o.I % 100UL) == 63UL || (o.I % 100UL) == 83UL)) return "few"; // n % 100 = 3,23,43,63,83
+        if (!(o.T == 0UL && o.I == 1UL) && o.T == 0UL && ((o.I % 100UL) == 1UL || (o.I % 100UL) == 21UL || (o.I % 100UL) == 41UL || (o.I % 100UL) == 61UL || (o.I % 100UL) == 81UL)) return "many"; // n != 1 and n % 100 = 1,21,41,61,81
+        return "other";
+    }
+
+    private static string Rule26(in PluralOperands o)
+    {
+        if (o.T == 0UL && o.I == 0UL) return "zero"; // n = 0
+        if ((o.I == 0UL || o.I == 1UL) && !(o.T == 0UL && o.I == 0UL)) return "one"; // i = 0,1 and n != 0
+        return "other";
+    }
+
+    private static string Rule27(in PluralOperands o)
+    {
+        if (o.T == 0UL && (o.I % 10UL) == 1UL && !(o.T == 0UL && (o.I % 100UL) >= 11UL && (o.I % 100UL) <= 19UL)) return "one"; // n % 10 = 1 and n % 100 != 11..19
+        if (o.T == 0UL && (o.I % 10UL) >= 2UL && (o.I % 10UL) <= 9UL && !(o.T == 0UL && (o.I % 100UL) >= 11UL && (o.I % 100UL) <= 19UL)) return "few"; // n % 10 = 2..9 and n % 100 != 11..19
+        if (o.F != 0UL) return "many"; // f != 0
+        return "other";
+    }
+
+    private static string Rule28(in PluralOperands o)
+    {
+        if ((o.T == 0UL && (o.I % 10UL) == 0UL) || (o.T == 0UL && (o.I % 100UL) >= 11UL && (o.I % 100UL) <= 19UL) || (o.V == 2 && (o.F % 100UL) >= 11UL && (o.F % 100UL) <= 19UL)) return "zero"; // n % 10 = 0 or n % 100 = 11..19 or v = 2 and f % 100 = 11..19
+        if ((o.T == 0UL && (o.I % 10UL) == 1UL && !(o.T == 0UL && (o.I % 100UL) == 11UL)) || (o.V == 2 && (o.F % 10UL) == 1UL && (o.F % 100UL) != 11UL) || (o.V != 2 && (o.F % 10UL) == 1UL)) return "one"; // n % 10 = 1 and n % 100 != 11 or v = 2 and f % 10 = 1 and f % 100 != 11 or v != 2 and f % 10 = 1
+        return "other";
+    }
+
+    private static string Rule29(in PluralOperands o)
+    {
+        if ((o.V == 0 && (o.I % 10UL) == 1UL && (o.I % 100UL) != 11UL) || ((o.F % 10UL) == 1UL && (o.F % 100UL) != 11UL)) return "one"; // v = 0 and i % 10 = 1 and i % 100 != 11 or f % 10 = 1 and f % 100 != 11
+        return "other";
+    }
+
+    private static string Rule30(in PluralOperands o)
+    {
+        if (o.I == 1UL && o.V == 0) return "one"; // i = 1 and v = 0
+        if (o.V != 0 || (o.T == 0UL && o.I == 0UL) || (!(o.T == 0UL && o.I == 1UL) && o.T == 0UL && (o.I % 100UL) >= 1UL && (o.I % 100UL) <= 19UL)) return "few"; // v != 0 or n = 0 or n != 1 and n % 100 = 1..19
+        return "other";
+    }
+
+    private static string Rule31(in PluralOperands o)
+    {
+        if (o.T == 0UL && o.I == 1UL) return "one"; // n = 1
+        if (o.T == 0UL && o.I == 2UL) return "two"; // n = 2
+        if ((o.T == 0UL && o.I == 0UL) || (o.T == 0UL && (o.I % 100UL) >= 3UL && (o.I % 100UL) <= 10UL)) return "few"; // n = 0 or n % 100 = 3..10
+        if (o.T == 0UL && (o.I % 100UL) >= 11UL && (o.I % 100UL) <= 19UL) return "many"; // n % 100 = 11..19
+        return "other";
+    }
+
+    private static string Rule32(in PluralOperands o)
+    {
+        if (o.I == 1UL && o.V == 0) return "one"; // i = 1 and v = 0
+        if (o.V == 0 && (o.I % 10UL) >= 2UL && (o.I % 10UL) <= 4UL && !((o.I % 100UL) >= 12UL && (o.I % 100UL) <= 14UL)) return "few"; // v = 0 and i % 10 = 2..4 and i % 100 != 12..14
+        if ((o.V == 0 && o.I != 1UL && (o.I % 10UL) >= 0UL && (o.I % 10UL) <= 1UL) || (o.V == 0 && (o.I % 10UL) >= 5UL && (o.I % 10UL) <= 9UL) || (o.V == 0 && (o.I % 100UL) >= 12UL && (o.I % 100UL) <= 14UL)) return "many"; // v = 0 and i != 1 and i % 10 = 0..1 or v = 0 and i % 10 = 5..9 or v = 0 and i % 100 = 12..14
+        return "other";
+    }
+
+    private static string Rule33(in PluralOperands o)
+    {
+        if (o.I >= 0UL && o.I <= 1UL) return "one"; // i = 0..1
+        if ((o.E == 0 && o.I != 0UL && (o.I % 1000000UL) == 0UL && o.V == 0) || (!(o.E >= 0 && o.E <= 5))) return "many"; // e = 0 and i != 0 and i % 1000000 = 0 and v = 0 or e != 0..5
+        return "other";
+    }
+
+    private static string Rule34(in PluralOperands o)
+    {
+        if (o.V == 0 && (o.I % 10UL) == 1UL && (o.I % 100UL) != 11UL) return "one"; // v = 0 and i % 10 = 1 and i % 100 != 11
+        if (o.V == 0 && (o.I % 10UL) >= 2UL && (o.I % 10UL) <= 4UL && !((o.I % 100UL) >= 12UL && (o.I % 100UL) <= 14UL)) return "few"; // v = 0 and i % 10 = 2..4 and i % 100 != 12..14
+        if ((o.V == 0 && (o.I % 10UL) == 0UL) || (o.V == 0 && (o.I % 10UL) >= 5UL && (o.I % 10UL) <= 9UL) || (o.V == 0 && (o.I % 100UL) >= 11UL && (o.I % 100UL) <= 14UL)) return "many"; // v = 0 and i % 10 = 0 or v = 0 and i % 10 = 5..9 or v = 0 and i % 100 = 11..14
+        return "other";
+    }
+
+    private static string Rule35(in PluralOperands o)
+    {
+        if (o.T == 0UL && (o.I % 10UL) == 1UL && !(o.T == 0UL && (o.I % 100UL) == 11UL)) return "one"; // n % 10 = 1 and n % 100 != 11
+        if (o.T == 0UL && o.I == 2UL) return "two"; // n = 2
+        if (!(o.T == 0UL && o.I == 2UL) && o.T == 0UL && (o.I % 10UL) >= 2UL && (o.I % 10UL) <= 9UL && !(o.T == 0UL && (o.I % 100UL) >= 11UL && (o.I % 100UL) <= 19UL)) return "few"; // n != 2 and n % 10 = 2..9 and n % 100 != 11..19
+        if (o.F != 0UL) return "many"; // f != 0
+        return "other";
+    }
+
+    private static string Rule36(in PluralOperands o)
+    {
+        if (o.I == 0UL || (o.T == 0UL && o.I == 1UL)) return "one"; // i = 0 or n = 1
+        if (o.T == 0UL && o.I >= 2UL && o.I <= 10UL) return "few"; // n = 2..10
+        return "other";
+    }
+
+    private static string Rule37(in PluralOperands o)
+    {
+        if ((o.T == 0UL && (o.I == 0UL || o.I == 1UL)) || (o.I == 0UL && o.F == 1UL)) return "one"; // n = 0,1 or i = 0 and f = 1
+        return "other";
+    }
+
+    private static string Rule38(in PluralOperands o)
+    {
+        if (o.V == 0 && (o.I % 100UL) == 1UL) return "one"; // v = 0 and i % 100 = 1
+        if (o.V == 0 && (o.I % 100UL) == 2UL) return "two"; // v = 0 and i % 100 = 2
+        if ((o.V == 0 && (o.I % 100UL) >= 3UL && (o.I % 100UL) <= 4UL) || o.V != 0) return "few"; // v = 0 and i % 100 = 3..4 or v != 0
+        return "other";
+    }
+
+    private static string Rule39(in PluralOperands o)
+    {
+        if ((o.T == 0UL && o.I >= 0UL && o.I <= 1UL) || (o.T == 0UL && o.I >= 11UL && o.I <= 99UL)) return "one"; // n = 0..1 or n = 11..99
+        return "other";
+    }
+
+    private static string Rule40(in PluralOperands o)
+    {
+        if (o.T == 0UL && (o.I == 1UL || o.I == 5UL || o.I == 7UL || o.I == 8UL || o.I == 9UL || o.I == 10UL)) return "one"; // n = 1,5,7,8,9,10
+        if (o.T == 0UL && (o.I == 2UL || o.I == 3UL)) return "two"; // n = 2,3
+        if (o.T == 0UL && o.I == 4UL) return "few"; // n = 4
+        if (o.T == 0UL && o.I == 6UL) return "many"; // n = 6
+        return "other";
+    }
+
+    private static string Rule41(in PluralOperands o)
+    {
+        if (((o.I % 10UL) == 1UL || (o.I % 10UL) == 2UL || (o.I % 10UL) == 5UL || (o.I % 10UL) == 7UL || (o.I % 10UL) == 8UL) || ((o.I % 100UL) == 20UL || (o.I % 100UL) == 50UL || (o.I % 100UL) == 70UL || (o.I % 100UL) == 80UL)) return "one"; // i % 10 = 1,2,5,7,8 or i % 100 = 20,50,70,80
+        if (((o.I % 10UL) == 3UL || (o.I % 10UL) == 4UL) || ((o.I % 1000UL) == 100UL || (o.I % 1000UL) == 200UL || (o.I % 1000UL) == 300UL || (o.I % 1000UL) == 400UL || (o.I % 1000UL) == 500UL || (o.I % 1000UL) == 600UL || (o.I % 1000UL) == 700UL || (o.I % 1000UL) == 800UL || (o.I % 1000UL) == 900UL)) return "few"; // i % 10 = 3,4 or i % 1000 = 100,200,300,400,500,600,700,800,900
+        if (o.I == 0UL || (o.I % 10UL) == 6UL || ((o.I % 100UL) == 40UL || (o.I % 100UL) == 60UL || (o.I % 100UL) == 90UL)) return "many"; // i = 0 or i % 10 = 6 or i % 100 = 40,60,90
+        return "other";
+    }
+
+    private static string Rule42(in PluralOperands o)
+    {
+        if (o.T == 0UL && ((o.I % 10UL) == 2UL || (o.I % 10UL) == 3UL) && !(o.T == 0UL && ((o.I % 100UL) == 12UL || (o.I % 100UL) == 13UL))) return "few"; // n % 10 = 2,3 and n % 100 != 12,13
+        return "other";
+    }
+
+    private static string Rule43(in PluralOperands o)
+    {
+        if (o.I == 0UL) return "zero"; // i = 0
+        if (o.I == 1UL) return "one"; // i = 1
+        if ((o.I == 2UL || o.I == 3UL || o.I == 4UL || o.I == 5UL || o.I == 6UL)) return "few"; // i = 2,3,4,5,6
+        return "other";
+    }
+
+    private static string Rule44(in PluralOperands o)
+    {
+        if (o.T == 0UL && (o.I == 1UL || o.I == 3UL)) return "one"; // n = 1,3
+        if (o.T == 0UL && o.I == 2UL) return "two"; // n = 2
+        if (o.T == 0UL && o.I == 4UL) return "few"; // n = 4
+        return "other";
+    }
+
+    private static string Rule45(in PluralOperands o)
+    {
+        if (o.T == 0UL && (o.I == 0UL || o.I == 7UL || o.I == 8UL || o.I == 9UL)) return "zero"; // n = 0,7,8,9
+        if (o.T == 0UL && o.I == 1UL) return "one"; // n = 1
+        if (o.T == 0UL && o.I == 2UL) return "two"; // n = 2
+        if (o.T == 0UL && (o.I == 3UL || o.I == 4UL)) return "few"; // n = 3,4
+        if (o.T == 0UL && (o.I == 5UL || o.I == 6UL)) return "many"; // n = 5,6
+        return "other";
+    }
+
+    private static string Rule46(in PluralOperands o)
     {
         if (o.T == 0UL && (o.I % 10UL) == 1UL && !(o.T == 0UL && (o.I % 100UL) == 11UL)) return "one"; // n % 10 = 1 and n % 100 != 11
         if (o.T == 0UL && (o.I % 10UL) == 2UL && !(o.T == 0UL && (o.I % 100UL) == 12UL)) return "two"; // n % 10 = 2 and n % 100 != 12
@@ -112,48 +426,114 @@ internal static class GeneratedLocaleData
         return "other";
     }
 
-    private static string CardinalEs(in PluralOperands o)
+    private static string Rule47(in PluralOperands o)
+    {
+        if (o.T == 0UL && (o.I == 1UL || o.I == 11UL)) return "one"; // n = 1,11
+        if (o.T == 0UL && (o.I == 2UL || o.I == 12UL)) return "two"; // n = 2,12
+        if (o.T == 0UL && (o.I == 3UL || o.I == 13UL)) return "few"; // n = 3,13
+        return "other";
+    }
+
+    private static string Rule48(in PluralOperands o)
     {
         if (o.T == 0UL && o.I == 1UL) return "one"; // n = 1
-        if ((o.E == 0 && o.I != 0UL && (o.I % 1000000UL) == 0UL && o.V == 0) || (!(o.E >= 0 && o.E <= 5))) return "many"; // e = 0 and i != 0 and i % 1000000 = 0 and v = 0 or e != 0..5
+        if (o.T == 0UL && (o.I == 2UL || o.I == 3UL)) return "two"; // n = 2,3
+        if (o.T == 0UL && o.I == 4UL) return "few"; // n = 4
+        if (o.T == 0UL && o.I == 6UL) return "many"; // n = 6
         return "other";
     }
 
-    private static string CardinalFr(in PluralOperands o)
+    private static string Rule49(in PluralOperands o)
     {
-        if ((o.I == 0UL || o.I == 1UL)) return "one"; // i = 0,1
-        if ((o.E == 0 && o.I != 0UL && (o.I % 1000000UL) == 0UL && o.V == 0) || (!(o.E >= 0 && o.E <= 5))) return "many"; // e = 0 and i != 0 and i % 1000000 = 0 and v = 0 or e != 0..5
+        if (o.T == 0UL && (o.I == 1UL || o.I == 5UL)) return "one"; // n = 1,5
         return "other";
     }
 
-    private static string OrdinalFr(in PluralOperands o)
-    {
-        if (o.T == 0UL && o.I == 1UL) return "one"; // n = 1
-        return "other";
-    }
-
-    private static string CardinalIt(in PluralOperands o)
-    {
-        if (o.I == 1UL && o.V == 0) return "one"; // i = 1 and v = 0
-        if ((o.E == 0 && o.I != 0UL && (o.I % 1000000UL) == 0UL && o.V == 0) || (!(o.E >= 0 && o.E <= 5))) return "many"; // e = 0 and i != 0 and i % 1000000 = 0 and v = 0 or e != 0..5
-        return "other";
-    }
-
-    private static string OrdinalIt(in PluralOperands o)
+    private static string Rule50(in PluralOperands o)
     {
         if (o.T == 0UL && (o.I == 11UL || o.I == 8UL || o.I == 80UL || o.I == 800UL)) return "many"; // n = 11,8,80,800
         return "other";
     }
 
-    private static string CardinalNb(in PluralOperands o)
+    private static string Rule51(in PluralOperands o)
     {
-        if (o.T == 0UL && o.I == 1UL) return "one"; // n = 1
+        if (o.I == 1UL) return "one"; // i = 1
+        if (o.I == 0UL || ((((o.I % 100UL) >= 2UL && (o.I % 100UL) <= 20UL) || (o.I % 100UL) == 40UL || (o.I % 100UL) == 60UL || (o.I % 100UL) == 80UL))) return "many"; // i = 0 or i % 100 = 2..20,40,60,80
         return "other";
     }
 
-    private static string OrdinalSv(in PluralOperands o)
+    private static string Rule52(in PluralOperands o)
+    {
+        if ((o.T == 0UL && (o.I % 10UL) == 6UL) || (o.T == 0UL && (o.I % 10UL) == 9UL) || (o.T == 0UL && (o.I % 10UL) == 0UL && !(o.T == 0UL && o.I == 0UL))) return "many"; // n % 10 = 6 or n % 10 = 9 or n % 10 = 0 and n != 0
+        return "other";
+    }
+
+    private static string Rule53(in PluralOperands o)
+    {
+        if (o.T == 0UL && o.I == 1UL) return "one"; // n = 1
+        if (o.T == 0UL && (o.I == 2UL || o.I == 3UL)) return "two"; // n = 2,3
+        if (o.T == 0UL && o.I == 4UL) return "few"; // n = 4
+        return "other";
+    }
+
+    private static string Rule54(in PluralOperands o)
+    {
+        if ((o.T == 0UL && o.I >= 1UL && o.I <= 4UL) || (o.T == 0UL && (((o.I % 100UL) >= 1UL && (o.I % 100UL) <= 4UL) || ((o.I % 100UL) >= 21UL && (o.I % 100UL) <= 24UL) || ((o.I % 100UL) >= 41UL && (o.I % 100UL) <= 44UL) || ((o.I % 100UL) >= 61UL && (o.I % 100UL) <= 64UL) || ((o.I % 100UL) >= 81UL && (o.I % 100UL) <= 84UL)))) return "one"; // n = 1..4 or n % 100 = 1..4,21..24,41..44,61..64,81..84
+        if ((o.T == 0UL && o.I == 5UL) || (o.T == 0UL && (o.I % 100UL) == 5UL)) return "many"; // n = 5 or n % 100 = 5
+        return "other";
+    }
+
+    private static string Rule55(in PluralOperands o)
+    {
+        if (o.T == 0UL && (o.I == 11UL || o.I == 8UL || (o.I >= 80UL && o.I <= 89UL) || (o.I >= 800UL && o.I <= 899UL))) return "many"; // n = 11,8,80..89,800..899
+        return "other";
+    }
+
+    private static string Rule56(in PluralOperands o)
+    {
+        if ((o.I % 10UL) == 1UL && (o.I % 100UL) != 11UL) return "one"; // i % 10 = 1 and i % 100 != 11
+        if ((o.I % 10UL) == 2UL && (o.I % 100UL) != 12UL) return "two"; // i % 10 = 2 and i % 100 != 12
+        if (((o.I % 10UL) == 7UL || (o.I % 10UL) == 8UL) && !(((o.I % 100UL) == 17UL || (o.I % 100UL) == 18UL))) return "many"; // i % 10 = 7,8 and i % 100 != 17,18
+        return "other";
+    }
+
+    private static string Rule57(in PluralOperands o)
+    {
+        if (o.T == 0UL && o.I >= 1UL && o.I <= 4UL) return "one"; // n = 1..4
+        return "other";
+    }
+
+    private static string Rule58(in PluralOperands o)
+    {
+        if (o.T == 0UL && (o.I == 1UL || o.I == 5UL || (o.I >= 7UL && o.I <= 9UL))) return "one"; // n = 1,5,7..9
+        if (o.T == 0UL && (o.I == 2UL || o.I == 3UL)) return "two"; // n = 2,3
+        if (o.T == 0UL && o.I == 4UL) return "few"; // n = 4
+        if (o.T == 0UL && o.I == 6UL) return "many"; // n = 6
+        return "other";
+    }
+
+    private static string Rule59(in PluralOperands o)
+    {
+        if (o.T == 0UL && o.I == 1UL) return "one"; // n = 1
+        if (o.T == 0UL && (o.I % 10UL) == 4UL && !(o.T == 0UL && (o.I % 100UL) == 14UL)) return "many"; // n % 10 = 4 and n % 100 != 14
+        return "other";
+    }
+
+    private static string Rule60(in PluralOperands o)
     {
         if (o.T == 0UL && ((o.I % 10UL) == 1UL || (o.I % 10UL) == 2UL) && !(o.T == 0UL && ((o.I % 100UL) == 11UL || (o.I % 100UL) == 12UL))) return "one"; // n % 10 = 1,2 and n % 100 != 11,12
+        return "other";
+    }
+
+    private static string Rule61(in PluralOperands o)
+    {
+        if ((o.T == 0UL && ((o.I % 10UL) == 6UL || (o.I % 10UL) == 9UL)) || (o.T == 0UL && o.I == 10UL)) return "few"; // n % 10 = 6,9 or n = 10
+        return "other";
+    }
+
+    private static string Rule62(in PluralOperands o)
+    {
+        if (o.T == 0UL && (o.I % 10UL) == 3UL && !(o.T == 0UL && (o.I % 100UL) == 13UL)) return "few"; // n % 10 = 3 and n % 100 != 13
         return "other";
     }
 }

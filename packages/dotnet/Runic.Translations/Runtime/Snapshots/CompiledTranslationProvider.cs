@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -61,6 +62,9 @@ public sealed class CompiledTranslationProvider : ITranslationProvider, ITransla
 
     /// <summary>Whether snapshots come from the default factory, which composes compiled data only.</summary>
     internal bool UsesDefaultSnapshotFactory => ReferenceEquals(_snapshotFactory, DefaultSnapshotFactory.Instance);
+
+    /// <inheritdoc />
+    public string NegotiateLocale(IEnumerable<string> preferredLocales) => _catalog.NegotiateLocale(preferredLocales);
 
     /// <inheritdoc />
     public ValueTask<ITranslationSnapshot> GetSnapshotAsync(
