@@ -31,6 +31,117 @@ internal sealed class Rmf2QualityCheckTests
     private static void None(Rmf2ProjectCompilation result, params string[] ids) =>
         Assert.True(!result.Diagnostics.Any(d => ids.Contains(d.Id)), "Unexpected " + string.Join("/", ids) + ":\n" + All(result));
 
+    [Test, DisplayName("per-message checks name their message and locale for editors")]
+    public void DiagnosticsNameTheirMessage()
+    {
+        var result = Compile(",\"locales\":[\"en\",\"cs\",\"de\"],\"validation\":{\"translationCompleteness\":\"warning\"}",
+            ("en", Plural + "\nlater = Later"),
+            ("cs", "items =\n  .input {$n :integer}\n  .match $n\n  one {{Jedna položka}}\n  * {{{$n} položek}}\nlater = Později"),
+            ("de", "items =\n  .input {$n :integer}\n  .match $n\n  one {{Ein Element}}\n  * {{{$n} Elemente}}"));
+        TranslationDiagnostic missing = Single(result, "RTR0095");
+        Assert.Equal("items", missing.MessageKey);
+        Assert.Equal("cs", missing.Locale);
+        TranslationDiagnostic untranslated = Single(result, "RTR0010");
+        Assert.Equal("later", untranslated.MessageKey);
+        Assert.Equal("de", untranslated.Locale);
+    }
+
+    [Test, DisplayName("the RTR0095 quick fix adds the missing categories as copies of the catch-all, and applies only with a compilation")]
+    public void MissingCategoryQuickFix()
+    {
+        const string czech = "items =\n  .input {$n :number}\n  .match $n\n  one {{Jedna položka}}\n  * {{{$n} položek}}\nlater = Později\n";
+        var result = Compile(",\"locales\":[\"en\",\"cs\"]", ("en", DecimalPlural + "\nlater = Later\n"), ("cs", czech));
+        TranslationSource source = Source("translations/cs.rmf2", czech);
+        Rmf2DiagnosticQuickFix fix = Rmf2DiagnosticActions.GetProjectQuickFixes(result, source).Single();
+        Assert.Equal("RTR0095", fix.DiagnosticId);
+        Assert.Equal("Add the missing plural variants few, many (copies of the * variant)", fix.Title);
+        TranslationSource fixedSource = Rmf2DiagnosticActions.ApplyQuickFix(source, fix, result);
+        Assert.Equal("items =\n  .input {$n :number}\n  .match $n\n  one {{Jedna položka}}\n  few {{{$n} položek}}\n  many {{{$n} položek}}\n  * {{{$n} položek}}\nlater = Později\n",
+            Encoding.UTF8.GetString(fixedSource.Bytes));
+        var repaired = Compile(",\"locales\":[\"en\",\"cs\"]", ("en", DecimalPlural + "\nlater = Later\n"), ("cs", Encoding.UTF8.GetString(fixedSource.Bytes)));
+        Assert.True(repaired.Success, All(repaired));
+        None(repaired, "RTR0094", "RTR0095");
+
+        // The document-only overload does not authorize a project repair, and a changed source refuses it.
+        Assert.Throws<System.InvalidOperationException>(() => Rmf2DiagnosticActions.ApplyQuickFix(source, fix), "A project repair applied without the project.");
+        Assert.Throws<System.InvalidOperationException>(() => Rmf2DiagnosticActions.ApplyQuickFix(fixedSource, fix, repaired), "A stale repair applied.");
+
+        // A direct .mf2 message on one line gets the space it uses between variants.
+        const string direct = ".input {$n :number} .match $n one {{Jedna}} * {{Více}}";
+        var mf2 = TranslationCompiler.CompileRmf2ProjectV5(
+            Source("translations/runic.json", "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\",\"locales\":[\"en\",\"cs\"]}"),
+            [Source("translations/en/items.mf2", ".input {$n :number} .match $n one {{One}} * {{More}}"), Source("translations/cs/items.mf2", direct)]);
+        TranslationSource directSource = Source("translations/cs/items.mf2", direct);
+        Rmf2DiagnosticQuickFix directFix = Rmf2DiagnosticActions.GetProjectQuickFixes(mf2, directSource).Single();
+        Assert.Equal(".input {$n :number} .match $n one {{Jedna}} few {{Více}} many {{Více}} * {{Více}}",
+            Encoding.UTF8.GetString(Rmf2DiagnosticActions.ApplyQuickFix(directSource, directFix, mf2).Bytes));
+    }
+
+    // Compiles the catalog, takes the single RTR0095 repair of the translation, and checks that the repaired catalog
+    // compiles without RTR0094/RTR0095 when the rest of it is complete.
+    private static (string Title, string Repaired) Repair(string config, string english, string locale, string translation, string? completeEnglish = null, string? complete = null)
+    {
+        var result = Compile(config, ("en", english), (locale, translation));
+        TranslationSource source = Source("translations/" + locale + ".rmf2", translation);
+        Rmf2DiagnosticQuickFix fix = Rmf2DiagnosticActions.GetProjectQuickFixes(result, source).Single();
+        string repaired = Encoding.UTF8.GetString(Rmf2DiagnosticActions.ApplyQuickFix(source, fix, result).Bytes);
+        var check = Compile(",\"locales\":[\"en\",\"" + locale + "\"]", ("en", completeEnglish ?? english), (locale, complete is null ? repaired : repaired + complete));
+        Assert.True(check.Success, All(check));
+        None(check, "RTR0094", "RTR0095");
+        return (fix.Title, repaired);
+    }
+
+    [Test, DisplayName("the RTR0095 quick fix takes integer categories from :integer")]
+    public void MissingCategoryQuickFixInteger()
+    {
+        var (title, repaired) = Repair(",\"locales\":[\"en\",\"cs\"]", Plural, "cs", "items =\n  .input {$n :integer}\n  .match $n\n  one {{Jedna}}\n  * {{Více}}");
+        Assert.Equal("Add the missing plural variant few (copies of the * variant)", title);
+        Assert.Equal("items =\n  .input {$n :integer}\n  .match $n\n  one {{Jedna}}\n  few {{Více}}\n  * {{Více}}", repaired);
+    }
+
+    [Test, DisplayName("the RTR0095 quick fix adds ordinal categories")]
+    public void MissingCategoryQuickFixOrdinal()
+    {
+        const string place = "place =\n  .input {$n :integer select=ordinal}\n  .match $n\n  one {{{$n}st}}\n  * {{{$n}th}}";
+        var result = Compile("", ("en", place));
+        TranslationSource source = Source("translations/en.rmf2", place);
+        Rmf2DiagnosticQuickFix fix = Rmf2DiagnosticActions.GetProjectQuickFixes(result, source).Single();
+        Assert.Equal("Add the missing ordinal variants two, few (copies of the * variant)", fix.Title);
+        string repaired = Encoding.UTF8.GetString(Rmf2DiagnosticActions.ApplyQuickFix(source, fix, result).Bytes);
+        Assert.Equal("place =\n  .input {$n :integer select=ordinal}\n  .match $n\n  one {{{$n}st}}\n  two {{{$n}th}}\n  few {{{$n}th}}\n  * {{{$n}th}}", repaired);
+        var check = Compile("", ("en", repaired));
+        Assert.True(check.Success, All(check));
+        None(check, "RTR0094", "RTR0095");
+    }
+
+    [Test, DisplayName("the RTR0095 quick fix ignores exact keys and inserts before a catch-all that comes first")]
+    public void MissingCategoryQuickFixExactKeysAndCatchAllFirst()
+    {
+        var (exactTitle, exact) = Repair(",\"locales\":[\"en\",\"cs\"]", DecimalPlural, "cs", "items =\n  .input {$n :number}\n  .match $n\n  0 {{Žádná}}\n  one {{Jedna}}\n  * {{Více}}");
+        Assert.Equal("Add the missing plural variants few, many (copies of the * variant)", exactTitle);
+        Assert.Equal("items =\n  .input {$n :number}\n  .match $n\n  0 {{Žádná}}\n  one {{Jedna}}\n  few {{Více}}\n  many {{Více}}\n  * {{Více}}", exact);
+
+        var (_, first) = Repair(",\"locales\":[\"en\",\"cs\"]", DecimalPlural, "cs", "items =\n  .input {$n :number}\n  .match $n\n  * {{Více}}\n  one {{Jedna}}");
+        Assert.Equal("items =\n  .input {$n :number}\n  .match $n\n  few {{Více}}\n  many {{Více}}\n  * {{Více}}\n  one {{Jedna}}", first);
+    }
+
+    [Test, DisplayName("the RTR0095 quick fix is offered while the catalog has errors, and when RTR0095 is an error")]
+    public void MissingCategoryQuickFixWithErrors()
+    {
+        // cs misses 'later': RTR0010 is an error by default, so the project does not compile.
+        const string czech = "items =\n  .input {$n :integer}\n  .match $n\n  one {{Jedna}}\n  * {{Více}}\n";
+        var incomplete = Compile(",\"locales\":[\"en\",\"cs\"]", ("en", Plural + "\nlater = Later\n"), ("cs", czech));
+        Assert.True(!incomplete.Success && incomplete.Diagnostics.Any(d => d.Id == "RTR0010" && d.Severity == TranslationDiagnosticSeverity.Error), All(incomplete));
+        var (title, repaired) = Repair(",\"locales\":[\"en\",\"cs\"]", Plural + "\nlater = Later\n", "cs", czech, complete: "later = Později\n");
+        Assert.Equal("Add the missing plural variant few (copies of the * variant)", title);
+        Assert.Equal("items =\n  .input {$n :integer}\n  .match $n\n  one {{Jedna}}\n  few {{Více}}\n  * {{Více}}\n", repaired);
+
+        // pluralCategories: error makes RTR0095 itself an error.
+        var strict = Compile(",\"locales\":[\"en\",\"cs\"],\"validation\":{\"pluralCategories\":\"error\"}", ("en", Plural), ("cs", czech));
+        Assert.Equal(TranslationDiagnosticSeverity.Error, Single(strict, "RTR0095").Severity);
+        Assert.Equal("RTR0095", Rmf2DiagnosticActions.GetProjectQuickFixes(strict, Source("translations/cs.rmf2", czech)).Single().DiagnosticId);
+    }
+
     [Test, DisplayName("RTR0094 reports a plural key the locale never selects, at the key")]
     public void UnreachableCategory()
     {

@@ -177,8 +177,10 @@ internal static class LocaleOperations
             foreach (string directory in emptied.OrderByDescending(static directory => directory.Length))
                 if (Directory.Exists(directory) && !Directory.EnumerateFileSystemEntries(directory).Any()) Directory.Delete(directory);
             InterchangeOperations.WriteFile(Path.GetFullPath(manifest.Source.Path, current), Encoding.UTF8.GetBytes(updated));
+            // Compare-and-swap (TranslationReviewFile.Update): an editor or language server write in between is kept.
             if (review is not null && reviewEntries != 0)
-                ReviewFile.Write(reviewPath, new TranslationInterchangeReview(review.CatalogId, review.Entries.Where(entry => !string.Equals(entry.Locale, locale, StringComparison.OrdinalIgnoreCase))));
+                TranslationReviewFile.Update(reviewPath, review.CatalogId, existing => existing is null ? null
+                    : new TranslationInterchangeReview(existing.CatalogId, existing.Entries.Where(entry => !string.Equals(entry.Locale, locale, StringComparison.OrdinalIgnoreCase))));
         }
         result.WriteOutputLine($"{(dryRun ? "would remove" : "removed")} locale {locale} from {manifest.Source.Path}.");
         // Sources outside the runic.json directory (sourceRoots such as ../shared) are part of the project, and marked.

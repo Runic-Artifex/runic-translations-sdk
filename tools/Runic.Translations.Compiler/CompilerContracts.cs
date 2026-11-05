@@ -103,6 +103,16 @@ public sealed class TranslationCompilerOptions
     /// <summary>The most locales in one catalog. Defaults to 256.</summary>
     public int MaximumLocalesPerCatalog { get; init => field = Positive(value); } = 256;
 
+    /// <summary>
+    /// Compiles only the base locale's sources and applies no <c>validation</c> policy, so the project compiles while
+    /// translations are incomplete or invalid; only errors in runic.json or the base locale fail it. The review file
+    /// computes source fingerprints from it: they depend only on the base messages and their caller contracts.
+    /// </summary>
+    internal bool BaseLocaleOnly { get; init; }
+
+    /// <summary>Applies no <c>validation</c> policy (all read as <c>allow</c>), so policy errors such as RTR0010 do not fail the compile.</summary>
+    internal bool RelaxedValidation { get; init; }
+
     private static int Positive(int value, [System.Runtime.CompilerServices.CallerArgumentExpression(nameof(value))] string? name = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value, name);
@@ -148,4 +158,10 @@ public sealed class TranslationDiagnostic
     public TranslationDiagnosticSeverity Severity { get; }
     public string Message { get; }
     public TextSourceLocation Location { get; }
+
+    /// <summary>The canonical key of the message a per-message project check is about (RTR0010, RTR0094–RTR0098, RTR0090), or null.</summary>
+    internal string? MessageKey { get; init; }
+
+    /// <summary>The locale of the translation that check is about, or null.</summary>
+    internal string? Locale { get; init; }
 }

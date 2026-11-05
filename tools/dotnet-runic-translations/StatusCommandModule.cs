@@ -123,8 +123,8 @@ internal static class StatusCommandModule
             warnings.Add(new CommandDiagnostic(ToolCodes.Diagnostic, "review-file", $"{ReviewFile.InvalidCode}: the review file {InputFiles.DisplayPath(reviewPath, Path.GetFullPath(Environment.CurrentDirectory))} cannot be read ({exception.Code}): {exception.Message}",
                 CommandDiagnosticPhase.Execution, CommandDiagnosticSeverity.Warning));
         }
-        ILookup<string, (TranslationInterchangeReviewEntry Entry, Rmf2TranslationV5? Translation)>? stale = review is null ? null
-            : ReviewFile.Stale(project, compilation, review).ToLookup(static item => item.Entry.Locale, StringComparer.Ordinal);
+        ILookup<string, TranslationReviewStaleEntry>? stale = review is null ? null
+            : TranslationReviewFile.Stale(compilation, review).ToLookup(static item => item.Entry.Locale, StringComparer.Ordinal);
 
         var reports = new List<TranslationsStatusLocale>();
         foreach (Rmf2LocaleV5 locale in project.Locales.OrderBy(locale => locale.Tag == project.DefaultLocale ? 0 : 1).ThenBy(static locale => locale.Tag, StringComparer.Ordinal))
