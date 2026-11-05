@@ -37,6 +37,19 @@ public static partial class TranslationCompiler
             CompileRmf2ProjectV5(project, messages, options, cancellationToken));
     }
 
+    // Whether a path is a grouped <locale>.rmf2 file or a direct <locale>/<id>.mf2 file of the locale.
+    private static bool IsLocaleSource(string path, string locale)
+    {
+        string normalized = path.Replace('\\', '/');
+        int slash = normalized.LastIndexOf('/');
+        string file = normalized[(slash + 1)..];
+        if (file.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
+            return string.Equals(file[..^".rmf2".Length], locale, StringComparison.OrdinalIgnoreCase);
+        if (!file.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase) || slash <= 0) return false;
+        int parent = normalized.LastIndexOf('/', slash - 1);
+        return string.Equals(normalized[(parent + 1)..slash], locale, StringComparison.OrdinalIgnoreCase);
+    }
+
     private sealed record Rmf2ProjectSourceV5(string Key, string[] Path, string Locale, TranslationSource Source, Rmf2ResourceNode Node, Rmf2SourceUnitV5? Unit);
     private sealed record Rmf2ProjectEntryV5(Rmf2ProjectSourceV5 Source, Rmf2LinkedMarkupV5 Linked)
     {
@@ -46,11 +59,16 @@ public static partial class TranslationCompiler
     }
 
     internal static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project,
-        IEnumerable<TranslationSource> messages, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default)
+        IEnumerable<TranslationSource> messages, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default) =>
+        CompileRmf2ProjectV5(project, messages, options, false, cancellationToken);
+
+    /// <param name="pseudoLocales">Whether to generate the development pseudo-locales that runic.json declares in <c>pseudoLocales</c>.</param>
+    internal static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project,
+        IEnumerable<TranslationSource> messages, TranslationCompilerOptions? options, bool pseudoLocales, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(messages);
-        return CompileRmf2ProjectV5(project, Materialize(messages), null, options ?? new TranslationCompilerOptions(), cancellationToken);
+        return CompileRmf2ProjectV5(project, Materialize(messages), null, options ?? new TranslationCompilerOptions(), cancellationToken, pseudoLocales);
     }
 
     /// <summary>
@@ -59,7 +77,12 @@ public static partial class TranslationCompiler
     /// to compiling the units' sources directly.
     /// </summary>
     internal static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project,
-        IEnumerable<Rmf2SourceUnitV5> units, TranslationCompilerOptions options, CancellationToken cancellationToken = default)
+        IEnumerable<Rmf2SourceUnitV5> units, TranslationCompilerOptions options, CancellationToken cancellationToken = default) =>
+        CompileRmf2ProjectV5(project, units, options, false, cancellationToken);
+
+    /// <param name="pseudoLocales">Whether to generate the development pseudo-locales that runic.json declares in <c>pseudoLocales</c>.</param>
+    internal static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project,
+        IEnumerable<Rmf2SourceUnitV5> units, TranslationCompilerOptions options, bool pseudoLocales, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(units);
@@ -72,11 +95,12 @@ public static partial class TranslationCompiler
             sources.Add(unit.Source);
             if (ReferenceEquals(unit.Options, options)) lookup[unit.Source] = unit;
         }
-        return CompileRmf2ProjectV5(project, Materialize(sources), lookup, options, cancellationToken);
+        return CompileRmf2ProjectV5(project, Materialize(sources), lookup, options, cancellationToken, pseudoLocales);
     }
 
     private static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project, TranslationSource[] sources,
-        IReadOnlyDictionary<TranslationSource, Rmf2SourceUnitV5>? units, TranslationCompilerOptions options, CancellationToken cancellationToken)
+        IReadOnlyDictionary<TranslationSource, Rmf2SourceUnitV5>? units, TranslationCompilerOptions options, CancellationToken cancellationToken,
+        bool pseudoLocales = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var diagnostics = new DiagnosticBag();
@@ -89,6 +113,23 @@ public static partial class TranslationCompiler
         JsonValue config = parsed.Root!;
         var markup = new Rmf2ProjectMarkupV5(config, project, diagnostics);
         if (Failed()) return Result();
+        if (manifest.PseudoLocales.Count != 0)
+        {
+            // A pseudo-locale is generated from the base sources; files of its own would be ambiguous in a development
+            // build and, in a release build of a catalog that discovers its locales, would ship as a real locale.
+            foreach (TranslationSource source in sources)
+                foreach (LocaleModel pseudo in manifest.PseudoLocales)
+                    if (IsLocaleSource(source.Path, pseudo.Tag))
+                        diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Pseudo-locale '" + pseudo.Tag + "' is generated; remove its source '" + source.Path + "'.", project, pseudo.Span);
+            if (Failed()) return Result();
+        }
+        if (pseudoLocales && manifest.PseudoLocales.Count != 0)
+        {
+            sources = Rmf2PseudoLocalesV5.Synthesize(sources, manifest.DefaultLocale, manifest.PseudoLocales.Select(static pseudo => pseudo.Tag).ToArray(), options);
+            if (manifest.Locales.Count != 0)
+                foreach (LocaleModel pseudo in manifest.PseudoLocales)
+                    manifest.Locales.Add(new(pseudo.Tag, manifest.DefaultLocale, pseudo.Span, pseudo.Span));
+        }
         var discovered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var extracted = ReadRmf2ProjectSourcesV5(project, sources, units, config, discovered, diagnostics, options, cancellationToken);
         if (discovered.Count > options.MaximumLocalesPerCatalog)
@@ -337,6 +378,9 @@ public static partial class TranslationCompiler
         {
             TranslationPolicy policy = manifest.Policy(source.Locale, ValidationMembers.PluralCategories);
             if (policy == TranslationPolicy.Allow || message.Selectors.Count == 0 || message.Syntax.Variants.Count != message.Variants.Count) return;
+            // A pseudo-locale is synthesized from the base locale's variants; nobody can add the categories its own
+            // rules reach, so its plural keys are not checked (the base locale's are).
+            if (manifest.PseudoLocales.Any(pseudo => string.Equals(pseudo.Tag, source.Locale, StringComparison.OrdinalIgnoreCase))) return;
             string logical = string.Join(".", source.Path);
             for (int position = 0; position < message.Selectors.Count; position++)
             {

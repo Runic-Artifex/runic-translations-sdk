@@ -219,6 +219,9 @@ public sealed class CompiledTranslationLocale
     /// <summary>Whether the values are created on first use and have not been created yet.</summary>
     internal bool IsDeferred => Volatile.Read(ref _values) is null;
 
+    /// <summary>The type whose code creates the deferred values (Hot Reload matches it with the updated types).</summary>
+    internal Type? FactoryType => _valueFactory?.Method.DeclaringType;
+
     internal CompiledTranslationValue[] ValueArray
     {
         get
@@ -236,11 +239,21 @@ public sealed class CompiledTranslationLocale
                     IReadOnlyList<CompiledTranslationValue> created = _valueFactory!() ??
                         throw new InvalidOperationException($"The value factory of locale '{Locale}' returned null.");
                     Volatile.Write(ref _values, CopyValues(created, "valueFactory"));
-                    _valueFactory = null;
+                    // Under Hot Reload the factory reads the generated data again after an edit (TranslationHotReload).
+                    if (!TranslationHotReload.IsSupported) _valueFactory = null;
                 }
 
                 return _values;
             }
+        }
+    }
+
+    /// <summary>Drops the created values of a deferred locale, so the next use calls its factory again (Hot Reload only).</summary>
+    internal void ResetDeferredValues()
+    {
+        lock (_gate)
+        {
+            if (_valueFactory is not null) Volatile.Write(ref _values, null);
         }
     }
 
