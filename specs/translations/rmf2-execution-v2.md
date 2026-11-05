@@ -353,17 +353,23 @@ The message direction (`msgdir`) is the direction of the message's effective
 content locale. A placeholder's direction is its `u:dir` (`ltr`, `rtl`, `auto` for
 unknown, `inherit` for `msgdir`); without one, `integer`, `number`, `date`, `time`
 and `datetime` have their formatting locale's direction, `runic:relative-time`
-the content locale's, `runic:uuid` and `runic:boolean` are left to right, and
-`string`, `runic:list` and literals of those types are unknown. A left-to-right
+and `runic:list` the content locale's, `runic:uuid` and `runic:boolean` are left
+to right, and `string` and literals are unknown. When the strategy applies, each
+item of a `runic:list` is wrapped in FSI and PDI before the CLDR list pattern
+joins them (the Spanish and Hebrew conjunction rules still read the raw item). A left-to-right
 placeholder stays bare when `msgdir` is left to right and its `u:dir` is absent or
 `inherit`, and is otherwise wrapped in U+2066 LRI and U+2069 PDI; a right-to-left
 one in U+2067 RLI and PDI; one of unknown direction in U+2068 FSI and PDI. Markup
 is not isolated; placeholders inside markup are isolated like any other.
 
 The catalog's `runtime.bidiIsolation` (`default`, `on`, `off`) decides whether the
-strategy applies: `default` resolves at compile time to on when a declared locale
-is right to left and to off otherwise. With it off, only a placeholder whose
-`u:dir` is `ltr`, `rtl` or `auto` is isolated. `u:dir` is a formatting option
+strategy applies: `on` always, `off` never, and `default` per format call, on when
+the requested locale, the catalog locale it resolved to or the message's content
+locale is right to left. `default` is carried to the runtime unresolved, so a
+right-to-left overlay or pack of a left-to-right catalog is isolated. When the
+strategy does not apply, only a placeholder whose `u:dir` is `ltr`, `rtl` or
+`auto` is isolated. `u:dir` must be a literal; pack validators reject a variable
+one, as the compiler does. `u:dir` is a formatting option
 like the others: a functionless local alias keeps it, an explicit function
 replaces it, and formatters ignore it. A locale is right to left when its
 explicit script, else its CLDR likely script, is one of CLDR's right-to-left

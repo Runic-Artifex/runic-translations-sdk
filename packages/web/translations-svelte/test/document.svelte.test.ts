@@ -72,6 +72,23 @@ describe("Svelte LocalizedDocument", () => {
     // English fallback text in an Arabic page.
     expect(html([paragraph("en", "Hello")], "rtl")).toBe('<p class="runic-leaf" data-runic-occurrence="p[1]" dir="ltr" lang="en">Hello</p>');
     expect(html([paragraph("he", "שלום")], "rtl")).toBe('<p class="runic-leaf" data-runic-occurrence="p[1]" lang="he">שלום</p>');
+    // Without pageDirection, the page has the provided locale's direction, as %runic.dir% gives it: English fallback text
+    // on an Arabic page states dir="ltr", and Arabic text there needs none.
+    const arabic = { getLocale: () => "ar", subscribe: () => () => {} };
+    const viaRuntime = { ...arabic, getLocale: () => "en", localeDirection: (tag: string) => (tag === "en" ? "rtl" : "ltr") as "ltr" | "rtl" };
+    const withLocale = (nodes: DocumentNode[], localeSource: object) => {
+      const host = document.createElement("div");
+      host.innerHTML = ssr({ nodes, localeSource });
+      return canonicalHtml(host);
+    };
+    expect(withLocale([paragraph("en", "Hello"), paragraph("ar", "مرحبا", "p[2]")], arabic))
+      .toBe('<p class="runic-leaf" data-runic-occurrence="p[1]" dir="ltr" lang="en">Hello</p><p class="runic-leaf" data-runic-occurrence="p[2]" lang="ar">مرحبا</p>');
+    // The locale source's localeDirection (the generated runtime's) decides the page direction when it has one.
+    expect(withLocale([paragraph("en", "Hello")], viaRuntime)).toBe('<p class="runic-leaf" data-runic-occurrence="p[1]" dir="ltr" lang="en">Hello</p>');
+    expect(html([paragraph("en", "Hello")], "ltr")).toBe('<p class="runic-leaf" data-runic-occurrence="p[1]" lang="en">Hello</p>');
+    const explicit = document.createElement("div");
+    explicit.innerHTML = ssr({ nodes: [paragraph("en", "Hello")], localeSource: arabic, pageDirection: "ltr" });
+    expect(canonicalHtml(explicit), "an explicit pageDirection wins").toBe('<p class="runic-leaf" data-runic-occurrence="p[1]" lang="en">Hello</p>');
     // The client renders the same attributes.
     const target = document.createElement("div");
     const component = mount(DocumentFixture, { target, props: { nodes: [paragraph("ar", "مرحبا"), paragraph("en", "Hello", "p[2]")] } });
@@ -88,7 +105,9 @@ describe("Svelte LocalizedDocument", () => {
       expect(source).toContain(`"${script}"`);
       expect(textDirection(`und-${script}`)).toBe("rtl");
     }
-    for (const [tag, direction] of Object.entries({ ar: "rtl", "ar-EG": "rtl", he: "rtl", fa: "rtl", "pa-PK": "rtl", ar_EG: "rtl", "ku-Arab": "rtl", en: "ltr", "he-Latn": "ltr", "sd-Deva": "ltr", "": "ltr", "not a tag": "ltr" }))
+    // Extension and private-use subtags are never the script, as in the runtime's localeDirection and .NET's LocaleDirection.
+    for (const [tag, direction] of Object.entries({ ar: "rtl", "ar-EG": "rtl", he: "rtl", fa: "rtl", "pa-PK": "rtl", ar_EG: "rtl", "ku-Arab": "rtl", en: "ltr", "he-Latn": "ltr", "sd-Deva": "ltr", "": "ltr", "not a tag": "ltr",
+      "ar-u-nu-latn": "rtl", "en-u-nu-arab": "ltr", "de-x-hebr": "ltr", "x-hebr": "ltr", "zh-yue-Hebr": "rtl", "und-Arab-u-nu-latn": "rtl", "sr-Latn-RS": "ltr" }))
       expect(textDirection(tag), tag).toBe(direction);
   });
 

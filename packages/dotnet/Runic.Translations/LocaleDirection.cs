@@ -37,9 +37,35 @@ public static class LocaleDirection
         if (locale.Length == 0) return false;
         if (!LocaleTag.TryCanonicalize(locale.Replace('_', '-'), out string canonical))
             throw new ArgumentException("The locale is not a structurally valid BCP 47 tag.", nameof(locale));
-        return CldrLocales.IsRightToLeft(canonical);
+        return Rmf2Bidi.IsRightToLeft(canonical);
     }
 
     /// <summary>The HTML <c>dir</c> value of <paramref name="direction"/>: <c>ltr</c> or <c>rtl</c>.</summary>
     public static string ToHtml(TextDirection direction) => direction == TextDirection.RightToLeft ? "rtl" : "ltr";
+}
+
+/// <summary>
+/// Plain-text helpers for the bidi isolation controls (U+2066 LRI, U+2067 RLI, U+2068 FSI and U+2069 PDI) that formatting
+/// puts around placeholders, the same as the ESM runtime's <c>removeBidiIsolates</c>.
+/// </summary>
+/// <remarks>
+/// Isolates render invisibly in browsers and in UI text controls, but a plain-text sink sees them: terminal output, logs,
+/// string comparisons in tests, length limits and the clipboard. Remove them there, per call, when a catalog shared with a
+/// UI formats them.
+/// </remarks>
+public static class BidiText
+{
+    /// <summary>Returns <paramref name="text"/> without U+2066–U+2069, or the same string when it has none.</summary>
+    /// <remarks>It also removes isolates that a value itself contained.</remarks>
+    public static string RemoveIsolates(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        int first = text.AsSpan().IndexOfAnyInRange('\u2066', '\u2069');
+        if (first < 0) return text;
+        var builder = new System.Text.StringBuilder(text.Length);
+        builder.Append(text, 0, first);
+        for (int index = first + 1; index < text.Length; index++)
+            if (text[index] is < '\u2066' or > '\u2069') builder.Append(text[index]);
+        return builder.ToString();
+    }
 }

@@ -128,5 +128,7 @@ Runic.Translations.TextDirection.RightToLeft = 1 -> Runic.Translations.TextDirec
 static Runic.Translations.LocaleDirection.Get(string! locale) -> Runic.Translations.TextDirection
 static Runic.Translations.LocaleDirection.IsRightToLeft(string! locale) -> bool
 static Runic.Translations.LocaleDirection.ToHtml(Runic.Translations.TextDirection direction) -> string!
-Runic.Translations.CompiledTranslationCatalog.BidiIsolation.get -> bool
-Runic.Translations.CompiledTranslationCatalog.WithBidiIsolation(bool enabled = true) -> Runic.Translations.CompiledTranslationCatalog!
+Runic.Translations.CompiledTranslationCatalog.BidiIsolation.get -> bool?
+Runic.Translations.CompiledTranslationCatalog.WithBidiIsolation(bool? enabled = true) -> Runic.Translations.CompiledTranslationCatalog!
+Runic.Translations.BidiText
+static Runic.Translations.BidiText.RemoveIsolates(string! text) -> string!

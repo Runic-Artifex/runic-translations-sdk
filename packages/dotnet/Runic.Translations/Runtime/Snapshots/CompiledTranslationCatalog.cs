@@ -124,7 +124,7 @@ public sealed class CompiledTranslationCatalog
         CompiledTranslationCatalog source,
         UnsupportedLocalePolicy unsupportedLocale,
         MissingTranslationPolicy missingKey,
-        bool bidiIsolation)
+        bool? bidiIsolation)
     {
         BidiIsolation = bidiIsolation;
         _definitions = source._definitions;
@@ -182,13 +182,21 @@ public sealed class CompiledTranslationCatalog
     /// <summary>
     /// Whether formatting isolates placeholders with Unicode MessageFormat 2's default bidi strategy (FSI, LRI or RLI
     /// before a placeholder and PDI after it), so a value written in the other direction does not reorder the text around
-    /// it. Placeholders with an explicit <c>u:dir</c> option are isolated either way.
+    /// it: <see langword="true"/> always, <see langword="false"/> never, and <see langword="null"/> (the default) per
+    /// format call, when the requested locale, the snapshot's locale or the message's content locale is written right to
+    /// left. Placeholders with an explicit <c>u:dir</c> of <c>ltr</c>, <c>rtl</c> or <c>auto</c> are isolated either way.
     /// </summary>
-    /// <remarks>Generated catalogs set it from <c>runtime.bidiIsolation</c> in <c>runic.json</c>: on for catalogs that declare a right-to-left locale, unless set to <c>off</c>.</remarks>
-    public bool BidiIsolation { get; }
+    /// <remarks>
+    /// Generated catalogs set it from <c>runtime.bidiIsolation</c> in <c>runic.json</c> (<c>on</c>, <c>off</c>, or
+    /// <c>default</c> for <see langword="null"/>). Because <see langword="null"/> is decided at run time, an application that
+    /// adds a right-to-left locale to a left-to-right library catalog through an overlay gets isolated placeholders in that
+    /// locale. Remove the isolates for a plain-text sink with <see cref="BidiText.RemoveIsolates"/>.
+    /// </remarks>
+    public bool? BidiIsolation { get; }
 
-    /// <summary>Returns a view of the catalog that does or does not isolate placeholders; see <see cref="BidiIsolation"/>.</summary>
-    public CompiledTranslationCatalog WithBidiIsolation(bool enabled = true) =>
+    /// <summary>Returns a view of the catalog with another <see cref="BidiIsolation"/>.</summary>
+    /// <param name="enabled"><see langword="true"/> to always isolate, <see langword="false"/> to never, <see langword="null"/> to decide per locale.</param>
+    public CompiledTranslationCatalog WithBidiIsolation(bool? enabled = true) =>
         enabled == BidiIsolation ? this : new CompiledTranslationCatalog(this, UnsupportedLocale, MissingKey, enabled);
 
     internal CompiledTranslationDefinition[] DefinitionArray => _definitions;

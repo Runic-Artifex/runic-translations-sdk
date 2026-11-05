@@ -58,8 +58,11 @@ The current release contract is exercised by ten complementary fixtures:
 - [`rmf2-bidi-conformance.json`](rmf2-bidi-conformance.json) is the cross-backend
   oracle for [placeholder isolation](../rmf2-execution-v2.md#bidirectional-text):
   MF2's default bidi strategy in left-to-right (`en`) and right-to-left (`ar`,
-  `he`) messages, with the catalog's `bidiIsolation` on and off, every `u:dir`
-  value, literals, local aliases and explicit functions. Expectations use `\u2066`
+  `he`) messages, with the catalog's `bidiIsolation` on, off and default (decided
+  per call, including a right-to-left request on a left-to-right catalog through
+  `requestedLocale`), every `u:dir` value, lists with isolated items, relative
+  time, percentages, right-to-left dates, literals, local aliases and explicit
+  functions. Expectations use `\u2066`
   to `\u2069` escapes and must format exactly in the same four routes as the list
   corpus;
 - [`transport-v2-persisted-references.json`](transport-v2-persisted-references.json)

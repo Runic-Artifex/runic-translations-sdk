@@ -35,7 +35,7 @@ internal enum TranslationUnsupportedLocalePolicy
 // runtime.bidiIsolation in runic.json: MF2's default bidi strategy for placeholders.
 internal enum TranslationBidiIsolation
 {
-    // On when the catalog declares a right-to-left locale.
+    // Decided by the runtime per format call: on when the requested, snapshot or content locale is right to left.
     Default,
     On,
     Off,

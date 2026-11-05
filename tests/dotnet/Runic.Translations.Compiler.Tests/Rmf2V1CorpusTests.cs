@@ -237,8 +237,12 @@ internal sealed class Rmf2V1CorpusTests
     // bidi strategy, accepts u:dir on every function, takes a locale's direction from the pinned likely subtags first and
     // gives createDomDocumentRenderer a pageDirection; runtime.d.ts declares it;
     // the C# output of this left-to-right corpus is unchanged, in both digests.
-    private const string EncodedOutputDigest = "9b8404127396236a57c7e0f5014bfc66750c79c4e30fd466a7b3e2bc23bce7a1";
-    private const string HiddenEncodedOutputDigest = "843191e06b1e62259915a37e37a2e8fe52c94a0d609fff925f20d7ac8ca0fd95";
+    // Re-pinned for the T2f review: runtime.js carries bidiIsolation as "default", "on" or "off" and decides "default" per
+    // call from the requested, catalog and content locales, isolates list items, rejects a variable u:dir, exports
+    // removeBidiIsolates, adds localeDirection to createLocaleSource and defaults pageDirection to <html dir> or the active
+    // locale; runtime.d.ts declares them; the C# output of this corpus (default) is unchanged, in both digests.
+    private const string EncodedOutputDigest = "8c59d175e8180640ef5630095415846022e7612316ed678d6ed6fa148d7f754e";
+    private const string HiddenEncodedOutputDigest = "e61886bc6311e0519f33a9db9d9b44c05d8259a0d6c401cebab8ed548be58945";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

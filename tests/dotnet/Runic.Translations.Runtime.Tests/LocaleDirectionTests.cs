@@ -20,7 +20,7 @@ internal sealed class LocaleDirectionTests
         ["en"] = TextDirection.LeftToRight, ["en-US"] = TextDirection.LeftToRight, ["de"] = TextDirection.LeftToRight, ["ja"] = TextDirection.LeftToRight,
         ["zh-Hant-TW"] = TextDirection.LeftToRight, ["sr-Cyrl"] = TextDirection.LeftToRight, ["pa"] = TextDirection.LeftToRight, ["ku"] = TextDirection.LeftToRight,
         ["he-Latn"] = TextDirection.LeftToRight, ["sd-Deva"] = TextDirection.LeftToRight, ["ks-Deva"] = TextDirection.LeftToRight, ["ar-Latn"] = TextDirection.LeftToRight,
-        ["und"] = TextDirection.LeftToRight, [""] = TextDirection.LeftToRight,
+        ["und"] = TextDirection.LeftToRight, [""] = TextDirection.LeftToRight, ["en-u-nu-arab"] = TextDirection.LeftToRight, ["de-x-hebr"] = TextDirection.LeftToRight,
     };
 
     [Test, DisplayName("LocaleDirection gives a locale's script direction from pinned CLDR data")]
@@ -57,10 +57,20 @@ internal sealed class LocaleDirectionTests
     {
         var catalog = new CompiledTranslationCatalog("app", "en", [new CompiledTranslationDefinition("greeting", [])],
             [new CompiledTranslationLocale("en", null, [new(0, "Hello")])]);
-        Assert.True(!catalog.BidiIsolation, "off by default");
+        Assert.True(catalog.BidiIsolation is null, "decided per locale by default");
         CompiledTranslationCatalog isolated = catalog.WithBidiIsolation();
-        Assert.True(isolated.BidiIsolation && ReferenceEquals(isolated, isolated.WithBidiIsolation(true)), "on");
-        Assert.True(isolated.WithOptions(new TranslationOptions { MissingKey = MissingTranslationPolicy.ReturnKey }).BidiIsolation, "kept by WithOptions");
-        Assert.True(!isolated.WithBidiIsolation(false).BidiIsolation, "off again");
+        Assert.True(isolated.BidiIsolation == true && ReferenceEquals(isolated, isolated.WithBidiIsolation(true)), "on");
+        Assert.True(isolated.WithOptions(new TranslationOptions { MissingKey = MissingTranslationPolicy.ReturnKey }).BidiIsolation == true, "kept by WithOptions");
+        Assert.True(isolated.WithBidiIsolation(false).BidiIsolation == false, "off");
+        Assert.True(isolated.WithBidiIsolation(null).BidiIsolation is null, "default again");
+    }
+
+    [Test, DisplayName("BidiText.RemoveIsolates removes U+2066–U+2069 only")]
+    public void RemoveIsolates()
+    {
+        Assert.Equal("Hello Ada and نور!", BidiText.RemoveIsolates("Hello \u2068Ada\u2069 and \u2067نور\u2069!\u2066\u2069"));
+        const string plain = "No isolates \u200E here";
+        Assert.True(ReferenceEquals(plain, BidiText.RemoveIsolates(plain)), "unchanged text is returned as is");
+        Assert.Equal("", BidiText.RemoveIsolates("\u2066\u2067\u2068\u2069"));
     }
 }

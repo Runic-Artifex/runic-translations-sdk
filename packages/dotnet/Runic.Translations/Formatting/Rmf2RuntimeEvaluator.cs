@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
@@ -55,7 +56,7 @@ internal sealed class Rmf2ResolvedFormat
     /// Formats in <paramref name="locale"/>, the formatting locale for numbers, percentages, dates and times; lists and
     /// relative time use the plural and list data of <paramref name="contentLocale"/>.
     /// </summary>
-    internal string Format(TextArgument value, string locale, string contentLocale)
+    internal string Format(TextArgument value, string locale, string contentLocale, bool isolateItems = false)
     {
         string style = String("style", "iso");
         switch (Function)
@@ -99,7 +100,7 @@ internal sealed class Rmf2ResolvedFormat
                 return style == "iso" ? Get<DateTimeOffset>(value).ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'", CultureInfo.InvariantCulture)
                     : Rmf2LocalizedFormats.DateTime(Get<DateTimeOffset>(value), style, String("timeZone", "local"), Rmf2LocalizedFormats.Culture(locale));
             case "runic:uuid": return Get<Guid>(value).ToString(String("style", "d"), CultureInfo.InvariantCulture);
-            case "runic:list": return TextListFormatter.Format(Get<IReadOnlyList<string>>(value), String("type", "conjunction"), String("style", "long"), contentLocale);
+            case "runic:list": return TextListFormatter.Format(Get<IReadOnlyList<string>>(value), String("type", "conjunction"), String("style", "long"), contentLocale, isolateItems);
             case "runic:relative-time": return TextRelativeTimeFormatter.Format(Rmf2RuntimeDecimal.Parse(Rmf2RuntimeDecimal.Canonical(Number(value))), String("unit", "day"), String("numeric", "always"), contentLocale);
             default: throw new TranslationFormatException("Unknown v5 formatter.");
         }
@@ -187,7 +188,7 @@ internal static class Rmf2RuntimeEvaluator
     /// dates format in when it shares the content locale's language.
     /// </summary>
     internal static string Format(CompiledRmf2Message message, ReadOnlySpan<TextArgument> arguments, string locale, int maximum, string? requestedLocale = null,
-        bool bidiIsolation = false)
+        bool? bidiIsolation = false)
     {
         if (message.HasMarkup) throw new TranslationFormatException("Structured localized content must be requested through FormatContent.");
         LocalizedTextContent content = FormatContent(message, arguments, locale, maximum, requestedLocale, bidiIsolation);
@@ -196,17 +197,22 @@ internal static class Rmf2RuntimeEvaluator
         return builder.ToString();
     }
     /// <remarks>
-    /// With <paramref name="bidiIsolation"/>, every placeholder is isolated with MF2's default bidi strategy; without it, only
-    /// placeholders with an explicit <c>u:dir</c> of <c>ltr</c>, <c>rtl</c> or <c>auto</c> are.
+    /// With <paramref name="bidiIsolation"/> <see langword="true"/>, every placeholder is isolated with MF2's default bidi
+    /// strategy; with <see langword="false"/>, only placeholders with an explicit <c>u:dir</c> of <c>ltr</c>, <c>rtl</c> or
+    /// <c>auto</c> are. <see langword="null"/> (the catalog's <c>default</c>) decides per call: on when the requested locale,
+    /// the snapshot's locale (<paramref name="locale"/>) or the message's content locale is written right to left.
     /// </remarks>
     internal static LocalizedTextContent FormatContent(CompiledRmf2Message message, ReadOnlySpan<TextArgument> arguments, string locale, int maximum, string? requestedLocale = null,
-        bool bidiIsolation = false)
+        bool? bidiIsolation = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(locale);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximum);
         string requested = requestedLocale ?? locale;
+        string snapshotLocale = locale;
         locale = message.ContentLocale ?? locale;
         string formatting = Rmf2LocalizedFormats.FormattingLocale(requested, locale);
+        bool isolation = bidiIsolation ?? (Rmf2Bidi.IsRightToLeft(requested) || Rmf2Bidi.IsRightToLeft(snapshotLocale) || Rmf2Bidi.IsRightToLeft(locale));
+        bool messageRightToLeft = Rmf2Bidi.IsRightToLeft(locale);
         try
         {
             var context = new Context(message, arguments);
@@ -230,7 +236,7 @@ internal static class Rmf2RuntimeEvaluator
                 {
                     Value? expression = node.Expression is null ? null : context.Expression(node.Expression);
                     string text = expression is null ? node.Value
-                        : Rmf2Bidi.Isolate(expression.Format.Format(expression.Carrier, formatting, locale), expression.Format, locale, formatting, bidiIsolation);
+                        : Rmf2Bidi.Isolate(expression.Format.Format(expression.Carrier, formatting, locale, isolation), expression.Format, messageRightToLeft, formatting, isolation);
                     AddLength(text.Length);
                     nodes.Add(new(LocalizedTextContentNodeKind.Text, text, null, node.Expression?.AnnotationArray));
                 }
@@ -296,24 +302,39 @@ internal static class Rmf2Bidi
 {
     internal const char LeftToRightIsolate = '\u2066', RightToLeftIsolate = '\u2067', FirstStrongIsolate = '\u2068', PopDirectionalIsolate = '\u2069';
     private enum Direction { Unknown, LeftToRight, RightToLeft }
+    // Locale directions by tag. The tags are the catalog's, the requested ones and their formatting locales, so the cache
+    // stays small; it stops growing at its limit, as the ESM runtime's does.
+    private static readonly ConcurrentDictionary<string, bool> Directions = new(StringComparer.Ordinal);
+    private const int DirectionCacheLimit = 256;
+
+    /// <summary>Whether a locale tag is written right to left; an empty or invalid tag is not. Cached per tag.</summary>
+    internal static bool IsRightToLeft(string? locale)
+    {
+        if (string.IsNullOrEmpty(locale)) return false;
+        if (Directions.TryGetValue(locale, out bool cached)) return cached;
+        bool value;
+        try { value = LocaleTag.TryCanonicalize(locale, out string canonical) && CldrLocales.IsRightToLeft(canonical); }
+        catch (ArgumentException) { value = false; }
+        if (Directions.Count < DirectionCacheLimit) Directions.TryAdd(locale, value);
+        return value;
+    }
 
     /// <param name="text">The formatted placeholder.</param>
     /// <param name="format">Its resolved format, with its function and <c>u:dir</c> option.</param>
-    /// <param name="contentLocale">The locale the message is written in, which gives the message's direction.</param>
+    /// <param name="messageRightToLeft">Whether the message's content locale, which gives the message's direction, is right to left.</param>
     /// <param name="formattingLocale">The locale numbers and dates format in.</param>
-    /// <param name="isolation">The catalog's bidi isolation: without it only an explicit <c>u:dir</c> isolates.</param>
-    internal static string Isolate(string text, Rmf2ResolvedFormat format, string contentLocale, string formattingLocale, bool isolation)
+    /// <param name="isolation">Whether this format isolates placeholders: without it only an explicit <c>u:dir</c> isolates.</param>
+    internal static string Isolate(string text, Rmf2ResolvedFormat format, bool messageRightToLeft, string formattingLocale, bool isolation)
     {
         string? option = format.Direction;
         if (!isolation && option is null or "inherit") return text;
-        bool messageRightToLeft = CldrLocales.IsRightToLeft(contentLocale);
         Direction direction = option switch
         {
             "ltr" => Direction.LeftToRight,
             "rtl" => Direction.RightToLeft,
             "auto" => Direction.Unknown,
             "inherit" => messageRightToLeft ? Direction.RightToLeft : Direction.LeftToRight,
-            _ => Of(format.Function, contentLocale, formattingLocale),
+            _ => Of(format.Function, messageRightToLeft, formattingLocale),
         };
         bool explicitIsolation = option is "ltr" or "rtl" or "auto";
         return direction switch
@@ -325,13 +346,16 @@ internal static class Rmf2Bidi
         };
     }
 
-    // The direction a function's output has without u:dir: numbers, dates and times are written in their formatting locale
-    // and relative times in the content locale; UUIDs and booleans are ASCII; text and lists of text come from the caller
-    // and have no known direction.
-    private static Direction Of(string function, string contentLocale, string formattingLocale) => function switch
+    /// <summary>Wraps a list item in FSI…PDI: the list's separators have the content locale's direction, its items none.</summary>
+    internal static string IsolateItem(string item) => FirstStrongIsolate + item + PopDirectionalIsolate;
+
+    // The direction a function's output has without u:dir: numbers, dates and times are written in their formatting locale;
+    // relative times and lists (whose separators come from CLDR, with each item isolated) in the content locale; UUIDs and
+    // booleans are ASCII; text from the caller has no known direction.
+    private static Direction Of(string function, bool messageRightToLeft, string formattingLocale) => function switch
     {
-        "integer" or "number" or "date" or "time" or "datetime" => CldrLocales.IsRightToLeft(formattingLocale) ? Direction.RightToLeft : Direction.LeftToRight,
-        "runic:relative-time" => CldrLocales.IsRightToLeft(contentLocale) ? Direction.RightToLeft : Direction.LeftToRight,
+        "integer" or "number" or "date" or "time" or "datetime" => IsRightToLeft(formattingLocale) ? Direction.RightToLeft : Direction.LeftToRight,
+        "runic:relative-time" or "runic:list" => messageRightToLeft ? Direction.RightToLeft : Direction.LeftToRight,
         "runic:uuid" or "runic:boolean" => Direction.LeftToRight,
         _ => Direction.Unknown,
     };

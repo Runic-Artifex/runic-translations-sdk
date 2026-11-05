@@ -119,6 +119,7 @@ export function createLocaleSource(options = {}) {
   return Object.freeze({
     getLocale: () => current,
     getRequestedLocale: () => requested,
+    localeDirection,
     subscribe(listener) { if (typeof listener !== "function") throw new TypeError("A locale listener must be a function."); listeners.add(listener); let active = true; return () => { if (active) { active = false; listeners.delete(listener); } }; },
     setLocale(locale) {
       const nextRequested = requestedTag(locale), next = resolveLocale(nextRequested);
@@ -194,20 +195,42 @@ function rightToLeft(canonical) {
   return cached;
 }
 
+// Whether any locale tag (requested, catalog or content) is right to left; an empty or invalid tag is not.
+function rightToLeftTag(tag) {
+  if (typeof tag !== "string" || tag === "") return false;
+  const canonical = canonicalLocale(tag); return canonical !== null && rightToLeft(canonical);
+}
+
+// Whether a format call isolates its placeholders: the catalog's runtime.bidiIsolation "on" always, "off" never, and
+// "default" when the requested locale, the catalog locale it resolved to or the message's content locale is right to left,
+// decided per call, as .NET's Rmf2RuntimeEvaluator does. A right-to-left overlay of a left-to-right catalog is isolated too.
+function bidiIsolationFor(requestedLocale, resolvedLocale, contentLocale) {
+  const mode = generatedLocaleData.bidiIsolation;
+  if (mode === "on") return true;
+  if (mode !== "default") return false;
+  return rightToLeftTag(requestedLocale) || rightToLeftTag(resolvedLocale) || rightToLeftTag(contentLocale);
+}
+
+/** Removes the bidi isolation controls U+2066–U+2069 that formatting puts around placeholders, for plain-text sinks such as terminals, logs and tests. */
+export function removeBidiIsolates(text) {
+  if (typeof text !== "string") throw new TypeError("Text must be a string.");
+  return text.replace(/[\u2066-\u2069]/g, "");
+}
+
 // Unicode MessageFormat 2's default bidi strategy (LDML 48 "Handling Bidirectional Text"), as .NET's Rmf2Bidi: a
 // placeholder of left-to-right direction stays bare in a left-to-right message unless its u:dir asks for isolation, and
-// is otherwise wrapped in LRI…PDI; a right-to-left one in RLI…PDI; one of unknown direction in FSI…PDI. Without the
-// catalog's bidiIsolation only an explicit u:dir of ltr, rtl or auto isolates. Numbers, dates and times have the
-// direction of their formatting locale, relative times of the content locale, UUIDs and booleans are left to right, and
-// text and lists from the caller have none.
-function isolate(text, value, contentLocale, formatLocale) {
+// is otherwise wrapped in LRI…PDI; a right-to-left one in RLI…PDI; one of unknown direction in FSI…PDI. Without isolation
+// for the call only an explicit u:dir of ltr, rtl or auto isolates. Numbers, dates and times have the direction of their
+// formatting locale; relative times and lists (CLDR separators, each item isolated) of the content locale; UUIDs and
+// booleans are left to right, and text from the caller has none.
+function isolate(text, value, messageRtl, formatLocale, isolation) {
   const option = value.format.options["u:dir"];
-  if (!generatedLocaleData.bidiIsolation && (option === undefined || option === "inherit")) return text;
-  const messageRtl = rightToLeft(contentLocale), fn = value.format.function;
+  if (!isolation && (option === undefined || option === "inherit")) return text;
+  const fn = value.format.function;
   const direction = option === "ltr" ? "ltr" : option === "rtl" ? "rtl" : option === "auto" ? "unknown"
     : option === "inherit" ? (messageRtl ? "rtl" : "ltr")
-    : ["integer", "number", "date", "time", "datetime"].includes(fn) ? (rightToLeft(formatLocale) ? "rtl" : "ltr")
-    : fn === "runic:relative-time" ? (messageRtl ? "rtl" : "ltr")
+    : ["integer", "number", "date", "time", "datetime"].includes(fn) ? (rightToLeftTag(formatLocale) ? "rtl" : "ltr")
+    : fn === "runic:relative-time" || fn === "runic:list" ? (messageRtl ? "rtl" : "ltr")
     : ["runic:uuid", "runic:boolean"].includes(fn) ? "ltr" : "unknown";
   const explicit = option === "ltr" || option === "rtl" || option === "auto";
   if (direction === "ltr") return !messageRtl && !explicit ? text : `\u2066${text}\u2069`;
@@ -392,7 +415,7 @@ function validateResolvedOptions(fn, options) {
 }
 
 // locale is the formatting locale of numbers, percentages, dates and times; contentLocale gives lists and relative time.
-function formatResolved(value, locale, contentLocale = locale) {
+function formatResolved(value, locale, contentLocale = locale, isolateItems = false) {
   const fn = value.format.function, options = value.format.options;
   switch (fn) {
     case "string": return value.carrier;
@@ -404,7 +427,7 @@ function formatResolved(value, locale, contentLocale = locale) {
     case "datetime": return formatTemporal(value.carrier, fn, options.style ?? "iso", locale, options.timeZone ?? "local");
     case "runic:uuid": { const canonical = value.carrier; const style = options.style ?? "d"; if (style === "d") return canonical; if (style === "n") return canonical.replaceAll("-", ""); if (style === "b") return `{${canonical}}`; return `(${canonical})`; }
     case "runic:relative-time": return formatRelative(value.type === "int64" ? decimalFromInteger(value.carrier) : value.carrier, options.unit ?? "day", options.numeric ?? "always", contentLocale);
-    case "runic:list": return formatList(value.carrier, options.type ?? "conjunction", options.style ?? "long", contentLocale);
+    case "runic:list": return formatList(value.carrier, options.type ?? "conjunction", options.style ?? "long", contentLocale, isolateItems);
     default: throw new TypeError("Unknown formatter.");
   }
 }
@@ -529,18 +552,20 @@ function formatRelative(value, unit, numeric, locale) {
 
 // Joins the items with the pinned CLDR list patterns, as Intl.ListFormat does: end(n-2, n-1), then
 // middle(i, rest) and start(0, rest). The .NET runtime applies the same generated patterns and Spanish rule.
-function formatList(items, type, style, locale) {
+// isolateItems wraps each item in FSI…PDI (bidi isolation); the Spanish and Hebrew rules still look at the raw item.
+function formatList(items, type, style, locale, isolateItems = false) {
   const entry = cldrLocale(locale), data = entry.list === undefined ? undefined : generatedLocaleData.list[entry.list];
   if (!data) throw new RangeError(`List formatting is not supported for locale '${locale}'.`);
   const offset = (["conjunction", "disjunction", "unit"].indexOf(type) * 3 + ["long", "short", "narrow"].indexOf(style)) * 4;
   const [start, middle, end, two] = data.slice(offset, offset + 4), language = entry.language;
+  const item = index => isolateItems ? `\u2068${items[index]}\u2069` : items[index];
   if (items.length === 0) return "";
-  if (items.length === 1) return items[0];
+  if (items.length === 1) return item(0);
   const last = items[items.length - 1];
-  if (items.length === 2) return applyListPattern(contextualListPattern(language, two, end, two, last), items[0], last);
-  let text = applyListPattern(contextualListPattern(language, two, end, end, last), items[items.length - 2], last);
-  for (let index = items.length - 3; index >= 1; index--) text = applyListPattern(middle, items[index], text);
-  return applyListPattern(start, items[0], text);
+  if (items.length === 2) return applyListPattern(contextualListPattern(language, two, end, two, last), item(0), item(1));
+  let text = applyListPattern(contextualListPattern(language, two, end, end, last), item(items.length - 2), item(items.length - 1));
+  for (let index = items.length - 3; index >= 1; index--) text = applyListPattern(middle, item(index), text);
+  return applyListPattern(start, item(0), text);
 }
 
 // Every pinned pattern has {0} before {1}.
@@ -792,19 +817,20 @@ export function formatCompiledMessage(key, wrapper, inputs, requestedLocale, res
     if (matches && (selectedRanks === null || compareRanks(ranks, selectedRanks) > 0)) { selected = variant; selectedRanks = ranks; selectedIndex = variantIndex; }
   }
   if (!selected) throw new RangeError("Message has no matching variant.");
-  const built = buildNodes(selected.nodes, context, formatLocale, locale, `v${selectedIndex}.`);
+  const built = buildNodes(selected.nodes, context, formatLocale, locale, `v${selectedIndex}.`, bidiIsolationFor(requestedLocale, resolvedLocale, locale));
   if (typeof resolvedLocale === "string") reportFallback(key, resolvedLocale, locale);
   if (!contract.structured) { if (built.some(node => node.kind !== "text")) throw new TypeError("Structured content cannot be formatted as text."); return built.map(node => node.value).join(""); }
   const kind = contract.content === "document" ? "localized-document" : "localized-content";
   return Object.freeze({ kind, key, locale, formatLocale, nodes: Object.freeze(built) });
 }
 
-function buildNodes(nodes, context, locale, contentLocale, path) {
+function buildNodes(nodes, context, locale, contentLocale, path, isolation = false) {
+  const messageRtl = rightToLeftTag(contentLocale);
   const roots = [], stack = [{ children: roots }];
   for (let index = 0; index < nodes.length; index++) {
     const node = nodes[index], parent = stack.at(-1).children;
     if (node.kind === "text") parent.push({ kind: "text", value: node.value, annotations: [] });
-    else if (node.kind === "expression") { const value = context.expression(node.expression); parent.push({ kind: "text", value: isolate(formatResolved(value, locale, contentLocale), value, contentLocale, locale), annotations: annotations(node.expression.annotations) }); }
+    else if (node.kind === "expression") { const value = context.expression(node.expression); parent.push({ kind: "text", value: isolate(formatResolved(value, locale, contentLocale, isolation), value, messageRtl, locale, isolation), annotations: annotations(node.expression.annotations) }); }
     else if (node.markupKind === "open") { const element = { kind: "element", name: node.name, attributes: markupOptions(node.options, context), annotations: annotations(node.annotations), closingAnnotations: [], standalone: false, occurrence: path + index, children: [] }; parent.push(element); stack.push(element); }
     else if (node.markupKind === "standalone") parent.push({ kind: "element", name: node.name, attributes: markupOptions(node.options, context), annotations: annotations(node.annotations), closingAnnotations: [], standalone: true, occurrence: path + index, children: [] });
     else { if (stack.length === 1 || stack.at(-1).name !== node.name) throw new TypeError("Unbalanced markup."); stack.at(-1).closingAnnotations = annotations(node.annotations); stack.pop(); }
@@ -1048,7 +1074,7 @@ function validateExpression(expression, symbols, references) {
 
 function validateOptions(options, symbols, fn) {
   if (!Array.isArray(options) || options.length > 256) return "argument-contract-mismatch"; const names = new Set(), staticEntries=[]; let dynamic=false;
-  for (const option of options) { const memberError=closedMemberError(option,["name","value"]);if(memberError)return memberError==="unknown-member"?memberError:"argument-contract-mismatch";const valueError=validateValue(option.value);if(valueError)return ["unknown-member","malformed"].includes(valueError)?valueError:"argument-contract-mismatch";if(!validName(option.name,true)||names.has(option.name))return "argument-contract-mismatch";names.add(option.name); if (fn) { const type = optionType(fn,option.name); if (!type) return "argument-contract-mismatch"; if (["input","local"].includes(option.value.kind)) { if (option.name === "select" || !Object.hasOwn(symbols,option.value.value) || symbols[option.value.value].type !== type || !symbols[option.value.value].explicitDependencies) return "argument-contract-mismatch"; dynamic=true; } else { try { staticEntries.push([option.name,literal(option.value,type)]); } catch { return "argument-contract-mismatch"; } } } }
+  for (const option of options) { const memberError=closedMemberError(option,["name","value"]);if(memberError)return memberError==="unknown-member"?memberError:"argument-contract-mismatch";const valueError=validateValue(option.value);if(valueError)return ["unknown-member","malformed"].includes(valueError)?valueError:"argument-contract-mismatch";if(!validName(option.name,true)||names.has(option.name))return "argument-contract-mismatch";names.add(option.name); if (fn) { const type = optionType(fn,option.name); if (!type) return "argument-contract-mismatch"; if (["input","local"].includes(option.value.kind)) { if (option.name === "select" || option.name === "u:dir" || !Object.hasOwn(symbols,option.value.value) || symbols[option.value.value].type !== type || !symbols[option.value.value].explicitDependencies) return "argument-contract-mismatch"; dynamic=true; } else { try { staticEntries.push([option.name,literal(option.value,type)]); } catch { return "argument-contract-mismatch"; } } } }
   if(fn){try{const resolved=freezeOwnRecord(staticEntries);validateResolvedOptions(fn,resolved);if(dynamic&&fn==="number"){const style=resolved.style,min=resolved.minimumFractionDigits??0n,max=resolved.maximumFractionDigits;if(style==="percent"&&min>4n||max!==undefined&&min>max)return "argument-contract-mismatch";}}catch{return "argument-contract-mismatch";}}
   return null;
 }
@@ -1249,9 +1275,12 @@ function integerOption(text,schema){return typeof text==="string"&&text.length<=
 // and clearContent retire the previous render: its actions stop calling back and its links lose their destination.
 // Paragraphs and headings with no children or only empty text, and lists with no items, are skipped; occurrences keep counting them.
 const domDocumentLifetimes=new WeakMap();
-export function createDomDocumentRenderer(document,{headingBase=2,custom=[],pageDirection="ltr"}={}) {
+// pageDirection defaults, per render, to the document's <html dir> when it is ltr or rtl, else to the active locale's
+// direction (getLocale(), the same source as SvelteKit's %runic.dir%), so English fallback blocks on an Arabic page get dir="ltr".
+export function createDomDocumentRenderer(document,{headingBase=2,custom=[],pageDirection}={}) {
   if(!Number.isInteger(headingBase)||headingBase<1||headingBase>9)throw new RangeError("headingBase must be an integer from 1 to 9.");
-  if(pageDirection!=="ltr"&&pageDirection!=="rtl")throw new RangeError("pageDirection must be \"ltr\" or \"rtl\".");
+  if(pageDirection!==undefined&&pageDirection!=="ltr"&&pageDirection!=="rtl")throw new RangeError("pageDirection must be \"ltr\" or \"rtl\".");
+  const page=()=>{if(pageDirection!==undefined)return pageDirection;const dir=document.documentElement?.getAttribute?.("dir")?.toLowerCase();return dir==="ltr"||dir==="rtl"?dir:localeDirection(getLocale());};
   let lifetime=null;
   const empty=new WeakSet();
   const create=(tag,occurrence)=>{const node=document.createElement(tag);node.setAttribute("data-runic-occurrence",occurrence);return node;};
@@ -1276,11 +1305,11 @@ export function createDomDocumentRenderer(document,{headingBase=2,custom=[],page
       if(!["runic:ul","runic:ol"].includes(name))node.setAttribute("class","runic-leaf");
       // Top-level blocks carry the effective content locale, which differs from the requested one after a fallback, and its
       // direction when it differs from the page's (English fallback text in an Arabic page).
-      if(!occurrence.includes("/")){node.setAttribute("lang",locale);const direction=localeDirection(locale);if(direction!==pageDirection)node.setAttribute("dir",direction);}
+      if(!occurrence.includes("/")){node.setAttribute("lang",locale);const direction=localeDirection(locale);if(direction!==lifetime.page)node.setAttribute("dir",direction);}
       node.append(...present);return node;
     }},custom);
   // A nested render (from an icon's accessibleName or a custom binding) restores the outer render's lifetime.
-  function build(content,options){const own={active:true,links:[],actions:[]},outer=lifetime;lifetime=own;try{return {nodes:core.render(content,options).filter(node=>node!==null),own};}finally{lifetime=outer;}}
+  function build(content,options){const own={active:true,links:[],actions:[],page:page()},outer=lifetime;lifetime=own;try{return {nodes:core.render(content,options).filter(node=>node!==null),own};}finally{lifetime=outer;}}
   // Retiring also drops the references to application callbacks, so retained nodes do not keep them alive.
   function retire(target){const previous=domDocumentLifetimes.get(target);if(!previous)return;previous.active=false;for(const link of previous.links)link.removeAttribute("href");for(const action of previous.actions){action.node.setAttribute("disabled","");action.release();}previous.links.length=0;previous.actions.length=0;domDocumentLifetimes.delete(target);}
   return Object.freeze({

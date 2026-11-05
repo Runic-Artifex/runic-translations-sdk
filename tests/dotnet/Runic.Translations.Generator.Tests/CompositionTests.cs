@@ -141,7 +141,7 @@ internal sealed class CompositionTests
         Assert.True(!context.TryGetManager("missing", out _), "unknown catalog");
     }
 
-    [Test, DisplayName("generated catalogs isolate placeholders when they declare a right-to-left locale, as runtime.bidiIsolation says")]
+    [Test, DisplayName("generated catalogs isolate placeholders in right-to-left locales by default, always with on and never with off")]
     public async Task BidiIsolation()
     {
         static async Task<string> Greeting(string project, string locale, params (string Locale, string Text)[] sources)
@@ -155,11 +155,33 @@ internal sealed class CompositionTests
             "\",\"code\":{\"namespace\":\"Example.Bidi\",\"className\":\"" + char.ToUpperInvariant(id[0]) + id[1..] + "Text\",\"visibility\":\"public\"},\"baseLocale\":\"en\",\"locales\":[" +
             locales + "]" + (runtime is null ? "" : ",\"runtime\":{\"bidiIsolation\":\"" + runtime + "\"}") + "}";
 
-        Assert.Equal("Hello \u2068Ada\u2069", await Greeting(Project("mixed", "\"en\",\"ar\""), "en", ("en", "greeting = Hello {$name}\n"), ("ar", "greeting = مرحبا {$name}\n")), "en in an en/ar catalog");
+        // default is decided per locale at run time: English text of an en/ar catalog stays free of isolates.
+        Assert.Equal("Hello Ada", await Greeting(Project("mixed", "\"en\",\"ar\""), "en", ("en", "greeting = Hello {$name}\n"), ("ar", "greeting = مرحبا {$name}\n")), "en in an en/ar catalog");
         Assert.Equal("مرحبا \u2068Ada\u2069", await Greeting(Project("mixed", "\"en\",\"ar\""), "ar", ("en", "greeting = Hello {$name}\n"), ("ar", "greeting = مرحبا {$name}\n")), "ar");
         Assert.Equal("Hello Ada", await Greeting(Project("plain", "\"en\",\"de\""), "en", ("en", "greeting = Hello {$name}\n"), ("de", "greeting = Hallo {$name}\n")), "en/de catalog");
         Assert.Equal("Hello \u2068Ada\u2069", await Greeting(Project("forced", "\"en\"", "on"), "en", ("en", "greeting = Hello {$name}\n")), "on");
         Assert.Equal("Hello Ada", await Greeting(Project("quiet", "\"en\",\"he\"", "off"), "en", ("en", "greeting = Hello {$name}\n"), ("he", "greeting = שלום {$name}\n")), "off");
+    }
+
+    [Test, DisplayName("bidiIsolation default: an application's right-to-left overlay of a left-to-right library catalog is isolated")]
+    public async Task RightToLeftOverlayIsolated()
+    {
+        Dictionary<string, byte[]> packs = Packs(OverlayProject.Replace("[ \"en\", \"fr\" ]", "[ \"en\", \"ar\" ]", StringComparison.Ordinal),
+            ("en", "title = Data grid\nrows =\n  .input {$count :integer}\n  {{{$count} rows}}\n"),
+            ("ar", "title = شبكة\nrows =\n  .input {$count :integer}\n  {{{$count} صفوف}}\n"));
+        TranslationContext context = await TranslationContext.CreateBuilder()
+            .Add(GridV1.Registration)
+            .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(packs), [new TranslationOverlayLocale("ar")]))
+            .BuildAsync("en");
+        // The library (en/de) was compiled with bidiIsolation default, which a pre-0.9 compile-time decision turned off.
+        Assert.Equal("3 rows", Text(context, GridId, "rows", new TextArgument("count", 3L)), "English stays bare");
+
+        await context.SetLocaleAsync("ar");
+        Assert.Equal("acme-grid:ar>ar:Exact", Describe(context.Catalogs[0]), "added locale");
+        Assert.Equal("\u20673\u2069 صفوف|شبكة", Text(context, GridId, "rows", new TextArgument("count", 3L)) + "|" + Text(context, GridId, "title"),
+            "the Arabic overlay's placeholder is isolated");
+        // A message the overlay lacks falls back to the library's English, which an Arabic request isolates too.
+        Assert.Equal("No rows", Text(context, GridId, "empty"), "English fallback without placeholders");
     }
 
     [Test, DisplayName("a context publishes every catalog together and changes none when one fails")]

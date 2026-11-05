@@ -3,13 +3,17 @@
   import type { InlineNode, InlineSnippets } from "../inline/types.js";
   import type { DocumentBlock, DocumentNode } from "./types.js";
   import { textDirection, type TextDirection } from "../translations/direction.js";
-  let { nodes, custom = {}, headingBase = 2, pageDirection = "ltr" }: { nodes: readonly DocumentNode[]; custom?: InlineSnippets; headingBase?: number; pageDirection?: TextDirection } = $props();
-  // A top-level block states its content locale's direction beside its lang when it differs from the page's (default
-  // ltr): Arabic content in an English page, or English fallback text in an Arabic page that passes pageDirection="rtl".
+  import { activeLocale } from "../translations/active-locale.js";
+  let { nodes, custom = {}, headingBase = 2, pageDirection }: { nodes: readonly DocumentNode[]; custom?: InlineSnippets; headingBase?: number; pageDirection?: TextDirection } = $props();
+  // The page's direction: the prop, else the provided locale's (the same source as SvelteKit's %runic.dir%), else ltr.
+  const locale = activeLocale();
+  const page: TextDirection = $derived(pageDirection ?? locale?.direction ?? "ltr");
+  // A top-level block states its content locale's direction beside its lang when it differs from the page's: Arabic
+  // content in an English page, or English fallback text in an Arabic page.
   // Spread as an attribute: Svelte sets dir as a DOM property on the client, where undefined would still write dir="".
   function direction(top: boolean, locale: string): Readonly<{ dir?: TextDirection }> {
     const value = textDirection(locale);
-    return !top || value === pageDirection ? {} : { dir: value };
+    return !top || value === page ? {} : { dir: value };
   }
   const leaves = new Set(["runic:p", "runic:h", "runic:li"]);
   const known = new Set([...leaves, "runic:ul", "runic:ol"]);

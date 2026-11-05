@@ -581,14 +581,18 @@ internal sealed class Rmf2EsmV5Tests
         {
             string script = Path.Combine(directory, "direction.mjs");
             File.WriteAllText(script, """
-                import { locales, localeDirection } from "./direction.esm-v5/runtime.js";
+                import { createLocaleSource, locales, localeDirection, removeBidiIsolates } from "./direction.esm-v5/runtime.js";
                 if(locales.map(localeDirection).join()!=="rtl,ltr,rtl")throw new Error(`catalog directions: ${locales.map(localeDirection)}`);
                 // The likely script decides, so a region or an explicit script can change the language's default.
                 const expected={ar:"rtl","ar-EG":"rtl","AR-eg":"rtl",he:"rtl",iw:"rtl",fa:"rtl",ur:"rtl",ps:"rtl",dv:"rtl",yi:"rtl",ckb:"rtl",sd:"rtl",ug:"rtl",ks:"rtl",
-                  "pa-PK":"rtl","pa-Arab":"rtl","az-IR":"rtl","uz-AF":"rtl","ku-Arab":"rtl","en-Arab":"rtl","und-Hebr":"rtl","ar-u-nu-latn":"rtl",
+                  "pa-PK":"rtl","pa-Arab":"rtl","az-IR":"rtl","uz-AF":"rtl","ku-Arab":"rtl","en-Arab":"rtl","und-Hebr":"rtl","ar-u-nu-latn":"rtl","en-u-nu-arab":"ltr","de-x-hebr":"ltr",
                   en:"ltr","en-US":"ltr",de:"ltr",ja:"ltr","zh-Hant-TW":"ltr","sr-Cyrl":"ltr",pa:"ltr",ku:"ltr","he-Latn":"ltr","sd-Deva":"ltr","ks-Deva":"ltr","ar-Latn":"ltr",und:"ltr"};
                 for(const [tag,direction] of Object.entries(expected))if(localeDirection(tag)!==direction)throw new Error(`${tag}: ${localeDirection(tag)}`);
                 for(const tag of [""," ","en-","x","en-a",undefined,null,1]){let rejected=false;try{localeDirection(tag);}catch(error){rejected=error instanceof RangeError;}if(!rejected)throw new Error(`accepted ${String(tag)}`);}
+                // A locale source offers the runtime's localeDirection, which translations-svelte's SvelteLocale.direction uses.
+                if(createLocaleSource({initialLocale:"ar"}).localeDirection("ar-u-nu-latn")!=="rtl")throw new Error("createLocaleSource().localeDirection");
+                if(removeBidiIsolates("Hello \u2068Ada\u2069 \u2067نور\u2069\u2066\u2069!")!=="Hello Ada نور!")throw new Error("removeBidiIsolates");
+                {let rejected=false;try{removeBidiIsolates(1);}catch(error){rejected=error instanceof TypeError;}if(!rejected)throw new Error("removeBidiIsolates accepted a number");}
                 // Every language the engine has data for agrees with the engine's own Intl.Locale text info. Tags with
                 // an explicit script are not compared: JavaScriptCore reports "ltr" for en-Arab, ku-Arab, az-IR and
                 // und-Hebr, where V8 and CLDR's script metadata say "rtl".

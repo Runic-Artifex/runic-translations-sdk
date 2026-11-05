@@ -200,8 +200,8 @@ and `az-IR`. Without `Intl.Locale`, a language outside the catalog counts only
 with an explicit script subtag. An invalid tag throws a `RangeError`, as in
 `resolveLocale`. In .NET, use `LocaleDirection.Get(locale)`, which gives the same
 answer from the same pinned data, also with `InvariantGlobalization`. The runtime
-also isolates placeholders for right-to-left catalogs; see
-[right-to-left text](bidi.md).
+also isolates placeholders in right-to-left locales, and `removeBidiIsolates(text)`
+removes the isolates for plain-text output; see [right-to-left text](bidi.md).
 
 Dynamic loading consumes locale artifact 5 and validates the
 closed artifact envelope, profile and grammar 5, catalog, caller fingerprint,

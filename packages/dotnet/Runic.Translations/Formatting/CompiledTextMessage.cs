@@ -371,7 +371,7 @@ internal static class CompiledTextMessageRuntime
 
     internal static string Format(CompiledTextMessage message, ReadOnlySpan<TextArgument> arguments, string locale,
         ITextValueFormatter formatter, int maximumOutputLength = TextPatternFormatter.DefaultMaximumOutputLength, string? requestedLocale = null,
-        bool bidiIsolation = false)
+        bool? bidiIsolation = false)
     {
         if (message.Rmf2V5 is { } v5) return Rmf2RuntimeEvaluator.Format(v5, arguments, locale, maximumOutputLength, requestedLocale, bidiIsolation);
         CompiledTextMessageNode[] nodes = message.NodeArray;
@@ -406,7 +406,7 @@ internal static class CompiledTextMessageRuntime
 
     internal static LocalizedTextContent FormatContent(CompiledTextMessage message, ReadOnlySpan<TextArgument> arguments,
         string locale, ITextValueFormatter formatter, int maximumOutputLength = TextPatternFormatter.DefaultMaximumOutputLength, string? requestedLocale = null,
-        bool bidiIsolation = false)
+        bool? bidiIsolation = false)
     {
         if (message.Rmf2V5 is { } v5) return Rmf2RuntimeEvaluator.FormatContent(v5, arguments, locale, maximumOutputLength, requestedLocale, bidiIsolation);
         locale = message.ContentLocale ?? locale;

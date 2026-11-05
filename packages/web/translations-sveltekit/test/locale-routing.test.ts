@@ -141,6 +141,13 @@ describe("Runic SvelteKit request integration", () => {
     expect(await render(createLocaleHandle(rtl, { htmlLanguageToken: false }), "/ar/setup")).toContain('<html lang="%runic.locale%" dir="rtl">');
     expect(textDirection("he-IL")).toBe("rtl");
     expect(textDirection("en")).toBe("ltr");
+    // Extension and private-use subtags are never the script (the same rule as translations-svelte and the runtime).
+    for (const [tag, direction] of Object.entries({ "ar-u-nu-latn": "rtl", "en-u-nu-arab": "ltr", "de-x-hebr": "ltr", "x-hebr": "ltr", "und-Hebr": "rtl" }))
+      expect(textDirection(tag), tag).toBe(direction);
+    // The SvelteKit and Svelte copies of the helper stay identical below their header comment.
+    const { readFileSync } = await import("node:fs");
+    const body = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8").split("\n").slice(3).join("\n");
+    expect(body("../src/translations/direction.ts")).toBe(body("../../translations-svelte/src/translations/direction.ts"));
   });
 
   test("redirects non-canonical locale URLs", async () => {

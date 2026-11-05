@@ -261,8 +261,7 @@ public static partial class TranslationCompiler
             Rmf2ProjectMarkupV5.Export(usedContracts, contracts.Concat(extraContracts).ToArray(), linkedLocales), HashV5(Encoding.UTF8.GetBytes(callerContract)), SourceHashV5(project, sources))
             {
                 ReferenceFallbackText = manifest.ReferenceFallbackText,
-                BidiIsolation = manifest.BidiIsolation == TranslationBidiIsolation.On ||
-                    (manifest.BidiIsolation == TranslationBidiIsolation.Default && linkedLocales.Any(locale => CldrLocales.IsRightToLeft(locale.Tag))),
+                BidiIsolation = manifest.BidiIsolation,
             });
 
         Rmf2ProjectEntryV5? Compile(Rmf2ProjectSourceV5 source, IReadOnlyList<Rmf2InputV5>? callerInputs)

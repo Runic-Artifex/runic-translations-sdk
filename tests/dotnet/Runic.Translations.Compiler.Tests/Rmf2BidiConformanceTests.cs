@@ -14,31 +14,36 @@ using Runic.Translations.Generated;
 namespace Runic.Translations.Compiler.Tests;
 
 // specs/translations/corpus/rmf2-bidi-conformance.json is the shared .NET/ESM oracle for placeholder bidi isolation
-// (rmf2-execution-v2.md, "Bidirectional text"): MF2's default strategy with and without the catalog's bidiIsolation, u:dir
-// on every function, locals and literals. Each content locale and isolation setting compiles into one project; .NET formats
-// the linked message and the loaded artifact-v5 pack, ESM the generated module and the dynamically decoded artifact.
+// (rmf2-execution-v2.md, "Bidirectional text"): MF2's default strategy with the catalog's bidiIsolation on, off and default
+// (decided per call from the requested, catalog and content locales, so a right-to-left request or overlay on a
+// left-to-right catalog is isolated), u:dir on every function, lists with isolated items, locals and literals. Each content
+// locale and isolation setting compiles into one project; .NET formats the linked message and the loaded artifact-v5 pack,
+// ESM the generated module and the dynamically decoded artifact, each in the vector's requested locale.
 [Category("rmf2-semantic-v5")]
 internal sealed class Rmf2BidiConformanceTests
 {
-    private sealed record Vector(string Id, string Locale, bool Isolation, string Message, JsonObject Arguments, string Expected);
+    private sealed record Vector(string Id, string Locale, string RequestedLocale, string Isolation, string Message, JsonObject Arguments, string Expected);
 
     private static List<Vector> Vectors()
     {
         var corpus = JsonNode.Parse(File.ReadAllBytes(RepositoryPaths.Resolve("specs", "translations", "corpus", "rmf2-bidi-conformance.json")))!;
         var vectors = corpus["cases"]!.AsArray().Select(item => new Vector(
-            item!["id"]!.GetValue<string>(), item["locale"]!.GetValue<string>(), item["bidiIsolation"]!.GetValue<bool>(),
+            item!["id"]!.GetValue<string>(), item["locale"]!.GetValue<string>(), (item["requestedLocale"] ?? item["locale"])!.GetValue<string>(),
+            item["bidiIsolation"]!.GetValue<string>(),
             item["message"]!.GetValue<string>(), item["arguments"]!.AsObject(), item["expected"]!.GetValue<string>())).ToList();
         Assert.True(vectors.Count >= 20, "The bidi vectors are missing.");
         Assert.Equal(vectors.Count, vectors.Select(vector => vector.Id).Distinct(StringComparer.Ordinal).Count(), "Duplicate bidi vector ids.");
+        foreach (string mode in new[] { "on", "off", "default" })
+            Assert.True(vectors.Any(vector => vector.Isolation == mode), "No vector covers bidiIsolation " + mode);
         foreach (string isolate in new[] { "⁦", "⁧", "⁨" })
             Assert.True(vectors.Any(vector => vector.Expected.Contains(isolate, StringComparison.Ordinal)), "No vector covers U+" + ((int)isolate[0]).ToString("X4", CultureInfo.InvariantCulture));
         return vectors;
     }
 
-    private static IEnumerable<IGrouping<(string Locale, bool Isolation), Vector>> Groups() =>
+    private static IEnumerable<IGrouping<(string Locale, string Isolation), Vector>> Groups() =>
         Vectors().GroupBy(vector => (vector.Locale, vector.Isolation));
 
-    private static Rmf2ProjectV5 Project(string locale, bool isolation, IReadOnlyList<Vector> vectors)
+    private static Rmf2ProjectV5 Project(string locale, string isolation, IReadOnlyList<Vector> vectors)
     {
         var source = new StringBuilder();
         for (int index = 0; index < vectors.Count; index++)
@@ -46,15 +51,26 @@ internal sealed class Rmf2BidiConformanceTests
             source.Append("vector").Append(index).Append(" =\n");
             foreach (string line in vectors[index].Message.Split('\n')) source.Append("  ").Append(line).Append('\n');
         }
-        Rmf2ProjectV5 project = Rmf2EsmV5Tests.CompileProject("bidi", locale, [locale], false, isolation ? "on" : "off", (locale, source.ToString()));
-        Assert.Equal(isolation, project.BidiIsolation, "resolved bidiIsolation");
+        Rmf2ProjectV5 project = Rmf2EsmV5Tests.CompileProject("bidi", locale, [locale], false, isolation, (locale, source.ToString()));
+        Assert.Equal(Mode(isolation), project.BidiIsolation, "bidiIsolation");
         return project;
     }
 
+    private static TranslationBidiIsolation Mode(string isolation) => isolation switch
+    {
+        "on" => TranslationBidiIsolation.On,
+        "off" => TranslationBidiIsolation.Off,
+        "default" => TranslationBidiIsolation.Default,
+        _ => throw new InvalidOperationException("Unknown bidiIsolation " + isolation),
+    };
+
     private static TextArgument[] Arguments(JsonObject values) => values.OrderBy(item => item.Key, StringComparer.Ordinal).Select(item =>
     {
-        string value = item.Value!["value"]!.GetValue<string>();
-        TextArgument carrier = item.Value["type"]!.GetValue<string>() switch
+        string type = item.Value!["type"]!.GetValue<string>();
+        if (type == "list")
+            return TextArgument.CreateRmf2(item.Key, new TextArgument("_", item.Value["value"]!.AsArray().Select(element => element!.GetValue<string>()).ToArray()));
+        string value = item.Value["value"]!.GetValue<string>();
+        TextArgument carrier = type switch
         {
             "int64" => new TextArgument("_", long.Parse(value, CultureInfo.InvariantCulture)),
             "decimal" => new TextArgument("_", decimal.Parse(value, CultureInfo.InvariantCulture)),
@@ -62,7 +78,7 @@ internal sealed class Rmf2BidiConformanceTests
             "boolean" => new TextArgument("_", value == "true"),
             "guid" => new TextArgument("_", Guid.Parse(value)),
             "date" => new TextArgument("_", DateOnly.ParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture)),
-            string type => throw new InvalidOperationException("Unsupported bidi corpus carrier " + type),
+            _ => throw new InvalidOperationException("Unsupported bidi corpus carrier " + type),
         };
         return TextArgument.CreateRmf2(item.Key, carrier);
     }).ToArray();
@@ -94,7 +110,8 @@ internal sealed class Rmf2BidiConformanceTests
         Assert.True(failures.Count == 0, string.Join("\n", failures));
 
         static string Format(CompiledRmf2Message message, TextArgument[] arguments, Vector vector) =>
-            Rmf2RuntimeEvaluator.Format(message, arguments, vector.Locale, TextPatternFormatter.DefaultMaximumOutputLength, bidiIsolation: vector.Isolation);
+            Rmf2RuntimeEvaluator.Format(message, arguments, vector.Locale, TextPatternFormatter.DefaultMaximumOutputLength, vector.RequestedLocale,
+                vector.Isolation switch { "on" => true, "off" => false, _ => null });
 
         void Check(Vector vector, string actual, string route)
         {
@@ -116,7 +133,7 @@ internal sealed class Rmf2BidiConformanceTests
                 File.WriteAllBytes(Path.Combine(directory, "artifact.json"), Rmf2LocaleArtifactV5.Render(project, group.Key.Locale).GetUtf8Bytes());
                 var cases = new JsonArray(vectors.Select((vector, index) => (JsonNode)new JsonObject
                 {
-                    ["id"] = vector.Id, ["key"] = "vector" + index, ["locale"] = vector.Locale, ["arguments"] = vector.Arguments.DeepClone(), ["expected"] = vector.Expected,
+                    ["id"] = vector.Id, ["key"] = "vector" + index, ["locale"] = vector.RequestedLocale, ["arguments"] = vector.Arguments.DeepClone(), ["expected"] = vector.Expected,
                 }).ToArray());
                 string script = Path.Combine(directory, "bidi-vectors.mjs");
                 File.WriteAllText(script, "import { readFile } from \"node:fs/promises\";\nimport { m } from \"./bidi.esm-v5/messages.js\";\n" +
@@ -140,7 +157,48 @@ internal sealed class Rmf2BidiConformanceTests
         }
     }
 
-    [Test, DisplayName("runtime.bidiIsolation resolves on for a catalog that declares a right-to-left locale, and u:dir takes only its four literals")]
+    [Test, NotInParallel, DisplayName("a pack whose u:dir names a variable is rejected by the .NET and ESM pack validators, as the compiler rejects it")]
+    public void PackVariableDirection()
+    {
+        Rmf2ProjectV5 project = Rmf2EsmV5Tests.CompileProject("bidi", "en", ["en"], false, "default",
+            ("en", "vector0 =\n  .input {$d :string}\n  {{{$v :string u:dir=ltr} {$d}}}\n"));
+        string valid = Encoding.UTF8.GetString(Rmf2LocaleArtifactV5.Render(project, "en").GetUtf8Bytes());
+        // The u:dir option's literal becomes a reference to the declared input $d, which a hand-edited pack could carry.
+        const string literal = "{\"name\":\"u:dir\",\"value\":{\"kind\":\"string-literal\",\"value\":\"ltr\"}}";
+        Assert.True(valid.Contains(literal, StringComparison.Ordinal), "The artifact has no literal u:dir option: " + valid);
+        string forged = valid.Replace(literal, "{\"name\":\"u:dir\",\"value\":{\"kind\":\"input\",\"value\":\"d\"}}", StringComparison.Ordinal);
+
+        _ = TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(Encoding.UTF8.GetBytes(valid)), Rmf2V1CorpusTests.PackContract(project, "en")).AsTask().GetAwaiter().GetResult();
+        try
+        {
+            _ = TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(Encoding.UTF8.GetBytes(forged)), Rmf2V1CorpusTests.PackContract(project, "en")).AsTask().GetAwaiter().GetResult();
+            throw new InvalidOperationException("The .NET pack loader accepted a variable u:dir.");
+        }
+        catch (TranslationPackException)
+        {
+        }
+
+        string directory = Rmf2EsmV5Tests.Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(project));
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "valid.json"), valid, new UTF8Encoding(false));
+            File.WriteAllText(Path.Combine(directory, "forged.json"), forged, new UTF8Encoding(false));
+            string script = Path.Combine(directory, "variable-direction.mjs");
+            File.WriteAllText(script, """
+                import { readFile } from "node:fs/promises";
+                import { decodeLocaleArtifact } from "./bidi.esm-v5/dynamic.js";
+                const read = async name => JSON.parse(await readFile(new URL(name, import.meta.url), "utf8"));
+                const valid = decodeLocaleArtifact(await read("./valid.json"));
+                if (!valid.ok) throw new Error(`valid artifact rejected: ${valid.reason}`);
+                const forged = decodeLocaleArtifact(await read("./forged.json"));
+                if (forged.ok) throw new Error("the ESM artifact decoder accepted a variable u:dir");
+                """, new UTF8Encoding(false));
+            foreach (string host in Rmf2DatePercentConformanceTests.EsmHosts()) Rmf2EsmV5Tests.Run(host, [script], directory);
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
+    [Test, DisplayName("runtime.bidiIsolation keeps default for the runtime to decide per locale, and u:dir takes only its four literals")]
     public void Resolution()
     {
         static Rmf2ProjectCompilation Compile(string locales, string? runtime, string message = "x = {$v}")
@@ -150,14 +208,13 @@ internal sealed class Rmf2BidiConformanceTests
             return TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(json)),
                 [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes(message + "\n"))]);
         }
-        static bool Resolved(string locales, string? runtime) => Compile(locales, runtime).Project!.BidiIsolation;
+        static TranslationBidiIsolation Resolved(string locales, string? runtime) => Compile(locales, runtime).Project!.BidiIsolation;
 
-        Assert.Equal(false, Resolved("\"en\",\"de\"", null), "LTR catalog, default");
-        Assert.Equal(true, Resolved("\"en\",\"ar\"", null), "RTL locale, default");
-        Assert.Equal(true, Resolved("\"en\",\"pa-PK\"", "\"default\""), "likely Arabic script");
-        Assert.Equal(false, Resolved("\"en\",\"pa\"", "\"default\""), "likely Gurmukhi script");
-        Assert.Equal(true, Resolved("\"en\"", "\"on\""), "on");
-        Assert.Equal(false, Resolved("\"en\",\"he\"", "\"off\""), "off");
+        // default is not resolved from the declared locales: an RTL overlay may add a locale the catalog does not declare.
+        Assert.Equal(TranslationBidiIsolation.Default, Resolved("\"en\",\"de\"", null), "LTR catalog, default");
+        Assert.Equal(TranslationBidiIsolation.Default, Resolved("\"en\",\"ar\"", "\"default\""), "RTL locale, default");
+        Assert.Equal(TranslationBidiIsolation.On, Resolved("\"en\"", "\"on\""), "on");
+        Assert.Equal(TranslationBidiIsolation.Off, Resolved("\"en\",\"he\"", "\"off\""), "off");
         foreach (string invalid in new[] { "\"yes\"", "true" })
         {
             Rmf2ProjectCompilation result = Compile("\"en\"", invalid);

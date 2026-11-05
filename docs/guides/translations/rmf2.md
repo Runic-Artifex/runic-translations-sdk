@@ -412,7 +412,8 @@ so the paragraph after an empty one is still `p[2]`.
 Every block and inline element carries `data-runic-occurrence`, and each
 top-level block carries `lang` with the effective content locale, which differs
 from the requested locale after a fallback, and `dir` when that locale's
-direction differs from the page's (`pageDirection`, default `ltr`; see
+direction differs from the page's (`pageDirection`, by default the active
+locale's direction; see
 [right-to-left text](bidi.md#content-in-a-page)). Leaves keep their text verbatim
 through the `runic-leaf` class, which needs `white-space: pre-wrap`. The Svelte
 component ships that rule; a page that uses the DOM adapter adds it to its own

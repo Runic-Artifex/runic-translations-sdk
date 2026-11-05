@@ -157,7 +157,7 @@ internal static class Rmf2RuntimeValidation
             TextArgumentType type = OptionType(function!, option.Name);
             if (option.Value.Kind is "input" or "local")
             {
-                if (option.Name == "select") throw new ArgumentException("Select is literal-only.", nameof(expression));
+                if (option.Name is "select" or "u:dir") throw new ArgumentException("The " + option.Name + " option is literal-only.", nameof(expression));
                 dynamic = true;
             }
             else
