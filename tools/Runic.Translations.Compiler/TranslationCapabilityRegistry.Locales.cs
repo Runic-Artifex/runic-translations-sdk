@@ -121,6 +121,36 @@ internal static partial class TranslationCapabilityRegistry
         return languages;
     }
 
+    /// <summary>
+    /// The number data of <paramref name="languages"/> as a locale artifact's <c>formatData.numbers</c>: the number records
+    /// and minimumGroupingDigits of their CLDR locales, and the likely subtags, parents and aliases that resolve their tags,
+    /// selected as <see cref="EsmLocaleSource"/> selects them for a catalog.
+    /// </summary>
+    internal static void WriteNumberData(Utf8JsonWriter writer, HashSet<string> languages)
+    {
+        bool Selected(string id) => languages.Contains(CldrLocales.Parse(id).Language);
+        writer.WriteStartObject();
+        writer.WriteStartObject("locales");
+        foreach (System.Text.Json.JsonProperty property in s_localeData.Value.RootElement.GetProperty("numbers").EnumerateObject())
+            if (Selected(property.Name)) property.WriteTo(writer);
+        writer.WriteEndObject();
+        writer.WriteStartObject("grouping");
+        for (int index = 0; index < GeneratedLocaleTables.GroupingKeys.Length; index++)
+            if (Selected(GeneratedLocaleTables.GroupingKeys[index])) writer.WriteNumber(GeneratedLocaleTables.GroupingKeys[index], GeneratedLocaleTables.GroupingValues[index]);
+        writer.WriteEndObject();
+        Strings("likely", GeneratedLocaleTables.LikelyKeys, GeneratedLocaleTables.LikelyValues, (key, _) => Selected(key));
+        Strings("parents", GeneratedLocaleTables.ParentKeys, GeneratedLocaleTables.ParentValues, (key, _) => Selected(key));
+        Strings("aliases", GeneratedLocaleTables.AliasKeys, GeneratedLocaleTables.AliasValues, (key, value) => languages.Contains(CldrLocales.Parse(value).Language));
+        writer.WriteEndObject();
+
+        void Strings(string name, string[] keys, string[] values, Func<string, string, bool> selected)
+        {
+            writer.WriteStartObject(name);
+            for (int index = 0; index < keys.Length; index++) if (selected(keys[index], values[index])) writer.WriteString(keys[index], values[index]);
+            writer.WriteEndObject();
+        }
+    }
+
     // Locale tags are ASCII letters, digits and hyphens.
     private static string Quote(string value) => "\"" + value + "\"";
 

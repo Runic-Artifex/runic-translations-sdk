@@ -63,8 +63,14 @@ internal static class Rmf2FormatDataV1
         /// <summary>The <c>runic.json</c> sets that a run-time <c>currency</c> or <c>unit</c> value must come from; empty when no message reads one.</summary>
         internal SortedSet<string> DynamicCurrencies { get; } = new(StringComparer.Ordinal);
         internal SortedSet<string> DynamicUnits { get; } = new(StringComparer.Ordinal);
+        /// <summary>Whether a message formats a number, date or time, whose digits and symbols come from the number records.</summary>
+        internal bool FormatsNumbers { get; set; }
         internal bool IsEmpty => Currencies.Count == 0 && Units.Count == 0 && CompactStyles.Count == 0;
     }
+
+    // The functions whose output uses the locale's number records (digits, symbols, grouping), explicit or by default.
+    private static readonly HashSet<string> NumberFunctions = new(StringComparer.Ordinal) { "integer", "number", CurrencyFunction, UnitFunction, "runic:relative-time", "date", "time", "datetime" };
+    private static readonly Dictionary<string, string> DefaultFunctions = new(StringComparer.Ordinal) { ["int64"] = "integer", ["decimal"] = "number", ["date"] = "date", ["time"] = "time", ["datetime"] = "datetime" };
 
     /// <summary>Collects what <paramref name="messages"/> use; dynamic options add the declared sets.</summary>
     internal static Usage Collect(IEnumerable<Rmf2MessageV5> messages, IReadOnlyCollection<string> declaredCurrencies, IReadOnlyCollection<string> declaredUnits)
@@ -73,6 +79,7 @@ internal static class Rmf2FormatDataV1
         foreach (Rmf2MessageV5 message in messages)
             foreach (Rmf2ExpressionV5 expression in Expressions(message))
             {
+                usage.FormatsNumbers |= NumberFunctions.Contains(expression.Function ?? DefaultFunctions.GetValueOrDefault(expression.ValueType) ?? "");
                 if (expression.Function == CurrencyFunction) Option(expression, "currency", usage.Currencies, usage.DynamicCurrencies, declaredCurrencies);
                 else if (expression.Function == UnitFunction) Option(expression, "unit", usage.Units, usage.DynamicUnits, declaredUnits);
                 else if (expression.Function == "number" && expression.Options.Any(option => option.Name == NotationOption && (option.Value.Kind != "string-literal" || option.Value.Value == "compact")))
@@ -101,11 +108,14 @@ internal static class Rmf2FormatDataV1
     /// <summary>
     /// The data <paramref name="usage"/> needs for the CLDR locales of <paramref name="locales"/>' languages, as compact
     /// JSON: <c>{"currencies": {code: digits}, "dynamicCurrencies": [...], "dynamicUnits": [...], "locales": {id: {...}}}</c>
-    /// with each locale's sections reduced to the used members; null when nothing is used.
+    /// with each locale's sections reduced to the used members, and, with <paramref name="numbers"/> (a locale artifact)
+    /// when the messages format numbers, dates or times, the number records of those languages
+    /// (<see cref="TranslationCapabilityRegistry.WriteNumberData"/>); null when nothing is needed.
     /// </summary>
-    internal static string? Select(IEnumerable<string> locales, Usage usage)
+    internal static string? Select(IEnumerable<string> locales, Usage usage, bool numbers = false)
     {
-        if (usage.IsEmpty) return null;
+        numbers &= usage.FormatsNumbers;
+        if (usage.IsEmpty && !numbers) return null;
         HashSet<string> languages = TranslationCapabilityRegistry.CatalogLanguages(locales);
         // A composed X-per-Y unit needs both parts and the per patterns; a CLDR compound unit has its own entry.
         var units = new SortedSet<string>(StringComparer.Ordinal);
@@ -121,6 +131,13 @@ internal static class Rmf2FormatDataV1
         using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
         {
             writer.WriteStartObject();
+            // An overlay that adds a language formats with that language's number records on a catalog without them.
+            if (numbers)
+            {
+                writer.WritePropertyName("numbers");
+                TranslationCapabilityRegistry.WriteNumberData(writer, languages);
+            }
+            if (usage.IsEmpty) { writer.WriteEndObject(); goto Done; }
             writer.WriteStartObject("currencies");
             foreach (string code in usage.Currencies) writer.WriteNumber(code, root.GetProperty("currencies").GetProperty(code).GetInt32());
             writer.WriteEndObject();
@@ -165,6 +182,7 @@ internal static class Rmf2FormatDataV1
             }
             writer.WriteEndObject();
             writer.WriteEndObject();
+            Done:;
 
             void WriteList(string name, SortedSet<string> values)
             {
@@ -181,7 +199,8 @@ internal static class Rmf2FormatDataV1
     {
         using Stream compressed = typeof(Rmf2FormatDataV1).Assembly.GetManifestResourceStream("Runic.Translations.Compiler.GeneratedFormatData.bin")
             ?? throw new InvalidOperationException("The pinned CLDR format data resource is missing.");
-        using var inflater = new DeflateStream(compressed, CompressionMode.Decompress);
+        // eng/generate-cldr.mjs writes it with Brotli, about a third smaller than deflate.
+        using var inflater = new BrotliStream(compressed, CompressionMode.Decompress);
         using var buffer = new MemoryStream();
         inflater.CopyTo(buffer);
         return JsonDocument.Parse(buffer.ToArray());

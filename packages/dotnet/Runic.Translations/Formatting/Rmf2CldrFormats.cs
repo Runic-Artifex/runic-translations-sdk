@@ -1,150 +1,8 @@
 using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
 
 namespace Runic.Translations;
-
-/// <summary>
-/// The pinned CLDR currency, unit and compact-notation data that the compiler embeds with a set of messages (a .NET
-/// catalog locale or a locale artifact): only the currencies, units and compact styles they use, for the CLDR locales of
-/// their languages (D055.4). The ESM runtime reads the same selection (<c>generatedLocaleData.formats</c>).
-/// </summary>
-/// <remarks>
-/// <c>{"currencies": {code: fraction digits}, "dynamicCurrencies": [...], "dynamicUnits": [...], "locales": {data ID:
-/// {"currencyFormats", "currencies", "units", "per", "compact"}}}</c>. Each locale stores what differs from its CLDR
-/// parent chain, so a lookup walks the chain of the formatting locale's data ID to the first locale with the entry.
-/// The record layouts are those of <c>specs/translations/cldr/runic-formats-48.2.json</c>.
-/// </remarks>
-internal sealed class Rmf2FormatData
-{
-    private const int MaximumBytes = 4 * 1024 * 1024;
-    private readonly Dictionary<string, int> _currencyDigits = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _dynamicCurrencies = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _dynamicUnits = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, Entry> _locales = new(StringComparer.Ordinal);
-
-    private sealed class Entry
-    {
-        internal Dictionary<string, string?[]> CurrencyFormats { get; } = new(StringComparer.Ordinal);
-        internal Dictionary<string, string?[]> Currencies { get; } = new(StringComparer.Ordinal);
-        internal Dictionary<string, string?[]?[]> Units { get; } = new(StringComparer.Ordinal);
-        internal Dictionary<string, string> Per { get; } = new(StringComparer.Ordinal);
-        internal Dictionary<string, Dictionary<string, string?[][]>> Compact { get; } = new(StringComparer.Ordinal);
-    }
-
-    private Rmf2FormatData() { }
-
-    /// <summary>Reads the compiler's embedded JSON.</summary>
-    /// <exception cref="TranslationPackException">The data is not in the compiler's form.</exception>
-    internal static Rmf2FormatData Parse(ReadOnlySpan<byte> utf8Json)
-    {
-        if (utf8Json.Length > MaximumBytes) throw Malformed();
-        var reader = new Utf8JsonReader(utf8Json, new JsonReaderOptions { MaxDepth = 8 });
-        try
-        {
-            using JsonDocument document = JsonDocument.ParseValue(ref reader);
-            return Parse(document.RootElement);
-        }
-        catch (JsonException) { throw Malformed(); }
-    }
-
-    /// <summary>Reads the <c>formatData</c> member of a locale artifact.</summary>
-    /// <exception cref="TranslationPackException">The data is not in the compiler's form.</exception>
-    internal static Rmf2FormatData Parse(JsonElement root)
-    {
-        try
-        {
-            var data = new Rmf2FormatData();
-            foreach (JsonProperty member in root.EnumerateObject())
-            {
-                switch (member.Name)
-                {
-                    case "currencies":
-                        foreach (JsonProperty currency in member.Value.EnumerateObject()) data._currencyDigits.Add(Code(currency.Name), currency.Value.GetInt32() is >= 0 and <= 6 and var digits ? digits : throw Malformed());
-                        break;
-                    case "dynamicCurrencies": foreach (JsonElement item in member.Value.EnumerateArray()) data._dynamicCurrencies.Add(Code(item.GetString() ?? throw Malformed())); break;
-                    case "dynamicUnits": foreach (JsonElement item in member.Value.EnumerateArray()) data._dynamicUnits.Add(item.GetString() ?? throw Malformed()); break;
-                    case "locales": foreach (JsonProperty locale in member.Value.EnumerateObject()) data._locales.Add(locale.Name, ReadEntry(locale.Value)); break;
-                    default: throw Malformed();
-                }
-            }
-            return data;
-        }
-        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or FormatException) { throw Malformed(); }
-
-        static string Code(string value) => value.Length == 3 && value.AsSpan().IndexOfAnyExceptInRange('A', 'Z') < 0 ? value : throw Malformed();
-    }
-
-    private static Entry ReadEntry(JsonElement value)
-    {
-        var entry = new Entry();
-        foreach (JsonProperty section in value.EnumerateObject())
-            foreach (JsonProperty member in section.Value.EnumerateObject())
-                switch (section.Name)
-                {
-                    case "currencyFormats": entry.CurrencyFormats.Add(member.Name, Slots(member.Value)); break;
-                    case "currencies": entry.Currencies.Add(member.Name, Slots(member.Value)); break;
-                    case "units":
-                    {
-                        var widths = new string?[]?[member.Value.GetArrayLength()];
-                        int index = 0;
-                        foreach (JsonElement width in member.Value.EnumerateArray()) widths[index++] = width.ValueKind == JsonValueKind.Null ? null : Slots(width);
-                        entry.Units.Add(member.Name, widths);
-                        break;
-                    }
-                    case "per": entry.Per.Add(member.Name, member.Value.GetString() ?? throw Malformed()); break;
-                    case "compact":
-                    {
-                        var styles = new Dictionary<string, string?[][]>(StringComparer.Ordinal);
-                        foreach (JsonProperty style in member.Value.EnumerateObject())
-                        {
-                            var magnitudes = new string?[style.Value.GetArrayLength()][];
-                            int index = 0;
-                            foreach (JsonElement record in style.Value.EnumerateArray()) magnitudes[index++] = Slots(record);
-                            styles.Add(style.Name, magnitudes);
-                        }
-                        entry.Compact.Add(member.Name, styles);
-                        break;
-                    }
-                    default: throw Malformed();
-                }
-        return entry;
-    }
-
-    // A record of optional strings whose first value is required.
-    private static string?[] Slots(JsonElement value)
-    {
-        var result = new string?[value.GetArrayLength()];
-        int index = 0;
-        foreach (JsonElement item in value.EnumerateArray()) result[index++] = item.ValueKind == JsonValueKind.Null ? null : item.GetString();
-        return result.Length > 0 && result[0] is not null ? result : throw Malformed();
-    }
-
-    private static TranslationPackException Malformed() => TranslationPackFailure.Create("The embedded CLDR format data is malformed.", TranslationPackFailureReason.Malformed);
-
-    /// <summary>The CLDR fraction digits of an embedded currency, or null when the catalog did not embed it.</summary>
-    internal int? CurrencyDigits(string code) => _currencyDigits.TryGetValue(code, out int digits) ? digits : null;
-
-    internal bool IsDynamicCurrency(string code) => _dynamicCurrencies.Contains(code);
-    internal bool IsDynamicUnit(string unit) => _dynamicUnits.Contains(unit);
-
-    internal string?[]? CurrencyFormats(string id, string system) => Find(id, entry => entry.CurrencyFormats.GetValueOrDefault(system));
-    internal string?[]? Currency(string id, string code) => Find(id, entry => entry.Currencies.GetValueOrDefault(code));
-    internal string?[]?[]? Unit(string id, string unit) => Find(id, entry => entry.Units.GetValueOrDefault(unit));
-    internal string? Per(string id, string width) => Find(id, entry => entry.Per.GetValueOrDefault(width));
-    internal string?[][]? Compact(string id, string system, string style) => Find(id, entry => entry.Compact.GetValueOrDefault(system)?.GetValueOrDefault(style));
-
-    // The first entry along CLDR's parent chain of a data ID, as the extractor stored it.
-    private T? Find<T>(string id, Func<Entry, T?> select) where T : class
-    {
-        for (string? current = id; current is not null; current = CldrLocales.Parent(current, truncate: false))
-            if (_locales.TryGetValue(current, out Entry? entry) && select(entry) is { } value) return value;
-        return null;
-    }
-}
 
 /// <summary>
 /// <c>:currency</c>, <c>:unit</c> and compact notation from the embedded pinned CLDR data, with the number formats of
@@ -154,21 +12,20 @@ internal sealed class Rmf2FormatData
 internal static class Rmf2CldrFormats
 {
     private const string NoBreakSpace = " ";
-    // Parsed patterns, bounded by the pinned data.
-    private static readonly ConcurrentDictionary<string, Pattern> s_patterns = new(StringComparer.Ordinal);
     private static readonly string[] Slots = ["other", "zero", "one", "two", "few", "many"];
 
     /// <summary>A number pattern's subpatterns: affixes (with <c>¤</c> kept) and group sizes; an implicit negative puts <c>-</c> first.</summary>
-    private sealed record Pattern(Affixes Positive, Affixes Negative);
-    private sealed record Affixes(string Prefix, string Suffix, int Primary, int Secondary);
+    internal sealed record Pattern(Affixes Positive, Affixes Negative);
+    internal sealed record Affixes(string Prefix, string Suffix, int Primary, int Secondary);
 
-    private static Pattern Parse(string pattern) => s_patterns.GetOrAdd(pattern, static text =>
+    // Rmf2FormatData caches the result per instance; its reader has checked the pattern (Rmf2FormatData.CurrencyPattern).
+    internal static Pattern ParsePattern(string text)
     {
         int split = Unquoted(text, ';');
         Affixes positive = Subpattern(split < 0 ? text : text[..split]);
         Affixes negative = split < 0 ? positive with { Prefix = "-" + positive.Prefix } : Subpattern(text[(split + 1)..]);
         return new(positive, negative);
-    });
+    }
 
     private static Affixes Subpattern(string pattern)
     {
@@ -236,8 +93,10 @@ internal static class Rmf2CldrFormats
         return (index < record.Length ? record[index] : null) ?? record[offset]!;
     }
 
+    // The message's currency, unit and compact data: its own (an artifact's formatData), else the catalog's, which a pack
+    // or overlay without any borrows when it is bound to the catalog.
     private static Rmf2FormatData Data(Rmf2FormatData? data) =>
-        data ?? throw new TranslationFormatException("The message has no embedded CLDR currency, unit or compact data; build it with the Runic compiler.");
+        data is { HasFormatters: true } ? data : throw new TranslationFormatException("The message has no embedded CLDR currency, unit or compact data; build it with the Runic compiler.");
 
     /// <summary>
     /// <c>:currency</c>: the amount rounded to <paramref name="fractionDigits"/> (the currency's CLDR digits by default), in
@@ -251,7 +110,7 @@ internal static class Rmf2CldrFormats
             throw new TranslationFormatException("Currency '" + code + "' is not in the catalog's runic.json formats.currencies.");
         int digits = fractionDigits ?? data.CurrencyDigits(code) ?? throw new TranslationFormatException("The catalog does not embed currency '" + code + "'.");
         VisibleDecimal visible = VisibleDecimal.FromNumber(value, false, digits, digits);
-        Rmf2NumberFormat format = Rmf2NumberFormat.For(locale);
+        Rmf2NumberFormat format = Rmf2NumberFormat.For(locale, embedded);
         string id = DataId(locale);
         string?[] formats = data.CurrencyFormats(id, format.System) ?? throw new TranslationFormatException("No currency formats for locale '" + locale + "'.");
         string?[] currency = data.Currency(id, code) ?? throw new TranslationFormatException("No data for currency '" + code + "' in locale '" + locale + "'.");
@@ -266,7 +125,7 @@ internal static class Rmf2CldrFormats
         }
         string symbol = display switch { "code" => code, "narrowSymbol" => currency[1] ?? currency[0]!, _ => currency[0]! };
         // A currency's own pattern (CLDR <currency><pattern>) replaces the standard pattern for that currency.
-        Pattern pattern = Parse(sign == "accounting" ? formats[1]! : At(currency, 8) ?? formats[0]!);
+        Pattern pattern = data.Pattern(sign == "accounting" ? formats[1]! : At(currency, 8) ?? formats[0]!);
         Affixes affixes = visible.Negative ? pattern.Negative : pattern.Positive;
         string digitsText = Rmf2NumberFormats.Digits(visible, grouping, locale, format, affixes.Primary, affixes.Secondary, decimalSeparator, groupSeparator);
         string prefix = Affix(affixes.Prefix, format.Minus, null), suffix = Affix(affixes.Suffix, format.Minus, null);
@@ -320,8 +179,8 @@ internal static class Rmf2CldrFormats
         if (dynamic && !data.IsDynamicUnit(unit))
             throw new TranslationFormatException("Unit '" + unit + "' is not in the catalog's runic.json formats.units.");
         VisibleDecimal visible = VisibleDecimal.FromNumber(value, false, minimumFractionDigits, maximumFractionDigits);
-        if (unit == "percent" && display != "long") return Rmf2NumberFormats.Percent(visible, grouping, locale);
-        string number = Rmf2NumberFormats.Decimal(visible, grouping, locale), id = DataId(locale), category = Category(visible, locale);
+        if (unit == "percent" && display != "long") return Rmf2NumberFormats.Percent(visible, grouping, locale, embedded);
+        string number = Rmf2NumberFormats.Decimal(visible, grouping, locale, embedded), id = DataId(locale), category = Category(visible, locale);
         int width = display switch { "long" => 0, "short" => 1, _ => 2 };
         if (data.Unit(id, unit) is { } own) return Substitute(Plural(Width(own, width), 0, category), number, "");
         int split = unit.IndexOf("-per-", StringComparison.Ordinal);
@@ -344,14 +203,44 @@ internal static class Rmf2CldrFormats
 
     /// <summary>
     /// <c>:number runic:notation=compact</c>: the number scaled by the CLDR compact pattern of its magnitude and rounded,
-    /// by default to whole numbers with at least two significant digits (1.2K, 12K, 123K), or to the fraction digit
-    /// options when given; a value that rounds up to the next magnitude takes that magnitude's pattern (999999 → 1M).
-    /// The pattern is chosen by the plural category of the scaled number; <c>useGrouping=auto</c> groups as <c>min2</c>.
+    /// by default to whole numbers with at least two significant digits (1.2K, 12K, 123K), to the fraction digit options
+    /// when given (with only <paramref name="minimumFractionDigits"/>, to at most max(3, minimum) digits, as
+    /// Intl.NumberFormat rounds); a value that rounds up to the next magnitude takes that magnitude's pattern (999999 →
+    /// 1M). The pattern is chosen by the plural category of the scaled number; <c>useGrouping=auto</c> groups as <c>min2</c>.
     /// </summary>
     internal static string Compact(decimal value, string display, string grouping, int? minimumFractionDigits, int? maximumFractionDigits, string locale, Rmf2FormatData? embedded)
     {
+        (VisibleDecimal rounded, int exponent, int shown, string?[][] table, Rmf2NumberFormat format) = CompactRound(value, display, minimumFractionDigits, maximumFractionDigits, locale, embedded);
+        string number = Rmf2NumberFormats.Digits(rounded, grouping == "auto" ? "min2" : grouping, locale, format, format.Primary, format.Secondary, format.Decimal, format.Group);
+        string sign = rounded.Negative ? format.Minus : "";
+        if (exponent == 0 && shown < 3) return sign + number;
+        string?[] record = table[Math.Min(shown, table.Length + 2) - 3];
+        string pattern = Plural(record, 0, Category(rounded, locale));
+        if (rounded.Coefficient == 1 && rounded.Scale == 0 && At(record, 6) is { } one) pattern = one;
+        if (pattern == "0") return sign + number;
+        int split = Unquoted(pattern, ';');
+        if (rounded.Negative && split >= 0) return Zeros(pattern[(split + 1)..], number, format.Minus);
+        return sign + Zeros(split < 0 ? pattern : pattern[..split], number, format.Minus);
+    }
+
+    /// <summary>
+    /// The number a compact <c>:number</c> selects on: the displayed (compact-rounded) value at full scale, 1.2K as 1200,
+    /// with the compact exponent as CLDR's <c>e</c> (<c>c</c>) operand, as TR35 and ICU select a compact number.
+    /// </summary>
+    internal static VisibleDecimal CompactOperand(decimal value, string display, int? minimumFractionDigits, int? maximumFractionDigits, string locale, Rmf2FormatData? embedded, out int exponent)
+    {
+        (VisibleDecimal rounded, exponent, _, _, _) = CompactRound(value, display, minimumFractionDigits, maximumFractionDigits, locale, embedded);
+        return exponent >= rounded.Scale
+            ? VisibleDecimal.Create(rounded.Negative, rounded.Coefficient * VisibleDecimal.Pow10(exponent - rounded.Scale), 0)
+            : VisibleDecimal.Create(rounded.Negative, rounded.Coefficient, rounded.Scale - exponent);
+    }
+
+    // The scaled and rounded value, the exponent it was divided by, the magnitude it displays and the compact table.
+    private static (VisibleDecimal Rounded, int Exponent, int Shown, string?[][] Table, Rmf2NumberFormat Format) CompactRound(decimal value, string display,
+        int? minimumFractionDigits, int? maximumFractionDigits, string locale, Rmf2FormatData? embedded)
+    {
         Rmf2FormatData data = Data(embedded);
-        Rmf2NumberFormat format = Rmf2NumberFormat.For(locale);
+        Rmf2NumberFormat format = Rmf2NumberFormat.For(locale, embedded);
         string?[][] table = data.Compact(DataId(locale), format.System, display) ?? throw new TranslationFormatException("No compact patterns for locale '" + locale + "'.");
         VisibleDecimal exact = VisibleDecimal.Canonical(value);
         UInt128 coefficient = exact.Coefficient;
@@ -364,16 +253,7 @@ internal static class Rmf2CldrFormats
             if (next != exponent) { exponent = next; rounded = Round(coefficient, scale + exponent, exact.Negative, minimumFractionDigits, maximumFractionDigits); }
         }
         int shown = rounded.Coefficient == 0 ? 0 : Magnitude(rounded.Coefficient, rounded.Scale) + exponent;
-        string number = Rmf2NumberFormats.Digits(rounded, grouping == "auto" ? "min2" : grouping, locale, format, format.Primary, format.Secondary, format.Decimal, format.Group);
-        string sign = rounded.Negative ? format.Minus : "";
-        if (exponent == 0 && shown < 3) return sign + number;
-        string?[] record = table[Math.Min(shown, table.Length + 2) - 3];
-        string pattern = Plural(record, 0, Category(rounded, locale));
-        if (rounded.Coefficient == 1 && rounded.Scale == 0 && At(record, 6) is { } one) pattern = one;
-        if (pattern == "0") return sign + number;
-        int split = Unquoted(pattern, ';');
-        if (rounded.Negative && split >= 0) return Zeros(pattern[(split + 1)..], number, format.Minus);
-        return sign + Zeros(split < 0 ? pattern : pattern[..split], number, format.Minus);
+        return (rounded, exponent, shown, table, format);
     }
 
     // The pattern with its run of zeros replaced by the number; a pattern without zeros spells the number out.
@@ -404,14 +284,15 @@ internal static class Rmf2CldrFormats
         return capped - (zeros - 1);
     }
 
-    // coefficient × 10^-scale rounded halfExpand: to the fraction digit options when given, else to whole numbers with at
-    // least two significant digits, without trailing zeros (ICU's compact default).
+    // coefficient × 10^-scale rounded halfExpand: to the fraction digit options when given (only a minimum: at most
+    // max(3, minimum) digits, Intl.NumberFormat's maximum for decimals), else to whole numbers with at least two
+    // significant digits, without trailing zeros (ICU's compact default).
     private static VisibleDecimal Round(UInt128 coefficient, int scale, bool negative, int? minimumFractionDigits, int? maximumFractionDigits)
     {
         if (scale < 0) { coefficient *= VisibleDecimal.Pow10(-scale); scale = 0; }
         int whole = coefficient == 0 ? 1 : coefficient.ToString(CultureInfo.InvariantCulture).Length - scale;
-        int maximum = maximumFractionDigits ?? Math.Max(0, whole >= 2 ? 0 : 2 - whole), minimum = minimumFractionDigits ?? 0;
-        if (minimumFractionDigits is not null && maximumFractionDigits is null) maximum = Math.Max(maximum, minimum);
+        int minimum = minimumFractionDigits ?? 0;
+        int maximum = maximumFractionDigits ?? (minimumFractionDigits is { } given ? Math.Max(3, given) : Math.Max(0, whole >= 2 ? 0 : 2 - whole));
         if (scale > maximum)
         {
             UInt128 divisor = VisibleDecimal.Pow10(scale - maximum), remainder = coefficient % divisor;

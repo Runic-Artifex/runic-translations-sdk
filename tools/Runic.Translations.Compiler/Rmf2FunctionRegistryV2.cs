@@ -16,6 +16,8 @@ internal sealed record Rmf2OptionRuleV2(string Name, string InputType, bool Lite
         if (!Literal) return false;
         if (InputType == "string") return value.Kind == "string-literal" && (Values.Contains(value.Value.Normalize(NormalizationForm.FormC), StringComparer.Ordinal) ||
             Pattern is not null && Rmf2FunctionRegistryV2.IsTimeZone(value.Value) || Accepts?.Invoke(value.Value) == true);
+        // An integer option may also name a value (MF2's fractionDigits=auto).
+        if (value.Kind == "string-literal") return Values.Contains(value.Value, StringComparer.Ordinal);
         return value.Kind == "number-literal" && int.TryParse(value.Canonical, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int number) && number >= Minimum && number <= Maximum;
     }
 }
@@ -36,7 +38,8 @@ internal static class Rmf2FunctionRegistryV2
         Function(Rmf2FormatDataV1.CurrencyFunction, "decimal", "none",
             new Rmf2OptionRuleV2("currency", "string", true, true, "(required)", Array.Empty<string>()) { Accepts = Rmf2FormatDataV1.IsCurrency },
             Enum("currencyDisplay", "symbol", true, "symbol", "narrowSymbol", "code", "name"), Enum("currencySign", "standard", true, "standard", "accounting"), Grouping(),
-            new Rmf2OptionRuleV2("fractionDigits", "int64", true, true, "the currency's CLDR digits", Array.Empty<string>(), 0, 6)),
+            // MF2: "auto" (the default, the currency's digits) or a digit size; the compiler drops auto from the AST.
+            new Rmf2OptionRuleV2("fractionDigits", "int64", true, true, "auto: the currency's CLDR digits", Array.AsReadOnly(["auto"]), 0, 6)),
         Function(Rmf2FormatDataV1.UnitFunction, "decimal", "none",
             new Rmf2OptionRuleV2("unit", "string", true, true, "(required)", Array.Empty<string>()) { Accepts = Rmf2FormatDataV1.IsUnit },
             Enum("unitDisplay", "short", true, "short", "long", "narrow"), Grouping(),

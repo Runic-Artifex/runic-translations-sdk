@@ -103,33 +103,76 @@ internal sealed class Rmf2CurrencyUnitCompilerTests
         Assert.True(!Rmf2LocaleArtifactV5.Render(plain.Project!, "en").Text.Contains("formatData", StringComparison.Ordinal), "A plain locale artifact carries formatData.");
     }
 
-    [Test, NotInParallel, DisplayName("an ESM overlay brings the CLDR data of its messages; a catalog without the formatters rejects it")]
+    [Test, NotInParallel, DisplayName("an ESM overlay brings the CLDR data of its messages, an artifact without it borrows the catalog's, and a catalog without the formatters skips their messages")]
     public void OverlayFormatData()
     {
-        Rmf2ProjectV5 library = Rmf2EsmV5Tests.CompileProject("shop", "en", ["en", "fr"], false, ("en", "total = {{Total: {$n :currency currency=EUR}}}\n"),
-            ("fr", "total = {{Total : {$n :currency currency=EUR}}}\n"));
+        Rmf2ProjectV5 library = Rmf2EsmV5Tests.CompileProject("shop", "en", ["en", "fr"], false, "off",
+            ("en", "total = {{Total: {$n :currency currency=EUR}}}\ncount = {{{$n :number} items}}\n"),
+            ("fr", "total = {{Total : {$n :currency currency=EUR}}}\ncount = {{{$n :number} articles}}\n"));
         Rmf2ProjectV5 plain = Rmf2EsmV5Tests.CompileProject("plain", "en", ["en"], false, ("en", "total =\n  .input {$n :number}\n  {{Total: {$n}}}\n"));
         // An application's French overlay with another currency, which the library's runtime does not embed.
         Rmf2ProjectV5 overlay = Rmf2EsmV5Tests.CompileProject("shop", "fr", ["fr"], false, ("fr", "total = {{Total : {$n :currency currency=CHF}}}\n"));
+        // Overlays that add languages the library lacks: German symbols and Egyptian Arabic digits come from their formatData.
+        Rmf2ProjectV5 added = Rmf2EsmV5Tests.CompileProject("shop", "de", ["de", "ar-EG"], false,
+            ("de", "total = {{Summe: {$n :currency currency=EUR}}}\ncount = {{{$n :number} Artikel}}\n"),
+            ("ar-EG", "total = {{المجموع {$n :currency currency=EUR}}}\ncount = {{{$n :number} عناصر}}\n"));
         Rmf2ProjectV5 plainOverlay = Rmf2EsmV5Tests.CompileProject("plain", "fr", ["fr"], false, ("fr", "total = {{Total : {$n :currency currency=CHF}}}\n"));
         string directory = Rmf2EsmV5Tests.Write([.. TranslationOutputRenderer.RenderRmf2V5EsmModules(library), .. TranslationOutputRenderer.RenderRmf2V5EsmModules(plain)]);
         try
         {
             File.WriteAllBytes(Path.Combine(directory, "overlay.fr.json"), Rmf2LocaleArtifactV5.Render(overlay, "fr").GetUtf8Bytes());
+            File.WriteAllBytes(Path.Combine(directory, "added.de.json"), Rmf2LocaleArtifactV5.Render(added, "de").GetUtf8Bytes());
+            File.WriteAllBytes(Path.Combine(directory, "added.ar-EG.json"), Rmf2LocaleArtifactV5.Render(added, "ar-EG").GetUtf8Bytes());
+            File.WriteAllBytes(Path.Combine(directory, "library.en.json"), Rmf2LocaleArtifactV5.Render(library, "en").GetUtf8Bytes());
+            File.WriteAllBytes(Path.Combine(directory, "plain.en.json"), Rmf2LocaleArtifactV5.Render(plain, "en").GetUtf8Bytes());
             File.WriteAllBytes(Path.Combine(directory, "plain.fr.json"), Rmf2LocaleArtifactV5.Render(plainOverlay, "fr").GetUtf8Bytes());
             string script = Path.Combine(directory, "overlay.mjs");
             File.WriteAllText(script, """
                 import { readFile } from "node:fs/promises";
                 import { m } from "./shop.esm-v5/messages.js";
-                import { installOverlay } from "./shop.esm-v5/dynamic.js";
-                import { installOverlay as installPlain } from "./plain.esm-v5/dynamic.js";
+                import { decodeLocaleArtifact, formatDynamicMessage, installOverlay } from "./shop.esm-v5/dynamic.js";
+                import { decodeLocaleArtifact as decodePlain, installOverlay as installPlain } from "./plain.esm-v5/dynamic.js";
                 const artifact = async name => JSON.parse(await readFile(new URL(name, import.meta.url), "utf8"));
+                const equal = (actual, expected, label) => { if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${label}: ${JSON.stringify(actual)} !== ${JSON.stringify(expected)}`); };
+                const attempt = run => { try { return run(); } catch (error) { return `${error.name}: ${error.message}`; } };
+
+                // The French overlay's own currency data.
                 const installed = installOverlay(await artifact("overlay.fr.json"));
                 if (!installed.ok) throw new Error(JSON.stringify(installed));
-                const french = m.total({ n: "12.5" }, { locale: "fr" }), english = m.total({ n: "12.5" }, { locale: "en" });
-                if (french !== "Total : 12,50\u00a0CHF" || english !== "Total: €12.50") throw new Error(JSON.stringify([french, english]));
-                const rejected = installPlain(await artifact("plain.fr.json"));
-                if (rejected.ok || rejected.reason !== "RTR0023/malformed") throw new Error(JSON.stringify(rejected));
+                equal([m.total({ n: "12.5" }, { locale: "fr" }), m.total({ n: "12.5" }, { locale: "en" })], ["Total : 12,50\u00a0CHF", "Total: €12.50"], "overlay currency");
+
+                // Added languages format with the number records their formatData brings (#143).
+                const german = installOverlay(await artifact("added.de.json")), arabic = installOverlay(await artifact("added.ar-EG.json"));
+                equal([german.ok, german.value?.diagnostics, arabic.ok, arabic.value?.diagnostics], [true, [], true, []], "added locales");
+                equal([m.total({ n: "1234.5" }, { locale: "de" }), m.count({ n: "1234.5" }, { locale: "de" }), m.count({ n: "1234.5" }, { locale: "ar-EG" }),
+                  m.count({ n: "1234.5" }, { locale: "ar-EG-u-nu-latn" })],
+                  ["Summe: 1.234,50\u00a0€", "1.234,5 Artikel", "١٬٢٣٤٫٥ عناصر", "1,234.5 عناصر"], "added number records");
+                arabic.value.remove(); german.value.remove();
+
+                // Without number records neither the catalog nor the overlay has the language's data: skipped, not formatted wrongly.
+                const stripped = await artifact("added.ar-EG.json"); delete stripped.formatData.numbers;
+                const missing = installOverlay(stripped);
+                equal(missing.value.diagnostics.map(item => `${item.key} ${item.reason}`).sort(), ["count unsupported-locale-data", "total unsupported-locale-data"], "missing number data");
+                missing.value.remove();
+
+                // An artifact without formatData borrows the catalog's currency data, as .NET binds it; a currency the catalog
+                // lacks fails as in .NET.
+                const own = await artifact("library.en.json"); delete own.formatData;
+                const decoded = decodeLocaleArtifact(own);
+                if (!decoded.ok) throw new Error(JSON.stringify(decoded));
+                equal([formatDynamicMessage(decoded.value, "total", { n: "12.5" }), formatDynamicMessage(decoded.value, "count", { n: "1234.5" })], ["Total: €12.50", "1,234.5 items"], "borrowed");
+                installed.value.remove();
+                const bare = await artifact("overlay.fr.json"); delete bare.formatData;
+                const lacking = installOverlay(bare);
+                equal(attempt(() => m.total({ n: "12.5" }, { locale: "fr" })), "RangeError: The catalog does not embed currency 'CHF'.", "borrowed without the currency");
+                lacking.value.remove();
+
+                // A catalog built without :currency skips such a message in an overlay and rejects an exact artifact that uses it.
+                const skipped = installPlain(await artifact("plain.fr.json"));
+                equal([skipped.ok, skipped.value?.diagnostics.map(item => `${item.key} ${item.reason}`)], [true, ["total unsupported-function"]], "plain overlay");
+                const exact = await artifact("plain.en.json"), currencyMessage = (await artifact("plain.fr.json")).messages.total;
+                exact.messages.total = { contentLocale: "en", ast: currencyMessage.ast };
+                equal(decodePlain(exact).reason, "RTR0023/unsupported-function", "plain artifact");
                 """, new UTF8Encoding(false));
             foreach (string host in Rmf2DatePercentConformanceTests.EsmHosts()) Rmf2EsmV5Tests.Run(host, [script], directory);
         }

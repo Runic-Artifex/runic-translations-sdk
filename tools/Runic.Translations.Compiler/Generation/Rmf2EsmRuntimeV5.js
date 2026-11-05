@@ -303,7 +303,7 @@ function isolate(text, value, messageRtl, formatLocale, isolation) {
   const fn = value.format.function;
   const direction = option === "ltr" ? "ltr" : option === "rtl" ? "rtl" : option === "auto" ? "unknown"
     : option === "inherit" ? (messageRtl ? "rtl" : "ltr")
-    : ["integer", "number", "currency", "unit", "date", "time", "datetime"].includes(fn) ? (rightToLeftTag(formatLocale) ? "rtl" : "ltr")
+    : ["integer", "number", /*@formats*/"currency", "unit", /*@end-formats*/"date", "time", "datetime"].includes(fn) ? (rightToLeftTag(formatLocale) ? "rtl" : "ltr")
     : fn === "runic:relative-time" || fn === "runic:list" ? (messageRtl ? "rtl" : "ltr")
     : ["runic:uuid", "runic:boolean"].includes(fn) ? "ltr" : "unknown";
   const explicit = option === "ltr" || option === "rtl" || option === "auto";
@@ -410,16 +410,19 @@ function validateInputs(inputs, contract) {
 }
 
 function defaultFunction(type) { return ({ string: "string", int64: "integer", decimal: "number", boolean: "runic:boolean", date: "date", time: "time", datetime: "datetime", guid: "runic:uuid", list: "runic:list" })[type]; }
-function functionType(name) { return ({ string: "string", integer: "int64", number: "decimal", "runic:boolean": "boolean", date: "date", time: "time", datetime: "datetime", "runic:uuid": "guid", "runic:relative-time": "decimal", "runic:list": "list", currency: "decimal", unit: "decimal" })[name]; }
+function functionType(name) { return ({ string: "string", integer: "int64", number: "decimal", "runic:boolean": "boolean", date: "date", time: "time", datetime: "datetime", "runic:uuid": "guid", "runic:relative-time": "decimal", "runic:list": "list"/*@formats*/, currency: "decimal", unit: "decimal"/*@end-formats*/ })[name]; }
 function optionType(fn, name) {
   if (name === "u:dir" && functionType(fn) !== undefined) return "string";
   if (["string", "runic:boolean", "integer", "number"].includes(fn) && name === "select") return "string";
-  if (["integer", "number", "currency", "unit"].includes(fn) && name === "useGrouping") return "string";
+  if ((fn === "integer" || fn === "number") && name === "useGrouping") return "string";
+  /*@formats*/// :currency, :unit and compact notation; a catalog that uses none of them is built without these lines.
+  if ((fn === "currency" || fn === "unit") && name === "useGrouping") return "string";
   if (fn === "number" && ["runic:notation", "runic:compactDisplay"].includes(name)) return "string";
   if (fn === "currency" && ["currency", "currencyDisplay", "currencySign"].includes(name)) return "string";
   if (fn === "currency" && name === "fractionDigits") return "int64";
   if (fn === "unit" && ["unit", "unitDisplay"].includes(name)) return "string";
   if (fn === "unit" && ["minimumFractionDigits", "maximumFractionDigits"].includes(name)) return "int64";
+  /*@end-formats*/
   if (["number", "date", "time", "datetime", "runic:uuid"].includes(fn) && name === "style") return "string";
   if (fn === "datetime" && name === "timeZone") return "string";
   if (fn === "number" && ["minimumFractionDigits", "maximumFractionDigits"].includes(name)) return "int64";
@@ -462,9 +465,9 @@ function contextFor(wrapper, inputs, contract) {
       return [option.name, resolve(option.value, type).carrier];
     });
     const options = freezeOwnRecord(entries); validateResolvedOptions(expressionValue.function, options);
-    // A currency or unit from a variable must be in the catalog's declared set (runic.json formats).
+    /*@formats*/// A currency or unit from a variable must be in the catalog's declared set (runic.json formats).
     const dynamicCode = expressionValue.options.some(option => option.name === expressionValue.function && ["input", "local"].includes(option.value.kind));
-    return Object.freeze({ carrier: inherited.carrier, type: inherited.type, format: Object.freeze({ function: expressionValue.function, options, dynamicCode }) });
+    /*@end-formats*/return Object.freeze({ carrier: inherited.carrier, type: inherited.type, format: Object.freeze({ function: expressionValue.function, options/*@formats*/, dynamicCode/*@end-formats*/ }) });
   };
   for (const declaration of wrapper.ast.declarations) {
     const resolved = expression(declaration.expression);
@@ -476,16 +479,16 @@ function contextFor(wrapper, inputs, contract) {
 function validateResolvedOptions(fn, options) {
   const allowed = {
     string: { select: ["exact"] }, "runic:boolean": { select: ["exact"] }, integer: { select: ["plural", "ordinal", "exact"], useGrouping: ["auto", "always", "never", "min2"] },
-    number: { select: ["plural", "ordinal", "exact"], style: ["decimal", "percent"], useGrouping: ["auto", "always", "never", "min2"], "runic:notation": ["standard", "compact"], "runic:compactDisplay": ["short", "long"] },
-    currency: { currency: /^[A-Z]{3}$/, currencyDisplay: ["symbol", "narrowSymbol", "code", "name"], currencySign: ["standard", "accounting"], useGrouping: ["auto", "always", "never", "min2"] },
+    number: { select: ["plural", "ordinal", "exact"], style: ["decimal", "percent"], useGrouping: ["auto", "always", "never", "min2"]/*@formats*/, "runic:notation": ["standard", "compact"], "runic:compactDisplay": ["short", "long"]/*@end-formats*/ },
+    /*@formats*/currency: { currency: /^[A-Z]{3}$/, currencyDisplay: ["symbol", "narrowSymbol", "code", "name"], currencySign: ["standard", "accounting"], useGrouping: ["auto", "always", "never", "min2"] },
     unit: { unit: /^[a-z0-9-]{1,64}$/, unitDisplay: ["short", "long", "narrow"], useGrouping: ["auto", "always", "never", "min2"] },
-    date: { style: ["iso", "short", "medium", "long", "full"] },
+    /*@end-formats*/date: { style: ["iso", "short", "medium", "long", "full"] },
     time: { style: ["iso", "short", "medium", "long", "full"] }, datetime: { style: ["iso", "short", "medium", "long", "full"], timeZone: null }, "runic:uuid": { style: ["d", "n", "b", "p"] },
     "runic:relative-time": { unit: ["second", "minute", "hour", "day", "week", "month", "year"], numeric: ["always", "auto"] },
     "runic:list": { type: ["conjunction", "disjunction", "unit"], style: ["long", "short", "narrow"] },
   }[fn];
   if (!allowed) throw new TypeError("Unknown formatter.");
-  const digitOption = name => ((fn === "number" || fn === "unit") && ["minimumFractionDigits", "maximumFractionDigits"].includes(name)) || (fn === "currency" && name === "fractionDigits");
+  const digitOption = name => ((fn === "number"/*@formats*/ || fn === "unit"/*@end-formats*/) && ["minimumFractionDigits", "maximumFractionDigits"].includes(name))/*@formats*/ || (fn === "currency" && name === "fractionDigits")/*@end-formats*/;
   for (const name of Object.keys(options)) {
     if (name === "u:dir") { if (!["ltr", "rtl", "auto", "inherit"].includes(options[name])) throw new RangeError("Invalid formatter option value."); continue; }
     if (!Object.hasOwn(allowed, name) && !digitOption(name)) throw new TypeError("Unknown formatter option.");
@@ -494,8 +497,8 @@ function validateResolvedOptions(fn, options) {
     else if (allowed[name] instanceof RegExp) { if (typeof options[name] !== "string" || !allowed[name].test(options[name])) throw new RangeError("Invalid formatter option value."); }
     else if (!allowed[name].includes(options[name])) throw new RangeError("Invalid formatter option value.");
   }
-  if (fn === "number" && options["runic:notation"] === "compact" && options.style === "percent") throw new RangeError("Compact notation does not apply to percentages.");
-  if (fn === "number" || fn === "unit") {
+  /*@formats*/if (fn === "number" && options["runic:notation"] === "compact" && options.style === "percent") throw new RangeError("Compact notation does not apply to percentages.");
+  /*@end-formats*/if (fn === "number"/*@formats*/ || fn === "unit"/*@end-formats*/) {
     const style = options.style ?? "decimal", minimum = options.minimumFractionDigits ?? 0n, maximum = options.maximumFractionDigits ?? (style === "percent" ? 4n : 6n);
     if (minimum > maximum || maximum > (style === "percent" ? 4n : 6n)) throw new RangeError("Invalid number precision.");
   }
@@ -511,11 +514,11 @@ function formatResolved(value, locale, contentLocale = locale, isolateItems = fa
     case "integer": return formatInteger(value.carrier, locale, options.useGrouping ?? "auto");
     case "number": {
       const number = value.type === "int64" ? decimalFromInteger(value.carrier) : value.carrier;
-      return options["runic:notation"] === "compact" ? formatCompact(number, options["runic:compactDisplay"] ?? "short", options, locale) : formatDecimal(number, locale, options);
+      return /*@formats*/options["runic:notation"] === "compact" ? formatCompact(number, options["runic:compactDisplay"] ?? "short", options, locale) : /*@end-formats*/formatDecimal(number, locale, options);
     }
-    case "currency": return formatCurrency(value.type === "int64" ? decimalFromInteger(value.carrier) : value.carrier, options, locale, value.format.dynamicCode);
+    /*@formats*/case "currency": return formatCurrency(value.type === "int64" ? decimalFromInteger(value.carrier) : value.carrier, options, locale, value.format.dynamicCode);
     case "unit": return formatUnit(value.type === "int64" ? decimalFromInteger(value.carrier) : value.carrier, options, locale, value.format.dynamicCode);
-    case "date": return formatTemporal(value.carrier, fn, options.style ?? "iso", locale, "local");
+    /*@end-formats*/    case "date": return formatTemporal(value.carrier, fn, options.style ?? "iso", locale, "local");
     case "time": return formatTemporal(value.carrier, fn, options.style ?? "iso", locale, "local");
     case "datetime": return formatTemporal(value.carrier, fn, options.style ?? "iso", locale, options.timeZone ?? "local");
     case "runic:uuid": { const canonical = value.carrier; const style = options.style ?? "d"; if (style === "d") return canonical; if (style === "n") return canonical.replaceAll("-", ""); if (style === "b") return `{${canonical}}`; return `(${canonical})`; }
@@ -563,7 +566,7 @@ function numberDigits(visible, grouping, locale, format, percent) {
   const digits = visible.coefficient.toString().padStart(visible.scale + 1, "0");
   const whole = digits.slice(0, digits.length - visible.scale), fraction = digits.slice(digits.length - visible.scale);
   const primary = percent ? format.percentPrimary : format.primary, secondary = percent ? format.percentSecondary : format.secondary;
-  return localizeDigits(`${groupDigits(whole, grouping, format.group, primary, secondary, locale)}${fraction ? format.decimal + fraction : ""}`, format);
+  return localizeDigits(`${groupDigits(whole, grouping, format.group, primary, secondary, locale, format)}${fraction ? format.decimal + fraction : ""}`, format);
 }
 
 // The pinned CLDR number formats of a formatting locale: its default numbering system, or Latin digits for
@@ -571,9 +574,13 @@ function numberDigits(visible, grouping, locale, format, percent) {
 // latn, latn's 12 (see eng/generate-cldr.mjs numberFields).
 const rootNumberFormat = Object.freeze({ system: "latn", digits: null, decimal: ".", group: ",", minus: "-", primary: 3, secondary: 3, percentPrimary: 3, percentSecondary: 3, percentPrefix: "", percentSuffix: "%", negativePercentPrefix: "-", negativePercentSuffix: "%" });
 // Cached by CLDR data ID, in the default system and in latn, so the caches are bounded by the embedded data whatever
-// tags callers request; the requested tags seen last map to them, emptied when full.
+// tags callers request; the requested tags seen last map to them, emptied when full. The number records of the message's
+// own data (a locale artifact's formatData.numbers, which the artifact decoders install) come first.
 const numberFormatCache = new Map(), latinNumberFormatCache = new Map(), localeNumberFormatCache = new Map();
+let ownNumbers;
 function numberFormat(locale) {
+  const own = activeFormatData?.numbers === undefined ? undefined : ownNumbers?.(locale, activeFormatData.numbers);
+  if (own !== undefined) return own;
   let format = localeNumberFormatCache.get(locale);
   if (format) return format;
   if (localeNumberFormatCache.size >= 256) localeNumberFormatCache.clear();
@@ -587,24 +594,56 @@ function dataNumberFormat(locale) {
   const latin = latinDigits(locale), cache = latin ? latinNumberFormatCache : numberFormatCache;
   let format = cache.get(id);
   if (format) return format;
-  const record = generatedLocaleData.numbers[id];
-  const offset = record.length > 13 && latin ? 13 : 1, system = offset === 1 ? record[0] : "latn", field = index => record[offset + index];
-  format = Object.freeze({
-    system, digits: system === "latn" ? null : Array.from(field(0)), decimal: field(1), group: field(2), minus: field(3),
-    primary: Number(field(4)), secondary: Number(field(5)), percentPrimary: Number(field(6)), percentSecondary: Number(field(7)),
-    percentPrefix: field(8), percentSuffix: field(9), negativePercentPrefix: field(10), negativePercentSuffix: field(11),
-  });
+  format = numberRecordFormat(generatedLocaleData.numbers[id], latin);
   cache.set(id, format);
   return format;
+}
+// A number record: the default system and its 12 fields, then latn's 12 when it is not latn. minimumGrouping is set for
+// a message's own records (Rmf2NumberFormat.FromRecord); the catalog's comes from the locale's grouping entry.
+function numberRecordFormat(record, latin, minimumGrouping) {
+  const offset = record.length > 13 && latin ? 13 : 1, system = offset === 1 ? record[0] : "latn", field = index => record[offset + index];
+  return Object.freeze({
+    system, digits: system === "latn" ? null : Array.from(field(0)), decimal: field(1), group: field(2), minus: field(3),
+    primary: Number(field(4)), secondary: Number(field(5)), percentPrimary: Number(field(6)), percentSecondary: Number(field(7)),
+    percentPrefix: field(8), percentSuffix: field(9), negativePercentPrefix: field(10), negativePercentSuffix: field(11), minimumGrouping,
+  });
+}
+// A locale artifact's number records: an overlay that adds a language formats with that language's symbols, digits and
+// grouping on a catalog without them. Its CLDR likely subtags, parents and aliases resolve the tag. Cached per records
+// object, for the requested tags seen last and by record, so the caches go away with the artifact.
+const ownNumberCaches = new WeakMap();
+function artifactNumberFormat(locale, numbers) {
+  let cache = ownNumberCaches.get(numbers);
+  if (!cache) ownNumberCaches.set(numbers, cache = { tables: formatDataTables(numbers), locales: new Map(), formats: new Map() });
+  if (cache.locales.has(locale)) return cache.locales.get(locale);
+  let format;
+  const canonical = canonicalLocale(locale), records = numbers.locales ?? {}, grouping = numbers.grouping ?? {};
+  if (canonical !== null) {
+    const id = cldrDataId(withoutExtensions(canonical), cache.tables), recordId = cldrFindFrom(id, records, false, cache.tables);
+    if (recordId !== undefined) {
+      const groupingId = cldrFindFrom(id, grouping, false, cache.tables), latin = latinDigits(canonical), minimum = groupingId === undefined ? 1 : grouping[groupingId];
+      const key = `${recordId}|${latin}|${minimum}`;
+      format = cache.formats.get(key) ?? numberRecordFormat(records[recordId], latin, minimum);
+      cache.formats.set(key, format);
+    }
+  }
+  if (cache.locales.size >= 256) cache.locales.clear();
+  cache.locales.set(locale, format);
+  return format;
+}
+// The catalog's CLDR resolution tables with a locale artifact's for its languages.
+function formatDataTables(numbers) {
+  const merge = name => Object.assign(Object.create(null), generatedLocaleData[name], numbers[name] ?? {});
+  return { likely: merge("likely"), parents: merge("parents"), aliases: merge("aliases") };
 }
 // Writes the ASCII digits of a text in the numbering system's digits.
 function localizeDigits(text, format) { return format.digits === null ? text : text.replace(/[0-9]/g, digit => format.digits[digit.charCodeAt(0) - 48]); }
 
 // useGrouping as ICU and Intl.NumberFormat apply it: auto groups once the digits above the primary group
 // reach the pinned CLDR minimumGroupingDigits of the locale, min2 requires at least two, always one.
-function groupDigits(digits, grouping, separator, primary, secondary, locale) {
+function groupDigits(digits, grouping, separator, primary, secondary, locale, format) {
   if (grouping === "never" || primary <= 0 || !separator) return digits;
-  const pinned = cldrLocale(locale).grouping;
+  const pinned = format.minimumGrouping ?? cldrLocale(locale).grouping;
   const minimum = grouping === "always" ? 1 : grouping === "min2" ? Math.max(2, pinned) : pinned;
   if (digits.length - primary < minimum) return digits;
   let end = digits.length - primary; const groups = [digits.slice(end)];
@@ -613,10 +652,13 @@ function groupDigits(digits, grouping, separator, primary, secondary, locale) {
 }
 
 // The number selection compares: :number uses its displayed digits; :integer and
-// relative time use the canonical typed value. The carrier itself never changes.
-function selectionOperand(resolved) {
+// relative time use the canonical typed value. The carrier itself never changes. A compact :number selects on its
+// compact-rounded value at full scale (1.2K as 1200), rounded as it displays in formatLocale, with the compact exponent
+// as CLDR's e operand.
+function selectionOperand(resolved, formatLocale) {
   const value = resolved.type === "int64" ? decimalFromInteger(resolved.carrier) : resolved.carrier;
-  return resolved.format.function === "number" ? visibleNumber(value, resolved.format.options) : value;
+  /*@formats*/if (resolved.format.function === "number" && resolved.format.options["runic:notation"] === "compact") return compactOperand(value, resolved.format.options, formatLocale);
+  /*@end-formats*/return { visible: resolved.format.function === "number" ? visibleNumber(value, resolved.format.options) : value, exponent: 0 };
 }
 
 function visibleCanonical(value) {
@@ -626,13 +668,13 @@ function visibleCanonical(value) {
 }
 
 // Applies the pinned CLDR rules of a locale to the operands of a visible decimal (sign ignored).
-function selectPlural(value, locale, ordinal) {
+function selectPlural(value, locale, ordinal, exponent = 0) {
   const entry = cldrLocale(locale), rule = ordinal ? entry.ordinal : entry.cardinal;
   if (rule < 0) throw new RangeError(`Plural selection is not supported for locale '${locale}'.`);
   const divisor = 10n ** BigInt(value.scale), f = value.coefficient % divisor;
   let t = f, w = BigInt(value.scale);
   while (w > 0n && t % 10n === 0n) { t /= 10n; w--; }
-  return generatedPluralRules[rule](Object.freeze({ i: value.coefficient / divisor, v: BigInt(value.scale), w, f, t, e: 0n }));
+  return generatedPluralRules[rule](Object.freeze({ i: value.coefficient / divisor, v: BigInt(value.scale), w, f, t, e: BigInt(exponent) }));
 }
 
 // CLDR relative time: the number is formatted as :number formats it by default, in numberLocale's digits and symbols
@@ -654,9 +696,69 @@ function formatRelative(value, unit, numeric, locale, numberLocale = locale) {
   return pattern.replace("{0}", formatDecimal(absolute, numberLocale, {}));
 }
 
-// A dynamic artifact's or an overlay's own formatData applies while its messages format (formatCompiledMessage).
+// A locale artifact's formatData (a dynamic artifact's, an overlay's) applies while its messages format
+// (formatCompiledMessage): its number records first, and its currency, unit and compact data, else the catalog's.
 let activeFormatData;
 const messageFormatData = new WeakMap();
+
+// The rules of embedded format data, as .NET's Rmf2FormatData.Parse checks them (rmf2-execution-v2.md, "Embedded format
+// data"), so a crafted pack fails as RTR0023/malformed in both runtimes and never while it formats: closed members,
+// bounded tables, records whose first and last values are present, and patterns with exactly their placeholders.
+const formatObject = (value, maximum) => isRecord(value) && Object.keys(value).length <= maximum;
+const formatArray = (value, minimum, maximum) => Array.isArray(value) && value.length >= minimum && value.length <= maximum;
+const formatText = value => typeof value === "string" && value.length > 0 && value.length <= 128;
+const formatRecord = (value, minimum, maximum) => formatArray(value, minimum, maximum) && value.every(item => item === null || formatText(item)) && value[0] !== null && value[value.length - 1] !== null;
+const formatCode = value => /^[A-Z]{3}$/.test(value);
+const formatUnitId = value => value.length <= 64 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
+const formatSystem = value => typeof value === "string" && /^[a-z]{4,8}$/.test(value);
+const formatDataId = value => value.length <= 64 && /^[a-z]{2,3}(?:-[A-Z][a-z]{3})?(?:-(?:[A-Z]{2}|[0-9]{3}))?(?:-[a-z0-9]{4,8})*$/.test(value);
+const formatTag = value => value.length >= 2 && value.length <= 64 && /^[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*$/.test(value);
+const formatPlaceholders = (pattern, zero, one) => pattern.split("{0}").length - 1 === zero && pattern.split("{1}").length - 1 === one;
+// An artifact's formatData, checked and frozen; undefined without one, null when it breaks the rules. Its number records
+// apply from now on (numberFormat).
+function artifactFormatData(snapshot) {
+  if (!Object.hasOwn(snapshot, "formatData")) return undefined;
+  if (!validFormatData(snapshot.formatData)) return null;
+  ownNumbers = artifactNumberFormat;
+  return freezeTrusted(snapshot.formatData);
+}
+function validFormatData(value) {
+  const formatters = ["currencies", "dynamicCurrencies", "dynamicUnits", "locales"];
+  if (!formatObject(value, 5) || Object.keys(value).some(name => name !== "numbers" && !formatters.includes(name))) return false;
+  if (Object.hasOwn(value, "numbers") && !validFormatNumbers(value.numbers)) return false;
+  return !formatters.some(name => Object.hasOwn(value, name)) || validFormatters(value);
+}
+// numbers: the number records and minimumGroupingDigits of the artifact's languages, and the likely subtags, parents and
+// aliases that resolve their tags.
+function validFormatNumbers(numbers) {
+  if (!formatObject(numbers, 5)) return false;
+  for (const [name, table] of Object.entries(numbers)) {
+    const entries = name === "locales" || name === "grouping" ? formatObject(table, 2048) && Object.entries(table) : ["likely", "parents", "aliases"].includes(name) ? formatObject(table, 4096) && Object.entries(table) : false;
+    if (!entries) return false;
+    for (const [key, item] of entries) {
+      const valid = name === "locales" ? formatDataId(key) && validNumberRecord(item)
+        : name === "grouping" ? formatDataId(key) && Number.isInteger(item) && item >= 1 && item <= 4
+        : formatTag(key) && formatText(item) && formatTag(item);
+      if (!valid) return false;
+    }
+  }
+  return true;
+}
+// [system, then 12 fields for it and, when it is not latn, 12 for latn]: digits, decimal, group, minus, four group sizes
+// and the four percent affixes.
+function validNumberRecord(record) {
+  if (!Array.isArray(record) || (record.length !== 13 && record.length !== 25) || !record.every(item => typeof item === "string")) return false;
+  if (!formatSystem(record[0]) || (record[0] === "latn") !== (record.length === 13)) return false;
+  for (let block = 1; block < record.length; block += 12) {
+    const digits = record[block];
+    // Ten digits of one width: all in the Basic Multilingual Plane, or all surrogate pairs (Adlam, Chakma).
+    if (block === 13 || record[0] === "latn" ? digits !== "0123456789" : !(digits.length === 10 && !/[\uD800-\uDFFF]/.test(digits) || /^(?:[\uD800-\uDBFF][\uDC00-\uDFFF]){10}$/.test(digits))) return false;
+    for (let field = 1; field <= 3; field++) if (record[block + field].length < 1 || record[block + field].length > 8) return false;
+    for (let field = 4; field <= 7; field++) if (!/^[1-9]$/.test(record[block + field])) return false;
+    for (let field = 8; field <= 11; field++) if (record[block + field].length > 16) return false;
+  }
+  return true;
+}
 // @runic-formats-begin: the renderer replaces this block with stubs when the catalog uses none of these functions.
 // :currency, :unit and compact notation from the CLDR data the compiler embedded for the catalog (D055.4): only the
 // currencies, units and compact styles its messages use, for the CLDR locales of its languages. The .NET runtime's
@@ -664,27 +766,38 @@ const messageFormatData = new WeakMap();
 // patterns other … many, currency decimal, currency group]; currencies [symbol, narrow, names other … many, pattern,
 // decimal, group]; units [long, short, narrow] of [other … many, per]; compact by magnitude from 3 of [other … many, "1"].
 const formatSlots = ["other", "zero", "one", "two", "few", "many"];
+// The message's currency, unit and compact data: an artifact's own, else the catalog's (a stripped or hand-made artifact
+// borrows them, as .NET binds a pack or overlay to its catalog).
 function formatData() {
-  const data = activeFormatData ?? generatedLocaleData.formats;
+  const data = activeFormatData !== undefined && Object.hasOwn(activeFormatData, "locales") ? activeFormatData : generatedLocaleData.formats;
   if (data === undefined) throw new RangeError("The catalog embeds no CLDR currency, unit or compact data.");
   return data;
 }
-// The first entry along CLDR's parent chain of the formatting locale's data ID.
+// The first entry along CLDR's parent chain of the formatting locale's data ID, resolved with the artifact's CLDR tables
+// for its languages when it brings them.
+const formatTableCache = new WeakMap();
 function formatEntry(locale, section, key, select = value => value) {
-  const locales = formatData().locales;
-  for (let id = cldrDataId(withoutExtensions(locale)), depth = 0; id !== undefined && depth < 16; id = cldrParent(id, false), depth++) {
-    const value = locales[id]?.[section]?.[key];
-    if (value !== undefined && select(value) !== undefined) return select(value);
+  const locales = formatData().locales, numbers = activeFormatData?.numbers;
+  let tables = generatedLocaleData;
+  if (numbers !== undefined) { tables = formatTableCache.get(numbers); if (!tables) formatTableCache.set(numbers, tables = formatDataTables(numbers)); }
+  for (let id = cldrDataId(withoutExtensions(locale), tables), depth = 0; id !== undefined && depth < 16; id = cldrParent(id, false, tables), depth++) {
+    const entry = Object.hasOwn(locales, id) ? locales[id] : undefined, members = entry !== undefined && Object.hasOwn(entry, section) ? entry[section] : undefined;
+    const value = members !== undefined && Object.hasOwn(members, key) ? select(members[key]) : undefined;
+    if (value !== undefined) return value;
   }
   return undefined;
 }
 function formatPlural(record, offset, category) { return record[offset + formatSlots.indexOf(category)] ?? record[offset]; }
 function formatCategory(visible, locale) { return cldrLocale(locale).cardinal < 0 ? "other" : selectPlural(visible, locale, false); }
 function formatSubstitute(pattern, zero, one) { return pattern.replace(/\{([01])\}/g, (_, index) => index === "0" ? zero : one); }
-// A number pattern's subpatterns as [prefix, suffix, primary, secondary]; an implicit negative puts "-" first.
-const formatPatternCache = new Map();
+// A number pattern's subpatterns as [prefix, suffix, primary, secondary]; an implicit negative puts "-" first. Cached per
+// data object (validFormatters has checked the pattern), so the cache goes away with an artifact.
+const formatPatternCaches = new WeakMap();
 function formatPattern(pattern) {
-  let parsed = formatPatternCache.get(pattern);
+  const data = formatData();
+  let cache = formatPatternCaches.get(data);
+  if (!cache) formatPatternCaches.set(data, cache = new Map());
+  let parsed = cache.get(pattern);
   if (parsed) return parsed;
   const split = formatUnquoted(pattern, ";");
   const sub = text => {
@@ -696,7 +809,7 @@ function formatPattern(pattern) {
   };
   const positive = sub(split < 0 ? pattern : pattern.slice(0, split));
   parsed = [positive, split < 0 ? ["-" + positive[0], positive[1], positive[2], positive[3]] : sub(pattern.slice(split + 1))];
-  formatPatternCache.set(pattern, parsed);
+  cache.set(pattern, parsed);
   return parsed;
 }
 function formatUnquoted(text, value) { let quoted = false; for (let index = 0; index < text.length; index++) { if (text[index] === "'") quoted = !quoted; else if (!quoted && text[index] === value) return index; } return -1; }
@@ -705,7 +818,7 @@ function formatAffix(affix, minus) { return affix.replace(/'([^']*)'|-/g, (match
 function formatDigitText(visible, grouping, locale, format, primary, secondary, decimal, group) {
   const digits = visible.coefficient.toString().padStart(visible.scale + 1, "0");
   const whole = digits.slice(0, digits.length - visible.scale), fraction = digits.slice(digits.length - visible.scale);
-  return localizeDigits(`${groupDigits(whole, grouping, group, primary, secondary, locale)}${fraction ? decimal + fraction : ""}`, format);
+  return localizeDigits(`${groupDigits(whole, grouping, group, primary, secondary, locale, format)}${fraction ? decimal + fraction : ""}`, format);
 }
 function formatRounded(value, minimum, maximum) { return visibleNumber(value, { minimumFractionDigits: BigInt(minimum), maximumFractionDigits: BigInt(maximum) }); }
 
@@ -763,11 +876,11 @@ function formatUnit(value, options, locale, dynamic) {
 }
 
 // Compact notation: the number scaled by the CLDR pattern of its magnitude and rounded, by default to whole numbers with
-// at least two significant digits, else to the fraction digit options; a value that rounds up to the next magnitude
-// takes that magnitude's pattern (999999 → 1M). The pattern follows the plural category of the scaled number, and
-// useGrouping=auto groups as min2, as ICU does.
-function formatCompact(value, display, options, locale) {
-  const format = numberFormat(locale), table = formatEntry(locale, "compact", format.system, systems => systems[display]);
+// at least two significant digits, else to the fraction digit options (only a minimum: at most max(3, minimum) digits,
+// as Intl.NumberFormat rounds); a value that rounds up to the next magnitude takes that magnitude's pattern (999999 →
+// 1M). The pattern follows the plural category of the scaled number, and useGrouping=auto groups as min2, as ICU does.
+function compactRound(value, display, options, locale) {
+  const format = numberFormat(locale), table = formatEntry(locale, "compact", format.system, systems => Object.hasOwn(systems, display) ? systems[display] : undefined);
   if (!table) throw new RangeError(`No compact patterns for locale '${locale}'.`);
   let coefficient = value.coefficient, scale = value.scale;
   while (scale > 0 && coefficient % 10n === 0n) { coefficient /= 10n; scale--; }
@@ -787,8 +900,7 @@ function formatCompact(value, display, options, locale) {
     if (s < 0) { c *= 10n ** BigInt(-s); s = 0; }
     const whole = c === 0n ? 1 : c.toString().length - s;
     const minimum = options.minimumFractionDigits === undefined ? 0 : Number(options.minimumFractionDigits);
-    let maximum = options.maximumFractionDigits === undefined ? Math.max(0, whole >= 2 ? 0 : 2 - whole) : Number(options.maximumFractionDigits);
-    if (options.minimumFractionDigits !== undefined && options.maximumFractionDigits === undefined) maximum = Math.max(maximum, minimum);
+    const maximum = options.maximumFractionDigits !== undefined ? Number(options.maximumFractionDigits) : options.minimumFractionDigits !== undefined ? Math.max(3, minimum) : Math.max(0, whole >= 2 ? 0 : 2 - whole);
     if (s > maximum) { const divisor = 10n ** BigInt(s - maximum), remainder = c % divisor; c = c / divisor + (remainder * 2n >= divisor ? 1n : 0n); s = maximum; }
     while (s > minimum && c % 10n === 0n) { c /= 10n; s--; }
     while (s < minimum) { c *= 10n; s++; }
@@ -799,12 +911,15 @@ function formatCompact(value, display, options, locale) {
     const next = multiplier(magnitude + 1);
     if (next !== exponent) { exponent = next; rounded = round(exponent); }
   }
-  const shown = rounded.coefficient === 0n ? 0 : magnitudeOf(rounded.coefficient, rounded.scale) + exponent;
+  return { rounded, exponent, shown: rounded.coefficient === 0n ? 0 : magnitudeOf(rounded.coefficient, rounded.scale) + exponent, table, format };
+}
+function formatCompact(value, display, options, locale) {
+  const { rounded, exponent, shown, table, format } = compactRound(value, display, options, locale);
   const grouping = options.useGrouping ?? "auto";
   const number = formatDigitText(rounded, grouping === "auto" ? "min2" : grouping, locale, format, format.primary, format.secondary, format.decimal, format.group);
   const sign = rounded.negative ? format.minus : "";
   if (exponent === 0 && shown < 3) return sign + number;
-  const record = table[Math.min(shown, largest) - 3];
+  const record = table[Math.min(shown, table.length + 2) - 3];
   let pattern = formatPlural(record, 0, formatCategory(rounded, locale));
   if (rounded.coefficient === 1n && rounded.scale === 0 && record[6] != null) pattern = record[6];
   if (pattern === "0") return sign + number;
@@ -813,29 +928,83 @@ function formatCompact(value, display, options, locale) {
   if (rounded.negative && split >= 0) return zeros(pattern.slice(split + 1));
   return sign + zeros(split < 0 ? pattern : pattern.slice(0, split));
 }
-
-// The shape of embedded format data (Rmf2FormatDataV1.Select): records of strings and nulls, nothing else.
-function validFormatData(value) {
-  const record = item => isRecord(item), strings = (item, first) => Array.isArray(item) && item.length > 0 && item.length <= 16 && item.every((entry, index) => typeof entry === "string" || (entry === null && (index > 0 || !first)));
-  if (!record(value) || Object.keys(value).some(name => !["currencies", "dynamicCurrencies", "dynamicUnits", "locales"].includes(name)) || !record(value.currencies) || !record(value.locales)) return false;
-  if (Object.entries(value.currencies).some(([code, digits]) => !/^[A-Z]{3}$/.test(code) || !Number.isInteger(digits) || digits < 0 || digits > 6)) return false;
-  for (const name of ["dynamicCurrencies", "dynamicUnits"]) if (value[name] !== undefined && (!Array.isArray(value[name]) || value[name].some(item => typeof item !== "string"))) return false;
-  for (const entry of Object.values(value.locales)) {
-    if (!record(entry)) return false;
-    for (const [section, members] of Object.entries(entry)) {
-      if (!record(members)) return false;
-      for (const member of Object.values(members)) {
-        const valid = section === "currencyFormats" || section === "currencies" ? strings(member, true)
-          : section === "units" ? Array.isArray(member) && member.length > 0 && member.length <= 3 && member.every((width, index) => (width === null && index > 0) || strings(width, true))
-          : section === "per" ? typeof member === "string"
-          : section === "compact" ? record(member) && Object.values(member).every(table => Array.isArray(table) && table.length > 0 && table.length <= 32 && table.every(item => strings(item, true)))
-          : false;
-        if (!valid) return false;
-      }
-    }
-  }
-  return true;
+// The number a compact :number selects on: the compact-rounded value at full scale (1.2K as 1200), with the compact
+// exponent as CLDR's e (c) operand, as TR35 and ICU select a compact number (Rmf2CldrFormats.CompactOperand).
+function compactOperand(value, options, locale) {
+  const { rounded, exponent } = compactRound(value, options["runic:compactDisplay"] ?? "short", options, locale);
+  const visible = exponent >= rounded.scale
+    ? Object.freeze({ coefficient: rounded.coefficient * 10n ** BigInt(exponent - rounded.scale), scale: 0, negative: rounded.negative })
+    : Object.freeze({ coefficient: rounded.coefficient, scale: rounded.scale - exponent, negative: rounded.negative });
+  return { visible, exponent };
 }
+
+// The currency, unit and compact members of formatData. A catalog built without these formatters does not read them
+// and rejects the messages that use them as unsupported-function (formatterFeature).
+function validFormatters(value) {
+  const { currencies, locales } = value;
+  if (!formatObject(currencies, 256) || !formatObject(locales, 2048)) return false;
+  if (Object.entries(currencies).some(([code, digits]) => !formatCode(code) || !Number.isInteger(digits) || digits < 0 || digits > 6)) return false;
+  for (const name of ["dynamicCurrencies", "dynamicUnits"]) if (Object.hasOwn(value, name)) {
+    const list = value[name];
+    if (!formatArray(list, 0, 256) || new Set(list).size !== list.length || !list.every(item => formatText(item) && (name === "dynamicUnits" ? formatUnitId(item) : formatCode(item) && Object.hasOwn(currencies, item)))) return false;
+  }
+  const sections = ["currencyFormats", "currencies", "units", "per", "compact"];
+  return Object.entries(locales).every(([id, entry]) => formatDataId(id) && formatObject(entry, 5) && Object.entries(entry).every(([section, members]) => sections.includes(section) &&
+    formatObject(members, section === "per" ? 3 : section === "currencyFormats" || section === "compact" ? 16 : 256) && Object.entries(members).every(([key, item]) => validFormatMember(section, key, item))));
+}
+function validFormatMember(section, key, item) {
+  const optional = (record, from, to, test) => record.slice(from, to).every(pattern => pattern === null || test(pattern));
+  switch (section) {
+    // [standard, accounting, unit pattern other … many, currency decimal, currency group]
+    case "currencyFormats": return formatSystem(key) && formatRecord(item, 3, 10) && validCurrencyPattern(item[0]) && validCurrencyPattern(item[1]) && item[2] !== null &&
+      optional(item, 2, 8, pattern => formatPlaceholders(pattern, 1, 1)) && optional(item, 8, 10, pattern => pattern.length <= 8);
+    // [symbol, narrow, names other … many, pattern, decimal, group]
+    case "currencies": return formatCode(key) && formatRecord(item, 3, 11) && item[2] !== null && optional(item, 8, 9, validCurrencyPattern) && optional(item, 9, 11, pattern => pattern.length <= 8);
+    // [long, short, narrow] of [other … many, per]: a unit pattern has at most one {0} (CLDR names some units without the
+    // number), a per-unit pattern exactly one.
+    case "units": return formatUnitId(key) && formatArray(item, 1, 3) && item.every((width, index) => (width === null && index > 0) ||
+      (formatRecord(width, 1, 7) && optional(width, 0, 6, pattern => pattern.split("{0}").length <= 2 && !pattern.includes("{1}")) && optional(width, 6, 7, pattern => formatPlaceholders(pattern, 1, 0))));
+    case "per": return ["long", "short", "narrow"].includes(key) && formatText(item) && formatPlaceholders(item, 1, 1);
+    case "compact": return formatSystem(key) && formatObject(item, 2) && Object.entries(item).every(([style, table]) => (style === "short" || style === "long") &&
+      formatArray(table, 1, 32) && table.every((record, index) => formatRecord(record, 1, 7) && optional(record, 0, 7, pattern => validCompactPattern(pattern, index + 3))));
+  }
+  return false;
+}
+// The subpatterns at an unquoted ";" (one or two), each with balanced quotes; null otherwise.
+function formatSubpatterns(pattern) {
+  let quotes = 0, split = -1;
+  for (let index = 0; index < pattern.length; index++) { if (pattern[index] === "'") quotes++; else if (pattern[index] === ";" && quotes % 2 === 0) { if (split >= 0) return null; split = index; } }
+  const result = split < 0 ? [pattern] : [pattern.slice(0, split), pattern.slice(split + 1)];
+  return quotes % 2 === 0 && result.every(item => (item.split("'").length - 1) % 2 === 0) ? result : null;
+}
+// One unquoted ¤ and one digit run per subpattern (#,##0.00: groups of # and 0, the last ending in 0, one decimal point).
+function validCurrencyPattern(pattern) {
+  const subpatterns = typeof pattern === "string" ? formatSubpatterns(pattern) : null;
+  return subpatterns !== null && subpatterns.every(subpattern => {
+    let currency = 0, first = -1, last = -1, quoted = false;
+    for (let index = 0; index < subpattern.length; index++) {
+      const item = subpattern[index];
+      if (item === "'") { quoted = !quoted; continue; }
+      if (quoted) continue;
+      if (item === "¤") currency++;
+      else if ("#0,.".includes(item)) { if (first >= 0 && last !== index - 1) return false; if (first < 0) first = index; last = index; }
+    }
+    const parts = first < 0 ? [] : subpattern.slice(first, last + 1).split(".");
+    return currency === 1 && first >= 0 && parts.length <= 2 && parts[0].split(",").every(group => /^[#0]+$/.test(group)) && parts[0].endsWith("0") && (parts.length === 1 || /^[#0]*$/.test(parts[1]));
+  });
+}
+// "0", or at most one unquoted run of zeros per subpattern, of at most magnitude − 2 zeros (a divisor of at least 10³).
+function validCompactPattern(pattern, magnitude) {
+  if (pattern === "0") return true;
+  const subpatterns = formatSubpatterns(pattern);
+  return subpatterns !== null && subpatterns.every(subpattern => {
+    let runs = 0, zeros = 0, quoted = false;
+    for (let index = 0; index < subpattern.length; index++) { const item = subpattern[index]; if (item === "'") { quoted = !quoted; continue; } if (quoted || item !== "0") continue; if (index === 0 || subpattern[index - 1] !== "0") runs++; zeros++; }
+    return runs <= 1 && zeros <= magnitude - 2;
+  });
+}
+// Every function and option this runtime has: none is a stripped formatter feature.
+function formatterFeature() { return false; }
 // @runic-formats-end
 
 // Joins the items with the pinned CLDR list patterns, as Intl.ListFormat does: end(n-2, n-1), then
@@ -923,15 +1092,16 @@ function cldrFormat(tag) { return tag.language + (tag.script === undefined ? "" 
 function cldrTable(table, key) { return Object.hasOwn(table, key) ? table[key] : undefined; }
 // A deprecated or legacy language code becomes its replacement, whose script and region fill those the tag lacks:
 // iw → he, tl → fil, sh → sr-Latn, cnr → sr-ME.
-function cldrCanonicalize(tag) {
-  const replacement = cldrTable(generatedLocaleData.aliases, tag.language);
+// tables: the catalog's CLDR resolution tables, or those with a locale artifact's (formatDataTables).
+function cldrCanonicalize(tag, tables = generatedLocaleData) {
+  const replacement = cldrTable(tables.aliases, tag.language);
   if (replacement === undefined) return tag;
   const found = cldrParse(replacement);
   return { ...tag, language: found.language, script: tag.script ?? found.script, region: tag.region ?? found.region };
 }
-function cldrMaximize(tag) {
-  tag = cldrCanonicalize(tag);
-  const likely = generatedLocaleData.likely;
+function cldrMaximize(tag, tables = generatedLocaleData) {
+  tag = cldrCanonicalize(tag, tables);
+  const likely = tables.likely;
   let value;
   if (tag.script !== undefined && tag.region !== undefined) value = cldrTable(likely, `${tag.language}-${tag.script}-${tag.region}`);
   if (value === undefined && tag.region !== undefined) value = cldrTable(likely, `${tag.language}-${tag.region}`);
@@ -941,14 +1111,14 @@ function cldrMaximize(tag) {
   const found = cldrParse(value);
   return { ...tag, script: tag.script ?? found.script, region: tag.region ?? found.region };
 }
-function cldrDataId(canonical) {
-  const tag = cldrCanonicalize(cldrParse(canonical));
-  const script = tag.script ?? cldrMaximize(tag).script, likely = cldrTable(generatedLocaleData.likely, tag.language);
+function cldrDataId(canonical, tables = generatedLocaleData) {
+  const tag = cldrCanonicalize(cldrParse(canonical), tables);
+  const script = tag.script ?? cldrMaximize(tag, tables).script, likely = cldrTable(tables.likely, tag.language);
   const defaultScript = likely === undefined ? undefined : cldrParse(likely).script;
   return cldrFormat({ ...tag, script: script !== undefined && script === defaultScript ? undefined : script });
 }
-function cldrParent(id, truncate) {
-  const explicit = truncate ? undefined : cldrTable(generatedLocaleData.parents, id);
+function cldrParent(id, truncate, tables = generatedLocaleData) {
+  const explicit = truncate ? undefined : cldrTable(tables.parents, id);
   if (explicit !== undefined) return explicit === "root" ? undefined : explicit;
   const tag = cldrParse(id);
   if (tag.variants) return cldrFormat({ ...tag, variants: tag.variants.slice(0, tag.variants.lastIndexOf("-")) });
@@ -956,8 +1126,8 @@ function cldrParent(id, truncate) {
   if (tag.script !== undefined && truncate) return tag.language;
   return undefined;
 }
-function cldrFindFrom(id, table, truncate) {
-  for (let depth = 0; id !== undefined && depth < 16; id = cldrParent(id, truncate), depth++) if (Object.hasOwn(table, id)) return id;
+function cldrFindFrom(id, table, truncate, tables = generatedLocaleData) {
+  for (let depth = 0; id !== undefined && depth < 16; id = cldrParent(id, truncate, tables), depth++) if (Object.hasOwn(table, id)) return id;
   return undefined;
 }
 // Where the data lookups of a tag start, as CldrLocales.Anchors in .NET: the first ID of its data ID's parent chain, and
@@ -1141,8 +1311,8 @@ function formatWrapper(key, wrapper, inputs, requestedLocale, resolvedLocale) {
     const resolved = context.resolve(selector.value, selector.type);
     if (!["int64", "decimal"].includes(selector.type)) return { resolved, canonical: canonicalCarrier(resolved.carrier, selector.type), category: null };
     // Exact keys and CLDR categories compare the same visible decimal.
-    const operand = selectionOperand(resolved);
-    return { resolved, canonical: visibleCanonical(operand), category: selector.function === "exact" ? null : selectPlural(operand, locale, selector.function === "ordinal") };
+    const { visible, exponent } = selectionOperand(resolved, formatLocale);
+    return { resolved, canonical: visibleCanonical(visible), category: selector.function === "exact" ? null : selectPlural(visible, locale, selector.function === "ordinal", exponent) };
   });
   let selected = null, selectedRanks = null, selectedIndex = -1;
   for (let variantIndex = 0; variantIndex < wrapper.ast.variants.length; variantIndex++) {
@@ -1248,11 +1418,12 @@ export function decodeLocaleArtifactV5(value, tables) {
     const error = validateMessageWrapper(message, contract, snapshot.locale, key); if (error) return failure(`RTR0023/${error}`);
     validatedMessages.set(message, contract); entries.push([key,message]);
   }
-  // formatData: the CLDR currency, unit and compact data of the artifact's messages, when they use them.
-  if (snapshot.formatData !== undefined && !validFormatData(snapshot.formatData)) return failure("RTR0023/malformed");
+  // formatData: the CLDR data of the artifact's messages: number records when they format numbers, and currency, unit and
+  // compact data when they use those functions.
+  const formats = artifactFormatData(snapshot); if (formats === null) return failure("RTR0023/malformed");
   const artifact=Object.freeze({ artifactVersion: 5, messageGrammarVersion: 5, profile, catalog, locale: snapshot.locale, contractFingerprint, messages: freezeOwnRecord(entries), markupContract: tables.rmf2Contract,
-    ...(snapshot.formatData === undefined ? {} : { formatData: freezeTrusted(snapshot.formatData) }) });decodedArtifacts.add(artifact);
-  if (artifact.formatData !== undefined) for (const message of Object.values(artifact.messages)) messageFormatData.set(message, artifact.formatData);
+    ...(formats === undefined ? {} : { formatData: formats }) });decodedArtifacts.add(artifact);
+  if (formats !== undefined) for (const message of Object.values(artifact.messages)) messageFormatData.set(message, formats);
   return Object.freeze({ ok: true, value: artifact });
 }
 
@@ -1357,9 +1528,8 @@ export function installOverlayV5(value, tables, options) {
   const captured = snapshotJson(value, limits.maximumDepth, limits.maximumDocumentBytes);
   if (!captured.ok) return failure(`RTR0023/${captured.reason}`);
   const snapshot = captured.value, envelope = validateOverlayEnvelope(snapshot); if (envelope) return failure(envelope);
-  // formatData: the CLDR currency, unit and compact data of the overlay's messages, when they use them.
-  if (snapshot.formatData !== undefined && !validFormatData(snapshot.formatData)) return failure("RTR0023/malformed");
-  const formats = snapshot.formatData === undefined ? undefined : freezeTrusted(snapshot.formatData);
+  // formatData: the CLDR data of the overlay's messages (number records, currency, unit and compact data).
+  const formats = artifactFormatData(snapshot); if (formats === null) return failure("RTR0023/malformed");
   const locale = snapshot.locale, declared = localeSet.has(locale);
   if (!declared && fallback === locale) throw new RangeError("A locale cannot fall back to itself.");
   const state = overlayState(tables);
@@ -1384,11 +1554,14 @@ export function installOverlayV5(value, tables, options) {
     const wrapper = { contentLocale: message.contentLocale, ast: { ...message.ast, inputs } };
     const error = validateMessageWrapper(wrapper, contract, null, key, tag => tag === message.contentLocale);
     if (error === "argument-contract-mismatch" || error === "document-structure-mismatch") { report("incompatible-markup"); continue; }
+    // A function or option this catalog was built without (:currency, :unit, compact notation).
+    if (error === "unsupported-function") { report("unsupported-function"); continue; }
     if (error) return failure(`RTR0023/${error}`);
     // Generated functions format a message without markup as a string, so an overlay cannot add markup to it.
     if (!contract.structured && wrapper.ast.variants.some(variant => variant.nodes.some(node => node.kind === "markup"))) { report("incompatible-markup"); continue; }
-    // This runtime embeds the plural, list and relative-time data of the catalog's languages only.
-    if (!localeSet.has(message.contentLocale) && !hasLocaleData(message.contentLocale, wrapper.ast)) { report("unsupported-locale-data"); continue; }
+    // This runtime embeds the plural, list, relative-time and number data of the catalog's languages only; the overlay's
+    // formatData brings the number records of its own.
+    if (!localeSet.has(message.contentLocale) && !hasLocaleData(message.contentLocale, wrapper.ast, formats)) { report("unsupported-locale-data"); continue; }
     const result = cloneFreeze(wrapper); validatedMessages.set(result, contract);
     if (formats !== undefined) messageFormatData.set(result, formats);
     if (!copy) own.set(key, result);
@@ -1447,13 +1620,24 @@ function orderedInputs(inputs, expected) {
 // Whether this runtime has the CLDR data a message needs in a locale the catalog does not declare, found as formatting
 // finds it (cldrLocale: the locale's CLDR data ID, its parents and likely subtags), so an added de-AT uses the embedded de
 // rules and an added pt-PT its own rules when they differ from pt's.
-function hasLocaleData(locale, ast) {
+// Numbers, dates and times need the language's number records (the catalog's or the overlay's formatData), and currency
+// names, units and compact numbers its plural rules.
+function hasLocaleData(locale, ast, formats) {
   const functions = new Set();
-  const collect = expression => { if (isRecord(expression) && typeof expression.function === "string") functions.add(expression.function); };
+  let numbers = false, categories = false;
+  const collect = expression => {
+    if (!isRecord(expression)) return;
+    const fn = typeof expression.function === "string" ? expression.function : defaultFunction(expression.valueType);
+    const option = name => expression.options.find(item => item.name === name)?.value, literal = (name, value) => { const found = option(name); return found !== undefined && (found.kind !== "string-literal" || found.value === value); };
+    functions.add(fn);
+    numbers ||= ["integer", "number", "currency", "unit", "runic:relative-time", "date", "time", "datetime"].includes(fn);
+    categories ||= fn === "unit" || (fn === "currency" && literal("currencyDisplay", "name")) || (fn === "number" && literal("runic:notation", "compact"));
+  };
   for (const declaration of ast.declarations) collect(declaration.expression);
   for (const variant of ast.variants) for (const node of variant.nodes) if (node.kind === "expression") collect(node.expression);
   const data = cldrLocale(locale);
-  const plural = ast.selectors.some(selector => selector.function !== "exact") || functions.has("runic:relative-time");
+  if (numbers && data.numbers === undefined && (formats?.numbers === undefined || artifactNumberFormat(locale, formats.numbers) === undefined)) return false;
+  const plural = ast.selectors.some(selector => selector.function !== "exact") || functions.has("runic:relative-time") || categories;
   if (plural && data.cardinal < 0) return false;
   if (functions.has("runic:relative-time") && data.relativeTime === undefined) return false;
   return !functions.has("runic:list") || data.list !== undefined;
@@ -1594,7 +1778,8 @@ function validateExpression(expression, symbols, references) {
   if (["input","local"].includes(expression.operand.kind)) { if (!Object.hasOwn(symbols,expression.operand.value) || symbols[expression.operand.value].type !== expression.valueType) return "argument-contract-mismatch"; }
   else { try { literal(expression.operand, expression.valueType); } catch { return "malformed-pattern"; } }
   if (expression.function === undefined) return expression.options.length === 0 ? null : "malformed-pattern";
-  const accepted = functionType(expression.function); if (!accepted || !(accepted === expression.valueType || (expression.valueType === "int64" && accepted === "decimal"))) return "argument-contract-mismatch";
+  const accepted = functionType(expression.function); if (!accepted && formatterFeature(expression.function)) return "unsupported-function";
+  if (!accepted || !(accepted === expression.valueType || (expression.valueType === "int64" && accepted === "decimal"))) return "argument-contract-mismatch";
   const optionError=validateOptions(expression.options,symbols,expression.function);if(optionError)return optionError;
   if (references) for (const option of expression.options) referenceValue(option.value,references);
   return null;
@@ -1602,9 +1787,9 @@ function validateExpression(expression, symbols, references) {
 
 function validateOptions(options, symbols, fn) {
   if (!Array.isArray(options) || options.length > 256) return "argument-contract-mismatch"; const names = new Set(), staticEntries=[]; let dynamic=false;
-  for (const option of options) { const memberError=closedMemberError(option,["name","value"]);if(memberError)return memberError==="unknown-member"?memberError:"argument-contract-mismatch";const valueError=validateValue(option.value);if(valueError)return ["unknown-member","malformed"].includes(valueError)?valueError:"argument-contract-mismatch";if(!validName(option.name,true)||names.has(option.name))return "argument-contract-mismatch";names.add(option.name); if (fn) { const type = optionType(fn,option.name); if (!type) return "argument-contract-mismatch"; if (["input","local"].includes(option.value.kind)) { if (option.name === "select" || option.name === "u:dir" || !Object.hasOwn(symbols,option.value.value) || symbols[option.value.value].type !== type || !symbols[option.value.value].explicitDependencies) return "argument-contract-mismatch"; dynamic=true; } else { try { staticEntries.push([option.name,literal(option.value,type)]); } catch { return "argument-contract-mismatch"; } } } }
-  if((fn==="currency"||fn==="unit")&&!names.has(fn))return "argument-contract-mismatch";
-  if(fn){try{const resolved=freezeOwnRecord(staticEntries);validateResolvedOptions(fn,resolved);if(dynamic&&(fn==="number"||fn==="unit")){const style=resolved.style,min=resolved.minimumFractionDigits??0n,max=resolved.maximumFractionDigits;if(style==="percent"&&min>4n||max!==undefined&&min>max)return "argument-contract-mismatch";}}catch{return "argument-contract-mismatch";}}
+  for (const option of options) { const memberError=closedMemberError(option,["name","value"]);if(memberError)return memberError==="unknown-member"?memberError:"argument-contract-mismatch";const valueError=validateValue(option.value);if(valueError)return ["unknown-member","malformed"].includes(valueError)?valueError:"argument-contract-mismatch";if(!validName(option.name,true)||names.has(option.name))return "argument-contract-mismatch";names.add(option.name); if (fn) { const type = optionType(fn,option.name); if (!type) return formatterFeature(fn,option.name) ? "unsupported-function" : "argument-contract-mismatch"; if (["input","local"].includes(option.value.kind)) { if (option.name === "select" || option.name === "u:dir" || !Object.hasOwn(symbols,option.value.value) || symbols[option.value.value].type !== type || !symbols[option.value.value].explicitDependencies) return "argument-contract-mismatch"; dynamic=true; } else { try { staticEntries.push([option.name,literal(option.value,type)]); } catch { return "argument-contract-mismatch"; } } } }
+  /*@formats*/if((fn==="currency"||fn==="unit")&&!names.has(fn))return "argument-contract-mismatch";
+  /*@end-formats*/if(fn){try{const resolved=freezeOwnRecord(staticEntries);validateResolvedOptions(fn,resolved);if(dynamic&&(fn==="number"/*@formats*/||fn==="unit"/*@end-formats*/)){const style=resolved.style,min=resolved.minimumFractionDigits??0n,max=resolved.maximumFractionDigits;if(style==="percent"&&min>4n||max!==undefined&&min>max)return "argument-contract-mismatch";}}catch{return "argument-contract-mismatch";}}
   return null;
 }
 function validateMarkupNode(node,symbols,requirements,counts,stack) {

@@ -105,20 +105,20 @@ internal static partial class Rmf2LocalizedFormats
     }
 
     /// <summary>A date in a CLDR length: <c>short</c>, <c>medium</c>, <c>long</c> or <c>full</c>, in the locale's digits.</summary>
-    internal static string Date(DateOnly value, string style, string locale)
+    internal static string Date(DateOnly value, string style, string locale, Rmf2FormatData? data = null)
     {
         CultureInfo culture = Culture(locale);
         string pattern = DatePattern(culture.DateTimeFormat, style);
         // .NET's dddd writes CLDR's stand-alone weekday; a pattern with CLDR's format-context EEEE needs those names.
         if (GeneratedLocaleData.FindWeekdays(locale) is { } weekdays) pattern = ReplaceField(pattern, 'd', 4, weekdays[(int)value.DayOfWeek]!);
-        return Rmf2NumberFormats.LocalizeDigits(Spaces(value.ToString(pattern, culture)), locale);
+        return Rmf2NumberFormats.LocalizeDigits(Spaces(value.ToString(pattern, culture)), locale, data);
     }
 
     /// <summary>
     /// A wall-clock time: <c>short</c> is the CLDR short time; <c>medium</c>, <c>long</c> and <c>full</c> are the
     /// CLDR medium time, because the longer CLDR times add a zone name that a time without a date and zone has not.
     /// </summary>
-    internal static string Time(TimeOnly value, string style, string locale)
+    internal static string Time(TimeOnly value, string style, string locale, Rmf2FormatData? data = null)
     {
         CultureInfo culture = Culture(locale);
         string pattern = style == "short" ? culture.DateTimeFormat.ShortTimePattern : culture.DateTimeFormat.LongTimePattern;
@@ -129,7 +129,7 @@ internal static partial class Rmf2LocalizedFormats
             while (index + 2 < periods.Length && int.Parse(periods[index + 2]!, NumberStyles.None, CultureInfo.InvariantCulture) <= minute) index += 2;
             pattern = ReplaceField(pattern, 't', 1, periods[index + 1]!);
         }
-        return Rmf2NumberFormats.LocalizeDigits(Spaces(value.ToString(pattern, culture)), locale);
+        return Rmf2NumberFormats.LocalizeDigits(Spaces(value.ToString(pattern, culture)), locale, data);
     }
 
     // Replaces each unquoted run of at least minimum letters field in a .NET date pattern with literal text.
@@ -156,10 +156,10 @@ internal static partial class Rmf2LocalizedFormats
     }
 
     /// <summary>The instant's date and time in the zone, each in the style, joined by a space.</summary>
-    internal static string DateTime(DateTimeOffset instant, string style, string timeZone, string locale)
+    internal static string DateTime(DateTimeOffset instant, string style, string timeZone, string locale, Rmf2FormatData? data = null)
     {
         DateTime wall = TimeZoneInfo.ConvertTime(instant, Zone(timeZone)).DateTime;
-        return Date(DateOnly.FromDateTime(wall), style, locale) + " " + Time(TimeOnly.FromDateTime(wall), style, locale);
+        return Date(DateOnly.FromDateTime(wall), style, locale, data) + " " + Time(TimeOnly.FromDateTime(wall), style, locale, data);
     }
 
     /// <summary>

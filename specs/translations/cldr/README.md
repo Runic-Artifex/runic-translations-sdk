@@ -48,7 +48,7 @@ It covers every CLDR locale (`availableLocales.full`) and keeps:
 
 `runic-formats-48.2.json` holds the data of `:currency`, `:unit` and compact
 notation. Unlike the subset, no runtime ships it: the compiler embeds the
-entries a catalog uses (D055.4), and `eng/generate-cldr.mjs` deflates it into the
+entries a catalog uses (D055.4), and `eng/generate-cldr.mjs` compresses it with Brotli into the
 compiler's `GeneratedFormatData.bin`. It keeps:
 
 - `currencies`: the ISO 4217 codes that `supplemental/currencyData.json` lists

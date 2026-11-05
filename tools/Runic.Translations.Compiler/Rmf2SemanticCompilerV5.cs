@@ -178,6 +178,10 @@ internal static class Rmf2SemanticCompilerV5
                 int? Digits(string name, int? fallback) => !supplied.TryGetValue(name, out var value) ? fallback : value.Kind == "number-literal" && int.TryParse(value.Canonical, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int digits) ? digits : null;
             }
             string selection = Selection(expression, function?.Selection ?? inherited.Selection);
+            // MF2's :currency fractionDigits=auto is the default (the currency's CLDR digits), so the AST leaves it out and
+            // the runtimes see only digit sizes.
+            if (function?.Name == Rmf2FormatDataV1.CurrencyFunction)
+                loweredOptions.RemoveAll(option => option.Name == "fractionDigits" && option.Value.Kind == "string-literal" && option.Value.Value == "auto");
             return (new(operand, inherited.ValueType, expression.Function, loweredOptions, Annotations(expression)), new("local", inherited.ValueType, selection, dependencies.Order(StringComparer.Ordinal).ToArray()));
         }
 

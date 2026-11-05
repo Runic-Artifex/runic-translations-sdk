@@ -113,7 +113,7 @@ internal static partial class Mf2MessageParser
                     "currency" => Rmf2FormatDataV1.IsCurrency(option.Value),
                     "currencyDisplay" => option.Value is "symbol" or "narrowSymbol" or "code" or "name",
                     "currencySign" => option.Value is "standard" or "accounting",
-                    "fractionDigits" => int.TryParse(option.Value, out int fixedDigits) && fixedDigits >= 0 && fixedDigits <= 6,
+                    "fractionDigits" => option.Value == "auto" || int.TryParse(option.Value, out int fixedDigits) && fixedDigits >= 0 && fixedDigits <= 6,
                     "unitDisplay" => option.Value is "short" or "long" or "narrow",
                     Rmf2FormatDataV1.NotationOption => option.Value is "standard" or "compact",
                     Rmf2FormatDataV1.CompactDisplayOption => option.Value is "short" or "long",

@@ -113,9 +113,12 @@ internal sealed record Rmf2ProjectV5(string Id, string CodeNamespace, string Cla
     internal IReadOnlyList<string> FormatCurrencies { get; init; } = Array.Empty<string>();
     internal IReadOnlyList<string> FormatUnits { get; init; } = Array.Empty<string>();
 
-    /// <summary>The currency, unit and compact data that messages need, for the locales of their content (Rmf2FormatDataV1.Select); null when none.</summary>
-    internal string? FormatData(IEnumerable<string> locales, IEnumerable<Rmf2MessageV5> messages) =>
-        Rmf2FormatDataV1.Select(locales, Rmf2FormatDataV1.Collect(messages, FormatCurrencies, FormatUnits));
+    /// <summary>
+    /// The currency, unit and compact data that messages need, for the locales of their content (Rmf2FormatDataV1.Select),
+    /// and with <paramref name="numbers"/> (a locale artifact) the number records of those languages; null when none.
+    /// </summary>
+    internal string? FormatData(IEnumerable<string> locales, IEnumerable<Rmf2MessageV5> messages, bool numbers = false) =>
+        Rmf2FormatDataV1.Select(locales, Rmf2FormatDataV1.Collect(messages, FormatCurrencies, FormatUnits), numbers);
 }
 
 internal static class Rmf2ProjectV5EmissionEligibility

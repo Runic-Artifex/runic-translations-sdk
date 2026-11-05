@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { deflateRawSync, inflateRawSync } from "node:zlib";
+import { brotliCompressSync, brotliDecompressSync, constants as zlibConstants, deflateRawSync, inflateRawSync } from "node:zlib";
 import {
   csharpRuleBody,
   javascriptRuleFunction,
@@ -220,7 +220,7 @@ function numberFields(id, system, formats) {
     String(positive.primary), String(positive.secondary), affix(positive.prefix), affix(positive.suffix), affix(negative.prefix), affix(negative.suffix)];
 }
 
-// Currencies, units and compact notation (runic-formats-48.2.json): checked here, then deflated whole into the
+// Currencies, units and compact notation (runic-formats-48.2.json): checked here, then compressed whole into the
 // compiler's resource, which selects the entries a catalog uses (Rmf2FormatDataV1.Select).
 const formatsSource = JSON.parse(await readFile(formatsSourcePath, "utf8"));
 if (formatsSource.source?.cldrVersion !== source.source.cldrVersion) throw new Error("The formats pin and the CLDR subset differ in version.");
@@ -259,7 +259,10 @@ for (const id of sortedKeys(formatsSource.locales, "formats locales")) {
   }
 }
 const formatResourceJson = JSON.stringify(formatsSource);
-const formatResource = deflateRawSync(Buffer.from(formatResourceJson, "utf8"), { level: 9 });
+// Brotli (BrotliStream in the compiler) is about a third smaller than deflate for this data.
+const formatResource = brotliCompressSync(Buffer.from(formatResourceJson, "utf8"), {
+  params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 11, [zlibConstants.BROTLI_PARAM_SIZE_HINT]: formatResourceJson.length },
+});
 
 // The compressed resource holds the number formats, lists and relative times; .NET reads it lazily.
 const resourceJson = JSON.stringify({ numbers, weekdays, dayPeriods, list, relativeTime });
@@ -424,8 +427,8 @@ await Promise.all([
   emit(registryPath, registry),
   emit(runtimePath, runtime),
   emit(tablesPath, tables),
-  emitResource(resourcePath, resource, resourceJson),
-  emitResource(formatResourcePath, formatResource, formatResourceJson),
+  emitResource(resourcePath, resource, resourceJson, inflateRawSync),
+  emitResource(formatResourcePath, formatResource, formatResourceJson, brotliDecompressSync),
   emit(matrixPath, matrix),
 ]);
 
@@ -438,11 +441,13 @@ async function emit(file, content) {
   await writeFile(file, content, "utf8");
 }
 
-// The check compares the decompressed content, so another zlib build cannot make it fail.
-async function emitResource(file, content, json) {
+// The check compares the decompressed content, so another zlib or brotli build cannot make it fail.
+async function emitResource(file, content, json, decompress) {
   if (check) {
     const current = await readFile(file).catch(() => null);
-    if (current === null || inflateRawSync(current).toString("utf8") !== json)
+    let text = null;
+    try { text = current === null ? null : decompress(current).toString("utf8"); } catch { text = null; }
+    if (text !== json)
       throw new Error(`${relative(root, file)} is stale; run bun eng/generate-cldr.mjs`);
     return;
   }

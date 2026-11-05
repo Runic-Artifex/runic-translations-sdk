@@ -470,8 +470,10 @@
           "inputType": "int64",
           "literal": true,
           "dynamic": true,
-          "default": "the currency's CLDR digits",
-          "values": [],
+          "default": "auto: the currency's CLDR digits",
+          "values": [
+            "auto"
+          ],
           "minimum": 0,
           "maximum": 6
         },
