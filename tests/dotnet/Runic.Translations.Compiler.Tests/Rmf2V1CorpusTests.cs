@@ -227,7 +227,7 @@ internal sealed class Rmf2V1CorpusTests
     // in both digests.
     // Re-pinned for merging T1g with main (TE, TC, TD) through T1a/T1b, in both digests.
     private const string EncodedOutputDigest = "055994a0adfc6fea54e61fd01110903108b0c2d19f49b7480ee01578edfa4dae";
-    private const string HiddenEncodedOutputDigest = "2b7c3a87b91fbddfc92f1655605f1e4e804729fd8644747a9dd758ba408b3e63";
+    private const string HiddenEncodedOutputDigest = "d16b2e38f21fb9b2df1d49459c9308ca806ac6b6406864ad41651471ae3f1af8";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]
@@ -248,7 +248,7 @@ internal sealed class Rmf2V1CorpusTests
             TranslationOutputRenderer.RenderRmf2V5CSharpKeys(project, readableSurface),
             TranslationOutputRenderer.RenderRmf2V5CSharpAccessors(project, readableSurface),
             TranslationOutputRenderer.RenderRmf2V5CSharpCatalogData(project),
-            TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(project),
+            TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(project, readableSurface: readableSurface),
             .. TranslationOutputRenderer.RenderRmf2V5EsmModules(project),
         ];
         return Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(

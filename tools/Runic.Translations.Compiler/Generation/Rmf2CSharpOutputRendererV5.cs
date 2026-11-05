@@ -87,7 +87,9 @@ internal static class Rmf2CSharpOutputRendererV5
 
     // runtimeAbiCall: the referenced runtime declares the version rule (TranslationsCompatibility.MinimumRuntimeAbiVersion)
     // and with it EnsureRuntimeAbi, so the base ABI is checked with a call.
-    internal static TranslationGeneratedOutput RenderRegistration(Rmf2ProjectV5 project, bool composition = true, bool runtimeAbiCall = true)
+    // readableSurface: the readable file is generated beside it, so Registration also creates the readable surface
+    // (TranslationCatalogRegistration.CreateReadableMessages, used by the WPF TranslationSource.ForCatalog).
+    internal static TranslationGeneratedOutput RenderRegistration(Rmf2ProjectV5 project, bool composition = true, bool runtimeAbiCall = true, bool readableSurface = true)
     {
         GenerationWriter writer = StartFile(project);
         string visibility = Visibility(project), className = GenerationSupport.CSharpIdentifier(project.ClassName);
@@ -109,7 +111,15 @@ internal static class Rmf2CSharpOutputRendererV5
         {
             writer.Line("/// <summary>Describes this catalog to a translation context: its ID, contract and provider factory.</summary>");
             writer.Line("public static global::Runic.Translations.TranslationCatalogRegistration Registration { get; } = new global::Runic.Translations.TranslationCatalogRegistration(");
-            writer.Indent(); writer.Line("CatalogId, DefaultLocale, ContractFingerprint, Rmf2MarkupContract, CreateProvider);"); writer.Unindent();
+            writer.Indent();
+            if (readableSurface && Rmf2ReadableNamesV1.SupportsClassName(project.ClassName))
+            {
+                string text = "global::" + string.Join(".", project.CodeNamespace.Split('.').Select(Verbatim)) + "." + Verbatim(project.ClassName);
+                writer.Line("CatalogId, DefaultLocale, ContractFingerprint, Rmf2MarkupContract, CreateProvider,");
+                writer.Line("static manager => new " + text + "(manager).Messages);");
+            }
+            else writer.Line("CatalogId, DefaultLocale, ContractFingerprint, Rmf2MarkupContract, CreateProvider);");
+            writer.Unindent();
             writer.Blank();
         }
         writer.Line("public static global::Runic.Translations.ITranslationProvider CreateProvider("); writer.Indent();

@@ -21,6 +21,7 @@ public delegate ITranslationProvider TranslationProviderFactory(
 public sealed class TranslationCatalogRegistration
 {
     private readonly TranslationProviderFactory _providerFactory;
+    private readonly Func<ITranslationManager, IReadableMessages>? _readableMessagesFactory;
 
     /// <summary>Describes a catalog.</summary>
     /// <param name="catalogId">The stable catalog ID (<c>XCatalog.CatalogId</c>).</param>
@@ -34,6 +35,28 @@ public sealed class TranslationCatalogRegistration
         string contractFingerprint,
         string rmf2MarkupContract,
         TranslationProviderFactory providerFactory)
+        : this(catalogId, defaultLocale, contractFingerprint, rmf2MarkupContract, providerFactory, readableMessagesFactory: null)
+    {
+    }
+
+    /// <summary>Describes a catalog and how to create its readable message surface.</summary>
+    /// <param name="catalogId">The stable catalog ID (<c>XCatalog.CatalogId</c>).</param>
+    /// <param name="defaultLocale">The canonical default locale (<c>XCatalog.DefaultLocale</c>).</param>
+    /// <param name="contractFingerprint">The generated contract fingerprint (<c>XCatalog.ContractFingerprint</c>), used to resolve references.</param>
+    /// <param name="rmf2MarkupContract">The generated markup contract (<c>XCatalog.Rmf2MarkupContract</c>), used to check overlays.</param>
+    /// <param name="providerFactory">Creates the catalog's provider (<c>XCatalog.CreateProvider</c>).</param>
+    /// <param name="readableMessagesFactory">
+    /// Creates the generated readable surface over a manager of this catalog (<c>manager =&gt; new XText(manager).Messages</c>),
+    /// so adapters such as the WPF <c>TranslationSource.ForCatalog</c> can resolve the catalog's messages by name; or
+    /// <see langword="null"/> when the catalog has no readable surface.
+    /// </param>
+    public TranslationCatalogRegistration(
+        string catalogId,
+        string defaultLocale,
+        string contractFingerprint,
+        string rmf2MarkupContract,
+        TranslationProviderFactory providerFactory,
+        Func<ITranslationManager, IReadableMessages>? readableMessagesFactory)
     {
         ArgumentNullException.ThrowIfNull(catalogId);
         ArgumentNullException.ThrowIfNull(defaultLocale);
@@ -51,6 +74,7 @@ public sealed class TranslationCatalogRegistration
         ContractFingerprint = contractFingerprint;
         Rmf2MarkupContract = rmf2MarkupContract;
         _providerFactory = providerFactory;
+        _readableMessagesFactory = readableMessagesFactory;
     }
 
     /// <summary>The stable catalog ID.</summary>
@@ -72,4 +96,21 @@ public sealed class TranslationCatalogRegistration
         TranslationOptions? options = null) =>
         _providerFactory(valueFormatter, snapshotFactory, options) ??
             throw new InvalidOperationException($"The provider factory of catalog '{CatalogId}' returned null.");
+
+    /// <summary>Whether <see cref="CreateReadableMessages"/> can create the catalog's readable surface.</summary>
+    public bool HasReadableMessages => _readableMessagesFactory is not null;
+
+    /// <summary>
+    /// Creates the generated readable surface (<c>new XText(manager).Messages</c>) over a manager of this catalog, or returns
+    /// <see langword="null"/> when the registration has none: the catalog was generated without a readable surface, or the
+    /// registration was created by hand without a factory.
+    /// </summary>
+    /// <param name="manager">A manager of this catalog, such as <c>context.GetManager(CatalogId)</c>.</param>
+    public IReadableMessages? CreateReadableMessages(ITranslationManager manager)
+    {
+        ArgumentNullException.ThrowIfNull(manager);
+        if (_readableMessagesFactory is null) return null;
+        return _readableMessagesFactory(manager) ??
+            throw new InvalidOperationException($"The readable message factory of catalog '{CatalogId}' returned null.");
+    }
 }

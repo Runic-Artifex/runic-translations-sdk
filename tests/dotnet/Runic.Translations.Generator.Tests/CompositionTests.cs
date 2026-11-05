@@ -141,6 +141,33 @@ internal sealed class CompositionTests
         Assert.True(!context.TryGetManager("missing", out _), "unknown catalog");
     }
 
+    [Test, DisplayName("a registration creates the catalog's readable surface over a context manager")]
+    public async Task ReadableRegistration()
+    {
+        TranslationContext context = await TranslationContext.CreateBuilder().Add(App.Registration).Add(GridV1.Registration).BuildAsync("de");
+        Assert.True(context.TryGetRegistration(GridId, out TranslationCatalogRegistration? registration) && ReferenceEquals(registration, GridV1.Registration),
+            "registration by ID");
+        Assert.True(!context.TryGetRegistration("missing", out TranslationCatalogRegistration? missing) && missing is null, "unknown catalog");
+        Assert.True(registration!.HasReadableMessages, "generated registrations have a readable surface");
+        IReadableMessages messages = registration.CreateReadableMessages(context.GetManager(GridId))!;
+        Assert.Equal("Acme.Grid.GridTextMessages", messages.GetType().FullName, "readable type");
+        Assert.Equal(1, messages.ReadableNameVersion, "readable name version");
+        // The surface reads the context's manager, so it follows the context's locale.
+        Func<string> title = () => (string)messages.GetType().GetProperty("title")!.GetValue(messages)!;
+        Assert.Equal("Raster", title(), "German title");
+        await context.SetLocaleAsync("en");
+        Assert.Equal("Grid", title(), "English title");
+
+        // A registration created by hand without a factory has none, and a factory that returns null is an error.
+        var manual = new TranslationCatalogRegistration(GridId, "en", GridV1.Registration.ContractFingerprint, GridV1.Registration.Rmf2MarkupContract,
+            GridV1.Registration.CreateProvider);
+        Assert.True(!manual.HasReadableMessages && manual.CreateReadableMessages(context.GetManager(GridId)) is null, "no factory");
+        var broken = new TranslationCatalogRegistration(GridId, "en", GridV1.Registration.ContractFingerprint, GridV1.Registration.Rmf2MarkupContract,
+            GridV1.Registration.CreateProvider, static _ => null!);
+        Assert.Throws<InvalidOperationException>(() => broken.CreateReadableMessages(context.GetManager(GridId)));
+        Assert.Throws<ArgumentNullException>(() => manual.CreateReadableMessages(null!));
+    }
+
     [Test, DisplayName("a context publishes every catalog together and changes none when one fails")]
     public async Task AtomicSwitch()
     {

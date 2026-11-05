@@ -112,6 +112,20 @@ public sealed class TranslationContext : ITranslationContext
     }
 
     /// <inheritdoc />
+    public bool TryGetRegistration(string catalogId, [NotNullWhen(true)] out TranslationCatalogRegistration? registration)
+    {
+        ArgumentNullException.ThrowIfNull(catalogId);
+        if (_indexById.TryGetValue(catalogId, out int index))
+        {
+            registration = _entries[index].Registration;
+            return true;
+        }
+
+        registration = null;
+        return false;
+    }
+
+    /// <inheritdoc />
     /// <remarks>
     /// The latest call wins: an earlier call that has not published yet is superseded, its preparation canceled and its
     /// result discarded, and it completes without error. A call for the locale that is already published returns at once

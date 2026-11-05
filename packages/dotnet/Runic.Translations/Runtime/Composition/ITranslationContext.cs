@@ -50,6 +50,14 @@ public interface ITranslationContext
     /// <summary>Attempts to get the manager of a registered catalog.</summary>
     bool TryGetManager(string catalogId, [NotNullWhen(true)] out ITranslationManager? manager);
 
+    /// <summary>Attempts to get the registration of a registered catalog, for adapters that need its readable surface.</summary>
+    /// <remarks>The default implementation reports that the context exposes no registrations.</remarks>
+    bool TryGetRegistration(string catalogId, [NotNullWhen(true)] out TranslationCatalogRegistration? registration)
+    {
+        registration = null;
+        return false;
+    }
+
     /// <summary>
     /// Prepares a snapshot of every catalog for <paramref name="locale"/>, then publishes them together. When any catalog
     /// fails, or the operation is canceled, no catalog changes.

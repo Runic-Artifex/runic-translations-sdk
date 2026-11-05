@@ -75,7 +75,11 @@ so the keys it applies to are not checked against the project default: a
 templates, styles and resources (which may be instantiated under it), and a
 Setter using its static dependency property excludes the whole file. Each such
 source is reported once as the informational `RTR0085` with its line. The rest of
-the file is still checked. `Binding.Source` selects binding data and does not
+the file is still checked. A source that names its catalog is certain: a
+`{rt:Message key, Catalog=id}` and the content under an attached
+`rt:TranslationProperties.Source="{rt:CatalogSource id}"` are checked against
+that catalog when it is the local or a referenced project's catalog, and
+reported once as `RTR0085` otherwise. `Binding.Source` selects binding data and does not
 affect catalog checks. To assert a known local catalog for such a file, or to check
 an explicitly selected file outside WPF, use:
 

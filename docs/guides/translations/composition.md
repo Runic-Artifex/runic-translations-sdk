@@ -85,6 +85,33 @@ building the service provider. See the [Hosting README](https://github.com/Runic
 `translations.Resolve(reference)` resolves a stored `TranslationReference` of any registered catalog, so validation
 text from a library ViewModel is translated like the application's own.
 
+### WPF control libraries
+
+A control library's `Generic.xaml` names its catalog, and the application shares its context with XAML once at startup:
+
+```csharp
+TranslationSource.UseContext(translations, registration => new WpfInlineRenderer(registration.Rmf2MarkupContract, Navigate));
+TranslationSource.Default = TranslationSource.ForCatalog(AppTextCatalog.CatalogId);
+```
+
+```xml
+<ControlTemplate TargetType="local:DataGridHeader">
+  <TextBlock Text="{rt:Message grid_title, Catalog=acme-grid}"/>
+</ControlTemplate>
+```
+
+`TranslationSource.ForCatalog(id)` returns one source per catalog over the context's manager and the catalog's generated
+readable surface (`XCatalog.Registration` creates it), so library text follows the application's locale switches. Set
+`rt:TranslationProperties.Source="{rt:CatalogSource acme-grid}"` on a template root to use the catalog for every message
+and rich message below it. The library's build checks the keys against its own catalog. See the
+[WPF README](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/packages/dotnet/Runic.Translations.Wpf/README.md#control-libraries).
+
+### Runic.CommandLine apps
+
+`TranslationCommandTextResolver` treats the application's catalog as an overlay of the `runic-command-line` catalog,
+locale-first, and takes a context or a `TranslationContextBuilder` to apply overlays of the framework text, such as French
+packs. See [Translate a Runic.CommandLine app](command-line.md).
+
 ## Requested and resolved locales
 
 Each catalog resolves the requested locale under its own unsupported-locale policy. `translations.Catalogs` reports, per
