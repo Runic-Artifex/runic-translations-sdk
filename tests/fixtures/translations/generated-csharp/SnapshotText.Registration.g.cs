@@ -19,6 +19,13 @@ public static class SnapshotTextCatalog
     public const int GeneratedNameVersion = 1;
     public const int GeneratorVersion = 1;
 
+    /// <summary>The declared locales in ordinal order.</summary>
+    public static global::System.Collections.Generic.IReadOnlyList<string> SupportedLocales { get; } = global::System.Array.AsReadOnly(new string[] { "de", "en" });
+
+    /// <summary>Chooses the declared locale for an ordered preference list with CLDR likely subtags, or <see cref="DefaultLocale"/>; see <see cref="global::Runic.Translations.LocaleNegotiation"/>.</summary>
+    public static string ResolveLocale(global::System.Collections.Generic.IEnumerable<string> preferredLocales) =>
+        global::Runic.Translations.LocaleNegotiation.Negotiate(preferredLocales, SupportedLocales, DefaultLocale);
+
     /// <summary>Describes this catalog to a translation context: its ID, contract and provider factory.</summary>
     public static global::Runic.Translations.TranslationCatalogRegistration Registration { get; } = new global::Runic.Translations.TranslationCatalogRegistration(
         CatalogId, DefaultLocale, ContractFingerprint, Rmf2MarkupContract, CreateProvider);
@@ -28,8 +35,7 @@ public static class SnapshotTextCatalog
         global::Runic.Translations.ITranslationSnapshotFactory? snapshotFactory = null,
         global::Runic.Translations.TranslationOptions? options = null)
     {
-        if (global::Runic.Translations.Generated.TranslationsCompatibility.RuntimeAbiVersion != 1)
-            throw new global::System.InvalidOperationException("RTR0024: Generated translation code is incompatible with the referenced runtime ABI.");
+        global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRuntimeAbi(1);
         global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(3);
         return new global::Runic.Translations.CompiledTranslationProvider(SnapshotTextCatalogData.CreateDefinition().WithOptions(options), valueFormatter, snapshotFactory);
     }
@@ -46,6 +52,15 @@ public static class SnapshotTextCatalog
         return new global::Runic.Translations.TranslationManager(provider, snapshot);
     }
 
+    /// <summary>Creates a manager in the declared locale that best matches an ordered preference list (<see cref="ResolveLocale"/>).</summary>
+    public static global::System.Threading.Tasks.ValueTask<global::Runic.Translations.ITranslationManager> CreateManagerFromPreferencesAsync(
+        global::System.Collections.Generic.IEnumerable<string> preferredLocales,
+        global::Runic.Translations.ITextValueFormatter? valueFormatter = null,
+        global::Runic.Translations.ITranslationSnapshotFactory? snapshotFactory = null,
+        global::System.Threading.CancellationToken cancellationToken = default,
+        global::Runic.Translations.TranslationOptions? options = null) =>
+        CreateManagerAsync(ResolveLocale(preferredLocales), valueFormatter, snapshotFactory, cancellationToken, options);
+
     /// <summary>Creates a manager for the embedded catalog without awaiting, for startup code that must set it before views load.</summary>
     public static global::Runic.Translations.ITranslationManager CreateManager(
         string? initialLocale = null,
@@ -56,6 +71,13 @@ public static class SnapshotTextCatalog
         global::Runic.Translations.ITranslationSnapshot snapshot = provider.GetSnapshotAsync(initialLocale ?? DefaultLocale).AsTask().GetAwaiter().GetResult();
         return new global::Runic.Translations.TranslationManager(provider, snapshot);
     }
+
+    /// <summary>Creates a manager without awaiting, in the declared locale that best matches an ordered preference list (<see cref="ResolveLocale"/>).</summary>
+    public static global::Runic.Translations.ITranslationManager CreateManagerFromPreferences(
+        global::System.Collections.Generic.IEnumerable<string> preferredLocales,
+        global::Runic.Translations.ITextValueFormatter? valueFormatter = null,
+        global::Runic.Translations.TranslationOptions? options = null) =>
+        CreateManager(ResolveLocale(preferredLocales), valueFormatter, options);
 
     public static global::Runic.Translations.TranslationPackContract CreateExternalPackContract(string locale) => SnapshotTextCatalogData.CreateExternalPackContract(locale);
 

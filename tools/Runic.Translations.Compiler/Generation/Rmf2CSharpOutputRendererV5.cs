@@ -85,7 +85,9 @@ internal static class Rmf2CSharpOutputRendererV5
         return Output(TranslationGeneratedOutputKind.CSharpCatalogData, project.ClassName + ".CatalogData.g.cs", writer);
     }
 
-    internal static TranslationGeneratedOutput RenderRegistration(Rmf2ProjectV5 project, bool composition = true)
+    // runtimeAbiCall: the referenced runtime declares the version rule (TranslationsCompatibility.MinimumRuntimeAbiVersion)
+    // and with it EnsureRuntimeAbi, so the base ABI is checked with a call.
+    internal static TranslationGeneratedOutput RenderRegistration(Rmf2ProjectV5 project, bool composition = true, bool runtimeAbiCall = true)
     {
         GenerationWriter writer = StartFile(project);
         string visibility = Visibility(project), className = GenerationSupport.CSharpIdentifier(project.ClassName);
@@ -103,6 +105,12 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("public const int MessageGrammarVersion = 5;");
         writer.Line("public const int GeneratedNameVersion = 1;");
         writer.Line("public const int GeneratorVersion = 1;"); writer.Blank();
+        writer.Line("/// <summary>The declared locales in ordinal order.</summary>");
+        writer.Line("public static global::System.Collections.Generic.IReadOnlyList<string> SupportedLocales { get; } = global::System.Array.AsReadOnly(new string[] { "
+            + string.Join(", ", project.Locales.Select(item => item.Tag).OrderBy(item => item, StringComparer.Ordinal).Select(GenerationSupport.CSharpString)) + " });"); writer.Blank();
+        writer.Line("/// <summary>Chooses the declared locale for an ordered preference list with CLDR likely subtags, or <see cref=\"DefaultLocale\"/>; see <see cref=\"global::Runic.Translations.LocaleNegotiation\"/>.</summary>");
+        writer.Line("public static string ResolveLocale(global::System.Collections.Generic.IEnumerable<string> preferredLocales) =>"); writer.Indent();
+        writer.Line("global::Runic.Translations.LocaleNegotiation.Negotiate(preferredLocales, SupportedLocales, DefaultLocale);"); writer.Unindent(); writer.Blank();
         if (composition)
         {
             writer.Line("/// <summary>Describes this catalog to a translation context: its ID, contract and provider factory.</summary>");
@@ -115,8 +123,14 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("global::Runic.Translations.ITranslationSnapshotFactory? snapshotFactory = null,");
         writer.Line("global::Runic.Translations.TranslationOptions? options = null)"); writer.Unindent();
         writer.Line("{"); writer.Indent();
-        writer.Line("if (global::Runic.Translations.Generated.TranslationsCompatibility.RuntimeAbiVersion != 1)"); writer.Indent();
-        writer.Line("throw new global::System.InvalidOperationException(\"RTR0024: Generated translation code is incompatible with the referenced runtime ABI.\");"); writer.Unindent();
+        // A runtime with the version rule checks the base ABI with a call, against the runtime that is loaded; the
+        // constant comparison of earlier releases is folded at compile time and never fails.
+        if (runtimeAbiCall) writer.Line("global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRuntimeAbi(1);");
+        else
+        {
+            writer.Line("if (global::Runic.Translations.Generated.TranslationsCompatibility.RuntimeAbiVersion != 1)"); writer.Indent();
+            writer.Line("throw new global::System.InvalidOperationException(\"RTR0024: Generated translation code is incompatible with the referenced runtime ABI.\");"); writer.Unindent();
+        }
         writer.Line("global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2ProjectV5.RuntimeAbiVersion + ");");
         writer.Line("return new global::Runic.Translations.CompiledTranslationProvider(" + className + "CatalogData.CreateDefinition().WithOptions(options), valueFormatter, snapshotFactory);");
         writer.Unindent(); writer.Line("}"); writer.Blank();
@@ -131,6 +145,14 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("global::Runic.Translations.ITranslationSnapshot snapshot = await provider.GetSnapshotAsync(initialLocale ?? DefaultLocale, cancellationToken).ConfigureAwait(false);");
         writer.Line("return new global::Runic.Translations.TranslationManager(provider, snapshot);");
         writer.Unindent(); writer.Line("}"); writer.Blank();
+        writer.Line("/// <summary>Creates a manager in the declared locale that best matches an ordered preference list (<see cref=\"ResolveLocale\"/>).</summary>");
+        writer.Line("public static global::System.Threading.Tasks.ValueTask<global::Runic.Translations.ITranslationManager> CreateManagerFromPreferencesAsync("); writer.Indent();
+        writer.Line("global::System.Collections.Generic.IEnumerable<string> preferredLocales,");
+        writer.Line("global::Runic.Translations.ITextValueFormatter? valueFormatter = null,");
+        writer.Line("global::Runic.Translations.ITranslationSnapshotFactory? snapshotFactory = null,");
+        writer.Line("global::System.Threading.CancellationToken cancellationToken = default,");
+        writer.Line("global::Runic.Translations.TranslationOptions? options = null) =>"); writer.Unindent(); writer.Indent();
+        writer.Line("CreateManagerAsync(ResolveLocale(preferredLocales), valueFormatter, snapshotFactory, cancellationToken, options);"); writer.Unindent(); writer.Blank();
         // The embedded catalog composes its snapshot without I/O, so startup code that cannot await
         // (a WPF StartupUri application, a constructor) can install the manager before views load.
         writer.Line("/// <summary>Creates a manager for the embedded catalog without awaiting, for startup code that must set it before views load.</summary>");
@@ -143,6 +165,12 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("global::Runic.Translations.ITranslationSnapshot snapshot = provider.GetSnapshotAsync(initialLocale ?? DefaultLocale).AsTask().GetAwaiter().GetResult();");
         writer.Line("return new global::Runic.Translations.TranslationManager(provider, snapshot);");
         writer.Unindent(); writer.Line("}"); writer.Blank();
+        writer.Line("/// <summary>Creates a manager without awaiting, in the declared locale that best matches an ordered preference list (<see cref=\"ResolveLocale\"/>).</summary>");
+        writer.Line("public static global::Runic.Translations.ITranslationManager CreateManagerFromPreferences("); writer.Indent();
+        writer.Line("global::System.Collections.Generic.IEnumerable<string> preferredLocales,");
+        writer.Line("global::Runic.Translations.ITextValueFormatter? valueFormatter = null,");
+        writer.Line("global::Runic.Translations.TranslationOptions? options = null) =>"); writer.Unindent(); writer.Indent();
+        writer.Line("CreateManager(ResolveLocale(preferredLocales), valueFormatter, options);"); writer.Unindent(); writer.Blank();
         writer.Line("public static global::Runic.Translations.TranslationPackContract CreateExternalPackContract(string locale) => " + className + "CatalogData.CreateExternalPackContract(locale);"); writer.Blank();
         writer.Line("public static global::Runic.Translations.ITranslationProvider CreateExternalProvider("); writer.Indent();
         writer.Line("global::Runic.Translations.IExternalTranslationSource externalSource,");

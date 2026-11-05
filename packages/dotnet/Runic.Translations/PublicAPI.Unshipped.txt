@@ -1,4 +1,6 @@
 #nullable enable
+Runic.Translations.CompiledTranslationCatalog.NegotiateLocale(System.Collections.Generic.IEnumerable<string!>! preferredLocales) -> string!
+Runic.Translations.CompiledTranslationProvider.NegotiateLocale(System.Collections.Generic.IEnumerable<string!>! preferredLocales) -> string!
 Runic.Translations.CompiledTranslationSnapshot.LocaleResolution.get -> Runic.Translations.LocaleResolution
 Runic.Translations.CompiledTranslationSnapshot.RequestedLocale.get -> string!
 Runic.Translations.CompiledTranslationSnapshot.TryGetContentLocale(Runic.Translations.TranslationKey key, out string! contentLocale) -> bool
@@ -10,15 +12,20 @@ Runic.Translations.ITranslationContext.RefreshAsync(System.Threading.Cancellatio
 Runic.Translations.ITranslationContext.RequestedLocale.get -> string!
 Runic.Translations.ITranslationContext.Resolve(Runic.Translations.TranslationReference! reference) -> Runic.Translations.TranslationReferenceResolution!
 Runic.Translations.ITranslationContext.SetLocaleAsync(string! locale, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Runic.Translations.ITranslationContext.SetLocaleFromPreferencesAsync(System.Collections.Generic.IEnumerable<string!>! preferredLocales, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Runic.Translations.ITranslationContext.SupportedLocales.get -> System.Collections.Generic.IReadOnlyList<string!>!
 Runic.Translations.ITranslationContext.TryGetManager(string! catalogId, out Runic.Translations.ITranslationManager? manager) -> bool
+Runic.Translations.ITranslationManager.SetLocaleFromPreferencesAsync(System.Collections.Generic.IEnumerable<string!>! preferredLocales, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Runic.Translations.ITranslationProvider.NegotiateLocale(System.Collections.Generic.IEnumerable<string!>! preferredLocales) -> string!
 Runic.Translations.ITranslationSnapshot.LocaleResolution.get -> Runic.Translations.LocaleResolution
 Runic.Translations.ITranslationSnapshot.RequestedLocale.get -> string!
 Runic.Translations.ITranslationSnapshot.TryGetContentLocale(Runic.Translations.TranslationKey key, out string! contentLocale) -> bool
+Runic.Translations.LocaleNegotiation
 Runic.Translations.LocaleResolution
 Runic.Translations.LocaleResolution.Default = 2 -> Runic.Translations.LocaleResolution
 Runic.Translations.LocaleResolution.Exact = 0 -> Runic.Translations.LocaleResolution
 Runic.Translations.LocaleResolution.Parent = 1 -> Runic.Translations.LocaleResolution
+Runic.Translations.LocaleResolution.Related = 3 -> Runic.Translations.LocaleResolution
 Runic.Translations.LocalizedTextContent.FormattingLocale.get -> string!
 Runic.Translations.TranslationCatalogRegistration
 Runic.Translations.TranslationCatalogRegistration.CatalogId.get -> string!
@@ -44,6 +51,7 @@ Runic.Translations.TranslationContext.RefreshAsync(System.Threading.Cancellation
 Runic.Translations.TranslationContext.RequestedLocale.get -> string!
 Runic.Translations.TranslationContext.Resolve(Runic.Translations.TranslationReference! reference) -> Runic.Translations.TranslationReferenceResolution!
 Runic.Translations.TranslationContext.SetLocaleAsync(string! locale, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Runic.Translations.TranslationContext.SetLocaleFromPreferencesAsync(System.Collections.Generic.IEnumerable<string!>! preferredLocales, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Runic.Translations.TranslationContext.SupportedLocales.get -> System.Collections.Generic.IReadOnlyList<string!>!
 Runic.Translations.TranslationContext.TryGetManager(string! catalogId, out Runic.Translations.ITranslationManager? manager) -> bool
 Runic.Translations.TranslationContextBuilder
@@ -67,6 +75,7 @@ Runic.Translations.TranslationFallbackEventArgs.RequestedLocale.get -> string!
 Runic.Translations.TranslationFallbackEventArgs.TranslationFallbackEventArgs(string! catalog, string! key, string! locale, string! contentLocale, string! requestedLocale) -> void
 Runic.Translations.TranslationLocaleChangedEventArgs.LocaleResolution.get -> Runic.Translations.LocaleResolution
 Runic.Translations.TranslationLocaleChangedEventArgs.RequestedLocale.get -> string!
+Runic.Translations.TranslationManager.SetLocaleFromPreferencesAsync(System.Collections.Generic.IEnumerable<string!>! preferredLocales, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
 Runic.Translations.TranslationOverlay
 Runic.Translations.TranslationOverlay.AddedLocales.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationOverlayLocale!>!
 Runic.Translations.TranslationOverlay.Catalog.get -> string!
@@ -97,7 +106,13 @@ Runic.Translations.TranslationProviderFactory
 Runic.Translations.TranslationSnapshotPublishedEventArgs.LocaleResolution.get -> Runic.Translations.LocaleResolution
 Runic.Translations.TranslationSnapshotPublishedEventArgs.RequestedLocale.get -> string!
 const Runic.Translations.Generated.TranslationsCompatibility.CompositionVersion = 1 -> int
+const Runic.Translations.Generated.TranslationsCompatibility.MinimumRmf2RuntimeAbiVersion = 3 -> int
+const Runic.Translations.Generated.TranslationsCompatibility.MinimumRuntimeAbiVersion = 1 -> int
 override Runic.Translations.TranslationOverlayDiagnostic.GetHashCode() -> int
+static Runic.Translations.Generated.TranslationsCompatibility.EnsureRuntimeAbi(int requiredVersion) -> void
+static Runic.Translations.Generated.TranslationsCompatibility.SupportsRuntimeAbi(int requiredVersion) -> bool
+static Runic.Translations.LocaleNegotiation.Match(string! requestedLocale, System.Collections.Generic.IEnumerable<string!>! availableLocales) -> string?
+static Runic.Translations.LocaleNegotiation.Negotiate(System.Collections.Generic.IEnumerable<string!>! preferredLocales, System.Collections.Generic.IEnumerable<string!>! availableLocales, string! defaultLocale) -> string!
 static Runic.Translations.TranslationContext.CreateBuilder() -> Runic.Translations.TranslationContextBuilder!
 static Runic.Translations.TranslationEvents.TranslationFallback -> System.EventHandler<Runic.Translations.TranslationFallbackEventArgs!>?
 static Runic.Translations.TranslationOverlay.FromPacks(string! catalog, Runic.Translations.IExternalTranslationSource! source, System.Collections.Generic.IEnumerable<Runic.Translations.TranslationOverlayLocale!>? addedLocales = null, Runic.Translations.TranslationPackLimits? limits = null, Runic.Translations.TranslationPackIntegrityVerifier? integrityVerifier = null) -> Runic.Translations.TranslationOverlay!
