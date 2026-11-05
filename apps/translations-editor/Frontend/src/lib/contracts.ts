@@ -74,6 +74,9 @@ export interface EditorDiagnostic {
   span?: EditorDiagnosticSpan;
   sourceRevision?: string;
   quickFixes?: EditorDiagnosticQuickFix[];
+  /** The message row a per-message check is about (RTR0010, RTR0090, RTR0094–RTR0098, or a diagnostic at a message name). */
+  key?: string;
+  locale?: string;
 }
 
 export interface WorkspaceSnapshot {
@@ -100,8 +103,16 @@ export interface EditorReviewEntry {
   locale: string;
   state: EditorReviewState;
   note?: string;
+  /**
+   * The SDK per-unit fingerprint of the source this state was recorded for. A state the user sets carries the
+   * fingerprint of the base text the editor loaded (EditorReviewSnapshot.fingerprints), never the source on disk at save.
+   */
   sourceFingerprint?: string;
   samples: Record<string, string>;
+  /** The source changed since this state was recorded (RTR0090). Computed by the backend. */
+  stale?: boolean;
+  /** A note or samples without a review-file entry: the state is inferred, and saving writes no review-file entry. */
+  implicit?: boolean;
 }
 
 export interface EditorTerminologyEntry {
@@ -117,12 +128,21 @@ export interface EditorReviewSnapshot {
   error?: string;
   entries: EditorReviewEntry[];
   terminology: EditorTerminologyEntry[];
+  /** A one-time notice, such as the move of editor approvals into the SDK review file. */
+  notice?: EditorNotice;
+  /** The SDK per-unit fingerprint of each base message as loaded; absent when runic.json or the base locale has errors. */
+  fingerprints?: Record<string, string>;
+  /** Version 1 editor approvals wait to move into the review file: the entries are shown read-only. */
+  migrationPending?: boolean;
 }
 
 export interface EditorReviewSaveRequest {
   expectedRevision?: string;
   entries: EditorReviewEntry[];
   terminology: EditorTerminologyEntry[];
+  /** The entries and terminology the edits started from: a changed review file gets only the user's changes re-applied. */
+  original?: EditorReviewEntry[];
+  originalTerminology?: EditorTerminologyEntry[];
 }
 
 export interface EditorReviewOperationResult {
@@ -231,6 +251,8 @@ export interface EditorExternalChanges {
   overflowed: boolean;
   paths: string[];
   changes: EditorExternalFileChange[];
+  /** The review data after another writer (the command line, the language server) changed the review file. */
+  review?: EditorReviewSnapshot;
 }
 
 export interface EditorExternalFileChange {

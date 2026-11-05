@@ -249,8 +249,10 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("{"); writer.Indent();
         foreach (Rmf2ProjectV5 overlay in overlays)
         {
+            // Each added locale names the fallback the compiler validated it against, so the runtime follows the same chain.
             string added = overlay.OverlayAddedLocales.Count == 0 ? "null" : "new global::Runic.Translations.TranslationOverlayLocale[] { " +
-                string.Join(", ", overlay.OverlayAddedLocales.Select(locale => "new global::Runic.Translations.TranslationOverlayLocale(" + GenerationSupport.CSharpString(locale) + ")")) + " }";
+                string.Join(", ", overlay.OverlayAddedLocales.Select(locale => "new global::Runic.Translations.TranslationOverlayLocale(" + GenerationSupport.CSharpString(locale) +
+                    ", " + GenerationSupport.CSharpString(overlay.Locales.First(item => string.Equals(item.Tag, locale, StringComparison.Ordinal)).FallbackTag ?? overlay.DefaultLocale) + ")")) + " }";
             writer.Line("global::Runic.Translations.TranslationOverlay.FromCompiled(" + GenerationSupport.CSharpString(overlay.Id) + ", " + added + ", static locale => locale switch");
             writer.Line("{"); writer.Indent();
             foreach (string locale in overlay.OverlayKeys.Keys.OrderBy(locale => locale, StringComparer.Ordinal))

@@ -169,6 +169,43 @@ internal sealed class CompositionTests
         Assert.Equal(0, later.Catalogs[0].OverlayDiagnostics.Count, "nothing skipped");
     }
 
+    [Test, DisplayName("an added regional override falls back to an added parent, as the compiler validated it")]
+    public async Task CompiledOverrideFallbacks()
+    {
+        // The library declares en and de; the application adds fr and fr-CH (fr-CH.rmf2 sorts before fr.rmf2). fr-CH falls back
+        // to the added fr, at compile time and at run time.
+        GeneratorRun run = GeneratorTestHost.Run([.. OverrideInputs("title = Data grid\n", "title = Grille\nrows =\n  .input {$count :integer}\n  .match $count\n  one {{Une ligne}}\n  many {{{$count} de lignes}}\n  * {{{$count} lignes}}\n"),
+            new TestInput("C:/repo/translations/overrides/acme-grid/fr-CH.rmf2", "OverrideSource", "title = Grille suisse\n", "acme-grid")]);
+        Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
+        using var stream = new MemoryStream();
+        Microsoft.CodeAnalysis.Emit.EmitResult emitted = run.Compilation.Emit(stream);
+        Assert.True(emitted.Success, string.Join("\n", emitted.Diagnostics));
+        Type catalog = Assembly.Load(stream.ToArray()).GetTypes().Single(static type => type.Name == "AppTextCatalog");
+        var overlays = (IReadOnlyList<TranslationOverlay>)catalog.GetProperty("Overlays")!.GetValue(null)!;
+        Assert.Equal("fr>en,fr-CH>fr", string.Join(",", overlays.Single().AddedLocales.Select(static locale => locale.Locale + ">" + locale.FallbackLocale)), "explicit fallbacks");
+
+        TranslationContext context = TranslationContext.CreateBuilder().Add(GridV1.Registration).AddOverlays(overlays).Build("fr-CH");
+        Assert.Equal("Grille suisse|3 lignes|No rows", Text(context, GridId, "title") + "|" + Text(context, GridId, "rows", new TextArgument("count", 3L)) + "|" +
+            Text(context, GridId, "empty"), "fr-CH, then the French override, then the library's English");
+    }
+
+    [Test, DisplayName("an explicit fallback may name a locale another overlay adds, but not in a cycle")]
+    public async Task ExplicitFallbackToAddedLocale()
+    {
+        Dictionary<string, byte[]> packs = Packs(OverlayProject.Replace("[ \"en\", \"fr\" ]", "[ \"en\", \"fr\", \"fr-CH\" ]", StringComparison.Ordinal),
+            ("en", "title = Data grid\nempty = Nothing here\n"), ("fr", "title = Grille\nempty = Aucune ligne\n"), ("fr-CH", "title = Grille suisse\n"));
+        TranslationContext context = await TranslationContext.CreateBuilder().Add(GridV1.Registration)
+            .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(packs), [new TranslationOverlayLocale("fr-CH", "fr")]))
+            .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(packs), [new TranslationOverlayLocale("fr", "de")]))
+            .BuildAsync("fr-CH");
+        Assert.Equal("Grille suisse|Aucune ligne|3 Zeilen", Text(context, GridId, "title") + "|" + Text(context, GridId, "empty") + "|" +
+            Text(context, GridId, "rows", new TextArgument("count", 3L)), "fr-CH, the added fr, then the library's de");
+        ArgumentException cycle = await Throws<ArgumentException>(() => TranslationContext.CreateBuilder().Add(GridV1.Registration)
+            .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(packs), [new TranslationOverlayLocale("fr-CH", "fr"), new TranslationOverlayLocale("fr", "fr-CH")]))
+            .BuildAsync().AsTask());
+        Assert.True(cycle.Message.Contains("cycle", StringComparison.Ordinal), cycle.Message);
+    }
+
     [Test, DisplayName("an override the packed library catalog does not accept is a build error in the override source")]
     public void RejectedOverrides()
     {
@@ -759,7 +796,7 @@ internal sealed class CompositionTests
         await Throws<InvalidOperationException>(() => TranslationContext.CreateBuilder().Add(App.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(Overlay))).BuildAsync().AsTask());
         await Throws<InvalidOperationException>(() => TranslationContext.CreateBuilder().BuildAsync().AsTask());
-        // An added locale must fall back to a locale the library declares.
+        // An added locale must fall back to a locale the library declares or an overlay adds.
         await Throws<ArgumentException>(() => TranslationContext.CreateBuilder().Add(GridV1.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(Overlay), [new TranslationOverlayLocale("fr", "it")])).BuildAsync().AsTask());
     }

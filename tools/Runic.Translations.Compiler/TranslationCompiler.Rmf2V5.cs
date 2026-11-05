@@ -314,6 +314,18 @@ public static partial class TranslationCompiler
             var byKey = contracts.Concat(extraContracts).ToDictionary(contract => contract.Key, StringComparer.Ordinal);
             var keysByLocale = new SortedDictionary<string, SortedSet<string>>(StringComparer.Ordinal);
             var added = new List<LocaleModel>();
+            // The fallback of every added locale is chosen once all of them are known, by the runtimes' rule, so de-CH falls
+            // back to an added de whatever the order of the files.
+            string[] libraryTags = locales.Select(locale => locale.Tag).Order(StringComparer.Ordinal).ToArray();
+            string[] addedTags = overlayExtracted.Where(source => !entries.ContainsKey(source.Locale) && (canonical.ContainsKey(source.Key) || extras.ContainsKey(source.Key)))
+                .Select(source => source.Locale).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            string[] candidates = libraryTags.Concat(addedTags).Order(StringComparer.Ordinal).ToArray();
+            foreach (string tag in addedTags)
+            {
+                entries[tag] = new SortedDictionary<string, Rmf2ProjectEntryV5>(StringComparer.Ordinal);
+                added.Add(new LocaleModel(tag, AddedLocaleFallback(tag, candidates, libraryTags, manifest.DefaultLocale), default, default));
+                overlayAdded.Add(tag);
+            }
             foreach (var source in overlayExtracted)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -325,12 +337,7 @@ public static partial class TranslationCompiler
                         (suggestion is null ? "" : " Did you mean '" + suggestion + "'?"), source.Source, NameSpan(source));
                     continue;
                 }
-                if (!entries.TryGetValue(source.Locale, out var target))
-                {
-                    entries[source.Locale] = target = new SortedDictionary<string, Rmf2ProjectEntryV5>(StringComparer.Ordinal);
-                    added.Add(new LocaleModel(source.Locale, AddedLocaleFallback(source.Locale, locales, manifest.DefaultLocale), default, default));
-                    overlayAdded.Add(source.Locale);
-                }
+                var target = entries[source.Locale];
                 if (Compile(source, origin.Linked.Message.Inputs) is not { } compiledEntry) continue;
                 var entry = Profile(compiledEntry, kinds[source.Key], new SortedDictionary<string, Rmf2ProjectEntryV5>(StringComparer.Ordinal));
                 Rmf2MessageContractV5 contract = byKey[source.Key];
@@ -349,7 +356,6 @@ public static partial class TranslationCompiler
                 keys.Add(source.Key);
             }
             foreach (var pair in keysByLocale) overlayKeys[pair.Key] = pair.Value.ToArray();
-            overlayAdded.Sort(StringComparer.Ordinal);
             locales = locales.Concat(added).OrderBy(locale => locale.Tag, StringComparer.Ordinal).ToArray();
         }
         if (keepLocales is not null)
@@ -794,17 +800,15 @@ public static partial class TranslationCompiler
         return result;
     }
 
-    // The fallback of a locale that override sources add: its nearest parent by truncation that the catalog declares
-    // (de-CH to de), else the base locale.
-    private static string AddedLocaleFallback(string locale, IReadOnlyList<LocaleModel> declared, string defaultLocale)
-    {
-        for (int dash = locale.LastIndexOf('-'); dash > 0; dash = locale.LastIndexOf('-', dash - 1))
-        {
-            string parent = locale[..dash];
-            if (declared.Any(item => string.Equals(item.Tag, parent, StringComparison.OrdinalIgnoreCase))) return parent;
-        }
-        return defaultLocale;
-    }
+    // The fallback of a locale that override sources add, as both runtimes choose it for an added locale without an explicit
+    // fallback (OverlayTranslationProvider in .NET, overlayState in ESM): its nearest CLDR parent among the library's and the
+    // added locales (de-CH to an added de or the library's de, es-MX to es-419, zh-TW to zh-Hant, never sr-Latn-RS to a
+    // Cyrillic sr), else the library locale CLDR likely subtags match (de-CH to de-DE), else the library's base locale.
+    // Generated code passes it explicitly, so the runtimes follow this choice.
+    internal static string AddedLocaleFallback(string locale, string[] candidates, string[] libraryLocales, string defaultLocale) =>
+        CldrLocales.NearestParent(locale, candidates) ??
+        CldrLocales.Match(locale, libraryLocales) ?? CldrLocales.Truncate(locale, libraryLocales) ??
+        defaultLocale;
 
     private static string NormalizeResourceRoot(string directory, string path)
     {

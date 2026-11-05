@@ -123,18 +123,19 @@ internal sealed class RuntimeDependencyRangeTests
         File.WriteAllText(temporary.Resolve("translations", "text", "de.rmf2"), "empty = Keine Zeilen\n", new UTF8Encoding(false));
         File.WriteAllText(temporary.Resolve("translations", "overrides", "other", "en.rmf2"), "title = Other\n", new UTF8Encoding(false));
         string targets = XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build", "build", "Runic.Translations.Build.Pack.targets"));
-        File.WriteAllText(temporary.Resolve("Probe.proj"), $$"""
-            <Project>
-              <PropertyGroup><BaseIntermediateOutputPath>obj/</BaseIntermediateOutputPath><RunicTranslationsPackCatalog>true</RunicTranslationsPackCatalog></PropertyGroup>
-              <Import Project="{{targets}}" />
-              <Target Name="_GetPackageFiles">
-                <Message Importance="high" Text="PACKED %(None.PackagePath)" Condition="'%(None.Pack)' == 'true'" />
-              </Target>
-            </Project>
-            """, new UTF8Encoding(false));
-        ProcessResult Pack(string catalog, string package)
+        ProcessResult Pack(string catalog, string package, string ownProps = "")
         {
             Project(catalog);
+            File.WriteAllText(temporary.Resolve("Probe.proj"), $$"""
+                <Project>
+                  <PropertyGroup><BaseIntermediateOutputPath>obj/</BaseIntermediateOutputPath><RunicTranslationsPackCatalog>true</RunicTranslationsPackCatalog></PropertyGroup>
+                  <ItemGroup>{{ownProps}}</ItemGroup>
+                  <Import Project="{{targets}}" />
+                  <Target Name="_GetPackageFiles">
+                    <Message Importance="high" Text="PACKED %(None.PackagePath)" Condition="'%(None.Pack)' == 'true'" />
+                  </Target>
+                </Project>
+                """, new UTF8Encoding(false));
             return Processes.DotNet(temporary.Path, "msbuild", "Probe.proj", "/nologo", "/t:_GetPackageFiles", "/v:minimal",
                 "/p:_RunicTranslationsPackTaskAssembly=" + BuildTaskAssembly(), "/p:PackageId=" + package);
         }
@@ -159,6 +160,22 @@ internal sealed class RuntimeDependencyRangeTests
         ProcessResult firstParty = Pack("runic-grid", "Runic.Grid");
         Assert.Equal(0, firstParty.ExitCode, firstParty.Combined);
         Assert.True(!firstParty.Combined.Contains("RTR0105", StringComparison.Ordinal), "first-party catalogs keep their runic- ID: " + firstParty.Combined);
+
+        // NuGet imports buildTransitive/<id>.props instead of build/<id>.props, so the generated props import the library's own.
+        string generated = temporary.Resolve("obj", "runic-pack", "buildTransitive", "Acme.Grid.props");
+        Assert.True(!File.ReadAllText(generated, Encoding.UTF8).Contains("../build/", StringComparison.Ordinal), "no build props to import");
+        ProcessResult importsBuild = Pack("acme.grid", "Acme.Grid", "<None Include=\"Acme.Grid.props\" Pack=\"true\" PackagePath=\"build/\" />");
+        Assert.Equal(0, importsBuild.ExitCode, importsBuild.Combined);
+        string transitive = File.ReadAllText(generated, Encoding.UTF8);
+        Assert.True(transitive.Contains("<Import Project=\"$(MSBuildThisFileDirectory)../build/Acme.Grid.props\"", StringComparison.Ordinal) &&
+            transitive.IndexOf("../build/", StringComparison.Ordinal) < transitive.IndexOf("catalog.props", StringComparison.Ordinal), transitive);
+        ProcessResult importsNamed = Pack("acme.grid", "Acme.Grid", "<None Include=\"Acme.Grid.props\" Pack=\"true\" PackagePath=\"build\\Acme.Grid.props\" />");
+        Assert.Equal(0, importsNamed.ExitCode, importsNamed.Combined);
+        Assert.True(File.ReadAllText(generated, Encoding.UTF8).Contains("../build/Acme.Grid.props", StringComparison.Ordinal), "a file PackagePath");
+        // A library's own buildTransitive/<id>.props would collide with the generated one.
+        ProcessResult collides = Pack("acme.grid", "Acme.Grid", "<None Include=\"Acme.Grid.props\" Pack=\"true\" PackagePath=\"buildTransitive\" />");
+        Assert.True(collides.ExitCode != 0 && collides.Combined.Contains("error RTR0104", StringComparison.Ordinal) &&
+            collides.Combined.Contains("RunicTranslationsPackCatalogProps", StringComparison.Ordinal), collides.Combined);
     }
 
     private static string Nuspec(string[] versions)

@@ -285,7 +285,8 @@ dotnet tool run runic-translations -- validate
 
 The optional review file `<catalog>.review.json` beside `runic.json`
 (`runic.translations.interchange-review/2`, schema `interchange-review-v2.schema.json`) records the review
-state of translations for teams that do not use the editor. Commit it with the sources. Each entry stores the
+state of translations. The Translations Editor and the language server read and write the same file (the
+editor's notes and terminology stay in its own state). Commit it with the sources. Each entry stores the
 per-unit fingerprint of the source its translation was made or approved for (a hash of the key, the source text
 and the caller contract), so editing one message never touches the others. The source text is hashed in canonical
 MF2 form: spacing inside an expression or between a `.match`'s parts, literal quoting, option order and equivalent
@@ -299,6 +300,10 @@ escapes do not change it; different text, placeholders, functions, options or se
   the translation predates a source change. Review it, then run `review mark`. An unreadable review file is
   the warning `RTR0091`. Without the file nothing is reported.
 - `xliff export` reads it for the XLIFF review state (see above).
+- The language server (`lsp`) reports the same `RTR0090` warnings, shows the review state in hover and offers
+  **Mark … reviewed**, which records the entry's state again for the source on disk. It refuses while the file with
+  the base message or the translation has unsaved changes (save first), and like the editor it works while another
+  locale misses keys. All three writers replace the review file only if it did not change since they read it.
 
 ## Other commands
 

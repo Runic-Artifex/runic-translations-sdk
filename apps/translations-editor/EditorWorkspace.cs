@@ -26,6 +26,7 @@ internal sealed class EditorWorkspace : IDisposable
     private readonly Dictionary<string, string> _knownRevisions = new(StringComparer.Ordinal);
     private string? _catalogId;
     private int _watcherOverflowed;
+    private string? _knownReviewRevision;
     private int _reconcileRequested;
     private bool _disposed;
 
@@ -123,7 +124,7 @@ internal sealed class EditorWorkspace : IDisposable
             // baseline so a later rename/delete of a newly added mount file
             // still reports the old path as removed.
             ReplaceKnownRevisions(current);
-            return new EditorExternalChanges(overflowed, changed, changes);
+            return new EditorExternalChanges(overflowed, changed, changes, await ExternalReviewAsync(cancellationToken).ConfigureAwait(false));
         }
         finally
         {
@@ -255,7 +256,9 @@ internal sealed class EditorWorkspace : IDisposable
         {
             ThrowIfDisposed();
             string path = NormalizeKnownPath(relativePath);
-            content = StrictUtf8.GetString(Rmf2DiagnosticActions.ApplyQuickFix(Source(path, content), fix).Bytes);
+            // A project repair (RTR0095) is re-derived from the catalog compiled with this draft.
+            WorkspaceState before = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
+            content = StrictUtf8.GetString(Rmf2DiagnosticActions.ApplyQuickFix(Source(path, content), fix, before.Compilation).Bytes);
             WorkspaceState state = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
             return new(state.Compilation.Success, content, ReadEntries(path, content, state.Compilation), Diagnostics(state, cancellationToken));
         }
@@ -442,16 +445,14 @@ internal sealed class EditorWorkspace : IDisposable
         {
             ThrowIfDisposed();
             if (_catalogId is null) return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_select_catalog_review"), null, null);
-            var state = new TranslationEditorState(
-                _catalogId,
-                request.Entries.Select(static entry => new TranslationEditorStateEntry(
-                    entry.Key, entry.Locale, entry.State, entry.Note, entry.SourceFingerprint, entry.Samples)).ToArray(),
-                request.Terminology.Select(static term => new TranslationTerminologyEntry(
-                    term.Source, term.Preferred, term.Locale, term.Note)).ToArray());
-            TranslationEditorStateLoadResult saved = TranslationEditorStateStore.Save(_root, state, request.ExpectedRevision);
-            return new EditorReviewOperationResult(true, null, Review(saved), null);
+            // Notes, samples and terminology always save. Review states carry the fingerprint of the source the user
+            // reviewed (from the snapshot); the review compilation tells which of them predate a change on disk, and it
+            // works while translations are incomplete or invalid (TranslationReviewFile.ForReview).
+            WorkspaceState state = await ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
+            EditorReviewSnapshot saved = KnownReview(ReviewStore(_catalogId).Save(request, ReviewCompilation(state, cancellationToken)));
+            return new EditorReviewOperationResult(true, null, saved, null);
         }
-        catch (Exception exception) when (exception is TranslationEditorStateException or IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is TranslationEditorStateException or TranslationInterchangeException or IOException or UnauthorizedAccessException or ArgumentException)
         {
             return new EditorReviewOperationResult(false, EditorNotice.FromException(exception), null, null);
         }
@@ -470,19 +471,16 @@ internal sealed class EditorWorkspace : IDisposable
         {
             ThrowIfDisposed();
             if (_catalogId is null) return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_select_catalog_review_change"), null, null);
-            TranslationEditorStateLoadResult current = TranslationEditorStateStore.Load(_root, _catalogId);
-            if (current.Error is not null)
-                return new EditorReviewOperationResult(false, EditorNotice.External(current.Error), null, null);
-            if (!string.Equals(current.Revision, expectedRevision, StringComparison.Ordinal))
+            EditorReviewStore store = ReviewStore(_catalogId);
+            if (!string.Equals(store.CurrentRevision(), expectedRevision, StringComparison.Ordinal))
                 return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_sidecar_history_conflict"), null, null);
-            string fullPath = ContainedPath(current.Path);
             cancellationToken.ThrowIfCancellationRequested();
-            if (File.Exists(fullPath)) File.Delete(fullPath);
+            store.Delete(expectedRevision);
             // File.Delete is the point of no return.  Callers must reconcile their
             // history before any sidecar reload can fail or observe an external write.
             return new EditorReviewOperationResult(true, null, null, null);
         }
-        catch (Exception exception) when (exception is TranslationEditorStateException or IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is TranslationEditorStateException or IOException or UnauthorizedAccessException or ArgumentException)
         {
             return new EditorReviewOperationResult(false, EditorNotice.FromException(exception), null, null);
         }
@@ -491,6 +489,9 @@ internal sealed class EditorWorkspace : IDisposable
             _gate.Release();
         }
     }
+
+    private EditorReviewStore ReviewStore(string catalogId) =>
+        new(_root, FindMf2ProjectConfig() ?? throw new EditorUserException(EditorNotice.Create("ui_backend_project_required")), catalogId);
 
     public void Dispose()
     {
@@ -503,14 +504,14 @@ internal sealed class EditorWorkspace : IDisposable
 
     // ---- XLIFF interchange (W03) ----
     //
-    // Fingerprint reconciliation: interchange entries use the per-unit source
-    // fingerprint (key, source text and caller contract; profile v3),
-    // independently of v5 CallerFingerprint and SourceHash. SourceHash remains
-    // the optimistic-concurrency freshness token. The editor sidecar keeps its
-    // per-entry fnv1a64 marker separately. Export stamps an entry with its
-    // unit's current fingerprint only while that marker still matches the
-    // base value; an approval recorded against an older source is exported as
-    // needs-review. Imported entries are stripped of stamps after validation.
+    // The editor exports and imports through the same Tooling code as `runic-translations xliff export/import`:
+    // TranslationInterchange (XLIFF profile v3, per-unit fingerprints), TranslationXliffImportPlan (which units are
+    // added, changed, unchanged, skipped or refused), TranslationInterchangeSourceWriter (where translations go) and
+    // TranslationReviewFile (the review entries after the import, in <catalog>.review.json). A unit whose source
+    // changed since export is imported as needs-review, as the command line's default policy does; only document-level
+    // problems (another catalog, an undeclared or the base locale, an unreadable file) refuse the whole import. The
+    // editor keeps its preview/confirm step: the preview computes every write, and the commit checks that nothing
+    // changed since.
 
     // allowRootedOutput is set only by the command line (`export --output`): a
     // rooted path there is the caller's chosen destination. The UI bridge keeps
@@ -529,7 +530,7 @@ internal sealed class EditorWorkspace : IDisposable
             if (!state.Compilation.Success)
                 return new EditorXliffExportResult(false, EditorNotice.Create("ui_backend_xliff_compile"), null, [], []);
             TranslationInterchangeProjection catalog = TranslationInterchange.PreflightXliff21(state.Compilation);
-            TranslationInterchangeReview review = BuildExportReview(TranslationEditorStateStore.Load(_root, catalog.CatalogId), catalog, BaseValues(state));
+            TranslationInterchangeReview review = ReviewStore(catalog.CatalogId).ExportReview();
             TranslationXliffExportResult export = TranslationInterchange.ExportXliff21(state.Compilation, review);
             string targetDirectory = ResolveInterchangeOutputDirectory(directory, Path.Combine(".runic-translations", "export"), allowRootedOutput);
             Directory.CreateDirectory(targetDirectory);
@@ -549,7 +550,7 @@ internal sealed class EditorWorkspace : IDisposable
                 export.Report.Losses.Select(static loss => new EditorInterchangeLoss(
                     loss.Code, loss.Location, loss.Message, loss.SemanticLoss)).ToArray());
         }
-        catch (Exception exception) when (exception is TranslationInterchangeException or TranslationAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is TranslationInterchangeException or TranslationAuthoringException or TranslationEditorStateException or ArgumentException or IOException or UnauthorizedAccessException)
         {
             return new EditorXliffExportResult(false, InterchangeMessage(exception), null, [], []);
         }
@@ -559,6 +560,7 @@ internal sealed class EditorWorkspace : IDisposable
         }
     }
 
+    // A copy of the SDK review file (with the editor's notes where it has none), for a reviewer outside the project.
     internal async Task<EditorReviewFileResult> ExportReviewJsonAsync(
         string? path,
         bool allowRootedOutput = false,
@@ -572,7 +574,7 @@ internal sealed class EditorWorkspace : IDisposable
             if (!state.Compilation.Success)
                 return new EditorReviewFileResult(false, EditorNotice.Create("ui_backend_review_compile"), null, 0);
             TranslationInterchangeProjection catalog = TranslationInterchange.PreflightXliff21(state.Compilation);
-            TranslationInterchangeReview review = BuildExportReview(TranslationEditorStateStore.Load(_root, catalog.CatalogId), catalog, BaseValues(state));
+            TranslationInterchangeReview review = ReviewStore(catalog.CatalogId).ExportReview();
             byte[] bytes = TranslationInterchange.ExportReviewJson(review);
             string targetPath = Path.Combine(
                 ResolveInterchangeOutputDirectory(path is null ? null : Path.GetDirectoryName(path), Path.Combine(".runic-translations", "export"), allowRootedOutput),
@@ -585,7 +587,7 @@ internal sealed class EditorWorkspace : IDisposable
                 ReportedOutputPath(targetPath),
                 review.Entries.Count);
         }
-        catch (Exception exception) when (exception is TranslationInterchangeException or TranslationAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is TranslationInterchangeException or TranslationAuthoringException or TranslationEditorStateException or ArgumentException or IOException or UnauthorizedAccessException)
         {
             return new EditorReviewFileResult(false, InterchangeMessage(exception), null, 0);
         }
@@ -608,50 +610,43 @@ internal sealed class EditorWorkspace : IDisposable
                 return (RefuseXliff("EDITOR-COMPILE", EditorNotice.Create("ui_backend_import_compile")), null);
             TranslationInterchangeProjection catalog = TranslationInterchange.PreflightXliff21(state.Compilation);
             byte[] bytes = await ReadImportSourceAsync(path, cancellationToken).ConfigureAwait(false);
-            TranslationXliffImportResult import = TranslationInterchange.ImportXliff21(bytes);
+
+            // Document-level checks first, with the editor's own messages; units are then judged one by one.
+            TranslationXliffImportResult header = TranslationInterchange.ImportXliff21(bytes);
             var refusals = new List<EditorInterchangeRefusal>();
-            CollectCatalogRefusals(catalog, import, refusals);
-            CollectUnitRefusals(catalog, import, refusals);
-
-            // Only applied units carry messages; untranslated, empty and selector units are skipped per unit.
-            Dictionary<string, string> importedValues = import.Messages.ToDictionary(
-                static message => message.MessageId,
-                static message => StrictUtf8.GetString(message.Bytes.Span).TrimEnd('\r', '\n'),
-                StringComparer.Ordinal);
-            if (!string.Equals(import.SourceLocale, catalog.SourceLocale, StringComparison.Ordinal))
+            CollectCatalogRefusals(catalog, header, refusals);
+            if (!string.Equals(header.SourceLocale, catalog.SourceLocale, StringComparison.Ordinal))
                 refusals.Add(new EditorInterchangeRefusal("EDITOR-SOURCE-LOCALE-MISMATCH",
-                    EditorNotice.Create("ui_backend_refusal_1", ("value1", import.SourceLocale!), ("value2", catalog.SourceLocale!))));
-            foreach (string key in importedValues.Keys.Where(key => !catalog.CanonicalUnits.Any(candidate => string.Equals(candidate.Key, key, StringComparison.Ordinal))).Order(StringComparer.Ordinal))
-                refusals.Add(new EditorInterchangeRefusal("EDITOR-KEY-NOT-IN-CATALOG", EditorNotice.Create("ui_backend_refusal_2", ("value1", key!), ("value2", catalog.CatalogId!))));
-
-            var sidecar = TranslationEditorStateStore.Load(_root, catalog.CatalogId);
-            if (sidecar.Error is not null)
-                refusals.Add(new EditorInterchangeRefusal("EDITOR-SIDECAR", EditorNotice.External(sidecar.Error)));
-            CollectApprovalFingerprintRefusals(catalog, import.Review.Entries, refusals);
-
+                    EditorNotice.Create("ui_backend_refusal_1", ("value1", header.SourceLocale!), ("value2", catalog.SourceLocale!))));
+            EditorReviewStore store = ReviewStore(catalog.CatalogId);
+            (TranslationInterchangeReview? existingReview, byte[]? existingReviewBytes, string? reviewRevision) = (null, null, null);
+            try { (existingReview, existingReviewBytes, reviewRevision) = store.ReadReview(); }
+            catch (Exception exception) when (exception is TranslationInterchangeException or TranslationEditorStateException)
+            {
+                refusals.Add(new EditorInterchangeRefusal("EDITOR-SIDECAR", EditorNotice.External(exception.Message)));
+            }
             if (refusals.Count > 0)
-                return (new EditorXliffImportPlan(false, null, null, import.CatalogId, import.SourceLocale, import.TargetLocale, null,
+                return (new EditorXliffImportPlan(false, null, null, header.CatalogId, header.SourceLocale, header.TargetLocale, null,
                     [], 0, 0, 0, 0, 0, false, refusals.Order(InterchangeRefusalOrder.Instance).ToArray()), null);
 
-            TranslationInterchangeLocale targetLocale = catalog.Locales.Single(locale => string.Equals(locale.Tag, import.TargetLocale, StringComparison.Ordinal));
-            Dictionary<string, string> direct = targetLocale.DirectResources.ToDictionary(
-                static resource => resource.Key,
-                static resource => resource.Text.TrimEnd('\r', '\n'),
-                StringComparer.Ordinal);
+            TranslationXliffImportResult import = TranslationInterchange.ImportXliff21(bytes, state.Compilation,
+                new TranslationXliffImportOptions { SourceChangePolicy = TranslationSourceChangePolicy.NeedsReview });
+            TranslationXliffImportPlan plan = TranslationXliffImportPlan.Create(state.Compilation, import);
             var changes = new List<EditorKeyChange>();
-            var values = new Dictionary<string, string>(StringComparer.Ordinal);
             bool overflowed = false;
-            int added = 0, changed = 0, removed = 0, unchanged = 0;
-            foreach ((string key, string after) in importedValues.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
+            foreach (TranslationXliffImportUnitPlan unit in plan.Units.OrderBy(static unit => unit.Key, StringComparer.Ordinal))
             {
-                string? before = direct.GetValueOrDefault(key);
-                // Equivalent MF2 spellings of the same text (escapes, quoting) are unchanged.
-                bool same = before is not null && string.Equals(TranslationInterchangePattern.Canonical(before), TranslationInterchangePattern.Canonical(after), StringComparison.Ordinal);
-                if (before is null) added += 1;
-                else if (same) unchanged += 1;
-                else changed += 1;
-                Push(ref changes, ref overflowed, new EditorKeyChange(key, before is not null ? "changed" : "added", before, after, null, null));
-                if (!same) values[key] = after;
+                switch (unit.Outcome)
+                {
+                    case "added" or "changed":
+                        Push(ref changes, ref overflowed, new EditorKeyChange(unit.Key, unit.Outcome, unit.Before, unit.After, null, null));
+                        break;
+                    case "refused" or "skipped":
+                        // A refused unit is listed with its reason; the other units are still imported.
+                        if (unit.Outcome == "refused")
+                            Push(ref changes, ref overflowed, new EditorKeyChange(unit.Key, "refused", null, unit.Code + ": " + unit.Message, null, null));
+                        break;
+                }
             }
 
             // The shared Tooling writer: an existing translation changes in place, a missing one is added
@@ -668,7 +663,7 @@ internal sealed class EditorWorkspace : IDisposable
                 resources,
                 state.Compilation,
                 import.TargetLocale!,
-                values,
+                plan.Values,
                 cancellationToken);
             var documents = edits.Select(edit =>
             {
@@ -685,33 +680,32 @@ internal sealed class EditorWorkspace : IDisposable
                 return (RefuseXliff("EDITOR-MF2-IMPORT", EditorNotice.External(message)), null);
             }
 
-            Dictionary<string, TranslationEditorStateEntry> currentEntries = sidecar.State.Entries
-                .ToDictionary(static entry => Identity(entry.Key, entry.Locale), StringComparer.Ordinal);
+            // The review file after the import, as xliff import writes it.
+            (TranslationInterchangeReview merged, bool reviewChanged) = TranslationReviewFile.MergeImport(existingReview, catalog.CatalogId, import, plan);
+            var before = (existingReview?.Entries ?? []).ToDictionary(static entry => Identity(entry.Key, entry.Locale), StringComparer.Ordinal);
             int reviewUpdates = 0;
-            foreach (TranslationInterchangeReviewEntry entry in import.Review.Entries.OrderBy(static item => item.Key, StringComparer.Ordinal).ThenBy(static item => item.Locale, StringComparer.Ordinal))
+            foreach (TranslationInterchangeReviewEntry entry in merged.Entries.OrderBy(static item => item.Key, StringComparer.Ordinal).ThenBy(static item => item.Locale, StringComparer.Ordinal))
             {
-                TranslationEditorStateEntry? existing = currentEntries.GetValueOrDefault(Identity(entry.Key, entry.Locale));
-                bool stateChanged = existing?.State != TranslationReviewStates.ToWire(entry.State);
-                bool noteChanged = existing?.Note != entry.Note;
-                if (!stateChanged && !noteChanged) continue;
+                before.TryGetValue(Identity(entry.Key, entry.Locale), out TranslationInterchangeReviewEntry? existing);
+                if (existing is not null && existing.State == entry.State) continue;
                 reviewUpdates += 1;
-                Push(ref changes, ref overflowed, new EditorKeyChange(entry.Key, "state-change", null, null, existing?.State ?? "draft", TranslationReviewStates.ToWire(entry.State)));
+                Push(ref changes, ref overflowed, new EditorKeyChange(entry.Key, "state-change", null, null,
+                    existing is null ? null : TranslationReviewFile.StateText(existing.State), TranslationReviewFile.StateText(entry.State)));
             }
-
-            List<TranslationEditorStateEntry> merged = MergeImportedEntries(sidecar, import.Review.Entries, catalog, BaseValues(state));
+            byte[]? reviewBytes = reviewChanged ? TranslationReviewFile.Render(merged) : null;
             var prepared = new PreparedInterchangeImport(
                 ResolveImportSourcePath(path),
                 SHA256.HashData(bytes),
                 import.CatalogId,
                 catalog.SourceFreshness,
                 documents,
-                merged,
-                sidecar.Revision);
+                reviewBytes,
+                reviewRevision);
             return (new EditorXliffImportPlan(true, null, null, import.CatalogId, import.SourceLocale, import.TargetLocale, null,
-                changes.ToArray(), added, changed, removed, unchanged, reviewUpdates, overflowed, []),
+                changes.ToArray(), plan.Count("added"), plan.Count("changed"), 0, plan.Count("unchanged"), reviewUpdates, overflowed, []),
                 prepared);
         }
-        catch (Exception exception) when (exception is TranslationInterchangeException or TranslationAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is TranslationInterchangeException or TranslationAuthoringException or TranslationEditorStateException or ArgumentException or IOException or UnauthorizedAccessException)
         {
             return (RefuseXliff(InterchangeCode(exception), InterchangeMessage(exception)), null);
         }
@@ -741,8 +735,9 @@ internal sealed class EditorWorkspace : IDisposable
             if (!string.Equals(currentCatalog.CatalogId, prepared.CatalogId, StringComparison.Ordinal) ||
                 !string.Equals(currentCatalog.SourceFreshness, prepared.ExpectedSourceFreshness, StringComparison.Ordinal))
                 return Failure("conflict", EditorNotice.Create("ui_backend_import_catalog_changed"));
-            string? sidecarRevision = TranslationEditorStateStore.Load(_root, prepared.CatalogId).Revision;
-            if (!string.Equals(sidecarRevision, prepared.ExpectedSidecarRevision, StringComparison.Ordinal))
+            EditorReviewStore store = ReviewStore(prepared.CatalogId);
+            (string? reviewRevision, byte[]? reviewBytes) = store.CurrentState();
+            if (!string.Equals(reviewRevision, prepared.ExpectedReviewRevision, StringComparison.Ordinal))
                 return Failure("conflict", EditorNotice.Create("ui_backend_import_sidecar_changed"));
 
             foreach (PreparedInterchangeDocument document in prepared.Documents)
@@ -768,10 +763,10 @@ internal sealed class EditorWorkspace : IDisposable
                     File.Move(temporaryPath, fullPath, true);
                     committed.Add((document, fullPath));
                 }
-                var state = new TranslationEditorState(prepared.CatalogId, prepared.MergedEntries, TranslationEditorStateStore.Load(_root, prepared.CatalogId).State.Terminology);
-                _ = TranslationEditorStateStore.Save(_root, state, prepared.ExpectedSidecarRevision);
+                // Compare-and-swap: a review file another writer changed since the check is not overwritten.
+                if (prepared.ReviewBytes is not null) store.WriteReview(prepared.ReviewBytes, reviewBytes);
             }
-            catch (Exception exception) when (exception is TranslationEditorStateException or IOException or UnauthorizedAccessException)
+            catch (Exception exception) when (exception is TranslationEditorStateException or TranslationInterchangeException or IOException or UnauthorizedAccessException)
             {
                 bool rolledBack = await RollBackInterchangeDocumentsAsync(committed, CancellationToken.None).ConfigureAwait(false);
                 return rolledBack
@@ -804,6 +799,9 @@ internal sealed class EditorWorkspace : IDisposable
         }
     }
 
+    // A review file from elsewhere (another checkout, a reviewer) merged into the project's review file: its entries
+    // replace those with the same key and locale and keep their fingerprints, so an approval made for an older source
+    // shows as stale (RTR0090) instead of being refused.
     internal async Task<(EditorReviewImportPlan Plan, PreparedInterchangeImport? Prepared)> PreviewReviewJsonImportAsync(
         string path,
         CancellationToken cancellationToken = default)
@@ -831,45 +829,49 @@ internal sealed class EditorWorkspace : IDisposable
                 if (!localeTags.Contains(entry.Locale))
                     refusals.Add(new EditorInterchangeRefusal("EDITOR-LOCALE-NOT-IN-CATALOG", EditorNotice.Create("ui_backend_refusal_5", ("value1", entry.Locale!))));
             }
-            TranslationEditorStateLoadResult sidecar = TranslationEditorStateStore.Load(_root, catalog.CatalogId);
-            if (sidecar.Error is not null)
-                refusals.Add(new EditorInterchangeRefusal("EDITOR-SIDECAR", EditorNotice.External(sidecar.Error)));
-            CollectApprovalFingerprintRefusals(catalog, import.Entries, refusals);
+            EditorReviewStore store = ReviewStore(catalog.CatalogId);
+            (TranslationInterchangeReview? existing, byte[]? existingBytes, string? revision) = (null, null, null);
+            try { (existing, existingBytes, revision) = store.ReadReview(); }
+            catch (Exception exception) when (exception is TranslationInterchangeException or TranslationEditorStateException)
+            {
+                refusals.Add(new EditorInterchangeRefusal("EDITOR-SIDECAR", EditorNotice.External(exception.Message)));
+            }
             if (refusals.Count > 0)
                 return (new EditorReviewImportPlan(false, null, null, import.CatalogId, [], 0, 0, 0, false,
                     refusals.Order(InterchangeRefusalOrder.Instance).ToArray()), null);
 
             var changes = new List<EditorReviewChange>();
             bool overflowed = false;
-            int added = 0, changed = 0, removed = 0;
-            Dictionary<string, TranslationEditorStateEntry> currentEntries = sidecar.State.Entries
+            int added = 0, changed = 0;
+            Dictionary<string, TranslationInterchangeReviewEntry> merged = (existing?.Entries ?? [])
                 .ToDictionary(static entry => Identity(entry.Key, entry.Locale), StringComparer.Ordinal);
             foreach (TranslationInterchangeReviewEntry entry in import.Entries.OrderBy(static item => item.Key, StringComparer.Ordinal).ThenBy(static item => item.Locale, StringComparer.Ordinal))
             {
-                TranslationEditorStateEntry? existing = currentEntries.GetValueOrDefault(Identity(entry.Key, entry.Locale));
-                if (existing is null)
+                merged.TryGetValue(Identity(entry.Key, entry.Locale), out TranslationInterchangeReviewEntry? current);
+                if (current is null)
                 {
                     added += 1;
-                    Push(ref changes, ref overflowed, new EditorReviewChange(entry.Key, entry.Locale, "added", null, TranslationReviewStates.ToWire(entry.State)));
+                    Push(ref changes, ref overflowed, new EditorReviewChange(entry.Key, entry.Locale, "added", null, TranslationReviewFile.StateText(entry.State)));
                 }
-                else if (existing.State != TranslationReviewStates.ToWire(entry.State) || existing.Note != entry.Note)
+                else if (current.State != entry.State || current.Note != entry.Note || current.SourceFingerprint != entry.SourceFingerprint)
                 {
                     changed += 1;
-                    Push(ref changes, ref overflowed, new EditorReviewChange(entry.Key, entry.Locale, "changed", existing.State, TranslationReviewStates.ToWire(entry.State)));
+                    Push(ref changes, ref overflowed, new EditorReviewChange(entry.Key, entry.Locale, "changed", TranslationReviewFile.StateText(current.State), TranslationReviewFile.StateText(entry.State)));
                 }
+                merged[Identity(entry.Key, entry.Locale)] = entry;
             }
-            List<TranslationEditorStateEntry> merged = MergeImportedEntries(sidecar, import.Entries, catalog, BaseValues(state));
+            byte[] reviewBytes = TranslationReviewFile.Render(new TranslationInterchangeReview(catalog.CatalogId, merged.Values));
             var prepared = new PreparedInterchangeImport(
                 ResolveImportSourcePath(path),
                 SHA256.HashData(bytes),
                 catalog.CatalogId,
                 catalog.SourceFreshness,
                 [],
-                merged,
-                sidecar.Revision);
-            return (new EditorReviewImportPlan(true, null, null, catalog.CatalogId, changes.ToArray(), added, changed, removed, overflowed, []), prepared);
+                existingBytes is not null && existingBytes.AsSpan().SequenceEqual(reviewBytes) ? null : reviewBytes,
+                revision);
+            return (new EditorReviewImportPlan(true, null, null, catalog.CatalogId, changes.ToArray(), added, changed, 0, overflowed, []), prepared);
         }
-        catch (Exception exception) when (exception is TranslationInterchangeException or TranslationAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is TranslationInterchangeException or TranslationAuthoringException or TranslationEditorStateException or ArgumentException or IOException or UnauthorizedAccessException)
         {
             return (RefuseReview(InterchangeCode(exception), InterchangeMessage(exception)), null);
         }
@@ -897,18 +899,22 @@ internal sealed class EditorWorkspace : IDisposable
             if (!string.Equals(currentCatalog.CatalogId, prepared.CatalogId, StringComparison.Ordinal) ||
                 !string.Equals(currentCatalog.SourceFreshness, prepared.ExpectedSourceFreshness, StringComparison.Ordinal))
                 return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_import_catalog_changed"), null, null);
-            TranslationEditorStateLoadResult sidecar = TranslationEditorStateStore.Load(_root, prepared.CatalogId);
-            if (!string.Equals(sidecar.Revision, prepared.ExpectedSidecarRevision, StringComparison.Ordinal))
+            EditorReviewStore store = ReviewStore(prepared.CatalogId);
+            (string? reviewRevision, byte[]? reviewBytes) = store.CurrentState();
+            if (!string.Equals(reviewRevision, prepared.ExpectedReviewRevision, StringComparison.Ordinal))
                 return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_import_sidecar_changed"), null, null);
-            var state = new TranslationEditorState(prepared.CatalogId, prepared.MergedEntries, sidecar.State.Terminology);
-            TranslationEditorStateLoadResult saved = TranslationEditorStateStore.Save(_root, state, prepared.ExpectedSidecarRevision);
-            return new EditorReviewOperationResult(true, null, Review(saved), null);
+            if (prepared.ReviewBytes is not null) store.WriteReview(prepared.ReviewBytes, reviewBytes);
+            return new EditorReviewOperationResult(true, null, KnownReview(store.Load(currentState.Compilation)), null);
+        }
+        catch (TranslationInterchangeException exception) when (exception.Code == TranslationReviewFile.ChangedCode)
+        {
+            return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_import_sidecar_changed"), null, null);
         }
         catch (TranslationInterchangeException)
         {
             return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_import_catalog_changed"), null, null);
         }
-        catch (Exception exception) when (exception is TranslationEditorStateException or IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is TranslationEditorStateException or ArgumentException or IOException or UnauthorizedAccessException)
         {
             return new EditorReviewOperationResult(false, EditorNotice.FromException(exception), null, null);
         }
@@ -979,39 +985,50 @@ internal sealed class EditorWorkspace : IDisposable
     private string ReportedOutputPath(string fullPath) =>
         IsWithinSourceRoot(_root, fullPath) ? Path.GetRelativePath(_root, fullPath).Replace('\\', '/') : fullPath;
 
-    // Review data for export. Each entry carries the per-unit source fingerprint of its key, so one edited key no
-    // longer voids every approval. An entry the editor recorded against an older source (its fnv1a64 marker no
-    // longer matches the current base value, as review-model.ts computes it) keeps that marker: an approval is
-    // then exported as needs-review and reported as REVIEW-STALE instead of being stamped as current.
-    private static TranslationInterchangeReview BuildExportReview(
-        TranslationEditorStateLoadResult sidecar,
-        TranslationInterchangeProjection catalog,
-        Dictionary<string, string> baseValues)
+    // The base-locale value of every key as the editor's frontend fingerprinted it before 0.9: an .rmf2 entry's
+    // message, a direct .mf2 file's content. Used only to move version 1 editor approvals (EditorReviewStore).
+    // The compilation review data is computed from: the state's own when it succeeded, else the same sources compiled
+    // without validation policies, else the base locale alone (TranslationReviewFile.ForReview). Cached per state.
+    private static Rmf2ProjectCompilation ReviewCompilation(WorkspaceState state, CancellationToken cancellationToken = default)
     {
-        IReadOnlyDictionary<string, string> fingerprints = catalog.SourceFingerprints;
-        var locales = new HashSet<string>(
-            catalog.Locales.Where(locale => !string.Equals(locale.Tag, catalog.SourceLocale, StringComparison.Ordinal)).Select(static locale => locale.Tag),
-            StringComparer.Ordinal);
-        var entries = sidecar.State.Entries
-            .Where(entry => fingerprints.ContainsKey(entry.Key) && locales.Contains(entry.Locale))
-            .Select(entry =>
-            {
-                TranslationReviewState state = TranslationReviewStates.TryParse(entry.State, out TranslationReviewState parsed) ? parsed : throw new InvalidDataException("Unknown review state '" + entry.State + "'.");
-                bool stale = entry.SourceFingerprint is not null && baseValues.TryGetValue(entry.Key, out string? value) &&
-                    !string.Equals(entry.SourceFingerprint, EditorSourceFingerprint(value), StringComparison.Ordinal);
-                string? fingerprint = !stale ? fingerprints[entry.Key] : state == TranslationReviewState.Approved ? entry.SourceFingerprint : null;
-                return new TranslationInterchangeReviewEntry(entry.Key, entry.Locale, state, entry.Note, fingerprint);
-            })
-            .ToArray();
-        return new TranslationInterchangeReview(catalog.CatalogId, entries);
+        if (state.ReviewCompilation is { } cached) return cached;
+        WorkspaceFile? manifest = state.Files.Find(static file => file.Kind == DocumentKind.Manifest);
+        Rmf2ProjectCompilation review = manifest is null ? state.Compilation : TranslationReviewFile.ForReview(state.Compilation, Source(manifest.Path, manifest.Content),
+            state.Files.Where(static file => file.Kind == DocumentKind.Resource).Select(static file => Source(file.Path, file.Content)).ToArray(), null, cancellationToken);
+        state.ReviewCompilation = review;
+        return review;
     }
 
-    // The base-locale value of every key as the frontend fingerprints it: an .rmf2 entry's message, a direct
-    // .mf2 file's content.
-    private static Dictionary<string, string> BaseValues(WorkspaceState state)
+    // The review data when another writer (runic-translations review mark or xliff import, the language server's
+    // "Mark reviewed") changed the review file since the frontend received it; null when unchanged. Read without
+    // moving the external-change baseline, so source changes are still reported on their own.
+    private async Task<EditorReviewSnapshot?> ExternalReviewAsync(CancellationToken cancellationToken)
+    {
+        if (_catalogId is null || FindMf2ProjectConfig() is not { } projectPath) return null;
+        var store = new EditorReviewStore(_root, projectPath, _catalogId);
+        if (string.Equals(store.CurrentRevision(), _knownReviewRevision, StringComparison.Ordinal)) return null;
+        try
+        {
+            WorkspaceState state = await ReadStateAsync(null, null, cancellationToken, resetBaseline: false).ConfigureAwait(false);
+            return KnownReview(store.Load(ReviewCompilation(state, cancellationToken)));
+        }
+        catch (Exception exception) when (exception is TranslationEditorStateException or TranslationInterchangeException or EditorUserException or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    // Remembers the review revision the frontend has, so the external-change poll reports another writer's change.
+    private EditorReviewSnapshot KnownReview(EditorReviewSnapshot snapshot)
+    {
+        _knownReviewRevision = snapshot.Revision;
+        return snapshot;
+    }
+
+    private static Dictionary<string, string> BaseValues(WorkspaceState state, Rmf2ProjectCompilation reviewCompilation)
     {
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (state.Compilation.Project is not { } project) return values;
+        if (reviewCompilation.Project is not { } project) return values;
         var files = state.Files.Where(static file => file.Kind == DocumentKind.Resource).ToDictionary(static file => file.Path, StringComparer.Ordinal);
         var nodes = new Dictionary<string, IReadOnlyList<Rmf2ResourceNode>>(StringComparer.Ordinal);
         foreach (Rmf2TranslationV5 resource in project.Locales.Single(locale => locale.Tag == project.DefaultLocale).DirectResources)
@@ -1026,7 +1043,10 @@ internal sealed class EditorWorkspace : IDisposable
         return values;
     }
 
-    /// <summary>The frontend's review fingerprint (<c>sourceFingerprint</c> in review-model.ts): FNV-1a 64 over the UTF-16 code units of <c>JSON.stringify(value)</c>.</summary>
+    /// <summary>
+    /// The editor's former review fingerprint (<c>sourceFingerprint</c> in the pre-0.9 review-model.ts): FNV-1a 64 over the
+    /// UTF-16 code units of <c>JSON.stringify(value)</c>. Read only when version 1 editor approvals move to the review file.
+    /// </summary>
     internal static string EditorSourceFingerprint(string value)
     {
         var json = new StringBuilder(value.Length + 2).Append('"');
@@ -1053,39 +1073,6 @@ internal sealed class EditorWorkspace : IDisposable
         ulong hash = 0xcbf29ce484222325;
         foreach (char unit in json.ToString()) hash = unchecked((hash ^ unit) * 0x100000001b3);
         return "fnv1a64:" + hash.ToString("x16", CultureInfo.InvariantCulture);
-    }
-
-    // Imported entries replace matching identities wholesale (interchange cannot
-    // express samples, so samples survive from the current sidecar); unrelated
-    // identities and terminology are preserved. An entry made for the current
-    // source gets the editor's marker of the current base value, so a later
-    // change to that value makes an imported approval stale on export, as it
-    // does for one made in the editor.
-    private static List<TranslationEditorStateEntry> MergeImportedEntries(
-        TranslationEditorStateLoadResult sidecar,
-        IReadOnlyList<TranslationInterchangeReviewEntry> imported,
-        TranslationInterchangeProjection catalog,
-        Dictionary<string, string> baseValues)
-    {
-        IReadOnlyDictionary<string, string> fingerprints = catalog.SourceFingerprints;
-        Dictionary<string, TranslationEditorStateEntry> merged = sidecar.State.Entries.ToDictionary(
-            static entry => Identity(entry.Key, entry.Locale), StringComparer.Ordinal);
-        foreach (TranslationInterchangeReviewEntry entry in imported)
-        {
-            TranslationEditorStateEntry? existing = merged.GetValueOrDefault(Identity(entry.Key, entry.Locale));
-            merged[Identity(entry.Key, entry.Locale)] = new TranslationEditorStateEntry(
-                entry.Key,
-                entry.Locale,
-                TranslationReviewStates.ToWire(entry.State),
-                entry.Note,
-                fingerprints.TryGetValue(entry.Key, out string? current) && string.Equals(entry.SourceFingerprint, current, StringComparison.Ordinal) &&
-                    baseValues.TryGetValue(entry.Key, out string? value) ? EditorSourceFingerprint(value) : null,
-                existing?.Samples ?? new SortedDictionary<string, string>(StringComparer.Ordinal));
-        }
-        return merged.Values
-            .OrderBy(static entry => entry.Key, StringComparer.Ordinal)
-            .ThenBy(static entry => entry.Locale, StringComparer.Ordinal)
-            .ToList();
     }
 
     private static Rmf2ProjectCompilation CompileWithInterchangeDocuments(
@@ -1127,25 +1114,6 @@ internal sealed class EditorWorkspace : IDisposable
         return succeeded;
     }
 
-    // A unit the import refused blocks the editor's preview with its own code. A translation of a source that
-    // changed after export is refused as EDITOR-SOURCE-MISMATCH: the per-unit fingerprint differs.
-    private static void CollectUnitRefusals(
-        TranslationInterchangeProjection catalog,
-        TranslationXliffImportResult import,
-        List<EditorInterchangeRefusal> refusals)
-    {
-        IReadOnlyDictionary<string, string> live = catalog.SourceFingerprints;
-        foreach (TranslationXliffUnitResult unit in import.Units)
-        {
-            if (unit.Outcome == TranslationXliffUnitOutcome.Refused)
-                refusals.Add(new EditorInterchangeRefusal(unit.Code!, EditorNotice.External(unit.Key + ": " + unit.Message)));
-            else if (unit.Outcome == TranslationXliffUnitOutcome.Applied && live.TryGetValue(unit.Key, out string? fingerprint) &&
-                !string.Equals(unit.SourceFingerprint, fingerprint, StringComparison.Ordinal))
-                refusals.Add(new EditorInterchangeRefusal("EDITOR-SOURCE-MISMATCH",
-                    EditorNotice.Create("ui_backend_refusal_6", ("value1", unit.Key!))));
-        }
-    }
-
     private static void CollectCatalogRefusals(
         TranslationInterchangeProjection catalog,
         TranslationXliffImportResult import,
@@ -1160,20 +1128,6 @@ internal sealed class EditorWorkspace : IDisposable
         if (string.Equals(import.TargetLocale, catalog.SourceLocale, StringComparison.Ordinal))
             refusals.Add(new EditorInterchangeRefusal("EDITOR-TARGET-DEFAULT-LOCALE",
                 EditorNotice.Create("ui_backend_refusal_9", ("value1", catalog.SourceLocale!))));
-    }
-
-    private static void CollectApprovalFingerprintRefusals(
-        TranslationInterchangeProjection catalog,
-        IReadOnlyList<TranslationInterchangeReviewEntry> entries,
-        List<EditorInterchangeRefusal> refusals)
-    {
-        IReadOnlyDictionary<string, string> fingerprints = catalog.SourceFingerprints;
-        foreach (TranslationInterchangeReviewEntry entry in entries.Where(static entry => entry.State == TranslationReviewState.Approved))
-        {
-            if (fingerprints.TryGetValue(entry.Key, out string? fingerprint) && string.Equals(entry.SourceFingerprint, fingerprint, StringComparison.Ordinal)) continue;
-            refusals.Add(new EditorInterchangeRefusal("EDITOR-APPROVAL-FINGERPRINT",
-                EditorNotice.Create("ui_backend_refusal_10", ("value1", entry.Key!), ("value2", entry.Locale!))));
-        }
     }
 
     private static void Flatten(JsonElement node, string prefix, Dictionary<string, string> values)
@@ -1221,22 +1175,26 @@ internal sealed class EditorWorkspace : IDisposable
         }
     }
 
+    // A read of the files on disk (no replacement) becomes the baseline of the external-change check, unless
+    // resetBaseline is false (the check itself reads the catalog to report a review file another writer changed).
     private Task<WorkspaceState> ReadStateAsync(
         string? replacementPath,
         string? replacementContent,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool resetBaseline = true)
     {
         string? projectConfig = FindMf2ProjectConfig();
         if (projectConfig is null)
             throw new EditorUserException(EditorNotice.Create("ui_backend_project_required"));
-        return ReadMf2StateAsync(projectConfig, replacementPath, replacementContent, cancellationToken);
+        return ReadMf2StateAsync(projectConfig, replacementPath, replacementContent, cancellationToken, resetBaseline);
     }
 
     private Task<WorkspaceState> ReadMf2StateAsync(
         string configPath,
         string? replacementPath,
         string? replacementContent,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool resetBaseline = true)
     {
         string projectRoot = Path.GetDirectoryName(configPath)!;
         string configRelativePath = NormalizeRelativePath(Path.GetRelativePath(_root, configPath));
@@ -1311,7 +1269,7 @@ internal sealed class EditorWorkspace : IDisposable
             }
         }
         _catalogId = rmf2?.Id ?? catalogId;
-        if (replacementPath is null)
+        if (replacementPath is null && resetBaseline)
         {
             _knownRevisions.Clear();
             foreach (WorkspaceFile file in files) _knownRevisions[file.Path] = file.Revision;
@@ -1367,32 +1325,52 @@ internal sealed class EditorWorkspace : IDisposable
                 file.Layer,
                 ReadEntries(file.Path, file.Content, state.Compilation)));
         }
-        EditorReviewSnapshot? review = _catalogId is null
-            ? null
-            : Review(TranslationEditorStateStore.Load(_root, _catalogId));
+        EditorReviewSnapshot? review = null;
+        if (_catalogId is not null)
+        {
+            EditorReviewStore store = ReviewStore(_catalogId);
+            Rmf2ProjectCompilation reviewCompilation = ReviewCompilation(state);
+            try { review = KnownReview(store.Load(reviewCompilation, BaseValues(state, reviewCompilation))); }
+            catch (Exception exception) when (exception is TranslationEditorStateException or TranslationInterchangeException or IOException or UnauthorizedAccessException)
+            {
+                review = new EditorReviewSnapshot(store.DisplayPath, null, exception.Message, [], []);
+            }
+        }
         return new WorkspaceSnapshot(_root, catalog, state.Catalogs, documents, Diagnostics(state), state.Compilation.Success, null, review, null);
     }
 
-    private static EditorReviewSnapshot Review(TranslationEditorStateLoadResult result) => new(
-        result.Path,
-        result.Revision,
-        result.Error,
-        result.State.Entries.Select(static entry => new EditorReviewEntry(
-            entry.Key, entry.Locale, entry.State, entry.Note, entry.SourceFingerprint, entry.Samples)).ToArray(),
-        result.State.Terminology.Select(static term => new EditorTerminologyEntry(
-            term.Source, term.Preferred, term.Locale, term.Note)).ToArray());
-
-    private static EditorDiagnostic[] Diagnostics(WorkspaceState state, CancellationToken cancellationToken = default)
+    // The compiler's diagnostics and, with a review file, RTR0090 for stale review entries (or RTR0091 when the file
+    // cannot be read), each attached to its message row where the check names one: the per-message checks carry their
+    // key and locale; any other diagnostic at a message name belongs to that message. Quick fixes are the compiler's
+    // document repairs (RTR0050, RTR0078) and project repairs (RTR0095: add the missing plural variants).
+    private EditorDiagnostic[] Diagnostics(WorkspaceState state, CancellationToken cancellationToken = default)
     {
         var compilation = state.Compilation;
+        List<TranslationDiagnostic> diagnostics = [.. compilation.Diagnostics];
+        // RTR0090 and the message rows come from the review compilation, so they stay while translations are incomplete.
+        Rmf2ProjectCompilation reviewCompilation = ReviewCompilation(state, cancellationToken);
+        if (reviewCompilation.Success && _catalogId is not null && FindMf2ProjectConfig() is { } projectPath)
+        {
+            EditorReviewStore store = new(_root, projectPath, _catalogId);
+            try
+            {
+                if (store.ReadReview().Review is { } review) diagnostics.AddRange(TranslationReviewFile.StaleDiagnostics(reviewCompilation, review));
+            }
+            catch (TranslationInterchangeException exception) { diagnostics.Add(TranslationReviewFile.InvalidDiagnostic(store.DisplayPath, exception)); }
+            catch (Exception exception) when (exception is TranslationEditorStateException or IOException or UnauthorizedAccessException) { /* The review snapshot reports it. */ }
+        }
+        var rows = new Dictionary<(string Path, int Start), (string Key, string Locale)>();
+        foreach (Rmf2LocaleV5 locale in (compilation.Project ?? reviewCompilation.Project)?.Locales ?? [])
+            foreach (Rmf2TranslationV5 resource in locale.DirectResources)
+                rows.TryAdd((resource.SourceLocation.Path, resource.SourceLocation.StartByte), (resource.Key, locale.Tag));
         var sources = state.Files.ToDictionary(file => file.Path, file => Source(file.Path, file.Content), StringComparer.Ordinal);
         var sourceFixes = new Dictionary<string, IReadOnlyList<Rmf2DiagnosticQuickFix>>(StringComparer.Ordinal);
         var sourceRevisions = new Dictionary<string, string>(StringComparer.Ordinal);
-        var result = new EditorDiagnostic[compilation.Diagnostics.Count];
+        var result = new EditorDiagnostic[diagnostics.Count];
         for (int index = 0; index < result.Length; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            TranslationDiagnostic diagnostic = compilation.Diagnostics[index];
+            TranslationDiagnostic diagnostic = diagnostics[index];
             TextSourceLocation location = diagnostic.Location;
             sources.TryGetValue(location.Path, out TranslationSource? source);
             Rmf2DiagnosticSpan? span = null;
@@ -1403,15 +1381,22 @@ internal sealed class EditorWorkspace : IDisposable
                 {
                     span = Rmf2DiagnosticActions.GetSpan(source, location);
                     if (!sourceRevisions.ContainsKey(source.Path)) sourceRevisions[source.Path] = Rmf2DiagnosticActions.Revision(source);
-                    if (diagnostic.Id == "RTR0050" && source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
+                    bool documentFix = diagnostic.Id == "RTR0050" && source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase);
+                    if (documentFix || diagnostic.Id == "RTR0095")
                     {
                         if (!sourceFixes.TryGetValue(source.Path, out var available))
-                            sourceFixes[source.Path] = available = Rmf2DiagnosticActions.GetQuickFixes(Rmf2ResourceReader.Analyze(source, cancellationToken: cancellationToken), cancellationToken);
+                        {
+                            IEnumerable<Rmf2DiagnosticQuickFix> all = source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase)
+                                ? Rmf2DiagnosticActions.GetQuickFixes(Rmf2ResourceReader.Analyze(source, cancellationToken: cancellationToken), cancellationToken) : [];
+                            sourceFixes[source.Path] = available = all.Concat(Rmf2DiagnosticActions.GetProjectQuickFixes(compilation, source, cancellationToken)).ToArray();
+                        }
                         fixes = available.Where(fix => fix.DiagnosticId == diagnostic.Id && fix.Location.Path == location.Path && fix.Location.StartByte == location.StartByte && fix.Location.LengthBytes == location.LengthBytes).ToArray();
                     }
                 }
                 catch (ArgumentException) { /* Project-level diagnostics may not address a complete physical slice. */ }
             }
+            (string Key, string Locale)? row = diagnostic.MessageKey is { } key && diagnostic.Locale is { } tag ? (key, tag)
+                : rows.TryGetValue((location.Path, location.StartByte), out var named) ? named : null;
             result[index] = new EditorDiagnostic(
                 diagnostic.Id,
                 diagnostic.Severity == TranslationDiagnosticSeverity.Error ? "error" : "warning",
@@ -1420,7 +1405,8 @@ internal sealed class EditorWorkspace : IDisposable
                 location.Line,
                 location.Column,
                 location.EndLine,
-                location.EndColumn, null, span, source is null ? null : sourceRevisions.GetValueOrDefault(source.Path), fixes);
+                location.EndColumn, null, span, source is null ? null : sourceRevisions.GetValueOrDefault(source.Path), fixes,
+                row?.Key, row?.Locale);
         }
         return result;
     }
@@ -1789,5 +1775,8 @@ internal sealed class EditorWorkspace : IDisposable
     private sealed record WorkspaceState(
         List<WorkspaceFile> Files,
         Rmf2ProjectCompilation Compilation,
-        IReadOnlyList<EditorCatalogSummary> Catalogs);
+        IReadOnlyList<EditorCatalogSummary> Catalogs)
+    {
+        internal Rmf2ProjectCompilation? ReviewCompilation { get; set; }
+    }
 }

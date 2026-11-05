@@ -15,8 +15,10 @@
 
   <!-- RunicTranslationsPackCatalog=true packs runic/<catalog>/ (runic.json, sources, contract.json) and
        buildTransitive/<PackageId>.props, which declares the catalog to an application's runic.json "overrides".
-       RunicTranslationsPackCatalogProps=false leaves out the props file for a library that packs its own; that file then
-       imports runic/<catalog>/catalog.props. -->
+       NuGet prefers buildTransitive/<PackageId>.props over build/<PackageId>.props, so the generated file imports the
+       library's own build/<PackageId>.props when it packs one. RunicTranslationsPackCatalogProps=false leaves out the props
+       file for a library that packs its own buildTransitive/<PackageId>.props (RTR0104 otherwise); that file then imports
+       runic/<catalog>/catalog.props. -->
   <UsingTask TaskName="Runic.Translations.Build.Rmf2PackCatalog" AssemblyFile="$(_RunicTranslationsPackTaskAssembly)" Condition="Exists('$(_RunicTranslationsPackTaskAssembly)')" />
   <Target Name="_RunicTranslationsPackCatalog"
           BeforeTargets="_GetPackageFiles"
@@ -33,7 +35,8 @@
     <Runic.Translations.Build.Rmf2PackCatalog Project="@(_RunicTranslationsPackProject)"
                                               PackageId="$(PackageId)"
                                               OutputDirectory="$(BaseIntermediateOutputPath)runic-pack"
-                                              EmitPackageProps="$([MSBuild]::ValueOrDefault('$(RunicTranslationsPackCatalogProps)', 'true'))">
+                                              EmitPackageProps="$([MSBuild]::ValueOrDefault('$(RunicTranslationsPackCatalogProps)', 'true'))"
+                                              PackItems="@(None);@(Content)">
       <Output TaskParameter="PackageFiles" ItemName="_RunicTranslationsPackFile" />
     </Runic.Translations.Build.Rmf2PackCatalog>
     <ItemGroup>
