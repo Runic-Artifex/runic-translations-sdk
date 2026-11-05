@@ -362,6 +362,45 @@ internal sealed class Rmf2EsmV5Tests
         finally { Directory.Delete(directory, true); }
     }
 
+    // T3f: reportUnused logs, after a production build, the messages tree-shaking left out of every chunk.
+    [Test, DisplayName("RMF2 v5 ESM: the Vite plugin reports the messages a production build does not use")]
+    [NotInParallel]
+    public void ReportsUnusedMessages()
+    {
+        const string json = """{"schemaVersion":1,"catalog":"unused","code":{"namespace":"Example","className":"UnusedText"},"baseLocale":"en","locales":["en"]}""";
+        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(json)),
+            [new("translations/en.rmf2", Encoding.UTF8.GetBytes("greet = Hello {$name}\ntitle = Title\nsettings {\n  farewell = Bye\n}\n"))]);
+        Assert.True(compilation.Success, string.Join("; ", compilation.Diagnostics.Select(item => item.Message)));
+        string directory = Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(compilation.Project!));
+        try
+        {
+            string plugin = RepositoryPaths.Resolve("packages", "web", "vite-plugin-runic-translations", "dist", "index.js");
+            File.WriteAllText(Path.Combine(directory, "app.js"), "import { m } from \"virtual:runic-translations/unused\";\nexport const result = m.greet({ name: \"Ada\" });\n");
+            string script = Path.Combine(directory, "unused.mjs");
+            File.WriteAllText(script, "import { createRequire } from \"node:module\";\nimport { join } from \"node:path\";\nconst plugin = " + JsonString(plugin) + ";\n" + """
+                const { runicTranslations } = await import(plugin);
+                const { build, createLogger } = await import(createRequire(plugin).resolve("vite"));
+                const root = import.meta.dirname;
+                async function run(reportUnused, formats = ["es"]) {
+                  const messages = [], logger = createLogger("info");
+                  logger.info = message => { messages.push(message); };
+                  await build({ configFile: false, root, logLevel: "info", customLogger: logger, plugins: [runicTranslations({ manifest: join(root, "unused.esm-v5", "web-module-manifest-v3.json"), reportUnused })],
+                    build: { outDir: join(root, "dist"), minify: false, lib: { entry: join(root, "app.js"), name: "app", formats, fileName: format => "bundle." + format + ".js" } } });
+                  return messages.filter(message => message.includes("[runic-translations]"));
+                }
+                const reported = await run(true);
+                const expected = '[runic-translations] 2 of 3 messages of catalog "unused" are not used by this build: settings_farewell, title.';
+                if (reported.length !== 1 || !reported[0].endsWith(expected)) throw new Error("unexpected report: " + JSON.stringify(reported));
+                // Several outputs of one environment report once.
+                const outputs = await run(true, ["es", "cjs"]);
+                if (outputs.length !== 1 || !outputs[0].endsWith(expected)) throw new Error("not reported once per environment: " + JSON.stringify(outputs));
+                if ((await run(false)).length !== 0) throw new Error("reported without reportUnused");
+                """, new UTF8Encoding(false));
+            Run("bun", [script], directory);
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
     // Content formatted in one process (SvelteKit server load data, postMessage, stored content) is rendered in another
     // whose module graph never loaded that message's module: the renderers check it against the catalog's own table of
     // structured messages in runtime.js, which a bundle that only calls m.key() still leaves out.

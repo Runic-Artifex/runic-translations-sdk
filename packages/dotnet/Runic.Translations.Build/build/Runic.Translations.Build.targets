@@ -62,6 +62,8 @@
          ../Frontend/translations/runic.json, then contains its sources (RTR0052 otherwise). -->
     <AdditionalFiles Include="@(RunicTranslationProject->'%(FullPath)')" RunicTranslationKind="Project" />
     <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="RunicTranslationKind" />
+    <!-- RTR0100: report the messages no C# code references (opt-in). -->
+    <CompilerVisibleProperty Include="RunicTranslationsReportUnusedMessages" />
   </ItemGroup>
 
   <!-- At execution time the declared project items exist and transformed wildcard

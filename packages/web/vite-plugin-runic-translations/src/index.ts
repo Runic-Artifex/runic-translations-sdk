@@ -4,7 +4,7 @@ import { lstatSync, readFileSync, readdirSync } from "node:fs";
 import { mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
-import type { HotUpdateOptions, Plugin, ViteDevServer } from "vite";
+import type { HotUpdateOptions, Logger, Plugin, ViteDevServer } from "vite";
 import { CompilerUnavailable, PersistentCompiler } from "./compiler-service.js";
 
 
@@ -37,6 +37,13 @@ export interface RunicTranslationsOptions {
    * the next change.
    */
   readonly persistentCompilerTimeout?: number;
+  /**
+   * Report, after a production build, the catalog's messages that no bundle of the build contains: `m` is a module
+   * namespace, so a message the application never reads is tree-shaken away. Logged as information, once per build
+   * environment that includes the catalog. Messages read only dynamically (the `dynamic` entry, keys computed at run
+   * time) or by another build are reported too. Defaults to false.
+   */
+  readonly reportUnused?: boolean;
   /**
    * Generate the development pseudo-locales that runic.json declares in `pseudoLocales` (`en-XA`, `ar-XB`) in project
    * mode. Defaults to true when Vite's mode is `development` (the dev server's default) and false otherwise, so
@@ -115,6 +122,8 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
   if (options.persistentCompilerTimeout !== undefined &&
       (typeof options.persistentCompilerTimeout !== "number" || !Number.isFinite(options.persistentCompilerTimeout) || options.persistentCompilerTimeout <= 0))
     throw new TypeError("persistentCompilerTimeout must be a positive number of milliseconds.");
+  if (options.reportUnused !== undefined && typeof options.reportUnused !== "boolean")
+    throw new TypeError("reportUnused must be a boolean.");
   const compiler = options.manifest === undefined ? projectOptions(options) : undefined;
   let manifestPath = compiler?.manifest ?? resolve(options.manifest!);
   if (options.typeDeclarations !== undefined && options.typeDeclarations !== false &&
@@ -138,6 +147,10 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
   let generatedPaths: ReadonlySet<string> = new Set();
   let compilation: Promise<unknown> = Promise.resolve();
   let lastChange: { readonly key: string; readonly change: Promise<Change> } | undefined;
+  let logger: Logger | undefined;
+  // reportUnused logs once per build environment, not once per output: `build.rollupOptions.output` may list several,
+  // and library mode bundles each of `build.lib.formats` separately. A watch rebuild reports again.
+  const reportedEnvironments = new Set<string>();
   // Resolved from Vite's mode in configResolved unless the option sets it.
   let pseudoLocales = options.pseudoLocales === true;
 
@@ -324,6 +337,7 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
     enforce: "pre",
 
     configResolved(config) {
+      logger = config.logger;
       if (options.pseudoLocales === undefined) pseudoLocales = config.mode === "development";
     },
 
@@ -363,8 +377,27 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       cleanupServer = cleanup;
     },
 
+    watchChange() {
+      reportedEnvironments.clear();
+    },
+
     closeBundle() {
       cleanupServer?.();
+    },
+
+    // Message modules that tree-shaking left out of every chunk are messages this build never reads.
+    generateBundle(_, bundle) {
+      if (!options.reportUnused || !entries || !catalog) return;
+      const environment = environmentName(this);
+      if (reportedEnvironments.has(environment)) return;
+      const report = unusedMessages(entries.messages, bundle);
+      if (!report) return;
+      reportedEnvironments.add(environment);
+      if (report.unused.length === 0) return;
+      const shown = report.unused.slice(0, 20).join(", ") + (report.unused.length > 20 ? `, and ${report.unused.length - 20} more` : "");
+      const message = `[runic-translations] ${report.unused.length} of ${report.total} messages of catalog "${catalog}" are not used by this build: ${shown}.`;
+      if (logger) logger.info(message, { timestamp: true });
+      else this.info(message);
     },
 
     async buildStart() {
@@ -428,6 +461,40 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       return invalidate(this.environment.moduleGraph, change, update.timestamp);
     },
   };
+}
+
+// The Vite environment a hook runs in ("client", "ssr" or a custom one).
+function environmentName(context: unknown): string {
+  return (context as { readonly environment?: { readonly name?: string } }).environment?.name ?? "client";
+}
+
+/**
+ * The messages of a catalog whose modules no chunk renders: the generated `messages/_index.js` names each message's
+ * module, and a bundle keeps only the modules the application reads. Undefined when the bundle has none of the
+ * catalog's modules (another environment's build, such as a server bundle that does not use it).
+ */
+function unusedMessages(messagesEntry: string, bundle: Readonly<Record<string, unknown>>): { readonly unused: readonly string[]; readonly total: number } | undefined {
+  const directory = join(dirname(messagesEntry), "messages");
+  let index: string;
+  try { index = readFileSync(join(directory, "_index.js"), "utf8"); } catch { return undefined; }
+  const names = new Map<string, string>();
+  for (const match of index.matchAll(/^export \{ [^ ]+ as ("(?:[^"\\]|\\.)*"|[^ ]+) \} from "\.\/([^"]+)";$/gm))
+    names.set(match[2]!, match[1]!.startsWith("\"") ? JSON.parse(match[1]!) as string : match[1]!);
+  const used = new Set<string>();
+  let present = false;
+  for (const output of Object.values(bundle)) {
+    const chunk = output as { readonly type?: string; readonly modules?: Readonly<Record<string, { readonly renderedLength: number }>> };
+    if (chunk.type !== "chunk" || !chunk.modules) continue;
+    for (const [id, module] of Object.entries(chunk.modules)) {
+      const path = normalize(id.split("?")[0]!);
+      if (!isWithin(dirname(messagesEntry), path) && path !== normalize(messagesEntry)) continue;
+      present = true;
+      if (dirname(path) === normalize(directory) && module.renderedLength > 0) used.add(basename(path));
+    }
+  }
+  if (!present) return undefined;
+  const unused = [...names].filter(([file]) => !used.has(file)).map(([, name]) => name).sort();
+  return { unused, total: names.size };
 }
 
 function projectOptions(options: RunicTranslationsOptions): CompilerProject {
