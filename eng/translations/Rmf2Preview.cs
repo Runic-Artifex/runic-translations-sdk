@@ -13,13 +13,38 @@ using Runic.Translations.Generated;
 namespace Runic.Translations.Internal;
 
 /// <summary>Executes the verified RMF2 runtime plan with inert preview bindings.</summary>
+/// <remarks>
+/// The editor, the language server (<c>runic.renderPreview</c>), VS Code and the Visual Studio tool window all render
+/// through this class, so a preview shows what the generated catalog formats at run time: the catalog's
+/// <c>runtime.bidiIsolation</c>, the requested locale's regional formatting and the zone <c>timeZone=local</c> formats in.
+/// </remarks>
 internal static class Rmf2Preview
 {
-    internal static JsonObject Render(Rmf2ProjectV5 project, string key, string locale, JsonObject samples)
+    /// <summary>Renders <paramref name="key"/> in the catalog locale <paramref name="locale"/>.</summary>
+    /// <param name="project">The compiled project; compile with pseudo-locales to preview <c>en-XA</c> or <c>ar-XB</c>.</param>
+    /// <param name="key">The message key.</param>
+    /// <param name="locale">A locale of <paramref name="project"/>, whose text is shown.</param>
+    /// <param name="samples">One sample per input.</param>
+    /// <param name="requestedLocale">
+    /// The tag a user asked for, such as <c>de-CH</c> for <c>de</c> content: numbers and dates format in it when it shares
+    /// the content locale's language, as the runtime formats a <c>de-CH</c> request that resolved to <c>de</c>. The
+    /// result reports it, the formatting locale and how it relates to <paramref name="locale"/> (exact, parent or related).
+    /// Null is <paramref name="locale"/>.
+    /// </param>
+    /// <param name="timeZone">
+    /// The zone that <c>timeZone=local</c>, the default of localized date-time styles, formats in: <c>utc</c>, <c>local</c>
+    /// (the host's) or an IANA ID such as <c>Europe/Zurich</c>. A message's own <c>timeZone</c> option still wins. Null is
+    /// the host's zone.
+    /// </param>
+    internal static JsonObject Render(Rmf2ProjectV5 project, string key, string locale, JsonObject samples,
+        string? requestedLocale = null, string? timeZone = null)
     {
         ArgumentNullException.ThrowIfNull(project);
         Rmf2LocaleV5 selectedLocale = project.Locales.SingleOrDefault(item => item.Tag == locale)
             ?? throw new ArgumentException("Unknown preview locale.", nameof(locale));
+        string requested = locale;
+        if (!string.IsNullOrWhiteSpace(requestedLocale) && !LocaleTag.TryCanonicalize(requestedLocale.Trim(), out requested))
+            throw new ArgumentException("The requested locale '" + requestedLocale + "' is not a valid BCP 47 tag.", nameof(requestedLocale));
         Rmf2V5DefinitionTable table = Rmf2V5DefinitionTable.Create(project);
         Rmf2V5Definition definition = table.Definitions.SingleOrDefault(item => item.Contract.Key == key)
             ?? throw new TranslationAuthoringException("Unknown preview message.");
@@ -36,16 +61,46 @@ internal static class Rmf2Preview
             packContract).AsTask().GetAwaiter().GetResult();
         TextArgument[] arguments = definition.Contract.Inputs.Select(input => Argument(input, samples)).ToArray();
         CompiledRmf2Message message = verified.Messages.Single(item => item.Key.Name == key).Message!.Rmf2V5!;
-        if (!definition.Contract.Structured)
-            return TextResult(key, locale, message.Format(arguments, locale));
+        bool? isolation = project.BidiIsolation switch
+        {
+            TranslationBidiIsolation.On => true,
+            TranslationBidiIsolation.Off => false,
+            _ => null,
+        };
 
-        LocalizedTextContent content = message.FormatContent(arguments, locale);
-        IReadOnlyDictionary<string, InlineMarkupBinding> bindings = definition.Contract.Slots.ToDictionary(
-            slot => slot.Key, slot => PreviewBinding(slot.Key, slot.Value.Kind), StringComparer.Ordinal);
-        if (definition.Contract.Content == Rmf2DocumentProfileV5.Document)
-            return DocumentResult(key, locale, Rmf2MarkupContract.Link(project.MarkupContract), new LocalizedDocumentContent(content), bindings);
-        return StructuredResult(
-            key, locale, new Rmf2InlineRenderer(project.MarkupContract).Render(key, content, bindings));
+        IDisposable zone;
+        // An unknown preview zone is a bad argument, as an unknown locale is.
+        try { zone = Rmf2LocalizedFormats.UseLocalTimeZone(string.IsNullOrWhiteSpace(timeZone) ? null : timeZone.Trim()); }
+        catch (Exception exception) when (exception is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            throw new ArgumentException(exception.Message, nameof(timeZone), exception);
+        }
+        LocalizedTextContent content;
+        using (zone)
+            content = Rmf2RuntimeEvaluator.FormatContent(message, arguments, locale, TextPatternFormatter.DefaultMaximumOutputLength, requested, isolation);
+        JsonObject result;
+        if (!definition.Contract.Structured)
+        {
+            var text = new System.Text.StringBuilder();
+            foreach (LocalizedTextContentNode node in content.Nodes.Span) text.Append(node.Value);
+            result = TextResult(key, locale, text.ToString());
+        }
+        else
+        {
+            IReadOnlyDictionary<string, InlineMarkupBinding> bindings = definition.Contract.Slots.ToDictionary(
+                slot => slot.Key, slot => PreviewBinding(slot.Key, slot.Value.Kind), StringComparer.Ordinal);
+            result = definition.Contract.Content == Rmf2DocumentProfileV5.Document
+                ? DocumentResult(key, locale, Rmf2MarkupContract.Link(project.MarkupContract), new LocalizedDocumentContent(content), bindings)
+                : StructuredResult(key, locale, new Rmf2InlineRenderer(project.MarkupContract).Render(key, content, bindings));
+        }
+        // How the text was formatted, for the clients to show beside it.
+        result["requestedLocale"] = requested;
+        result["resolution"] = requested == locale ? "exact"
+            : LocaleRequestResolver.Classify(requested, locale) == LocaleResolution.Parent ? "parent" : "related";
+        result["formattingLocale"] = content.FormattingLocale;
+        result["direction"] = LocaleDirection.ToHtml(LocaleDirection.Get(locale));
+        if (!string.IsNullOrWhiteSpace(timeZone)) result["timeZone"] = timeZone.Trim();
+        return result;
     }
 
     // Document messages return the semantic block tree. "runs" keeps one plain-text run so

@@ -174,7 +174,7 @@ internal static partial class Rmf2LocalizedFormats
     {
         switch (timeZone)
         {
-            case "local": return TimeZoneInfo.Local;
+            case "local": return s_localTimeZone.Value is { } zone ? Zone(zone) : TimeZoneInfo.Local;
             case "utc": return TimeZoneInfo.Utc;
         }
         try { return TimeZoneInfo.FindSystemTimeZoneById(timeZone); }
@@ -183,6 +183,31 @@ internal static partial class Rmf2LocalizedFormats
             throw new TimeZoneNotFoundException("The time zone '" + timeZone + "' is not available. It is unknown, or the platform has no data for it: " +
                 "IANA zones need tzdata on Linux and ICU globalization on Windows (not NLS or invariant mode).", exception);
         }
+    }
+
+    // The zone that timeZone=local formats in on this asynchronous flow, as the ESM runtime's runWithLocale({ timeZone })
+    // sets it for a request; null is the host's zone. Only the formatting preview (Rmf2Preview) sets it.
+    private static readonly System.Threading.AsyncLocal<string?> s_localTimeZone = new();
+
+    /// <summary>
+    /// Formats <c>timeZone=local</c> (the default of the localized date-time styles) in <paramref name="timeZone"/> until
+    /// the result is disposed: <c>utc</c> or an IANA ID; <c>local</c> or null keep the host's zone. The zone is resolved
+    /// first, so an unknown one throws <see cref="TimeZoneNotFoundException"/> here rather than on the first format call.
+    /// </summary>
+    internal static IDisposable UseLocalTimeZone(string? timeZone)
+    {
+        if (timeZone is not null && timeZone != "local" && timeZone != "utc" && !IsTimeZone(timeZone))
+            throw new ArgumentException("The time zone '" + timeZone + "' is not utc, local or an IANA time zone ID.", nameof(timeZone));
+        string? zone = timeZone == "local" ? null : timeZone;
+        if (zone is not null) Zone(zone);
+        string? previous = s_localTimeZone.Value;
+        s_localTimeZone.Value = zone;
+        return new LocalTimeZoneScope(previous);
+    }
+
+    private sealed class LocalTimeZoneScope(string? previous) : IDisposable
+    {
+        public void Dispose() => s_localTimeZone.Value = previous;
     }
 
     /// <summary>The syntax of a <c>timeZone</c> value besides <c>local</c> and <c>utc</c>, as the compiler checks it.</summary>

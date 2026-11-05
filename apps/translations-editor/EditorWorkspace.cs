@@ -27,6 +27,13 @@ internal sealed class EditorWorkspace : IDisposable
     private string? _catalogId;
     private int _watcherOverflowed;
     private string? _knownReviewRevision;
+    // The last compilation by the revision of its sources, so requests on unchanged sources (the preview and the
+    // pseudo-locale preview of one edit, a samples change) reuse it instead of compiling again.
+    private (string Revision, Rmf2ProjectCompilation Compilation)? _lastCompilation;
+    // The pseudo-locale compilations of _lastCompilation's sources, by pseudo-locale.
+    private readonly Dictionary<string, (string Revision, Rmf2ProjectCompilation Compilation)> _pseudoCompilations = new(StringComparer.Ordinal);
+    // Guards the two caches: PlanRmf2Mutation reads the state outside _gate.
+    private readonly Lock _compilationCache = new();
     private int _reconcileRequested;
     private bool _disposed;
 
@@ -294,6 +301,8 @@ internal sealed class EditorWorkspace : IDisposable
         string locale,
         string key,
         string? samplesJson = null,
+        string? requestedLocale = null,
+        string? timeZone = null,
         CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -307,6 +316,17 @@ internal sealed class EditorWorkspace : IDisposable
                 return new EditorMessagePreview(false, null, null, null, diagnostics);
 
             Rmf2ProjectV5 rmf2 = state.Compilation.Project!;
+            // en-XA and ar-XB are generated from the base locale by the SDK's pseudo-locale generator, exactly as a
+            // --pseudo-locales build does, also when runic.json does not configure them (the simulation toggle).
+            if (!rmf2.Locales.Any(item => item.Tag == locale) && Rmf2PseudoLocalesV5.Supported.Contains(locale, StringComparer.Ordinal))
+            {
+                Rmf2ProjectCompilation pseudo = PseudoLocaleCompilation(state, Rmf2PseudoLocalesV5.Supported.First(tag => tag == locale), cancellationToken);
+                if (!pseudo.Success || pseudo.Project is null)
+                    return new EditorMessagePreview(false, null, null, null, [.. diagnostics, .. pseudo.Diagnostics
+                        .Where(static item => item.Severity == TranslationDiagnosticSeverity.Error)
+                        .Select(static item => new EditorDiagnostic(item.Id, "error", item.Message, item.Location.Path, item.Location.Line, item.Location.Column, item.Location.EndLine, item.Location.EndColumn))]);
+                rmf2 = pseudo.Project;
+            }
             Rmf2LocaleV5? selectedLocale = rmf2.Locales.SingleOrDefault(item => item.Tag == locale);
             Rmf2TranslationV5? resource = selectedLocale?.ResolvedResources.SingleOrDefault(item => item.Key == key);
             if (resource is null)
@@ -315,7 +335,7 @@ internal sealed class EditorWorkspace : IDisposable
             JsonObject samples = samplesJson is null ? new JsonObject() : JsonNode.Parse(samplesJson)?.AsObject()
                 ?? throw new JsonException("Preview samples must be a JSON object.");
             string? rendered = resource.Message.Inputs.All(input => samples.ContainsKey(input.Name))
-                ? Rmf2Preview.Render(rmf2, key, locale, samples).ToJsonString()
+                ? Rmf2Preview.Render(rmf2, key, locale, samples, requestedLocale, timeZone).ToJsonString()
                 : null;
             return new EditorMessagePreview(true, locale, ast, rendered, diagnostics);
         }
@@ -328,6 +348,25 @@ internal sealed class EditorWorkspace : IDisposable
         {
             _gate.Release();
         }
+    }
+
+    // The state's sources compiled with the pseudo-locale generated, as --pseudo-locales builds compile them, also when
+    // runic.json does not configure it. runic.json is read by the compiler as in every other compile (a BOM is skipped,
+    // a duplicate member is its diagnostic), never re-serialized. One compilation per sources revision and pseudo-locale.
+    private Rmf2ProjectCompilation PseudoLocaleCompilation(WorkspaceState state, string locale, CancellationToken cancellationToken)
+    {
+        lock (_compilationCache)
+            if (_pseudoCompilations.TryGetValue(locale, out var cached) && string.Equals(cached.Revision, state.SourcesRevision, StringComparison.Ordinal))
+                return cached.Compilation;
+        WorkspaceFile manifest = state.Files.Single(static file => file.Kind == DocumentKind.Manifest);
+        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(Source(manifest.Path, manifest.Content),
+            state.Files.Where(static file => file.Kind == DocumentKind.Resource).Select(static file => Source(file.Path, file.Content)).ToArray(),
+            null, [locale], cancellationToken);
+        lock (_compilationCache)
+            // Only for the sources the cache holds; an older state's pseudo compilation is not kept.
+            if (state.SourcesRevision is { } revision && string.Equals(_lastCompilation?.Revision, revision, StringComparison.Ordinal))
+                _pseudoCompilations[locale] = (revision, compilation);
+        return compilation;
     }
 
     private static EditorMessagePreview MissingPreviewKey(string path, string locale, string key) =>
@@ -1253,9 +1292,20 @@ internal sealed class EditorWorkspace : IDisposable
             files.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
         }
 
-        Rmf2ProjectCompilation compilation = TranslationManifestReader.WithManifestErrors(
-            TranslationCompiler.CompileRmf2ProjectV5(projectSource, messageSources, null, cancellationToken),
-            projectSource.Path, layout.Error, discoveryErrors);
+        string sourcesRevision = SourcesRevision(projectSource, messageSources);
+        Rmf2ProjectCompilation? compiled = null;
+        lock (_compilationCache)
+            if (_lastCompilation is { } last && string.Equals(last.Revision, sourcesRevision, StringComparison.Ordinal)) compiled = last.Compilation;
+        if (compiled is null)
+        {
+            compiled = TranslationCompiler.CompileRmf2ProjectV5(projectSource, messageSources, null, cancellationToken);
+            lock (_compilationCache)
+            {
+                _lastCompilation = (sourcesRevision, compiled);
+                _pseudoCompilations.Clear();
+            }
+        }
+        Rmf2ProjectCompilation compilation = TranslationManifestReader.WithManifestErrors(compiled, projectSource.Path, layout.Error, discoveryErrors);
         Rmf2ProjectV5? rmf2 = compilation.Project;
         (string Tag, string? Fallback)[] compiledLocales = rmf2?.Locales.Select(static locale => (locale.Tag, locale.FallbackTag)).ToArray() ?? [];
         if (compiledLocales.Length != 0)
@@ -1289,7 +1339,22 @@ internal sealed class EditorWorkspace : IDisposable
                 compilation.Diagnostics.Count - errors,
                 compilation.Success),
         };
-        return Task.FromResult(new WorkspaceState(files, compilation, summaries));
+        return Task.FromResult(new WorkspaceState(files, compilation, summaries) { SourcesRevision = sourcesRevision });
+    }
+
+    // The revision of everything a compile reads: runic.json and every message source, by path and content.
+    private static string SourcesRevision(TranslationSource project, IEnumerable<TranslationSource> messages)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        Span<byte> length = stackalloc byte[8];
+        foreach (TranslationSource source in messages.Prepend(project))
+            foreach (byte[] part in (byte[][])[StrictUtf8.GetBytes(source.Path), source.GetUtf8Bytes()])
+            {
+                System.Buffers.Binary.BinaryPrimitives.WriteInt64LittleEndian(length, part.Length);
+                hash.AppendData(length);
+                hash.AppendData(part);
+            }
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
     private WorkspaceSnapshot CreateSnapshot(WorkspaceState state)
@@ -1419,7 +1484,7 @@ internal sealed class EditorWorkspace : IDisposable
     {
         try
         {
-            using JsonDocument document = JsonDocument.Parse(content);
+            using JsonDocument document = JsonDocument.Parse(WithoutBom(content));
             JsonElement root = document.RootElement;
             string id = root.GetProperty("catalog").GetString() ?? string.Empty;
             int schemaVersion = root.GetProperty("schemaVersion").GetInt32();
@@ -1443,7 +1508,11 @@ internal sealed class EditorWorkspace : IDisposable
                 }
             }
             if (locales.Count == 0 && defaultLocale.Length != 0) locales.Add(new EditorLocale(defaultLocale, null));
-            return new EditorCatalog(id, schemaVersion, defaultLocale, locales, [new EditorLayer("base", 0)]);
+            string[] pseudoLocales = root.TryGetProperty("pseudoLocales", out JsonElement pseudo) && pseudo.ValueKind == JsonValueKind.Array
+                ? Rmf2PseudoLocalesV5.Supported.Where(tag => pseudo.EnumerateArray().Any(item => item.ValueKind == JsonValueKind.String &&
+                    string.Equals(item.GetString(), tag, StringComparison.OrdinalIgnoreCase))).ToArray()
+                : [];
+            return new EditorCatalog(id, schemaVersion, defaultLocale, locales, [new EditorLayer("base", 0)], pseudoLocales.Length == 0 ? null : pseudoLocales);
         }
         // A manifest with a catalog but missing or mistyped members is shown
         // without catalog metadata; the compiler diagnostics explain why.
@@ -1464,7 +1533,7 @@ internal sealed class EditorWorkspace : IDisposable
     {
         try
         {
-            using JsonDocument document = JsonDocument.Parse(content);
+            using JsonDocument document = JsonDocument.Parse(WithoutBom(content));
             return StringProperty(document.RootElement, "catalog");
         }
         catch (JsonException)
@@ -1506,6 +1575,9 @@ internal sealed class EditorWorkspace : IDisposable
     private static string NormalizeRelativePath(string path) => path.Replace('\\', '/').TrimStart('/');
 
     private static TranslationSource Source(string path, string content) => new(path, StrictUtf8.GetBytes(content));
+
+    // runic.json as the compiler reads it: a leading UTF-8 BOM is not part of the JSON.
+    private static string WithoutBom(string content) => content.StartsWith('\uFEFF') ? content[1..] : content;
 
     private static string Revision(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
 
@@ -1720,10 +1792,9 @@ internal sealed class EditorWorkspace : IDisposable
             throw new TranslationAuthoringException(discovery.Message);
         var sources = state.Files.Where(file => file.Kind == DocumentKind.Resource && IsSourcePath(file.Path)).Select(file => Source(file.Path, file.Content)).ToArray();
         if (sources.Length == 0) return null;
+        if (request.Kind is "add-locale" or "remove-locale" or "set-fallback")
+            return PlanLocaleChange(request, config, layout, sources);
         var workspace = new Rmf2Workspace(_root, new TranslationSource(Path.GetRelativePath(_root, config).Replace('\\', '/'), File.ReadAllBytes(config)), sources);
-        if (request.Kind == "add-locale") return workspace.AddLocale(request.Locale ?? "", request.Fallback, request.CopyFromLocale);
-        if (request.Kind == "remove-locale") return workspace.RemoveLocale(request.Locale ?? "", request.ReplacementFallback);
-        if (request.Kind == "set-fallback") return workspace.SetFallback(request.Locale ?? "", request.Fallback);
         string[] Target() => (request.TargetKey ?? "").Split('.', StringSplitOptions.RemoveEmptyEntries);
         if (request.Kind == "create-key")
         {
@@ -1745,6 +1816,112 @@ internal sealed class EditorWorkspace : IDisposable
             "delete-key" => workspace.MutateResource(logical, null),
             _ => throw new TranslationAuthoringException("This operation is not available for RMF2 resources."),
         };
+    }
+
+    // Locale changes go through Tooling's planner, the code of runic-translations locale add|remove: runic.json keeps its
+    // formatting and only the changed entry's bytes change. The editor seeds a new locale from a declared one (copyFrom)
+    // and gives the copied messages the plural and ordinal variants the new locale needs (RTR0095's repair: copies of
+    // the * variant); removing a locale redirects the locales that fall back to it (the base locale by default).
+    private TranslationWorkspaceTransactionPlan PlanLocaleChange(EditorMutationRequest request, string config, TranslationManifestLayout layout, TranslationSource[] sources)
+    {
+        string baseLocale = layout.BaseLocale ?? throw new TranslationAuthoringException(TranslationManifestReader.MissingBaseLocale);
+        var project = new TranslationSource(NormalizeRelativePath(Path.GetRelativePath(_root, config)), File.ReadAllBytes(config));
+        var inputs = new TranslationProjectSources(_root, project, sources, layout.SourceRoots);
+        TranslationLocalePlan plan;
+        try
+        {
+            plan = request.Kind switch
+            {
+                "add-locale" => TranslationLocaleChanges.PlanAdd(inputs, request.Locale ?? "", request.Fallback, request.CopyFromLocale ?? baseLocale),
+                "remove-locale" => TranslationLocaleChanges.PlanRemove(inputs, request.Locale ?? "", request.ReplacementFallback ?? baseLocale),
+                _ => TranslationLocaleChanges.PlanSetFallback(inputs, request.Locale ?? "", request.Fallback ?? baseLocale),
+            };
+        }
+        catch (TranslationToolingUsageException exception) { throw new TranslationAuthoringException(exception.Message, exception); }
+        // Removing a locale reads the review file to drop its entries; a corrupt one is refused with what to repair.
+        catch (TranslationInterchangeException exception)
+        {
+            throw new EditorUserException(EditorNotice.Create("ui_backend_locale_review_invalid", ("locale", request.Locale?.Trim() ?? ""),
+                ("path", ReviewDisplayPath() ?? "review.json")) with { Detail = exception.Message });
+        }
+
+        var created = plan.CreatedFiles.Select(file => new TranslationSource(inputs.DisplayPath(file.Path), file.Bytes)).ToList();
+        if (created.Count != 0) created = SeedPluralCategories(plan, inputs, sources, created);
+        var deleted = plan.DeletedFiles.Select(inputs.DisplayPath).ToHashSet(StringComparer.Ordinal);
+        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource(project.Path, plan.ProjectBytes),
+            sources.Where(source => !deleted.Contains(source.Path)).Concat(created).ToArray());
+        if (!compilation.Success || compilation.Project is null)
+            throw new TranslationAuthoringException("The complete edited catalog is invalid: " + string.Join("; ", compilation.Diagnostics
+                .Where(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error).Select(static diagnostic => diagnostic.Message)));
+
+        var edits = new List<TranslationWorkspaceEdit>
+        {
+            new(project.Path, TranslationWorkspaceEditKind.Replace, WorkspaceRevision(project.GetUtf8Bytes()), plan.ProjectBytes),
+        };
+        foreach (TranslationSource source in created) edits.Add(new(source.Path, TranslationWorkspaceEditKind.Create, null, source.GetUtf8Bytes()));
+        foreach (TranslationSource source in sources.Where(source => deleted.Contains(source.Path)))
+            edits.Add(new(source.Path, TranslationWorkspaceEditKind.Delete, WorkspaceRevision(source.GetUtf8Bytes()), null));
+        return new TranslationWorkspaceTransactionPlan(_root, compilation.Project.Id, edits, compilation);
+    }
+
+    private static string WorkspaceRevision(byte[] bytes) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes));
+
+    // Each copied message whose plural or ordinal selector lacks a category the new locale needs gets it, as the RTR0095
+    // quick fix adds it: a copy of the * variant. Repairs within one file never overlap, so they apply back to front.
+    private static List<TranslationSource> SeedPluralCategories(TranslationLocalePlan plan, TranslationProjectSources inputs,
+        TranslationSource[] sources, List<TranslationSource> created)
+    {
+        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource(inputs.Project.Path, plan.ProjectBytes),
+            sources.Concat(created).ToArray());
+        var seeded = new List<TranslationSource>(created.Count);
+        foreach (TranslationSource source in created)
+        {
+            byte[] bytes = source.GetUtf8Bytes();
+            foreach (Rmf2DiagnosticQuickFix fix in Rmf2DiagnosticActions.GetProjectQuickFixes(compilation, source).OrderByDescending(static fix => fix.StartByte))
+                bytes = [.. bytes.AsSpan(0, fix.StartByte), .. Encoding.UTF8.GetBytes(fix.NewText), .. bytes.AsSpan(fix.StartByte + fix.LengthBytes)];
+            seeded.Add(new TranslationSource(source.Path, bytes));
+        }
+        return seeded;
+    }
+
+    /// <summary>After a locale's removal: its entries leave the review file, as runic-translations locale remove drops them.</summary>
+    /// <summary>The open catalog's review file relative to the workspace, or null without a catalog.</summary>
+    internal string? ReviewDisplayPath() =>
+        _catalogId is null || FindMf2ProjectConfig() is not { } config || !TranslationReviewFile.IsFileName(_catalogId) ? null
+            : NormalizeRelativePath(Path.GetRelativePath(_root, TranslationReviewFile.PathFor(config, _catalogId)));
+
+    /// <summary>The compiled catalog's locales, default locale and unsupportedLocale policy; null when it does not compile.</summary>
+    internal async Task<EditorLocaleContext?> LocaleContextAsync(CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ThrowIfDisposed();
+            // No baseline reset: reading the state for a description must not hide an external change.
+            WorkspaceState state = await ReadStateAsync(null, null, cancellationToken, resetBaseline: false).ConfigureAwait(false);
+            if (state.Compilation.Project is not { } project) return null;
+            UnsupportedLocalePolicy policy = project.UnsupportedLocale switch
+            {
+                TranslationUnsupportedLocalePolicy.Exact => UnsupportedLocalePolicy.Exact,
+                TranslationUnsupportedLocalePolicy.Default => UnsupportedLocalePolicy.Default,
+                _ => UnsupportedLocalePolicy.ParentsThenDefault,
+            };
+            return new EditorLocaleContext(project.Locales.Select(static locale => locale.Tag).ToArray(), project.DefaultLocale, policy, project.Id);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    internal void CompleteLocaleRemoval(string locale)
+    {
+        if (_catalogId is null || FindMf2ProjectConfig() is not { } config) return;
+        string reviewPath = TranslationReviewFile.PathFor(config, _catalogId);
+        // Compare-and-swap: a write by the command line or the language server in between is kept.
+        TranslationReviewFile.Update(reviewPath, _catalogId, existing => existing is null || !existing.Entries.Any(entry => string.Equals(entry.Locale, locale, StringComparison.OrdinalIgnoreCase))
+            ? existing
+            : new TranslationInterchangeReview(existing.CatalogId, existing.Entries.Where(entry => !string.Equals(entry.Locale, locale, StringComparison.OrdinalIgnoreCase))));
     }
 
     private Rmf2Workspace Rmf2Catalog()
@@ -1778,5 +1955,7 @@ internal sealed class EditorWorkspace : IDisposable
         IReadOnlyList<EditorCatalogSummary> Catalogs)
     {
         internal Rmf2ProjectCompilation? ReviewCompilation { get; set; }
+        /// <summary>The revision of the compiled sources (runic.json and the message sources), which keys cached compilations.</summary>
+        internal string? SourcesRevision { get; init; }
     }
 }

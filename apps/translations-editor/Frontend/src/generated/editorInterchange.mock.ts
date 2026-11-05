@@ -46,7 +46,7 @@ export interface EditorInterchangeMock extends MockTypedView<EditorInterchangeMo
 const spec: MockTypedViewSpec = {
   kind: "editorInterchange",
   route: "editorInterchange",
-  contract: "Runic.Translations.Editor.EditorInterchangeViewModel:AD00A5B4BE47AA9A45169F855E1B9CE367A214E3C59A59057362787C22ABD400",
+  contract: "Runic.Translations.Editor.EditorInterchangeViewModel:DED79562058A5F044218FF7D157CE7BB9075A685D7090FE94A9EDEB655F30D46",
   fields: {
     exportXliffResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     previewXliffImportResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },

@@ -108,7 +108,7 @@ const members: BridgeMemberDecoders<EditorInterchangeState> = {
   isPreviewReviewJsonImportExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isApplyReviewJsonImportExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorInterchangeViewModel:AD00A5B4BE47AA9A45169F855E1B9CE367A214E3C59A59057362787C22ABD400";
+const bridgeContract = "Runic.Translations.Editor.EditorInterchangeViewModel:DED79562058A5F044218FF7D157CE7BB9075A685D7090FE94A9EDEB655F30D46";
 const exportXliffOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const previewXliffImportOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const applyXliffImportOperation: BridgeOperationCodec<void> = { decode: value => undefined };

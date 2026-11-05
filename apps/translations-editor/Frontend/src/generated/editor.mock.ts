@@ -40,7 +40,7 @@ export interface EditorMock extends MockTypedView<EditorMockState, EditorClient,
 const spec: MockTypedViewSpec = {
   kind: "editor",
   route: "editor",
-  contract: "Runic.Translations.Editor.EditorViewModel:AD00A5B4BE47AA9A45169F855E1B9CE367A214E3C59A59057362787C22ABD400",
+  contract: "Runic.Translations.Editor.EditorViewModel:DED79562058A5F044218FF7D157CE7BB9075A685D7090FE94A9EDEB655F30D46",
   fields: {},
   defaults: { isSetUiLocaleExecuting: false },
   commands: {

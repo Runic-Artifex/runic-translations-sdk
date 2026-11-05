@@ -17,6 +17,8 @@ import type {
   EditorReviewFileResult,
   EditorReviewImportPreview,
   EditorMessagePreview,
+  EditorLocaleCatalog,
+  EditorLocaleDescription,
   EditorMutationPreview,
   EditorMutationRequest,
   EditorNotice,
@@ -184,7 +186,10 @@ export interface EditorBridge {
   applyAuthoringOperation(path: string, content: string, key: string, expectedRevision: string, operation: EditorMessageOperation): Promise<EditorDocumentDraft>;
   applyDiagnosticFix(path: string, content: string, fix: EditorDiagnosticQuickFix): Promise<EditorDocumentDraft>;
   transformDocument(path: string, content: string, key?: string, value?: string): Promise<EditorDocumentDraft>;
-  previewMessage(path: string, content: string, locale: string, key: string, samplesJson?: string): Promise<EditorMessagePreview>;
+  /** `requestedLocale` (`de-CH` for `de` text) and `timeZone` (`utc`, an IANA zone; empty: the host's) format the preview. */
+  previewMessage(path: string, content: string, locale: string, key: string, samplesJson?: string, requestedLocale?: string, timeZone?: string): Promise<EditorMessagePreview>;
+  listLocales(): Promise<EditorLocaleCatalog>;
+  describeLocale(tag: string): Promise<EditorLocaleDescription>;
   saveReview(request: EditorReviewSaveRequest): Promise<EditorReviewOperationResult>;
   about(): Promise<EditorAbout>;
   createDiagnosticBundle(): Promise<EditorDiagnosticBundleResult>;
@@ -236,7 +241,9 @@ export function createEditorBridge(): EditorBridge {
     applyAuthoringOperation: (path, content, key, expectedRevision, operation) => invokeRouted("ApplyAuthoringOperation", root => root.snapshot.documentTools, (view, request) => view.applyAuthoringOperation(request), state => state.applyAuthoringOperationResultJson, { path, content, key, expectedRevision, operation }) as Promise<EditorDocumentDraft>,
     applyDiagnosticFix: (path, content, fix) => invokeRouted("ApplyDiagnosticFix", root => root.snapshot.documentTools, (view, request) => view.applyDiagnosticFix(request), state => state.applyDiagnosticFixResultJson, { path, content, fix }) as Promise<EditorDocumentDraft>,
     transformDocument: (path, content, key, value) => invokeRouted("TransformDocument", root => root.snapshot.documentTools, (view, request) => view.transformDocument(request), state => state.transformDocumentResultJson, { path, content, key, value }) as Promise<EditorDocumentDraft>,
-    previewMessage: (path, content, locale, key, samplesJson) => invokeRouted("PreviewMessage", root => root.snapshot.documentTools, (view, request) => view.previewMessage(request), state => state.previewMessageResultJson, { path, content, locale, key, samplesJson }) as Promise<EditorMessagePreview>,
+    previewMessage: (path, content, locale, key, samplesJson, requestedLocale, timeZone) => invokeRouted("PreviewMessage", root => root.snapshot.documentTools, (view, request) => view.previewMessage(request), state => state.previewMessageResultJson, { path, content, locale, key, samplesJson, requestedLocale, timeZone }) as Promise<EditorMessagePreview>,
+    listLocales: () => invokeRouted("ListLocales", root => root.snapshot.workspace, (view, request) => view.listLocales(request), state => state.listLocalesResultJson, {}) as Promise<EditorLocaleCatalog>,
+    describeLocale: (tag) => invokeRouted("DescribeLocale", root => root.snapshot.workspace, (view, request) => view.describeLocale(request), state => state.describeLocaleResultJson, { tag }) as Promise<EditorLocaleDescription>,
     saveReview: (request) => invokeRouted("SaveReview", root => root.snapshot.review, (view, request) => view.saveReview(request), state => state.saveReviewResultJson, request) as Promise<EditorReviewOperationResult>,
     about: () => invokeRouted("About", root => root.snapshot.diagnostics, (view, request) => view.about(request), state => state.aboutResultJson, {}) as Promise<EditorAbout>,
     createDiagnosticBundle: () => invokeRouted("CreateDiagnosticBundle", root => root.snapshot.diagnostics, (view, request) => view.createDiagnosticBundle(request), state => state.createDiagnosticBundleResultJson, {}) as Promise<EditorDiagnosticBundleResult>,

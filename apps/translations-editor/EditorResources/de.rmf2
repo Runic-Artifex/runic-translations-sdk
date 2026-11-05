@@ -4060,3 +4060,109 @@ ui {
 ui {
   preview_example = Beispiel {$number}
 }
+ui {
+  backend {
+    locale_invalid = '{$locale}' ist kein gültiges BCP-47-Sprach-Tag.
+  }
+}
+ui {
+  backend {
+    locale_unknown = CLDR hat keine Daten für {$locale}: Pluralregeln, Zahlen und Datumsangaben fallen auf die Root-Locale zurück.
+  }
+}
+ui {
+  backend {
+    locale_review_invalid = {$locale} wurde nicht entfernt: Die Review-Datei {$path} kann nicht gelesen werden. Reparieren oder löschen Sie sie und entfernen Sie die Sprache dann erneut.
+  }
+}
+ui {
+  backend {
+    locale_review_not_updated = {$locale} wurde entfernt, aber die Review-Zustände stehen noch in {$path}. Entfernen Sie sie dort, bevor Sie {$locale} erneut hinzufügen, sonst gelten sie für die neuen Übersetzungen.
+  }
+}
+ui {
+  preview_formatting = Vorschau-Formatierung
+}
+ui {
+  preview_regional_locale = Regionale Sprache
+}
+ui {
+  preview_regional_locale_description = Die Sprache, die jemand anfordert, etwa de-CH für deutschen Text: Zahlen und Datumsangaben werden darin formatiert, wenn die Sprache übereinstimmt.
+}
+ui {
+  preview_time_zone = Zeitzone
+}
+ui {
+  preview_time_zone_description = Die Zone, in der timeZone=local, die Vorgabe der Datums- und Zeitstile, formatiert.
+}
+ui {
+  preview_time_zone_host = Zeitzone dieses Computers
+}
+ui {
+  preview_time_zone_summary = Zeitzone {$zone}
+}
+ui {
+  preview_formats_in = Formatiert in {$locale}
+}
+ui {
+  preview_requested_summary = Angefordert {$requested} ({$resolution})
+}
+ui {
+  preview_resolution_exact = exakt
+}
+ui {
+  preview_resolution_parent = übergeordnete Sprache
+}
+ui {
+  preview_resolution_related = verwandte Sprache
+}
+ui {
+  preview_pseudo_locale = Pseudo-Sprache {$locale}
+}
+ui {
+  locale_pseudo = Pseudo-Sprache
+}
+ui {
+  locale_generated = generiert
+}
+ui {
+  locale_pseudo_description = Aus der Basissprache erzeugt, wie ein Pseudo-Sprachen-Build sie erzeugt; in der Vorschau gezeigt, schreibgeschützt.
+}
+ui {
+  locale_cldr_summary = {$locale}: CLDR-Daten von {$data}, {$direction}
+}
+ui {
+  locale_direction_ltr = von links nach rechts
+}
+ui {
+  locale_direction_rtl = von rechts nach links
+}
+ui {
+  locale_cldr_canonical = CLDR formatiert diese Locale mit den Daten von {$locale} (Likely Subtags).
+}
+ui {
+  locale_cldr_use = {$locale} verwenden
+}
+ui {
+  locale_plural_categories = Pluralkategorien: {$categories}
+}
+ui {
+  locale_ordinal_categories = Ordinal: {$categories}
+}
+ui {
+  locale_categories_seeded = Kopierte Startwerte erhalten für jede Pluralkategorie, die die Sprache braucht, eine Variante als Kopie der *-Variante.
+}
+ui {
+  locale_script_suggestion = {$locale} ist die Locale auf Schriftebene: Die Laufzeit-Aushandlung ordnet {$typed} und die anderen Regionen mit dieser Schrift ihr zu. Behalten Sie {$typed}, wenn nur diese Region gemeint ist.
+}
+ui {
+  locale_matches = Mit unsupportedLocale "{$policy}" bedient {$locale} Anfragen für: {$tags}.
+}
+ui {
+  locale_matches_more =
+    .input {$count :integer select=plural}
+    .match $count
+    one {{und eine weitere}}
+    * {{und {$count} weitere}}
+
+}

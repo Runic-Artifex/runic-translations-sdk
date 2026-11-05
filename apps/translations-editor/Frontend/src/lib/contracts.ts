@@ -31,6 +31,43 @@ export interface EditorCatalog {
   defaultLocale: string;
   locales: EditorLocale[];
   layers: EditorLayer[];
+  /** runic.json `pseudoLocales` (`en-XA`, `ar-XB`): generated from the base locale for previews, never edited. */
+  pseudoLocales?: string[];
+}
+
+/** The add-language picker's suggestions: the SDK's pinned CLDR locales, by CLDR data ID. */
+export interface EditorLocaleCatalog {
+  cldrVersion: string;
+  locales: string[];
+}
+
+/** What a typed locale tag means, from the SDK's CLDR data. */
+export interface EditorLocaleDescription {
+  valid: boolean;
+  canonical?: string;
+  /** The CLDR data ID through likely subtags: `zh-TW` → `zh-Hant-TW`. */
+  dataId?: string;
+  /** The nearest CLDR locale with data; absent when CLDR has none (root only). */
+  cldrLocale?: string;
+  direction: "ltr" | "rtl";
+  /** The plural categories (`one`, `few`, …) a translation in this locale selects. */
+  cardinal: string[];
+  ordinal: string[];
+  message?: EditorNotice;
+  /** The script-level locale for a region tag whose CLDR data is in another script: `zh-TW` → `zh-Hant`. */
+  suggested?: string;
+  /** The open catalog's `runtime.unsupportedLocale` policy; absent when the catalog does not compile. */
+  unsupportedLocale?: "exact" | "parentsThenDefault" | "default";
+  /** The requested tags the runtime would resolve to the typed locale under that policy. */
+  matches?: EditorLocaleMatches;
+  /** The requested tags the runtime would resolve to the suggested locale. */
+  suggestedMatches?: EditorLocaleMatches;
+}
+
+/** Requested tags that reach a locale: the first few (the tag itself, then the shortest) and how many in all. */
+export interface EditorLocaleMatches {
+  tags: string[];
+  count: number;
 }
 
 export interface EditorMessageEntry {

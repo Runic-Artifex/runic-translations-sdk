@@ -36,7 +36,7 @@ export interface EditorDocumentMock extends MockTypedView<EditorDocumentMockStat
 const spec: MockTypedViewSpec = {
   kind: "editorDocument",
   route: "editorDocument",
-  contract: "Runic.Translations.Editor.EditorDocumentViewModel:AD00A5B4BE47AA9A45169F855E1B9CE367A214E3C59A59057362787C22ABD400",
+  contract: "Runic.Translations.Editor.EditorDocumentViewModel:DED79562058A5F044218FF7D157CE7BB9075A685D7090FE94A9EDEB655F30D46",
   fields: {
     path: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     content: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },

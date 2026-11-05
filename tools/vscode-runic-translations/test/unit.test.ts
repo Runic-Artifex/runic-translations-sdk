@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, symlinkSyn
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { nearestProjectManifest, projectManifest, serverLaunch, sourceWatchRoots, toolLaunch, xliffExportArguments, xliffImportDryRunArguments } from "../src/server.js";
-import { resolvePreviewHtml } from "../src/preview.js";
+import { previewDescription, renderedPreviewHtml, resolvePreviewHtml } from "../src/preview.js";
 import type { Preview } from "../src/preview.js";
 import { PreviewSession, sampleChoices, type PreviewHost, type PreviewState, type Samples } from "../src/preview-session.js";
 import { ForwardedWatchers, type DisposableLike, type WatcherLike } from "../src/watchers.js";
@@ -149,6 +149,17 @@ test("execution-v2 preview selects server rendering and remains inert", async ()
   expect(html).toContain("&lt;script&gt;"); expect(html).not.toContain("<script>");
   expect(html).toContain("aria-disabled=\"true\""); expect(html).toContain("<button disabled>"); expect(html).not.toContain("href=");
   expect(html).toContain("title=\"shop:badge\"");
+});
+
+test("the preview names the requested locale, its resolution, the formatting locale and the time zone, and sets the direction", () => {
+  const swiss = { key: "price", locale: "de", runs: [{ text: "1'234.5" }], requestedLocale: "de-CH", resolution: "parent" as const, formattingLocale: "de-CH", direction: "ltr" as const, timeZone: "Europe/Zurich" };
+  expect(previewDescription(swiss)).toBe("de · requested de-CH (parent) · formats in de-CH · time zone Europe/Zurich · inert preview");
+  expect(previewDescription({ key: "price", locale: "de", runs: [], requestedLocale: "de", resolution: "exact", formattingLocale: "de" })).toBe("de · inert preview");
+  const mirrored = renderedPreviewHtml({ key: "price", locale: "ar-XB", runs: [{ text: "<b>" }], direction: "rtl" });
+  expect(mirrored).toContain('lang="ar-XB" dir="rtl"');
+  expect(mirrored).toContain("&lt;b&gt;");
+  // An older server reports no direction: left to right.
+  expect(renderedPreviewHtml({ key: "k", locale: "en", runs: [] })).toContain('dir="ltr"');
 });
 
 const metadata = (key = "count"): Preview => ({ key, locale: "en", inputs: [{ name: "count", type: "integer" }], examples: [{ count: 1 }, { count: 2 }], ast: { astVersion: 5, profile: "rmf2-execution-v2", inputs: [] } });
