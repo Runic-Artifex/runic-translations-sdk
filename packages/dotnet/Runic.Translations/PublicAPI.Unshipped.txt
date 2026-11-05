@@ -1,9 +1,62 @@
 #nullable enable
+Runic.Translations.CompiledTranslationSnapshot.LocaleResolution.get -> Runic.Translations.LocaleResolution
 Runic.Translations.CompiledTranslationSnapshot.RequestedLocale.get -> string!
 Runic.Translations.CompiledTranslationSnapshot.TryGetContentLocale(Runic.Translations.TranslationKey key, out string! contentLocale) -> bool
+Runic.Translations.ITranslationContext
+Runic.Translations.ITranslationContext.Catalogs.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationCatalogStatus!>!
+Runic.Translations.ITranslationContext.GetManager(string! catalogId) -> Runic.Translations.ITranslationManager!
+Runic.Translations.ITranslationContext.LocaleChanged -> System.EventHandler<Runic.Translations.TranslationContextLocaleChangedEventArgs!>?
+Runic.Translations.ITranslationContext.RefreshAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Runic.Translations.ITranslationContext.RequestedLocale.get -> string!
+Runic.Translations.ITranslationContext.Resolve(Runic.Translations.TranslationReference! reference) -> Runic.Translations.TranslationReferenceResolution!
+Runic.Translations.ITranslationContext.SetLocaleAsync(string! locale, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Runic.Translations.ITranslationContext.SupportedLocales.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Runic.Translations.ITranslationContext.TryGetManager(string! catalogId, out Runic.Translations.ITranslationManager? manager) -> bool
+Runic.Translations.ITranslationSnapshot.LocaleResolution.get -> Runic.Translations.LocaleResolution
 Runic.Translations.ITranslationSnapshot.RequestedLocale.get -> string!
 Runic.Translations.ITranslationSnapshot.TryGetContentLocale(Runic.Translations.TranslationKey key, out string! contentLocale) -> bool
+Runic.Translations.LocaleResolution
+Runic.Translations.LocaleResolution.Default = 2 -> Runic.Translations.LocaleResolution
+Runic.Translations.LocaleResolution.Exact = 0 -> Runic.Translations.LocaleResolution
+Runic.Translations.LocaleResolution.Parent = 1 -> Runic.Translations.LocaleResolution
 Runic.Translations.LocalizedTextContent.FormattingLocale.get -> string!
+Runic.Translations.TranslationCatalogRegistration
+Runic.Translations.TranslationCatalogRegistration.CatalogId.get -> string!
+Runic.Translations.TranslationCatalogRegistration.ContractFingerprint.get -> string!
+Runic.Translations.TranslationCatalogRegistration.CreateProvider(Runic.Translations.ITextValueFormatter? valueFormatter = null, Runic.Translations.ITranslationSnapshotFactory? snapshotFactory = null, Runic.Translations.TranslationOptions? options = null) -> Runic.Translations.ITranslationProvider!
+Runic.Translations.TranslationCatalogRegistration.DefaultLocale.get -> string!
+Runic.Translations.TranslationCatalogRegistration.Rmf2MarkupContract.get -> string!
+Runic.Translations.TranslationCatalogRegistration.TranslationCatalogRegistration(string! catalogId, string! defaultLocale, string! contractFingerprint, string! rmf2MarkupContract, Runic.Translations.TranslationProviderFactory! providerFactory) -> void
+Runic.Translations.TranslationCatalogStatus
+Runic.Translations.TranslationCatalogStatus.CatalogId.get -> string!
+Runic.Translations.TranslationCatalogStatus.Locale.get -> string!
+Runic.Translations.TranslationCatalogStatus.LocaleResolution.get -> Runic.Translations.LocaleResolution
+Runic.Translations.TranslationCatalogStatus.OverlayDiagnostics.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationOverlayDiagnostic>!
+Runic.Translations.TranslationCatalogStatus.RequestedLocale.get -> string!
+Runic.Translations.TranslationCatalogStatus.Snapshot.get -> Runic.Translations.ITranslationSnapshot!
+Runic.Translations.TranslationCatalogStatus.SupportedLocales.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Runic.Translations.TranslationCatalogStatus.TranslationCatalogStatus(Runic.Translations.ITranslationSnapshot! snapshot, System.Collections.Generic.IReadOnlyList<string!>? supportedLocales = null, System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationOverlayDiagnostic>? overlayDiagnostics = null) -> void
+Runic.Translations.TranslationContext
+Runic.Translations.TranslationContext.Catalogs.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationCatalogStatus!>!
+Runic.Translations.TranslationContext.GetManager(string! catalogId) -> Runic.Translations.ITranslationManager!
+Runic.Translations.TranslationContext.LocaleChanged -> System.EventHandler<Runic.Translations.TranslationContextLocaleChangedEventArgs!>?
+Runic.Translations.TranslationContext.RefreshAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Runic.Translations.TranslationContext.RequestedLocale.get -> string!
+Runic.Translations.TranslationContext.Resolve(Runic.Translations.TranslationReference! reference) -> Runic.Translations.TranslationReferenceResolution!
+Runic.Translations.TranslationContext.SetLocaleAsync(string! locale, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Runic.Translations.TranslationContext.SupportedLocales.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Runic.Translations.TranslationContext.TryGetManager(string! catalogId, out Runic.Translations.ITranslationManager? manager) -> bool
+Runic.Translations.TranslationContextBuilder
+Runic.Translations.TranslationContextBuilder.Add(Runic.Translations.TranslationCatalogRegistration! registration, Runic.Translations.TranslationOptions? options = null) -> Runic.Translations.TranslationContextBuilder!
+Runic.Translations.TranslationContextBuilder.AddOverlay(Runic.Translations.TranslationOverlay! overlay) -> Runic.Translations.TranslationContextBuilder!
+Runic.Translations.TranslationContextBuilder.Build(string? initialLocale = null) -> Runic.Translations.TranslationContext!
+Runic.Translations.TranslationContextBuilder.BuildAsync(string? initialLocale = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Runic.Translations.TranslationContext!>
+Runic.Translations.TranslationContextBuilder.UseValueFormatter(Runic.Translations.ITextValueFormatter! valueFormatter) -> Runic.Translations.TranslationContextBuilder!
+Runic.Translations.TranslationContextLocaleChangedEventArgs
+Runic.Translations.TranslationContextLocaleChangedEventArgs.Catalogs.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationCatalogStatus!>!
+Runic.Translations.TranslationContextLocaleChangedEventArgs.OldRequestedLocale.get -> string!
+Runic.Translations.TranslationContextLocaleChangedEventArgs.RequestedLocale.get -> string!
+Runic.Translations.TranslationContextLocaleChangedEventArgs.TranslationContextLocaleChangedEventArgs(string! oldRequestedLocale, string! requestedLocale, System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationCatalogStatus!>! catalogs) -> void
 Runic.Translations.TranslationEvents
 Runic.Translations.TranslationFallbackEventArgs
 Runic.Translations.TranslationFallbackEventArgs.Catalog.get -> string!
@@ -12,4 +65,48 @@ Runic.Translations.TranslationFallbackEventArgs.Key.get -> string!
 Runic.Translations.TranslationFallbackEventArgs.Locale.get -> string!
 Runic.Translations.TranslationFallbackEventArgs.RequestedLocale.get -> string!
 Runic.Translations.TranslationFallbackEventArgs.TranslationFallbackEventArgs(string! catalog, string! key, string! locale, string! contentLocale, string! requestedLocale) -> void
+Runic.Translations.TranslationLocaleChangedEventArgs.LocaleResolution.get -> Runic.Translations.LocaleResolution
+Runic.Translations.TranslationLocaleChangedEventArgs.RequestedLocale.get -> string!
+Runic.Translations.TranslationOverlay
+Runic.Translations.TranslationOverlay.AddedLocales.get -> System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationOverlayLocale!>!
+Runic.Translations.TranslationOverlay.Catalog.get -> string!
+Runic.Translations.TranslationOverlayDiagnostic
+Runic.Translations.TranslationOverlayDiagnostic.Catalog.get -> string!
+Runic.Translations.TranslationOverlayDiagnostic.Catalog.init -> void
+Runic.Translations.TranslationOverlayDiagnostic.Deconstruct(out string! Catalog, out string! Locale, out string! Key, out Runic.Translations.TranslationOverlayDiagnosticReason Reason) -> void
+Runic.Translations.TranslationOverlayDiagnostic.Equals(Runic.Translations.TranslationOverlayDiagnostic other) -> bool
+Runic.Translations.TranslationOverlayDiagnostic.Key.get -> string!
+Runic.Translations.TranslationOverlayDiagnostic.Key.init -> void
+Runic.Translations.TranslationOverlayDiagnostic.Locale.get -> string!
+Runic.Translations.TranslationOverlayDiagnostic.Locale.init -> void
+Runic.Translations.TranslationOverlayDiagnostic.Reason.get -> Runic.Translations.TranslationOverlayDiagnosticReason
+Runic.Translations.TranslationOverlayDiagnostic.Reason.init -> void
+Runic.Translations.TranslationOverlayDiagnostic.TranslationOverlayDiagnostic() -> void
+Runic.Translations.TranslationOverlayDiagnostic.TranslationOverlayDiagnostic(string! Catalog, string! Locale, string! Key, Runic.Translations.TranslationOverlayDiagnosticReason Reason) -> void
+Runic.Translations.TranslationOverlayDiagnosticReason
+Runic.Translations.TranslationOverlayDiagnosticReason.ContentKindChanged = 3 -> Runic.Translations.TranslationOverlayDiagnosticReason
+Runic.Translations.TranslationOverlayDiagnosticReason.IncompatibleInputs = 2 -> Runic.Translations.TranslationOverlayDiagnosticReason
+Runic.Translations.TranslationOverlayDiagnosticReason.IncompatibleMarkup = 4 -> Runic.Translations.TranslationOverlayDiagnosticReason
+Runic.Translations.TranslationOverlayDiagnosticReason.Unknown = 0 -> Runic.Translations.TranslationOverlayDiagnosticReason
+Runic.Translations.TranslationOverlayDiagnosticReason.UnknownKey = 1 -> Runic.Translations.TranslationOverlayDiagnosticReason
+Runic.Translations.TranslationOverlayLocale
+Runic.Translations.TranslationOverlayLocale.FallbackLocale.get -> string?
+Runic.Translations.TranslationOverlayLocale.Locale.get -> string!
+Runic.Translations.TranslationOverlayLocale.TranslationOverlayLocale(string! locale, string? fallbackLocale = null) -> void
+Runic.Translations.TranslationProviderFactory
+Runic.Translations.TranslationSnapshotPublishedEventArgs.LocaleResolution.get -> Runic.Translations.LocaleResolution
+Runic.Translations.TranslationSnapshotPublishedEventArgs.RequestedLocale.get -> string!
+const Runic.Translations.Generated.TranslationsCompatibility.CompositionVersion = 1 -> int
+const Runic.Translations.Generated.TranslationsCompatibility.MinimumRmf2RuntimeAbiVersion = 3 -> int
+const Runic.Translations.Generated.TranslationsCompatibility.MinimumRuntimeAbiVersion = 1 -> int
+override Runic.Translations.TranslationOverlayDiagnostic.GetHashCode() -> int
+static Runic.Translations.Generated.TranslationsCompatibility.EnsureRuntimeAbi(int requiredVersion) -> void
+static Runic.Translations.Generated.TranslationsCompatibility.SupportsRuntimeAbi(int requiredVersion) -> bool
+static Runic.Translations.TranslationContext.CreateBuilder() -> Runic.Translations.TranslationContextBuilder!
 static Runic.Translations.TranslationEvents.TranslationFallback -> System.EventHandler<Runic.Translations.TranslationFallbackEventArgs!>?
+static Runic.Translations.TranslationOverlay.FromPacks(string! catalog, Runic.Translations.IExternalTranslationSource! source, System.Collections.Generic.IEnumerable<Runic.Translations.TranslationOverlayLocale!>? addedLocales = null, Runic.Translations.TranslationPackLimits? limits = null, Runic.Translations.TranslationPackIntegrityVerifier? integrityVerifier = null) -> Runic.Translations.TranslationOverlay!
+static Runic.Translations.TranslationOverlayDiagnostic.operator !=(Runic.Translations.TranslationOverlayDiagnostic left, Runic.Translations.TranslationOverlayDiagnostic right) -> bool
+static Runic.Translations.TranslationOverlayDiagnostic.operator ==(Runic.Translations.TranslationOverlayDiagnostic left, Runic.Translations.TranslationOverlayDiagnostic right) -> bool
+virtual Runic.Translations.TranslationProviderFactory.Invoke(Runic.Translations.ITextValueFormatter? valueFormatter, Runic.Translations.ITranslationSnapshotFactory? snapshotFactory, Runic.Translations.TranslationOptions? options) -> Runic.Translations.ITranslationProvider!
+~override Runic.Translations.TranslationOverlayDiagnostic.Equals(object obj) -> bool
+~override Runic.Translations.TranslationOverlayDiagnostic.ToString() -> string

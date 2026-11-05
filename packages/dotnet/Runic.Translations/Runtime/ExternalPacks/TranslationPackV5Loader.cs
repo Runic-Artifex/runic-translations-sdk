@@ -84,6 +84,75 @@ internal static class TranslationPackV5Loader
         { throw Error("The external pack contains an invalid normalized v5 AST.", TranslationPackFailureReason.MalformedPattern); }
     }
 
+    // An overlay pack is a locale artifact v5 checked key by key against the library it overlays, not against a whole
+    // catalog contract: any contract fingerprint and markup contract is accepted here, and the provider checks each
+    // message's inputs, content kind and markup against the library's definition. The envelope, the AST shape and the
+    // pack's own consistency (every message's content locale) are checked as for an external pack, and a violation
+    // rejects the whole pack.
+    internal static OverlayPack ParseOverlay(ReadOnlyMemory<byte> content, string expectedCatalog, string expectedLocale,
+        TranslationPackLimits limits, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!WithinMaximumDepth(content.Span, limits.MaximumDepth))
+                throw Limit("The overlay pack exceeds the configured depth limit.");
+            using JsonDocument document = JsonDocument.Parse(content, new JsonDocumentOptions
+            {
+                AllowTrailingCommas = false,
+                CommentHandling = JsonCommentHandling.Disallow,
+                MaxDepth = limits.MaximumDepth,
+            });
+            Dictionary<string, JsonElement> root = Members(document.RootElement,
+                ["artifactVersion", "messageGrammarVersion", "profile", "catalog", "locale", "contractFingerprint", "messages", "markupContract"]);
+            if (Integer(root["artifactVersion"]) != 5)
+                throw Error("The overlay pack artifact version is unsupported.", TranslationPackFailureReason.ArtifactVersionMismatch);
+            if (Integer(root["messageGrammarVersion"]) != 5)
+                throw Error("The overlay pack message grammar version is unsupported.", TranslationPackFailureReason.MessageGrammarVersionMismatch);
+            if (String(root["profile"]) != "rmf2-execution-v2")
+                throw Error("The overlay pack execution profile is unsupported.", TranslationPackFailureReason.MessageGrammarVersionMismatch);
+            if (root["markupContract"].ValueKind != JsonValueKind.Object ||
+                !root["markupContract"].TryGetProperty("version", out JsonElement markupVersion) ||
+                markupVersion.ValueKind != JsonValueKind.Number || !markupVersion.TryGetInt32(out int markupVersionNumber) ||
+                markupVersionNumber != Rmf2MarkupContract.Version)
+                throw Error("The overlay pack was built for another Runic markup contract and must be rebuilt with the current compiler.", TranslationPackFailureReason.MarkupContractVersionMismatch);
+            string catalog = String(root["catalog"]), locale = String(root["locale"]), fingerprint = String(root["contractFingerprint"]);
+            if (!TranslationPackValidation.IsCatalog(catalog)) throw Error("The overlay pack catalog identifier is invalid.");
+            if (!TranslationPackValidation.IsCanonicalLocale(locale)) throw Error("The overlay pack locale is not canonical.");
+            if (!TranslationPackValidation.IsFingerprint(fingerprint)) throw Error("The overlay pack fingerprint is invalid.");
+            if (!string.Equals(catalog, expectedCatalog, StringComparison.Ordinal)) throw Error("The overlay pack catalog does not match the overlaid catalog.", TranslationPackFailureReason.CatalogMismatch);
+            if (!string.Equals(locale, expectedLocale, StringComparison.Ordinal)) throw Error("The overlay pack locale does not match the requested locale.", TranslationPackFailureReason.LocaleMismatch);
+            Rmf2MarkupContract markup;
+            try { markup = Rmf2MarkupContract.Link(root["markupContract"].GetRawText()); }
+            catch (ArgumentException exception)
+            {
+                throw Error("The overlay pack markup contract is not a valid markup contract v2: " + exception.Message, TranslationPackFailureReason.Malformed);
+            }
+            if (root["messages"].ValueKind != JsonValueKind.Object) throw Error("The overlay pack messages value must be an object.");
+            var messages = new List<OverlayPackMessage>();
+            var keys = new HashSet<string>(StringComparer.Ordinal);
+            foreach (JsonProperty property in root["messages"].EnumerateObject())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!keys.Add(property.Name)) throw Error("The overlay pack contains duplicate message key '" + property.Name + "'.");
+                if (messages.Count >= limits.MaximumMessages) throw Limit("The overlay pack exceeds the configured message limit.");
+                if (!TranslationPackValidation.IsResourceKey(property.Name)) throw Error("The overlay pack contains an invalid message key.");
+                Dictionary<string, JsonElement> wrapper = Members(property.Value, ["contentLocale", "ast"]);
+                string contentLocale = String(wrapper["contentLocale"]);
+                if (!TranslationPackValidation.IsCanonicalLocale(contentLocale) ||
+                    !markup.Messages.TryGetValue(property.Name, out Rmf2MarkupContract.Message? linked) ||
+                    !linked.ContentLocales.TryGetValue(locale, out string? declared) || declared != contentLocale)
+                    throw Error("RMF2 effective content locale mismatch.", TranslationPackFailureReason.ArgumentContractMismatch);
+                messages.Add(new OverlayPackMessage(property.Name, contentLocale, linked.Document, ReadAst(wrapper["ast"], null, limits, contentLocale)));
+            }
+            return new OverlayPack(catalog, locale, fingerprint, messages.ToArray());
+        }
+        catch (TranslationPackException) { throw; }
+        catch (JsonException exception) { throw Error("The overlay pack is incomplete, contains invalid UTF-8, or malformed JSON near byte " + exception.BytePositionInLine + "."); }
+        catch (DecoderFallbackException) { throw Error("The overlay pack contains invalid UTF-8 text."); }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or KeyNotFoundException)
+        { throw Error("The overlay pack contains an invalid normalized v5 AST.", TranslationPackFailureReason.MalformedPattern); }
+    }
+
     // Generated catalogs embed each locale's direct values as [[id, {"contentLocale", "ast"}], ...] and read them when the
     // locale is first used. The data comes from the same compiler as the generated code, so only the shape is checked
     // (Rmf2GeneratedLocaleReader); the catalog checks every message against its definition's inputs.
@@ -313,3 +382,9 @@ internal static class TranslationPackV5Loader
     private static TranslationPackException Limit(string message) => Error(message, TranslationPackFailureReason.LimitExceeded);
     private static TranslationPackException Error(string message, TranslationPackFailureReason reason = TranslationPackFailureReason.Malformed) => TranslationPackFailure.Create(message, reason);
 }
+
+/// <summary>One message of an overlay pack, before it is checked against the overlaid catalog.</summary>
+internal sealed record OverlayPackMessage(string Key, string ContentLocale, bool Document, CompiledRmf2Message Message);
+
+/// <summary>A parsed overlay pack for one locale.</summary>
+internal sealed record OverlayPack(string Catalog, string Locale, string ContractFingerprint, OverlayPackMessage[] Messages);

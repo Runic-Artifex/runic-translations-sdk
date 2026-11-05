@@ -39,9 +39,33 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         Catalog = catalog.Catalog;
         Locale = canonicalLocale;
         RequestedLocale = canonicalLocale;
+        OverlayDiagnostics = [];
     }
 
-    private CompiledTranslationSnapshot(CompiledTranslationSnapshot source, string requestedLocale)
+    // A composed snapshot (overlays): the values are already resolved and checked against the definitions, and the
+    // locale may be one that only an overlay adds.
+    internal CompiledTranslationSnapshot(
+        CompiledTranslationCatalog catalog,
+        string locale,
+        string?[] patterns,
+        CompiledTextMessage?[] messages,
+        ITextValueFormatter? valueFormatter,
+        TranslationOverlayDiagnostic[] overlayDiagnostics)
+    {
+        _catalog = catalog;
+        _definitions = catalog.DefinitionArray;
+        _patterns = patterns;
+        _messages = messages;
+        _noArgumentText = BuildNoArgumentText(messages, _definitions);
+        _valueFormatter = valueFormatter ?? DefaultTextValueFormatter.Shared;
+        Catalog = catalog.Catalog;
+        Locale = locale;
+        RequestedLocale = locale;
+        OverlayDiagnostics = overlayDiagnostics;
+    }
+
+    // The same values for another request that resolved to this locale.
+    private CompiledTranslationSnapshot(CompiledTranslationSnapshot source, string requestedLocale, LocaleResolution resolution)
     {
         _catalog = source._catalog;
         _definitions = source._definitions;
@@ -52,6 +76,8 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         Catalog = source.Catalog;
         Locale = source.Locale;
         RequestedLocale = requestedLocale;
+        LocaleResolution = resolution;
+        OverlayDiagnostics = source.OverlayDiagnostics;
     }
 
     /// <summary>
@@ -128,20 +154,25 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
     /// <inheritdoc />
     public string RequestedLocale { get; }
 
-    /// <summary>
-    /// This snapshot's data for another canonical requested tag that resolved to <see cref="Locale"/>, such as <c>de-CH</c>
-    /// for <c>de</c>: a message formats numbers and dates in the requested locale when its language matches the
-    /// message's content locale. The views are memoized, so repeated requests for one tag get the same object; requested
+    /// <inheritdoc />
+    public LocaleResolution LocaleResolution { get; }
+
+    /// <summary>The overlay messages that were skipped while composing this snapshot.</summary>
+    internal TranslationOverlayDiagnostic[] OverlayDiagnostics { get; }
+
+    /// <summary>Returns this snapshot for another request, or itself when the request is the same.</summary>
+    /// <remarks>
+    /// The views of a cached snapshot are memoized, so repeated requests for the same tag get the same object. Requested
     /// tags can come from untrusted input, so only the first <see cref="MaximumRequestViews"/> are kept.
-    /// </summary>
-    internal CompiledTranslationSnapshot ForRequestedLocale(string requestedLocale)
+    /// </remarks>
+    internal CompiledTranslationSnapshot ForRequest(LocaleRequest request)
     {
-        if (string.Equals(requestedLocale, RequestedLocale, StringComparison.Ordinal)) return this;
+        if (string.Equals(request.Requested, RequestedLocale, StringComparison.Ordinal) && request.Resolution == LocaleResolution) return this;
         ConcurrentDictionary<string, CompiledTranslationSnapshot> views =
             LazyInitializer.EnsureInitialized(ref _requestViews, static () => new ConcurrentDictionary<string, CompiledTranslationSnapshot>(StringComparer.Ordinal));
-        if (views.TryGetValue(requestedLocale, out CompiledTranslationSnapshot? view)) return view;
-        view = new CompiledTranslationSnapshot(this, requestedLocale);
-        return views.Count < MaximumRequestViews ? views.GetOrAdd(requestedLocale, view) : view;
+        if (views.TryGetValue(request.Requested, out CompiledTranslationSnapshot? view) && view.LocaleResolution == request.Resolution) return view;
+        view = new CompiledTranslationSnapshot(this, request.Requested, request.Resolution);
+        return views.Count < MaximumRequestViews ? views.GetOrAdd(request.Requested, view) : view;
     }
 
     private const int MaximumRequestViews = 64;
