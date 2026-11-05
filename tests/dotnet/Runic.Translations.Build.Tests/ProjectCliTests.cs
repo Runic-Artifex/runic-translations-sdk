@@ -37,11 +37,11 @@ internal sealed class ProjectCliTests
 
         ProcessResult human = TestFixture.RunTool(temporary, "status");
         Assert.Equal(0, human.ExitCode, human.Combined);
-        Assert.Contains("shop (translations/runic.json): 10 message(s), base locale en", human.StandardOutput);
-        Assert.Contains("  de                   3         0        7      1       30%", human.StandardOutput);
-        Assert.Contains("  de-CH                1         2        7      0       30%", human.StandardOutput);
+        Assert.Contains("shop (translations/runic.json): 11 message(s), base locale en", human.StandardOutput);
+        Assert.Contains("  de                   3         0        8      1    27.27%", human.StandardOutput);
+        Assert.Contains("  de-CH                1         2        8      0    27.27%", human.StandardOutput);
 
-        ProcessResult json = TestFixture.RunTool(temporary, "status", "--min-coverage", "de=30,de-CH=50", "--format", "json");
+        ProcessResult json = TestFixture.RunTool(temporary, "status", "--min-coverage", "de=27,de-CH=50", "--format", "json");
         Assert.Equal(1, json.ExitCode, json.Combined);
         using JsonDocument envelope = JsonDocument.Parse(json.StandardOutput);
         Assert.Equal("RTR0099", envelope.RootElement.GetProperty("fault").GetProperty("code").GetString());
@@ -53,7 +53,7 @@ internal sealed class ProjectCliTests
         Assert.Equal(2, swiss.GetProperty("fallback").GetInt32());
         Assert.True(swiss.GetProperty("belowThreshold").GetBoolean() && !locales.Single(locale => locale.GetProperty("locale").GetString() == "de").GetProperty("belowThreshold").GetBoolean(), payload.GetRawText());
 
-        ProcessResult passing = TestFixture.RunTool(temporary, "status", "--min-coverage", "*=30", "--format", "json");
+        ProcessResult passing = TestFixture.RunTool(temporary, "status", "--min-coverage", "*=27", "--format", "json");
         Assert.Equal(0, passing.ExitCode, passing.Combined);
         using (JsonDocument passed = JsonDocument.Parse(passing.StandardOutput))
         {
