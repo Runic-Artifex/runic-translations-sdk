@@ -121,7 +121,9 @@ internal static class Program
             "buildMultiTargeting/Runic.Translations.Build.targets",
             "analyzers/dotnet/cs/Runic.Translations.Generator.dll",
             "analyzers/dotnet/cs/Runic.Translations.Compiler.dll",
-            "tools/net10.0/Runic.Translations.Build.dll");
+            "tools/net10.0/Runic.Translations.Build.dll",
+            // The packing task (RunicTranslationsPackCatalog) compiles the catalog to write its contract.
+            "tools/net10.0/Runic.Translations.Compiler.dll");
         AssertPackageShape(wpf,
             "Runic.Translations.Wpf.nuspec",
             "README.md",
