@@ -14,7 +14,7 @@ namespace Runic.Translations.Tool;
 internal static class TranslationsToolCommandModule
 {
     /// <summary>The translation commands, whose human output <see cref="ToolOutcomePresenter"/> writes.</summary>
-    internal static readonly string[] Commands = ["init", "lsp", "serve", "validate", "generate", "verify", "import-text", "schema", "xliff export", "xliff import", "review mark"];
+    internal static readonly string[] Commands = ["init", "lsp", "serve", "validate", "generate", "verify", "import-text", "import", "schema", "xliff export", "xliff import", "review mark"];
 
     /// <summary>Writes a catalog-level response through the standard command-line transport.</summary>
     internal static ValueTask PresentAsync(
@@ -229,7 +229,13 @@ internal sealed record TranslationsToolCommandRequest(
     /// <summary>The review file that <c>xliff export</c> reads instead of the default one.</summary>
     public string? Review { get; init; }
 
-    /// <summary>The XLIFF document that <c>xliff import</c> reads.</summary>
+    /// <summary>The source format of <c>import</c>: <c>resx</c> or <c>i18next</c>.</summary>
+    public string? From { get; init; }
+
+    /// <summary>Whether <c>import</c> replaces the text of existing messages (<c>--overwrite</c>); otherwise they are kept.</summary>
+    public bool Overwrite { get; init; }
+
+    /// <summary>The XLIFF document that <c>xliff import</c> reads, or the file or directory that <c>import</c> reads.</summary>
     public string? Source { get; init; }
 
     /// <summary>The <c>--source-changed</c> policy of <c>xliff import</c>: <c>needs-review</c> or <c>refuse</c>.</summary>
@@ -287,6 +293,10 @@ internal sealed record TranslationsToolDiagnostic(string Code, string Severity, 
 /// <param name="Catalog">The catalog identifier.</param>
 internal sealed record TranslationsToolInterchange(string Operation, string Catalog)
 {
+    /// <summary>The source format of an import: <c>xliff</c>, <c>resx</c> or <c>i18next</c>.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Format { get; init; }
+
     /// <summary>The target locale of an import or a review mark.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Locale { get; init; }
@@ -330,6 +340,8 @@ internal sealed record TranslationsToolInterchangeCounts
     public int Added { get; init; }
     public int Changed { get; init; }
     public int Unchanged { get; init; }
+    /// <summary>Existing messages whose text differs from the source and that <c>import</c> kept (no <c>--overwrite</c>).</summary>
+    public int Kept { get; init; }
     public int Skipped { get; init; }
     public int Refused { get; init; }
     /// <summary>Applied units whose source changed since export, imported as needs-review.</summary>
@@ -339,13 +351,17 @@ internal sealed record TranslationsToolInterchangeCounts
 }
 
 /// <param name="Key">The message key.</param>
-/// <param name="Outcome"><c>added</c>, <c>changed</c>, <c>unchanged</c> (only when its source changed), <c>skipped</c>, <c>refused</c>, <c>marked</c> or <c>demoted</c>.</param>
+/// <param name="Outcome"><c>added</c>, <c>changed</c>, <c>unchanged</c> (only when its source changed), <c>kept</c>, <c>skipped</c>, <c>refused</c>, <c>marked</c> or <c>demoted</c>.</param>
 /// <param name="Code">The reason, such as <c>XLIFF21-UNTRANSLATED</c>; absent for an applied unit.</param>
 /// <param name="Message">The reason as text.</param>
 internal sealed record TranslationsToolInterchangeEntry(string Key, string Outcome,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Code,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Message)
 {
+    /// <summary>The locale of the message, for an import that reads several locales (<c>import --from</c>).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Locale { get; init; }
+
     /// <summary>The review state an applied or marked unit has afterwards.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? State { get; init; }

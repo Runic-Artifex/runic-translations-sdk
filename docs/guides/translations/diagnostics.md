@@ -484,9 +484,12 @@ Fix or delete the file; `review mark` refuses to overwrite it.
 
 ## RTR0092
 
-An `xliff` or `review` command cannot use its document. The fault of an
-`xliff export`, `xliff import` or `review mark` that stops before writing
+An `xliff`, `import` or `review` command cannot use its document. The fault of an
+`xliff export`, `xliff import`, `import --from` or `review mark` that stops before writing
 anything; one `RCLI8215` diagnostic names the problem. The command exits with 2.
+`import --from` also stops with this fault when the imported messages do not
+compile for a reason it cannot attribute to one message (the RTR diagnostics
+name it).
 `xliff import` also stops with this fault when `--fail-on refused` is given and
 a unit was refused (each refusal is an `RCLI8216` warning), and when a source or
 the review file changed on disk between reading and writing, for example through
@@ -625,10 +628,17 @@ or an undeclared target locale), `XLIFF21-CONTRACT` or `XLIFF21-PROFILE`
 level 0), or a `REVIEW-*` code for the review file. It also names a source or
 review file that changed on disk during `xliff import`. The fault is `RTR0092`
 and nothing is written.
+For `import --from`, a source file cannot be read: `RESX-MALFORMED` (not
+well-formed XML, or no `<root>`), `I18NEXT-MALFORMED` (not a UTF-8 JSON object)
+or `IMPORT-TOO-LARGE` (over 8 MiB), or a file changed on disk during the import.
 
 ## RCLI8216
 
-An XLIFF unit was refused and the rest of the document was applied. This
+An XLIFF unit or an imported message was refused and the rest of the document was applied.
+For `import --from`, the warning names the locale, the key and the code
+(`IMPORT-NO-BASE`, `IMPORT-INVALID`, `IMPORT-KEY-COLLISION`, `IMPORT-PATTERN`,
+`I18NEXT-NESTING`); see [Migrate from .resx](migrate-resx.md#what-is-reported) and
+[Migrate from i18next](migrate-i18next.md#what-is-reported). For `xliff import`, an XLIFF unit was refused. This
 warning names the key and the unit code: `XLIFF21-PLACEHOLDER` (a `<ph>` that
 is not one MF2 placeholder, or a placeholder the message's caller contract does
 not have), `XLIFF21-PLACEHOLDER-CHANGED` (a target `<ph>` whose expression is

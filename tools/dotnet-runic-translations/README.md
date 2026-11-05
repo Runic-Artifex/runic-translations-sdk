@@ -86,6 +86,31 @@ message key, `{ "Remove user {name}": "stored_remove_user" }`, for an applicatio
 that must look up text it stored in the base language. See
 [Import a text-keyed catalog](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md#import-a-text-keyed-catalog).
 
+## Migrate a .resx or i18next catalog
+
+```bash
+dotnet tool run runic-translations -- import --from resx Properties/Strings.resx --dry-run
+dotnet tool run runic-translations -- import --from i18next public/locales --project translations
+```
+
+`import --from resx|i18next <path>` writes an existing catalog into the project's `.rmf2` sources through the same
+writer as `xliff import`: a new message goes to `<project>[/<group>]/<locale>.rmf2`, and an existing one (base text or
+translation) is kept and, when its text differs, reported as `kept` (`IMPORT-EXISTS`). `--overwrite` replaces the text
+of existing messages instead; they keep their place and comments. A neutral `Strings.resx` brings its declared `Strings.<locale>.resx` satellites;
+an i18next directory holds `<lng>.json` or `<lng>/<namespace>.json` files. Keys become RMF2 names (nested i18next keys
+and namespaces become groups), `{0}` becomes `{$arg0}`, `{name}` and `{{name}}` become `{$name}`, i18next plural suffixes
+(`_zero`, `_one`, ..., `_other`, `_ordinal_*`) become `.match $count` on the locale's CLDR categories, and `.resx`
+comments become descriptions. `--locale` (repeatable) selects locales, `--group` places new messages in a group
+directory and `--dry-run` writes nothing.
+
+What cannot be mapped is skipped or refused per message, with a code such as `RESX-NON-STRING`, `I18NEXT-NESTING`,
+`IMPORT-NO-BASE` or `IMPORT-INVALID`, and lossy mappings are notices; the rest is imported and the command exits with 0.
+The `interchange` member of the JSON payload (`operation: "import"`, `format: "resx"` or `"i18next"`) lists them per
+locale. An unreadable source fails with `RTR0092`. PO files are not supported: convert them to i18next JSON or go
+through a TMS and XLIFF. See
+[Migrate from .resx](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/migrate-resx.md)
+and [Migrate from i18next](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/migrate-i18next.md).
+
 ## Exchange XLIFF with translators and TMS tools
 
 ```bash
@@ -218,7 +243,7 @@ The envelope's payload is `runic.translations.tool/1` for every command except
 are published as `translations-tool-v1.schema.json` and
 `translations-support-v1.schema.json` (written by `schema`). The `output` and
 `error` members of `runic.translations.tool/1` are display text, not a format to
-parse; read `diagnostics`, `interchange` (for `xliff` and `review`) and the envelope's `exitCode` instead.
+parse; read `diagnostics`, `interchange` (for `xliff`, `import` and `review`) and the envelope's `exitCode` instead.
 Later releases may add members; readers ignore members they do not know.
 
 The exit codes are the same in every Runic tool:

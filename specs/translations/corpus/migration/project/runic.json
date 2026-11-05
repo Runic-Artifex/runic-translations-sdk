@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "catalog": "app",
+  "code": { "namespace": "Migrated", "className": "AppText" },
+  "baseLocale": "en",
+  "locales": ["en", { "tag": "de", "fallback": "en" }],
+  "validation": { "translationCompleteness": "allow" }
+}
