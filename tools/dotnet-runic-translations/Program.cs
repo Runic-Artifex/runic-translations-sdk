@@ -275,9 +275,12 @@ internal static class Program
     {
         ToolCommand.Help => CommandPath.Root,
         ToolCommand.ImportText => new CommandPath(["import-text"]),
+        ToolCommand.Import => new CommandPath(["import"]),
         ToolCommand.XliffExport => new CommandPath(["xliff", "export"]),
         ToolCommand.XliffImport => new CommandPath(["xliff", "import"]),
         ToolCommand.ReviewMark => new CommandPath(["review", "mark"]),
+        ToolCommand.LocaleAdd => new CommandPath(["locale", "add"]),
+        ToolCommand.LocaleRemove => new CommandPath(["locale", "remove"]),
         _ => new CommandPath([command.ToString().ToLowerInvariant()]),
     };
 
@@ -410,6 +413,11 @@ internal static class Program
         return $" at {value.Substring(start, end - start)}";
     }
 
+    /// <summary>Runs one invocation into a shared result, for commands that run several projects.</summary>
+    internal static int RunInto(ToolInvocation invocation, ToolOperationResult result) => Run(invocation, result, null);
+
+    internal static string Version => ToolVersion;
+
     private static int Run(ToolInvocation invocation, ToolOperationResult result, SourceUnitCache? units)
     {
         if (invocation.Command == ToolCommand.Help)
@@ -448,8 +456,8 @@ internal static class Program
     private static int RunSemanticV5(ToolInvocation invocation, CompilerInputs inputs, ToolOperationResult result, SourceUnitCache? units)
     {
         Rmf2ProjectCompilation compilation = units is null
-            ? TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, inputs.Messages)
-            : TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, units.Resolve(inputs.Messages), units.Options);
+            ? TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, inputs.Messages, null, invocation.PseudoLocales)
+            : TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, units.Resolve(inputs.Messages), units.Options, invocation.PseudoLocales);
         compilation = TranslationManifestReader.WithManifestErrors(compilation, inputs.Project.Path, inputs.ManifestError);
         // In a build whose source generator reports the same compilation diagnostics, they are
         // omitted here so each appears once, with its help link, from the generator.
@@ -641,19 +649,25 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
         ToolOperationResult result = request.Command switch
         {
             "init" => Program.ExecuteInit(request.Directory!, request.Catalog!, request.DefaultLocale!, request.Namespace!, request.ClassName!, request.Locales ?? [], request.NoStarter),
-            "validate" => ExecuteCompilation(request, ToolCommand.Validate, null, ToolEmission.None),
+            "validate" => ExecuteValidate(request),
             "generate" or "verify" when request.Contract is not null && request.EmitCSharp | request.EmitEsm | !request.EmitJson =>
                 Program.Usage("--contract builds locale-v5 JSON for a shipped release; pass --emit-json and no other --emit-* option.", request.Command == "generate" ? ToolCommand.Generate : ToolCommand.Verify),
             "generate" => ExecuteCompilation(request, ToolCommand.Generate, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitEsm), OmitSourceDiagnostics()),
             "verify" => ExecuteCompilation(request, ToolCommand.Verify, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitEsm), OmitSourceDiagnostics()),
             "schema" => Program.Execute(new ToolInvocation(ToolCommand.Schema, request.Output, ToolEmission.None, null)),
             "import-text" => ExecuteImport(request),
+            "import" => ExecuteInterchange(request, ToolCommand.Import, (project, result) =>
+                CatalogImport.Run(project, new CatalogImportRequest(request.From!, request.Source!, request.Locales ?? [], request.Group, request.Overwrite), request.DryRun, result)),
             "xliff export" => ExecuteInterchange(request, ToolCommand.XliffExport, (project, result) =>
                 InterchangeOperations.Export(project, request.Output!, request.Locales ?? [], request.Review, result)),
             "xliff import" => ExecuteInterchange(request, ToolCommand.XliffImport, (project, result) =>
                 InterchangeOperations.Import(project, request.Source!, request.SourceChanged, request.WriteReview, request.DryRun, result, request.FailOn)),
             "review mark" => ExecuteInterchange(request, ToolCommand.ReviewMark, (project, result) =>
                 InterchangeOperations.Mark(project, request.Keys ?? [], request.Locales![0], request.State!, request.Note, result)),
+            "locale add" => ExecuteInterchange(request, ToolCommand.LocaleAdd, (project, result) =>
+                LocaleOperations.Add(project, request.Tag!, request.Fallback, request.DryRun, result)),
+            "locale remove" => ExecuteInterchange(request, ToolCommand.LocaleRemove, (project, result) =>
+                LocaleOperations.Remove(project, request.Tag!, request.DryRun, result)),
             _ => new ToolOperationResult { ExitCode = Program.UsageFailure, ExitCategory = CommandExitCategory.Usage },
         };
         var report = new TranslationsToolCommandResult(result.Output, string.Empty) { Diagnostics = result.TranslationDiagnostics, Interchange = result.Interchange };
@@ -671,6 +685,53 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
     }
 
     private const string PayloadType = "runic.translations.tool/1";
+
+    // validate: every --project into one result, then the optional SARIF report of all their diagnostics.
+    private static ToolOperationResult ExecuteValidate(TranslationsToolCommandRequest request)
+    {
+        IReadOnlyList<string> projects = request.Projects is { Count: > 0 } several ? several
+            : DefaultProject() is { } found ? [found] : [];
+        if (projects.Count == 0)
+            return Program.Usage("no runic.json in the current directory or in ./translations; pass --project <directory>.", ToolCommand.Validate);
+        return Program.Execute(ToolCommand.Validate, result =>
+        {
+            int exit = Program.Success;
+            var faults = new List<string>();
+            try
+            {
+                foreach (string project in projects)
+                {
+                    try
+                    {
+                        if (Program.RunInto(new ToolInvocation(ToolCommand.Validate, null, ToolEmission.None, null, project, PseudoLocales: request.PseudoLocales), result) != Program.Success) exit = 1;
+                    }
+                    // A project that cannot be read (no runic.json, an inaccessible file) does not stop the others: with
+                    // several projects it is reported, and the SARIF report records it as a run-level notification.
+                    catch (Exception exception) when (exception is ToolUsageException or IOException or UnauthorizedAccessException or ArgumentException)
+                    {
+                        faults.Add($"The project '{project}' could not be validated: {exception.Message}");
+                        if (projects.Count == 1) throw;
+                        result.WriteOutputLine($"runic-translations: {faults[^1]}");
+                        result.AddDiagnostic(exception is ToolUsageException ? ToolCodes.Usage : ToolCodes.Io, exception is ToolUsageException ? "tool-usage" : "io", faults[^1], CommandDiagnosticSeverity.Error);
+                        if (result.ExitCategory is CommandExitCategory.Success or CommandExitCategory.Validation)
+                            result.ExitCategory = exception is ToolUsageException or ArgumentException ? CommandExitCategory.Usage : CommandExitCategory.CommandFailure;
+                        exit = 1;
+                    }
+                }
+            }
+            finally
+            {
+                if (request.Sarif is { Length: > 0 } sarif)
+                {
+                    string currentDirectory = Path.GetFullPath(Environment.CurrentDirectory);
+                    string path = Path.GetFullPath(sarif, currentDirectory);
+                    InterchangeOperations.WriteFile(path, SarifReport.Render(result.AllTranslationDiagnostics, Program.Version, currentDirectory, faults));
+                    result.WriteOutputLine($"wrote {InputFiles.DisplayPath(path, currentDirectory)} ({result.AllTranslationDiagnostics.Count} result(s)).");
+                }
+            }
+            return exit;
+        });
+    }
 
     private static ToolOperationResult ExecuteImport(TranslationsToolCommandRequest request)
     {
@@ -708,7 +769,7 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
         string? project = string.IsNullOrWhiteSpace(request.Project) ? DefaultProject() : request.Project;
         if (project is null)
             return Program.Usage("no runic.json in the current directory or in ./translations; pass --project <directory>.", command);
-        return Program.Execute(new ToolInvocation(command, output, emission, null, project, OmitSourceDiagnostics: omitSourceDiagnostics, ContractPath: request.Contract));
+        return Program.Execute(new ToolInvocation(command, output, emission, null, project, OmitSourceDiagnostics: omitSourceDiagnostics, PseudoLocales: request.PseudoLocales, ContractPath: request.Contract));
     }
 
     // Runic.Translations.Build sets this when its source generator reports the same compilation
@@ -719,7 +780,7 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
 
     // Without --project: the current directory when it holds runic.json, else the conventional
     // ./translations directory that the templates, init and Runic.Translations.Build use.
-    private static string? DefaultProject()
+    internal static string? DefaultProject()
     {
         if (File.Exists("runic.json")) return ".";
         return File.Exists(Path.Combine("translations", "runic.json")) ? "translations" : null;
@@ -752,6 +813,8 @@ internal static class ToolCodes
     internal const string InterchangeDocument = "RCLI8215";
     /// <summary>A warning: one XLIFF unit was refused and the rest of the document applied.</summary>
     internal const string InterchangeUnit = "RCLI8216";
+    /// <summary>The fault of a <c>status</c> whose locale is below its <c>--min-coverage</c>.</summary>
+    internal const string CoverageBelowThreshold = "RTR0099";
 }
 
 internal sealed class ToolDiagnosticException : Exception

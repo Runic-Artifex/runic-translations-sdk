@@ -23,8 +23,21 @@ It covers every CLDR locale (`availableLocales.full`) and keeps:
   replacement's, so aliasing never changes a plural;
 - `rightToLeftScripts`: the scripts whose `rtl` is `YES` in
   `cldr-core/scriptMetadata.json`, which the ESM runtime's `localeDirection` reads;
-- `locales`: per CLDR data ID, `minimumGroupingDigits` from
-  `cldr-numbers-full` (`main/<locale>/numbers.json`), the resolved
+- `numberingSystems`: the ten digits of each numbering system a locale uses,
+  from `supplemental/numberingSystems.json`;
+- `availableLocales`: every CLDR locale (`availableLocales.full`) as a data
+  ID, which the cross-runtime comparison of localized formatting iterates;
+- `locales`: per CLDR data ID, `minimumGroupingDigits` and `numbers` from
+  `cldr-numbers-full` (`main/<locale>/numbers.json`): the
+  `defaultNumberingSystem` and, for it and for `latn` (`-u-nu-latn`), the
+  `decimal`, `group`, `minusSign` and `percentSign` symbols and the standard
+  decimal and percent patterns, verbatim; from `cldr-dates-full`
+  (`main/<locale>/ca-gregorian.json`) the format-context wide `weekdays`
+  (Sunday first) where a date pattern uses `EEEE` and they differ from the
+  stand-alone names, and the `dayPeriods` of a time pattern with `B` as
+  `[minute of the day, abbreviated name]` from `supplemental/dayPeriods.json`
+  (both only for .NET, whose platform data lacks them; an empty value overrides
+  an ancestor's); the resolved
   `listPatterns` of `cldr-misc-full`, and the long-form `relativeTime` of
   `cldr-dates-full` (`main/<locale>/dateFields.json`) for the units second to
   year: the past and future patterns per plural category and the
@@ -58,9 +71,10 @@ The data is licensed under Unicode License v3; the complete notice is in
 `LICENSE`. `eng/generate-cldr.mjs` deterministically derives the compiler
 registry, the runtime locale tables (`GeneratedLocaleTables.cs`, shared by the
 runtime and the compiler), the plural selectors (`GeneratedLocaleData.cs`), the
-deflated list and relative-time resource (`GeneratedLocaleData.bin`), and the
+deflated number-format, weekday, day-period, list and relative-time resource
+(`GeneratedLocaleData.bin`), and the
 capability matrix. The ESM compiler embeds only the data of a catalog's
-languages. `eng/render-capabilities.mjs` then renders the guide from that matrix.
+languages, and not the weekdays and day periods, which `Intl` already applies. `eng/render-capabilities.mjs` then renders the guide from that matrix.
 
 To update the pin, download the four packages, check them against the recorded
 integrity, unpack each into `<directory>/<package>/`, and run:

@@ -25,13 +25,13 @@
     },
     "integer": {
       "plain": "exact",
-      "grouped": "semantic"
+      "grouped": "exact"
     },
     "number": {
-      "plain": "semantic",
-      "grouped": "semantic",
-      "fixed": "semantic",
-      "percent": "semantic"
+      "plain": "exact",
+      "grouped": "exact",
+      "fixed": "exact",
+      "percent": "exact"
     },
     "date": {
       "iso": "exact",
@@ -53,7 +53,7 @@
   "messageProfile": {
     "cardinal": "exact",
     "ordinal": "exact",
-    "relativeTime": "semantic",
+    "relativeTime": "exact",
     "list": "exact"
   },
   "locales": [
@@ -843,6 +843,13 @@
     },
     {
       "tag": "hsb",
+      "cardinal": true,
+      "ordinal": true,
+      "relativeTime": true,
+      "list": true
+    },
+    {
+      "tag": "ht",
       "cardinal": true,
       "ordinal": true,
       "relativeTime": true,

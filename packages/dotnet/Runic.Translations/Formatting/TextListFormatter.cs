@@ -10,7 +10,8 @@ namespace Runic.Translations;
 /// </summary>
 internal static class TextListFormatter
 {
-    internal static string Format(IReadOnlyList<string> items, string type, string style, string locale)
+    // isolateItems wraps each item in FSI…PDI (bidi isolation); the Spanish and Hebrew rules still look at the raw item.
+    internal static string Format(IReadOnlyList<string> items, string type, string style, string locale, bool isolateItems = false)
     {
         int typeIndex = type switch { "conjunction" => 0, "disjunction" => 1, "unit" => 2, _ => throw new TranslationFormatException("Invalid list type '" + type + "'.") };
         int styleIndex = style switch { "long" => 0, "short" => 1, "narrow" => 2, _ => throw new TranslationFormatException("Invalid list style '" + style + "'.") };
@@ -22,14 +23,16 @@ internal static class TextListFormatter
         switch (items.Count)
         {
             case 0: return string.Empty;
-            case 1: return items[0];
-            case 2: return Apply(Contextual(language, two, end, two, items[1]), items[0], items[1]);
+            case 1: return Item(0);
+            case 2: return Apply(Contextual(language, two, end, two, items[1]), Item(0), Item(1));
         }
         // CLDR composes from the end: end(n-2, n-1), then middle(i, rest) and start(0, rest).
         string last = items[items.Count - 1];
-        string text = Apply(Contextual(language, two, end, end, last), items[items.Count - 2], last);
-        for (int index = items.Count - 3; index >= 1; index--) text = Apply(middle, items[index], text);
-        return Apply(start, items[0], text);
+        string text = Apply(Contextual(language, two, end, end, last), Item(items.Count - 2), Item(items.Count - 1));
+        for (int index = items.Count - 3; index >= 1; index--) text = Apply(middle, Item(index), text);
+        return Apply(start, Item(0), text);
+
+        string Item(int index) => isolateItems ? Rmf2Bidi.IsolateItem(items[index]) : items[index];
     }
 
     // Every pinned pattern has {0} before {1} (eng/generate-cldr.mjs checks this).

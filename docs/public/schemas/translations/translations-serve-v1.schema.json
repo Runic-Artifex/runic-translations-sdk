@@ -193,6 +193,10 @@
               "esm"
             ]
           }
+        },
+        "pseudoLocales": {
+          "type": "boolean",
+          "description": "Also generate the development pseudo-locales that runic.json declares (pseudoLocales), as --pseudo-locales does. Defaults to false."
         }
       }
     }

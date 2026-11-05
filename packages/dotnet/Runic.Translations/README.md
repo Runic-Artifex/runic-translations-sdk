@@ -61,6 +61,15 @@ builder share their catalogs' providers, so a context per window or request is c
 keep working when the library adds messages, and resolve locale-first. The text class now has a second one-parameter
 constructor, so register it with a factory rather than by type in a DI container. See [Catalogs from libraries](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/composition.md).
 
+## Right-to-left text
+
+`LocaleDirection.Get("ar")` returns `TextDirection.RightToLeft` from pinned CLDR data, the same answer as the ESM
+runtime's `localeDirection` and independent of the operating system's culture data. Text formatted in a right-to-left
+locale isolates placeholders with Unicode MessageFormat 2's default bidi strategy (`مرحبا {$name}` formats as
+`مرحبا \u2068{name}\u2069`), decided per call, so an RTL overlay of an LTR library catalog is isolated too; set
+`runtime.bidiIsolation` to `on` or `off` in `runic.json` to choose, and `u:dir` on a placeholder to set its direction.
+`BidiText.RemoveIsolates(text)` removes the isolates for plain-text output such as a terminal or a log. See [Right-to-left text](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/bidi.md).
+
 ## When to choose this package
 
 Choose `Runic.Translations` for application runtime behavior: generated catalog data, locale resolution, formatting, structured content, translation references, and optional verified external packs. Choose `Runic.Translations.Tooling` when building an editor, compiler host, or workspace tool.

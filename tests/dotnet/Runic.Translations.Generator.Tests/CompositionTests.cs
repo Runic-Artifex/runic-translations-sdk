@@ -142,6 +142,76 @@ internal sealed class CompositionTests
         Assert.True(!context.TryGetManager("missing", out _), "unknown catalog");
     }
 
+    [Test, DisplayName("generated catalogs isolate placeholders in right-to-left locales by default, always with on and never with off")]
+    public async Task BidiIsolation()
+    {
+        static async Task<string> Greeting(string project, string locale, params (string Locale, string Text)[] sources)
+        {
+            ITranslationProvider provider = Catalog.Compile(project, sources).Registration.CreateProvider();
+            ITranslationSnapshot snapshot = await provider.GetSnapshotAsync(locale);
+            Assert.True(snapshot.TryGetKey("greeting", out TranslationKey key), "greeting");
+            return snapshot.Format(key, [Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument("name", new TextArgument("_", "Ada"))]);
+        }
+        static string Project(string id, string locales, string? runtime = null) => "{\"schemaVersion\":1,\"catalog\":\"" + id +
+            "\",\"code\":{\"namespace\":\"Example.Bidi\",\"className\":\"" + char.ToUpperInvariant(id[0]) + id[1..] + "Text\",\"visibility\":\"public\"},\"baseLocale\":\"en\",\"locales\":[" +
+            locales + "]" + (runtime is null ? "" : ",\"runtime\":{\"bidiIsolation\":\"" + runtime + "\"}") + "}";
+
+        // default is decided per locale at run time: English text of an en/ar catalog stays free of isolates.
+        Assert.Equal("Hello Ada", await Greeting(Project("mixed", "\"en\",\"ar\""), "en", ("en", "greeting = Hello {$name}\n"), ("ar", "greeting = مرحبا {$name}\n")), "en in an en/ar catalog");
+        Assert.Equal("مرحبا \u2068Ada\u2069", await Greeting(Project("mixed", "\"en\",\"ar\""), "ar", ("en", "greeting = Hello {$name}\n"), ("ar", "greeting = مرحبا {$name}\n")), "ar");
+        Assert.Equal("Hello Ada", await Greeting(Project("plain", "\"en\",\"de\""), "en", ("en", "greeting = Hello {$name}\n"), ("de", "greeting = Hallo {$name}\n")), "en/de catalog");
+        Assert.Equal("Hello \u2068Ada\u2069", await Greeting(Project("forced", "\"en\"", "on"), "en", ("en", "greeting = Hello {$name}\n")), "on");
+        Assert.Equal("Hello Ada", await Greeting(Project("quiet", "\"en\",\"he\"", "off"), "en", ("en", "greeting = Hello {$name}\n"), ("he", "greeting = שלום {$name}\n")), "off");
+    }
+
+    [Test, DisplayName("bidiIsolation default: an application's right-to-left overlay of a left-to-right library catalog is isolated")]
+    public async Task RightToLeftOverlayIsolated()
+    {
+        Dictionary<string, byte[]> packs = Packs(OverlayProject.Replace("[ \"en\", \"fr\" ]", "[ \"en\", \"ar\" ]", StringComparison.Ordinal),
+            ("en", "title = Data grid\nrows =\n  .input {$count :integer}\n  {{{$count} rows}}\n"),
+            ("ar", "title = شبكة\nrows =\n  .input {$count :integer}\n  {{{$count} صفوف}}\n"));
+        TranslationContext context = await TranslationContext.CreateBuilder()
+            .Add(GridV1.Registration)
+            .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(packs), [new TranslationOverlayLocale("ar")]))
+            .BuildAsync("en");
+        // The library (en/de) was compiled with bidiIsolation default, which a pre-0.9 compile-time decision turned off.
+        Assert.Equal("3 rows", Text(context, GridId, "rows", new TextArgument("count", 3L)), "English stays bare");
+
+        await context.SetLocaleAsync("ar");
+        Assert.Equal("acme-grid:ar>ar:Exact", Describe(context.Catalogs[0]), "added locale");
+        Assert.Equal("\u20673\u2069 صفوف|شبكة", Text(context, GridId, "rows", new TextArgument("count", 3L)) + "|" + Text(context, GridId, "title"),
+            "the Arabic overlay's placeholder is isolated");
+        // A message the overlay lacks falls back to the library's English, which an Arabic request isolates too.
+        Assert.Equal("No rows", Text(context, GridId, "empty"), "English fallback without placeholders");
+    }
+
+    [Test, DisplayName("a registration creates the catalog's readable surface over a context manager")]
+    public async Task ReadableRegistration()
+    {
+        TranslationContext context = await TranslationContext.CreateBuilder().Add(App.Registration).Add(GridV1.Registration).BuildAsync("de");
+        Assert.True(context.TryGetRegistration(GridId, out TranslationCatalogRegistration? registration) && ReferenceEquals(registration, GridV1.Registration),
+            "registration by ID");
+        Assert.True(!context.TryGetRegistration("missing", out TranslationCatalogRegistration? missing) && missing is null, "unknown catalog");
+        Assert.True(registration!.HasReadableMessages, "generated registrations have a readable surface");
+        IReadableMessages messages = registration.CreateReadableMessages(context.GetManager(GridId))!;
+        Assert.Equal("Acme.Grid.GridTextMessages", messages.GetType().FullName, "readable type");
+        Assert.Equal(1, messages.ReadableNameVersion, "readable name version");
+        // The surface reads the context's manager, so it follows the context's locale.
+        Func<string> title = () => (string)messages.GetType().GetProperty("title")!.GetValue(messages)!;
+        Assert.Equal("Raster", title(), "German title");
+        await context.SetLocaleAsync("en");
+        Assert.Equal("Grid", title(), "English title");
+
+        // A registration created by hand without a factory has none, and a factory that returns null is an error.
+        var manual = new TranslationCatalogRegistration(GridId, "en", GridV1.Registration.ContractFingerprint, GridV1.Registration.Rmf2MarkupContract,
+            GridV1.Registration.CreateProvider);
+        Assert.True(!manual.HasReadableMessages && manual.CreateReadableMessages(context.GetManager(GridId)) is null, "no factory");
+        var broken = new TranslationCatalogRegistration(GridId, "en", GridV1.Registration.ContractFingerprint, GridV1.Registration.Rmf2MarkupContract,
+            GridV1.Registration.CreateProvider, static _ => null!);
+        Assert.Throws<InvalidOperationException>(() => broken.CreateReadableMessages(context.GetManager(GridId)));
+        Assert.Throws<ArgumentNullException>(() => manual.CreateReadableMessages(null!));
+    }
+
     [Test, DisplayName("a context publishes every catalog together and changes none when one fails")]
     public async Task AtomicSwitch()
     {
@@ -378,7 +448,7 @@ internal sealed class CompositionTests
         await context.SetLocaleAsync("de-CH");
         Assert.Equal("grid de>de de-CH Parent|published de-CH LocaleChanged|context de>de-CH", string.Join("|", seen), "events");
         string swiss = Text(context, GridId, "rows", new TextArgument("count", 1234567L));
-        Assert.Equal(1234567L.ToString("#,0", System.Globalization.CultureInfo.GetCultureInfo("de-CH")) + " Zeilen", swiss, "Swiss grouping");
+        Assert.Equal("1'234'567 Zeilen", swiss, "Swiss grouping (pinned CLDR 48.2, U+0027 on every platform)");
         Assert.True(german != swiss, "de and de-CH group digits differently: " + german);
 
         await context.SetLocaleAsync("de-CH");

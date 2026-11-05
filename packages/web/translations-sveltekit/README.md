@@ -83,8 +83,10 @@ export const reroute = createLocaleReroute(routing);
 
 The handle resolves the locale, stores it in `event.locals.locale`, and
 redirects non-canonical URLs, such as `/en/about` in unprefixed mode or
-`/DE/about`, with `307`. It replaces `%runic.locale%` in `app.html`, so use
-`<html lang="%runic.locale%">`. With the generated `runWithLocale`, message
+`/DE/about`, with `307`. It replaces `%runic.locale%` and `%runic.dir%` in
+`app.html`, so use `<html lang="%runic.locale%" dir="%runic.dir%">`; `%runic.dir%`
+is `rtl` for a right-to-left locale such as `ar` or `he` and `ltr` otherwise
+(`textDirection(locale)`). With the generated `runWithLocale`, message
 calls during the request use the request's locale and concurrent renders stay
 isolated. One `runWithLocale` covers every catalog in the server process that
 Runic Translations 0.9 or later generated, such as a component library's: the
@@ -139,6 +141,8 @@ an explicit `timeZone`, where that matters.
 | `timeZone` | none | `(event) => zone`, the IANA zone `timeZone=local` formats in during SSR. A zone the server does not know is ignored. |
 | `setLocale` | none | `(event, locale, { requestedLocale, timeZone }) => void` that replaces the `locals` assignments. |
 | `htmlLanguageToken` | `'%runic.locale%'` | Placeholder replaced in `app.html`. Use `false` to disable. |
+| `htmlDirectionToken` | `'%runic.dir%'` | Placeholder replaced with the locale's direction, `ltr` or `rtl`. Use `false` to disable. |
+| `direction` | CLDR script direction | `(locale) => "ltr" \| "rtl"` for `htmlDirectionToken`. |
 
 The reroute hook removes the locale prefix before route matching, so one
 `src/routes/about` serves `/about` and `/de/about` without a `[locale]`

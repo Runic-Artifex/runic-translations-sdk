@@ -39,6 +39,7 @@ internal static class SupportCommandModule
             foreach (string command in TranslationsToolCommandModule.Commands)
                 builder.PresentOutcome<TranslationsToolCommandResult>(command, ToolOutcomePresenter.PresentAsync);
             foreach (string mode in Modes) builder.Present<SupportCommandResult>(Group + " " + mode, PresentAsync);
+            builder.Present<TranslationsStatusResult>(StatusCommandModule.Command, StatusCommandModule.PresentAsync);
         });
 
     [Command("support preview", Description = "List what a support envelope would contain, without writing it.",

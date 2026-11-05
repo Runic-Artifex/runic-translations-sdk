@@ -2,7 +2,19 @@
   import InlineContent from "../inline/InlineContent.svelte";
   import type { InlineNode, InlineSnippets } from "../inline/types.js";
   import type { DocumentBlock, DocumentNode } from "./types.js";
-  let { nodes, custom = {}, headingBase = 2 }: { nodes: readonly DocumentNode[]; custom?: InlineSnippets; headingBase?: number } = $props();
+  import { textDirection, type TextDirection } from "../translations/direction.js";
+  import { activeLocale } from "../translations/active-locale.js";
+  let { nodes, custom = {}, headingBase = 2, pageDirection }: { nodes: readonly DocumentNode[]; custom?: InlineSnippets; headingBase?: number; pageDirection?: TextDirection } = $props();
+  // The page's direction: the prop, else the provided locale's (the same source as SvelteKit's %runic.dir%), else ltr.
+  const locale = activeLocale();
+  const page: TextDirection = $derived(pageDirection ?? locale?.direction ?? "ltr");
+  // A top-level block states its content locale's direction beside its lang when it differs from the page's: Arabic
+  // content in an English page, or English fallback text in an Arabic page.
+  // Spread as an attribute: Svelte sets dir as a DOM property on the client, where undefined would still write dir="".
+  function direction(top: boolean, locale: string): Readonly<{ dir?: TextDirection }> {
+    const value = textDirection(locale);
+    return !top || value === page ? {} : { dir: value };
+  }
   const leaves = new Set(["runic:p", "runic:h", "runic:li"]);
   const known = new Set([...leaves, "runic:ul", "runic:ol"]);
   const markerTypes: Readonly<Record<string, string>> = { "lower-alpha": "a", "upper-alpha": "A", "lower-roman": "i", "upper-roman": "I" };
@@ -33,14 +45,14 @@
 {#snippet renderBlocks(items: readonly DocumentNode[], top: boolean)}
   {#each blocks(items) as block (block.occurrence)}
     {#if block.name === "runic:p"}
-      <p class="runic-leaf" data-runic-occurrence={block.occurrence} lang={top ? block.locale : undefined}><InlineContent nodes={inlines(block)} {custom} documentMode={true} /></p>
+      <p class="runic-leaf" data-runic-occurrence={block.occurrence} lang={top ? block.locale : undefined} {...direction(top, block.locale)}><InlineContent nodes={inlines(block)} {custom} documentMode={true} /></p>
     {:else if block.name === "runic:h"}
       {@const effective = level(block)}
-      <svelte:element this={effective <= 6 ? `h${effective}` : "h6"} class="runic-leaf" role={effective > 6 ? "heading" : undefined} aria-level={effective > 6 ? effective : undefined} data-runic-occurrence={block.occurrence} lang={top ? block.locale : undefined}><InlineContent nodes={inlines(block)} {custom} documentMode={true} /></svelte:element>
+      <svelte:element this={effective <= 6 ? `h${effective}` : "h6"} class="runic-leaf" role={effective > 6 ? "heading" : undefined} aria-level={effective > 6 ? effective : undefined} data-runic-occurrence={block.occurrence} lang={top ? block.locale : undefined} {...direction(top, block.locale)}><InlineContent nodes={inlines(block)} {custom} documentMode={true} /></svelte:element>
     {:else if block.name === "runic:ul"}
-      <ul data-runic-occurrence={block.occurrence} lang={top ? block.locale : undefined}>{@render renderBlocks(block.children, false)}</ul>
+      <ul data-runic-occurrence={block.occurrence} lang={top ? block.locale : undefined} {...direction(top, block.locale)}>{@render renderBlocks(block.children, false)}</ul>
     {:else if block.name === "runic:ol"}
-      <ol data-runic-occurrence={block.occurrence} lang={top ? block.locale : undefined} start={block.options.start === "1" ? undefined : Number(block.options.start)} type={markerTypes[block.options.marker] as "a" | "A" | "i" | "I" | undefined}>{@render renderBlocks(block.children, false)}</ol>
+      <ol data-runic-occurrence={block.occurrence} lang={top ? block.locale : undefined} {...direction(top, block.locale)} start={block.options.start === "1" ? undefined : Number(block.options.start)} type={markerTypes[block.options.marker] as "a" | "A" | "i" | "I" | undefined}>{@render renderBlocks(block.children, false)}</ol>
     {:else}
       <li class="runic-leaf" data-runic-occurrence={block.occurrence}><InlineContent nodes={inlines(block)} {custom} documentMode={true} /></li>
     {/if}

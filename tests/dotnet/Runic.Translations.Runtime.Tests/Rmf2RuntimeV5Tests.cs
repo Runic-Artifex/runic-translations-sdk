@@ -50,9 +50,9 @@ internal sealed class Rmf2RuntimeV5Tests
         Assert.Equal("yesterday", Simple([], [], Output(Number("-1"), TextArgumentType.Number, "runic:relative-time", new CompiledRmf2Option("numeric", Text("auto")))).Format([], "en"));
         Assert.Equal("1.3", Simple([], [], Output(Number("1.25"), TextArgumentType.Number, "number", new CompiledRmf2Option("maximumFractionDigits", Number("1")))).Format([], "en"));
         Assert.Equal("-1.3", Simple([], [], Output(Number("-1.25"), TextArgumentType.Number, "number", new CompiledRmf2Option("maximumFractionDigits", Number("1")))).Format([], "en"));
-        // useGrouping=auto (the default) formats with the locale's minus sign; never keeps the invariant integer.
+        // Every useGrouping value formats with the locale's minus sign and digits, never only without group separators.
         Assert.Equal("\u22121", Simple([], [], Output(Number("-1"), TextArgumentType.Int, "integer")).Format([], "sv"));
-        Assert.Equal("-1234", Simple([], [], Output(Number("-1234"), TextArgumentType.Int, "integer", new CompiledRmf2Option("useGrouping", Text("never")))).Format([], "sv"));
+        Assert.Equal("\u22121234", Simple([], [], Output(Number("-1234"), TextArgumentType.Int, "integer", new CompiledRmf2Option("useGrouping", Text("never")))).Format([], "sv"));
         Assert.Equal("-9223372036854775808", Simple([], [], Output(Number("-9223372036854775808"), TextArgumentType.Int, "integer", new CompiledRmf2Option("useGrouping", Text("never")))).Format([], "en"));
         Assert.Equal("7,922,816,251,426,433,759,354,395,033,500%", Simple([], [], Output(Number("79228162514264337593543950335"), TextArgumentType.Number, "number", new CompiledRmf2Option("style", Text("percent")))).Format([], "en"));
     }

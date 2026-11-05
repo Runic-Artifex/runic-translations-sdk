@@ -126,6 +126,7 @@ internal static class Rmf2RuntimeValidation
     };
     internal static TextArgumentType OptionType(string function, string name) => (function, name) switch
     {
+        (_, "u:dir") => TextArgumentType.String,
         ("string" or "runic:boolean" or "integer" or "number", "select") => TextArgumentType.String,
         ("integer" or "number", "useGrouping") => TextArgumentType.String,
         ("number" or "date" or "time" or "datetime" or "runic:uuid", "style") => TextArgumentType.String,
@@ -156,7 +157,7 @@ internal static class Rmf2RuntimeValidation
             TextArgumentType type = OptionType(function!, option.Name);
             if (option.Value.Kind is "input" or "local")
             {
-                if (option.Name == "select") throw new ArgumentException("Select is literal-only.", nameof(expression));
+                if (option.Name is "select" or "u:dir") throw new ArgumentException("The " + option.Name + " option is literal-only.", nameof(expression));
                 dynamic = true;
             }
             else

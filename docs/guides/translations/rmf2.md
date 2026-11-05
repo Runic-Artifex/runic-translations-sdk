@@ -81,13 +81,25 @@ an empty pattern. `#` or `=` inside a body is ordinary text.
 Comments and `@param $name - description` / `@example {JSON}` attach to the next
 entry or group without an intervening blank line. Parameters and example input
 types are checked; unknown properties remain in the resource model with a warning.
+`@maxLength N` limits a message's text to N characters (Unicode code points after
+NFC, without placeholder values) in every locale; a translation may lower it with
+its own. `validate` warns about a longer text (`RTR0098`), and XLIFF export writes
+the same per-locale limit as `slr:sizeRestriction` for translation tools:
+
+```text
+@maxLength 12
+toolbar.save = Save
+```
 The raw source, segment paths, comments, properties, spans, and byte map are public
 through `Rmf2ResourceReader`. `Read` recovers the resource outline;
 `Analyze` adds execution-profile message diagnostics.
 
 The base locale defines caller inputs and functional slots. Translations may omit
 unused inputs, select on them differently, reorder content, and add decorative
-markup. They cannot introduce inputs or change functional slot kinds. Source
+markup. An input the base displays and no variant of a translation displays is
+reported as a warning (`RTR0096`), as are plural keys a locale never selects and
+categories it needs that fall to `*` (`RTR0094`, `RTR0095`) and booleans printed
+as text (`RTR0097`); see `validation` in [diagnostics](diagnostics.md). They cannot introduce inputs or change functional slot kinds. Source
 selector trees do not participate in the RMF2 caller fingerprint. Integer/number
 selectors default to cardinal selection; explicit `select=ordinal` and
 `select=exact` remain available. Numeric exact keys are tested before a variant
@@ -109,7 +121,8 @@ from the original number.
 whose CLDR data groups only from five digits (`12.345`). `always` groups every
 number above the first group, `min2` only from five digits, and `never` writes
 the digits alone (`1234`, `-1234`). Both runtimes use the same pinned CLDR
-threshold; separators and the minus sign come from the platform. See
+threshold, separators, minus sign and digits, so numbers are identical in .NET
+and ESM on every platform. See
 [digit grouping](../../../specs/translations/rmf2-execution-v2.md#digit-grouping).
 
 ```rmf2
@@ -119,12 +132,25 @@ code = Code {$code :integer useGrouping=never}
 ```
 
 `{$rate :number style=percent}` uses the locale's percent pattern and signs, so
-0.5 is `50%` in English, `50 %` in German and French (with a no-break space) and
-`%50` in Turkish.
+0.5 is `50%` in English, `50 %` in German and French (with a no-break space),
+`%50` in Turkish and `۵۰٪` in Persian.
+
+Numbers, percentages, dates, times and the number in relative time use the
+digits of the locale's CLDR default numbering system: Bengali writes
+`১২,৩৪,৫৬৭.৫`, Marathi and Nepali Devanagari digits, Persian, Pashto and Urdu
+in India Extended Arabic-Indic digits, and Arabic in Egypt, Saudi Arabia and the
+other regions CLDR gives Arabic-Indic digits `١٬٢٣٤٫٥`. `ar` itself, `ar-MA` and
+`hi` keep Latin digits, as CLDR 48 does. A requested tag with `-u-nu-latn`
+(`ar-EG-u-nu-latn`, `fa-u-nu-latn`) switches to Latin digits and the locale's
+Latin-digit symbols. `useGrouping=never` drops only the group separators, so
+`{$n :integer useGrouping=never}` writes Persian `‎−۱۲۳۴`, as `:number` does;
+format a code that must stay ASCII with `:string`. Symbols, group sizes and digits come from
+the pinned CLDR data in both runtimes, not from the platform.
 
 `:date`, `:time` and `:datetime` write `iso` by default (`2026-11-04`,
 `13:05:09`, `2026-11-04T13:05:09Z`); the localized styles are the CLDR lengths
-`short`, `medium`, `long` and `full` of the platform's locale data:
+`short`, `medium`, `long` and `full` of the platform's locale data, written in
+the locale's digits:
 
 | Style | `:date` (English) | `:time` (English) |
 | --- | --- | --- |
@@ -171,11 +197,14 @@ locale otherwise. A `de-CH` user reading the catalog's `de` text sees Swiss
 separators (`1'234.5` rather than `1.234,5`; older ICU versions write the
 apostrophe as `’`) and percentages (`50%`), and an `en-GB` user reading `en`
 text sees `04/11/2026`. The script is the tag's own or the language's likely one
-for the region, so an `sr-Latn` user reading Cyrillic `sr` text, or a `zh-TW`
-user reading Simplified `zh` text, sees the text's dates rather than ones in
-another script. Unicode extensions of the requested tag (`-u-ca-buddhist`,
-`-u-nu-arab`) are ignored. Plural and ordinal rules, lists and relative time
-stay on the text's locale. Content objects report both locales: .NET
+for the region (from CLDR's likely subtags), so an `sr-Latn` user reading
+Cyrillic `sr` text, or a `zh-TW` user reading Simplified `zh` text, sees the
+text's dates rather than ones in another script, while a `de-Latn-CH` user
+reading `de` text sees Swiss formats (as `de-CH`, and `en-Latn-US` as `en-US`). Unicode extensions of the
+requested tag (`-u-ca-buddhist`, `-u-nu-arab`) are ignored, except
+`-u-nu-latn`. Plural and ordinal rules, lists and relative-time patterns
+stay on the text's locale; the number in relative time uses the formatting
+locale's digits, as `:number` does. Content objects report both locales: .NET
 `LocalizedTextContent.Locale` and `FormattingLocale`, ESM `locale` and
 `formatLocale`. A string message's text locale (for `lang`) comes from .NET
 `ITranslationSnapshot.TryGetContentLocale` or ESM `getMessageLocale(key)`.
@@ -411,7 +440,10 @@ so the paragraph after an empty one is still `p[2]`.
 
 Every block and inline element carries `data-runic-occurrence`, and each
 top-level block carries `lang` with the effective content locale, which differs
-from the requested locale after a fallback. Leaves keep their text verbatim
+from the requested locale after a fallback, and `dir` when that locale's
+direction differs from the page's (`pageDirection`, by default the active
+locale's direction; see
+[right-to-left text](bidi.md#content-in-a-page)). Leaves keep their text verbatim
 through the `runic-leaf` class, which needs `white-space: pre-wrap`. The Svelte
 component ships that rule; a page that uses the DOM adapter adds it to its own
 stylesheet:
@@ -660,9 +692,13 @@ AST 5 into a JavaScript executor.
 Editor changes are resource-only and do not rewrite application call sites.
 Its closed XLIFF 2.1 profile (version 3) losslessly round-trips plain messages,
 text with placeholders, for the supported execution contract: each placeholder is
-an XLIFF `<ph>` carrying its MF2 expression. Declarations, selectors and markup
-produce the semantic-loss report, are exported as `translate="no"`, and are
-skipped per unit on import rather than approximated. The loss entry of a
+an XLIFF `<ph>` carrying its MF2 expression. Messages with declarations or
+selectors (plurals, selects) are exchanged as one unit with their syntax
+protected: the declarations and `.match` as one `<ph>`, each variant as a `<pc>`
+whose start code is its keys; import checks the declarations, the caller contract
+and the target locale's plural categories. Markup produces the semantic-loss
+report, is exported as `translate="no"`, and is skipped per unit on import rather
+than approximated. The loss entry of a
 document message (`XLIFF21-STRUCTURED-MESSAGE`) names the document profile;
 segment-level XLIFF for documents is not part of this version. The same profile
 is available without the editor through `runic-translations xliff export` and
@@ -680,6 +716,59 @@ The [VS Code extension](../../../tools/vscode-runic-translations/README.md) and
 [Visual Studio extension](../../../tools/visualstudio-runic-translations/README.md)
 package this language server with native IDE navigation and preview commands.
 Their READMEs describe configuration, supported refactor scope and host checks.
+
+## Pseudo-locales
+
+A pseudo-locale shows untranslated, clipped and mirrored text while you develop,
+before any translation exists. Declare them in `runic.json`:
+
+```json
+{
+  "baseLocale": "en",
+  "locales": ["en", "de"],
+  "pseudoLocales": ["en-XA", "ar-XB"]
+}
+```
+
+In a development build the compiler generates each one from the base locale, as
+if `<tag>.rmf2` files existed beside every `<baseLocale>.rmf2` (or `<tag>/` beside
+a direct `<baseLocale>/` directory), with the base locale as its fallback. Select
+it like any locale: `CreateManager("en-XA")`, `SetLocaleAsync("ar-XB")`, or
+`{ locale: "en-XA" }` in ESM.
+
+| Tag | Text | Direction |
+| --- | --- | --- |
+| `en-XA` | `Save {$name}` reads `[Śààṽéé Ada]`: ASCII letters accented, vowels doubled, padded with `~` to at least 35% more characters, and bracketed | left to right |
+| `ar-XB` | `Save {$name}` reads `[`, U+202E, `Save `, U+202C, U+2068, `Ada`, U+2069, `]`: each run of text displays reversed under a right-to-left override (U+202E … U+202C), bracketed; as in any right-to-left locale, the placeholder is isolated ([bidirectional text](bidi.md)) | right to left (`localeDirection("ar-XB")` is `rtl`) |
+
+Only the text of each pattern changes: placeholders, markup and its slots,
+declarations, selectors and variant keys stay as written, so a pseudo message has
+the base caller contract and formats the same in .NET and ESM. A label that
+shows no brackets, or plain English, does not come from the catalog. Text that
+is cut off before the closing bracket does not fit. In a document message the
+brackets and padding go inside each paragraph, heading and list item, and empty
+blocks stay empty. Plural selection uses the
+pseudo tag's language (English for `en-XA`, Arabic for `ar-XB`), and numbers and
+dates format for the tag. `ar-XB` keeps the base message's variants, so a count
+whose Arabic category the base does not have (`two`, `few`, `many`, or any
+ordinal, which is always `other` in Arabic) selects the `*` variant: `{$n}st` for
+1 in English reads as the `*` text in `ar-XB`.
+
+Release builds leave the pseudo-locales out:
+
+- MSBuild (`Runic.Translations.Build`, the source generator) generates them when
+  `Configuration` is `Debug`; set `RunicTranslationsPseudoLocales` to `true` or
+  `false` to override.
+- The Vite plugin generates them when Vite's mode is `development` (the dev
+  server); the `pseudoLocales` option overrides it. In manifest mode it takes
+  them out of the bundle otherwise, even when a Debug `dotnet build` generated
+  them.
+- The CLI generates them with `--pseudo-locales` on `validate`, `generate` and
+  `verify` (and `pseudoLocales: true` in a `serve` request).
+
+`pseudoLocales` accepts `en-XA` and `ar-XB`. A tag that is also in `locales`,
+or that has source files of its own (`en-XA.rmf2`, `en-XA/*.mf2`), is `RTR0004`
+in every build, so a stray file cannot ship as a real locale in release.
 
 ## Import a text-keyed catalog
 

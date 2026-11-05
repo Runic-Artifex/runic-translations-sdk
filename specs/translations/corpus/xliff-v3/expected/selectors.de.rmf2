@@ -1,0 +1,17 @@
+# German translations of the shop.
+greeting = Hallo {$name}!
+farewell = Auf Wiedersehen
+cart {
+  empty = Dein Warenkorb ist leer
+}
+notifications =
+  .input {$count :integer}
+  .match $count
+  0 {{Keine neuen Mitteilungen}}
+  one {{Eine neue Mitteilung}}
+  * {{{$count} neue Mitteilungen}}
+order_status =
+  .input {$status :string}
+  .match $status
+  shipped {{Deine Bestellung ist unterwegs}}
+  * {{Deine Bestellung wird vorbereitet}}

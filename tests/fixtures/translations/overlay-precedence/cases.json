@@ -7,7 +7,7 @@
     "sources": {
       "en": "title = Grid\nempty = No rows\nrows =\n  .input {$count :integer}\n  .match $count\n  one {{{$count} row}}\n  * {{{$count} rows}}\n",
       "de": "title = Raster\nempty = Keine Zeilen\nrows =\n  .input {$count :integer}\n  .match $count\n  one {{{$count} Zeile}}\n  * {{{$count} Zeilen}}\n",
-      "es": "title = Cuadrícula\nempty = Sin filas\nrows =\n  .input {$count :integer}\n  .match $count\n  one {{{$count} fila}}\n  * {{{$count} filas}}\n"
+      "es": "title = Cuadrícula\nempty = Sin filas\nrows =\n  .input {$count :integer}\n  .match $count\n  one {{{$count} fila}}\n  many {{{$count} de filas}}\n  * {{{$count} filas}}\n"
     }
   },
   "cases": [

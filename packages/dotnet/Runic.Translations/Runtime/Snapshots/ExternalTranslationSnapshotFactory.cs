@@ -141,7 +141,7 @@ public sealed class ExternalTranslationSnapshotFactory : ITranslationSnapshotFac
         }
 
         CompiledTranslationDefinition[] definitions = catalog.DefinitionArray;
-        string?[] resolvedPatterns = catalog.GetResolvedPatterns(canonicalLocale);
+        string?[] resolvedPatterns = catalog.GetResolved(canonicalLocale).Patterns;
         var seen = new bool[definitions.Length];
         IReadOnlyList<TranslationPackMessageContract> messages = contract.Messages;
         for (int i = 0; i < messages.Count; i++)

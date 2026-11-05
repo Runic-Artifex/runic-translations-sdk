@@ -32,8 +32,10 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
 
         _catalog = catalog;
         _definitions = catalog.DefinitionArray;
-        _patterns = catalog.GetResolvedPatterns(canonicalLocale);
-        _messages = catalog.GetResolvedMessages(canonicalLocale);
+        // One pair: under Hot Reload the catalog may replace its data between two reads.
+        LocaleValues values = catalog.GetResolved(canonicalLocale);
+        _patterns = values.Patterns;
+        _messages = values.Messages;
         _noArgumentText = BuildNoArgumentText(_messages, _definitions);
         _valueFormatter = valueFormatter ?? DefaultTextValueFormatter.Shared;
         Catalog = catalog.Catalog;
@@ -229,7 +231,8 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         }
 
         if (message.Rmf2V5 is null) ValidateArguments(_definitions[index], arguments);
-        string text = CompiledTextMessageRuntime.Format(message, arguments, Locale, _valueFormatter, requestedLocale: RequestedLocale);
+        string text = CompiledTextMessageRuntime.Format(message, arguments, Locale, _valueFormatter, requestedLocale: RequestedLocale,
+            bidiIsolation: _catalog.BidiIsolation);
         ReportFallback(index, message);
         return text;
     }
@@ -244,7 +247,8 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         // that contract-wide FormatContent surface.
         if (!message.HasMarkup && message.Rmf2V5 is null) throw new TranslationFormatException("The resource does not produce structured content.");
         if (message.Rmf2V5 is null) ValidateArguments(_definitions[index], arguments);
-        LocalizedTextContent content = CompiledTextMessageRuntime.FormatContent(message, arguments, Locale, _valueFormatter, requestedLocale: RequestedLocale);
+        LocalizedTextContent content = CompiledTextMessageRuntime.FormatContent(message, arguments, Locale, _valueFormatter, requestedLocale: RequestedLocale,
+            bidiIsolation: _catalog.BidiIsolation);
         ReportFallback(index, message);
         return content;
     }
