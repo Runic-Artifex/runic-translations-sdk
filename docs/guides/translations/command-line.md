@@ -110,8 +110,9 @@ Runic.CommandLine formats values in `CommandApp.Culture`. With a snapshot,
 manager or context, the text uses that object's locale instead. When the
 invocation culture names another language, such as a manager created with the
 default `en` and `Culture = de`, the resolver keeps the translation locale, so
-the text stays in one language, and writes one trace warning
-(`Trace.TraceWarning`) for that resolver. Create the manager from the invocation
+the text stays in one language, and reports it once for that resolver: a
+`warning:` line on standard error, which reaches the user of a shipped console
+app without a trace listener, and a `Trace.TraceWarning`. Create the manager from the invocation
 culture, as above, or pass a `TranslationContextBuilder` so the text always follows
 the culture:
 

@@ -62,8 +62,12 @@ internal sealed class CatalogSourceTests
             ThrowsLoad(() => Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message title, Catalog=missing}\"/>"), "unknown catalog");
             ThrowsLoad(() => Parse<TextBlock>("<TextBlock {NS} Text=\"{rt:Message title, Catalog=acme-grid, Source={rt:CatalogSource acme-grid}}\"/>"), "Source and Catalog");
 
-            // Another context cannot replace one whose sources bindings use; the same one can be passed again.
+            // Another context cannot replace one whose sources bindings use; the same one can be passed again, also with a
+            // new renderer factory delegate (a second init path), which applies only to sources created later.
             TranslationSource.UseContext(context);
+            TranslationSource.UseContext(context, registration => null);
+            TranslationSource.UseContext(context, registration => null);
+            Require(ReferenceEquals(source, TranslationSource.ForCatalog(GridId)), "the same context keeps its sources");
             Throws<InvalidOperationException>(() => TranslationSource.UseContext(TranslationContext.CreateBuilder().Add(Registration(GridId, readable: true)).Build()), "replace");
         }
         finally
@@ -73,6 +77,63 @@ internal sealed class CatalogSourceTests
 
         Require(TranslationSource.Context is null, "context cleared");
         Throws<InvalidOperationException>(() => TranslationSource.ForCatalog(GridId), "no context after clearing");
+    }
+
+    [Test, DisplayName("catalog: a source first asked for on a secondary UI thread stays on the context's dispatcher"), NotInParallel(WpfSuite.Key, Order = 251)]
+    public void ForCatalogOnSecondaryUiThread()
+    {
+        TranslationContext context = TranslationContext.CreateBuilder().Add(Registration(GridId, readable: true)).Build("en");
+        try
+        {
+            TranslationSource.UseContext(context);
+            TranslationSource? created = null;
+            Exception? failure = null;
+            var thread = new Thread(() =>
+            {
+                try { created = TranslationSource.ForCatalog(GridId); }
+                catch (Exception exception) { failure = exception; }
+                finally { Dispatcher.CurrentDispatcher.InvokeShutdown(); }
+            });
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+            thread.Join();
+            if (failure is not null) throw new InvalidOperationException("ForCatalog on the secondary thread failed.", failure);
+
+            // The secondary thread's dispatcher has shut down; the source still raises on this (the context's) thread.
+            int raised = 0;
+            created!.PropertyChanged += (_, _) => raised++;
+            created.Invalidate();
+            Require(raised > 0, "Invalidate on the context's dispatcher raises synchronously");
+        }
+        finally
+        {
+            TranslationSource.UseContext(null);
+        }
+    }
+
+    [Test, DisplayName("catalog: a custom context without registrations reports what to implement"), NotInParallel(WpfSuite.Key, Order = 252)]
+    public void ForCatalogCustomContext()
+    {
+        TranslationContext inner = TranslationContext.CreateBuilder().Add(Registration(GridId, readable: true)).Build("en");
+        try
+        {
+            TranslationSource.UseContext(new ManagersOnlyContext(inner));
+            try
+            {
+                TranslationSource.ForCatalog(GridId);
+            }
+            catch (InvalidOperationException exception) when (exception.Message.Contains("TryGetRegistration", StringComparison.Ordinal))
+            {
+                Throws<KeyNotFoundException>(() => TranslationSource.ForCatalog("missing"), "unknown catalog");
+                return;
+            }
+
+            throw new InvalidOperationException("Expected an InvalidOperationException that names TryGetRegistration.");
+        }
+        finally
+        {
+            TranslationSource.UseContext(null);
+        }
     }
 
     private static TranslationCatalogRegistration Registration(string id, bool readable) =>
@@ -107,6 +168,21 @@ internal sealed class CatalogSourceTests
         private bool German => manager.Current.Locale == "de";
         public string title => German ? "Raster" : "Grid";
         public string rows(long count) => count + (German ? " Zeilen" : " rows");
+    }
+
+    /// <summary>A custom context that exposes managers but not registrations, as one written before 0.9.0 does.</summary>
+    private sealed class ManagersOnlyContext(TranslationContext inner) : ITranslationContext
+    {
+        public string RequestedLocale => inner.RequestedLocale;
+        public IReadOnlyList<TranslationCatalogStatus> Catalogs => inner.Catalogs;
+        public IReadOnlyList<string> SupportedLocales => inner.SupportedLocales;
+        public event EventHandler<TranslationContextLocaleChangedEventArgs>? LocaleChanged { add => inner.LocaleChanged += value; remove => inner.LocaleChanged -= value; }
+        public ITranslationManager GetManager(string catalogId) => inner.GetManager(catalogId);
+        public bool TryGetManager(string catalogId, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out ITranslationManager? manager) => inner.TryGetManager(catalogId, out manager);
+        public ValueTask SetLocaleAsync(string locale, CancellationToken cancellationToken = default) => inner.SetLocaleAsync(locale, cancellationToken);
+        public ValueTask SetLocaleFromPreferencesAsync(IEnumerable<string> preferredLocales, CancellationToken cancellationToken = default) => inner.SetLocaleFromPreferencesAsync(preferredLocales, cancellationToken);
+        public ValueTask RefreshAsync(CancellationToken cancellationToken = default) => inner.RefreshAsync(cancellationToken);
+        public TranslationReferenceResolution Resolve(TranslationReference reference) => inner.Resolve(reference);
     }
 
     private sealed class Provider(string catalog) : ITranslationProvider

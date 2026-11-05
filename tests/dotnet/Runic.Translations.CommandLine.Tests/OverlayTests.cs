@@ -30,6 +30,11 @@ internal sealed class OverlayTests
         Assert.Equal(2, TranslationCommandTextResolver.Rank("de-CH", "de"));
         Assert.Equal(1, TranslationCommandTextResolver.Rank("en-AU", "en-001"));
         Assert.Equal(1, TranslationCommandTextResolver.Rank("zh-TW", "zh-Hant"));
+        // Another explicit script is not on the request's chain: the framework's sr (a truncation parent) beats it.
+        Assert.Equal(int.MaxValue, TranslationCommandTextResolver.Rank("sr-Latn", "sr-Cyrl"));
+        Assert.Equal(int.MaxValue, TranslationCommandTextResolver.Rank("sr-Latn-RS", "sr-Cyrl"));
+        Assert.Equal(2, TranslationCommandTextResolver.Rank("sr-Latn", "sr"));
+        Assert.Equal(2, TranslationCommandTextResolver.Rank("zh-Hant-TW", "zh-Hant"));
         Assert.True(TranslationCommandTextResolver.Rank("en-AU", "en-001") < TranslationCommandTextResolver.Rank("en-AU", "en"), "a CLDR parent beats the language");
         Assert.Equal(int.MaxValue, TranslationCommandTextResolver.Rank("de", "en"));
         Assert.Equal(int.MaxValue, TranslationCommandTextResolver.Rank("", "en"));
@@ -114,7 +119,8 @@ internal sealed class OverlayTests
     public async Task CultureMismatchReportedOnce()
     {
         ITranslationManager manager = await TestTextCatalog.CreateManagerAsync("en");
-        var resolver = new TranslationCommandTextResolver(manager);
+        using var standardError = new StringWriter();
+        var resolver = new TranslationCommandTextResolver(manager) { WarningOutput = standardError };
         using var listener = new Capture();
         Trace.Listeners.Add(listener);
         try
@@ -131,6 +137,10 @@ internal sealed class OverlayTests
         }
 
         Assert.Equal(1, listener.Count("invocation culture 'de' differs from the translation locale 'en'"), string.Join("\n", listener.Messages));
+        // A shipped console app has no trace listener, so the warning also goes to standard error, once.
+        string written = standardError.ToString();
+        Assert.True(written.StartsWith("warning: Runic.Translations.CommandLine: the invocation culture 'de'", StringComparison.Ordinal), written);
+        Assert.Equal(1, written.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
     }
 
     private sealed class Capture : TraceListener

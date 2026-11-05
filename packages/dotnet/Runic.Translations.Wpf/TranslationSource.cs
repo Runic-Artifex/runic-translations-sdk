@@ -42,6 +42,7 @@ public sealed class TranslationSource : INotifyPropertyChanged, IDisposable
     private static readonly object ContextGate = new();
     private static ITranslationContext? s_context;
     private static Func<TranslationCatalogRegistration, WpfInlineRenderer?>? s_renderers;
+    private static Dispatcher? s_contextDispatcher;
     private static readonly Dictionary<string, TranslationSource> CatalogSources = new(StringComparer.Ordinal);
     private int _version;
     private int _disposed;
@@ -85,9 +86,20 @@ public sealed class TranslationSource : INotifyPropertyChanged, IDisposable
     /// render only plain messages.
     /// </param>
     /// <remarks>
-    /// Call it once at startup on the UI thread, before views that name a catalog load. Replacing the context after
-    /// <see cref="ForCatalog"/> created a source throws, because loaded bindings keep the source they resolved; passing
-    /// <see langword="null"/> disposes the sources created from the previous context.
+    /// <para>
+    /// Call it at startup on the UI thread, before views that name a catalog load. Catalog sources are application-wide:
+    /// each one is created once, on <see cref="Application.Current"/>'s dispatcher (else on the dispatcher of the thread
+    /// that called <see cref="UseContext"/>), and serves every window, including windows on other UI threads.
+    /// </para>
+    /// <para>
+    /// Calling it again with the same context is harmless, for example from a second initialization path: existing sources
+    /// keep the renderer they were created with, and a non-null <paramref name="renderers"/> replaces the factory for
+    /// catalogs whose source is created later. The factory runs once per catalog, when its source is created.
+    /// </para>
+    /// <para>
+    /// Replacing the context after <see cref="ForCatalog"/> created a source throws, because loaded bindings keep the
+    /// source they resolved; passing <see langword="null"/> disposes the sources created from the previous context.
+    /// </para>
     /// </remarks>
     /// <exception cref="InvalidOperationException">Another context is already in use.</exception>
     public static void UseContext(ITranslationContext? context, Func<TranslationCatalogRegistration, WpfInlineRenderer?>? renderers = null)
@@ -97,12 +109,25 @@ public sealed class TranslationSource : INotifyPropertyChanged, IDisposable
         {
             if (context is not null && s_context is not null && !ReferenceEquals(context, s_context) && CatalogSources.Count > 0)
                 throw new InvalidOperationException("TranslationSource.UseContext was already called with another context that bindings use; share one context, or call UseContext(null) first.");
-            if (context is not null && ReferenceEquals(context, s_context) && CatalogSources.Count > 0 && !ReferenceEquals(renderers, s_renderers))
-                throw new InvalidOperationException("The catalog sources of this context already exist; pass the renderer factory in the first UseContext call.");
             released = context is null ? [.. CatalogSources.Values] : [];
             if (context is null) CatalogSources.Clear();
+            if (context is null)
+            {
+                s_renderers = null;
+                s_contextDispatcher = null;
+            }
+            else if (!ReferenceEquals(context, s_context))
+            {
+                s_renderers = renderers;
+                s_contextDispatcher = Application.Current?.Dispatcher ?? Dispatcher.FromThread(Thread.CurrentThread);
+            }
+            else if (renderers is not null)
+            {
+                // The same context again: keep the sources, and use the new factory for catalogs created from now on.
+                s_renderers = renderers;
+            }
+
             s_context = context;
-            s_renderers = context is null ? null : renderers;
         }
 
         foreach (TranslationSource source in released) source.Dispose();
@@ -114,12 +139,15 @@ public sealed class TranslationSource : INotifyPropertyChanged, IDisposable
     /// </summary>
     /// <param name="catalogId">The catalog ID, such as <c>GridTextCatalog.CatalogId</c>.</param>
     /// <remarks>
-    /// The first call creates the source on the current thread's dispatcher, else the application's. Set
+    /// The first call creates the source on <see cref="Application.Current"/>'s dispatcher (else on the dispatcher of the
+    /// thread that called <see cref="UseContext"/>, else on the current thread's), whichever window or UI thread asks
+    /// first, so the source keeps refreshing every window after a secondary UI thread ends. Set
     /// <see cref="Default"/> to the application's own catalog with <c>TranslationSource.Default = TranslationSource.ForCatalog(AppTextCatalog.CatalogId)</c>.
     /// </remarks>
     /// <exception cref="InvalidOperationException">
     /// No context was shared with <see cref="UseContext"/>, or the catalog's registration has no readable surface (it was
-    /// generated by a release before 0.9.0, or created by hand without one).
+    /// generated by a release before 0.9.0, or created by hand without one), or a custom context registers the catalog's
+    /// manager but does not implement <see cref="ITranslationContext.TryGetRegistration"/>.
     /// </exception>
     /// <exception cref="KeyNotFoundException">The context does not register the catalog.</exception>
     public static TranslationSource ForCatalog(string catalogId)
@@ -127,20 +155,31 @@ public sealed class TranslationSource : INotifyPropertyChanged, IDisposable
         ArgumentNullException.ThrowIfNull(catalogId);
         ITranslationContext context;
         Func<TranslationCatalogRegistration, WpfInlineRenderer?>? renderers;
+        Dispatcher? contextDispatcher;
         lock (ContextGate)
         {
             if (CatalogSources.TryGetValue(catalogId, out TranslationSource? existing) && Volatile.Read(ref existing._disposed) == 0) return existing;
             context = s_context ?? throw new InvalidOperationException(
                 $"No translation context for catalog '{catalogId}': call TranslationSource.UseContext(context) at startup, before views that name a catalog load.");
             renderers = s_renderers;
+            contextDispatcher = s_contextDispatcher;
         }
 
         if (!context.TryGetRegistration(catalogId, out TranslationCatalogRegistration? registration))
+        {
+            if (context.TryGetManager(catalogId, out _))
+                throw new InvalidOperationException(
+                    $"The translation context passed to TranslationSource.UseContext ({context.GetType().FullName}) registers catalog '{catalogId}' but exposes no registrations: " +
+                    "implement ITranslationContext.TryGetRegistration to return the catalog's TranslationCatalogRegistration (TranslationContext does), " +
+                    "or create a TranslationSource for the catalog yourself with new TranslationSource(manager, messages).");
             throw new KeyNotFoundException($"Catalog '{catalogId}' is not registered with the translation context passed to TranslationSource.UseContext.");
+        }
+
         ITranslationManager manager = context.GetManager(catalogId);
         IReadableMessages messages = registration.CreateReadableMessages(manager) ?? throw new InvalidOperationException(
             $"The registration of catalog '{catalogId}' has no readable surface; rebuild the catalog with Runic.Translations 0.9.0 or later, or create a TranslationSource for it yourself.");
-        var created = new TranslationSource(manager, messages, renderers?.Invoke(registration));
+        Dispatcher? dispatcher = Application.Current?.Dispatcher ?? contextDispatcher;
+        var created = new TranslationSource(manager, messages, renderers?.Invoke(registration), dispatcher);
         lock (ContextGate)
         {
             // Another thread may have created it meanwhile, or the context may have changed: keep the first live one.

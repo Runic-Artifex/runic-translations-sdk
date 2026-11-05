@@ -51,7 +51,11 @@ public interface ITranslationContext
     bool TryGetManager(string catalogId, [NotNullWhen(true)] out ITranslationManager? manager);
 
     /// <summary>Attempts to get the registration of a registered catalog, for adapters that need its readable surface.</summary>
-    /// <remarks>The default implementation reports that the context exposes no registrations.</remarks>
+    /// <remarks>
+    /// The default implementation reports that the context exposes no registrations. A custom context should return the
+    /// <see cref="TranslationCatalogRegistration"/> it registered the catalog with; adapters such as the WPF
+    /// <c>TranslationSource.ForCatalog</c> need it and report a custom context that does not implement this method.
+    /// </remarks>
     bool TryGetRegistration(string catalogId, [NotNullWhen(true)] out TranslationCatalogRegistration? registration)
     {
         registration = null;

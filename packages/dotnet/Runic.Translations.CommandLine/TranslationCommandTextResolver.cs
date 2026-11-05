@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -33,7 +34,9 @@ namespace Runic.Translations.CommandLine;
 /// The locale is the invocation culture for the parameterless constructor and for a
 /// <see cref="TranslationContextBuilder"/>. A snapshot, manager or context brings its own locale; when the invocation
 /// culture names another language, the resolver keeps the translation locale, so text and formatting stay consistent,
-/// and writes a trace warning once. Create the manager or context from the invocation culture to avoid it.
+/// and reports it once: a warning line on standard error, so it reaches the user of a shipped console app, and a trace
+/// warning. Create the manager or context from the invocation culture, or pass a <see cref="TranslationContextBuilder"/>,
+/// to avoid it.
 /// </para>
 /// </remarks>
 public sealed class TranslationCommandTextResolver : ICommandTextResolver
@@ -51,6 +54,9 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
     private readonly string? _applicationCatalogId;
     private readonly ConcurrentDictionary<string, TranslationContext>? _contexts;
     private int _reportedCulture;
+
+    /// <summary>Where the culture-mismatch warning goes besides the trace; <see langword="null"/> for standard error. Tests set it.</summary>
+    internal TextWriter? WarningOutput { get; init; }
 
     /// <summary>Creates a resolver with only the built-in framework text, in the invocation culture.</summary>
     public TranslationCommandTextResolver()
@@ -207,8 +213,19 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
     {
         if (culture.Name.Length == 0 || requested.Length == 0 || SameLanguage(culture.Name, requested)) return;
         if (Interlocked.Exchange(ref _reportedCulture, 1) != 0) return;
-        Trace.TraceWarning($"Runic.Translations.CommandLine: the invocation culture '{culture.Name}' differs from the translation locale '{requested}'; " +
-            "command-line text uses the translation locale. Create the manager or context from the invocation culture, or pass a TranslationContextBuilder to resolve in the culture.");
+        string message = $"Runic.Translations.CommandLine: the invocation culture '{culture.Name}' differs from the translation locale '{requested}'; " +
+            "command-line text uses the translation locale. Create the manager or context from the invocation culture, or pass a TranslationContextBuilder to resolve in the culture.";
+        Trace.TraceWarning(message);
+        try
+        {
+            // The default trace listener writes only to an attached debugger, so a shipped console app also gets the line on
+            // standard error, which machine-readable standard output does not include.
+            (WarningOutput ?? Console.Error).WriteLine("warning: " + message);
+        }
+        catch (Exception exception) when (exception is IOException or ObjectDisposedException)
+        {
+            // A closed standard error must not fail text resolution.
+        }
     }
 
     private static bool SameLanguage(string left, string right) =>
@@ -224,15 +241,37 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
     // even step per removed subtag for a truncation parent (de for de-CH), an odd step in between for another locale of the
     // same language (a CLDR parent such as en-001 for en-AU, or zh-Hant for zh-TW), and int.MaxValue for another language,
     // such as a catalog's default locale.
+    //
+    // It is a lexical estimate, not the provider's fallback chain: providers do not expose their chain through
+    // ITranslationSnapshot (the compiled catalog's is internal, and an application may bring its own snapshot), so content
+    // locales are assumed to lie on the request's chain, which negotiation and CLDR parents ensure today. The one
+    // same-language case that cannot be on the chain, another explicit script (sr-Cyrl content for an sr-Latn request),
+    // ranks as another language.
     internal static int Rank(string requested, string content)
     {
         if (string.Equals(requested, content, StringComparison.OrdinalIgnoreCase)) return 0;
         if (requested.Length == 0 || content.Length == 0 || !SameLanguage(requested, content)) return int.MaxValue;
+        if (Script(requested) is { Length: > 0 } requestedScript && Script(content) is { Length: > 0 } contentScript &&
+            !requestedScript.Equals(contentScript, StringComparison.OrdinalIgnoreCase))
+            return int.MaxValue;
         int distance = 2 * (Subtags(requested) - Subtags(content));
         if (requested.Length > content.Length && requested[content.Length] == '-' &&
             requested.StartsWith(content, StringComparison.OrdinalIgnoreCase))
             return distance;
         return Math.Max(1, distance - 1);
+    }
+
+    // The explicit script subtag (the 4-letter second subtag), or empty.
+    private static ReadOnlySpan<char> Script(string tag)
+    {
+        int start = tag.AsSpan().IndexOfAny('-', '_');
+        if (start < 0) return [];
+        ReadOnlySpan<char> rest = tag.AsSpan(start + 1);
+        int end = rest.IndexOfAny('-', '_');
+        ReadOnlySpan<char> subtag = end < 0 ? rest : rest[..end];
+        if (subtag.Length != 4) return [];
+        foreach (char character in subtag) if (!char.IsAsciiLetter(character)) return [];
+        return subtag;
     }
 
     private static int Subtags(string tag)

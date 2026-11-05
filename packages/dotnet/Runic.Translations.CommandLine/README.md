@@ -34,7 +34,8 @@ or an `ITranslationContext` with your catalog's ID. To resolve in the invocation
 culture (`CommandApp.Culture`) itself, pass a `TranslationContextBuilder`; the
 resolver builds one context per culture. With a snapshot, manager or context
 whose locale names another language than the culture, the text keeps that
-locale and the resolver writes one trace warning.
+locale and the resolver reports it once: a `warning:` line on standard error,
+so a shipped console app shows it, and a trace warning.
 
 For other languages, register `TranslationCommandTextResolver.CatalogRegistration`
 in the builder and attach a `TranslationOverlay` for

@@ -313,11 +313,18 @@ is the context's (`translations.GetManager(id)`), so the library's text switches
 with `translations.SetLocaleAsync`, and its messages are the catalog's generated
 readable surface, which the generated `XCatalog.Registration` creates. The
 renderer factory is needed only for rich messages; without it, catalog sources
-render plain messages only. Share one context for the application's life:
-replacing it after a binding used a catalog source throws, and
+render plain messages only; it runs once per catalog, when its source is
+created. Catalog sources are application-wide: each is created on
+`Application.Current`'s dispatcher (else on the dispatcher of the thread that
+called `UseContext`), whichever window asks first, so windows on other UI
+threads share it and it keeps refreshing after such a thread ends. Share one
+context for the application's life: calling `UseContext` again with the same
+context keeps the existing sources (a new renderer factory applies to catalogs
+created later), replacing it after a binding used a catalog source throws, and
 `UseContext(null)` disposes the catalog sources. A catalog generated before
 0.9.0 has no readable surface in its registration; create a `TranslationSource`
-for it yourself.
+for it yourself. A custom `ITranslationContext` must implement
+`TryGetRegistration` for `ForCatalog`; otherwise it reports what to implement.
 
 `{rt:Message key, Catalog=id}` checks the key when the XAML loads, as with an
 explicit `Source`; setting both is an error. The library's build checks its
