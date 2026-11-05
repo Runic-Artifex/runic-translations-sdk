@@ -105,7 +105,7 @@ Runic.Translations.TranslationOverlayLocale.TranslationOverlayLocale(string! loc
 Runic.Translations.TranslationProviderFactory
 Runic.Translations.TranslationSnapshotPublishedEventArgs.LocaleResolution.get -> Runic.Translations.LocaleResolution
 Runic.Translations.TranslationSnapshotPublishedEventArgs.RequestedLocale.get -> string!
-const Runic.Translations.Generated.TranslationsCompatibility.CompositionVersion = 1 -> int
+const Runic.Translations.Generated.TranslationsCompatibility.CompositionVersion = 2 -> int
 const Runic.Translations.Generated.TranslationsCompatibility.MinimumRmf2RuntimeAbiVersion = 3 -> int
 const Runic.Translations.Generated.TranslationsCompatibility.MinimumRuntimeAbiVersion = 1 -> int
 override Runic.Translations.TranslationOverlayDiagnostic.GetHashCode() -> int
@@ -140,3 +140,8 @@ Runic.Translations.TranslationContext.TryGetRegistration(string! catalogId, out 
 Runic.Translations.TranslationCatalogRegistration.TranslationCatalogRegistration(string! catalogId, string! defaultLocale, string! contractFingerprint, System.Func<string!>! rmf2MarkupContract, Runic.Translations.TranslationProviderFactory! providerFactory) -> void
 static Runic.Translations.Rmf2MarkupContract.Link(System.Func<string!>! contractJson) -> Runic.Translations.Rmf2MarkupContract!
 Runic.Translations.TranslationCatalogRegistration.TranslationCatalogRegistration(string! catalogId, string! defaultLocale, string! contractFingerprint, System.Func<string!>! rmf2MarkupContract, Runic.Translations.TranslationProviderFactory! providerFactory, System.Func<Runic.Translations.ITranslationManager!, Runic.Translations.IReadableMessages!>? readableMessagesFactory) -> void
+Runic.Translations.TranslationContextBuilder.AddOverlays(System.Collections.Generic.IEnumerable<Runic.Translations.TranslationOverlay!>! overlays) -> Runic.Translations.TranslationContextBuilder!
+Runic.Translations.TranslationOverlay.IsCompiled.get -> bool
+Runic.Translations.TranslationOverlayData
+static Runic.Translations.TranslationOverlay.FromCompiled(string! catalog, System.Collections.Generic.IEnumerable<Runic.Translations.TranslationOverlayLocale!>? addedLocales, Runic.Translations.TranslationOverlayData! data) -> Runic.Translations.TranslationOverlay!
+virtual Runic.Translations.TranslationOverlayData.Invoke(string! locale) -> System.ReadOnlySpan<byte>

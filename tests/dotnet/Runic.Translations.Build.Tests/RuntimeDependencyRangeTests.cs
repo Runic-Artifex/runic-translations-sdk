@@ -84,6 +84,83 @@ internal sealed class RuntimeDependencyRangeTests
         Assert.Equal(1, Regex.Count(result.Combined, "error RTR0089"), "one RTR0089 error: " + result.Combined);
     }
 
+    [Test, DisplayName("packing removes the dependency on Runic.Translations.Build, also with the range stamp off")]
+    [Arguments(true)]
+    [Arguments(false)]
+    public void RemovesBuildDependency(bool stampRange)
+    {
+        using TemporaryDirectory temporary = new();
+        File.WriteAllText(temporary.Resolve("Library.nuspec"),
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<package xmlns=\"http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd\"><metadata><id>Library</id><version>1.0.0</version><dependencies>" +
+            "<group targetFramework=\"net10.0\">\n  <dependency id=\"Runic.Translations\" version=\"0.9.0\" exclude=\"Build,Analyzers\" />\n" +
+            "  <dependency id=\"Runic.Translations.Build\" version=\"0.9.0\" exclude=\"Build,Analyzers\" />\n</group></dependencies></metadata></package>", new UTF8Encoding(false));
+        string targets = XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build", "build", "Runic.Translations.Build.Pack.targets"));
+        File.WriteAllText(temporary.Resolve("Probe.proj"), $$"""
+            <Project>
+              <Import Project="{{targets}}" />
+              <ItemGroup><NuGetPackOutput Include="Library.nuspec" /></ItemGroup>
+              <Target Name="GenerateNuspec" />
+            </Project>
+            """, new UTF8Encoding(false));
+        ProcessResult result = Processes.DotNet(temporary.Path, "msbuild", "Probe.proj", "/nologo", "/t:GenerateNuspec", "/v:minimal",
+            "/p:_RunicTranslationsPackTaskAssembly=" + BuildTaskAssembly(), "/p:RunicTranslationsStampRuntimeRange=" + (stampRange ? "true" : "false"));
+        Assert.Equal(0, result.ExitCode, result.Combined);
+        string nuspec = File.ReadAllText(temporary.Resolve("Library.nuspec"), Encoding.UTF8);
+        Assert.Equal(stampRange ? "[0.9.0, 0.10.0-0)" : "0.9.0", Ranges(nuspec), "range");
+        Assert.True(!nuspec.Contains("Runic.Translations.Build", StringComparison.Ordinal), nuspec);
+    }
+
+    [Test, DisplayName("RunicTranslationsPackCatalog packs runic/<catalog>/ and buildTransitive props, and checks the catalog ID")]
+    public void PacksCatalog()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("translations", "text"));
+        Directory.CreateDirectory(temporary.Resolve("translations", "overrides", "other"));
+        void Project(string catalog) => File.WriteAllText(temporary.Resolve("translations", "runic.json"),
+            "{ \"schemaVersion\": 1, \"catalog\": \"" + catalog + "\", \"code\": { \"namespace\": \"Acme.Grid\", \"className\": \"GridText\" }, \"baseLocale\": \"en\", " +
+            "\"sourceRoots\": [{ \"path\": \"text\", \"namespace\": [\"grid\"] }], \"overrides\": [{ \"catalog\": \"other\", \"from\": \"Other\" }] }", new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("translations", "text", "en.rmf2"), "empty = No rows\n", new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("translations", "text", "de.rmf2"), "empty = Keine Zeilen\n", new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("translations", "overrides", "other", "en.rmf2"), "title = Other\n", new UTF8Encoding(false));
+        string targets = XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build", "build", "Runic.Translations.Build.Pack.targets"));
+        File.WriteAllText(temporary.Resolve("Probe.proj"), $$"""
+            <Project>
+              <PropertyGroup><BaseIntermediateOutputPath>obj/</BaseIntermediateOutputPath><RunicTranslationsPackCatalog>true</RunicTranslationsPackCatalog></PropertyGroup>
+              <Import Project="{{targets}}" />
+              <Target Name="_GetPackageFiles">
+                <Message Importance="high" Text="PACKED %(None.PackagePath)" Condition="'%(None.Pack)' == 'true'" />
+              </Target>
+            </Project>
+            """, new UTF8Encoding(false));
+        ProcessResult Pack(string catalog, string package)
+        {
+            Project(catalog);
+            return Processes.DotNet(temporary.Path, "msbuild", "Probe.proj", "/nologo", "/t:_GetPackageFiles", "/v:minimal",
+                "/p:_RunicTranslationsPackTaskAssembly=" + BuildTaskAssembly(), "/p:PackageId=" + package);
+        }
+
+        ProcessResult packed = Pack("acme.grid", "Acme.Grid");
+        Assert.Equal(0, packed.ExitCode, packed.Combined);
+        string paths = string.Join("|", Regex.Matches(packed.Combined, "PACKED (\\S+)").Select(static match => match.Groups[1].Value).Order(StringComparer.Ordinal));
+        Assert.Equal("buildTransitive/Acme.Grid.props|runic/acme.grid/catalog.props|runic/acme.grid/contract.json|runic/acme.grid/runic.json|runic/acme.grid/text/de.rmf2|runic/acme.grid/text/en.rmf2",
+            paths, "packed files, without the library's own overrides");
+        Assert.True(!packed.Combined.Contains("RTR0105", StringComparison.Ordinal), packed.Combined);
+        string contract = File.ReadAllText(temporary.Resolve("obj", "runic-pack", "acme.grid", "contract.json"), Encoding.UTF8);
+        Assert.True(contract.Contains("\"locale\":\"en\"", StringComparison.Ordinal) && contract.Contains("\"grid_empty\"", StringComparison.Ordinal), contract);
+        string props = File.ReadAllText(temporary.Resolve("obj", "runic-pack", "acme.grid", "catalog.props"), Encoding.UTF8);
+        Assert.True(props.Contains("Catalog=\"acme.grid\" Package=\"Acme.Grid\"", StringComparison.Ordinal), props);
+
+        ProcessResult renamed = Pack("grid", "Acme.Grid");
+        Assert.Equal(0, renamed.ExitCode, renamed.Combined);
+        Assert.Equal(1, Regex.Count(renamed.Combined, "warning RTR0105"), renamed.Combined);
+
+        ProcessResult reserved = Pack("runic-grid", "Acme.Grid");
+        Assert.True(reserved.ExitCode != 0 && reserved.Combined.Contains("error RTR0106", StringComparison.Ordinal), reserved.Combined);
+        ProcessResult firstParty = Pack("runic-grid", "Runic.Grid");
+        Assert.Equal(0, firstParty.ExitCode, firstParty.Combined);
+        Assert.True(!firstParty.Combined.Contains("RTR0105", StringComparison.Ordinal), "first-party catalogs keep their runic- ID: " + firstParty.Combined);
+    }
+
     private static string Nuspec(string[] versions)
     {
         var builder = new StringBuilder("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<package xmlns=\"http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd\"><metadata><id>Library</id><version>1.0.0</version><dependencies>");

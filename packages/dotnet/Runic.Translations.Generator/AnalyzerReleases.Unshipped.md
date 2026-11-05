@@ -13,3 +13,5 @@ RTR0096 | Runic.Translations | Warning | Translation drops a placeholder the bas
 RTR0097 | Runic.Translations | Warning | Boolean is formatted as text
 RTR0098 | Runic.Translations | Warning | Message is longer than its @maxLength
 RTR0100 | Runic.Translations | Info | Message is not referenced from C# code
+RTR0103 | Runic.Translations | Error | Override does not match the library catalog
+RTR0104 | Runic.Translations | Error | Library catalog to override is not available

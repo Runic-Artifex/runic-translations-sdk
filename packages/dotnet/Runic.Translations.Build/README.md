@@ -35,6 +35,29 @@ The project declaration and messages become Roslyn `AdditionalFiles` with
 defaults to `obj/<configuration>/<target-framework>/translations/app.esm-v5/`
 and `web-module-manifest-v3.json`; consume it with the Vite adapter.
 
+## Libraries: pack the catalog, override library text
+
+A component library that ships a catalog sets
+`<RunicTranslationsPackCatalog>true</RunicTranslationsPackCatalog>`. `dotnet pack`
+then adds `runic/<catalog>/` (its `runic.json`, sources and `contract.json`) and
+`buildTransitive/<PackageId>.props`, which declares the packed catalog as a
+`RunicTranslationsPackedCatalog` item to every project that references the
+package. Name the catalog after the package in lower case (`RTR0105` warns
+otherwise); `runic-` catalog IDs are reserved for the Runic packages
+(`RTR0106`). A library that packs its own `buildTransitive/<PackageId>.props`
+sets `RunicTranslationsPackCatalogProps` to `false` and imports
+`../runic/<catalog>/catalog.props` from it. Packing removes the package's
+dependency on `Runic.Translations.Build`, a development dependency.
+
+An application overrides a packed catalog in its own `runic.json`:
+`"overrides": [{ "catalog": "acme.grid", "from": "Acme.Grid" }]`, with the
+override sources in `translations/overrides/acme.grid/<locale>.rmf2`, which are
+not part of the application's catalog. The source generator validates them
+against the packed catalog (`RTR0103`, `RTR0104` and the usual translation
+checks) and compiles them into `AppTextCatalog.Overlays`, which the application
+attaches with `TranslationContextBuilder.AddOverlays`. See
+[Catalogs from libraries](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/composition.md#build-time-overrides).
+
 ## Check WPF XAML at build time
 
 For a WPF project with a local `RunicTranslationProject`, declare the catalog used by

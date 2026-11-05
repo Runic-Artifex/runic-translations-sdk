@@ -10,6 +10,8 @@
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <IsPackable>true</IsPackable>
+    <!-- A build-time package: a library that references it keeps it out of its own package's dependencies. -->
+    <DevelopmentDependency>true</DevelopmentDependency>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);BundleTranslationAnalyzers</TargetsForTfmSpecificContentInPackage>
@@ -39,6 +41,8 @@
   <Target Name="BundleTranslationAnalyzers">
     <ItemGroup>
       <TfmSpecificPackageFile Include="$(OutputPath)Runic.Translations.Build.dll" PackagePath="tools/net10.0" />
+      <!-- The packing task (RunicTranslationsPackCatalog) compiles the catalog to write its contract. -->
+      <TfmSpecificPackageFile Include="$(OutputPath)Runic.Translations.Compiler.dll" PackagePath="tools/net10.0" />
       <TfmSpecificPackageFile Include="$(OutputPath)Runic.Translations.Generator.dll"
                               PackagePath="analyzers/dotnet/cs" />
       <TfmSpecificPackageFile Include="$(OutputPath)Runic.Translations.Compiler.dll"

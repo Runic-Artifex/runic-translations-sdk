@@ -109,7 +109,22 @@ internal sealed record Rmf2ProjectV5(string Id, string CodeNamespace, string Cla
     // or, by default, when the locale a format call runs in is written right to left, which the runtime decides per call, so
     // an RTL overlay on an LTR catalog is isolated too.
     internal TranslationBidiIsolation BidiIsolation { get; init; } = TranslationBidiIsolation.Default;
+
+    /// <summary>The library catalogs this project overrides (runic.json <c>overrides</c>).</summary>
+    internal IReadOnlyList<Rmf2OverrideV5> Overrides { get; init; } = Array.Empty<Rmf2OverrideV5>();
+
+    /// <summary>
+    /// For a library catalog compiled with an application's override sources: the overridden keys of each locale, in ordinal
+    /// order. Their messages replace the library's in <see cref="Locales"/>. Empty for a project compiled on its own.
+    /// </summary>
+    internal IReadOnlyDictionary<string, IReadOnlyList<string>> OverlayKeys { get; init; } = new Dictionary<string, IReadOnlyList<string>>();
+
+    /// <summary>The locales the override sources add to the library catalog, in ordinal order; they are in <see cref="Locales"/> too.</summary>
+    internal IReadOnlyList<string> OverlayAddedLocales { get; init; } = Array.Empty<string>();
 }
+
+/// <summary>An <c>overrides</c> entry of runic.json: a library catalog and the NuGet or npm package that ships it.</summary>
+internal sealed record Rmf2OverrideV5(string Catalog, string From);
 
 internal static class Rmf2ProjectV5EmissionEligibility
 {

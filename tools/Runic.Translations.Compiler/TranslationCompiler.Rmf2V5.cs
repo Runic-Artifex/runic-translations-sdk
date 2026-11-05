@@ -98,9 +98,41 @@ public static partial class TranslationCompiler
         return CompileRmf2ProjectV5(project, Materialize(sources), lookup, options, cancellationToken, pseudoLocales);
     }
 
+    /// <summary>Reads the <c>overrides</c> of a runic.json; empty when it declares none or cannot be read (its compilation reports why).</summary>
+    internal static IReadOnlyList<Rmf2OverrideV5> ReadOverridesV5(TranslationSource project, TranslationCompilerOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        options ??= new TranslationCompilerOptions();
+        var diagnostics = new DiagnosticBag();
+        ParsedJson parsed = StrictJsonParser.Parse(project, diagnostics, options, CancellationToken.None);
+        ManifestModel? manifest = parsed.Root is null ? null : ReadMf2Project(parsed, diagnostics, options);
+        return manifest is null ? Array.Empty<Rmf2OverrideV5>() : manifest.Overrides.Select(item => new Rmf2OverrideV5(item.Catalog, item.From)).ToArray();
+    }
+
+    /// <summary>
+    /// Compiles a library catalog, from the <c>runic.json</c> and sources its package ships (<c>runic/&lt;catalog&gt;/</c>),
+    /// together with an application's override sources (<c>translations/overrides/&lt;catalog&gt;/&lt;locale&gt;.rmf2</c>).
+    /// </summary>
+    /// <remarks>
+    /// Each override message is checked against the library's definition of its key: a key the library does not have is
+    /// <c>RTR0103</c>, and inputs, content kind, markup and document structure are checked as for a translation of the
+    /// library's base locale. The result is the library catalog with the override messages in place of the library's, and the
+    /// locales they add (falling back to their nearest declared parent, else the library's base locale);
+    /// <see cref="Rmf2ProjectV5.OverlayKeys"/> lists the overridden keys. The contract fingerprint is the library's.
+    /// </remarks>
+    internal static Rmf2ProjectCompilation CompileRmf2OverlayV5(TranslationSource libraryProject, IEnumerable<TranslationSource> librarySources,
+        IEnumerable<TranslationSource> overrideSources, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(libraryProject);
+        ArgumentNullException.ThrowIfNull(librarySources);
+        ArgumentNullException.ThrowIfNull(overrideSources);
+        return CompileRmf2ProjectV5(libraryProject, Materialize(librarySources), null, options ?? new TranslationCompilerOptions(), cancellationToken,
+            false, Materialize(overrideSources));
+    }
+
     private static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project, TranslationSource[] sources,
         IReadOnlyDictionary<TranslationSource, Rmf2SourceUnitV5>? units, TranslationCompilerOptions options, CancellationToken cancellationToken,
-        bool pseudoLocales = false)
+        bool pseudoLocales = false, TranslationSource[]? overlaySources = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var diagnostics = new DiagnosticBag();
@@ -132,6 +164,7 @@ public static partial class TranslationCompiler
         }
         var discovered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var extracted = ReadRmf2ProjectSourcesV5(project, sources, units, config, discovered, diagnostics, options, cancellationToken);
+        var overlayExtracted = overlaySources is null ? new List<Rmf2ProjectSourceV5>() : ReadRmf2OverlaySourcesV5(overlaySources, diagnostics, options, cancellationToken);
         if (discovered.Count > options.MaximumLocalesPerCatalog)
             diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "Locale count exceeds the configured limit.", project, manifest.DefaultLocaleSpan);
         if (manifest.Locales.Count == 0)
@@ -262,6 +295,54 @@ public static partial class TranslationCompiler
                     if (!contract.Slots.ContainsKey(slot.Name)) Error("Unknown source slot '" + slot.Name + "'.", project, slot.Value.Span);
             }
         }
+        // Override sources of an application (CompileRmf2OverlayV5): each message is checked against the library's
+        // definition of its key and replaces the library's message in its locale; a locale the library lacks is added.
+        var overlayKeys = new SortedDictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        var overlayAdded = new List<string>();
+        if (overlaySources is not null)
+        {
+            var known = canonical.Values.Concat(extras.Values).Select(entry => string.Join(".", entry.Source.Path)).Order(StringComparer.Ordinal).ToArray();
+            var byKey = contracts.Concat(extraContracts).ToDictionary(contract => contract.Key, StringComparer.Ordinal);
+            var keysByLocale = new SortedDictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+            var added = new List<LocaleModel>();
+            foreach (var source in overlayExtracted)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                string logical = string.Join(".", source.Path);
+                if (!canonical.TryGetValue(source.Key, out var origin) && !extras.TryGetValue(source.Key, out origin))
+                {
+                    string? suggestion = SuggestKey(logical, known);
+                    diagnostics.Add("RTR0103", TranslationDiagnosticSeverity.Error, "Catalog '" + manifest.Id + "' has no message '" + logical + "' to override." +
+                        (suggestion is null ? "" : " Did you mean '" + suggestion + "'?"), source.Source, NameSpan(source));
+                    continue;
+                }
+                if (!entries.TryGetValue(source.Locale, out var target))
+                {
+                    entries[source.Locale] = target = new SortedDictionary<string, Rmf2ProjectEntryV5>(StringComparer.Ordinal);
+                    added.Add(new LocaleModel(source.Locale, AddedLocaleFallback(source.Locale, locales, manifest.DefaultLocale), default, default));
+                    overlayAdded.Add(source.Locale);
+                }
+                if (Compile(source, origin.Linked.Message.Inputs) is not { } compiledEntry) continue;
+                var entry = Profile(compiledEntry, kinds[source.Key], new SortedDictionary<string, Rmf2ProjectEntryV5>(StringComparer.Ordinal));
+                Rmf2MessageContractV5 contract = byKey[source.Key];
+                ValidateCallerContract(origin, entry);
+                Rmf2ProjectMarkupV5.ValidateSlots(source.Key, contract.Slots, entry.Linked, entry.Source.Node.NameLocation, diagnostics);
+                // A message the library formats as plain text (no markup in any of its locales) cannot gain markup: its
+                // generated accessor returns a string.
+                if (!contract.Structured && entry.Linked.Names.Count != 0)
+                    diagnostics.Add("RTR0103", TranslationDiagnosticSeverity.Error, "'" + logical + "' is plain text in catalog '" + manifest.Id +
+                        "', so its override cannot use markup (" + string.Join(", ", entry.Linked.Names) + ").", source.Source, NameSpan(source));
+                ValidateStructure(origin, entry);
+                ValidateInputParity(origin, entry);
+                ValidateMaxLength(origin, entry);
+                target[source.Key] = entry;
+                if (!keysByLocale.TryGetValue(source.Locale, out var keys)) keysByLocale[source.Locale] = keys = new SortedSet<string>(StringComparer.Ordinal);
+                keys.Add(source.Key);
+            }
+            foreach (var pair in keysByLocale) overlayKeys[pair.Key] = pair.Value.ToArray();
+            overlayAdded.Sort(StringComparer.Ordinal);
+            locales = locales.Concat(added).OrderBy(locale => locale.Tag, StringComparer.Ordinal).ToArray();
+        }
         var linkedLocales = new List<Rmf2LocaleV5>();
         var byTag = locales.ToDictionary(locale => locale.Tag, StringComparer.OrdinalIgnoreCase);
         foreach (var locale in locales)
@@ -300,8 +381,12 @@ public static partial class TranslationCompiler
         });
         return Result(new(manifest.Id, manifest.CodeNamespace, manifest.ClassName, manifest.Visibility, manifest.DefaultLocale,
             manifest.UnsupportedLocale, manifest.MissingKey, contracts.AsReadOnly(), extraContracts.AsReadOnly(), linkedLocales.AsReadOnly(), usedContracts,
-            Rmf2ProjectMarkupV5.Export(usedContracts, contracts.Concat(extraContracts).ToArray(), linkedLocales), HashV5(Encoding.UTF8.GetBytes(callerContract)), SourceHashV5(project, sources))
+            Rmf2ProjectMarkupV5.Export(usedContracts, contracts.Concat(extraContracts).ToArray(), linkedLocales), HashV5(Encoding.UTF8.GetBytes(callerContract)),
+            SourceHashV5(project, overlaySources is null ? sources : sources.Concat(overlaySources).ToArray()))
             {
+                Overrides = manifest.Overrides.Select(item => new Rmf2OverrideV5(item.Catalog, item.From)).ToArray(),
+                OverlayKeys = overlayKeys,
+                OverlayAddedLocales = overlayAdded.ToArray(),
                 ReferenceFallbackText = manifest.ReferenceFallbackText,
                 BidiIsolation = manifest.BidiIsolation,
                 PluralCategoryPolicies = locales.ToDictionary(locale => locale.Tag, locale => manifest.Policy(locale.Tag, ValidationMembers.PluralCategories), StringComparer.Ordinal),
@@ -640,6 +725,53 @@ public static partial class TranslationCompiler
         }
         return result;
         void Error(string message, TranslationSource source, ByteSpan span) => diagnostics.Add("RTR0052", TranslationDiagnosticSeverity.Error, message, source, span);
+    }
+
+    // Override sources are grouped <locale>.rmf2 files whose keys are the library catalog's full logical keys, whatever
+    // source roots the library itself uses.
+    private static List<Rmf2ProjectSourceV5> ReadRmf2OverlaySourcesV5(TranslationSource[] sources, DiagnosticBag diagnostics,
+        TranslationCompilerOptions options, CancellationToken cancellationToken)
+    {
+        var result = new List<Rmf2ProjectSourceV5>();
+        var declared = new Dictionary<string, TextSourceLocation>(StringComparer.Ordinal);
+        foreach (var source in sources)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string file = source.Path[(source.Path.LastIndexOf('/') + 1)..];
+            if (!file.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase) || !TryCanonicalizeLocale(file[..^5], out string locale))
+            {
+                diagnostics.Add("RTR0052", TranslationDiagnosticSeverity.Error, "Override sources must be grouped '<locale>.rmf2' files.", source, new(0, 0));
+                continue;
+            }
+            var resource = Rmf2ResourceReader.Read(source, options, cancellationToken);
+            foreach (var diagnostic in resource.Diagnostics) diagnostics.Add(diagnostic.Id, diagnostic.Severity, diagnostic.Message, diagnostic.Location);
+            foreach (var node in resource.Nodes)
+            {
+                if (node.IsGroup) continue;
+                string[] path = node.Path.ToArray();
+                string identity = locale + ":" + string.Join(".", path);
+                if (declared.TryGetValue(identity, out var first))
+                {
+                    diagnostics.Add("RTR0054", TranslationDiagnosticSeverity.Error, "Duplicate declaration '" + identity + "'; first declaration: " + first + ".", node.NameLocation);
+                    continue;
+                }
+                declared[identity] = node.NameLocation;
+                result.Add(new(string.Join("_", path), path, locale, source, node, null));
+            }
+        }
+        return result;
+    }
+
+    // The fallback of a locale that override sources add: its nearest parent by truncation that the catalog declares
+    // (de-CH to de), else the base locale.
+    private static string AddedLocaleFallback(string locale, IReadOnlyList<LocaleModel> declared, string defaultLocale)
+    {
+        for (int dash = locale.LastIndexOf('-'); dash > 0; dash = locale.LastIndexOf('-', dash - 1))
+        {
+            string parent = locale[..dash];
+            if (declared.Any(item => string.Equals(item.Tag, parent, StringComparison.OrdinalIgnoreCase))) return parent;
+        }
+        return defaultLocale;
     }
 
     private static string NormalizeResourceRoot(string directory, string path)

@@ -74,8 +74,14 @@
     <PropertyGroup>
       <_TranslationsSourceDiscoveryGlobs>@(RunicTranslationProject->'%(RootDir)%(Directory)**/*')</_TranslationsSourceDiscoveryGlobs>
     </PropertyGroup>
-    <Runic.Translations.Build.Rmf2SourceDiscovery Projects="@(RunicTranslationProject)" Condition="'@(RunicTranslationProject)' != '' and Exists('$(_Rmf2DiscoveryAssembly)')">
+    <!-- runic.json "overrides": translations/overrides/<catalog>/ holds the overrides of a library catalog, and each
+         referenced package that packs a catalog (RunicTranslationsPackCatalog) declares it as a RunicTranslationsPackedCatalog
+         item from its buildTransitive props. The overridden catalogs' packed runic.json and sources go to the source
+         generator, which validates the overrides against them and compiles them into XCatalog.Overlays. -->
+    <Runic.Translations.Build.Rmf2SourceDiscovery Projects="@(RunicTranslationProject)" PackedCatalogs="@(RunicTranslationsPackedCatalog)" Condition="'@(RunicTranslationProject)' != '' and Exists('$(_Rmf2DiscoveryAssembly)')">
       <Output TaskParameter="Sources" ItemName="_TranslationsDiscoveredSource" />
+      <Output TaskParameter="OverrideSources" ItemName="RunicTranslationOverride" />
+      <Output TaskParameter="PackedCatalogFiles" ItemName="_TranslationsPackedCatalogFile" />
     </Runic.Translations.Build.Rmf2SourceDiscovery>
     <ItemGroup Condition="'@(RunicTranslationProject)' != '' and !Exists('$(_Rmf2DiscoveryAssembly)')">
       <_TranslationsDiscoveredSource Include="$(_TranslationsSourceDiscoveryGlobs)" />
@@ -101,6 +107,12 @@
     </ItemGroup>
     <ItemGroup>
       <AdditionalFiles Include="@(RunicTranslationMf2->'%(FullPath)')" RunicTranslationKind="Mf2" />
+      <AdditionalFiles Include="@(RunicTranslationOverride->'%(FullPath)')" RunicTranslationKind="OverrideSource" RunicTranslationOverrideCatalog="%(RunicTranslationOverride.Catalog)" />
+      <AdditionalFiles Include="@(_TranslationsPackedCatalogFile)" />
+      <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="RunicTranslationOverrideCatalog" />
+      <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="RunicTranslationPackage" />
+      <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="RunicTranslationPackedCatalog" />
+      <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="RunicTranslationProject" Condition="'@(_TranslationsPackedCatalogFile)' != ''" />
     </ItemGroup>
   </Target>
 
@@ -149,7 +161,7 @@
           DependsOnTargets="_RunicTranslationsDiscoverTranslationSources"
           BeforeTargets="CoreCompile;RunicTranslationsGenerateTranslationArtifacts">
     <ItemGroup>
-      <_TranslationsCheckedSource Include="@(RunicTranslationProject);@(RunicTranslationMf2)" />
+      <_TranslationsCheckedSource Include="@(RunicTranslationProject);@(RunicTranslationMf2);@(RunicTranslationOverride)" />
       <_TranslationsCheckedDirectory Include="@(_TranslationsCheckedSource->'%(RootDir)%(Directory)')" />
     </ItemGroup>
     <Error Condition="Exists('%(_TranslationsCheckedSource.Identity)') and $([MSBuild]::BitwiseAnd($([System.Convert]::ToInt32($([System.IO.File]::GetAttributes('%(_TranslationsCheckedSource.Identity)')))), 1024)) != 0" Code="RTR0020" HelpKeyword="RTR0020"

@@ -7,7 +7,8 @@ namespace Runic.Translations.Compiler;
 
 public static partial class TranslationCompiler
 {
-    private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceRoots", "markup", "pseudoLocales" };
+    private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceRoots", "markup", "pseudoLocales", "overrides" };
+    private static readonly string[] OverrideMembers = { "catalog", "from" };
     private static readonly string[] CodeMembers = { "namespace", "className", "visibility", "referenceFallbackText" };
     private static readonly string[] LocaleMembers = { "tag", "fallback", "validation" };
     private static readonly string[] RuntimeMembers = { "unsupportedLocale", "missingKey", "bidiIsolation" };
@@ -109,7 +110,68 @@ public static partial class TranslationCompiler
         if (validation is not null) ReadValidation(validation, model, parsed.Source, diagnostics);
         JsonProperty? runtime = root.Property("runtime");
         if (runtime is not null) ReadRuntime(runtime, model, parsed.Source, diagnostics);
+        JsonProperty? overrides = root.Property("overrides");
+        if (overrides is not null) ReadOverrides(overrides.Value, model, parsed.Source, diagnostics);
         return model;
+    }
+
+    // overrides: [{ "catalog": "acme-grid", "from": "Acme.Grid" }], each library catalog at most once and never the
+    // project's own catalog. The sources are translations/overrides/<catalog>/<locale>.rmf2 beside runic.json.
+    private static void ReadOverrides(JsonValue value, ManifestModel model, TranslationSource source, DiagnosticBag diagnostics)
+    {
+        if (value.Kind != JsonKind.Array)
+        {
+            diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "overrides must be an array of { \"catalog\", \"from\" } entries.", source, value.Span);
+            return;
+        }
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (JsonValue item in value.Items)
+        {
+            if (item.Kind != JsonKind.Object)
+            {
+                diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "An overrides entry must be an object with catalog and from.", source, item.Span);
+                continue;
+            }
+            ValidateKnownMembers(item, OverrideMembers, source, diagnostics);
+            JsonProperty? catalog = Required(item, "catalog", JsonKind.String, source, diagnostics);
+            JsonProperty? from = Required(item, "from", JsonKind.String, source, diagnostics);
+            if (catalog is null || from is null) continue;
+            string id = catalog.Value.Text!, package = from.Value.Text!;
+            if (!IsCatalogId(id) || IsWindowsDeviceStem(id))
+                diagnostics.Add("RTR0006", TranslationDiagnosticSeverity.Error, "Invalid catalog ID '" + id + "'.", source, catalog.Value.Span);
+            else if (string.Equals(id, model.Id, StringComparison.Ordinal))
+                diagnostics.Add("RTR0104", TranslationDiagnosticSeverity.Error, "A project cannot override its own catalog '" + id + "'; edit its sources instead.", source, catalog.Value.Span);
+            else if (!seen.Add(id))
+                diagnostics.Add("RTR0104", TranslationDiagnosticSeverity.Error, "Catalog '" + id + "' is overridden more than once.", source, catalog.Value.Span);
+            else if (!IsPackageId(package))
+                diagnostics.Add("RTR0104", TranslationDiagnosticSeverity.Error, "'" + package + "' is not a NuGet or npm package ID.", source, from.Value.Span);
+            else model.Overrides.Add(new OverrideModel(id, package, item.Span));
+        }
+    }
+
+    // A NuGet package ID (Acme.Grid) or an npm package name, scoped or not (@acme/grid).
+    internal static bool IsPackageId(string value)
+    {
+        if (value.Length == 0 || value.Length > 214) return false;
+        int start = 0;
+        if (value[0] == '@')
+        {
+            int slash = value.IndexOf('/');
+            if (slash < 2 || slash == value.Length - 1 || !IsPackageSegment(value, 1, slash)) return false;
+            start = slash + 1;
+        }
+        return IsPackageSegment(value, start, value.Length);
+
+        static bool IsPackageSegment(string text, int from, int to)
+        {
+            if (text[from] is '.' or '-' or '_') return false;
+            for (int index = from; index < to; index++)
+            {
+                char ch = text[index];
+                if (!((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch is '.' or '-' or '_' or '~')) return false;
+            }
+            return true;
+        }
     }
 
     // pseudoLocales: en-XA and ar-XB, each at most once and not also a declared locale.

@@ -82,6 +82,25 @@ internal sealed class CliIntegrationTests
         Assert.Contains("@<file>", help.StandardOutput);
     }
 
+    [Test, DisplayName("CLI project mode leaves translations/overrides to the library catalogs runic.json overrides")]
+    public void OverrideSourcesAreNotProjectSources()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("translations", "overrides", "acme.grid"));
+        File.WriteAllText(temporary.Resolve("translations", "runic.json"), """
+            { "schemaVersion": 1, "catalog": "app", "code": { "namespace": "Example", "className": "AppText" }, "baseLocale": "en",
+              "overrides": [{ "catalog": "acme.grid", "from": "Acme.Grid" }] }
+            """, new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("translations", "en.rmf2"), "title = Shop\n", new UTF8Encoding(false));
+        // As a source of the project's own catalog, this would be the namespace overrides.acme.grid, and fr an undeclared locale.
+        File.WriteAllText(temporary.Resolve("translations", "overrides", "acme.grid", "en.rmf2"), "empty = Nothing\n", new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("translations", "overrides", "acme.grid", "fr.rmf2"), "empty = Rien\n", new UTF8Encoding(false));
+
+        ProcessResult validate = TestFixture.RunTool(temporary, "validate", "--project", "translations");
+        Assert.Equal(0, validate.ExitCode, validate.Combined);
+        Assert.Contains("1 source document(s)", validate.StandardOutput);
+    }
+
     [Test, DisplayName("CLI project mode validates and generates direct MF2")]
     public void ProjectModeValidatesAndGenerates()
     {

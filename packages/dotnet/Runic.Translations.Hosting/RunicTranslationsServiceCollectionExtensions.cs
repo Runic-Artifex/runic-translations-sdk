@@ -217,7 +217,8 @@ internal sealed class RunicTranslationsRegistrations : ITranslationContextFactor
         {
             if (Lifetime == ServiceLifetime.Singleton && _singleton is not null) return _singleton;
             if (_initialization is { IsCompletedSuccessfully: true } initialized && Lifetime == ServiceLifetime.Singleton) return _singleton = initialized.Result;
-            if (_overlays.Count > 0 && _initialization is not { IsCompletedSuccessfully: true })
+            // Compiled overlays (runic.json overrides) load without I/O and need no initialization.
+            if (_overlays.Exists(static overlay => !overlay.IsCompiled) && _initialization is not { IsCompletedSuccessfully: true })
                 throw new InvalidOperationException(
                     "Runic Translations has overlays, whose packs load asynchronously: call await services.InitializeRunicTranslationsAsync() " +
                     "after building the service provider and before resolving ITranslationContext.");

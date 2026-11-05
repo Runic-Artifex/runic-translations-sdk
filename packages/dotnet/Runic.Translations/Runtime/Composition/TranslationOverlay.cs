@@ -63,6 +63,33 @@ public sealed class TranslationOverlay
     internal TranslationOverlaySource Source { get; }
 
     /// <summary>
+    /// Whether the overlay was compiled into the application (<see cref="FromCompiled"/>): it loads without I/O, so a context
+    /// with it composes synchronously.
+    /// </summary>
+    public bool IsCompiled => Source is CompiledOverlaySource;
+
+    /// <summary>
+    /// Creates an overlay from messages compiled into the application, such as the overlays a build generates for runic.json
+    /// <c>overrides</c> (<c>XCatalog.Overlays</c>).
+    /// </summary>
+    /// <param name="catalog">The ID of the catalog to overlay.</param>
+    /// <param name="addedLocales">Locales the overlay adds to the catalog.</param>
+    /// <param name="data">
+    /// Returns the overlay's locale artifact v5 for a locale (UTF-8 JSON, as <see cref="FromPacks"/> reads), or an empty span
+    /// when the overlay has no messages for it. Called once per locale a snapshot needs.
+    /// </param>
+    /// <remarks>
+    /// The messages are checked key by key against the catalog when a snapshot is composed, as pack messages are. The data is
+    /// trusted, so it is not size-limited, and a malformed artifact fails the locale switch with a <see cref="TranslationPackException"/>.
+    /// </remarks>
+    public static TranslationOverlay FromCompiled(string catalog, IEnumerable<TranslationOverlayLocale>? addedLocales, TranslationOverlayData data)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(data);
+        return new TranslationOverlay(catalog, addedLocales, new CompiledOverlaySource(data));
+    }
+
+    /// <summary>
     /// Creates an overlay from locale artifacts v5 (the <c>&lt;catalog&gt;.&lt;locale&gt;.locale-v5.json</c> files that
     /// <c>runic-translations generate</c> writes), loaded from <paramref name="source"/> when a snapshot needs a locale.
     /// </summary>
@@ -101,6 +128,10 @@ public sealed class TranslationOverlay
         return new TranslationOverlay(catalog, addedLocales, source);
     }
 }
+
+/// <summary>Returns the compiled overlay data (a locale artifact v5, UTF-8 JSON) of a locale, or an empty span for none.</summary>
+/// <param name="locale">The canonical tag of the locale a snapshot needs.</param>
+public delegate ReadOnlySpan<byte> TranslationOverlayData(string locale);
 
 /// <summary>A locale that an overlay adds to a catalog.</summary>
 public sealed class TranslationOverlayLocale
@@ -162,6 +193,24 @@ internal abstract class TranslationOverlaySource
 {
     /// <summary>Loads the messages of <paramref name="locale"/>, or returns <see langword="null"/> when the overlay has none.</summary>
     internal abstract ValueTask<OverlayPack?> LoadAsync(string catalog, string locale, CancellationToken cancellationToken);
+}
+
+// Overlay data compiled into the application by the build: parsed without I/O, so composition completes synchronously.
+internal sealed class CompiledOverlaySource : TranslationOverlaySource
+{
+    // Compiled data comes from the build, not from a download: only the JSON depth stays bounded.
+    private static readonly TranslationPackLimits Limits = new();
+    private readonly TranslationOverlayData _data;
+
+    internal CompiledOverlaySource(TranslationOverlayData data) => _data = data;
+
+    internal override ValueTask<OverlayPack?> LoadAsync(string catalog, string locale, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ReadOnlySpan<byte> data = _data(locale);
+        if (data.IsEmpty) return ValueTask.FromResult<OverlayPack?>(null);
+        return ValueTask.FromResult<OverlayPack?>(TranslationPackV5Loader.ParseOverlay(data.ToArray(), catalog, locale, Limits, cancellationToken));
+    }
 }
 
 internal sealed class PackOverlaySource : TranslationOverlaySource

@@ -119,6 +119,10 @@ internal static class TranslationsDiagnostics
         "RTR0097", "Boolean is formatted as text", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0097");
     internal static readonly DiagnosticDescriptor MaxLengthExceeded = new(
         "RTR0098", "Message is longer than its @maxLength", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0098");
+    internal static readonly DiagnosticDescriptor OverrideKeyUnknown = new(
+        "RTR0103", "Override does not match the library catalog", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0103");
+    internal static readonly DiagnosticDescriptor OverrideSetup = new(
+        "RTR0104", "Library catalog to override is not available", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0104");
     internal static readonly DiagnosticDescriptor MessageNotReferenced = new(
         "RTR0100", "Message is not referenced from C# code", "{0}", Category, DiagnosticSeverity.Info, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0100", customTags: WellKnownDiagnosticTags.CompilationEnd);
 
@@ -130,7 +134,8 @@ internal static class TranslationsDiagnostics
         InvalidMarkupContract, InvalidMarkup, InvalidMarkupReference, NotExecutable, SyntaxError, InvalidDataModel,
         ReadableSurfaceUnsupported, ReadableNameReserved, DocumentContentKind, DocumentVariantStructure, DocumentChildInvalid,
         DocumentLimitExceeded, DocumentStructureMismatch, DocumentBlockEmpty, DocumentHeadingLevel, DocumentLineBreakSpace, XamlDeclaration, XamlKey, XamlInputs, XamlKind,
-        XamlPositionalInputs, XamlSourceNotChecked, PluralCategoryUnreachable, PluralCategoryMissing, InputNotDisplayed, BooleanFormatted, MaxLengthExceeded, MessageNotReferenced);
+        XamlPositionalInputs, XamlSourceNotChecked, PluralCategoryUnreachable, PluralCategoryMissing, InputNotDisplayed, BooleanFormatted, MaxLengthExceeded, MessageNotReferenced,
+        OverrideKeyUnknown, OverrideSetup);
 
     private static readonly object UnknownGate = new();
     private static readonly Dictionary<string, DiagnosticDescriptor> Unknown = new(System.StringComparer.Ordinal);

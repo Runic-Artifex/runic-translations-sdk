@@ -1251,8 +1251,9 @@ internal sealed class EditorWorkspace : IDisposable
         IReadOnlyList<string> sourceRoots = UsableSourceRoots(layout.SourceRoots, discoveryErrors);
         foreach (string sourceRoot in sourceRoots)
         {
-            paths.AddRange(EnumerateSourceFiles(sourceRoot, ".mf2").Order(StringComparer.Ordinal));
-            paths.AddRange(EnumerateSourceFiles(sourceRoot, ".rmf2").Order(StringComparer.Ordinal));
+            // runic.json "overrides": translations/overrides holds overrides of library catalogs, not this catalog's sources.
+            paths.AddRange(EnumerateSourceFiles(sourceRoot, ".mf2").Where(path => !layout.IsOverrideSource(path)).Order(StringComparer.Ordinal));
+            paths.AddRange(EnumerateSourceFiles(sourceRoot, ".rmf2").Where(path => !layout.IsOverrideSource(path)).Order(StringComparer.Ordinal));
         }
         var files = new List<WorkspaceFile>(paths.Count);
         TranslationSource? projectSource = null;
