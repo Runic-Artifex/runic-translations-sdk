@@ -61,7 +61,7 @@ shop (translations/runic.json): 10 message(s), base locale en
 Coverage is translated plus fallback as a percentage of the base locale's messages. `--min-coverage
 <locale>=<percent>` (repeatable or comma-separated; `*` for every translated locale) makes the command exit
 with 1 and the fault `RTR0099` when a locale is below it; the payload, `runic.translations.status/1`
-([schema](../../specs/translations/schemas/translations-status-v1.schema.json)), is then in
+(schema `translations-status-v1.schema.json`, written by `schema`), is then in
 `fault.data.payload`. `--project` is repeatable. To require completeness at build time instead, use the
 locale's own policy in `runic.json`: `{ "tag": "fr", "fallback": "en", "validation": { "translationCompleteness":
 "warning" } }` lets `fr` lag while the project's `error` still applies to the other locales.
