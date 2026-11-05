@@ -133,12 +133,42 @@ export function resolveLocale(requested) {
   // An empty tag (the invariant culture, an unset lang) names no locale, so the unsupported-locale policy applies to it.
   const canonical = requested === "" ? "" : canonicalLocale(requested); if (canonical === null) throw new RangeError(`Invalid locale '${requested}'.`);
   if (localeSet.has(canonical)) return canonical;
-  if (unsupportedLocalePolicy === "ParentsThenDefault") {
-    let parent = canonical; while (parent.includes("-")) { parent = parent.slice(0, parent.lastIndexOf("-")); if (localeSet.has(parent)) return parent; }
-    return baseLocale;
-  }
+  if (unsupportedLocalePolicy === "ParentsThenDefault") return (canonical === "" ? undefined : matchLocale(canonical)) ?? baseLocale;
   if (unsupportedLocalePolicy === "Default") return baseLocale;
   throw new RangeError(`Unsupported locale '${requested}'.`);
+}
+
+// The best declared locale for a list of preferences, such as navigator.languages, Accept-Language or LANGUAGE:
+// the first preference that matches a declared locale wins, else the base locale. Invalid and empty entries are
+// skipped, and so are und tags that are not declared; POSIX forms (de_DE.UTF-8) are accepted. The
+// unsupported-locale policy does not apply.
+export function negotiateLocale(preferences) {
+  if (typeof preferences === "string") preferences = [preferences];
+  if (preferences === null || typeof preferences !== "object" || typeof preferences[Symbol.iterator] !== "function") throw new TypeError("Locale preferences must be an iterable of strings.");
+  for (const preference of preferences) {
+    if (typeof preference !== "string") continue;
+    const canonical = canonicalLocale(preference.replace(/[.@].*$/s, ""));
+    if (canonical === null) continue;
+    const match = localeSet.has(canonical) ? canonical : matchLocale(canonical);
+    if (match !== undefined) return match;
+  }
+  return baseLocale;
+}
+
+// A declared locale for a canonical tag that is not declared: CLDR likely-subtag matching, else the nearest
+// declared truncation with the same likely script (tlh-x-a → tlh, but never sr-Latn-RS → sr or zh-Hant → zh),
+// else undefined. The undetermined language (und, und-DE) matches nothing.
+function matchLocale(canonical) {
+  const match = cldrMatch(canonical, locales);
+  if (match !== undefined) return match;
+  const wanted = cldrMaximize(cldrParse(canonical));
+  if (wanted.language === "und") return undefined;
+  let parent = canonical;
+  while (parent.includes("-")) {
+    parent = parent.slice(0, parent.lastIndexOf("-"));
+    if (localeSet.has(parent) && cldrMaximize(cldrParse(parent)).script === wanted.script) return parent;
+  }
+  return undefined;
 }
 
 // The direction of a locale's script: the explicit script subtag, else the likely script CLDR gives Intl.Locale's
@@ -416,8 +446,7 @@ function numberSymbols(locale) {
 // reach the pinned CLDR minimumGroupingDigits of the content locale, min2 requires at least two, always one.
 function groupDigits(digits, grouping, symbols, locale) {
   if (grouping === "never" || symbols.primary <= 0 || !symbols.group) return digits;
-  const language = locale.toLowerCase().split(/[-_]/)[0];
-  const pinned = Object.hasOwn(generatedLocaleData.minimumGroupingDigits, language) ? generatedLocaleData.minimumGroupingDigits[language] : 1;
+  const pinned = cldrLocale(locale).grouping;
   const minimum = grouping === "always" ? 1 : grouping === "min2" ? Math.max(2, pinned) : pinned;
   if (digits.length - symbols.primary < minimum) return digits;
   let end = digits.length - symbols.primary; const groups = [digits.slice(end)];
@@ -438,49 +467,188 @@ function visibleCanonical(value) {
   return decimalCanonical({ coefficient, scale, negative: value.negative && coefficient !== 0n });
 }
 
-// Applies the pinned CLDR rules to the operands of a visible decimal (sign ignored).
+// Applies the pinned CLDR rules of a locale to the operands of a visible decimal (sign ignored).
 function selectPlural(value, locale, ordinal) {
-  const language = locale.toLowerCase().split(/[-_]/)[0]; const rules = Object.hasOwn(generatedPluralRules, language) ? generatedPluralRules[language] : undefined;
-  if (!rules) throw new RangeError(`Plural selection is not supported for locale '${locale}'.`);
+  const entry = cldrLocale(locale), rule = ordinal ? entry.ordinal : entry.cardinal;
+  if (rule < 0) throw new RangeError(`Plural selection is not supported for locale '${locale}'.`);
   const divisor = 10n ** BigInt(value.scale), f = value.coefficient % divisor;
   let t = f, w = BigInt(value.scale);
   while (w > 0n && t % 10n === 0n) { t /= 10n; w--; }
-  return rules[ordinal ? 1 : 0](Object.freeze({ i: value.coefficient / divisor, v: BigInt(value.scale), w, f, t, e: 0n }));
+  return generatedPluralRules[rule](Object.freeze({ i: value.coefficient / divisor, v: BigInt(value.scale), w, f, t, e: 0n }));
 }
 
+// CLDR relative time: the number is formatted as :number formats it by default and picks the past or future
+// pattern of its plural category; numeric=auto uses the relative-type text for whole values from -2 to 2.
+// Each unit has 17 slots: past patterns (zero … other), future patterns likewise, then relative-type -2 … 2.
+const relativeUnits = ["second", "minute", "hour", "day", "week", "month", "year"];
+const pluralCategoryOrder = ["zero", "one", "two", "few", "many", "other"];
 function formatRelative(value, unit, numeric, locale) {
-  const language = locale.toLowerCase().split(/[-_]/)[0], data = generatedLocaleData.relativeTime[language];
+  const entry = cldrLocale(locale), data = entry.cardinal < 0 || entry.relativeTime === undefined ? undefined : generatedLocaleData.relativeTime[entry.relativeTime];
   if (!data) throw new RangeError(`Relative-time formatting is not supported for locale '${locale}'.`);
-  const signed = value.negative ? -value.coefficient : value.coefficient;
-  if (numeric === "auto" && unit === "day" && value.scale === 0 && signed >= -1n && signed <= 1n) return data.autoDay[Number(signed + 1n)];
-  const absolute = decimalAbsolute(value), forms = data.units[unit], noun = forms[selectPlural(absolute, locale, false) === "one" ? 0 : 1];
-  return (value.negative ? data.past : data.future).replace("{0}", decimalCanonical(absolute)).replace("{unit}", noun);
+  const offset = relativeUnits.indexOf(unit) * 17, divisor = 10n ** BigInt(value.scale);
+  if (numeric === "auto" && value.coefficient % divisor === 0n && value.coefficient / divisor <= 2n) {
+    const whole = Number(value.coefficient / divisor) * (value.negative ? -1 : 1), text = data[offset + 14 + whole];
+    if (text !== null) return text;
+  }
+  const absolute = decimalAbsolute(value), visible = visibleNumber(absolute, {});
+  const patterns = offset + (value.negative ? 0 : 6), pattern = data[patterns + pluralCategoryOrder.indexOf(selectPlural(visible, locale, false))] ?? data[patterns + 5];
+  return pattern.replace("{0}", formatDecimal(absolute, locale, {}));
 }
 
-// Joins the items with the pinned CLDR list patterns, as Intl.ListFormat does.
-// The .NET runtime applies the same generated separators and Spanish rule.
+// Joins the items with the pinned CLDR list patterns, as Intl.ListFormat does: end(n-2, n-1), then
+// middle(i, rest) and start(0, rest). The .NET runtime applies the same generated patterns and Spanish rule.
 function formatList(items, type, style, locale) {
-  const language = locale.toLowerCase().split(/[-_]/)[0], data = Object.hasOwn(generatedLocaleData.list, language) ? generatedLocaleData.list[language] : undefined;
+  const entry = cldrLocale(locale), data = entry.list === undefined ? undefined : generatedLocaleData.list[entry.list];
   if (!data) throw new RangeError(`List formatting is not supported for locale '${locale}'.`);
   const offset = (["conjunction", "disjunction", "unit"].indexOf(type) * 3 + ["long", "short", "narrow"].indexOf(style)) * 4;
-  const [start, middle, end, two] = data.slice(offset, offset + 4);
+  const [start, middle, end, two] = data.slice(offset, offset + 4), language = entry.language;
   if (items.length === 0) return "";
   if (items.length === 1) return items[0];
   const last = items[items.length - 1];
-  if (items.length === 2) return items[0] + contextualListSeparator(language, two, end, two, last) + last;
-  let text = items[0] + start + items[1];
-  for (let index = 2; index < items.length - 1; index++) text += middle + items[index];
-  return text + contextualListSeparator(language, two, end, end, last) + last;
+  if (items.length === 2) return applyListPattern(contextualListPattern(language, two, end, two, last), items[0], last);
+  let text = applyListPattern(contextualListPattern(language, two, end, end, last), items[items.length - 2], last);
+  for (let index = items.length - 3; index >= 1; index--) text = applyListPattern(middle, items[index], text);
+  return applyListPattern(start, items[0], text);
+}
+
+// Every pinned pattern has {0} before {1}.
+function applyListPattern(pattern, first, second) {
+  const zero = pattern.indexOf("{0}"), one = pattern.indexOf("{1}");
+  return pattern.slice(0, zero) + first + pattern.slice(zero + 3, one) + second + pattern.slice(one + 3);
 }
 
 // ICU, and therefore Intl.ListFormat, changes Spanish "y" to "e" before an /i/ sound
 // and "o" to "u" before an /o/ sound. The rule applies to the two-item and end
-// separators of a pattern set that uses " y " (or else " o "), and tests the last item.
-function contextualListSeparator(language, two, end, separator, last) {
-  if (language !== "es") return separator;
-  if (two === " y " || end === " y ") return separator === " y " && /^(?:[iI]|[hH][iI](?![aAeE]))/.test(last) ? " e " : separator;
-  if (two === " o " || end === " o ") return separator === " o " && /^(?:[oO8]|[hH][oO]|11(?: |$))/.test(last) ? " u " : separator;
-  return separator;
+// patterns of a pattern set that uses "{0} y {1}" (or else "{0} o {1}"), and tests the last item.
+// Hebrew "ו" takes a hyphen ("ו-") before an item that does not start with a Hebrew character.
+function contextualListPattern(language, two, end, pattern, last) {
+  if (language === "he" || language === "iw") return pattern === "{0} \u05d5{1}" && last.length > 0 && !/^[\u0591-\u05f4\ufb1d-\ufb4f]/.test(last) ? "{0} \u05d5-{1}" : pattern;
+  if (language !== "es") return pattern;
+  if (two === "{0} y {1}" || end === "{0} y {1}") return pattern === "{0} y {1}" && /^(?:[iI]|[hH][iI](?![aAeE]))/.test(last) ? "{0} e {1}" : pattern;
+  if (two === "{0} o {1}" || end === "{0} o {1}") return pattern === "{0} o {1}" && /^(?:[oO8]|[hH][oO]|11(?: |$))/.test(last) ? "{0} u {1}" : pattern;
+  return pattern;
+}
+
+// Locale identity over the pinned CLDR tables, exactly as CldrLocales.cs does in .NET: likely subtags, the
+// CLDR data ID of a tag, its parent chains and likely-subtag matching. Only the tables of the catalog's
+// languages are embedded; matching and lookup never need others.
+const cldrLocaleCache = new Map();
+function cldrLocale(locale) {
+  let entry = cldrLocaleCache.get(locale);
+  if (entry) return entry;
+  const canonical = canonicalLocale(locale);
+  if (canonical === null) entry = Object.freeze({ language: "", cardinal: -1, ordinal: -1, grouping: 1, list: undefined, relativeTime: undefined });
+  else {
+    const cardinalId = cldrFind(canonical, generatedLocaleData.cardinal, true), ordinalId = cldrFind(canonical, generatedLocaleData.ordinal, true), groupingId = cldrFind(canonical, generatedLocaleData.grouping, false);
+    const list = cldrFind(canonical, generatedLocaleData.list, false), relativeTime = cldrFind(canonical, generatedLocaleData.relativeTime, false);
+    // A locale with CLDR data but no plural rules of its own (agq, rw) uses CLDR's root rule (0, other only).
+    const rootRule = list !== undefined || relativeTime !== undefined ? 0 : -1;
+    entry = Object.freeze({
+      language: cldrParse(canonical).language,
+      cardinal: cardinalId === undefined ? rootRule : generatedLocaleData.cardinal[cardinalId],
+      ordinal: cardinalId === undefined ? rootRule : ordinalId === undefined ? 0 : generatedLocaleData.ordinal[ordinalId],
+      grouping: groupingId === undefined ? 1 : generatedLocaleData.grouping[groupingId],
+      list,
+      relativeTime,
+    });
+  }
+  if (cldrLocaleCache.size < 64) cldrLocaleCache.set(locale, entry);
+  return entry;
+}
+function cldrParse(canonical) {
+  const parts = canonical.split("-"); let index = 1, script, region, variants = "";
+  if (parts[0].length <= 3) for (let count = 0; count < 3 && index < parts.length && parts[index].length === 3 && /^[a-z]/i.test(parts[index]); count++) index++;
+  if (index < parts.length && parts[index].length === 4 && /^[a-z]/i.test(parts[index])) script = parts[index++];
+  if (index < parts.length && (parts[index].length === 2 || (parts[index].length === 3 && /^\d/.test(parts[index])))) region = parts[index++];
+  while (index < parts.length && (parts[index].length >= 5 || (parts[index].length === 4 && /^\d/.test(parts[index])))) variants += "-" + parts[index++];
+  return { language: parts[0], script, region, variants };
+}
+function cldrFormat(tag) { return tag.language + (tag.script === undefined ? "" : "-" + tag.script) + (tag.region === undefined ? "" : "-" + tag.region) + tag.variants; }
+function cldrTable(table, key) { return Object.hasOwn(table, key) ? table[key] : undefined; }
+// A deprecated or legacy language code becomes its replacement, whose script and region fill those the tag lacks:
+// iw → he, tl → fil, sh → sr-Latn, cnr → sr-ME.
+function cldrCanonicalize(tag) {
+  const replacement = cldrTable(generatedLocaleData.aliases, tag.language);
+  if (replacement === undefined) return tag;
+  const found = cldrParse(replacement);
+  return { ...tag, language: found.language, script: tag.script ?? found.script, region: tag.region ?? found.region };
+}
+function cldrMaximize(tag) {
+  tag = cldrCanonicalize(tag);
+  const likely = generatedLocaleData.likely;
+  let value;
+  if (tag.script !== undefined && tag.region !== undefined) value = cldrTable(likely, `${tag.language}-${tag.script}-${tag.region}`);
+  if (value === undefined && tag.region !== undefined) value = cldrTable(likely, `${tag.language}-${tag.region}`);
+  if (value === undefined && tag.script !== undefined) value = cldrTable(likely, `${tag.language}-${tag.script}`);
+  value ??= cldrTable(likely, tag.language);
+  if (value === undefined) return tag;
+  const found = cldrParse(value);
+  return { ...tag, script: tag.script ?? found.script, region: tag.region ?? found.region };
+}
+function cldrDataId(canonical) {
+  const tag = cldrCanonicalize(cldrParse(canonical));
+  const script = tag.script ?? cldrMaximize(tag).script, likely = cldrTable(generatedLocaleData.likely, tag.language);
+  const defaultScript = likely === undefined ? undefined : cldrParse(likely).script;
+  return cldrFormat({ ...tag, script: script !== undefined && script === defaultScript ? undefined : script });
+}
+function cldrParent(id, truncate) {
+  const explicit = truncate ? undefined : cldrTable(generatedLocaleData.parents, id);
+  if (explicit !== undefined) return explicit === "root" ? undefined : explicit;
+  const tag = cldrParse(id);
+  if (tag.variants) return cldrFormat({ ...tag, variants: tag.variants.slice(0, tag.variants.lastIndexOf("-")) });
+  if (tag.region !== undefined) return cldrFormat({ ...tag, region: undefined });
+  if (tag.script !== undefined && truncate) return tag.language;
+  return undefined;
+}
+function cldrFind(canonical, table, truncate) {
+  let depth = 0;
+  for (let id = cldrDataId(canonical); id !== undefined && depth < 16; id = cldrParent(id, truncate), depth++) if (Object.hasOwn(table, id)) return id;
+  return undefined;
+}
+function cldrChain(id) { const result = []; for (let current = id; current !== undefined && result.length < 16; current = cldrParent(current, false)) result.push(current); return result; }
+// A language and its bare-language CLDR parent (nb, nn → no) match after every same-language candidate (1000); two
+// languages with the same parent, nb and nn, after those (2000); -1: not related.
+function cldrRelatedPenalty(first, second) {
+  const firstParent = cldrParent(first, false), secondParent = cldrParent(second, false);
+  if (firstParent === second || secondParent === first) return 1000;
+  return firstParent !== undefined && firstParent === secondParent ? 2000 : -1;
+}
+// Both sides maximized must share language and script. Equal maximized tags match best (the one nearest in the
+// desired tag's CLDR chain first), then the nearest CLDR
+// ancestor of the desired tag that a locale shares (the ancestor itself first), then a sibling region (the likely
+// region first), then a related language (cldrRelatedPenalty). The undetermined language only matches itself.
+// Ties keep the ordinal order of the declared locales.
+function cldrMatch(desired, available) {
+  if (available.includes(desired)) return desired;
+  const wanted = cldrMaximize(cldrParse(desired));
+  if (wanted.language === "und") return undefined;
+  const chain = cldrChain(cldrDataId(desired));
+  let best, bestScore = Infinity;
+  for (const locale of available) {
+    const candidate = cldrMaximize(cldrParse(locale));
+    const penalty = candidate.language === wanted.language ? 0 : cldrRelatedPenalty(wanted.language, candidate.language);
+    if (penalty < 0) continue;
+    if (candidate.script !== wanted.script) continue;
+    let score;
+    if (candidate.region === wanted.region) {
+      // Equal maximized tags: the nearest in the desired tag's CLDR chain first (en-US-posix → en-US before en).
+      const step = chain.indexOf(cldrDataId(locale));
+      score = step < 0 ? 16 : step;
+    } else {
+      // The nearest ancestor of the desired tag that the candidate shares; the ancestor itself before its other descendants.
+      score = -1; const candidateId = cldrDataId(locale), candidateChain = cldrChain(candidateId);
+      for (let step = 1; step < chain.length && score < 0; step++) {
+        if (!candidateChain.includes(chain[step])) continue;
+        const ancestor = cldrMaximize(cldrParse(chain[step]));
+        const itself = candidateId === chain[step] || (ancestor.language === candidate.language && ancestor.script === candidate.script && ancestor.region === candidate.region);
+        score = 20 + 2 * step + (itself ? 0 : 1);
+      }
+      if (score < 0) score = candidate.region === cldrMaximize({ language: wanted.language, script: wanted.script, region: undefined, variants: "" }).region ? 100 : 101;
+    }
+    score += penalty;
+    if (score < bestScore) { best = locale; bestScore = score; }
+  }
+  return best;
 }
 
 // Localized dates and times from Intl, by the rules the .NET runtime applies to platform data: a date in its CLDR
@@ -884,8 +1052,10 @@ function validName(value, qualified = false) {
 function validDate(value) { if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith("0000-")) return false; const date = new Date(`${value}T00:00:00Z`); return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0,10) === value; }
 function validTime(value) { if (!/^\d{2}:\d{2}:\d{2}$/.test(value)) return false; return Number(value.slice(0,2)) < 24 && Number(value.slice(3,5)) < 60 && Number(value.slice(6,8)) < 60; }
 function validDateTime(value) { if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value) || value.startsWith("0000-")) return false; const date = new Date(value); return !Number.isNaN(date.valueOf()) && date.toISOString().replace(".000Z","Z") === value; }
+// POSIX-style tags such as de_DE name the same locale as de-DE.
 function canonicalLocale(value) {
-  if (typeof value!=="string"||!value||value.startsWith("-")||value.endsWith("-")) return null;
+  if (typeof value!=="string") return null; value=value.replaceAll("_","-");
+  if (!value||value.startsWith("-")||value.endsWith("-")) return null;
   const parts=value.split("-");
   if(parts[0].length<2||parts[0].length>8||!/^[A-Za-z]+$/.test(parts[0])) return null;
   const result=[parts[0].toLowerCase()]; let index=1;

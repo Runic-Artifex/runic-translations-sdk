@@ -9,8 +9,8 @@ namespace Runic.Translations;
 /// Development signals of the runtime, under the event source name <c>Runic-Translations</c>.
 /// </summary>
 /// <remarks>
-/// A catalog that resolves a requested locale to another locale (<see cref="LocaleResolution.Parent"/> or
-/// <see cref="LocaleResolution.Default"/>) when a context publishes is reported at the <see cref="EventLevel.Verbose"/>
+/// A catalog that resolves a requested locale to another locale (<see cref="LocaleResolution.Parent"/>,
+/// <see cref="LocaleResolution.Related"/> or <see cref="LocaleResolution.Default"/>) when a context publishes is reported at the <see cref="EventLevel.Verbose"/>
 /// level, for <c>dotnet-trace</c>, <c>dotnet-counters</c> or an <see cref="EventListener"/>, and to an attached debugger's
 /// output. Nothing is computed when neither listens.
 /// </remarks>
@@ -33,6 +33,7 @@ internal sealed class TranslationsEventSource : EventSource
             if (traced)
             {
                 if (status.LocaleResolution == LocaleResolution.Parent) Log.LocaleParentFallback(status.CatalogId, status.RequestedLocale, status.Locale);
+                else if (status.LocaleResolution == LocaleResolution.Related) Log.LocaleRelatedMatch(status.CatalogId, status.RequestedLocale, status.Locale);
                 else Log.LocaleDefaultFallback(status.CatalogId, status.RequestedLocale, status.Locale);
             }
 
@@ -51,4 +52,8 @@ internal sealed class TranslationsEventSource : EventSource
     /// <summary>A catalog lacks the requested locale and its parents and shows its default locale.</summary>
     [Event(2, Level = EventLevel.Verbose, Message = "Catalog '{0}' lacks requested locale '{1}' and shows its default locale '{2}'.")]
     public void LocaleDefaultFallback(string catalog, string requestedLocale, string locale) => WriteEvent(2, catalog, requestedLocale, locale);
+
+    /// <summary>A catalog lacks the requested locale and its parents and shows a locale CLDR likely subtags match.</summary>
+    [Event(3, Level = EventLevel.Verbose, Message = "Catalog '{0}' lacks requested locale '{1}' and shows the related locale '{2}'.")]
+    public void LocaleRelatedMatch(string catalog, string requestedLocale, string locale) => WriteEvent(3, catalog, requestedLocale, locale);
 }
