@@ -105,6 +105,10 @@ internal static class StatusCommandModule
             warnings.Add(new CommandDiagnostic(ToolCodes.Diagnostic, "review-file", $"{ReviewFile.InvalidCode}: the review file {InputFiles.DisplayPath(reviewPath, Path.GetFullPath(Environment.CurrentDirectory))} cannot be read ({exception.Code}): {exception.Message}",
                 CommandDiagnosticPhase.Execution, CommandDiagnosticSeverity.Warning));
         }
+        // Overrides of library catalogs whose library text changed since they were written (RTR0090), as validate reports them.
+        foreach (TranslationDiagnostic diagnostic in ReviewFile.Overrides(inputs))
+            warnings.Add(new CommandDiagnostic(ToolCodes.Diagnostic, "library-override", $"{diagnostic.Id}: {diagnostic.Location.Path}({diagnostic.Location.Line},{diagnostic.Location.Column}): {diagnostic.Message}",
+                CommandDiagnosticPhase.Execution, CommandDiagnosticSeverity.Warning));
         return TranslationStatus.Report(inputs.Project.Path, compilation, review,
             review is null ? null : InputFiles.DisplayPath(reviewPath, Path.GetFullPath(Environment.CurrentDirectory)), thresholds);
     }

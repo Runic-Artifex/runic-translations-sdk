@@ -44,8 +44,20 @@ internal sealed partial class Rmf2LanguageServer
         return resolution;
     }
 
+    // The restore outputs, install state files and node_modules directories the resolution depends on, missing ones
+    // included: a first restore or install (npm, pnpm, Yarn, workspaces) changes the stamp, and the next request resolves again.
     private static string InputsStamp(IReadOnlyList<string> inputs) =>
-        string.Concat(inputs.Select(path => "|" + (FileStamp(path) ?? "-")));
+        string.Concat(inputs.Select(path => "|" + (FileStamp(path) ?? DirectoryStamp(path) ?? "-")));
+
+    private static string? DirectoryStamp(string path)
+    {
+        try
+        {
+            var info = new DirectoryInfo(path);
+            return info.Exists ? "d" + info.LastWriteTimeUtc.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture) : null;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return null; }
+    }
 
     // The override sources of the project's buffers (absolute path → text), which replace the files.
     private Dictionary<string, byte[]> OverrideBuffers(TranslationDependencyResolution resolution, IEnumerable<string> group)
@@ -140,7 +152,7 @@ internal sealed partial class Rmf2LanguageServer
         if (message.Inputs.Count != 0) lines.Add("Inputs: " + string.Join(", ", message.Inputs));
         lines.Add("Content: " + message.Content + (message.Structured ? "" : ", plain text (no markup)"));
         if (catalog.Override(entry.Key, context.Locale) is { Changed: true })
-            lines.Add("Override: the library's base text changed since this override was written (RTR0090).");
+            lines.Add($"Override: the library's text (its base text or its {context.Locale} text) changed since this override was written (RTR0090).");
         string[] baseComments = message.Description is null ? [] : message.Description.Split('\n');
         return HoverResult(new Rmf2HoverContent
         {

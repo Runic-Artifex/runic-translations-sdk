@@ -104,12 +104,17 @@ locale's own text), the overridden messages, overrides whose library text change
 `overrides add <catalog> --locale <tag> --key <key>` adds each message to
 `translations/overrides/<catalog>/<tag>.rmf2`, seeded with the library's text in that locale (for a locale the
 library lacks, the text of the locale it falls back to) and with the library's base text as comments above it, and
-records that base text in `translations/overrides/<catalog>/<catalog>.review.json`, so the language server, the
-Translations Editor and `overrides list` mark the override (`RTR0090`) when a library update changes it. Keys are
+records the library text it was written for (the base text and the text that locale shows) in
+`translations/overrides/<catalog>/<catalog>.review.json`, so `validate`, `status`, the language server, the
+Translations Editor and `overrides list` report the override (`RTR0090`) when a library update changes either. Keys are
 logical (`grid.title`) or canonical (`grid_title`). Without `--key`, it creates `<tag>.rmf2` with every library
 message as a commented-out template. A locale the library lacks is added with its first message and falls back by
-the build's rule. An installed catalog that `runic.json` does not list yet is added to `"overrides"`. `--dry-run`
-reports the change without writing it.
+the build's rule (an added locale with no message yet is not a fallback target of other locales). An installed catalog
+that `runic.json` does not list yet is added to `"overrides"`. The request is checked first; `runic.json`, the override
+source and the review file are then written together, each only while it is unchanged since it was read, or nothing is
+written. An unreadable review file (`RTR0091`) stops the command until it is fixed or deleted. `--dry-run` reports the
+change without writing it. A custom `BaseIntermediateOutputPath`, `MSBuildProjectExtensionsPath` or `ArtifactsPath`
+and Yarn Plug'n'Play are not searched for library catalogs.
 
 ## Generate C# and ESM
 

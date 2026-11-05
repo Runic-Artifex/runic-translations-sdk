@@ -48,6 +48,15 @@ internal sealed class LibraryOverrideTests
         Assert.Contains($"acme.table: {(npm ? "@acme/table@1.0.0 (npm)" : "Acme.Table 1.0.0 (NuGet)")}", list.StandardOutput);
         Assert.Contains("de (library, falls back to en): 3/3 messages in its own text; overrides header.sort, empty (library text changed)", list.StandardOutput);
         Assert.Contains("fr (added by the application, no messages yet, falls back to en): 0/3", list.StandardOutput);
+
+        // validate and status report overrides whose library text changed (RTR0090), so CI can gate them.
+        ProcessResult validate = Tool(fixture, "validate", "--project", "translations");
+        Assert.Equal(0, validate.ExitCode, validate.Combined);
+        Assert.Contains("RTR0090", validate.Combined);
+        Assert.Contains("acme.table/de.rmf2", validate.Combined);
+        ProcessResult status = Tool(fixture, "status", "--project", "translations");
+        Assert.Equal(0, status.ExitCode, status.Combined);
+        Assert.Contains("RTR0090", status.Combined);
     }
 
     [Test, DisplayName("CLI overrides add lists an installed catalog in runic.json overrides and refuses one no package ships")]
@@ -55,6 +64,14 @@ internal sealed class LibraryOverrideTests
     {
         using PackedLibraryFixture fixture = PackedLibraryFixture.Create();
         File.WriteAllText(fixture.ProjectPath, "{\n  \"schemaVersion\": 1,\n  \"catalog\": \"shop\",\n  \"code\": { \"namespace\": \"Shop\", \"className\": \"ShopText\" },\n  \"baseLocale\": \"en\"\n}\n");
+        string original = File.ReadAllText(fixture.ProjectPath);
+        // A request that fails (an unknown key, an invalid locale) writes nothing, runic.json included.
+        ProcessResult wrongKey = Tool(fixture, "overrides", "add", "acme.table", "--locale", "de", "--key", "titel", "--project", "translations");
+        Assert.Equal(2, wrongKey.ExitCode, wrongKey.Combined);
+        ProcessResult wrongLocale = Tool(fixture, "overrides", "add", "acme.table", "--locale", "not a locale", "--key", "empty", "--project", "translations");
+        Assert.Equal(2, wrongLocale.ExitCode, wrongLocale.Combined);
+        Assert.Equal(original, File.ReadAllText(fixture.ProjectPath));
+        Assert.False(Directory.Exists(fixture.OverridesDirectory), "A failed request created the overrides directory.");
         ProcessResult dry = Tool(fixture, "overrides", "add", "acme.table", "--locale", "de", "--key", "empty", "--dry-run", "--project", "translations");
         Assert.Equal(0, dry.ExitCode, dry.Combined);
         Assert.Contains("would add { \"catalog\": \"acme.table\", \"from\": \"Acme.Table\" }", dry.StandardOutput);
