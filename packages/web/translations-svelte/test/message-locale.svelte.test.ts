@@ -97,6 +97,33 @@ describe("useMessageLocale", () => {
     expect(channel()?.resolver).toBe(null);
   });
 
+  test("removes shared resolvers by identity, in any order", async () => {
+    const channel = () => (globalThis as Record<symbol, { resolver: unknown; resolvers: unknown[] } | undefined>)[Symbol.for("runic.translations.locale")];
+    // A layout swapped with an outro transition: the new one mounts before the old one is destroyed.
+    const first = mount(SharedLocaleFixture, { target: document.body, props: { state: { locale: "de" } } });
+    const second = mount(SharedLocaleFixture, { target: document.body, props: { state: { locale: "en-GB" } } });
+    flushSync();
+    expect(library.requested()).toBe("en-GB");
+    await unmount(first);
+    expect(library.requested()).toBe("en-GB");
+    await unmount(second);
+    // Both are gone, so no destroyed component's getter stays installed.
+    expect(channel()?.resolver).toBe(null);
+    expect(channel()?.resolvers).toEqual([]);
+
+    // Install A, B, C; remove B, then C (A applies again), then A.
+    const a = mount(SharedLocaleFixture, { target: document.body, props: { state: { locale: "a" } } });
+    const b = mount(SharedLocaleFixture, { target: document.body, props: { state: { locale: "b" } } });
+    const c = mount(SharedLocaleFixture, { target: document.body, props: { state: { locale: "c" } } });
+    flushSync();
+    await unmount(b);
+    expect(library.requested()).toBe("c");
+    await unmount(c);
+    expect(library.requested()).toBe("a");
+    await unmount(a);
+    expect(channel()?.resolver).toBe(null);
+  });
+
   test("with a SvelteLocale alone, the shared channel gets the requested tag", async () => {
     let current = "de";
     const listeners = new Set<(locale: string) => void>();

@@ -234,8 +234,9 @@ internal sealed class Rmf2V1CorpusTests
     // Re-pinned for merging T1g with main (TE, TC, TD) through T1a/T1b, in both digests.
     // Re-pinned for merging TB (#131) with T1g (#132), in both digests.
     // Re-pinned for T1c (0.9): the shared locale channel in runtime.js, server.js and transport.js, in both digests.
-    private const string EncodedOutputDigest = "a3546eed56e08d586a1797a0f091b107cbd29d9af377a87844bbf68b150702ab";
-    private const string HiddenEncodedOutputDigest = "b9c69c821f485298819188a77269bde8adf083f87fc428246fa4d4e7b3f9a3eb";
+    // Re-pinned for merging main (TB #131) into T1c, with ordered resolver removal, in both digests.
+    private const string EncodedOutputDigest = "e05ab6cff32bbeffbbe56d7ca78fe5613c5375302a13ef2a0df0e88e5f8f24a4";
+    private const string HiddenEncodedOutputDigest = "7345b8b3c370684a23d0829d203c420bce259d954d7aef3800eae1b26985d199";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

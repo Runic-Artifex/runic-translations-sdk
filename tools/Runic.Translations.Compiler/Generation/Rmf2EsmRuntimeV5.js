@@ -12,21 +12,36 @@ const dynamicContracts = new WeakMap();
 const decodedArtifacts = new WeakSet();
 // The shared locale channel: one locale for every generated catalog on a page or in a server process, and for every copy of
 // this runtime, so an application and its libraries switch together. Its shape is a protocol between runtimes of different
-// compiler releases and the Svelte adapter, so members are only ever added: { version: 1, resolver, storage }. resolver is
-// the page's locale resolver (configureSharedLocaleResolver, useMessageLocale(locale)); storage is the AsyncLocalStorage
-// that the first server.js creates, whose store { requested, timeZone } is the locale of the request runWithLocale runs.
+// compiler releases and the Svelte adapter, so members are only ever added: { version: 1, resolver, storage, resolvers }.
+// resolver is the page's locale resolver (configureSharedLocaleResolver, useMessageLocale(locale)): the last of resolvers,
+// the installed ones in installation order, each removed by identity, so removals in any order leave the latest remaining
+// one. storage is the AsyncLocalStorage that the first server.js creates, whose store { requested, timeZone } is the
+// locale of the request runWithLocale runs.
 const localeChannelKey = Symbol.for("runic.translations.locale");
 function localeChannel() {
   let channel = globalThis[localeChannelKey];
-  if (channel === undefined || channel === null || typeof channel !== "object") globalThis[localeChannelKey] = channel = { version: 1, resolver: null, storage: null };
+  if (channel === undefined || channel === null || typeof channel !== "object") globalThis[localeChannelKey] = channel = { version: 1, resolver: null, storage: null, resolvers: [] };
+  if (!Array.isArray(channel.resolvers)) channel.resolvers = typeof channel.resolver === "function" ? [channel.resolver] : [];
   return channel;
+}
+// Installs a resolver on top of an ordered list and returns its removal, which takes out exactly this installation
+// (a resolver installed twice is two entries) and makes the latest remaining one current.
+function installResolver(list, resolver, apply) {
+  const entry = () => resolver(); list.push(entry); apply(entry); let active = true;
+  return () => {
+    if (!active) return; active = false;
+    const index = list.indexOf(entry); if (index >= 0) list.splice(index, 1);
+    apply(list.length === 0 ? null : list[list.length - 1]);
+  };
 }
 function requestStore() {
   const store = globalThis[localeChannelKey]?.storage?.getStore?.();
   return store !== null && typeof store === "object" && typeof store.requested === "string" ? store : undefined;
 }
-// The resolver configureLocaleResolver installs for this catalog only; null when it has none and the channel applies.
+// The resolver configureLocaleResolver installs for this catalog only (the latest of localeResolvers); null when it has
+// none and the channel applies.
 let localeResolver = null;
+const localeResolvers = [];
 // The tag the catalog formats in when a call names none: its own resolver, else the request's locale (runWithLocale of any
 // catalog), else the shared resolver, else the document's lang, else the base locale.
 function currentLocaleTag() {
@@ -51,17 +66,17 @@ export function freezeOwnRecord(entries) {
 
 export function configureLocaleResolver(resolver) {
   if (typeof resolver !== "function") throw new TypeError("The locale resolver must be a function.");
-  const previous = localeResolver; localeResolver = resolver;
-  return () => { if (localeResolver === resolver) localeResolver = previous; };
+  return installResolver(localeResolvers, resolver, current => { localeResolver = current; });
 }
 
 // Sets the locale of every generated catalog on the page (or in the process) that has no resolver of its own: the shared
 // channel above. The resolver returns a tag that each catalog resolves under its own locales and policy, normally the
-// requested tag of the application's locale source (de-CH), so a library that declares de-CH shows it.
+// requested tag of the application's locale source (de-CH), so a library that declares de-CH shows it. The resolver is
+// process-wide: on a server, set the request's locale with runWithLocale instead, which every catalog reads first.
 export function configureSharedLocaleResolver(resolver) {
   if (typeof resolver !== "function") throw new TypeError("The locale resolver must be a function.");
-  const channel = localeChannel(), previous = channel.resolver; channel.resolver = resolver;
-  return () => { if (channel.resolver === resolver) channel.resolver = previous; };
+  const channel = localeChannel();
+  return installResolver(channel.resolvers, resolver, current => { channel.resolver = current; });
 }
 
 // server.js: the process's one request-locale storage, created by the first catalog that needs it.
