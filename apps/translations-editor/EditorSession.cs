@@ -5,7 +5,7 @@ using Runic.Translations.Authoring;
 
 namespace Runic.Translations.Editor;
 
-internal sealed class EditorSession : IDisposable
+internal sealed partial class EditorSession : IDisposable
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly EditorHistory _history = new();
@@ -586,7 +586,7 @@ internal sealed class EditorSession : IDisposable
         try
         {
             ThrowIfDisposed();
-            var replacement = new EditorWorkspace(request.Directory);
+            var replacement = new EditorWorkspace(request.Directory, request.CatalogId);
             try
             {
                 WorkspaceSnapshot snapshot = await replacement.LoadAsync(cancellationToken).ConfigureAwait(false);

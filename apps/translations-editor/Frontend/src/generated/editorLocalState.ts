@@ -66,7 +66,7 @@ const members: BridgeMemberDecoders<EditorLocalStateState> = {
   isSaveLocalStateExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isClearLocalStateExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorLocalStateViewModel:65CB9514BADD2A468BEE5C0905089A11636FF7E3BA9F1133DE5231364EDD720E";
+const bridgeContract = "Runic.Translations.Editor.EditorLocalStateViewModel:038EF687035CE7BA203C5B35C0FC6FE8C52706385336A981E5058A8BA7500500";
 const loadLocalStateOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const saveLocalStateOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const clearLocalStateOperation: BridgeOperationCodec<void> = { decode: value => undefined };

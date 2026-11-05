@@ -20,7 +20,7 @@ using System.Xml.Linq;
 
 namespace Runic.Translations.Editor;
 
-internal static class EditorSmokeTest
+internal static partial class EditorSmokeTest
 {
     private static async Task AuthoringJourneyAsync(string project)
     {
@@ -621,6 +621,7 @@ internal static class EditorSmokeTest
             await ReviewStampJourneyAsync(Path.Combine(container, "review-stamp")).ConfigureAwait(false);
             await IncompleteCatalogReviewJourneyAsync(Path.Combine(container, "incomplete-review")).ConfigureAwait(false);
             await ImportedApprovalJourneyAsync(Path.Combine(container, "imported-approval")).ConfigureAwait(false);
+            await LibraryCatalogJourneyAsync(Path.Combine(container, "library-catalogs")).ConfigureAwait(false);
             string project = Path.Combine(container, "translations");
             // Smoke tests exercise an intentionally minimal workspace. They must
             // never mutate the packaged example or a caller-provided directory.

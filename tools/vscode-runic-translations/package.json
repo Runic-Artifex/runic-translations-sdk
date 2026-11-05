@@ -116,6 +116,10 @@
         "title": "Runic: Import XLIFF (dry run)"
       },
       {
+        "command": "runicTranslations.overrideLibraryMessage",
+        "title": "Runic: Override Library Message…"
+      },
+      {
         "command": "runicTranslations.showStatus",
         "title": "Runic: Show Translation Status"
       },

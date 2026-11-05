@@ -9,6 +9,7 @@ import { pageEditorInterchange, type EditorInterchangePageReference } from "./ed
 import { pageEditorDiagnostics, type EditorDiagnosticsPageReference } from "./editorDiagnostics.js";
 import { pageEditorLocalState, type EditorLocalStatePageReference } from "./editorLocalState.js";
 import { pageEditorProject, type EditorProjectPageReference } from "./editorProject.js";
+import { pageEditorLibraries, type EditorLibrariesPageReference } from "./editorLibraries.js";
 import { pageEditorDocument, type EditorDocumentPageReference } from "./editorDocument.js";
 
 export interface EditorState {
@@ -19,6 +20,7 @@ export interface EditorState {
   readonly diagnostics: EditorDiagnosticsPageReference;
   readonly localState: EditorLocalStatePageReference;
   readonly project: EditorProjectPageReference;
+  readonly libraries: EditorLibrariesPageReference;
   readonly documents: readonly (EditorDocumentPageReference)[];
   readonly isSetUiLocaleExecuting: boolean;
 }
@@ -61,10 +63,11 @@ const members: BridgeMemberDecoders<EditorState> = {
   diagnostics: (wire: unknown) => { const reference = contentReference(wire); return reference.kind === "editorDiagnostics" ? pageEditorDiagnostics(reference.id) : (() => { throw new BridgeError("failed", "Unknown diagnostics kind."); })(); },
   localState: (wire: unknown) => { const reference = contentReference(wire); return reference.kind === "editorLocalState" ? pageEditorLocalState(reference.id) : (() => { throw new BridgeError("failed", "Unknown localState kind."); })(); },
   project: (wire: unknown) => { const reference = contentReference(wire); return reference.kind === "editorProject" ? pageEditorProject(reference.id) : (() => { throw new BridgeError("failed", "Unknown project kind."); })(); },
+  libraries: (wire: unknown) => { const reference = contentReference(wire); return reference.kind === "editorLibraries" ? pageEditorLibraries(reference.id) : (() => { throw new BridgeError("failed", "Unknown libraries kind."); })(); },
   documents: (wire: unknown) => bridgeWire.array(wire, item => { const reference = contentReference(item); return reference.kind === "editorDocument" ? pageEditorDocument(reference.id) : (() => { throw new BridgeError("failed", "Unknown documents kind."); })(); }),
   isSetUiLocaleExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorViewModel:65CB9514BADD2A468BEE5C0905089A11636FF7E3BA9F1133DE5231364EDD720E";
+const bridgeContract = "Runic.Translations.Editor.EditorViewModel:038EF687035CE7BA203C5B35C0FC6FE8C52706385336A981E5058A8BA7500500";
 const setUiLocaleOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 
 /**

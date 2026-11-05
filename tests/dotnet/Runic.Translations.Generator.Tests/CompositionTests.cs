@@ -232,6 +232,28 @@ internal sealed class CompositionTests
             string.Join("\n", stray.SingleResult.Diagnostics));
     }
 
+    [Test, DisplayName("runic.json overrides \"from\" may list the library's NuGet and npm packages; the build matches its NuGet package")]
+    public void OverridesFromSeveralPackages()
+    {
+        TestInput[] inputs = OverrideInputs("title = Data grid\n", "title = Grille\n");
+        TestInput[] WithFrom(string from) => inputs.Select(input => input.Kind == "Project"
+            ? input with { Text = input.Text.Replace("\"from\": \"Acme.Grid\"", "\"from\": " + from, StringComparison.Ordinal) } : input).ToArray();
+
+        GeneratorRun both = GeneratorTestHost.Run(WithFrom("[ \"@acme/grid\", \"Acme.Grid\" ]"));
+        Assert.Equal(0, both.SingleResult.Diagnostics.Length, string.Join("\n", both.SingleResult.Diagnostics));
+        Assert.True(both.SingleResult.GeneratedSources.Any(source => source.SourceText.ToString().Contains("TranslationOverlay.FromCompiled", StringComparison.Ordinal)), "compiled overlay");
+
+        // RTR0104 only when none of the listed packages packs the catalog; an npm name never matches a NuGet package.
+        GeneratorRun npmOnly = GeneratorTestHost.Run(WithFrom("[ \"@acme/grid\" ]"));
+        Assert.True(npmOnly.SingleResult.Diagnostics.Any(diagnostic => diagnostic.Id == "RTR0104" && diagnostic.Severity == DiagnosticSeverity.Error &&
+            diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture).Contains("'Acme.Grid', not '@acme/grid'", StringComparison.Ordinal)),
+            string.Join("\n", npmOnly.SingleResult.Diagnostics));
+        GeneratorRun other = GeneratorTestHost.Run(WithFrom("[ \"Other.Grid\", \"@acme/grid\" ]"));
+        Assert.True(other.SingleResult.Diagnostics.Any(diagnostic => diagnostic.Id == "RTR0104" &&
+            diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture).Contains("'Acme.Grid', not 'Other.Grid'", StringComparison.Ordinal)),
+            string.Join("\n", other.SingleResult.Diagnostics));
+    }
+
     [Test, DisplayName("a context switches every catalog to one requested locale and reports how each resolved it")]
     public async Task SharedLocale()
     {

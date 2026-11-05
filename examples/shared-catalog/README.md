@@ -30,11 +30,28 @@ English and prints them again:
 [en] One update is ready to install. 3 updates are ready to install.
 ```
 
-The frontend adds the Vite plugin with this project:
+`Frontend` is a minimal Vite page on the same catalog. Its
+[`vite.config.js`](Frontend/vite.config.js) adds the Vite plugin with this
+project, and [`main.js`](Frontend/main.js) shows `m.page_title()` and
+`m.page_summary({ count: 3 })` with a button that switches between English and
+German:
 
 ```js
 runicTranslations({ project: 'translations' })
 ```
+
+```sh
+cd examples/shared-catalog/Frontend
+dotnet new tool-manifest --output .config
+dotnet tool install dotnet-runic-translations --version <VERSION>
+npm install
+npm run dev
+```
+
+CI builds the page against the packages of the current commit
+(`bun eng/verify-packages.mjs`, or `bun eng/verify-examples.mjs` after
+`bun eng/run.mjs pack`) and checks that its bundle holds only the messages the
+page calls, not the tray's.
 
 `bun eng/run.mjs native-aot` publishes `Tray` with NativeAOT, with trim and AOT
 warnings treated as errors, and checks this output. See

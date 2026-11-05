@@ -378,15 +378,21 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             cancellationToken.ThrowIfCancellationRequested();
             GeneratorInput[] packed = inputs.Where(input => input.Kind == InputKind.PackedProject && input.Text is not null &&
                 string.Equals(input.Catalog, item.Catalog, StringComparison.Ordinal)).ToArray();
-            GeneratorInput[] fromPackage = packed.Where(input => string.Equals(input.DefaultCatalog, item.From, StringComparison.OrdinalIgnoreCase)).ToArray();
+            // "from" may list the library's npm package too; a NuGet package ID matches only the NuGet entries.
+            GeneratorInput[] fromPackage = packed.Where(input => item.From.Any(from => string.Equals(input.DefaultCatalog, from, StringComparison.OrdinalIgnoreCase))).ToArray();
+            string[] nuGetFrom = item.From.Where(static from => from.IndexOf('@') < 0 && from.IndexOf('/') < 0).ToArray();
+            string named = nuGetFrom.Length == 0 ? "'" + string.Join("', '", item.From) + "'" : "'" + string.Join("' or '", nuGetFrom) + "'";
             if (fromPackage.Length != 1)
             {
                 string message = packed.Length == 0
-                    ? "Catalog '" + item.Catalog + "' to override is not packed by any referenced package; reference '" + item.From +
-                      "', and pack it with RunicTranslationsPackCatalog=true (Runic.Translations.Build 0.9.0 or later)."
+                    ? "Catalog '" + item.Catalog + "' to override is not packed by any referenced package; " +
+                      (nuGetFrom.Length == 0
+                          ? "\"from\" in runic.json lists only npm packages (" + named + "); add the library's NuGet package ID"
+                          : "reference " + named) +
+                      ", and pack it with RunicTranslationsPackCatalog=true (Runic.Translations.Build 0.9.0 or later)."
                     : fromPackage.Length == 0
-                        ? "Catalog '" + item.Catalog + "' comes from package '" + string.Join("', '", packed.Select(input => input.DefaultCatalog)) + "', not '" + item.From + "'; correct \"from\" in runic.json."
-                        : "Catalog '" + item.Catalog + "' is packed more than once by '" + item.From + "'.";
+                        ? "Catalog '" + item.Catalog + "' comes from package '" + string.Join("', '", packed.Select(input => input.DefaultCatalog)) + "', not " + named + "; correct \"from\" in runic.json."
+                        : "Catalog '" + item.Catalog + "' is packed more than once by " + named + ".";
                 diagnostics.Add(Diagnostic.Create(TranslationsDiagnostics.Get("RTR0104"), Location.None, DiagnosticSeverity.Error, null, null, message));
                 continue;
             }
@@ -410,7 +416,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             }
             if (libraryError is not null)
                 diagnostics.Add(Diagnostic.Create(TranslationsDiagnostics.Get("RTR0104"), Location.None, DiagnosticSeverity.Error, null, null,
-                    "The packed catalog '" + item.Catalog + "' of package '" + item.From + "' does not compile with this Runic.Translations.Build: " +
+                    "The packed catalog '" + item.Catalog + "' of package '" + library.DefaultCatalog + "' does not compile with this Runic.Translations.Build: " +
                     libraryError.Id + " " + libraryError.Message + " Use a Runic.Translations.Build at least as new as the library's."));
             if (!failed && compilation.Project is { } overlay && overlay.OverlayKeys.Count != 0) compiled.Add(overlay);
         }

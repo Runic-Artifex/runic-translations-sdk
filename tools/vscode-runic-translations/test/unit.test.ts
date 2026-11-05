@@ -8,6 +8,7 @@ import type { Preview } from "../src/preview.js";
 import { PreviewSession, sampleChoices, type PreviewHost, type PreviewState, type Samples } from "../src/preview-session.js";
 import { ForwardedWatchers, type DisposableLike, type WatcherLike } from "../src/watchers.js";
 import { OneTimeNotice, coverageLine, errorSummary, localeStatus, parseStatus, statusHtml, statusPresentation, type DocumentInfo } from "../src/status.js";
+import { canonicalLocale, isOverriddenIn, libraryCatalogChoices, libraryInstallPattern, libraryDocumentProject, libraryLocaleChoices, libraryMessageChoices, messageLine, overrideSourcePath, overridesAddArguments, unsavedDocuments, type LibraryCatalogs } from "../src/libraries.js";
 
 class MockWatcher implements WatcherLike<string> {
   readonly created: ((uri: string) => void)[] = [];
@@ -330,4 +331,78 @@ test("catalog import runs the tool's importer: a dry run first, then the import,
     .toEqual(["import", "--from", "resx", "/w/Strings resx/Strings.resx", "--project", "/w/runic.json", "--dry-run"]);
   expect(importArguments("/w/runic.json", "i18next", "/w/locales", { dryRun: false, overwrite: true }))
     .toEqual(["import", "--from", "i18next", "/w/locales", "--project", "/w/runic.json", "--overwrite"]);
+});
+test("Override Library Message offers installed catalogs, messages and locales, and runs overrides add for the project", () => {
+  const result: LibraryCatalogs = {
+    project: "file:///work/shop/translations/runic.json", warnings: [],
+    catalogs: [
+      { catalog: "acme.chart", package: "Acme.Chart", version: "2.0.0", origin: "nuget", overridden: false, problem: null, directory: null, baseLocale: "en",
+        locales: [{ tag: "en", origin: "library", fallback: null, messages: 1, libraryTranslated: 1, overridden: 0, covered: 1, pending: false }],
+        messages: [{ key: "legend", path: "legend", baseText: "Legend", inputs: [], overridden: [], changed: [] }] },
+      { catalog: "acme.missing", package: null, version: null, origin: null, overridden: true, problem: "not installed", directory: null },
+      { catalog: "acme.table", package: "Acme.Table", version: "1.0.0", origin: "nuget", overridden: true, problem: null, directory: null, baseLocale: "en",
+        locales: [
+          { tag: "en", origin: "library", fallback: null, messages: 2, libraryTranslated: 2, overridden: 0, covered: 2, pending: false },
+          { tag: "de-CH", origin: "application", fallback: "de", messages: 2, libraryTranslated: 0, overridden: 1, covered: 1, pending: false },
+        ],
+        messages: [
+          { key: "header_sort", path: "header.sort", baseText: "Sort by {$column}", inputs: ["$column: string"], overridden: ["de-CH"], changed: ["de-CH"] },
+          { key: "rows", path: "rows", baseText: ".input {$count :integer}\n.match $count", inputs: [], overridden: [], changed: [] },
+        ] },
+    ],
+  };
+  const catalogs = libraryCatalogChoices(result);
+  expect(catalogs.map(choice => choice.label)).toEqual(["acme.table", "acme.chart"]);
+  expect(catalogs[0].detail).toBe("Overridden in de-CH");
+  expect(catalogs[1].detail).toContain("runic.json gets an \"overrides\" entry");
+  const messages = libraryMessageChoices(catalogs[0].value);
+  expect(messages.map(choice => [choice.label, choice.description])).toEqual([["header.sort", "Sort by {$column}"], ["rows", ".input {$count :integer}"]]);
+  expect(messages[0].detail).toBe("Overridden in de-CH; library text changed since the override in de-CH; Inputs: $column: string");
+  const locales = libraryLocaleChoices(catalogs[0].value, messages[0].value);
+  expect(locales.map(choice => choice.description)).toEqual(["library base locale", "added by the application, falls back to de"]);
+  expect(locales[1].detail).toBe("1/2 messages in its own text; this message is overridden here");
+  const manifest = join("/work", "shop", "translations", "runic.json");
+  expect(overridesAddArguments(manifest, "acme.table", "fr", "header_sort")).toEqual(["overrides", "add", "acme.table", "--locale", "fr", "--key", "header_sort", "--project", join("/work", "shop", "translations")]);
+  expect(overrideSourcePath(manifest, "acme.table", "fr")).toBe(join("/work", "shop", "translations", "overrides", "acme.table", "fr.rmf2"));
+  expect(messageLine("# header {\n#   sort = x\n# }\nrows = Rows\nheader {\n  sort = Trier\n}\n", "header.sort")).toBe(5);
+  expect(messageLine("rows = Rows\n", "missing")).toBe(0);
+});
+test("typed override locales are canonicalized and compared case-insensitively", () => {
+  expect(canonicalLocale("de_ch")).toBe("de-CH");
+  expect(canonicalLocale(" DE-ch ")).toBe("de-CH");
+  expect(canonicalLocale("zh_hant_tw")).toBe("zh-Hant-TW");
+  expect(canonicalLocale("fr")).toBe("fr");
+  expect(canonicalLocale("not a locale")).toBeUndefined();
+  expect(canonicalLocale("de--CH")).toBeUndefined();
+  expect(canonicalLocale("")).toBeUndefined();
+  const message = { overridden: ["de-CH"] };
+  expect(isOverriddenIn(message, "de-ch")).toBe(true);
+  expect(isOverriddenIn(message, "DE-CH")).toBe(true);
+  expect(isOverriddenIn(message, "de")).toBe(false);
+});
+test("overrides add stops for unsaved edits to the files it writes", () => {
+  const source = join("/work", "overrides", "acme.table", "de-CH.rmf2");
+  const manifest = join("/work", "runic.json");
+  const documents = [
+    { fsPath: source, isDirty: true },
+    { fsPath: manifest, isDirty: false },
+    { fsPath: join("/work", "other.rmf2"), isDirty: true },
+  ];
+  expect(unsavedDocuments(documents, [source, manifest], "linux")).toEqual([documents[0]]);
+  expect(unsavedDocuments(documents, [source.toUpperCase(), manifest], "linux")).toEqual([]);
+  expect(unsavedDocuments(documents, [source.toUpperCase(), manifest], "win32")).toEqual([documents[0]]);
+  expect(unsavedDocuments([{ fsPath: manifest, isDirty: true }], [source, manifest], "linux")).toHaveLength(1);
+});
+test("library documents name their project in the query, encoded or not", () => {
+  const project = "file:///work/my%20shop/translations/runic.json";
+  expect(libraryDocumentProject(`project=${encodeURIComponent(project)}`)).toBe(project);
+  expect(libraryDocumentProject(encodeURIComponent(`project=${project}`))).toBe(project);
+  expect(libraryDocumentProject("other=1")).toBeUndefined();
+  expect(statusPresentation("running", { project: null, catalog: "acme.table", baseLocale: null, locale: "fr", library: "Acme.Table 1.0.0" }).tooltip)
+    .toContain("Catalog: acme.table (library Acme.Table 1.0.0, overridden by the application)");
+});
+
+test("the restore and install files of every package manager are watched for library catalogs", () => {
+  for (const file of ["obj/project.assets.json", "node_modules/.package-lock.json", "node_modules/.modules.yaml", "node_modules/.yarn-state.yml", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock"])
+    expect(libraryInstallPattern).toContain(file);
 });

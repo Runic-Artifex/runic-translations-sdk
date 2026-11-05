@@ -165,6 +165,14 @@ export const load: LayoutServerLoad = ({ locals }) => ({
 the handle didn't set a supported one. Declare `locale` in `App.Locals` in
 `src/app.d.ts`.
 
+SvelteKit does not track `locals`, and the reroute hook maps `/de` and `/fr` to
+one route, so a load runs again after a locale switch on the client only when it
+reads `url` (or a `depends` key you invalidate). A load whose data is text in
+the request's locale reads `url`, as
+[the component-library example](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/examples/component-library/web/src/routes/+page.server.ts)
+does. The root layout's locale source follows navigation by itself
+(`synchronizeLocaleWithNavigation`).
+
 `requestedLocaleFromLocals(locals, routing, key?, localeKey?)` returns the
 requested tag, or the locale when the handle stored none. Return it from the
 layout load too and create the browser's locale source with

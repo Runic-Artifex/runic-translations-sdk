@@ -10,7 +10,7 @@ import { discoverDependencyCatalogs, type DependencyCatalog } from "./dependenci
 
 interface ApplicationSettings {
   readonly locales?: readonly string[];
-  readonly overrides: ReadonlyMap<string, { readonly from: string; readonly directory: string }>;
+  readonly overrides: ReadonlyMap<string, { readonly from: readonly string[]; readonly directory: string }>;
 }
 
 
@@ -279,7 +279,7 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
   }
 
   function readApplicationSettings(project: CompilerProject): ApplicationSettings {
-    const overrides = new Map<string, { from: string; directory: string }>();
+    const overrides = new Map<string, { from: string[]; directory: string }>();
     const settings = JSON.parse(readFileSync(project.config, "utf8")) as { baseLocale?: unknown; locales?: unknown; overrides?: unknown };
     if (!settings || typeof settings !== "object" || Array.isArray(settings)) throw new Error("runic.json must contain a JSON object.");
     let locales = options.locales;
@@ -288,8 +288,12 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
     if (locales && typeof settings.baseLocale === "string" && !locales.includes(settings.baseLocale)) locales = [settings.baseLocale, ...locales];
     if (Array.isArray(settings.overrides))
       for (const entry of settings.overrides as { catalog?: unknown; from?: unknown }[])
-        if (typeof entry?.catalog === "string" && typeof entry.from === "string")
-          overrides.set(entry.catalog, { from: entry.from, directory: join(project.project, "overrides", entry.catalog) });
+        if (typeof entry?.catalog === "string") {
+          // "from" is a package name or a list of them, such as the NuGet and npm packages of a library shipped both ways.
+          const from = typeof entry.from === "string" ? [entry.from] : Array.isArray(entry.from) && entry.from.length > 0 &&
+            entry.from.every(item => typeof item === "string") ? entry.from as string[] : undefined;
+          if (from) overrides.set(entry.catalog, { from, directory: join(project.project, "overrides", entry.catalog) });
+        }
     return { locales, overrides };
   }
 
@@ -316,14 +320,17 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       if (options.dependencies !== "auto") return;
       const settings = applicationSettings();
       const { locales, overrides } = settings;
-      // As RTR0104 in a .NET build: every override must name a catalog that a dependency ships, from the package it names.
+      // As RTR0104 in a .NET build: every override must name a catalog that a dependency ships, from one of the packages it
+      // names. "from" may list the library's NuGet package too, which never matches an npm package name.
       for (const [overridden, { from }] of overrides) {
         const dependency = dependencyCatalogs.find(item => item.catalog === overridden);
+        const npm = from.filter(name => name.startsWith("@") || !/[A-Z]/.test(name));
+        const named = (npm.length > 0 ? npm : from).map(name => `'${name}'`).join(" or ");
         if (!dependency)
-          throw new Error(`RTR0104: Catalog '${overridden}' to override is not shipped by any dependency; add '${from}' to the application's ` +
+          throw new Error(`RTR0104: Catalog '${overridden}' to override is not shipped by any dependency; add ${named} to the application's ` +
             `package.json dependencies (its package.json must declare runicTranslations), or correct "catalog" in runic.json.`);
-        if (dependency.packageName !== from)
-          throw new Error(`RTR0104: Catalog '${overridden}' comes from package '${dependency.packageName}', not '${from}'; correct "from" in runic.json.`);
+        if (!from.includes(dependency.packageName))
+          throw new Error(`RTR0104: Catalog '${overridden}' comes from package '${dependency.packageName}', not ${named}; correct "from" in runic.json.`);
       }
       // Override sources of a catalog that runic.json does not list are ignored, as in a .NET build.
       if (compiler) {

@@ -23,6 +23,7 @@
     <ProjectReference Include="../../../packages/dotnet/Runic.Translations.Build/Runic.Translations.Build.csproj"
                       ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\tools\dotnet-runic-translations\dotnet-runic-translations.csproj" />
+    <Compile Include="../Shared/PackedLibraryFixture.cs" Link="Shared/PackedLibraryFixture.cs" />
   </ItemGroup>
   <Import Project="../../../eng/build/translations.targets" />
 </Project>

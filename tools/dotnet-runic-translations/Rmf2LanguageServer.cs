@@ -18,7 +18,7 @@ using Runic.Translations.Tooling;
 namespace Runic.Translations.Tool;
 
 /// <summary>Bounded stdio LSP transport over the shared recoverable resource model.</summary>
-internal sealed class Rmf2LanguageServer
+internal sealed partial class Rmf2LanguageServer
 {
     private readonly Rmf2WorkspaceCache _syntaxCache = new();
     private readonly Dictionary<string, Buffer> _buffers = new(StringComparer.Ordinal);
@@ -179,6 +179,7 @@ internal sealed class Rmf2LanguageServer
     {
         if (method is "textDocument/didOpen" or "textDocument/didChange" or "textDocument/didClose" or "textDocument/didSave" or
             "workspace/didChangeWatchedFiles" or "workspace/didChangeConfiguration") _reviewViews.Clear();
+        if (method is "workspace/didChangeWatchedFiles" or "workspace/didChangeConfiguration") _dependencies.Clear();
         if (method == "initialize")
         {
             _configurationSync = args["initializationOptions"]?["runicConfigurationSync"]?.GetValue<bool>() == true;
@@ -230,6 +231,8 @@ internal sealed class Rmf2LanguageServer
             FlushGlobalDiagnosticsRefresh();
             return null;
         }
+        if (method == "runic/libraryCatalogs") return LibraryCatalogs(args);
+        if (method == "runic/libraryDocument") return LibraryDocument(args);
         if (method == "workspace/executeCommand")
         {
             string command = args["command"]!.GetValue<string>();
@@ -419,6 +422,14 @@ internal sealed class Rmf2LanguageServer
         int offset = args["position"] is JsonNode position ? Offset(buffer.Text, position) : 0;
         int atByte = Utf8.GetByteCount(buffer.Text.AsSpan(0, offset));
         Rmf2ResourceNode? entry = buffer.Syntax.Nodes.LastOrDefault(n => n.Location.StartByte <= atByte && atByte <= n.Location.StartByte + n.Location.LengthBytes);
+        // An override source of a library catalog: completion, hover and definition come from the packed library.
+        if (method is "textDocument/hover" or "textDocument/completion" or "textDocument/definition" && OverrideContextOf(uri) is { } library)
+            return method switch
+            {
+                "textDocument/hover" => LibraryHover(library, entry),
+                "textDocument/completion" => LibraryCompletion(library, entry, atByte),
+                _ => LibraryDefinition(library, entry),
+            };
         if (method == "runic/message")
         {
             if (entry is null) throw new TranslationAuthoringException("Place the cursor inside a resource or group.");
@@ -567,6 +578,16 @@ internal sealed class Rmf2LanguageServer
                 if (manifest.Id.Length != 0) result["catalog"] = manifest.Id;
                 if (manifest.DefaultLocale.Length != 0) result["baseLocale"] = manifest.DefaultLocale;
             }
+            if (!configuration && Dependencies(project) is { } dependencies && dependencies.OverrideOf(path) is { } target)
+            {
+                // An override source belongs to the library catalog it overrides; its file name is its locale.
+                result["catalog"] = target.Catalog;
+                result["library"] = target.Dependency?.Display;
+                result["baseLocale"] = null;
+                string file = Path.GetFileName(path);
+                result["locale"] = file.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase) ? file[..^5] : null;
+                return result;
+            }
             if (!configuration)
             {
                 // The locale depends only on the path and the project's layout. The layout is
@@ -697,7 +718,8 @@ internal sealed class Rmf2LanguageServer
                         else
                         {
                             string name = Path.GetFileName(entry);
-                            if (name is not (".git" or ".worktrees" or "node_modules" or "bin" or "obj" or "dist" or "artifacts" or ".cache" or ".direnv" or ".vs" or ".runic" or ".runic-translations"))
+                            // The same skipped directories as the Translations Editor's catalog discovery.
+                            if (!TranslationProjectDiscovery.IsSkipped(name))
                                 pending.Add(entry);
                         }
                     }
@@ -1023,6 +1045,7 @@ internal sealed class Rmf2LanguageServer
         try
         {
             diagnostics = WithReviewDiagnostics(ReviewViewOf(project, group));
+            diagnostics = [.. diagnostics, .. LibraryDiagnostics(project, group)];
             // A later failure after recovery is worth reporting again.
             foreach (string uri in group) _reportedBufferFailures.Remove(uri);
         }
@@ -1031,6 +1054,8 @@ internal sealed class Rmf2LanguageServer
             foreach (string uri in group) ReportBufferFailure(uri, error);
             if (TryGetBuffer(Path.Combine(project, "runic.json"), out string? configUri, out Buffer? config))
                 diagnostics = ConfigDiagnostics(new TranslationSource(LocalPath(configUri), Utf8.GetBytes(config.Text)));
+            // The overrides of library catalogs are checked against the libraries, not the application's catalog.
+            diagnostics = [.. diagnostics, .. LibraryDiagnostics(project, group)];
         }
         PublishDiagnostics(diagnostics, group, project);
     }

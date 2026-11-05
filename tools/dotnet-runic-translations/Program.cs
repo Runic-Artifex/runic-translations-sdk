@@ -281,6 +281,8 @@ internal static class Program
         ToolCommand.ReviewMark => new CommandPath(["review", "mark"]),
         ToolCommand.LocaleAdd => new CommandPath(["locale", "add"]),
         ToolCommand.LocaleRemove => new CommandPath(["locale", "remove"]),
+        ToolCommand.OverridesAdd => new CommandPath(["overrides", "add"]),
+        ToolCommand.OverridesList => new CommandPath(["overrides", "list"]),
         _ => new CommandPath([command.ToString().ToLowerInvariant()]),
     };
 
@@ -679,6 +681,9 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
                 LocaleOperations.Add(project, request.Tag!, request.Fallback, request.DryRun, result)),
             "locale remove" => ExecuteInterchange(request, ToolCommand.LocaleRemove, (project, result) =>
                 LocaleOperations.Remove(project, request.Tag!, request.DryRun, result)),
+            "overrides add" => ExecuteInterchange(request, ToolCommand.OverridesAdd, (project, result) =>
+                OverridesOperations.Add(project, request.Catalog!, request.Tag!, request.Keys ?? [], request.DryRun, result)),
+            "overrides list" => ExecuteInterchange(request, ToolCommand.OverridesList, OverridesOperations.List),
             _ => new ToolOperationResult { ExitCode = Program.UsageFailure, ExitCategory = CommandExitCategory.Usage },
         };
         var report = new TranslationsToolCommandResult(result.Output, string.Empty) { Diagnostics = result.TranslationDiagnostics, Interchange = result.Interchange };

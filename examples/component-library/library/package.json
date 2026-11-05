@@ -1,0 +1,15 @@
+{
+  "name": "@acme/widgets",
+  "version": "1.0.0",
+  "description": "Storage widgets with English and German text.",
+  "type": "module",
+  "exports": {
+    ".": { "types": "./index.d.ts", "default": "./index.js" },
+    "./runic-translations": "./dist/translations/acme.widgets.esm-v5/web-module-manifest-v3.json"
+  },
+  "runicTranslations": { "catalog": "acme.widgets", "project": "./translations/runic.json" },
+  "files": ["index.js", "index.d.ts", "dist/translations", "translations"],
+  "scripts": {
+    "build": "dotnet tool run runic-translations -- generate --project translations --output dist/translations --emit-esm"
+  }
+}

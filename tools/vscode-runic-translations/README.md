@@ -88,6 +88,24 @@ active and the workspace has several. Both run the workspace's local
 `runic-translations xliff` tool, the same code as the Translations Editor; apply
 an import with `runic-translations xliff import` or the editor.
 
+## Library catalogs and overrides
+
+An application overrides the text of a library catalog that an installed package packs (runic.json `"overrides"`,
+`translations/overrides/<catalog>/<locale>.rmf2`). The language server finds the library in the restore output
+(`obj/project.assets.json`) or in `node_modules`, as the build and the Vite plugin do, and treats override sources as
+overlays on it: an unknown key (`RTR0103`), changed inputs and markup in a plain-text message are reported as the build
+reports them, completion offers the library's keys and inputs, hover shows the library's base text (and its text in the
+file's locale, or the fallback of a locale the application adds), and **Go to Definition** opens the library's source as
+a read-only document. A library update that changes the base text of an overridden message is reported (`RTR0090`).
+Restore the project first; without the package the override sources report `RTR0104`. The extension watches the restore output
+(`obj/project.assets.json`) and the package managers' install state and lockfiles, so the language server picks up a restore or an install
+without a restart.
+
+**Override Library Message…** asks for an installed library catalog, one of its messages and a locale (a library locale,
+or another one the application adds; a typed tag is canonicalized, so `de_ch` becomes `de-CH`), then runs the workspace's local `runic-translations overrides add`: it adds the
+message to `translations/overrides/<catalog>/<locale>.rmf2`, seeded with the library's text and with the base text as
+comments, records that base text, lists the catalog in runic.json `"overrides"` when needed, and opens the file at the
+message.
 **Show Translation Status** shows `runic-translations status` for the project:
 per locale the messages translated, served by a fallback locale, missing and
 stale, the coverage, and whether missing translations are errors or warnings
@@ -166,6 +184,8 @@ command set until the production language server (2.0).
 | Inline Resource into Ancestor | Command | No (2.0) |
 | Export XLIFF | Command | No (2.0) |
 | Import XLIFF (dry run) | Command | No (2.0) |
+| Override sources of library catalogs (diagnostics, completion, hover, definition) | Yes, library sources open read-only | Yes, except definition into library sources |
+| Override Library Message… | Command | No (2.0) |
 | Show Translation Status | Command, coverage in the status bar | No (2.0) |
 | Import .resx or i18next Catalog | Command (dry run first) | No (2.0) |
 | Review state in hover | Yes | Yes |

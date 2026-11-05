@@ -82,14 +82,14 @@ internal sealed class CliIntegrationTests
         Assert.Contains("@<file>", help.StandardOutput);
     }
 
-    [Test, DisplayName("CLI project mode leaves translations/overrides to the library catalogs runic.json overrides")]
+    [Test, DisplayName("CLI project mode leaves translations/overrides to the library catalogs runic.json overrides, from one or several packages")]
     public void OverrideSourcesAreNotProjectSources()
     {
         using TemporaryDirectory temporary = new();
         Directory.CreateDirectory(temporary.Resolve("translations", "overrides", "acme.grid"));
         File.WriteAllText(temporary.Resolve("translations", "runic.json"), """
             { "schemaVersion": 1, "catalog": "app", "code": { "namespace": "Example", "className": "AppText" }, "baseLocale": "en",
-              "overrides": [{ "catalog": "acme.grid", "from": "Acme.Grid" }] }
+              "overrides": [{ "catalog": "acme.grid", "from": ["Acme.Grid", "@acme/grid"] }, { "catalog": "acme.menu", "from": "Acme.Menu" }] }
             """, new UTF8Encoding(false));
         File.WriteAllText(temporary.Resolve("translations", "en.rmf2"), "title = Shop\n", new UTF8Encoding(false));
         // As a source of the project's own catalog, this would be the namespace overrides.acme.grid, and fr an undeclared locale.

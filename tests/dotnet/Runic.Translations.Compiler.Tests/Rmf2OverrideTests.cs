@@ -126,7 +126,9 @@ internal sealed class Rmf2OverrideTests
             { "schemaVersion": 1, "catalog": "shop", "code": { "namespace": "Shop", "className": "ShopText" }, "baseLocale": "en",
               "overrides": [{ "catalog": "acme-grid", "from": "Acme.Grid" }, { "catalog": "acme-grid", "from": "Acme.Grid" },
                             { "catalog": "shop", "from": "Shop" }, { "catalog": "Bad", "from": "x" }, { "catalog": "acme-chart", "from": "not a package" },
-                            { "catalog": "acme-menu", "from": "@acme/menu", "extra": 1 }] }
+                            { "catalog": "acme-menu", "from": "@acme/menu", "extra": 1 },
+                            { "catalog": "acme-list", "from": [] }, { "catalog": "acme-tree", "from": ["Acme.Tree", "acme.tree"] },
+                            { "catalog": "acme-form", "from": ["Acme.Form", 1] }, { "catalog": "acme-tabs", "from": ["Acme.Tabs", "not a package"] }] }
             """;
         Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(project)),
             [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes("title = Shop\n"))]);
@@ -136,16 +138,21 @@ internal sealed class Rmf2OverrideTests
         Assert.True(reported.Contains("RTR0006 Invalid catalog ID 'Bad'.", StringComparison.Ordinal), reported);
         Assert.True(reported.Contains("RTR0104 'not a package' is not a NuGet or npm package ID.", StringComparison.Ordinal), reported);
         Assert.True(reported.Contains("RTR0019 Unknown or misplaced member 'extra'.", StringComparison.Ordinal), reported);
+        Assert.Equal(2, result.Diagnostics.Count(diagnostic => diagnostic.Message == "Member 'from' must be a package ID or a non-empty array of package IDs."), reported);
+        Assert.True(reported.Contains("RTR0104 Package 'acme.tree' is listed more than once in \"from\".", StringComparison.Ordinal), reported);
+        Assert.Equal(2, result.Diagnostics.Count(diagnostic => diagnostic.Message == "'not a package' is not a NuGet or npm package ID."), reported);
 
         string valid = """
             { "schemaVersion": 1, "catalog": "shop", "code": { "namespace": "Shop", "className": "ShopText" }, "baseLocale": "en",
-              "overrides": [{ "catalog": "acme-grid", "from": "Acme.Grid" }, { "catalog": "acme-menu", "from": "@acme/menu" }] }
+              "overrides": [{ "catalog": "acme-grid", "from": "Acme.Grid" }, { "catalog": "acme-menu", "from": "@acme/menu" },
+                            { "catalog": "acme-tree", "from": ["Acme.Tree", "@acme/tree"] }] }
             """;
         Rmf2ProjectCompilation compiled = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(valid)),
             [new TranslationSource("translations/en.rmf2", Encoding.UTF8.GetBytes("title = Shop\n"))]);
         Assert.True(compiled.Success, Describe(compiled));
-        Assert.Equal("acme-grid<Acme.Grid|acme-menu<@acme/menu", string.Join("|", compiled.Project!.Overrides.Select(item => item.Catalog + "<" + item.From)), "entries");
-        Assert.Equal("acme-grid,acme-menu", string.Join(",", TranslationCompiler.ReadOverridesV5(new TranslationSource("runic.json", Encoding.UTF8.GetBytes(valid))).Select(item => item.Catalog)), "reader");
+        Assert.Equal("acme-grid<Acme.Grid|acme-menu<@acme/menu|acme-tree<Acme.Tree,@acme/tree",
+            string.Join("|", compiled.Project!.Overrides.Select(item => item.Catalog + "<" + string.Join(",", item.From))), "entries");
+        Assert.Equal("acme-grid,acme-menu,acme-tree", string.Join(",", TranslationCompiler.ReadOverridesV5(new TranslationSource("runic.json", Encoding.UTF8.GetBytes(valid))).Select(item => item.Catalog)), "reader");
     }
 
     private static Rmf2ProjectCompilation CompileLibrary() => TranslationCompiler.CompileRmf2ProjectV5(

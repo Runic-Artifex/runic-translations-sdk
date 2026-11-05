@@ -1,0 +1,12 @@
+# French, a locale the library lacks.
+storage {
+  title = Stockage
+  empty = Aucun fichier pour l’instant
+  files =
+    .input {$count :integer}
+    .match $count
+    one  {{Un fichier}}
+    many {{{$count} de fichiers}}
+    *    {{{$count} fichiers}}
+  usage = {$used :unit unit=gigabyte} sur {$total :unit unit=gigabyte} utilisés
+}

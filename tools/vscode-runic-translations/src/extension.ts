@@ -7,6 +7,7 @@ import { escapeHtml, resolvePreviewHtml, type Preview, type RenderedPreview } fr
 import { PreviewSession, exampleSamples, sampleChoices, type Samples } from "./preview-session.js";
 import { ForwardedWatchers } from "./watchers.js";
 import { OneTimeNotice, errorSummary, localeStatus, parseStatus, statusHtml, statusPresentation, type DocumentInfo, type ServerState, type StatusResult } from "./status.js";
+import { canonicalLocale, isOverriddenIn, libraryCatalogChoices, libraryInstallPattern, libraryDocumentProject, libraryLocaleChoices, libraryMessageChoices, libraryScheme, messageLine, overrideSourcePath, overridesAddArguments, unsavedDocuments, type LibraryCatalogs } from "./libraries.js";
 
 const extensionId = "runic-artifex.runic-translations";
 /**
@@ -196,7 +197,11 @@ async function clientFor(uri: vscode.Uri): Promise<LanguageClient> {
         // The review file changes the server's RTR0090 warnings and hover review state.
         const reviewWatcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, "**/*.review.json"));
         reviewWatcher.onDidCreate(uri => forward(uri, 1)); reviewWatcher.onDidChange(uri => forward(uri, 2)); reviewWatcher.onDidDelete(uri => forward(uri, 3));
-        reviewWatchers.set(key, reviewWatcher);
+        // A restore or an install changes which library catalogs override sources resolve against (RTR0104, completion,
+        // hover): the restore output and the package managers' install state.
+        const installWatcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, libraryInstallPattern));
+        installWatcher.onDidCreate(uri => forward(uri, 1)); installWatcher.onDidChange(uri => forward(uri, 2)); installWatcher.onDidDelete(uri => forward(uri, 3));
+        reviewWatchers.set(key, vscode.Disposable.from(reviewWatcher, installWatcher));
         const openingDocuments: Promise<void>[] = [];
         const options: LanguageClientOptions = {
           documentSelector: [{ scheme: "file", language: "rmf2", pattern: `${folder.uri.fsPath.replaceAll("\\", "/")}/**/*.{mf2,rmf2}` }, { scheme: "file", language: "json", pattern: `${folder.uri.fsPath.replaceAll("\\", "/")}/**/runic.json` }],
@@ -429,6 +434,57 @@ export function activate(context: vscode.ExtensionContext) {
     const summary = result.split("\n").find(line => line.startsWith("dry run: ")) ?? "Dry run finished.";
     output.show(true);
     void vscode.window.showInformationMessage(`${summary} Nothing was written; run runic-translations xliff import or the Translations Editor to apply it.`);
+  });
+  // Library catalogs (T5d): "Go to Definition" in an override source opens the library's source as a read-only
+  // runic-library: document, read through the language server of the application's folder.
+  context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider(libraryScheme, {
+    provideTextDocumentContent: async uri => {
+      const project = libraryDocumentProject(uri.query);
+      if (!project) throw new Error("The library document names no project.");
+      const client = await clientFor(vscode.Uri.parse(project));
+      return (await client.sendRequest<{ text: string }>("runic/libraryDocument", { uri: uri.toString() })).text;
+    },
+  }));
+  // Override library message…: choose an installed library catalog, a message and a locale; runic-translations overrides
+  // add writes translations/overrides/<catalog>/<locale>.rmf2 seeded with the library's text (listing the catalog in
+  // runic.json "overrides" when needed), and the file opens at the message.
+  register("overrideLibraryMessage", async () => {
+    const chosen = await interchangeFolder();
+    if (!chosen) return;
+    const { folder, project } = chosen;
+    const client = await clientFor(vscode.Uri.file(project));
+    const result = await client.sendRequest<LibraryCatalogs>("runic/libraryCatalogs", { uri: vscode.Uri.file(project).toString() });
+    for (const warning of result.warnings) output.appendLine(warning);
+    const catalogs = libraryCatalogChoices(result);
+    if (!catalogs.length) throw new Error("No installed package packs a library catalog. Restore the project (dotnet restore, npm install) first.");
+    const catalog = (await vscode.window.showQuickPick(catalogs, { placeHolder: "Library catalog to override", matchOnDescription: true }))?.value;
+    if (!catalog) return;
+    const message = (await vscode.window.showQuickPick(libraryMessageChoices(catalog), { placeHolder: `Message of ${catalog.catalog} to override`, matchOnDescription: true, matchOnDetail: true }))?.value;
+    if (!message) return;
+    const other = { label: "Another locale…", description: "a locale the library lacks", value: "" };
+    let locale = (await vscode.window.showQuickPick([...libraryLocaleChoices(catalog, message), other], { placeHolder: `Locale to override ${message.path} in` }))?.value;
+    if (locale === "") locale = await vscode.window.showInputBox({ prompt: "BCP 47 locale tag the application adds, such as fr or de-CH", validateInput: value => canonicalLocale(value) ? undefined : "Use a BCP 47 locale tag." });
+    if (!locale) return;
+    const tag = canonicalLocale(locale);
+    if (!tag) throw new Error(`"${locale}" is not a BCP 47 locale tag.`);
+    const path = overrideSourcePath(project, catalog.catalog, tag);
+    if (!isOverriddenIn(message, tag)) {
+      // The tool writes the override source and possibly runic.json; unsaved edits there would be overwritten underneath the editor.
+      const unsaved = unsavedDocuments(vscode.workspace.textDocuments.map(document => ({ document, fsPath: document.uri.fsPath, isDirty: document.uri.scheme === "file" && document.isDirty })), [path, project]);
+      if (unsaved.length) {
+        const save = "Save and continue";
+        const names = unsaved.map(entry => vscode.workspace.asRelativePath(entry.document.uri)).join(", ");
+        const answer = await vscode.window.showWarningMessage(`${names} has unsaved changes that runic-translations overrides add would overwrite. Save or revert it first.`, { modal: true }, save);
+        if (answer !== save) return;
+        for (const entry of unsaved) {
+          if (!await entry.document.save()) throw new Error(`Could not save ${vscode.workspace.asRelativePath(entry.document.uri)}.`);
+        }
+      }
+      await runTool(folder, overridesAddArguments(project, catalog.catalog, tag, message.key));
+    }
+    const document = await vscode.workspace.openTextDocument(vscode.Uri.file(path));
+    const line = messageLine(document.getText(), message.path);
+    await vscode.window.showTextDocument(document, { selection: new vscode.Range(line, 0, line, 0) });
   });
   // Translation status: the same report as runic-translations status and the Translations Editor's language list.
   register("showStatus", async () => {

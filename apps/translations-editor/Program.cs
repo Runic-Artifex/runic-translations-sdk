@@ -303,6 +303,7 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
             .Map<EditorDiagnosticsViewModel>(() => new EditorDiagnosticsView())
             .Map<EditorLocalStateViewModel>(() => new EditorLocalStateView())
             .Map<EditorProjectViewModel>(() => new EditorProjectView())
+            .Map<EditorLibrariesViewModel>(() => new EditorLibrariesView())
             .Map<EditorDocumentViewModel>(() => new EditorDocumentView());
         services.AddScoped<IRunicViewLocator>(_ => new ReactiveRunicViewLocator(locator));
         services.AddRunicWindowService();

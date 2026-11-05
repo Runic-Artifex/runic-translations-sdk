@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- An application that uses the Acme.Widgets package, overrides one of its messages and adds French
+       (../translations/overrides/acme.widgets/). The catalog and its overrides are shared with the SvelteKit
+       application in ../web, so the project names ../translations/runic.json. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <RunicTranslationProject Include="../translations/runic.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Runic.Translations" Version="$(RunicTranslationsVersion)" />
+    <PackageReference Include="Runic.Translations.Build" Version="$(RunicTranslationsVersion)" PrivateAssets="all" />
+    <PackageReference Include="Acme.Widgets" Version="1.0.0" />
+  </ItemGroup>
+</Project>

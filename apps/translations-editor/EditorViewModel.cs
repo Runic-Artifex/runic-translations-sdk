@@ -36,8 +36,9 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
         Diagnostics = new EditorDiagnosticsViewModel(session, this, _scheduler);
         LocalState = new EditorLocalStateViewModel(session, this, _scheduler);
         Project = new EditorProjectViewModel(session, this, _scheduler);
+        Libraries = new EditorLibrariesViewModel(session, this, _scheduler);
         _modelContextLease = RunicModelContextRegistry.Shared.Bind(modelContext, this, Workspace,
-            DocumentTools, Review, Interchange, Diagnostics, LocalState, Project);
+            DocumentTools, Review, Interchange, Diagnostics, LocalState, Project, Libraries);
     }
 
     public EditorWorkspaceViewModel Workspace { get; }
@@ -47,6 +48,7 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
     public EditorDiagnosticsViewModel Diagnostics { get; }
     public EditorLocalStateViewModel LocalState { get; }
     public EditorProjectViewModel Project { get; }
+    public EditorLibrariesViewModel Libraries { get; }
     public IReadOnlyList<EditorDocumentViewModel> Documents => _documentViews;
     /// <summary>Sets the window's locale to one of the editor catalog's locales, such as <c>de</c>.</summary>
     public ReactiveCommand<string, RxVoid> SetUiLocaleCommand { get; }
@@ -125,6 +127,7 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
         Diagnostics.Dispose();
         LocalState.Dispose();
         Project.Dispose();
+        Libraries.Dispose();
         foreach (var document in _documents.Values) document.Dispose();
         _documents.Clear();
         foreach (var lease in _documentContextLeases.Values) lease.Dispose();
@@ -142,3 +145,4 @@ public sealed partial class EditorInterchangeView : ReactiveRunicView<EditorInte
 public sealed partial class EditorDiagnosticsView : ReactiveRunicView<EditorDiagnosticsViewModel>;
 public sealed partial class EditorLocalStateView : ReactiveRunicView<EditorLocalStateViewModel>;
 public sealed partial class EditorProjectView : ReactiveRunicView<EditorProjectViewModel>;
+public sealed partial class EditorLibrariesView : ReactiveRunicView<EditorLibrariesViewModel>;
