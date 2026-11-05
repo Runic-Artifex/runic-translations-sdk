@@ -252,9 +252,9 @@ internal sealed class Rmf2V1CorpusTests
     // Re-pinned for T1f (0.9): Registration also creates the readable surface, beside the readable surface only.
     // Re-pinned for merging T1f (#145) with main (TJ Hot Reload), beside the readable surface only.
     // Re-pinned for merging T1f (#145) with the formatting follow-ups (#148), beside the readable surface only.
-    // Re-pinned for merging T2f (#146) with T1f (#145), in both digests.
+    // Re-pinned for merging T2f (#146) with T1f (#145), beside the readable surface only.
     private const string EncodedOutputDigest = "f42f706f506fd6c76273b95b757ed69cee9cf53345770172d81f5469696e8e73";
-    private const string HiddenEncodedOutputDigest = "9a9996267a33ff6183c4f7edeba97a50076c236c9385f0a0bc09addf3934a8aa";
+    private const string HiddenEncodedOutputDigest = "d434d31b2cc68fe59d8f674128cb769e7d2598f629bd65811a65d8bb566353ee";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]
