@@ -49,8 +49,9 @@ internal sealed class Rmf2ResolvedFormat
         if (!valid) throw new ArgumentException("Invalid option '" + name + "' for '" + function + "'.", nameof(value));
     }
     /// <summary>
-    /// Formats in <paramref name="locale"/>, the formatting locale for numbers, percentages, dates and times; lists and
-    /// relative time use the plural and list data of <paramref name="contentLocale"/>.
+    /// Formats in <paramref name="locale"/>, the formatting locale for numbers (the number in relative time included),
+    /// percentages, dates and times; lists and relative-time patterns use the plural, list and relative-time data of
+    /// <paramref name="contentLocale"/>.
     /// </summary>
     internal string Format(TextArgument value, string locale, string contentLocale)
     {
@@ -59,62 +60,28 @@ internal sealed class Rmf2ResolvedFormat
         {
             case "string": return Get<string>(value);
             case "runic:boolean": return Get<bool>(value) ? "true" : "false";
-            case "integer":
-            {
-                long integer = Get<long>(value);
-                string grouping = String("useGrouping", "auto");
-                // Ungrouped integers stay invariant; the grouping strategies use the locale's sign, separator and group sizes.
-                if (grouping == "never") return integer.ToString(CultureInfo.InvariantCulture);
-                CultureInfo culture = Rmf2LocalizedFormats.Culture(locale);
-                int digits = integer == long.MinValue ? 19 : Math.Abs(integer).ToString(CultureInfo.InvariantCulture).Length;
-                return integer.ToString(Groups(grouping, digits, locale, culture.NumberFormat) ? "#,0" : "0", culture);
-            }
+            case "integer": return Rmf2NumberFormats.Integer(Get<long>(value), String("useGrouping", "auto"), locale);
             case "number":
             {
+                // The visible decimal (percent multiplied by 100, rounded halfExpand), then the pinned number formats.
                 bool percent = String("style", "decimal") == "percent";
-                int minimum = MinimumDigits, maximum = MaximumDigits;
-                // Round the unscaled decimal explicitly. The custom percent formatter
-                // scales its decimal digit buffer, so decimal.MaxValue cannot overflow.
-                decimal rounded = decimal.Round(Number(value), maximum + (percent ? 2 : 0), MidpointRounding.AwayFromZero);
-                CultureInfo culture = Rmf2LocalizedFormats.Culture(locale);
-                VisibleDecimal visible = VisibleDecimal.FromNumber(Number(value), percent, minimum, maximum);
-                int digits = Math.Max(1, visible.Coefficient.ToString(CultureInfo.InvariantCulture).Length - visible.Scale);
-                string pattern = (Groups(String("useGrouping", "auto"), digits, locale, culture.NumberFormat) ? "#,0" : "0")
-                    + (maximum == 0 ? "" : "." + new string('0', minimum) + new string('#', maximum - minimum)) + (percent ? "%" : "");
-                if (!percent) return rounded.ToString(pattern, culture);
-                // The scaled digits without a sign or percent sign, then the locale's percent pattern around them.
-                var unsigned = (NumberFormatInfo)culture.NumberFormat.Clone();
-                unsigned.PercentSymbol = string.Empty;
-                return Rmf2LocalizedFormats.Percent(Math.Abs(rounded).ToString(pattern, unsigned), visible.Negative, culture.NumberFormat);
+                VisibleDecimal visible = VisibleDecimal.FromNumber(Number(value), percent, MinimumDigits, MaximumDigits);
+                string grouping = String("useGrouping", "auto");
+                return percent ? Rmf2NumberFormats.Percent(visible, grouping, locale) : Rmf2NumberFormats.Decimal(visible, grouping, locale);
             }
             case "date": return style == "iso" ? Get<DateOnly>(value).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
-                : Rmf2LocalizedFormats.Date(Get<DateOnly>(value), style, Rmf2LocalizedFormats.Culture(locale));
+                : Rmf2LocalizedFormats.Date(Get<DateOnly>(value), style, locale);
             case "time": return style == "iso" ? Get<TimeOnly>(value).ToString("HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture)
-                : Rmf2LocalizedFormats.Time(Get<TimeOnly>(value), style, Rmf2LocalizedFormats.Culture(locale));
+                : Rmf2LocalizedFormats.Time(Get<TimeOnly>(value), style, locale);
             case "datetime":
                 // iso is always UTC; the localized styles use the timeZone option, the host's local zone by default.
                 return style == "iso" ? Get<DateTimeOffset>(value).ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'", CultureInfo.InvariantCulture)
-                    : Rmf2LocalizedFormats.DateTime(Get<DateTimeOffset>(value), style, String("timeZone", "local"), Rmf2LocalizedFormats.Culture(locale));
+                    : Rmf2LocalizedFormats.DateTime(Get<DateTimeOffset>(value), style, String("timeZone", "local"), locale);
             case "runic:uuid": return Get<Guid>(value).ToString(String("style", "d"), CultureInfo.InvariantCulture);
             case "runic:list": return TextListFormatter.Format(Get<IReadOnlyList<string>>(value), String("type", "conjunction"), String("style", "long"), contentLocale);
-            case "runic:relative-time": return TextRelativeTimeFormatter.Format(Rmf2RuntimeDecimal.Parse(Rmf2RuntimeDecimal.Canonical(Number(value))), String("unit", "day"), String("numeric", "always"), contentLocale);
+            case "runic:relative-time": return TextRelativeTimeFormatter.Format(Rmf2RuntimeDecimal.Parse(Rmf2RuntimeDecimal.Canonical(Number(value))), String("unit", "day"), String("numeric", "always"), contentLocale, locale);
             default: throw new TranslationFormatException("Unknown v5 formatter.");
         }
-    }
-    /// <summary>
-    /// Whether <c>useGrouping</c> separates an integer part of <paramref name="digits"/> digits, as ICU and
-    /// <c>Intl.NumberFormat</c> do: <c>auto</c> groups once the digits above the primary group reach the
-    /// pinned CLDR <c>minimumGroupingDigits</c> of the content locale, <c>min2</c> requires at least two,
-    /// <c>always</c> one. Group sizes and the separator come from platform globalization.
-    /// </summary>
-    internal static bool Groups(string grouping, int digits, string locale, NumberFormatInfo format)
-    {
-        if (grouping == "never") return false;
-        int[] sizes = format.NumberGroupSizes;
-        if (sizes.Length == 0 || sizes[0] <= 0 || format.NumberGroupSeparator.Length == 0) return false;
-        int pinned = GeneratedLocaleData.MinimumGroupingDigits(locale);
-        int minimum = grouping switch { "always" => 1, "min2" => Math.Max(2, pinned), _ => pinned };
-        return digits - sizes[0] >= minimum;
     }
     /// <summary>
     /// The number that plural, ordinal and exact selection compare. <c>:number</c>

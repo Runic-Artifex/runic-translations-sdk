@@ -1,6 +1,6 @@
 # Runic Translations conformance corpora
 
-The current release contract is exercised by ten complementary fixtures:
+The current release contract is exercised by eleven complementary fixtures:
 
 - [`rmf2-v1/index.json`](rmf2-v1/index.json) is the cross-backend release oracle
   for resource syntax `rmf2-v1` executed as `rmf2-execution-v2`, grammar/AST and
@@ -45,16 +45,44 @@ The current release contract is exercised by ten complementary fixtures:
   percentages, IANA time zones, and the formatting locale of a requested tag
   (`requested`, default `locale`) over the case's content `locale`, including the
   implied-script cases (`sr-Latn` over `sr`, `zh-TW` over `zh`, `zh-CN` over
-  `zh-Hant` and back), dropped extensions, and the Arabic and Thai date rules. The expectations are plain `Intl`
+  `zh-Hant` and back, `de-Latn-CH` over `de`), dropped extensions and the kept
+  `-u-nu-latn`, the Arabic and Thai date rules, native digits (CLDR's default
+  numbering system in `bn fa mr my ne ps ar-EG`, Latin in `ar`) in numbers,
+  percentages, dates, times and relative time, format-context weekdays (`lv mn
+  km tk yo`), `zh-Hant`'s flexible day periods, and pinned percent patterns
+  (`oc`, `fa`). The expectations are plain `Intl`
   output under the documented rules and must format in the same four routes as
   the list corpus. The only tolerance is for punctuation that platform ICU
   versions write differently: U+0020, U+00A0 and U+202F count as the same space,
   and U+0027 and U+2019 as the same apostrophe (the `de-CH` group separator, `'`
   in ICU 78 and `’` in older builds). A case may also list `alternates`, the
-  exact output of a platform ICU whose locale data differs (Apple's ICU writes
-  `2026年11月4日 水曜日` for the Japanese full date); each route must produce the
-  expected string or one of them. CI runs it on Linux, Windows and macOS, with
+  exact output of a platform ICU whose locale data differs, with a `note` naming
+  that platform (Apple's ICU writes `2026年11月4日 水曜日` for the Japanese full
+  date; ICU 72 to 77, which CI's Linux libicu74 and Windows load, write `sv-AX`'s
+  medium date as `4 nov. 2026`, and ICU 72 to 75 `yo`'s full date with the
+  month `Èrèl`); each
+  route must produce the expected string or one of them. Every other case is
+  strict on every platform: the expectations of the other cases were checked
+  with .NET on ICU 72, 74, 76 and 78. CI runs it on Linux, Windows and macOS, with
   the ESM half in Bun and Node;
+- [`localized-format-divergences.json`](localized-format-divergences.json) lists
+  the localized dates and times that .NET and ESM write differently for a CLDR
+  locale both runtimes' ICU covers, with the reason (`shn-TH`'s Buddhist era name,
+  `haw`'s Roman month numerals). `LocalizedFormatComparisonTests` formats numbers,
+  percentages, dates and times in both runtimes for every CLDR locale (and with
+  `-u-nu-latn` where the default digits are not Latin): numbers must agree
+  exactly, and with `Intl.NumberFormat` where the engine carries CLDR 48; dates
+  and times are compared where .NET and the engine load the same ICU version,
+  and every difference beyond the tolerance above must be listed here. A listed
+  entry that no longer occurs fails too. `--test-parameter
+  comparison-report=<file>` writes every difference;
+- [`localized-format-engine-coverage.json`](localized-format-engine-coverage.json)
+  lists, per JavaScript engine and ICU version, the CLDR locales whose dates the
+  comparison cannot compare because the engine's `Intl` has no data for them
+  (ESM then uses the nearest CLDR parent it has, .NET its ICU's fallback). The
+  comparison writes it with `--test-parameter update-engine-coverage=true` and
+  fails when Node, or Bun on Linux, covers a different set under the recorded
+  ICU version;
 - [`transport-v2-persisted-references.json`](transport-v2-persisted-references.json)
   is the cross-backend oracle for [persisted text references](../transport-v2.md):
   references written against the `writer` catalog are resolved by the changed

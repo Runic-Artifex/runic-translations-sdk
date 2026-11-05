@@ -57,7 +57,7 @@ internal sealed class Rmf2EsmLocalizedFormattingTests
                 import { createTextReference, decodeTextReference } from "./formats.esm-v5/transport.js";
                 const check = (condition, message) => { if (!condition) throw new Error(message); };
                 const throwsType = (operation, type, message) => { try { operation(); } catch (error) { check(error instanceof type, `${message}: ${error}`); return; } throw new Error(`${message}: accepted`); };
-                const swiss = new Intl.NumberFormat("de-CH", { maximumFractionDigits: 6 }).format(1234567.5);
+                const swiss = "1'234'567.5"; // pinned CLDR de-CH symbols, not the platform ICU
                 // Numbers format in the requested locale when it shares the content language; the text stays German.
                 check(m.amount({ n: "1234567.5" }, { locale: "de-CH" }) === `Betrag ${swiss}`, `de-CH: ${m.amount({ n: "1234567.5" }, { locale: "de-CH" })}`);
                 check(m.amount({ n: "1234567.5" }, { locale: "de" }) === "Betrag 1.234.567,5", "de");
@@ -71,6 +71,9 @@ internal sealed class Rmf2EsmLocalizedFormattingTests
                   check(JSON.stringify(getMessageLocale("farewell")) === '{"key":"farewell","locale":"en","formatLocale":"en"}', JSON.stringify(getMessageLocale("farewell")));
                 } finally { restore(); }
                 check(getMessageLocale("amount", { locale: "en-GB" }).formatLocale === "en-GB", "en-GB format locale");
+                // An explicit script that is the likely one of a language written in one script is dropped, as in .NET.
+                for (const [requested, expected] of [["en-Latn-US", "en-US"], ["en-Shaw-GB", "en"], ["de-Latn-CH", "de-CH"]])
+                  check(getMessageLocale("amount", { locale: requested }).formatLocale === expected, `${requested}: ${getMessageLocale("amount", { locale: requested }).formatLocale}`);
                 throwsType(() => getMessageLocale("missing"), RangeError, "unknown message");
                 throwsType(() => getMessageLocale("amount", { locale: "en-" }), RangeError, "invalid tag");
                 // A message that shows fallback text calls the listeners; a throwing listener does not break formatting.
