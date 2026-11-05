@@ -8,35 +8,49 @@ namespace Runic.Translations;
 [EditorBrowsable(EditorBrowsableState.Never)]
 internal static class TextRelativeTimeFormatter
 {
-    /// <summary>Formats a relative duration for a compiler-supported locale family.</summary>
+    private static readonly string[] Units = ["second", "minute", "hour", "day", "week", "month", "year"];
+    private static readonly string[] Categories = ["zero", "one", "two", "few", "many", "other"];
+
+    /// <summary>Formats a relative duration with the pinned CLDR patterns of a locale.</summary>
+    /// <remarks>
+    /// The number is formatted as <c>:number</c> formats it by default (the locale's digits, separators and grouping,
+    /// at most six fraction digits), and the pattern is chosen by the plural category of that displayed number.
+    /// <c>numeric=auto</c> uses CLDR's relative-type text ("yesterday", "now", "next month") for whole values from
+    /// -2 to 2 where the locale has one.
+    /// </remarks>
     public static string Format(decimal value, string unit, string numeric, string locale)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(unit);
         ArgumentException.ThrowIfNullOrWhiteSpace(numeric);
         ArgumentException.ThrowIfNullOrWhiteSpace(locale);
-        if (unit is not ("second" or "minute" or "hour" or "day" or "week" or "month" or "year"))
-            throw new ArgumentOutOfRangeException(nameof(unit));
+        int unitIndex = Array.IndexOf(Units, unit);
+        if (unitIndex < 0) throw new ArgumentOutOfRangeException(nameof(unit));
         if (numeric is not ("always" or "auto")) throw new ArgumentOutOfRangeException(nameof(numeric));
-        string language = GeneratedLocaleData.Language(locale);
-        GeneratedRelativeTimeLocale data = GeneratedLocaleData.FindRelativeTime(language) ?? throw Unsupported(locale);
-        if (numeric == "auto" && unit == "day" && value is >= -1 and <= 1 && decimal.Truncate(value) == value)
+        string?[] data = GeneratedLocaleData.FindRelativeTime(locale) ?? throw Unsupported(locale);
+        int offset = unitIndex * 17;
+        if (numeric == "auto" && value is >= -2 and <= 2 && decimal.Truncate(value) == value &&
+            data[offset + 14 + (int)value] is { } relative)
         {
-            return data.AutoDay[(int)value + 1];
+            return relative;
         }
+
         decimal absolute = Math.Abs(value);
-        string number = absolute.ToString(CultureInfo.InvariantCulture);
-        // The noun agrees with the number as displayed, including visible trailing zeros.
-        bool one = TextMessageSelector.Select(VisibleDecimal.Displayed(absolute), locale, false) == "one";
-        GeneratedRelativeTimeUnit? unitData = null;
-        for (int index = 0; index < data.Units.Length; index++)
-        {
-            if (data.Units[index].Name == unit) { unitData = data.Units[index]; break; }
-        }
-        if (unitData is null) throw new ArgumentOutOfRangeException(nameof(unit));
-        string noun = one ? unitData.One : unitData.Other;
-        return (value < 0 ? data.Past : data.Future)
-            .Replace("{0}", number, StringComparison.Ordinal)
-            .Replace("{unit}", noun, StringComparison.Ordinal);
+        VisibleDecimal visible = VisibleDecimal.FromNumber(absolute, false, 0, 6);
+        string category = TextMessageSelector.Select(visible, locale, false);
+        int patterns = offset + (value < 0 ? 0 : 6);
+        string pattern = data[patterns + Array.IndexOf(Categories, category)] ?? data[patterns + 5]!;
+        return pattern.Replace("{0}", FormatNumber(absolute, visible, locale), StringComparison.Ordinal);
+    }
+
+    // As :number with its default options: grouping auto, zero to six fraction digits, halfExpand.
+    private static string FormatNumber(decimal absolute, VisibleDecimal visible, string locale)
+    {
+        CultureInfo culture;
+        try { culture = CultureInfo.GetCultureInfo(locale); }
+        catch (CultureNotFoundException) { culture = CultureInfo.InvariantCulture; }
+        int digits = Math.Max(1, visible.Coefficient.ToString(CultureInfo.InvariantCulture).Length - visible.Scale);
+        string pattern = (Rmf2ResolvedFormat.Groups("auto", digits, locale, culture.NumberFormat) ? "#,0" : "0") + ".######";
+        return decimal.Round(absolute, 6, MidpointRounding.AwayFromZero).ToString(pattern, culture);
     }
 
     private static TranslationFormatException Unsupported(string locale) =>

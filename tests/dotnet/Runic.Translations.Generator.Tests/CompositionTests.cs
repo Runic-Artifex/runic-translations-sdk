@@ -453,6 +453,87 @@ internal sealed class CompositionTests
         Assert.Equal("No rows", Text(merged, GridId, "empty"), "the explicit fallback of either overlay applies");
     }
 
+    // A library whose locales exercise CLDR parent locales, likely subtags and scripts.
+    private const string RegionalProject = """
+        {
+          "schemaVersion": 1,
+          "catalog": "acme-regional",
+          "code": { "namespace": "Acme.Regional", "className": "RegionalText", "visibility": "public" },
+          "baseLocale": "en",
+          "locales": [ "en", "de-DE", "es-419", "sr" ]
+        }
+        """;
+
+    private static readonly Catalog Regional = Catalog.Compile(RegionalProject,
+        ("en", "title = Grid\nempty = No rows\n"),
+        ("de-DE", "title = Raster\nempty = Keine Zeilen\n"),
+        ("es-419", "title = Cuadrícula\nempty = Sin filas\n"),
+        ("sr", "title = Мрежа\nempty = Нема редова\n"));
+
+    [Test, DisplayName("a catalog matches an undeclared locale with CLDR likely subtags and reports a parent or a related locale")]
+    public async Task LikelySubtagResolution()
+    {
+        TranslationContext context = await TranslationContext.CreateBuilder().Add(Regional.Registration).BuildAsync("es-AR");
+        Assert.Equal("acme-regional:es-AR>es-419:Parent", Describe(context.Catalogs[0]), "CLDR parent locale");
+        await context.SetLocaleAsync("de-AT");
+        Assert.Equal("acme-regional:de-AT>de-DE:Related", Describe(context.Catalogs[0]), "sibling region");
+        await context.SetLocaleAsync("de");
+        Assert.Equal("acme-regional:de>de-DE:Related", Describe(context.Catalogs[0]), "more specific locale");
+        await context.SetLocaleAsync("sr-Latn-RS");
+        Assert.Equal("acme-regional:sr-Latn-RS>en:Default", Describe(context.Catalogs[0]), "a Latin request never shows Cyrillic text");
+        await context.SetLocaleAsync("sr-Cyrl-ME");
+        Assert.Equal("acme-regional:sr-Cyrl-ME>sr:Parent", Describe(context.Catalogs[0]), "same script");
+    }
+
+    [Test, DisplayName("an added locale falls back along CLDR parents into the library and keeps its script")]
+    public async Task AddedLocaleFollowsCldrParents()
+    {
+        Dictionary<string, byte[]> packs = Packs(RegionalProject.Replace("[ \"en\", \"de-DE\", \"es-419\", \"sr\" ]",
+                "[ \"en\", \"de-CH\", \"es-MX\", \"sr-Latn\" ]", StringComparison.Ordinal)
+                .Replace("\"baseLocale\": \"en\",", "\"baseLocale\": \"en\", \"validation\": { \"translationCompleteness\": \"allow\" },", StringComparison.Ordinal),
+            ("en", "title = Data grid\nempty = Nothing here\n"),
+            ("de-CH", "title = Datenraster\n"),
+            ("es-MX", "title = Tabla\n"),
+            ("sr-Latn", "title = Mreža\n"));
+        packs.Remove("en");
+
+        TranslationContext context = await TranslationContext.CreateBuilder()
+            .Add(Regional.Registration)
+            .AddOverlay(TranslationOverlay.FromPacks("acme-regional", new MemoryPackSource(packs),
+                [new TranslationOverlayLocale("de-CH"), new TranslationOverlayLocale("es-MX"), new TranslationOverlayLocale("sr-Latn")]))
+            .BuildAsync("es-MX");
+        Assert.Equal("Tabla|Sin filas", Text(context, "acme-regional", "title") + "|" + Text(context, "acme-regional", "empty"),
+            "es-MX falls back to its CLDR parent es-419");
+        await context.SetLocaleAsync("de-CH");
+        Assert.Equal("Datenraster|Keine Zeilen", Text(context, "acme-regional", "title") + "|" + Text(context, "acme-regional", "empty"),
+            "de-CH falls back to the de-DE that likely subtags match, without a declared de");
+        await context.SetLocaleAsync("sr-Latn");
+        Assert.Equal("Mreža|No rows", Text(context, "acme-regional", "title") + "|" + Text(context, "acme-regional", "empty"),
+            "sr-Latn never falls back to the Cyrillic sr");
+        await context.SetLocaleAsync("es-CO");
+        Assert.Equal("acme-regional:es-CO>es-419:Parent", Describe(context.Catalogs[0]), "a declared parent beats an added sibling");
+    }
+
+    [Test, DisplayName("a context negotiates a preference list against the locales every catalog shows, then each catalog's")]
+    public async Task ContextPreferences()
+    {
+        TranslationContext context = await TranslationContext.CreateBuilder()
+            .Add(App.Registration)
+            .Add(GridV1.Registration)
+            .BuildAsync("en");
+        await context.SetLocaleFromPreferencesAsync(["fr-CH", "de-AT", "en"]);
+        Assert.Equal("de|app:de>de:Exact|acme-grid:de>de:Exact", context.RequestedLocale + "|" + Describe(context.Catalogs[0]) + "|" +
+            Describe(context.Catalogs[1]), "the first preference every catalog shows");
+
+        await context.GetManager(GridId).SetLocaleFromPreferencesAsync(["fr-CA", "ja"]);
+        Assert.Equal("fr|app:fr>fr:Exact|acme-grid:fr>en:Default", context.RequestedLocale + "|" + Describe(context.Catalogs[0]) + "|" +
+            Describe(context.Catalogs[1]), "else the first catalog with a match, through any manager");
+
+        await context.SetLocaleFromPreferencesAsync(["ja", "x-invalid-", "und"]);
+        Assert.Equal("en", context.RequestedLocale, "else the first catalog's default locale");
+        await Throws<ArgumentNullException>(() => context.SetLocaleFromPreferencesAsync(null!).AsTask());
+    }
+
     [Test, DisplayName("fallback copies in an overlay pack never replace the library's text for a locale it declares")]
     public async Task FallbackCopiesYieldToLibrary()
     {

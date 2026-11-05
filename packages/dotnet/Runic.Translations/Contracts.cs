@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -152,6 +153,15 @@ public interface ITranslationProvider
     /// <see cref="UnsupportedLocalePolicy.Exact"/>.
     /// </remarks>
     ValueTask<ITranslationSnapshot> GetSnapshotAsync(string requestedLocale, CancellationToken cancellationToken = default);
+    /// <summary>Chooses the provided locale for an ordered preference list, such as the operating system's user languages.</summary>
+    /// <remarks>
+    /// <see cref="CompiledTranslationProvider"/> matches with CLDR likely subtags and parent locales
+    /// (<see cref="LocaleNegotiation"/>) and returns the default locale when no preference matches. The default
+    /// implementation throws <see cref="NotSupportedException"/>.
+    /// </remarks>
+    /// <param name="preferredLocales">The preferences, most preferred first.</param>
+    string NegotiateLocale(IEnumerable<string> preferredLocales) =>
+        throw new NotSupportedException("This provider does not negotiate locales.");
 }
 
 /// <summary>Owns the currently active immutable locale snapshot.</summary>
@@ -173,6 +183,15 @@ public interface ITranslationManager
     /// text but formats numbers and dates for Switzerland, so it publishes a snapshot and raises <see cref="LocaleChanged"/>.
     /// </remarks>
     ValueTask SetLocaleAsync(string locale, CancellationToken cancellationToken = default);
+    /// <summary>Negotiates a locale for an ordered preference list and activates it as <see cref="SetLocaleAsync"/> does.</summary>
+    /// <remarks>
+    /// <see cref="TranslationManager"/> asks its provider's <see cref="ITranslationProvider.NegotiateLocale"/>. The default
+    /// implementation throws <see cref="NotSupportedException"/>.
+    /// </remarks>
+    /// <param name="preferredLocales">The preferences, most preferred first, such as the operating system's user languages.</param>
+    /// <param name="cancellationToken">Cancels this caller's wait.</param>
+    ValueTask SetLocaleFromPreferencesAsync(IEnumerable<string> preferredLocales, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This manager does not negotiate locales.");
     /// <summary>
     /// Rebuilds and atomically republishes the active locale's snapshot from its sources as if the
     /// locale were being entered fresh, without changing locales.

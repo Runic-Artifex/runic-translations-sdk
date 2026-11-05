@@ -59,8 +59,8 @@ internal static class Rmf2EsmOutputRendererV5
         writer.Line("export const baseLocale = " + GenerationSupport.JsonString(project.DefaultLocale) + ";");
         writer.Line("export const locales = Object.freeze(" + JsonSerializer.Serialize(project.Locales.Select(item => item.Tag).OrderBy(item => item, StringComparer.Ordinal)) + ");");
         writer.Line("const unsupportedLocalePolicy = " + GenerationSupport.JsonString(project.UnsupportedLocale.ToString()) + ";");
-        writer.Line("const generatedLocaleData = " + TranslationCapabilityRegistry.EsmLocaleDataJson + ";");
-        writer.Line(TranslationCapabilityRegistry.EsmPluralRulesSource);
+        // Only the CLDR data of the catalog's languages is embedded.
+        writer.Line(TranslationCapabilityRegistry.EsmLocaleSource(project.Locales.Select(item => item.Tag)));
         // Only the markup contracts: per-message contracts live in the message modules and dynamic.js.
         writer.Line("const markupContracts = freezeTrusted(JSON.parse(" + GenerationSupport.JsonString(MarkupContractsJson(project)) + "));");
         // The renderers' table of structured messages; a function, so a bundle without a renderer drops it.
@@ -286,6 +286,8 @@ internal static class Rmf2EsmOutputRendererV5
         export declare const locales: readonly Locale[];
         export declare function decimal(value: string): Rmf2Decimal;
         export declare function resolveLocale(locale: string): Locale;
+        /** The best declared locale for an ordered preference list (navigator.languages, Accept-Language, LANGUAGE), matched with CLDR likely subtags; the base locale when none matches. */
+        export declare function negotiateLocale(preferences: Iterable<string>): Locale;
         /** The text direction of any BCP 47 locale tag's script, for the page's `dir` attribute. */
         export declare function localeDirection(locale: string): "ltr" | "rtl";
         export declare function getLocale(): Locale;
@@ -297,7 +299,7 @@ internal static class Rmf2EsmOutputRendererV5
         export declare function onFallback(listener: (key: string, requested: Locale, content: Locale) => void): () => void;
         /** Sets the locale of this catalog only, over the shared locale; returns a function that removes the resolver. */
         export declare function configureLocaleResolver(resolver: () => string): () => void;
-        /** Sets the locale of every catalog on the page (or in the process) that has no resolver of its own, such as a library's: the shared locale channel. Each catalog resolves the tag under its own locales, so pass the requested tag (`source.getRequestedLocale`). Inside `runWithLocale`, the request's locale applies instead. Returns a function that removes the resolver. */
+        /** Sets the locale of every catalog on the page (or in the process) that has no resolver of its own, such as a library's: the shared locale channel. Each catalog resolves the tag under its own locales, so pass the requested tag (`source.getRequestedLocale`). Inside `runWithLocale`, the request's locale applies instead; on a server, use `runWithLocale`, as this resolver is process-wide. Returns a function that removes this resolver: the latest one still installed then applies, whatever order they are removed in. */
         export declare function configureSharedLocaleResolver(resolver: () => string): () => void;
         /** Sets the zone that `timeZone=local` formats in, such as the browser's zone that an SSR request carries in a cookie; `undefined`, or a zone the engine does not know, means the host's zone. Returns a function that removes the resolver. */
         export declare function configureTimeZoneResolver(resolver: () => string | null | undefined): () => void;
@@ -478,8 +480,8 @@ internal static class Rmf2EsmOutputRendererV5
         export declare function resolveTextReference(value: unknown, handlers: TextReferenceHandlers, options?: MessageOptions): TextReferenceResolution;
         export declare const catalog: string;
         export declare const contractFingerprint: string;
-        /** A catalog for createReferenceResolver: its generated transport module (`import * as transport from ".../transport.js"`) and its message namespace `m`. */
-        export interface ReferenceCatalog { readonly transport: Readonly<{ catalog: string; resolveTextReference(value: unknown, handlers: TextReferenceHandlers, options?: MessageOptions): TextReferenceResolution }>; readonly messages: TextReferenceHandlers; }
+        /** A catalog for createReferenceResolver: its generated transport module (`import * as transport from ".../transport.js"`) and its message namespace `m`. A transport module generated before Runic Translations 0.9 does not export its catalog ID, so its entry names it in `catalog`. */
+        export interface ReferenceCatalog { readonly catalog?: string; readonly transport: Readonly<{ catalog?: string; resolveTextReference(value: unknown, handlers: TextReferenceHandlers, options?: MessageOptions): TextReferenceResolution }>; readonly messages: TextReferenceHandlers; }
         /** Resolves references of every listed catalog, such as the application's and its libraries', by the reference's catalog, with that catalog's resolveTextReference (a version 2 reference written against another release of a catalog is checked key by key and reports `contract-changed`). A reference of an unlisted catalog shows its fallback text (`catalog-mismatch`). */
         export declare function createReferenceResolver(catalogs: readonly ReferenceCatalog[]): (value: unknown, options?: MessageOptions) => TextReferenceResolution;
         """;
