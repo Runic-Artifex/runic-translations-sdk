@@ -739,7 +739,7 @@ it like any locale: `CreateManager("en-XA")`, `SetLocaleAsync("ar-XB")`, or
 | Tag | Text | Direction |
 | --- | --- | --- |
 | `en-XA` | `Save {$name}` reads `[Śààṽéé Ada]`: ASCII letters accented, vowels doubled, padded with `~` to at least 35% more characters, and bracketed | left to right |
-| `ar-XB` | `Save {$name}` reads `[`, U+202E, `Save `, U+202C, `Ada]`: each run of text displays reversed under a right-to-left override (U+202E … U+202C), bracketed | right to left (`localeDirection("ar-XB")` is `rtl`) |
+| `ar-XB` | `Save {$name}` reads `[`, U+202E, `Save `, U+202C, U+2068, `Ada`, U+2069, `]`: each run of text displays reversed under a right-to-left override (U+202E … U+202C), bracketed; as in any right-to-left locale, the placeholder is isolated ([bidirectional text](bidi.md)) | right to left (`localeDirection("ar-XB")` is `rtl`) |
 
 Only the text of each pattern changes: placeholders, markup and its slots,
 declarations, selectors and variant keys stay as written, so a pseudo message has
