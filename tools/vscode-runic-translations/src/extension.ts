@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { execFile } from "node:child_process";
 import { dirname, join } from "node:path";
 import { LanguageClient, State, type LanguageClientOptions, type WorkspaceEdit as ProtocolEdit } from "vscode-languageclient/node";
-import { projectManifest, serverLaunch, sourceWatchRoots, toolLaunch, xliffExportArguments, xliffImportDryRunArguments } from "./server.js";
+import { nearestProjectManifest, projectManifest, serverLaunch, sourceWatchRoots, toolLaunch, xliffExportArguments, xliffImportDryRunArguments } from "./server.js";
 import { escapeHtml, resolvePreviewHtml, type Preview, type RenderedPreview } from "./preview.js";
 import { PreviewSession, exampleSamples, sampleChoices, type Samples } from "./preview-session.js";
 import { ForwardedWatchers } from "./watchers.js";
@@ -289,13 +289,33 @@ export function activate(context: vscode.ExtensionContext) {
   };
   // XLIFF interchange through the project-local tool (runic-translations xliff), the same code as the Translations
   // Editor and the command line. Import is a dry run: it reports each unit's outcome and writes nothing.
-  const interchangeFolder = () => {
+  // The project of the active file (the nearest runic.json above it, as the language server resolves it); without one,
+  // the workspace's only project, or the one the user picks among them.
+  const interchangeFolder = async (): Promise<{ folder: vscode.WorkspaceFolder; project: string } | undefined> => {
     if (!vscode.workspace.isTrusted) throw new Error("Trust this workspace before running its local Runic tool.");
     const active = vscode.window.activeTextEditor?.document.uri;
-    const folder = (active && vscode.workspace.getWorkspaceFolder(active)) ?? vscode.workspace.workspaceFolders?.[0];
-    if (!folder) throw new Error("Open a workspace folder with a runic.json project.");
-    const project = projectManifest(folder.uri.fsPath);
-    if (!project) throw new Error("No runic.json or translations/runic.json in the workspace folder.");
+    const activeFolder = active?.scheme === "file" ? vscode.workspace.getWorkspaceFolder(active) : undefined;
+    if (active && activeFolder) {
+      const project = nearestProjectManifest(active.fsPath, activeFolder.uri.fsPath);
+      if (project) return { folder: activeFolder, project };
+    }
+    const found = new Set<string>();
+    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+      const conventional = projectManifest(folder.uri.fsPath);
+      if (conventional) found.add(conventional);
+    }
+    for (const uri of await vscode.workspace.findFiles("**/runic.json", "**/{node_modules,bin,obj,.git}/**", 200)) found.add(uri.fsPath);
+    const projects = [...found].sort();
+    if (projects.length === 0) throw new Error("No runic.json project in the workspace.");
+    let project = projects[0];
+    if (projects.length > 1) {
+      const picked = await vscode.window.showQuickPick(projects.map(path => ({ label: vscode.workspace.asRelativePath(path), path })),
+        { placeHolder: "Choose the Runic translation project" });
+      if (!picked) return undefined;
+      project = picked.path;
+    }
+    const folder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(project));
+    if (!folder) throw new Error("The runic.json project is outside the workspace folders.");
     return { folder, project };
   };
   const runTool = (folder: vscode.WorkspaceFolder, toolArguments: string[]) => new Promise<string>((resolveRun, rejectRun) => {
@@ -310,7 +330,9 @@ export function activate(context: vscode.ExtensionContext) {
     });
   });
   register("exportXliff", async () => {
-    const { folder, project } = interchangeFolder();
+    const chosen = await interchangeFolder();
+    if (!chosen) return;
+    const { folder, project } = chosen;
     const target = await vscode.window.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, canSelectMany: false,
       defaultUri: vscode.Uri.file(dirname(project)), openLabel: "Export XLIFF here" });
     if (!target?.[0]) return;
@@ -319,7 +341,9 @@ export function activate(context: vscode.ExtensionContext) {
     void vscode.window.showInformationMessage(`Exported ${written} XLIFF document(s) to ${target[0].fsPath}.`);
   });
   register("importXliffDryRun", async () => {
-    const { folder, project } = interchangeFolder();
+    const chosen = await interchangeFolder();
+    if (!chosen) return;
+    const { folder, project } = chosen;
     const source = await vscode.window.showOpenDialog({ canSelectMany: false, defaultUri: vscode.Uri.file(join(dirname(project))),
       filters: { "XLIFF 2.1": ["xliff", "xlf"] }, openLabel: "Check import" });
     if (!source?.[0]) return;

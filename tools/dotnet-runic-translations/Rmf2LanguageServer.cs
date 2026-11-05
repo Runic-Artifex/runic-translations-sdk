@@ -32,7 +32,10 @@ internal sealed class Rmf2LanguageServer
     private bool _fileOperations;
     private bool _configurationSync;
     private bool _codeDescriptionSupport;
-    private readonly Rmf2ReviewFileState _reviewState = new();
+    // Review data per project and buffer group, for code actions and hover: the compilation with the open buffers, its
+    // review compilation (TranslationReviewFile.ForReview), the fingerprints and the review file. Dropped when a buffer,
+    // a watched file or the configuration changes, and when the review file's size or write time differs.
+    private readonly Dictionary<string, ReviewView> _reviewViews = new(StringComparer.Ordinal);
     // Open buffers by file (FileKey). Clients spell one file's URI differently from .NET
     // (`file:///c%3A/...` and percent-encoded `+ @ ( ) !` in VS Code), so whether a file is
     // open, and which URI its publications use, is decided by its path, never by URI text.
@@ -174,6 +177,8 @@ internal sealed class Rmf2LanguageServer
     }
     private JsonNode? Handle(string method, JsonObject args)
     {
+        if (method is "textDocument/didOpen" or "textDocument/didChange" or "textDocument/didClose" or "textDocument/didSave" or
+            "workspace/didChangeWatchedFiles" or "workspace/didChangeConfiguration") _reviewViews.Clear();
         if (method == "initialize")
         {
             _configurationSync = args["initializationOptions"]?["runicConfigurationSync"]?.GetValue<bool>() == true;
@@ -232,7 +237,7 @@ internal sealed class Rmf2LanguageServer
             string sourceUri = arguments[0]!.GetValue<string>(); string sourcePath = LocalPath(sourceUri);
             var workspace = Workspace(sourcePath);
             if (command == "runic.markReviewed")
-                return MarkReviewed(sourcePath, workspace, arguments[1]!.GetValue<string>(), arguments[2]!.GetValue<string>());
+                return MarkReviewed(sourcePath, arguments[1]!.GetValue<string>(), arguments[2]!.GetValue<string>());
             if (command is "runic.preview" or "runic.renderPreview")
             {
                 string key = arguments[1]!.GetValue<string>(), locale = arguments[2]!.GetValue<string>();
@@ -465,9 +470,11 @@ internal sealed class Rmf2LanguageServer
                         .SelectMany(document => document.Nodes.Where(node => !node.IsGroup && workspace.LogicalPath(document.Source.Path, node).SequenceEqual(logical, StringComparer.Ordinal)))
                         .FirstOrDefault();
             }
-            Rmf2ProjectCompilation compiled = workspace.Validate();
-            if (compiled.Success && !entry.IsGroup)
-                reviewState = _reviewState.Describe(ProjectDirectory(path, allowExternalAncestor: true), compiled, key, locale);
+            string hoverProject = ProjectDirectory(path, allowExternalAncestor: true);
+            ReviewView view = ReviewViewOf(hoverProject, BufferUris(hoverProject).ToArray(), workspace);
+            Rmf2ProjectCompilation compiled = view.Compilation;
+            if (!entry.IsGroup)
+                reviewState = Rmf2ReviewFileState.Describe(view.Review.Project?.DefaultLocale, view.Fingerprints, view.File, view.Error, key, locale);
             if (compiled.Success && !entry.IsGroup)
             {
                 Rmf2ProjectV5 project = compiled.Project!;
@@ -1001,7 +1008,7 @@ internal sealed class Rmf2LanguageServer
         IReadOnlyList<TranslationDiagnostic> diagnostics = Array.Empty<TranslationDiagnostic>();
         try
         {
-            diagnostics = WithReviewDiagnostics(project, Workspace(project, group).Validate());
+            diagnostics = WithReviewDiagnostics(ReviewViewOf(project, group));
             // A later failure after recovery is worth reporting again.
             foreach (string uri in group) _reportedBufferFailures.Remove(uri);
         }
@@ -1243,37 +1250,71 @@ internal sealed class Rmf2LanguageServer
     }
     private static JsonObject EmptyRange() => new() {
         ["start"] = new JsonObject { ["line"] = 0, ["character"] = 0 }, ["end"] = new JsonObject { ["line"] = 0, ["character"] = 0 } };
-    // The review file's warnings beside the compiler's: RTR0090 for each stale entry, RTR0091 when the file cannot be read
-    // (the same rules and file as runic-translations validate, through Tooling).
-    private static IReadOnlyList<TranslationDiagnostic> WithReviewDiagnostics(string project, Rmf2ProjectCompilation compilation)
+    private sealed record ReviewView(string Stamp, Rmf2ProjectCompilation Compilation, Rmf2ProjectCompilation Review,
+        IReadOnlyDictionary<string, string>? Fingerprints, string? ReviewPath, TranslationInterchangeReview? File, string? Error,
+        TranslationInterchangeException? ReadFailure);
+
+    // The review data of a project compiled with the buffers of group, cached (see _reviewViews). The review compilation
+    // is the compilation itself when it succeeded, else the same sources without validation policies, else the base
+    // locale alone, so RTR0090, hover's review state and "Mark reviewed" work while translations are incomplete.
+    private ReviewView ReviewViewOf(string project, IReadOnlyCollection<string> group, Rmf2Workspace? workspace = null)
     {
-        if (!compilation.Success || compilation.Project is not { } compiled || !TranslationReviewFile.IsFileName(compiled.Id)) return compilation.Diagnostics;
-        string path = TranslationReviewFile.PathFor(Path.Combine(project, "runic.json"), compiled.Id);
-        try
+        string cacheKey = project + "\n" + string.Join("\n", group.Order(StringComparer.Ordinal));
+        if (_reviewViews.TryGetValue(cacheKey, out ReviewView? cached) && cached.Stamp == ReviewStamp(cached.ReviewPath)) return cached;
+        workspace ??= Workspace(project, group);
+        Rmf2ProjectCompilation compilation = workspace.Validate();
+        Rmf2ProjectCompilation review = TranslationReviewFile.ForReview(compilation, workspace.ProjectSource, workspace.Sources, null, _requestCancellation);
+        IReadOnlyDictionary<string, string>? fingerprints = review is { Success: true, Project: not null } ? TranslationInterchange.ComputeSourceFingerprints(review) : null;
+        string? catalog = review.Project?.Id ?? compilation.Project?.Id;
+        string? path = catalog is not null && TranslationReviewFile.IsFileName(catalog) ? TranslationReviewFile.PathFor(Path.Combine(project, "runic.json"), catalog) : null;
+        string stamp = ReviewStamp(path);
+        TranslationInterchangeReview? file = null;
+        TranslationInterchangeException? failure = null;
+        string? error = null;
+        if (path is not null)
         {
-            return TranslationReviewFile.Read(path, compiled.Id) is { } review
-                ? [.. compilation.Diagnostics, .. TranslationReviewFile.StaleDiagnostics(compilation, review)] : compilation.Diagnostics;
+            try { file = TranslationReviewFile.Read(path, catalog!); }
+            catch (TranslationInterchangeException exception) { failure = exception; error = exception.Message; }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { error = exception.Message; }
         }
-        catch (TranslationInterchangeException exception) { return [.. compilation.Diagnostics, TranslationReviewFile.InvalidDiagnostic(path, exception)]; }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { return compilation.Diagnostics; }
+        var view = new ReviewView(stamp, compilation, review, fingerprints, path, file, error, failure);
+        _reviewViews[cacheKey] = view;
+        return view;
     }
 
-    // The project repairs for one open buffer and its stale review entries, from its project compiled with the open
-    // buffers. A buffer without a resolvable, compiling project has none.
+    private static string ReviewStamp(string? path)
+    {
+        if (path is null) return "-";
+        var info = new FileInfo(path);
+        return info.Exists ? info.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) + ":" + info.LastWriteTimeUtc.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture) : "-";
+    }
+
+    // The review file's warnings beside the compiler's: RTR0090 for each stale entry, RTR0091 when the file cannot be read
+    // (the same rules and file as runic-translations validate, through Tooling).
+    private static IReadOnlyList<TranslationDiagnostic> WithReviewDiagnostics(ReviewView view)
+    {
+        IReadOnlyList<TranslationDiagnostic> diagnostics = view.Compilation.Diagnostics;
+        if (view.ReadFailure is not null && view.ReviewPath is not null) return [.. diagnostics, TranslationReviewFile.InvalidDiagnostic(view.ReviewPath, view.ReadFailure)];
+        if (view.File is null || view.Fingerprints is null) return diagnostics;
+        return [.. diagnostics, .. TranslationReviewFile.StaleDiagnostics(view.Review, view.File)];
+    }
+
+    // The project repairs for one open buffer and its stale review entries whose "Mark reviewed" can run now (the files
+    // with the key's base message and translation are saved), from its project compiled with the open buffers.
     private (IReadOnlyList<Rmf2DiagnosticQuickFix> Fixes, IReadOnlyList<TranslationReviewStaleEntry> Stale) ProjectQuickFixes(string uri, Buffer buffer)
     {
         string? project = BufferProject(uri, out _);
         if (project is null) return ([], []);
         try
         {
-            Rmf2ProjectCompilation compilation = Workspace(project, BufferUris(project).ToArray()).Validate();
+            ReviewView view = ReviewViewOf(project, BufferUris(project).ToArray());
             string path = LocalPath(uri);
             var source = new TranslationSource(path, Utf8.GetBytes(buffer.Text));
-            IReadOnlyList<Rmf2DiagnosticQuickFix> fixes = Rmf2DiagnosticActions.GetProjectQuickFixes(compilation, source, _requestCancellation);
+            IReadOnlyList<Rmf2DiagnosticQuickFix> fixes = Rmf2DiagnosticActions.GetProjectQuickFixes(view.Compilation, source, _requestCancellation);
             IReadOnlyList<TranslationReviewStaleEntry> stale = [];
-            if (compilation.Success && compilation.Project is { } compiled && TranslationReviewFile.IsFileName(compiled.Id) &&
-                TranslationReviewFile.Read(TranslationReviewFile.PathFor(Path.Combine(project, "runic.json"), compiled.Id), compiled.Id) is { } review)
-                stale = TranslationReviewFile.Stale(compilation, review).Where(entry => PathComparer.Equals(FileKey(entry.Location.Path), FileKey(path))).ToArray();
+            if (view.File is { } review && view.Fingerprints is not null)
+                stale = TranslationReviewFile.Stale(view.Review, review).Where(entry => PathComparer.Equals(FileKey(entry.Location.Path), FileKey(path)) &&
+                    UnsavedReviewFiles(project, view.Review.Project, null, entry.Entry.Key, entry.Entry.Locale).Count == 0).ToArray();
             return (fixes, stale);
         }
         catch (Exception error) when (error is ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or InvalidOperationException or IOException or FormatException or TranslationInterchangeException or TranslationAuthoringException or System.Text.Json.JsonException)
@@ -1282,19 +1323,68 @@ internal sealed class Rmf2LanguageServer
         }
     }
 
-    // runic.markReviewed: records the entry's state again for the current source (the open buffers included), as
-    // runic-translations review mark does, and republishes the diagnostics.
-    private JsonNode? MarkReviewed(string sourcePath, Rmf2Workspace workspace, string key, string locale)
+    // The open buffers, among the files with the key's base message and its translation, whose text differs from the
+    // file on disk. Where no compilation locates the translation (it is missing, or only the base locale compiled), every
+    // buffer of the project in that locale counts.
+    private List<string> UnsavedReviewFiles(string project, Rmf2ProjectV5? buffers, Rmf2ProjectV5? disk, string key, string locale)
     {
-        Rmf2ProjectCompilation compilation = workspace.Validate();
-        if (!compilation.Success || compilation.Project is not { } project)
-            throw new TranslationAuthoringException("Fix the catalog's errors before recording a review.");
+        var files = new HashSet<string>(PathComparer);
+        bool translationFound = false;
+        foreach (Rmf2ProjectV5 compiled in new[] { buffers, disk }.OfType<Rmf2ProjectV5>())
+            foreach (Rmf2LocaleV5 item in compiled.Locales.Where(item => item.Tag == compiled.DefaultLocale || item.Tag == locale))
+                foreach (Rmf2TranslationV5 resource in item.DirectResources.Where(resource => resource.Key == key))
+                {
+                    files.Add(Path.GetFullPath(resource.SourceLocation.Path));
+                    translationFound |= item.Tag == locale;
+                }
+        string[] group = BufferUris(project).ToArray();
+        if (!translationFound && group.Length != 0)
+        {
+            Rmf2Workspace workspace = Workspace(project, group);
+            foreach (string uri in group)
+                if (string.Equals(workspace.Locale(LocalPath(uri)), locale, StringComparison.OrdinalIgnoreCase)) files.Add(LocalPath(uri));
+        }
+        var unsaved = new List<string>();
+        foreach (string file in files.Order(StringComparer.Ordinal))
+        {
+            if (!TryGetBuffer(file, out _, out Buffer? buffer)) continue;
+            byte[]? saved = File.Exists(file) ? File.ReadAllBytes(file) : null;
+            if (saved is null || !saved.AsSpan().SequenceEqual(Utf8.GetBytes(buffer.Text))) unsaved.Add(file);
+        }
+        return unsaved;
+    }
+
+    // runic.markReviewed: records the entry's state again for the source on disk, as runic-translations review mark
+    // does, and republishes the diagnostics. It refuses while the base message's or the translation's file has unsaved
+    // changes: the review file is on disk, so it must describe the files on disk. Works while translations are
+    // incomplete (the review compilation); the review file is written with compare-and-swap.
+    private JsonNode? MarkReviewed(string sourcePath, string key, string locale)
+    {
+        string projectDirectory = ProjectDirectory(sourcePath, allowExternalAncestor: true);
+        CompilerInputs inputs = InputFiles.ReadProject(projectDirectory, null);
+        var projectSource = new TranslationSource(Path.GetFullPath(inputs.Project.Path), inputs.Project.GetUtf8Bytes());
+        TranslationSource[] sources = inputs.Messages.Select(source => new TranslationSource(Path.GetFullPath(source.Path), source.GetUtf8Bytes())).ToArray();
+        Rmf2ProjectCompilation review = TranslationReviewFile.ForReview(TranslationCompiler.CompileRmf2ProjectV5(projectSource, sources, null, _requestCancellation),
+            projectSource, sources, null, _requestCancellation);
+        if (!review.Success || review.Project is not { } project)
+            throw new TranslationAuthoringException("Fix the errors in runic.json or the base locale before recording a review.");
         if (locale == project.DefaultLocale || !project.Locales.Any(item => item.Tag == locale))
             throw new ArgumentException($"'{locale}' is not a translated locale of catalog '{project.Id}'.");
-        string path = TranslationReviewFile.PathFor(Path.Combine(ProjectDirectory(sourcePath, allowExternalAncestor: true), "runic.json"), project.Id);
-        TranslationInterchangeReview? existing = TranslationReviewFile.Read(path, project.Id);
-        TranslationReviewState state = existing?.Entries.FirstOrDefault(entry => entry.Key == key && entry.Locale == locale)?.State ?? TranslationReviewState.Translated;
-        TranslationReviewFile.Write(path, TranslationReviewFile.Mark(existing, project.Id, [key], locale, state, null, TranslationInterchange.ComputeSourceFingerprints(compilation)));
+        IReadOnlyDictionary<string, string> fingerprints = TranslationInterchange.ComputeSourceFingerprints(review);
+        if (!fingerprints.ContainsKey(key)) throw new ArgumentException($"'{key}' is not a message of catalog '{project.Id}'.");
+        Rmf2ProjectV5? buffers = BufferUris(projectDirectory).Any() ? ReviewViewOf(projectDirectory, BufferUris(projectDirectory).ToArray()).Review.Project : null;
+        List<string> unsaved = UnsavedReviewFiles(projectDirectory, buffers, project, key, locale);
+        if (unsaved.Count != 0)
+            throw new TranslationAuthoringException("Save " + string.Join(", ", unsaved.Select(Path.GetFileName)) +
+                " first to record a review: the review file describes the files on disk.");
+        string path = TranslationReviewFile.PathFor(Path.Combine(projectDirectory, "runic.json"), project.Id);
+        try
+        {
+            TranslationReviewFile.Update(path, project.Id, existing => TranslationReviewFile.Mark(existing, project.Id, [key], locale,
+                existing?.Entries.FirstOrDefault(entry => entry.Key == key && entry.Locale == locale)?.State ?? TranslationReviewState.Translated, null, fingerprints));
+        }
+        catch (TranslationInterchangeException exception) { throw new TranslationAuthoringException("The review was not recorded: " + exception.Message); }
+        _reviewViews.Clear();
         QueueGlobalDiagnosticsRefresh();
         FlushGlobalDiagnosticsRefresh();
         return null;

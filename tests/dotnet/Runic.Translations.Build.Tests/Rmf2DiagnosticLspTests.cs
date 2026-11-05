@@ -401,6 +401,66 @@ internal sealed class Rmf2DiagnosticLspTests
         Assert.Equal(german, File.ReadAllText(temporary.Resolve("de.rmf2")), "Marking a review changed the translation.");
     }
 
+    [Test, DisplayName("LSP review features work while a locale misses keys, and Mark reviewed refuses unsaved buffers and stamps from disk")]
+    public void ReviewOnIncompleteCatalog()
+    {
+        using TemporaryDirectory temporary = new();
+        // translationCompleteness defaults to error: cs misses 'later' (RTR0010), so the catalog does not compile.
+        const string project = """{"schemaVersion":1,"catalog":"app","code":{"namespace":"Example","className":"Text"},"baseLocale":"en","locales":["en","cs"]}""";
+        File.WriteAllText(temporary.Resolve("runic.json"), project);
+        const string english = "title = Title\nlater = Later\nitems =\n  .input {$n :integer}\n  .match $n\n  one {{One}}\n  * {{Many}}\n";
+        File.WriteAllText(temporary.Resolve("en.rmf2"), english);
+        const string czech = "title = Titulek\nitems =\n  .input {$n :integer}\n  .match $n\n  one {{Jedna}}\n  * {{Více}}\n";
+        File.WriteAllText(temporary.Resolve("cs.rmf2"), czech);
+        string reviewPath = temporary.Resolve("app.review.json");
+        string old = "sha256:" + new string('0', 64);
+        File.WriteAllText(reviewPath, "{\"$schema\":\"runic.translations.interchange-review/2\",\"catalog\":\"app\",\"entries\":[" +
+            "{\"key\":\"title\",\"locale\":\"cs\",\"state\":\"approved\",\"sourceFingerprint\":\"" + old + "\"}]}");
+        string csUri = new Uri(temporary.Resolve("cs.rmf2")).AbsoluteUri, enUri = new Uri(temporary.Resolve("en.rmf2")).AbsoluteUri;
+        using Session session = new(temporary.Path);
+        session.Request("initialize", new JsonObject { ["rootUri"] = new Uri(temporary.Path).AbsoluteUri, ["capabilities"] = new JsonObject() });
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = csUri, ["version"] = 1, ["text"] = czech } });
+        Flush(session, csUri);
+        JsonArray published = LastDiagnostics(session, csUri);
+        Assert.True(published.Any(item => item?["code"]?.GetValue<string>() == "RTR0010") && published.Any(item => item?["code"]?.GetValue<string>() == "RTR0090"),
+            "RTR0090 was not reported beside the RTR0010 error: " + published.ToJsonString());
+        Assert.Contains("Review: approved, stale", session.Request("textDocument/hover", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = csUri },
+            ["position"] = Position(0, 1) })["result"]!["contents"]!["value"]!.GetValue<string>());
+
+        JsonArray Actions(int line) => session.Request("textDocument/codeAction", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = csUri },
+            ["range"] = new JsonObject { ["start"] = Position(line, 0), ["end"] = Position(line, 5) }, ["context"] = new JsonObject { ["diagnostics"] = new JsonArray() } })["result"]!.AsArray();
+        Assert.True(Actions(1).Any(action => action?["title"]?.GetValue<string>() == "Add the missing plural variant few (copies of the * variant)"),
+            "The RTR0095 quick fix was not offered while the catalog has errors.");
+        static bool IsMark(JsonNode? action) => action?["command"]?["command"]?.GetValue<string>() == "runic.markReviewed";
+        JsonNode mark = Actions(0).Single(IsMark)!;
+        JsonNode Execute() => session.Request("workspace/executeCommand", new JsonObject { ["command"] = "runic.markReviewed", ["arguments"] = mark["command"]!["arguments"]!.DeepClone() });
+
+        // An unsaved translation: the action is not offered, and the command refuses without writing.
+        session.Notify("textDocument/didChange", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = csUri, ["version"] = 2 },
+            ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = czech.Replace("Titulek", "Nadpis", StringComparison.Ordinal) }) });
+        Flush(session, csUri);
+        Assert.False(Actions(0).Any(IsMark), "Mark reviewed was offered while the translation has unsaved changes.");
+        Assert.Contains("Save cs.rmf2 first", Execute()["error"]?["message"]?.GetValue<string>() ?? "", "Mark reviewed did not refuse an unsaved translation.");
+        Assert.Contains(old, File.ReadAllText(reviewPath));
+        session.Notify("textDocument/didChange", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = csUri, ["version"] = 3 },
+            ["contentChanges"] = new JsonArray(new JsonObject { ["text"] = czech }) });
+
+        // An unsaved base message refuses too: the stamp is made from the files on disk.
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = enUri, ["version"] = 1, ["text"] = english.Replace("Title", "Main title", StringComparison.Ordinal) } });
+        Flush(session, csUri);
+        Assert.Contains("Save en.rmf2 first", Execute()["error"]?["message"]?.GetValue<string>() ?? "", "Mark reviewed did not refuse an unsaved base message.");
+        session.Notify("textDocument/didClose", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = enUri } });
+        Flush(session, csUri);
+
+        // Saved buffers: the entry is recorded for the source on disk, while the catalog still has the RTR0010 error.
+        Assert.True(Execute()["error"] is null, "runic.markReviewed failed on an incomplete catalog.");
+        Rmf2ProjectCompilation disk = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource(temporary.Resolve("runic.json"), Encoding.UTF8.GetBytes(project)),
+            [new TranslationSource(temporary.Resolve("en.rmf2"), Encoding.UTF8.GetBytes(english))], new TranslationCompilerOptions { BaseLocaleOnly = true });
+        Assert.Contains(Runic.Translations.Tooling.TranslationInterchange.ComputeSourceFingerprints(disk)["title"], File.ReadAllText(reviewPath));
+        Flush(session, csUri);
+        Assert.False(LastDiagnostics(session, csUri).Any(item => item?["code"]?.GetValue<string>() == "RTR0090"), "RTR0090 remained after marking the entry reviewed.");
+    }
+
     [Test, DisplayName("LSP offers the RTR0095 quick fix that adds the missing plural variants")]
     public void MissingPluralVariantsQuickFix()
     {

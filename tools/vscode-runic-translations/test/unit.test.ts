@@ -2,7 +2,7 @@ import { test, expect } from "bun:test";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, symlinkSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { projectManifest, serverLaunch, sourceWatchRoots, toolLaunch, xliffExportArguments, xliffImportDryRunArguments } from "../src/server.js";
+import { nearestProjectManifest, projectManifest, serverLaunch, sourceWatchRoots, toolLaunch, xliffExportArguments, xliffImportDryRunArguments } from "../src/server.js";
 import { resolvePreviewHtml } from "../src/preview.js";
 import type { Preview } from "../src/preview.js";
 import { PreviewSession, sampleChoices, type PreviewHost, type PreviewState, type Samples } from "../src/preview-session.js";
@@ -52,6 +52,19 @@ test("XLIFF commands run the same local tool with the project's manifest and kee
       .toEqual(["tool", "run", "runic-translations", "--", "xliff", "import", "--project", project, "--source", "de file.xliff", "--dry-run"]);
     writeFileSync(join(root, "runic.json"), "{}");
     expect(projectManifest(root)).toBe(join(root, "runic.json"));
+  } finally { rmSync(root, { recursive: true }); }
+});
+test("XLIFF commands pick the project of the active file: the nearest runic.json above it within the folder", () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "runic-vscode-nearest-")));
+  try {
+    mkdirSync(join(root, "apps", "shop", "translations"), { recursive: true });
+    mkdirSync(join(root, "apps", "admin"), { recursive: true });
+    writeFileSync(join(root, "runic.json"), "{}");
+    writeFileSync(join(root, "apps", "shop", "translations", "runic.json"), "{}");
+    expect(nearestProjectManifest(join(root, "apps", "shop", "translations", "de.rmf2"), root)).toBe(join(root, "apps", "shop", "translations", "runic.json"));
+    expect(nearestProjectManifest(join(root, "apps", "admin", "en.rmf2"), root)).toBe(join(root, "runic.json"));
+    expect(nearestProjectManifest(join(root, "apps", "admin", "en.rmf2"), join(root, "apps"))).toBeUndefined();
+    expect(nearestProjectManifest(join(tmpdir(), "elsewhere.rmf2"), root)).toBeUndefined();
   } finally { rmSync(root, { recursive: true }); }
 });
 test("translation source watcher plans dedupe nested mounts and reject workspace escapes", () => {

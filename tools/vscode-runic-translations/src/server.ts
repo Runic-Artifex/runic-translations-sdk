@@ -77,6 +77,25 @@ export function projectManifest(root: string): string | undefined {
   return [join(root, "runic.json"), join(root, "translations", "runic.json")].find(path => existsSync(path));
 }
 
+/**
+ * The runic.json of the project a file belongs to: the nearest one in its directory or above, up to and including
+ * `root` (the workspace folder), as the language server resolves it. Undefined when none is found within `root`.
+ */
+export function nearestProjectManifest(file: string, root: string): string | undefined {
+  const boundary = resolve(root);
+  let directory = dirname(resolve(file));
+  for (;;) {
+    const rel = relative(boundary, directory);
+    if (rel.startsWith("..") || isAbsolute(rel)) return undefined;
+    const candidate = join(directory, "runic.json");
+    if (existsSync(candidate)) return candidate;
+    if (directory === boundary) return undefined;
+    const parent = dirname(directory);
+    if (parent === directory) return undefined;
+    directory = parent;
+  }
+}
+
 /** `runic-translations xliff export` of the project into `output`: one XLIFF 2.1 document per translated locale. */
 export function xliffExportArguments(project: string, output: string): string[] {
   return ["xliff", "export", "--project", project, "--output", output];

@@ -181,7 +181,9 @@ escapes do not change it; different text, placeholders, functions, options or se
   the warning `RTR0091`. Without the file nothing is reported.
 - `xliff export` reads it for the XLIFF review state (see above).
 - The language server (`lsp`) reports the same `RTR0090` warnings, shows the review state in hover and offers
-  **Mark … reviewed**, which records the entry's state again for the current source.
+  **Mark … reviewed**, which records the entry's state again for the source on disk. It refuses while the file with
+  the base message or the translation has unsaved changes (save first), and like the editor it works while another
+  locale misses keys. All three writers replace the review file only if it did not change since they read it.
 
 ## Other commands
 

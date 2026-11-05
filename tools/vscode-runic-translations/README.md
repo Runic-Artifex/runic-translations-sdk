@@ -65,7 +65,10 @@ state from the project's review file (`<catalog>.review.json` beside
 Editor write), marked stale when the source changed since it was recorded.
 
 A stale review entry is reported as `RTR0090`; its quick fix **Mark … reviewed**
-records the entry's state again for the current source in the review file.
+records the entry's state again for the source on disk in the review file. It is
+offered, and runs, only while the files with the base message and the translation
+have no unsaved changes. Review warnings, hover and quick fixes also work while
+the catalog has errors elsewhere, such as a locale that misses keys.
 `RTR0095` (plural categories that fall to `*`) has a quick fix that adds the
 missing variants as copies of the `*` variant.
 
@@ -79,7 +82,9 @@ published URL); templates write the published `project-v1.schema.json` URI.
 **Export XLIFF** writes one XLIFF 2.1 document per translated locale into a
 folder you choose, and **Import XLIFF (dry run)** reports what importing a
 translated document would do, unit by unit, without writing anything (the
-output goes to **Runic: Show Output**). Both run the workspace's local
+output goes to **Runic: Show Output**). Both use the project of the active file (the
+nearest `runic.json` above it), or ask which project when no file of one is
+active and the workspace has several. Both run the workspace's local
 `runic-translations xliff` tool, the same code as the Translations Editor; apply
 an import with `runic-translations xliff import` or the editor.
 
