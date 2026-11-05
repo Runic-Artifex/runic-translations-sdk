@@ -132,6 +132,36 @@ internal sealed class TranslationProjectOperationsTests
         Require(plan.ReviewPath == directory.Resolve("translations/app.review.json") && plan.ReviewEntries == 0, "The review file differs.");
     }
 
+    [Test, DisplayName("locale remove and set fallback refuse a fallback cycle anywhere along the chain")]
+    public void FallbackCyclesAlongTheChain()
+    {
+        // en; de → en; de-AT → de; x → de-AT.
+        using var directory = new TemporaryProject();
+        directory.Write("translations/runic.json", """
+            {
+              "schemaVersion": 1,
+              "catalog": "app",
+              "code": { "namespace": "App", "className": "Text" },
+              "baseLocale": "en",
+              "locales": ["en", "de", { "tag": "de-AT", "fallback": "de" }, { "tag": "it", "fallback": "de-AT" }, "fr"],
+              "validation": { "translationCompleteness": "allow" }
+            }
+            """);
+        directory.Write("translations/en.rmf2", "a = A\n");
+
+        // Removing de re-links de-AT to it, which falls back to de-AT: it → de-AT → it.
+        string removal = Throws<TranslationToolingUsageException>(() => TranslationLocaleChanges.PlanRemove(directory.Sources(), "de", replacementFallback: "it"), "A cycle two levels down was accepted.").Message;
+        Require(removal.Contains("it → de-AT → it", StringComparison.Ordinal), removal);
+        Throws<TranslationToolingUsageException>(() => TranslationLocaleChanges.PlanRemove(directory.Sources(), "de", replacementFallback: "de-AT"), "A dependent became its own fallback.");
+        Throws<TranslationToolingUsageException>(() => TranslationLocaleChanges.PlanRemove(directory.Sources(), "de", replacementFallback: "de"), "The removed locale became the replacement.");
+        Require(TranslationLocaleChanges.PlanRemove(directory.Sources(), "de", replacementFallback: "fr").Errors.Count == 0, "A replacement without a cycle was refused.");
+
+        // de → it comes back to de through de-AT; fr → it does not.
+        string set = Throws<TranslationToolingUsageException>(() => TranslationLocaleChanges.PlanSetFallback(directory.Sources(), "de", "it"), "A cycle through two locales was accepted.").Message;
+        Require(set.Contains("de → it → de-AT → de", StringComparison.Ordinal), set);
+        Require(TranslationLocaleChanges.PlanSetFallback(directory.Sources(), "fr", "it").Errors.Count == 0, "A fallback without a cycle was refused.");
+    }
+
     [Test, DisplayName("set fallback edits one locale entry and keeps the rest of runic.json byte for byte")]
     public void SetFallbackPreservesFormatting()
     {
@@ -215,10 +245,10 @@ internal sealed class TranslationProjectOperationsTests
 
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
 
-    private static void Throws<TException>(Func<object?> action, string message) where TException : Exception
+    private static TException Throws<TException>(Func<object?> action, string message) where TException : Exception
     {
         try { _ = action(); }
-        catch (TException) { return; }
+        catch (TException exception) { return exception; }
         throw new InvalidOperationException(message);
     }
 
