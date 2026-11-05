@@ -5,13 +5,20 @@ using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
+using System.Threading.Tasks.Sources;
 using TUnit.Core;
 
 namespace Runic.Translations.Runtime.Tests;
 
 internal sealed class RuntimeTests
 {
+    // Bounds the wait for a step that cannot happen when the manager deadlocks. A correct manager does not depend on
+    // it: the cases that use it are driven by gates, not by timers, so it only limits how long a real deadlock takes
+    // to fail.
+    private static readonly TimeSpan DeadlockGuard = TimeSpan.FromSeconds(30);
+
     [Test, DisplayName("manager exposes initial immutable reference")]
     public void InitialState()
     {
@@ -148,14 +155,23 @@ internal sealed class RuntimeTests
     [Test, DisplayName("manager serializes different locale loads")]
     public async Task SerializesDifferentLocales()
     {
-        SerialProbeProvider provider = new();
+        // Every load stays open until the test releases it, so an overlapping load is seen without timing assumptions.
+        GatedProvider provider = new(locale => new FakeSnapshot("app", locale));
         TranslationManager manager = new(provider, new FakeSnapshot("app", "en-US"));
         Task[] changes = [
             manager.SetLocaleAsync("de-DE").AsTask(),
             manager.SetLocaleAsync("fr-FR").AsTask(),
             manager.SetLocaleAsync("it-IT").AsTask(),
         ];
-        await Task.WhenAll(changes).WaitAsync(TimeSpan.FromSeconds(5));
+        for (int load = 1; load <= changes.Length; load++)
+        {
+            GatedProvider.Load entered = await provider.NextLoadAsync();
+            Assert.Equal(load, provider.CallCount, "A load started before the previous one finished.");
+            Assert.Equal(1, provider.ActiveCalls, "Two loads ran at once.");
+            entered.Release();
+        }
+
+        await Task.WhenAll(changes).WaitAsync(DeadlockGuard);
         Assert.Equal(1, provider.MaximumConcurrentCalls);
         Assert.Equal(3, provider.CallCount);
     }
@@ -266,16 +282,17 @@ internal sealed class RuntimeTests
     public async Task CancellationWinsBeforeCommit()
     {
         FakeSnapshot initial = new("app", "en-US");
-        CommitBarrierSnapshot replacement = new("app", "de-DE");
-        TranslationManager manager = new(new YieldingProvider(replacement), initial);
         using CancellationTokenSource cancellation = new();
+        // The only caller cancels while the manager validates the loaded snapshot: after the load, before the commit.
+        CancelOnValidationSnapshot replacement = new("app", "de-DE", cancellation.Cancel);
+        GatedProvider provider = new(_ => replacement);
+        TranslationManager manager = new(provider, initial);
         Task transition = manager.SetLocaleAsync("de-DE", cancellation.Token).AsTask();
 
-        await replacement.ValidationStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        cancellation.Cancel();
-        replacement.AllowValidation.TrySetResult(true);
+        (await provider.NextLoadAsync()).Release();
 
-        await Assert.ThrowsAsync<OperationCanceledException>(() => transition);
+        await Assert.ThrowsAsync<OperationCanceledException>(() => transition.WaitAsync(DeadlockGuard));
+        Assert.True(replacement.Validated, "The manager did not validate the loaded snapshot.");
         Assert.Same(initial, manager.Current);
     }
 
@@ -295,15 +312,17 @@ internal sealed class RuntimeTests
     [Test, DisplayName("manager synchronous wait does not capture caller context")]
     public void SynchronousWaitDoesNotDeadlock()
     {
+        // The load completes on this thread, and only after the manager has awaited it on the caller's thread. Every
+        // continuation then runs here inline, unless it captured the caller's context: the non-pumping context drops it
+        // and the caller waits forever. No timer or thread-pool thread is involved.
+        ContextProbeProvider provider = new();
         Exception? failure = null;
         Thread thread = new(() =>
         {
             SynchronizationContext.SetSynchronizationContext(new NonPumpingSynchronizationContext());
             try
             {
-                TranslationManager manager = new(
-                    new OffContextProvider(),
-                    new FakeSnapshot("app", "en-US"));
+                TranslationManager manager = new(provider, new FakeSnapshot("app", "en-US"));
                 manager.SetLocaleAsync("de-DE").AsTask().GetAwaiter().GetResult();
                 Assert.Equal("de-DE", manager.CurrentLocale);
             }
@@ -321,8 +340,10 @@ internal sealed class RuntimeTests
         };
 
         thread.Start();
+        Assert.True(provider.Awaited.Wait(DeadlockGuard), "The manager did not await the provider: " + failure);
+        provider.Complete();
         Assert.True(
-            thread.Join(TimeSpan.FromSeconds(5)),
+            thread.Join(DeadlockGuard),
             "SetLocaleAsync deadlocked after capturing a non-pumping synchronization context.");
         if (failure is not null)
             throw new InvalidOperationException("The synchronous locale switch failed.", failure);
@@ -838,30 +859,106 @@ internal sealed class RuntimeTests
         }
     }
 
-    private sealed class YieldingProvider : ITranslationProvider
+    private sealed class GatedProvider : ITranslationProvider
     {
-        private readonly ITranslationSnapshot _snapshot;
-        internal YieldingProvider(ITranslationSnapshot snapshot) => _snapshot = snapshot;
+        private readonly Func<string, ITranslationSnapshot> _factory;
+        private readonly Channel<Load> _loads = Channel.CreateUnbounded<Load>();
+        private int _active;
+        internal int CallCount;
+        internal int MaximumConcurrentCalls;
 
-        public async ValueTask<ITranslationSnapshot> GetSnapshotAsync(
-            string requestedLocale,
-            CancellationToken cancellationToken = default)
+        internal GatedProvider(Func<string, ITranslationSnapshot> factory) => _factory = factory;
+
+        internal int ActiveCalls => Volatile.Read(ref _active);
+
+        /// <summary>Waits until the manager has started the next load; the load returns when the test releases it.</summary>
+        internal async Task<Load> NextLoadAsync() => await _loads.Reader.ReadAsync().AsTask().WaitAsync(DeadlockGuard);
+
+        public async ValueTask<ITranslationSnapshot> GetSnapshotAsync(string requestedLocale, CancellationToken cancellationToken = default)
         {
-            await Task.Yield();
-            cancellationToken.ThrowIfCancellationRequested();
-            return _snapshot;
+            Interlocked.Increment(ref CallCount);
+            int active = Interlocked.Increment(ref _active);
+            int observed;
+            while ((observed = Volatile.Read(ref MaximumConcurrentCalls)) < active &&
+                Interlocked.CompareExchange(ref MaximumConcurrentCalls, active, observed) != observed)
+            {
+            }
+
+            try
+            {
+                // Without RunContinuationsAsynchronously, the manager continues on the releasing test thread.
+                Load load = new();
+                _loads.Writer.TryWrite(load);
+                await load.Released.Task.ConfigureAwait(false);
+                return _factory(requestedLocale);
+            }
+            finally { Interlocked.Decrement(ref _active); }
+        }
+
+        internal sealed class Load
+        {
+            internal TaskCompletionSource Released { get; } = new();
+            internal void Release() => Released.TrySetResult();
         }
     }
 
-    private sealed class OffContextProvider : ITranslationProvider
+    // A provider whose load completes only when the test calls Complete, after the manager awaited it.
+    private sealed class ContextProbeProvider : ITranslationProvider, IValueTaskSource<ITranslationSnapshot>
     {
-        public async ValueTask<ITranslationSnapshot> GetSnapshotAsync(
-            string requestedLocale,
-            CancellationToken cancellationToken = default)
+        private ManualResetValueTaskSourceCore<ITranslationSnapshot> _core;
+        private string? _locale;
+
+        internal ManualResetEventSlim Awaited { get; } = new();
+
+        public ValueTask<ITranslationSnapshot> GetSnapshotAsync(string requestedLocale, CancellationToken cancellationToken = default)
         {
-            await Task.Delay(10, cancellationToken).ConfigureAwait(false);
-            return new FakeSnapshot("app", requestedLocale);
+            _locale = requestedLocale;
+            return new ValueTask<ITranslationSnapshot>(this, _core.Version);
         }
+
+        internal void Complete() => _core.SetResult(new FakeSnapshot("app", _locale!));
+
+        public ITranslationSnapshot GetResult(short token) => _core.GetResult(token);
+        public ValueTaskSourceStatus GetStatus(short token) => _core.GetStatus(token);
+
+        public void OnCompleted(Action<object?> continuation, object? state, short token, ValueTaskSourceOnCompletedFlags flags)
+        {
+            // The core captures the caller's synchronization context here when the await does not opt out of it.
+            _core.OnCompleted(continuation, state, token, flags);
+            Awaited.Set();
+        }
+    }
+
+    private sealed class CancelOnValidationSnapshot : ITranslationSnapshot
+    {
+        private readonly string _catalog;
+        private readonly Action _cancel;
+        private int _validated;
+
+        internal CancelOnValidationSnapshot(string catalog, string locale, Action cancel)
+        {
+            _catalog = catalog;
+            Locale = locale;
+            _cancel = cancel;
+        }
+
+        internal bool Validated => Volatile.Read(ref _validated) != 0;
+
+        // The manager reads the catalog to validate a loaded snapshot before committing it.
+        public string Catalog
+        {
+            get
+            {
+                if (Interlocked.Exchange(ref _validated, 1) == 0)
+                    _cancel();
+                return _catalog;
+            }
+        }
+
+        public string Locale { get; }
+        public bool TryGet(TranslationKey key, out string pattern) { pattern = string.Empty; return false; }
+        public string Get(TranslationKey key) => throw new TranslationNotFoundException(key.Name);
+        public string Format(TranslationKey key, ReadOnlySpan<TextArgument> arguments) => Get(key);
     }
 
     private sealed class NonPumpingSynchronizationContext : SynchronizationContext
@@ -871,37 +968,6 @@ internal sealed class RuntimeTests
             // Intentionally do not dispatch: captured continuations would deadlock
             // the thread that synchronously waits in the regression test.
         }
-    }
-
-    private sealed class CommitBarrierSnapshot : ITranslationSnapshot
-    {
-        private readonly string _catalog;
-
-        internal CommitBarrierSnapshot(string catalog, string locale)
-        {
-            _catalog = catalog;
-            Locale = locale;
-        }
-
-        internal TaskCompletionSource<bool> ValidationStarted { get; } =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
-        internal TaskCompletionSource<bool> AllowValidation { get; } =
-            new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        public string Catalog
-        {
-            get
-            {
-                ValidationStarted.TrySetResult(true);
-                AllowValidation.Task.GetAwaiter().GetResult();
-                return _catalog;
-            }
-        }
-
-        public string Locale { get; }
-        public bool TryGet(TranslationKey key, out string pattern) { pattern = string.Empty; return false; }
-        public string Get(TranslationKey key) => throw new TranslationNotFoundException(key.Name);
-        public string Format(TranslationKey key, ReadOnlySpan<TextArgument> arguments) => Get(key);
     }
 
     private sealed class ThrowingProvider : ITranslationProvider
@@ -943,37 +1009,6 @@ internal sealed class RuntimeTests
         }
 
         internal void Complete(ITranslationSnapshot snapshot) => _completion.TrySetResult(snapshot);
-    }
-
-    private sealed class SerialProbeProvider : ITranslationProvider
-    {
-        private int _active;
-        internal int CallCount;
-        internal int MaximumConcurrentCalls;
-
-        public async ValueTask<ITranslationSnapshot> GetSnapshotAsync(string requestedLocale, CancellationToken cancellationToken = default)
-        {
-            Interlocked.Increment(ref CallCount);
-            int active = Interlocked.Increment(ref _active);
-            UpdateMaximum(active);
-            try
-            {
-                await Task.Delay(15, cancellationToken).ConfigureAwait(false);
-                return new FakeSnapshot("app", requestedLocale);
-            }
-            finally { Interlocked.Decrement(ref _active); }
-        }
-
-        private void UpdateMaximum(int value)
-        {
-            int observed;
-            do
-            {
-                observed = MaximumConcurrentCalls;
-                if (observed >= value) return;
-            }
-            while (Interlocked.CompareExchange(ref MaximumConcurrentCalls, value, observed) != observed);
-        }
     }
 
     private sealed class SnapshotFactoryProbe : ITranslationSnapshotFactory

@@ -62,6 +62,17 @@ let stage = "boot";
 let page;
 const pageErrors = [];
 const consoleErrors = [];
+const sentUiLocales = [];
+let onUiLocaleSent = () => {};
+// Resolves as soon as the page sends a `saveLocalState` request carrying `lang`, so the caller can act before its reply.
+const uiLocaleSent = (lang, label) => {
+  const sent = new Promise((resolveSent, rejectSent) => {
+    const timer = setTimeout(() => rejectSent(new Error(`Timed out: ${label}; sent: ${JSON.stringify(sentUiLocales)}`)), 20_000);
+    onUiLocaleSent = value => { if (value === lang) { clearTimeout(timer); onUiLocaleSent = () => {}; resolveSent(); } };
+  });
+  sent.catch(() => {});
+  return sent;
+};
 const waitFor = async (predicate, label) => {
   const deadline = Date.now() + 20_000;
   while (Date.now() < deadline) {
@@ -76,6 +87,22 @@ try {
   page.on("pageerror", error => pageErrors.push(error.stack ?? error.message));
   page.on("console", message => { if (message.type() === "error") { consoleErrors.push(message.text()); console.error(message.text()); } });
   page.on("dialog", dialog => void dialog.accept());
+  // The interface language each `saveLocalState` request carried when the page sent it on the Bridge's WebSocket
+  // (CS-WebUI frames: a short binary header, then the Views request JSON).
+  page.on("websocket", socket => socket.on("framesent", frame => {
+    const text = String(frame.payload);
+    if (!text.includes('"member":"saveLocalState"')) return;
+    try {
+      // The header's length bytes can include "{", so the JSON starts at the request's first member.
+      const request = JSON.parse(text.slice(text.indexOf('{"kind":'), text.lastIndexOf("}") + 1));
+      const entries = JSON.parse(request.input).argument;
+      const value = entries.find(entry => entry.key === "runic-translations.ui-locale")?.value ?? null;
+      sentUiLocales.push(value);
+      onUiLocaleSent(value);
+    } catch (error) {
+      sentUiLocales.push(`unreadable: ${error}`);
+    }
+  }));
   await page.goto(new URL("/", urlOrPrepare).href, { waitUntil: "domcontentloaded" });
   const select = async key => {
     await page.evaluate(() => {
@@ -307,9 +334,11 @@ try {
   if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "interface-language-de.png"), fullPage: true });
   assert.deepEqual(pageErrors, [], "The production editor reported uncaught browser errors.");
 
-  // A reload straight after a switch, without waiting for its native save, as a user pressing F5 would. The reload
-  // ends the Bridge connection while the save may still be in flight: that must not surface as an uncaught
-  // `BridgeError: The Bridge is disconnected.`, and the switch must still survive the reload.
+  // A reload straight after a switch, as a user pressing F5 would. The reload ends the Bridge connection while the
+  // native save is in flight: that must not surface as an uncaught `BridgeError: The Bridge is disconnected.`, and the
+  // switch must survive the reload. The editor guarantees the latter only for a save whose request has left the page
+  // (#147): one still waiting in the page's Bridge queue, or for the routed localState View to open, is lost with the
+  // page. So each reload waits until the page has sent the save carrying the new language, but not for its reply.
   stage = "interface-language-immediate-reload";
   const settingsButton = /^(Editor settings|Editoreinstellungen), /;
   for (const [name, lang, summary] of [
@@ -317,8 +346,10 @@ try {
     ["Deutsch", "de", /^Editoreinstellungen, .*Oberflächensprache Deutsch$/],
     ["English", "en", /^Editor settings, .*interface language English$/],
   ]) {
+    const sent = uiLocaleSent(lang, `the native save of ${name} sent to the host`);
     await page.getByRole("button", { name: settingsButton }).click();
     await page.getByRole("menuitemradio", { name, exact: true }).click();
+    await sent;
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: summary }).waitFor();
     assert.equal(await page.evaluate(() => document.documentElement.lang), lang, `The switch to ${name} did not survive an immediate reload.`);
@@ -332,7 +363,7 @@ try {
       page.screenshot({ path: join(reportDirectory, "failure.png"), fullPage: true }),
       page.content().then(html => writeFile(join(reportDirectory, "failure.html"), html)),
       page.evaluate(() => window.__runicEditorDocumentCalls ?? []).then(calls =>
-        writeFile(join(reportDirectory, "failure.json"), JSON.stringify({ stage, pageErrors, consoleErrors, calls }, null, 2) + "\n")),
+        writeFile(join(reportDirectory, "failure.json"), JSON.stringify({ stage, pageErrors, consoleErrors, sentUiLocales, calls }, null, 2) + "\n")),
     ]);
   }
   throw error;

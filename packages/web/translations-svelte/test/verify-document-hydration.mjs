@@ -3,9 +3,10 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 import { createServer } from "vite";
+import { devServerOptions, watchPage } from "./browser-page.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
-const vite = await createServer({ root, configFile: resolve(root, "vite.config.ts"), server: { host: "127.0.0.1", port: 0, hmr: false } });
+const vite = await createServer({ root, configFile: resolve(root, "vite.config.ts"), server: devServerOptions });
 let browser;
 try {
   await vite.listen();
@@ -18,12 +19,10 @@ try {
   assert.equal(calls, 0, "SSR must not activate application actions");
   browser = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || process.env.WEBUI_BROWSER_PATH, headless: true });
   const page = await browser.newPage();
-  const errors = [];
-  page.on("pageerror", error => errors.push(error.message));
-  page.on("console", message => { if (message.type() === "warning" && message.text().includes("hydration")) errors.push(message.text()); });
+  const { errors, waitForResult } = watchPage(page);
   await page.route("**/document-hydration", route => route.fulfill({ contentType: "text/html", body: `<!doctype html><html lang="fr"><body>${body}<script type="module" src="/test/document-hydration-client.ts"></script></body></html>` }));
   await page.goto(`${vite.resolvedUrls.local[0]}document-hydration`);
-  await page.waitForFunction(() => window.runicDocumentResult !== undefined);
+  await waitForResult(() => window.runicDocumentResult !== undefined, "the document hydration result");
   assert.deepEqual(errors, []);
   assert.deepEqual(await page.evaluate(() => window.runicDocumentResult), { hydrated: executions.length, mismatches: [], initialCalls: 0 });
 
