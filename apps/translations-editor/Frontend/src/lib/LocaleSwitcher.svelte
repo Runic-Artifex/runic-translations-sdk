@@ -25,12 +25,20 @@
 		selectedLocale,
 		onselect,
 		onmanage,
+		pseudoLocales = [],
+		activePseudoLocale,
+		onselectpseudo,
 		open = $bindable(true),
 	}: {
 		locales: LocaleSummary[];
 		selectedLocale: string;
 		onselect: (locale: string) => void;
 		onmanage: () => void;
+		/** runic.json pseudoLocales: generated from the base locale, previewed but never edited. */
+		pseudoLocales?: string[];
+		/** The pseudo-locale the preview currently shows, if any. */
+		activePseudoLocale?: string;
+		onselectpseudo?: (locale: string) => void;
 		open?: boolean;
 	} = $props();
 
@@ -99,6 +107,32 @@
 									<Item.Actions>
 										<Badge variant="outline" aria-label={`${locale.percent}% ${ui.text("ui_locale_translated")}`}>{locale.translated}/{locale.total}</Badge>
 									</Item.Actions>
+								</button>
+							{/snippet}
+						</Item.Root>
+					{/each}
+					{#each pseudoLocales as locale (locale)}
+						<Item.Root
+							variant={activePseudoLocale === locale ? "muted" : "default"}
+							size="xs"
+							aria-pressed={activePseudoLocale === locale}
+							onclick={() => onselectpseudo?.(locale)}
+							class="cursor-pointer"
+							aria-label={`${locale}, ${ui.text("ui_locale_pseudo_description")}`}
+						>
+							{#snippet child({ props })}
+								<button type="button" {...props}>
+									<Item.Media>
+										<Badge variant={activePseudoLocale === locale ? "default" : "outline"} class="min-w-8">
+											<code>{locale}</code>
+										</Badge>
+									</Item.Media>
+									<Item.Content class="min-w-0">
+										<Item.Title class="min-w-0">
+											<span class="truncate">{ui.text("ui_locale_pseudo")}</span>
+											<Badge variant="ghost" aria-hidden="true" title={ui.text("ui_locale_pseudo_description")}>{ui.text("ui_locale_generated")}</Badge>
+										</Item.Title>
+									</Item.Content>
 								</button>
 							{/snippet}
 						</Item.Root>

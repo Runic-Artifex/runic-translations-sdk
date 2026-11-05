@@ -53,7 +53,21 @@ export type PreviewBlock = {
   nodes: PreviewNode[];
 };
 
-export type MessagePreviewResult =
+/** How the host formatted a preview (eng/translations/Rmf2Preview.cs). */
+export type PreviewFormatting = {
+  /** The locale a user requests, the shown locale unless a regional one was chosen. */
+  requestedLocale?: string;
+  /** How the requested locale relates to the shown one. */
+  resolution?: "exact" | "parent" | "related";
+  /** The locale numbers and dates formatted in. */
+  formattingLocale?: string;
+  direction?: "ltr" | "rtl";
+  /** The zone timeZone=local formatted in; absent: the host's. */
+  timeZone?: string;
+};
+
+export type MessagePreviewResult = (
   | { kind: "text"; value: string }
   | { kind: "content"; nodes: PreviewNode[] }
-  | { kind: "document"; blocks: PreviewBlock[] };
+  | { kind: "document"; blocks: PreviewBlock[] }
+) & { formatting?: PreviewFormatting };

@@ -4060,3 +4060,85 @@ ui {
 ui {
   preview_example = Beispiel {$number}
 }
+ui {
+  backend {
+    locale_invalid = '{$locale}' ist kein gültiges BCP-47-Sprach-Tag.
+  }
+}
+ui {
+  backend {
+    locale_unknown = CLDR hat keine Daten für {$locale}: Pluralregeln, Zahlen und Datumsangaben fallen auf die Root-Locale zurück.
+  }
+}
+ui {
+  preview_formatting = Vorschau-Formatierung
+}
+ui {
+  preview_regional_locale = Regionale Sprache
+}
+ui {
+  preview_regional_locale_description = Die Sprache, die jemand anfordert, etwa de-CH für deutschen Text: Zahlen und Datumsangaben werden darin formatiert, wenn die Sprache übereinstimmt.
+}
+ui {
+  preview_time_zone = Zeitzone
+}
+ui {
+  preview_time_zone_description = Die Zone, in der timeZone=local, die Vorgabe der Datums- und Zeitstile, formatiert.
+}
+ui {
+  preview_time_zone_host = Zeitzone dieses Computers
+}
+ui {
+  preview_time_zone_summary = Zeitzone {$zone}
+}
+ui {
+  preview_formats_in = Formatiert in {$locale}
+}
+ui {
+  preview_requested_summary = Angefordert {$requested} ({$resolution})
+}
+ui {
+  preview_resolution_exact = exakt
+}
+ui {
+  preview_resolution_parent = übergeordnete Sprache
+}
+ui {
+  preview_resolution_related = verwandte Sprache
+}
+ui {
+  preview_pseudo_locale = Pseudo-Sprache {$locale}
+}
+ui {
+  locale_pseudo = Pseudo-Sprache
+}
+ui {
+  locale_generated = generiert
+}
+ui {
+  locale_pseudo_description = Aus der Basissprache erzeugt, wie ein Pseudo-Sprachen-Build sie erzeugt; in der Vorschau gezeigt, schreibgeschützt.
+}
+ui {
+  locale_cldr_summary = {$locale}: CLDR-Daten von {$data}, {$direction}
+}
+ui {
+  locale_direction_ltr = von links nach rechts
+}
+ui {
+  locale_direction_rtl = von rechts nach links
+}
+ui {
+  locale_cldr_canonical = CLDR nennt diese Sprache {$locale} (wahrscheinliche Subtags).
+}
+ui {
+  locale_cldr_use = {$locale} verwenden
+}
+ui {
+  locale_plural_categories = Pluralkategorien: {$categories}
+}
+ui {
+  locale_ordinal_categories = Ordinal: {$categories}
+}
+ui {
+  locale_categories_seeded = Kopierte Startwerte erhalten für jede Pluralkategorie, die die Sprache braucht, eine Variante als Kopie der *-Variante.
+}

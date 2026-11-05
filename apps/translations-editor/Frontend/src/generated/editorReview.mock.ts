@@ -31,7 +31,7 @@ export interface EditorReviewMock extends MockTypedView<EditorReviewMockState, E
 const spec: MockTypedViewSpec = {
   kind: "editorReview",
   route: "editorReview",
-  contract: "Runic.Translations.Editor.EditorReviewViewModel:AD00A5B4BE47AA9A45169F855E1B9CE367A214E3C59A59057362787C22ABD400",
+  contract: "Runic.Translations.Editor.EditorReviewViewModel:DED79562058A5F044218FF7D157CE7BB9075A685D7090FE94A9EDEB655F30D46",
   fields: {
     saveReviewResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
   },

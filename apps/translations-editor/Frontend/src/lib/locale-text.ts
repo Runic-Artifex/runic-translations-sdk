@@ -1,8 +1,12 @@
+import { textDirection } from "@runic-artifex/translations-svelte";
 import type { UiDirection } from "./simulation";
 
-const rtlLanguages = new Set(["ar", "arc", "ckb", "dv", "fa", "he", "ku", "nqo", "ps", "sd", "ug", "ur", "yi"]);
-
-/** The BCP-47 language subtag determines text direction when no document-level override exists. */
+/**
+ * The writing direction of a locale: its explicit script, else its likely script, is one of CLDR's right-to-left
+ * scripts. This is the public direction of Runic Translations for the web, which agrees with the runtime's
+ * `localeDirection` and .NET's `LocaleDirection`: `ar`, `fa`, `pa-PK` and `ku-Arab` are right to left; `ku`,
+ * `he-Latn` and `sd-Deva` left to right.
+ */
 export function localeDirection(locale: string): UiDirection {
-  return rtlLanguages.has(locale.trim().toLocaleLowerCase().split("-")[0] ?? "") ? "rtl" : "ltr";
+  return textDirection(locale.trim());
 }

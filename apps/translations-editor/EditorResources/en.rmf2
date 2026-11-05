@@ -4060,3 +4060,85 @@ ui {
 ui {
   preview_example = Example {$number}
 }
+ui {
+  backend {
+    locale_invalid = '{$locale}' is not a valid BCP 47 language tag.
+  }
+}
+ui {
+  backend {
+    locale_unknown = CLDR has no data for {$locale}: plural rules, numbers and dates fall back to the root locale.
+  }
+}
+ui {
+  preview_formatting = Preview formatting
+}
+ui {
+  preview_regional_locale = Regional locale
+}
+ui {
+  preview_regional_locale_description = The locale a user requests, such as de-CH for de text: numbers and dates format in it when it shares the language.
+}
+ui {
+  preview_time_zone = Time zone
+}
+ui {
+  preview_time_zone_description = The zone that timeZone=local, the default of date and time styles, formats in.
+}
+ui {
+  preview_time_zone_host = This computer's time zone
+}
+ui {
+  preview_time_zone_summary = Time zone {$zone}
+}
+ui {
+  preview_formats_in = Formats in {$locale}
+}
+ui {
+  preview_requested_summary = Requested {$requested} ({$resolution})
+}
+ui {
+  preview_resolution_exact = exact
+}
+ui {
+  preview_resolution_parent = parent locale
+}
+ui {
+  preview_resolution_related = related locale
+}
+ui {
+  preview_pseudo_locale = Pseudo-locale {$locale}
+}
+ui {
+  locale_pseudo = Pseudo-locale
+}
+ui {
+  locale_generated = generated
+}
+ui {
+  locale_pseudo_description = Generated from the base locale as a pseudo-locale build produces it; shown in the preview, read-only.
+}
+ui {
+  locale_cldr_summary = {$locale}: CLDR data from {$data}, {$direction}
+}
+ui {
+  locale_direction_ltr = left to right
+}
+ui {
+  locale_direction_rtl = right to left
+}
+ui {
+  locale_cldr_canonical = CLDR names this locale {$locale} (likely subtags).
+}
+ui {
+  locale_cldr_use = Use {$locale}
+}
+ui {
+  locale_plural_categories = Plural categories: {$categories}
+}
+ui {
+  locale_ordinal_categories = ordinal: {$categories}
+}
+ui {
+  locale_categories_seeded = Copied starter values get a variant for each plural category the language needs, as a copy of the * variant.
+}

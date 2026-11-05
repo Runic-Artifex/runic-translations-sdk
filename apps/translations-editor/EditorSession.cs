@@ -181,9 +181,11 @@ internal sealed class EditorSession : IDisposable
         string locale,
         string key,
         string? samplesJson = null,
+        string? requestedLocale = null,
+        string? timeZone = null,
         CancellationToken cancellationToken = default) =>
         WithWorkspaceAsync(
-            (workspace, token) => workspace.PreviewMessageAsync(relativePath, content, locale, key, samplesJson, token),
+            (workspace, token) => workspace.PreviewMessageAsync(relativePath, content, locale, key, samplesJson, requestedLocale, timeZone, token),
             cancellationToken);
 
     public async Task<EditorOperationResult> SaveAsync(

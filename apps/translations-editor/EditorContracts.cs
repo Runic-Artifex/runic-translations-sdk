@@ -9,11 +9,21 @@ internal sealed record EditorCatalog(
     int SchemaVersion,
     string DefaultLocale,
     IReadOnlyList<EditorLocale> Locales,
-    IReadOnlyList<EditorLayer> Layers);
+    IReadOnlyList<EditorLayer> Layers,
+    // runic.json pseudoLocales (en-XA, ar-XB): generated from the base locale for previews, never edited.
+    IReadOnlyList<string>? PseudoLocales = null);
 
 internal sealed record EditorLocale(string Tag, string? Fallback);
 
 internal sealed record EditorLayer(string Name, int Priority);
+
+// The add-language picker's suggestions: the SDK's pinned CLDR locales by data ID (EditorLocales).
+internal sealed record EditorLocaleCatalog(string CldrVersion, IReadOnlyList<string> Locales);
+
+// A typed locale tag: canonical form, CLDR data ID through likely subtags (zh-TW -> zh-Hant-TW), the CLDR locale its
+// data comes from (null: none, only root), text direction, and the plural and ordinal categories it needs.
+internal sealed record EditorLocaleDescription(bool Valid, string? Canonical, string? DataId, string? CldrLocale,
+    string Direction, IReadOnlyList<string> Cardinal, IReadOnlyList<string> Ordinal, EditorNotice? Message);
 
 internal sealed record EditorCatalogSummary(
     string Id,
@@ -333,6 +343,8 @@ internal sealed record PreparedInterchangeDocument(
 [JsonSerializable(typeof(WorkspaceSnapshot))]
 [JsonSerializable(typeof(ValidationResult))]
 [JsonSerializable(typeof(EditorMessagePreview))]
+[JsonSerializable(typeof(EditorLocaleCatalog))]
+[JsonSerializable(typeof(EditorLocaleDescription))]
 [JsonSerializable(typeof(EditorReviewSnapshot))]
 [JsonSerializable(typeof(EditorReviewSaveRequest))]
 [JsonSerializable(typeof(EditorReviewOperationResult))]

@@ -64,7 +64,7 @@ const members: BridgeMemberDecoders<EditorState> = {
   documents: (wire: unknown) => bridgeWire.array(wire, item => { const reference = contentReference(item); return reference.kind === "editorDocument" ? pageEditorDocument(reference.id) : (() => { throw new BridgeError("failed", "Unknown documents kind."); })(); }),
   isSetUiLocaleExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorViewModel:AD00A5B4BE47AA9A45169F855E1B9CE367A214E3C59A59057362787C22ABD400";
+const bridgeContract = "Runic.Translations.Editor.EditorViewModel:DED79562058A5F044218FF7D157CE7BB9075A685D7090FE94A9EDEB655F30D46";
 const setUiLocaleOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 
 /**

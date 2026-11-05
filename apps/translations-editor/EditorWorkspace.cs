@@ -294,6 +294,8 @@ internal sealed class EditorWorkspace : IDisposable
         string locale,
         string key,
         string? samplesJson = null,
+        string? requestedLocale = null,
+        string? timeZone = null,
         CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -307,6 +309,17 @@ internal sealed class EditorWorkspace : IDisposable
                 return new EditorMessagePreview(false, null, null, null, diagnostics);
 
             Rmf2ProjectV5 rmf2 = state.Compilation.Project!;
+            // en-XA and ar-XB are generated from the base locale by the SDK's pseudo-locale generator, exactly as a
+            // --pseudo-locales build does, also when runic.json does not configure them (the simulation toggle).
+            if (!rmf2.Locales.Any(item => item.Tag == locale) && Rmf2PseudoLocalesV5.Supported.Contains(locale, StringComparer.Ordinal))
+            {
+                Rmf2ProjectCompilation pseudo = PseudoLocaleCompilation(state, locale, cancellationToken);
+                if (!pseudo.Success || pseudo.Project is null)
+                    return new EditorMessagePreview(false, null, null, null, [.. diagnostics, .. pseudo.Diagnostics
+                        .Where(static item => item.Severity == TranslationDiagnosticSeverity.Error)
+                        .Select(static item => new EditorDiagnostic(item.Id, "error", item.Message, item.Location.Path, item.Location.Line, item.Location.Column, item.Location.EndLine, item.Location.EndColumn))]);
+                rmf2 = pseudo.Project;
+            }
             Rmf2LocaleV5? selectedLocale = rmf2.Locales.SingleOrDefault(item => item.Tag == locale);
             Rmf2TranslationV5? resource = selectedLocale?.ResolvedResources.SingleOrDefault(item => item.Key == key);
             if (resource is null)
@@ -315,7 +328,7 @@ internal sealed class EditorWorkspace : IDisposable
             JsonObject samples = samplesJson is null ? new JsonObject() : JsonNode.Parse(samplesJson)?.AsObject()
                 ?? throw new JsonException("Preview samples must be a JSON object.");
             string? rendered = resource.Message.Inputs.All(input => samples.ContainsKey(input.Name))
-                ? Rmf2Preview.Render(rmf2, key, locale, samples).ToJsonString()
+                ? Rmf2Preview.Render(rmf2, key, locale, samples, requestedLocale, timeZone).ToJsonString()
                 : null;
             return new EditorMessagePreview(true, locale, ast, rendered, diagnostics);
         }
@@ -328,6 +341,20 @@ internal sealed class EditorWorkspace : IDisposable
         {
             _gate.Release();
         }
+    }
+
+    // The state's sources compiled with the pseudo-locale generated, as --pseudo-locales builds compile them; runic.json
+    // gains the tag in memory when it does not configure it.
+    private static Rmf2ProjectCompilation PseudoLocaleCompilation(WorkspaceState state, string locale, CancellationToken cancellationToken)
+    {
+        WorkspaceFile manifest = state.Files.Single(static file => file.Kind == DocumentKind.Manifest);
+        JsonObject project = JsonNode.Parse(manifest.Content) as JsonObject ?? throw new JsonException("runic.json is not an object.");
+        JsonArray configured = project["pseudoLocales"] as JsonArray ?? [];
+        if (!configured.Any(item => item is System.Text.Json.Nodes.JsonValue value && value.TryGetValue(out string? tag) && string.Equals(tag, locale, StringComparison.OrdinalIgnoreCase)))
+            project["pseudoLocales"] = new JsonArray([.. configured.Select(static item => item?.DeepClone()), System.Text.Json.Nodes.JsonValue.Create(locale)]);
+        return TranslationCompiler.CompileRmf2ProjectV5(Source(manifest.Path, project.ToJsonString()),
+            state.Files.Where(static file => file.Kind == DocumentKind.Resource).Select(static file => Source(file.Path, file.Content)).ToArray(),
+            null, pseudoLocales: true, cancellationToken);
     }
 
     private static EditorMessagePreview MissingPreviewKey(string path, string locale, string key) =>
@@ -1442,7 +1469,11 @@ internal sealed class EditorWorkspace : IDisposable
                 }
             }
             if (locales.Count == 0 && defaultLocale.Length != 0) locales.Add(new EditorLocale(defaultLocale, null));
-            return new EditorCatalog(id, schemaVersion, defaultLocale, locales, [new EditorLayer("base", 0)]);
+            string[] pseudoLocales = root.TryGetProperty("pseudoLocales", out JsonElement pseudo) && pseudo.ValueKind == JsonValueKind.Array
+                ? Rmf2PseudoLocalesV5.Supported.Where(tag => pseudo.EnumerateArray().Any(item => item.ValueKind == JsonValueKind.String &&
+                    string.Equals(item.GetString(), tag, StringComparison.OrdinalIgnoreCase))).ToArray()
+                : [];
+            return new EditorCatalog(id, schemaVersion, defaultLocale, locales, [new EditorLayer("base", 0)], pseudoLocales.Length == 0 ? null : pseudoLocales);
         }
         // A manifest with a catalog but missing or mistyped members is shown
         // without catalog metadata; the compiler diagnostics explain why.
