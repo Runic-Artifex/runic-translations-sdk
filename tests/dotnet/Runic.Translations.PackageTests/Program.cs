@@ -74,6 +74,7 @@ internal static class Program
         string runtime = RequireSingle(feed, $"Runic.Translations.{PackageVersion}.nupkg");
         string tooling = RequireSingle(feed, $"Runic.Translations.Tooling.{PackageVersion}.nupkg");
         string commandLine = RequireSingle(feed, $"Runic.Translations.CommandLine.{PackageVersion}.nupkg");
+        string hosting = RequireSingle(feed, $"Runic.Translations.Hosting.{PackageVersion}.nupkg");
         string build = RequireSingle(feed, $"Runic.Translations.Build.{PackageVersion}.nupkg");
         string wpf = RequireSingle(feed, $"Runic.Translations.Wpf.{PackageVersion}.nupkg");
         string tool = RequireSingle(feed, $"dotnet-runic-translations.{PackageVersion}.nupkg");
@@ -105,6 +106,11 @@ internal static class Program
             "README.md",
             "lib/net10.0/Runic.Translations.CommandLine.dll",
             "lib/net10.0/Runic.Translations.CommandLine.xml");
+        AssertPackageShape(hosting,
+            "Runic.Translations.Hosting.nuspec",
+            "README.md",
+            "lib/net10.0/Runic.Translations.Hosting.dll",
+            "lib/net10.0/Runic.Translations.Hosting.xml");
         AssertPackageShape(build,
             "Runic.Translations.Build.nuspec",
             "README.md",
@@ -169,6 +175,7 @@ internal static class Program
         // same major from 1.0, so the Build package gives a packed library's Runic.Translations dependency the range
         // [N, next minor-0) or [N, next major-0); the -0 bound keeps the next breaking release's previews out.
         AssertDependencyRange(commandLine, "Runic.Translations", $"[{PackageVersion}, {NextBreaking(PackageVersion)})");
+        AssertDependencies(hosting, ["Microsoft.Extensions.DependencyInjection.Abstractions", "Runic.Translations"]);
         AssertDependencies(build, Array.Empty<string>());
         AssertDependencies(wpf, ["Runic.Translations"]);
         AssertDependencies(tool, Array.Empty<string>());
@@ -196,6 +203,7 @@ internal static class Program
         AssertEmbeddedSourceLink(tooling, "lib/net10.0/Runic.Translations.Compiler.dll");
         AssertToolingSchemaClosure(tooling);
         AssertEmbeddedSourceLink(commandLine, "lib/net10.0/Runic.Translations.CommandLine.dll");
+        AssertEmbeddedSourceLink(hosting, "lib/net10.0/Runic.Translations.Hosting.dll");
         AssertEmbeddedSourceLink(build, "analyzers/dotnet/cs/Runic.Translations.Generator.dll");
         AssertEmbeddedSourceLink(build, "tools/net10.0/Runic.Translations.Build.dll");
         AssertEmbeddedSourceLink(wpf, "lib/net10.0-windows7.0/Runic.Translations.Wpf.dll");
@@ -277,6 +285,7 @@ internal static class Program
             $"Runic.Translations.{PackageVersion}.nupkg",
             $"Runic.Translations.Build.{PackageVersion}.nupkg",
             $"Runic.Translations.CommandLine.{PackageVersion}.nupkg",
+            $"Runic.Translations.Hosting.{PackageVersion}.nupkg",
             $"Runic.Translations.Wpf.{PackageVersion}.nupkg",
             $"Runic.Translations.Templates.{PackageVersion}.nupkg",
             $"dotnet-runic-translations.{PackageVersion}.nupkg",
