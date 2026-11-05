@@ -19,6 +19,8 @@ internal enum ToolCommand
     ReviewMark,
     LocaleAdd,
     LocaleRemove,
+    OverridesAdd,
+    OverridesList,
 }
 
 [Flags]

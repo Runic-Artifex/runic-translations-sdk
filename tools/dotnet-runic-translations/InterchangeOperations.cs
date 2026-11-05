@@ -36,14 +36,32 @@ internal static class ReviewFile
     {
         if (compilation.Project is not { } project) return [];
         string path = PathFor(inputs, project.Id);
-        if (!File.Exists(path)) return [];
+        IReadOnlyList<TranslationDiagnostic> overrides = Overrides(inputs);
+        if (!File.Exists(path)) return overrides;
         TranslationInterchangeReview review;
         try { review = Read(path, project.Id)!; }
         catch (TranslationInterchangeException exception)
         {
-            return [TranslationReviewFile.InvalidDiagnostic(InputFiles.DisplayPath(path, Path.GetFullPath(Environment.CurrentDirectory)), exception)];
+            return [TranslationReviewFile.InvalidDiagnostic(InputFiles.DisplayPath(path, Path.GetFullPath(Environment.CurrentDirectory)), exception), .. overrides];
         }
-        return TranslationReviewFile.StaleDiagnostics(compilation, review);
+        return [.. TranslationReviewFile.StaleDiagnostics(compilation, review), .. overrides];
+    }
+
+    /// <summary>
+    /// The review warnings of the application's overrides of library catalogs: <c>RTR0090</c> for an override whose library
+    /// text changed since it was written, <c>RTR0091</c> for an unreadable override review file; located relative to the
+    /// working directory.
+    /// </summary>
+    internal static IReadOnlyList<TranslationDiagnostic> Overrides(CompilerInputs inputs)
+    {
+        string current = Path.GetFullPath(Environment.CurrentDirectory);
+        return TranslationLibraryCatalog.OverrideReviewDiagnostics(Path.GetFullPath(inputs.Project.Path, current)).Select(diagnostic =>
+        {
+            TextSourceLocation location = diagnostic.Location;
+            return new TranslationDiagnostic(diagnostic.Id, diagnostic.Severity, diagnostic.Message,
+                new TextSourceLocation(InputFiles.DisplayPath(location.Path, current), location.StartByte, location.LengthBytes, location.Line, location.Column, location.EndLine, location.EndColumn))
+            { MessageKey = diagnostic.MessageKey, Locale = diagnostic.Locale };
+        }).ToArray();
     }
 
     internal static string TranslationReviewStatesText(TranslationReviewState state) => TranslationReviewFile.StateText(state);

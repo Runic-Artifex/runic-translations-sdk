@@ -11,6 +11,7 @@
     <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../Shared/PackedLibraryFixture.cs" Link="Shared/PackedLibraryFixture.cs" />
     <PackageReference Include="TUnit.Core" />
     <PackageReference Include="TUnit.Engine" />
     <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
