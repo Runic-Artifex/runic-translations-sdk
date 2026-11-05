@@ -1370,7 +1370,8 @@ internal sealed class Rmf2LanguageServer
     {
         try
         {
-            if (JsonNode.Parse(workspace.ProjectSource.GetUtf8Bytes())?["pseudoLocales"] is not JsonArray configured) return [];
+            // A runic.json that is not an object has no pseudo-locales; validation reports it.
+            if (JsonNode.Parse(workspace.ProjectSource.GetUtf8Bytes()) is not JsonObject root || root["pseudoLocales"] is not JsonArray configured) return [];
             return Rmf2PseudoLocalesV5.Supported.Where(tag => configured.Any(item => item is JsonValue value && value.TryGetValue(out string? text) &&
                 string.Equals(text, tag, StringComparison.OrdinalIgnoreCase))).ToArray();
         }
