@@ -92,6 +92,44 @@ internal static class EditorSmokeTest
         Require(preview.RenderedJson?.Contains("Exactly one item", StringComparison.Ordinal) == true, "Mounted selected example wasn't previewed canonically.");
     }
 
+    // L5-23, L5-24, L5-25: the preview formats for a requested locale and in a preview time zone, renders pseudo-locales
+    // through the SDK generator (also when runic.json does not configure them), and the locale picker's CLDR data.
+    private static async Task PreviewFormattingJourneyAsync(string project)
+    {
+        Directory.CreateDirectory(project);
+        await File.WriteAllTextAsync(Path.Combine(project, "runic.json"),
+            "{\"schemaVersion\":1,\"catalog\":\"formatting\",\"code\":{\"namespace\":\"Smoke.Translations\",\"className\":\"SmokeText\"},\"baseLocale\":\"en\",\"locales\":[\"en\",\"de\"],\"pseudoLocales\":[\"ar-XB\"]}\n").ConfigureAwait(false);
+        const string english = "price = Total {$amount :number} at {$when :datetime style=short}\n";
+        await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), english).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "de.rmf2"), "price = Summe {$amount :number} am {$when :datetime style=short}\n").ConfigureAwait(false);
+        using var session = new EditorSession(project);
+        var loaded = await session.LoadAsync().ConfigureAwait(false);
+        Require(loaded.Success && loaded.Catalog?.PseudoLocales?.SequenceEqual(["ar-XB"]) == true, "Configured pseudo-locales weren't listed.");
+        var german = loaded.Documents.Single(document => document.Path == "de.rmf2");
+        const string samples = "{\"amount\":\"1234.5\",\"when\":\"2026-01-15T12:00:00Z\"}";
+        var swiss = await session.PreviewMessageAsync(german.Path, german.Content, "de", "price", samples, "de-CH", "Asia/Tokyo").ConfigureAwait(false);
+        Require(swiss.RenderedJson is { } swissJson && JsonNode.Parse(swissJson)!["runs"]![0]!["text"]!.GetValue<string>() == "Summe 1'234.5 am 15.01.2026 21:00" &&
+            swissJson.Contains("\"formattingLocale\":\"de-CH\"", StringComparison.Ordinal) && swissJson.Contains("\"resolution\":\"parent\"", StringComparison.Ordinal),
+            "The preview did not format for de-CH in the preview time zone: " + swiss.RenderedJson);
+        var zone = await session.PreviewMessageAsync(german.Path, german.Content, "de", "price", samples, null, "Mars/Olympus").ConfigureAwait(false);
+        Require(!zone.Success && zone.Diagnostics.Single().Id == "PREVIEW", "An unknown preview time zone wasn't reported.");
+        foreach (string pseudo in new[] { "en-XA", "ar-XB" })
+        {
+            var generated = await session.PreviewMessageAsync(german.Path, german.Content, pseudo, "price", samples, null, "utc").ConfigureAwait(false);
+            // en-XA accents the text; ar-XB wraps it in a right-to-left override (U+202E), both bracketed.
+            string text = generated.Success && generated.RenderedJson is { } json ? JsonNode.Parse(json)!["runs"]![0]!["text"]!.GetValue<string>() : "";
+            Require(text.StartsWith('[') && (pseudo == "ar-XB" ? text.Contains('\u202E') : !text.Contains("Total", StringComparison.Ordinal)),
+                $"The {pseudo} preview wasn't the generated pseudo-locale: " + generated.RenderedJson);
+        }
+        EditorLocaleDescription chinese = EditorLocales.Describe("zh-TW"), russian = EditorLocales.Describe("ru"), invalid = EditorLocales.Describe("not a tag");
+        Require(chinese.Valid && chinese.Canonical == "zh-TW" && chinese.DataId == "zh-Hant-TW" && chinese.Cardinal.SequenceEqual(["other"]), "zh-TW wasn't described through likely subtags.");
+        Require(russian.Cardinal.SequenceEqual(["one", "few", "many", "other"]) && russian.Direction == "ltr" && EditorLocales.Describe("fa").Direction == "rtl",
+            "Plural categories or direction came from somewhere other than the SDK's CLDR data.");
+        Require(!invalid.Valid && invalid.Message?.Code == "ui_backend_locale_invalid", "An invalid tag wasn't refused.");
+        Require(EditorLocales.Catalog.Locales.Contains("zh-Hant") && EditorLocales.Catalog.Locales.Contains("de-CH") && !EditorLocales.Catalog.Locales.Contains("root"),
+            "The CLDR locale list is incomplete.");
+    }
+
     private static async Task MalformedManifestJourneyAsync(string root)
     {
         // A hand-edited or half-saved runic.json must produce diagnostics, not
@@ -445,6 +483,7 @@ internal static class EditorSmokeTest
             WorkspacePickerSelection();
             await AuthoringJourneyAsync(Path.Combine(container, "authoring")).ConfigureAwait(false);
             await MountedContextJourneyAsync(Path.Combine(container, "mounted-context")).ConfigureAwait(false);
+            await PreviewFormattingJourneyAsync(Path.Combine(container, "preview-formatting")).ConfigureAwait(false);
             await MalformedManifestJourneyAsync(Path.Combine(container, "malformed-manifest")).ConfigureAwait(false);
             await InterchangeOutputJourneyAsync(Path.Combine(container, "interchange-output"), commandLine).ConfigureAwait(false);
             await ReviewStampJourneyAsync(Path.Combine(container, "review-stamp")).ConfigureAwait(false);
