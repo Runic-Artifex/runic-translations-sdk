@@ -1,0 +1,35 @@
+# The application name.
+title = Shop
+
+settings {
+  # The page heading.
+  heading = Settings
+}
+common {
+  ok = OK
+  cancel = Cancel
+}
+welcome = Welcome, {$name}!
+cart {
+  items =
+    .input {$count :number}
+    .match $count
+    0 {{Your cart is empty}}
+    one {{{$count} item}}
+    * {{{$count} items}}
+  total = Total: {$amount :number}
+  updated = Updated {$when :date style=short}
+}
+place =
+  .input {$count :number select=ordinal}
+  .match $count
+  one {{{$count}st place}}
+  two {{{$count}nd place}}
+  few {{{$count}rd place}}
+  * {{{$count}th place}}
+invited = Invited: {$names :runic:list}
+price = Price: {$value}
+terms = Read the <1>terms</1>.
+sign_in = Sign in
+profile = {$user_name}'s profile
+lonely_one = One lonely form

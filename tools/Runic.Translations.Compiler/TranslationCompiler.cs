@@ -7,10 +7,9 @@ namespace Runic.Translations.Compiler;
 
 public static partial class TranslationCompiler
 {
-    private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceRoots", "markup" };
+    private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceRoots", "markup", "pseudoLocales" };
     private static readonly string[] CodeMembers = { "namespace", "className", "visibility", "referenceFallbackText" };
-    private static readonly string[] LocaleMembers = { "tag", "fallback" };
-    private static readonly string[] ValidationMembers = { "translationCompleteness", "extraLocaleKeys", "emptyValues" };
+    private static readonly string[] LocaleMembers = { "tag", "fallback", "validation" };
     private static readonly string[] RuntimeMembers = { "unsupportedLocale", "missingKey" };
 
     /// <summary>Compiles a convention-based Runic project whose messages are standard MF2 files.</summary>
@@ -104,11 +103,37 @@ public static partial class TranslationCompiler
                     diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "locales must include baseLocale.", parsed.Source, locales.Value.Span);
             }
         }
+        JsonProperty? pseudoLocales = root.Property("pseudoLocales");
+        if (pseudoLocales is not null) ReadPseudoLocales(pseudoLocales.Value, model, parsed.Source, diagnostics);
         JsonProperty? validation = root.Property("validation");
         if (validation is not null) ReadValidation(validation, model, parsed.Source, diagnostics);
         JsonProperty? runtime = root.Property("runtime");
         if (runtime is not null) ReadRuntime(runtime, model, parsed.Source, diagnostics);
         return model;
+    }
+
+    // pseudoLocales: en-XA and ar-XB, each at most once and not also a declared locale.
+    private static void ReadPseudoLocales(JsonValue value, ManifestModel model, TranslationSource source, DiagnosticBag diagnostics)
+    {
+        if (value.Kind != JsonKind.Array)
+        {
+            diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "pseudoLocales must be an array of pseudo-locale tags.", source, value.Span);
+            return;
+        }
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (JsonValue item in value.Items)
+        {
+            string? tag = item.Kind == JsonKind.String
+                ? Array.Find(Rmf2PseudoLocalesV5.Supported, supported => string.Equals(supported, item.Text, StringComparison.OrdinalIgnoreCase))
+                : null;
+            if (tag is null)
+                diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "pseudoLocales supports only 'en-XA' and 'ar-XB'.", source, item.Span);
+            else if (!seen.Add(tag))
+                diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Duplicate pseudo-locale '" + tag + "'.", source, item.Span);
+            else if (model.Locales.Exists(locale => string.Equals(locale.Tag, tag, StringComparison.OrdinalIgnoreCase)))
+                diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Pseudo-locale '" + tag + "' is generated; remove it from locales.", source, item.Span);
+            else model.PseudoLocales.Add(new LocaleModel(tag, null, item.Span, item.Span));
+        }
     }
 
     private static void ReadMf2Locale(JsonValue item, ManifestModel model, HashSet<string> seen, TranslationSource source, DiagnosticBag diagnostics)
@@ -132,7 +157,10 @@ public static partial class TranslationCompiler
             if (fallbackProperty.Value.Kind != JsonKind.String || !TryCanonicalizeLocale(fallbackProperty.Value.Text!, out fallback))
                 diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Invalid fallback locale.", source, fallbackProperty.Value.Span);
         }
-        model.Locales.Add(new LocaleModel(tag, fallback, tagProperty.Value.Span, fallbackSpan));
+        var locale = new LocaleModel(tag, fallback, tagProperty.Value.Span, fallbackSpan);
+        if (item.Property("validation") is { } validation)
+            ReadValidationPolicies(validation, source, diagnostics, (member, policy) => locale.Validation[member] = policy);
+        model.Locales.Add(locale);
     }
 
     private static string ProjectDirectory(string path)
@@ -248,25 +276,39 @@ public static partial class TranslationCompiler
         }
     }
 
-    private static void ReadValidation(JsonProperty property, ManifestModel model, TranslationSource source, DiagnosticBag diagnostics)
+    private static void ReadValidation(JsonProperty property, ManifestModel model, TranslationSource source, DiagnosticBag diagnostics) =>
+        ReadValidationPolicies(property, source, diagnostics, (member, policy) =>
+        {
+            switch (member)
+            {
+                case ValidationMembers.TranslationCompleteness: model.Completeness = policy; break;
+                case ValidationMembers.ExtraLocaleKeys: model.ExtraKeys = policy; break;
+                case ValidationMembers.EmptyValues: model.EmptyValues = policy; break;
+                case ValidationMembers.PluralCategories: model.PluralCategories = policy; break;
+                case ValidationMembers.InputParity: model.InputParity = policy; break;
+                case ValidationMembers.FormattedBooleans: model.FormattedBooleans = policy; break;
+                case ValidationMembers.MaxLength: model.MaxLength = policy; break;
+            }
+        });
+
+    // A validation object, of the project or of a locale entry: each known member that holds a valid policy.
+    private static void ReadValidationPolicies(JsonProperty property, TranslationSource source, DiagnosticBag diagnostics, Action<string, TranslationPolicy> apply)
     {
         if (property.Value.Kind != JsonKind.Object) { diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "validation must be an object.", source, property.Value.Span); return; }
-        ValidateKnownMembers(property.Value, ValidationMembers, source, diagnostics);
-        model.Completeness = ReadPolicy(property.Value.Property("translationCompleteness"), model.Completeness, source, diagnostics);
-        model.ExtraKeys = ReadPolicy(property.Value.Property("extraLocaleKeys"), model.ExtraKeys, source, diagnostics);
-        model.EmptyValues = ReadPolicy(property.Value.Property("emptyValues"), model.EmptyValues, source, diagnostics);
+        ValidateKnownMembers(property.Value, ValidationMembers.All, source, diagnostics);
+        foreach (string member in ValidationMembers.All)
+            if (property.Value.Property(member) is { } value && ReadPolicy(value, source, diagnostics) is { } policy) apply(member, policy);
     }
 
-    private static TranslationPolicy ReadPolicy(JsonProperty? property, TranslationPolicy defaultValue, TranslationSource source, DiagnosticBag diagnostics)
+    private static TranslationPolicy? ReadPolicy(JsonProperty property, TranslationSource source, DiagnosticBag diagnostics)
     {
-        if (property is null) return defaultValue;
-        if (property.Value.Kind != JsonKind.String) { diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Validation policy must be allow, warning, or error.", source, property.Value.Span); return defaultValue; }
+        if (property.Value.Kind != JsonKind.String) { diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Validation policy must be allow, warning, or error.", source, property.Value.Span); return null; }
         switch (property.Value.Text)
         {
             case "allow": return TranslationPolicy.Allow;
             case "warning": return TranslationPolicy.Warning;
             case "error": return TranslationPolicy.Error;
-            default: diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Unknown validation policy '" + property.Value.Text + "'.", source, property.Value.Span); return defaultValue;
+            default: diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Unknown validation policy '" + property.Value.Text + "'.", source, property.Value.Span); return null;
         }
     }
 

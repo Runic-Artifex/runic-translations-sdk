@@ -144,6 +144,12 @@ Set one or more of these properties to `true`:
 | `RunicTranslationsEmitJson` | `{catalog}.{locale}.locale-v5.json` plus `asset-manifest-v1` |
 | `RunicTranslationsEmitEsm` | Cohesive ESM-v5 modules, declarations, and `web-module-manifest-v3.json` |
 
+`RunicTranslationsPseudoLocales` controls the development pseudo-locales that
+`runic.json` declares in `pseudoLocales` (`en-XA`, `ar-XB`), for the generated C#
+and the JSON and ESM artifacts alike. It defaults to `true` when `Configuration`
+is `Debug` and `false` otherwise, so release builds and packages leave them out.
+See [Pseudo-locales](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md#pseudo-locales).
+
 `RunicTranslationsGenerateOnBuild=true` with no individual selection emits the JSON
 and ESM groups; C# remains source-generator owned. Generated C# is never written
 to disk by this package—it belongs to the source generator.
@@ -156,6 +162,17 @@ retired `TranslationsEmitTypeScript`, `TranslationsEmitTemplateManifest` and
 which names the replacement.
 
 Choose this package for generated C# and whenever MSBuild owns input classification or non-C# artifact generation. Use the CLI directly when generation is owned by Vite, CI, or another host.
+
+## Report unused messages
+
+Set `<RunicTranslationsReportUnusedMessages>true</RunicTranslationsReportUnusedMessages>` to report, as the
+information `RTR0100`, every message that no C# code of the project references through its readable member,
+encoded member, `References` factory or key property, including generated code such as the `.g.cs` files of XAML
+or other source generators (only the catalog's own generated types are skipped). The analyzer runs at the end of a
+full compilation: `dotnet build -v:n` (or a binary log) and full-solution analysis in the IDE show it. Messages used
+only by a key string, from XAML markup that no generated code reads, from another assembly or from the web are
+reported too, so read the list as candidates. The web side
+has `reportUnused` in `@runic-artifex/vite-plugin-runic-translations`.
 
 ## Important build behavior
 

@@ -47,6 +47,8 @@ export interface GenerateRequest {
   readonly project: string;
   readonly output: string;
   readonly emit: readonly string[];
+  /** Generate the runic.json pseudo-locales, as `--pseudo-locales` does. */
+  readonly pseudoLocales?: boolean;
 }
 
 export interface PersistentCompilerOptions {

@@ -21,6 +21,9 @@ public delegate ITranslationProvider TranslationProviderFactory(
 public sealed class TranslationCatalogRegistration
 {
     private readonly TranslationProviderFactory _providerFactory;
+    // Generated registrations read the generated contract through this, so a Hot Reload update that changes it is seen.
+    private readonly Func<string>? _markupContractSource;
+    private readonly string? _markupContract;
     private readonly Func<ITranslationManager, IReadableMessages>? _readableMessagesFactory;
 
     /// <summary>Describes a catalog.</summary>
@@ -57,11 +60,71 @@ public sealed class TranslationCatalogRegistration
         string rmf2MarkupContract,
         TranslationProviderFactory providerFactory,
         Func<ITranslationManager, IReadableMessages>? readableMessagesFactory)
+        : this(catalogId, defaultLocale, contractFingerprint, providerFactory, readableMessagesFactory)
+    {
+        ArgumentNullException.ThrowIfNull(rmf2MarkupContract);
+        _markupContract = rmf2MarkupContract;
+    }
+
+    /// <summary>Describes a catalog whose markup contract is read when it is used, as generated registrations do.</summary>
+    /// <param name="catalogId">The stable catalog ID (<c>XCatalog.CatalogId</c>).</param>
+    /// <param name="defaultLocale">The canonical default locale (<c>XCatalog.DefaultLocale</c>).</param>
+    /// <param name="contractFingerprint">The generated contract fingerprint (<c>XCatalog.ContractFingerprint</c>), used to resolve references.</param>
+    /// <param name="rmf2MarkupContract">
+    /// Returns the generated markup contract (<c>() =&gt; XCatalog.Rmf2MarkupContract</c>), used to check overlays. A .NET Hot
+    /// Reload update can change the contract without a restart; overlays are then checked against the new one.
+    /// </param>
+    /// <param name="providerFactory">Creates the catalog's provider (<c>XCatalog.CreateProvider</c>).</param>
+    public TranslationCatalogRegistration(
+        string catalogId,
+        string defaultLocale,
+        string contractFingerprint,
+        Func<string> rmf2MarkupContract,
+        TranslationProviderFactory providerFactory)
+        : this(catalogId, defaultLocale, contractFingerprint, rmf2MarkupContract, providerFactory, readableMessagesFactory: null)
+    {
+    }
+
+    /// <summary>
+    /// Describes a catalog whose markup contract is read when it is used, and how to create its readable message surface,
+    /// as generated registrations do.
+    /// </summary>
+    /// <param name="catalogId">The stable catalog ID (<c>XCatalog.CatalogId</c>).</param>
+    /// <param name="defaultLocale">The canonical default locale (<c>XCatalog.DefaultLocale</c>).</param>
+    /// <param name="contractFingerprint">The generated contract fingerprint (<c>XCatalog.ContractFingerprint</c>), used to resolve references.</param>
+    /// <param name="rmf2MarkupContract">
+    /// Returns the generated markup contract (<c>() =&gt; XCatalog.Rmf2MarkupContract</c>), used to check overlays. A .NET Hot
+    /// Reload update can change the contract without a restart; overlays are then checked against the new one.
+    /// </param>
+    /// <param name="providerFactory">Creates the catalog's provider (<c>XCatalog.CreateProvider</c>).</param>
+    /// <param name="readableMessagesFactory">
+    /// Creates the generated readable surface over a manager of this catalog (<c>manager =&gt; new XText(manager).Messages</c>),
+    /// so adapters such as the WPF <c>TranslationSource.ForCatalog</c> can resolve the catalog's messages by name; or
+    /// <see langword="null"/> when the catalog has no readable surface.
+    /// </param>
+    public TranslationCatalogRegistration(
+        string catalogId,
+        string defaultLocale,
+        string contractFingerprint,
+        Func<string> rmf2MarkupContract,
+        TranslationProviderFactory providerFactory,
+        Func<ITranslationManager, IReadableMessages>? readableMessagesFactory)
+        : this(catalogId, defaultLocale, contractFingerprint, providerFactory, readableMessagesFactory)
+    {
+        ArgumentNullException.ThrowIfNull(rmf2MarkupContract);
+        _markupContractSource = rmf2MarkupContract;
+    }
+
+    private TranslationCatalogRegistration(
+        string catalogId,
+        string defaultLocale,
+        string contractFingerprint,
+        TranslationProviderFactory providerFactory,
+        Func<ITranslationManager, IReadableMessages>? readableMessagesFactory)
     {
         ArgumentNullException.ThrowIfNull(catalogId);
         ArgumentNullException.ThrowIfNull(defaultLocale);
         ArgumentNullException.ThrowIfNull(contractFingerprint);
-        ArgumentNullException.ThrowIfNull(rmf2MarkupContract);
         ArgumentNullException.ThrowIfNull(providerFactory);
         if (!TranslationDataValidation.IsCatalog(catalogId))
             throw new ArgumentException("The catalog identifier is not canonical.", nameof(catalogId));
@@ -72,7 +135,6 @@ public sealed class TranslationCatalogRegistration
         CatalogId = catalogId;
         DefaultLocale = defaultLocale;
         ContractFingerprint = contractFingerprint;
-        Rmf2MarkupContract = rmf2MarkupContract;
         _providerFactory = providerFactory;
         _readableMessagesFactory = readableMessagesFactory;
     }
@@ -86,8 +148,14 @@ public sealed class TranslationCatalogRegistration
     /// <summary>The generated contract fingerprint.</summary>
     public string ContractFingerprint { get; }
 
-    /// <summary>The generated RMF2 markup contract JSON.</summary>
-    public string Rmf2MarkupContract { get; }
+    /// <summary>The generated RMF2 markup contract JSON, read again on each use when the registration was given a source.</summary>
+    public string Rmf2MarkupContract => _markupContract ?? _markupContractSource!() ??
+        throw new InvalidOperationException($"The markup contract source of catalog '{CatalogId}' returned null.");
+
+    /// <summary>Links the markup contract; one from a source follows Hot Reload updates (<see cref="Runic.Translations.Rmf2MarkupContract.Link(Func{string})"/>).</summary>
+    internal Runic.Translations.Rmf2MarkupContract LinkMarkupContract() => _markupContractSource is { } source
+        ? Runic.Translations.Rmf2MarkupContract.Link(source)
+        : Runic.Translations.Rmf2MarkupContract.Link(_markupContract!);
 
     /// <summary>Creates a provider for the catalog, as the generated <c>CreateProvider</c> does.</summary>
     public ITranslationProvider CreateProvider(

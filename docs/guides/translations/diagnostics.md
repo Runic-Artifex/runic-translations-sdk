@@ -9,9 +9,12 @@ page explains what each ID covers and how to fix it. Locations use the source
 file, a one-based line and column, and UTF-16 columns. The generator's help
 links open this page at the release tag of the package you use.
 
-Most diagnostics are errors and stop generation. `RTR0010`, `RTR0011` and
-`RTR0021` follow the project's `validation` policies (`allow`, `warning` or
-`error`), and some `RTR0051` reports are warnings, as are `RTR0068`, `RTR0069`, `RTR0071`,
+Most diagnostics are errors and stop generation. `RTR0010`, `RTR0011`, `RTR0021`
+and the quality checks `RTR0094`–`RTR0098` follow the project's `validation`
+policies (`allow`, `warning` or `error`), which a locale entry in `locales` can
+override for that locale (`{ "tag": "fr", "fallback": "en", "validation": {
+"translationCompleteness": "warning" } }`). The quality checks are warnings by
+default, so a project that treats warnings as errors sees them as errors; and some `RTR0051` reports are warnings, as are `RTR0068`, `RTR0069`, `RTR0071`,
 `RTR0076`, `RTR0077`, `RTR0078`, `RTR0084`, `RTR0090`, `RTR0091` and `RTR0093`. `RTR0085` is informational.
 
 ## RTR0001
@@ -39,7 +42,10 @@ the tool and packages together.
 Locale is invalid or not declared. A locale tag is not a valid BCP 47 tag, a
 locale appears twice, the base locale is not declared, or a source file uses a
 locale missing from `locales`. Declare every locale in `runic.json` and name
-files after canonical tags.
+files after canonical tags. For `pseudoLocales`: a tag other than `en-XA` or
+`ar-XB`, a duplicate, a tag that is also in `locales`, or source files of a
+pseudo-locale while pseudo-locales are generated
+([Pseudo-locales](rmf2.md#pseudo-locales)).
 
 ## RTR0006
 
@@ -61,7 +67,9 @@ points at the locale's file beside the base-locale file of the message, or at
 the locale in `runic.json` when the locale has no such file. A translation that
 exists but fails to compile reports its own error instead. Translate the
 message, or relax `validation.translationCompleteness` to `warning` or `allow`
-to fall back.
+to fall back. A locale entry's own `validation` applies to that locale only, so
+`de` can be required to be complete while `fr` may lag:
+`"locales": ["en", "de", { "tag": "fr", "fallback": "en", "validation": { "translationCompleteness": "warning" } }]`.
 
 ## RTR0011
 
@@ -152,8 +160,9 @@ or a direct `.mf2` file name is not an identifier.
 
 ## RTR0051
 
-Message metadata is invalid or unknown. `@param` documents a missing input, or
-`@example` is not a JSON object matching the message inputs (errors). Unknown
+Message metadata is invalid or unknown. `@param` documents a missing input,
+`@example` is not a JSON object matching the message inputs, or `@maxLength` is
+not one positive whole number (errors). Unknown
 `@` metadata is preserved but reported as a warning.
 
 ## RTR0052
@@ -477,9 +486,12 @@ Fix or delete the file; `review mark` refuses to overwrite it.
 
 ## RTR0092
 
-An `xliff` or `review` command cannot use its document. The fault of an
-`xliff export`, `xliff import` or `review mark` that stops before writing
+An `xliff`, `import` or `review` command cannot use its document. The fault of an
+`xliff export`, `xliff import`, `import --from` or `review mark` that stops before writing
 anything; one `RCLI8215` diagnostic names the problem. The command exits with 2.
+`import --from` also stops with this fault when the imported messages do not
+compile for a reason it cannot attribute to one message (the RTR diagnostics
+name it).
 `xliff import` also stops with this fault when `--fail-on refused` is given and
 a unit was refused (each refusal is an `RCLI8216` warning), and when a source or
 the review file changed on disk between reading and writing, for example through
@@ -494,6 +506,95 @@ with a plain version such as `0.9.0`, which the Build package turns into
 `[0.9.0, 0.10.0-0)` (see [RTR0089](#rtr0089)), or set
 `RunicTranslationsStampRuntimeRange` to `false`. A dependency that already names
 a range is left as it is without this warning.
+
+## RTR0094
+
+Plural key is never selected in its locale. For example:
+`Variant key 'few' of 'items' is never selected in locale 'de', whose plural
+categories are one, other.` The key is checked against the CLDR categories of
+the message's own locale (cardinal for `:integer`/`:number`, ordinal for
+`select=ordinal`), from the same generated rules that both runtimes select with,
+so the variant is dead text. An integer selector (`:integer`) is checked against
+the categories integers reach: Czech `many` is for decimals only, so `many` under
+`:integer` is reported (`whose plural categories for integers are one, few,
+other`). It usually comes from copying another language's
+variants. Remove the variant, or use an exact number key such as `0` if a value
+was meant. A warning by default; `validation.pluralCategories` sets the policy.
+
+## RTR0095
+
+Plural categories of the locale fall to the catch-all variant. For example:
+`'items' has no variant for the plural categories few, many of locale 'cs'; they
+fall to the '*' variant.` Czech selects `few` for 2–4 and `many` for decimals, so
+a translation with only `one` and `*` shows the `*` text, often with the wrong
+grammar. Under `:integer` only the categories integers reach are expected:
+`one`, `few` and `*` are a complete Czech integer plural, while French still
+needs `many` (1000000). Add a variant for each listed category. A selector whose keys are all
+exact numbers and `*` chose not to use categories and is not checked. A warning
+by default; `validation.pluralCategories` sets the policy (with `RTR0094`).
+
+## RTR0096
+
+Translation drops a placeholder the base displays. For example: `The 'de' translation of
+'greeting' displays no $name, which base locale 'en' displays.` An input that
+the base locale shows in a pattern, directly or through a `.local`, appears in
+no variant of the translation. Translations may omit inputs, so this is a
+warning, not an error; the union over variants counts, so `one {{Ein Element}}`
+beside `* {{{$n} Elemente}}` is fine, and an input the base only selects on is
+not required. Add the placeholder, or set `validation.inputParity` (`allow`
+turns the check off, for a language that needs no count).
+
+## RTR0097
+
+Boolean is formatted as text. For example: `'flag' in locale 'en' formats the
+boolean $on as text, which reads 'true' or 'false' in every locale.` A
+`:runic:boolean` value, or an input declared boolean, printed in a pattern is
+the English word in every locale. Select on it instead and write the words in
+each variant: `.input {$on :runic:boolean}`, `.match $on`, `true {{On}}`,
+`* {{Off}}`. A warning by default; `validation.formattedBooleans: "error"`
+forbids it.
+
+## RTR0098
+
+Message is longer than its @maxLength. For example: `The 'de' text of 'save'
+is 16 characters long, more than its @maxLength of 10; placeholder values are
+not counted.` `@maxLength N` on a base-locale message applies to every locale.
+A locale's own `@maxLength` can only lower it for that locale; a larger value is
+an `RTR0051` warning and the base limit applies. The length is the
+number of Unicode code points of the literal text after NFC normalization, in
+the longest variant, without placeholder values and markup, so a text that
+passes can still overflow at run time. XLIFF export writes the same per-locale limit as
+`slr:sizeRestriction` with the `xliff:codepoints` profile, so translation tools
+can enforce it. Shorten the translation or raise the limit. A warning by
+default; `validation.maxLength` sets the policy. A `@maxLength` that is not a
+positive whole number, or appears twice, is an `RTR0051` error.
+
+## RTR0099
+
+Translation coverage is below its minimum. The fault of a `runic-translations
+status` whose locale is below its `--min-coverage`, for example `status
+--min-coverage de=100,fr=80` when `fr` has 66.67% coverage. Coverage counts the
+messages a locale translates and those a fallback locale other than the base
+locale serves (`de-CH` from `de`), as a percentage of the base locale's
+messages. The command exits with 1 and its payload (`runic.translations.status/1`)
+is in `fault.data`. Translate the missing messages (`status` lists the counts per
+locale) or lower the threshold.
+
+## RTR0100
+
+Message is not referenced from C# code. Information from
+`Runic.Translations.Build` when the project sets
+`<RunicTranslationsReportUnusedMessages>true</RunicTranslationsReportUnusedMessages>`:
+no C# code of the project uses the message through its readable member
+(`Text.Messages.greeting`), its encoded member, its `References` factory or its
+key property; uses in generated code, such as XAML `.g.cs` files or other source
+generators, count, while the catalog's own generated types do not. It is
+reported at the end of a full compilation, so `dotnet build` (with `-v:n` or a
+binary log for information messages) and full-solution analysis show it. A
+message used only by a key string, from XAML markup that no generated code reads,
+from another assembly or from the web is reported too; the ESM side has its own report in
+`vite-plugin-runic-translations` (`reportUnused`). Remove the message from every
+locale, or keep it and leave the report off.
 
 ## RCLI8201
 
@@ -556,16 +657,25 @@ or an undeclared target locale), `XLIFF21-CONTRACT` or `XLIFF21-PROFILE`
 level 0), or a `REVIEW-*` code for the review file. It also names a source or
 review file that changed on disk during `xliff import`. The fault is `RTR0092`
 and nothing is written.
+For `import --from`, a source file cannot be read: `RESX-MALFORMED` (not
+well-formed XML, or no `<root>`), `I18NEXT-MALFORMED` (not a UTF-8 JSON object)
+or `IMPORT-TOO-LARGE` (over 8 MiB), or a file changed on disk during the import.
 
 ## RCLI8216
 
-An XLIFF unit was refused and the rest of the document was applied. This
+An XLIFF unit or an imported message was refused and the rest of the document was applied.
+For `import --from`, the warning names the locale, the key and the code
+(`IMPORT-NO-BASE`, `IMPORT-INVALID`, `IMPORT-KEY-COLLISION`, `IMPORT-PATTERN`,
+`I18NEXT-NESTING`); see [Migrate from .resx](migrate-resx.md#what-is-reported) and
+[Migrate from i18next](migrate-i18next.md#what-is-reported). For `xliff import`, an XLIFF unit was refused. This
 warning names the key and the unit code: `XLIFF21-PLACEHOLDER` (a `<ph>` that
 is not one MF2 placeholder, or a placeholder the message's caller contract does
 not have), `XLIFF21-PLACEHOLDER-CHANGED` (a target `<ph>` whose expression is
 not one of the message's placeholders: another function or options, or a literal
 in place of a variable), `XLIFF21-INLINE` (an inline element other than `<ph>`, `<mrk>` and
-`<cp>`), `XLIFF21-TARGET-INVALID` (the target does not compile against the base
+`<cp>`), `XLIFF21-SELECTOR-CHANGED` (a target that changes a selector message's
+declarations or `.match`, or drops its variants), `XLIFF21-VARIANT-KEY` (an added
+variant whose `equivStart` is not only MF2 keys), `XLIFF21-TARGET-INVALID` (the target does not compile against the base
 message), `XLIFF21-UNKNOWN-KEY`, `XLIFF21-DUPLICATE-UNIT`, `XLIFF21-UNIT-ID`,
 `XLIFF21-STATE` (an unknown segment state), `XLIFF21-SOURCE-CHANGED` (with
 `--source-changed refuse`) or `XLIFF21-METADATA` (an unreadable Runic note).

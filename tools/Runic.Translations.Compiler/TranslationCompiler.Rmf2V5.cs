@@ -37,6 +37,19 @@ public static partial class TranslationCompiler
             CompileRmf2ProjectV5(project, messages, options, cancellationToken));
     }
 
+    // Whether a path is a grouped <locale>.rmf2 file or a direct <locale>/<id>.mf2 file of the locale.
+    private static bool IsLocaleSource(string path, string locale)
+    {
+        string normalized = path.Replace('\\', '/');
+        int slash = normalized.LastIndexOf('/');
+        string file = normalized[(slash + 1)..];
+        if (file.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
+            return string.Equals(file[..^".rmf2".Length], locale, StringComparison.OrdinalIgnoreCase);
+        if (!file.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase) || slash <= 0) return false;
+        int parent = normalized.LastIndexOf('/', slash - 1);
+        return string.Equals(normalized[(parent + 1)..slash], locale, StringComparison.OrdinalIgnoreCase);
+    }
+
     private sealed record Rmf2ProjectSourceV5(string Key, string[] Path, string Locale, TranslationSource Source, Rmf2ResourceNode Node, Rmf2SourceUnitV5? Unit);
     private sealed record Rmf2ProjectEntryV5(Rmf2ProjectSourceV5 Source, Rmf2LinkedMarkupV5 Linked)
     {
@@ -46,11 +59,16 @@ public static partial class TranslationCompiler
     }
 
     internal static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project,
-        IEnumerable<TranslationSource> messages, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default)
+        IEnumerable<TranslationSource> messages, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default) =>
+        CompileRmf2ProjectV5(project, messages, options, false, cancellationToken);
+
+    /// <param name="pseudoLocales">Whether to generate the development pseudo-locales that runic.json declares in <c>pseudoLocales</c>.</param>
+    internal static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project,
+        IEnumerable<TranslationSource> messages, TranslationCompilerOptions? options, bool pseudoLocales, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(messages);
-        return CompileRmf2ProjectV5(project, Materialize(messages), null, options ?? new TranslationCompilerOptions(), cancellationToken);
+        return CompileRmf2ProjectV5(project, Materialize(messages), null, options ?? new TranslationCompilerOptions(), cancellationToken, pseudoLocales);
     }
 
     /// <summary>
@@ -59,7 +77,12 @@ public static partial class TranslationCompiler
     /// to compiling the units' sources directly.
     /// </summary>
     internal static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project,
-        IEnumerable<Rmf2SourceUnitV5> units, TranslationCompilerOptions options, CancellationToken cancellationToken = default)
+        IEnumerable<Rmf2SourceUnitV5> units, TranslationCompilerOptions options, CancellationToken cancellationToken = default) =>
+        CompileRmf2ProjectV5(project, units, options, false, cancellationToken);
+
+    /// <param name="pseudoLocales">Whether to generate the development pseudo-locales that runic.json declares in <c>pseudoLocales</c>.</param>
+    internal static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project,
+        IEnumerable<Rmf2SourceUnitV5> units, TranslationCompilerOptions options, bool pseudoLocales, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(units);
@@ -72,11 +95,12 @@ public static partial class TranslationCompiler
             sources.Add(unit.Source);
             if (ReferenceEquals(unit.Options, options)) lookup[unit.Source] = unit;
         }
-        return CompileRmf2ProjectV5(project, Materialize(sources), lookup, options, cancellationToken);
+        return CompileRmf2ProjectV5(project, Materialize(sources), lookup, options, cancellationToken, pseudoLocales);
     }
 
     private static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project, TranslationSource[] sources,
-        IReadOnlyDictionary<TranslationSource, Rmf2SourceUnitV5>? units, TranslationCompilerOptions options, CancellationToken cancellationToken)
+        IReadOnlyDictionary<TranslationSource, Rmf2SourceUnitV5>? units, TranslationCompilerOptions options, CancellationToken cancellationToken,
+        bool pseudoLocales = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var diagnostics = new DiagnosticBag();
@@ -89,6 +113,23 @@ public static partial class TranslationCompiler
         JsonValue config = parsed.Root!;
         var markup = new Rmf2ProjectMarkupV5(config, project, diagnostics);
         if (Failed()) return Result();
+        if (manifest.PseudoLocales.Count != 0)
+        {
+            // A pseudo-locale is generated from the base sources; files of its own would be ambiguous in a development
+            // build and, in a release build of a catalog that discovers its locales, would ship as a real locale.
+            foreach (TranslationSource source in sources)
+                foreach (LocaleModel pseudo in manifest.PseudoLocales)
+                    if (IsLocaleSource(source.Path, pseudo.Tag))
+                        diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Pseudo-locale '" + pseudo.Tag + "' is generated; remove its source '" + source.Path + "'.", project, pseudo.Span);
+            if (Failed()) return Result();
+        }
+        if (pseudoLocales && manifest.PseudoLocales.Count != 0)
+        {
+            sources = Rmf2PseudoLocalesV5.Synthesize(sources, manifest.DefaultLocale, manifest.PseudoLocales.Select(static pseudo => pseudo.Tag).ToArray(), options);
+            if (manifest.Locales.Count != 0)
+                foreach (LocaleModel pseudo in manifest.PseudoLocales)
+                    manifest.Locales.Add(new(pseudo.Tag, manifest.DefaultLocale, pseudo.Span, pseudo.Span));
+        }
         var discovered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var extracted = ReadRmf2ProjectSourcesV5(project, sources, units, config, discovered, diagnostics, options, cancellationToken);
         if (discovered.Count > options.MaximumLocalesPerCatalog)
@@ -131,11 +172,11 @@ public static partial class TranslationCompiler
             cancellationToken.ThrowIfCancellationRequested();
             canonical.TryGetValue(source.Key, out var origin);
             // A base message that failed to compile reported its own error; the key is not extra.
-            if (origin is null && manifest.ExtraKeys != TranslationPolicy.Allow && !declaredKeys[manifest.DefaultLocale].Contains(source.Key))
+            if (origin is null && manifest.Policy(source.Locale, ValidationMembers.ExtraLocaleKeys) != TranslationPolicy.Allow && !declaredKeys[manifest.DefaultLocale].Contains(source.Key))
             {
                 string logical = string.Join(".", source.Path);
                 string? suggestion = SuggestKey(logical, baseKeys);
-                AddPolicyDiagnostic("RTR0011", manifest.ExtraKeys, "Locale '" + source.Locale + "' defines '" + logical + "', which base locale '" + manifest.DefaultLocale + "' does not define." +
+                AddPolicyDiagnostic("RTR0011", manifest.Policy(source.Locale, ValidationMembers.ExtraLocaleKeys), "Locale '" + source.Locale + "' defines '" + logical + "', which base locale '" + manifest.DefaultLocale + "' does not define." +
                     (suggestion is null ? "" : " Did you mean '" + suggestion + "'?"), source.Source, new(source.Node.NameLocation.StartByte, source.Node.NameLocation.LengthBytes), diagnostics);
             }
             if (origin is null) extras.TryGetValue(source.Key, out origin);
@@ -167,16 +208,17 @@ public static partial class TranslationCompiler
                 {
                     ValidateCallerContract(pair.Value, translated);
                     Rmf2ProjectMarkupV5.ValidateSlots(pair.Key, requirements, translated.Linked, translated.Source.Node.NameLocation, diagnostics);
-                    if (!ReferenceEquals(translated, pair.Value)) ValidateStructure(pair.Value, translated);
+                    if (!ReferenceEquals(translated, pair.Value)) { ValidateStructure(pair.Value, translated); ValidateInputParity(pair.Value, translated); }
+                    ValidateMaxLength(pair.Value, translated);
                     names.UnionWith(translated.Linked.Names);
                 }
                 else if (locale.Tag != manifest.DefaultLocale && !declaredKeys[locale.Tag].Contains(pair.Key))
                 {
                     string message = "Locale '" + locale.Tag + "' does not translate '" + string.Join(".", pair.Value.Source.Path) + "' from base locale '" + manifest.DefaultLocale + "'.";
                     if (groupedFiles.TryGetValue(ProjectDirectory(pair.Value.Source.Source.Path) + "\0" + locale.Tag, out var file))
-                        AddPolicyDiagnostic("RTR0010", manifest.Completeness, message, file, new(0, 0), diagnostics);
+                        AddPolicyDiagnostic("RTR0010", manifest.Policy(locale.Tag, ValidationMembers.TranslationCompleteness), message, file, new(0, 0), diagnostics);
                     else
-                        AddPolicyDiagnostic("RTR0010", manifest.Completeness, message, project, locale.Span, diagnostics);
+                        AddPolicyDiagnostic("RTR0010", manifest.Policy(locale.Tag, ValidationMembers.TranslationCompleteness), message, project, locale.Span, diagnostics);
                 }
             }
             contracts.Add(new(contracts.Count, pair.Key, Array.AsReadOnly(pair.Value.Source.Path), pair.Value.Linked.Message.Inputs,
@@ -259,7 +301,10 @@ public static partial class TranslationCompiler
         return Result(new(manifest.Id, manifest.CodeNamespace, manifest.ClassName, manifest.Visibility, manifest.DefaultLocale,
             manifest.UnsupportedLocale, manifest.MissingKey, contracts.AsReadOnly(), extraContracts.AsReadOnly(), linkedLocales.AsReadOnly(), usedContracts,
             Rmf2ProjectMarkupV5.Export(usedContracts, contracts.Concat(extraContracts).ToArray(), linkedLocales), HashV5(Encoding.UTF8.GetBytes(callerContract)), SourceHashV5(project, sources))
-            { ReferenceFallbackText = manifest.ReferenceFallbackText });
+            {
+                ReferenceFallbackText = manifest.ReferenceFallbackText,
+                PluralCategoryPolicies = locales.ToDictionary(locale => locale.Tag, locale => manifest.Policy(locale.Tag, ValidationMembers.PluralCategories), StringComparer.Ordinal),
+            });
 
         Rmf2ProjectEntryV5? Compile(Rmf2ProjectSourceV5 source, IReadOnlyList<Rmf2InputV5>? callerInputs)
         {
@@ -279,8 +324,10 @@ public static partial class TranslationCompiler
             }
             if (result.Message is null) return null;
             ValidateMetadataV5(source.Node, result.Message, diagnostics);
+            ValidatePluralCategories(source, result.Message);
+            ValidateFormattedBooleans(source, result.Message);
             if (result.Message.Variants.Any(variant => variant.Nodes.Count == 0))
-                AddPolicyDiagnostic("RTR0021", manifest.EmptyValues, "Resource '" + source.Key + "' has an empty variant.", source.Source, new(source.Node.NameLocation.StartByte, source.Node.NameLocation.LengthBytes), diagnostics);
+                AddPolicyDiagnostic("RTR0021", manifest.Policy(source.Locale, ValidationMembers.EmptyValues), "Resource '" + source.Key + "' has an empty variant.", source.Source, new(source.Node.NameLocation.StartByte, source.Node.NameLocation.LengthBytes), diagnostics);
             return new(source, markup.Link(result.Message, source.Node.NameLocation, diagnostics));
         }
         Rmf2ProjectEntryV5 Profile(Rmf2ProjectEntryV5 entry, string? expectedKind, SortedDictionary<string, Rmf2ProjectEntryV5> locale)
@@ -323,6 +370,87 @@ public static partial class TranslationCompiler
                 if (!origin.Linked.Message.Inputs.Any(expected => expected.Name == input.Name && expected.Type == input.Type))
                     diagnostics.Add("RTR0016", TranslationDiagnosticSeverity.Error, "Translation introduces or changes caller input '" + input.Name + "' for '" + origin.Source.Key + "'.", translated.Source.Node.NameLocation);
         }
+        // RTR0094/RTR0095: plural or ordinal keys checked against the categories of the message's own locale, from
+        // the generated CLDR rule metadata that both runtimes select with. A selector position whose keys are all
+        // exact numbers (and the catch-all) chose not to use categories and is not checked for missing ones. An
+        // integer selector (int64, as `:integer` declares) is checked against the categories integers reach.
+        void ValidatePluralCategories(Rmf2ProjectSourceV5 source, Rmf2MessageV5 message)
+        {
+            TranslationPolicy policy = manifest.Policy(source.Locale, ValidationMembers.PluralCategories);
+            if (policy == TranslationPolicy.Allow || message.Selectors.Count == 0 || message.Syntax.Variants.Count != message.Variants.Count) return;
+            // A pseudo-locale is synthesized from the base locale's variants; nobody can add the categories its own
+            // rules reach, so its plural keys are not checked (the base locale's are).
+            if (manifest.PseudoLocales.Any(pseudo => string.Equals(pseudo.Tag, source.Locale, StringComparison.OrdinalIgnoreCase))) return;
+            string logical = string.Join(".", source.Path);
+            for (int position = 0; position < message.Selectors.Count; position++)
+            {
+                Rmf2SelectorV5 selector = message.Selectors[position];
+                if (selector.Function is not ("plural" or "ordinal")) continue;
+                bool ordinal = selector.Function == "ordinal";
+                IReadOnlyList<string> categories = Rmf2AuthoringService.PluralCategories(source.Locale, ordinal, selector.Type == "int64");
+                bool integer = categories.Count != Rmf2AuthoringService.PluralCategories(source.Locale, ordinal).Count;
+                if (categories.Count == 0) continue; // RTR0031 reports a locale without rules.
+                var used = new SortedSet<string>(StringComparer.Ordinal);
+                for (int index = 0; index < message.Variants.Count; index++)
+                {
+                    Rmf2KeyV5 key = message.Variants[index].Keys[position];
+                    if (key.Kind != "literal" || key.Canonical is not null || key.Value is not ("zero" or "one" or "two" or "few" or "many" or "other")) continue;
+                    used.Add(key.Value);
+                    if (categories.Contains(key.Value)) continue;
+                    TextSourceLocation location = message.Syntax.Variants[index].KeyLocations[position];
+                    AddPolicyDiagnostic("RTR0094", policy, "Variant key '" + key.Value + "' of '" + logical + "' is never selected in locale '" + source.Locale + "', whose " +
+                        (ordinal ? "ordinal" : "plural") + " categories" + (integer ? " for integers" : "") + " are " + string.Join(", ", categories) + ".", source.Source, MessageSpan(source, location), diagnostics);
+                }
+                if (used.Count == 0) continue;
+                string[] missing = categories.Where(category => category != "other" && !used.Contains(category)).ToArray();
+                if (missing.Length != 0)
+                    AddPolicyDiagnostic("RTR0095", policy, "'" + logical + "' has no variant for the " + (ordinal ? "ordinal" : "plural") + " " + (missing.Length == 1 ? "category " : "categories ") +
+                        string.Join(", ", missing) + " of locale '" + source.Locale + "'; " + (missing.Length == 1 ? "it falls" : "they fall") + " to the '*' variant.",
+                        source.Source, NameSpan(source), diagnostics);
+            }
+        }
+        // RTR0097: a boolean formatted as text prints "true" or "false" in every locale.
+        void ValidateFormattedBooleans(Rmf2ProjectSourceV5 source, Rmf2MessageV5 message)
+        {
+            TranslationPolicy policy = manifest.Policy(source.Locale, ValidationMembers.FormattedBooleans);
+            if (policy == TranslationPolicy.Allow) return;
+            string[] names = message.Variants.SelectMany(variant => variant.Nodes).OfType<Rmf2ExpressionNodeV5>()
+                .Where(node => node.Expression.ValueType == "boolean")
+                .Select(node => node.Expression.Operand.Kind is "input" or "local" ? "$" + node.Expression.Operand.Value : "|" + node.Expression.Operand.Value + "|")
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            if (names.Length != 0)
+                AddPolicyDiagnostic("RTR0097", policy, "'" + string.Join(".", source.Path) + "' in locale '" + source.Locale + "' formats the boolean " + string.Join(", ", names) +
+                    " as text, which reads 'true' or 'false' in every locale; select on it with .match and write the words in the variants.", source.Source, NameSpan(source), diagnostics);
+        }
+        // RTR0096: an input the base displays that no variant of the translation displays (union over variants).
+        void ValidateInputParity(Rmf2ProjectEntryV5 origin, Rmf2ProjectEntryV5 translated)
+        {
+            TranslationPolicy policy = manifest.Policy(translated.Source.Locale, ValidationMembers.InputParity);
+            if (policy == TranslationPolicy.Allow) return;
+            SortedSet<string> expected = DisplayedInputs(origin.Linked.Message), actual = DisplayedInputs(translated.Linked.Message);
+            string[] dropped = expected.Where(name => !actual.Contains(name)).ToArray();
+            if (dropped.Length != 0)
+                AddPolicyDiagnostic("RTR0096", policy, "The '" + translated.Source.Locale + "' translation of '" + string.Join(".", origin.Source.Path) + "' displays " +
+                    (dropped.Length == 1 ? "no " : "none of ") + string.Join(", ", dropped.Select(name => "$" + name)) + ", which base locale '" + manifest.DefaultLocale + "' displays.",
+                    translated.Source.Source, NameSpan(translated.Source), diagnostics);
+        }
+        // RTR0098: the literal text of a variant is longer than @maxLength; placeholder values and markup are not counted.
+        void ValidateMaxLength(Rmf2ProjectEntryV5 origin, Rmf2ProjectEntryV5 translated)
+        {
+            // The base locale's limit is the developer's UI constraint: a translation may only tighten it, and XLIFF
+            // export writes the same effective limit (EffectiveMaxLengthV5) as the unit's size restriction.
+            if (MaxLengthV5(translated.Source.Node.Properties) is { } own && MaxLengthV5(origin.Source.Node.Properties) is { } baseLimit && own > baseLimit)
+                diagnostics.Add("RTR0051", TranslationDiagnosticSeverity.Warning, "The '" + translated.Source.Locale + "' @maxLength " + own.ToString(CultureInfo.InvariantCulture) + " of '" +
+                    string.Join(".", origin.Source.Path) + "' is larger than the limit of " + baseLimit.ToString(CultureInfo.InvariantCulture) + " in base locale '" + manifest.DefaultLocale +
+                    "'; a translation can only lower it, so " + baseLimit.ToString(CultureInfo.InvariantCulture) + " applies.", translated.Source.Source, NameSpan(translated.Source));
+            TranslationPolicy policy = manifest.Policy(translated.Source.Locale, ValidationMembers.MaxLength);
+            if (policy == TranslationPolicy.Allow || EffectiveMaxLengthV5(MaxLengthV5(origin.Source.Node.Properties), MaxLengthV5(translated.Source.Node.Properties)) is not { } limit) return;
+            int longest = translated.Linked.Message.Variants.Select(variant => TextLengthV5(variant.Nodes)).DefaultIfEmpty(0).Max();
+            if (longest > limit)
+                AddPolicyDiagnostic("RTR0098", policy, "The '" + translated.Source.Locale + "' text of '" + string.Join(".", origin.Source.Path) + "' is " + longest.ToString(CultureInfo.InvariantCulture) +
+                    " characters long" + (translated.Linked.Message.Variants.Count > 1 ? " in its longest variant" : "") + ", more than its @maxLength of " + limit.ToString(CultureInfo.InvariantCulture) +
+                    "; placeholder values are not counted.", translated.Source.Source, NameSpan(translated.Source), diagnostics);
+        }
         void ValidateContentLocale(Rmf2TranslationV5 resource)
         {
             foreach (var selector in resource.Message.Selectors)
@@ -336,6 +464,63 @@ public static partial class TranslationCompiler
                 diagnostics.Add("RTR0031", TranslationDiagnosticSeverity.Error, "The built-in list registry does not support content locale '" + resource.ContentLocale + "'.", resource.SourceLocation);
         }
         void Error(string message, TranslationSource source, ByteSpan span) => diagnostics.Add("RTR0062", TranslationDiagnosticSeverity.Error, message, source, span);
+    }
+
+    // A location inside the extracted message, mapped back to its source file.
+    private static ByteSpan MessageSpan(Rmf2ProjectSourceV5 source, TextSourceLocation location)
+    {
+        IReadOnlyList<int> map = source.Node.MessageByteMap;
+        int from = map[Math.Min(location.StartByte, map.Count - 1)];
+        int to = map[Math.Min(location.StartByte + location.LengthBytes, map.Count - 1)];
+        return new(from, Math.Max(0, to - from));
+    }
+
+    private static ByteSpan NameSpan(Rmf2ProjectSourceV5 source) => new(source.Node.NameLocation.StartByte, source.Node.NameLocation.LengthBytes);
+
+    // The inputs a message displays: those its pattern expressions read, directly or through locals.
+    private static SortedSet<string> DisplayedInputs(Rmf2MessageV5 message)
+    {
+        var locals = new Dictionary<string, Rmf2ExpressionV5>(StringComparer.Ordinal);
+        foreach (Rmf2DeclarationV5 declaration in message.Declarations)
+            if (declaration.Kind == "local") locals.TryAdd(declaration.Name, declaration.Expression);
+        var result = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (Rmf2ExpressionNodeV5 node in message.Variants.SelectMany(variant => variant.Nodes).OfType<Rmf2ExpressionNodeV5>())
+        {
+            Rmf2ValueV5 operand = node.Expression.Operand;
+            var visited = new HashSet<string>(StringComparer.Ordinal);
+            while (operand.Kind == "local" && visited.Add(operand.Value) && locals.TryGetValue(operand.Value, out Rmf2ExpressionV5? local)) operand = local.Operand;
+            if (operand.Kind == "input") result.Add(operand.Value);
+        }
+        return result;
+    }
+
+    // The @maxLength of a message's properties, or null when it declares none or an invalid one (RTR0051).
+    internal static int? MaxLengthV5(IReadOnlyList<string> properties)
+    {
+        foreach (string property in properties)
+        {
+            int space = property.IndexOf(' ');
+            if ((space < 0 ? property : property.Substring(0, space)) != "maxLength") continue;
+            return int.TryParse(space < 0 ? "" : property.Substring(space + 1).Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out int value) && value > 0 ? value : null;
+        }
+        return null;
+    }
+
+    // The limit a translation is held to: the smaller of the base's and its own @maxLength, either of which may be absent.
+    internal static int? EffectiveMaxLengthV5(int? baseLimit, int? translationLimit) =>
+        baseLimit is { } a && translationLimit is { } b ? Math.Min(a, b) : baseLimit ?? translationLimit;
+
+    // Unicode code points of the literal text after NFC normalization, as XLIFF's xliff:codepoints profile counts.
+    private static int TextLengthV5(IReadOnlyList<Rmf2NodeV5> nodes)
+    {
+        int length = 0;
+        foreach (Rmf2TextV5 text in nodes.OfType<Rmf2TextV5>())
+        {
+            string normalized = text.Value.Normalize(NormalizationForm.FormC);
+            for (int index = 0; index < normalized.Length; index++)
+                if (!char.IsLowSurrogate(normalized[index])) length++;
+        }
+        return length;
     }
 
     private static List<Rmf2ProjectSourceV5> ReadRmf2ProjectSourcesV5(TranslationSource project, TranslationSource[] sources,
@@ -496,6 +681,11 @@ public static partial class TranslationCompiler
             {
                 string parameter = value.Split(' ', 2)[0].TrimStart('$').Normalize(NormalizationForm.FormC);
                 if (!value.StartsWith('$') || !message.Inputs.Any(input => input.Name == parameter)) Error("@param must document an existing caller input.");
+            }
+            else if (name == "maxLength")
+            {
+                if (MaxLengthV5(new[] { property }) is null) Error("@maxLength must be a positive whole number of characters, such as @maxLength 40.");
+                else if (node.Properties.Count(item => item == "maxLength" || item.StartsWith("maxLength ", StringComparison.Ordinal)) > 1) Error("@maxLength may appear only once per message.");
             }
             else if (name == "example")
             {

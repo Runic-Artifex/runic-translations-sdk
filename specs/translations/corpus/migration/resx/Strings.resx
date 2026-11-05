@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <data name="Greeting" xml:space="preserve">
+    <value>Hello, {0}!</value>
+    <comment>Shown on the start page. {0} is the user's name.</comment>
+  </data>
+  <data name="ItemsInFolder" xml:space="preserve">
+    <value>{0:N0} items in {1}</value>
+  </data>
+  <data name="Progress" xml:space="preserve">
+    <value>{0:P0} done</value>
+  </data>
+  <data name="DueDate" xml:space="preserve">
+    <value>Due {0:d}</value>
+  </data>
+  <data name="Errors.NotFound" xml:space="preserve">
+    <value>The file '{0}' was not found.</value>
+  </data>
+  <data name="Braces" xml:space="preserve">
+    <value>Use {{ and }} around a placeholder, as in {{0}}.</value>
+  </data>
+  <data name="Padded" xml:space="preserve">
+    <value>  Indented</value>
+  </data>
+  <data name="TwoLines" xml:space="preserve">
+    <value>First line
+Second line</value>
+  </data>
+  <data name="Welcome" xml:space="preserve">
+    <value>Welcome, {userName}.</value>
+  </data>
+  <data name="Save" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="Logo" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>logo.png;System.Drawing.Bitmap, System.Drawing</value>
+  </data>
+  <data name="&gt;&gt;saveButton.Name" xml:space="preserve">
+    <value>saveButton</value>
+  </data>
+</root>

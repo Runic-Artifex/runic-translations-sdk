@@ -233,9 +233,15 @@ internal sealed class Rmf2V1CorpusTests
     // in both digests.
     // Re-pinned for merging T1g with main (TE, TC, TD) through T1a/T1b, in both digests.
     // Re-pinned for merging TB (#131) with T1g (#132), in both digests.
+    // Re-pinned for TR 0.9 batch TJ: <Class>Catalog.SourceHash and Rmf2MarkupContract are static properties rather than
+    // constants, so .NET Hot Reload applies text-only catalog edits, in both digests (C# only).
+    // Re-pinned for the TJ Hot Reload review: Registration reads the markup contract through static () => Rmf2MarkupContract,
+    // so overlays follow a Hot Reload update of it, in both digests (C# only).
+    // Re-pinned for merging the TJ Hot Reload review with TB (#131), in both digests.
     // Re-pinned for T1f (0.9): Registration also creates the readable surface, beside the readable surface only.
-    private const string EncodedOutputDigest = "a3546eed56e08d586a1797a0f091b107cbd29d9af377a87844bbf68b150702ab";
-    private const string HiddenEncodedOutputDigest = "8a1f4572ccd67976bf09dae52ce2173df28de2bb663a8f675b51fd00e9fd3225";
+    // Re-pinned for merging T1f (#145) with main (TJ Hot Reload), beside the readable surface only.
+    private const string EncodedOutputDigest = "4f14e58d36415a0a33af819db5e55d8d916d5b263218d286e19bcfdb141c8508";
+    private const string HiddenEncodedOutputDigest = "29912036e31549eb20ebd5b538b0f45bf5e0163128cfc283af0c8591d7ea2dac";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

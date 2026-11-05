@@ -19,3 +19,11 @@ order_status =
   shipped {{Your order has shipped}}
   * {{Your order is being prepared}}
 help_hint = Read the {#strong}help{/strong} first.
+# Unread notifications in the header.
+@maxLength 30
+notifications =
+  .input {$count :integer}
+  .match $count
+  0 {{No new notifications}}
+  one {{One new notification}}
+  * {{{$count} new notifications}}
