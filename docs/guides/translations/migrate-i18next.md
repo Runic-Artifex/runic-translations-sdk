@@ -3,7 +3,8 @@
 `runic-translations import --from i18next` moves i18next JSON resources
 (JSON v4, the format of i18next 21 and later) into the `.rmf2` sources of a Runic
 Translations project. Run it once to migrate, or again while both catalogs still
-exist: a second run updates changed text in place and leaves the rest alone.
+exist: a second run adds the keys that are new since the last run and keeps
+every message that already exists, so edits made in the `.rmf2` sources survive.
 
 ## Before you start
 
@@ -41,8 +42,13 @@ runic-translations validate
 `--locale <tag>` (repeatable) imports only those locales, and `--dry-run` reports
 the outcome and the files it would write without writing them. New messages go to
 `<project>/<baseLocale>.rmf2` and their translations beside them; `--group
-<name>` writes new messages to `<project>/<name>/<locale>.rmf2` instead. A message
-that already exists keeps its file, group and comments; only its text changes.
+<name>` writes new messages to `<project>/<name>/<locale>.rmf2` instead.
+
+A message that already exists, as base text or as a translation, is kept: its
+text in the `.rmf2` sources wins, and one whose text differs from the JSON is
+reported as `kept` (`IMPORT-EXISTS`). Run with `--dry-run` first to see them.
+`--overwrite` replaces their text with the JSON text instead; each such message
+keeps its file, group and comments, and only its text changes.
 
 ## What is mapped
 
@@ -94,6 +100,13 @@ forms of categories the locale does not use (`_few` in German) are dropped
 (`I18NEXT-PLURAL-MISSING`), and a lone `items_one` without `items_other` stays a
 plain message (`I18NEXT-PLURAL-INCOMPLETE`), as in i18next.
 
+Resources in the JSON v3 format (`compatibilityJSON: 'v3'`, i18next 20 and
+earlier) name plurals `items_plural` or `items_0`, `items_1`, ... These keys are
+imported as plain messages with an `I18NEXT-PLURAL-V3` notice. Convert the files
+to v4 first, for example with
+[i18next-v4-format-converter](https://github.com/i18next/i18next-v4-format-converter),
+and import them again.
+
 ## What is reported
 
 The command imports what it can and lists the rest. It exits with 0 even when
@@ -108,16 +121,18 @@ the `interchange` member of the payload (`format: "i18next"`, schema
 | `I18NEXT-NESTING` | refused | `$t(other.key)`: RMF2 messages do not reference each other. Repeat the text, or compose the two messages in code. |
 | `IMPORT-NO-BASE` | refused | A translation whose key has no base message. |
 | `IMPORT-INVALID` | refused | The message does not compile; the reason names the RTR code, for example a translation that uses `{{user}}` while its base text does not (`RTR0016`). |
-| `IMPORT-KEY-COLLISION` | refused | Two keys map to the same RMF2 name, or `items` exists both as a message and as plural forms. |
+| `IMPORT-KEY-COLLISION` | refused | Two keys map to the same RMF2 name, `items` exists both as a message and as plural forms, or a dotted key (`"a.b"`) repeats a nested one (`"a": { "b": ... }`); the first is imported. |
+| `IMPORT-EXISTS` | kept | The message already exists with other text and was not changed; `--overwrite` replaces it. |
 | `I18NEXT-FORMAT` | notice | A format without an RMF2 equivalent (`currency`, `relativetime`, a custom formatter) or format options were dropped. |
 | `I18NEXT-INTERPOLATION` | notice | `{{user.name}}` became the input `$user_name`; pass it as its own value. |
 | `I18NEXT-MARKUP` | notice | HTML or `<Trans>` tags (`<1>terms</1>`) were kept as text. Rewrite them as RMF2 markup (`{#link}terms{/link}`) with a slot ([RMF2 guide](rmf2.md)). |
 | `IMPORT-LOCALE` | notice | A file of a locale that `runic.json` does not declare. |
+| `I18NEXT-PLURAL-V3` | notice | A v3 plural key (`items_plural`, `items_0`) was imported as a plain message; convert the resources to v4. |
 
 Contexts (`key_male`, `key_female`) are imported as separate messages; join them
 into one message with `.match` on a `:string` input if you want a single call.
 Refused messages are also `RCLI8216` warnings. A file that is not a UTF-8 JSON
-object (`I18NEXT-MALFORMED`) stops the command with `RTR0092` and exit code 2,
+object (`I18NEXT-MALFORMED`; a UTF-8 byte order mark is accepted) stops the command with `RTR0092` and exit code 2,
 and so do imported messages that make the project fail to compile for a reason
 the importer cannot attribute to one message; nothing is written then.
 

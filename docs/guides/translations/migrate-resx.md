@@ -3,7 +3,8 @@
 `runic-translations import --from resx` moves the strings of a .NET resource
 file and its satellites into the `.rmf2` sources of a Runic Translations
 project. Run it once to migrate, or again while both catalogs still exist: a
-second run updates changed text in place and leaves everything else alone.
+second run adds the strings that are new since the last run and keeps every
+message that already exists, so edits made in the `.rmf2` sources survive.
 
 ## Before you start
 
@@ -37,8 +38,13 @@ reports the outcome and the files it would write without writing them.
 
 New messages go to `<project>/<baseLocale>.rmf2` and their translations beside
 them. `--group <name>` writes new messages to `<project>/<name>/<locale>.rmf2`
-instead, so the generated API names them `<name>_<key>`. A message that already
-exists keeps its file, group and comments; only its text changes.
+instead, so the generated API names them `<name>_<key>`.
+
+A message that already exists, as base text or as a translation, is kept: its
+text in the `.rmf2` sources wins, and one whose text differs from the `.resx`
+is reported as `kept` (`IMPORT-EXISTS`). Run with `--dry-run` first to see
+them. `--overwrite` replaces their text with the `.resx` text instead; each such
+message keeps its file, group and comments, and only its text changes.
 
 ## What is mapped
 
@@ -92,8 +98,10 @@ the `interchange` member of the payload (`format: "resx"`, schema
 
 | Code | Outcome | Meaning |
 | --- | --- | --- |
-| `RESX-NON-STRING` | skipped | A file reference, image or other typed entry. |
+| `RESX-NON-STRING` | skipped | A file reference, image or other typed entry: a `type` other than `System.String` (with or without its assembly), or a `mimetype`. |
 | `RESX-DESIGNER` | skipped | Windows Forms designer metadata (`>>button1.Name`, `$this.Text`). |
+| `RESX-NO-VALUE` | skipped | A `<data>` entry without a `<value>` element. |
+| `IMPORT-EXISTS` | kept | The message already exists with other text and was not changed; `--overwrite` replaces it. |
 | `IMPORT-NO-BASE` | refused | A translation whose key has no base message. |
 | `IMPORT-INVALID` | refused | The message does not compile; the reason names the RTR code, for example a translation that uses `{2}` while its base text has only `{0}` (`RTR0016`). |
 | `IMPORT-KEY-COLLISION` | refused | Two keys map to the same RMF2 name. |

@@ -51,12 +51,89 @@ internal sealed class MigrationCliTests
         Assert.Contains("imported resx: en 0 added, 0 changed, 10 unchanged; de 0 added, 0 changed, 3 unchanged; 2 skipped, 2 refused.", again.StandardOutput);
         Assert.False(again.StandardOutput.Contains("wrote ", StringComparison.Ordinal), again.StandardOutput);
 
-        // A changed base text updates the message in place and keeps its description.
-        File.WriteAllText(temporary.Resolve("resx", "Strings.resx"), File.ReadAllText(temporary.Resolve("resx", "Strings.resx")).Replace("Hello, {0}!", "Hi, {0}!", StringComparison.Ordinal), new UTF8Encoding(false));
-        ProcessResult changed = TestFixture.RunTool(temporary, "import", "--from", "resx", "resx/Strings.resx", "--locale", "en");
-        Assert.Equal(0, changed.ExitCode, changed.Combined);
-        Assert.Contains("imported resx: en 0 added, 1 changed, 9 unchanged; 2 skipped, 0 refused.", changed.StandardOutput);
-        Assert.Contains("# Shown on the start page. {0} is the user's name.\nGreeting = Hi, {$arg0}!\n", File.ReadAllText(temporary.Resolve("translations", "en.rmf2")));
+        // Messages edited after the migration are kept by default and reported: the base text and a translation.
+        string enPath = temporary.Resolve("translations", "en.rmf2"), dePath = temporary.Resolve("translations", "de.rmf2");
+        File.WriteAllText(enPath, File.ReadAllText(enPath).Replace("Hello, {$arg0}!", "Hi there, {$arg0}!", StringComparison.Ordinal), new UTF8Encoding(false));
+        File.WriteAllText(dePath, File.ReadAllText(dePath).Replace("Hallo, {$arg0}!", "Servus, {$arg0}!", StringComparison.Ordinal), new UTF8Encoding(false));
+        string enEdited = File.ReadAllText(enPath), deEdited = File.ReadAllText(dePath);
+        ProcessResult kept = TestFixture.RunTool(temporary, "import", "--from", "resx", "resx/Strings.resx", "--format", "json");
+        Assert.Equal(0, kept.ExitCode, kept.Combined);
+        Assert.Equal(enEdited, File.ReadAllText(enPath), "An edited base text was overwritten without --overwrite.");
+        Assert.Equal(deEdited, File.ReadAllText(dePath), "An edited translation was overwritten without --overwrite.");
+        using (JsonDocument envelope = JsonDocument.Parse(kept.StandardOutput))
+        {
+            JsonElement payload = envelope.RootElement.GetProperty("payload");
+            PayloadSchemas.Validate(PayloadSchemas.Tool, payload);
+            JsonElement interchange = payload.GetProperty("interchange");
+            Assert.Equal(2, interchange.GetProperty("units").GetProperty("kept").GetInt32());
+            Assert.Equal(0, interchange.GetProperty("units").GetProperty("changed").GetInt32());
+            AssertEntry(interchange, "en", "Greeting", "kept", "IMPORT-EXISTS");
+            AssertEntry(interchange, "de", "Greeting", "kept", "IMPORT-EXISTS");
+        }
+        ProcessResult keptText = TestFixture.RunTool(temporary, "import", "--from", "resx", "resx/Strings.resx", "--dry-run");
+        Assert.Contains("dry run: imported resx: en 0 added, 0 changed, 9 unchanged, 1 kept; de 0 added, 0 changed, 2 unchanged, 1 kept; 2 skipped, 2 refused.", keptText.StandardOutput);
+        Assert.Contains("2 existing message(s) differ from the source and were kept; --overwrite replaces them.", keptText.StandardOutput);
+
+        // --overwrite replaces the text in place and keeps the description.
+        ProcessResult overwritten = TestFixture.RunTool(temporary, "import", "--from", "resx", "resx/Strings.resx", "--overwrite");
+        Assert.Equal(0, overwritten.ExitCode, overwritten.Combined);
+        Assert.Contains("imported resx: en 0 added, 1 changed, 9 unchanged; de 0 added, 1 changed, 2 unchanged; 2 skipped, 2 refused.", overwritten.StandardOutput);
+        Assert.Contains("# Shown on the start page. {0} is the user's name.\nGreeting = Hello, {$arg0}!\n", File.ReadAllText(enPath));
+        Assert.Contains("Greeting = Hallo, {$arg0}!\n", File.ReadAllText(dePath));
+    }
+
+    [Test, DisplayName("CLI import --from resx reads entries written without whitespace, reports one without a value and matches string types exactly")]
+    public void ImportsCompactResx()
+    {
+        using TemporaryDirectory temporary = CopyCorpus();
+        Directory.CreateDirectory(temporary.Resolve("compact"));
+        File.WriteAllText(temporary.Resolve("compact", "Compact.resx"),
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?><root>" +
+            "<data name=\"ValueFirst\" xml:space=\"preserve\"><value>Value text</value><comment>Value note</comment></data>" +
+            "<data name=\"CommentFirst\"><comment>Comment note</comment><value>Real text</value></data>" +
+            "<data name=\"NoValue\"><comment>Only a comment</comment></data>" +
+            "<data name=\"Empty\"><value/></data>" +
+            "<data name=\"Comparison\" type=\"System.StringComparison, mscorlib\"><value>Ordinal</value></data>" +
+            "<data name=\"Qualified\" type=\"System.String, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089\"><value>Typed text</value></data>" +
+            "</root>", new UTF8Encoding(false));
+        ProcessResult import = TestFixture.RunTool(temporary, "import", "--from", "resx", "compact/Compact.resx", "--group", "legacy", "--format", "json");
+        Assert.Equal(0, import.ExitCode, import.Combined);
+        string written = File.ReadAllText(temporary.Resolve("translations", "legacy", "en.rmf2"));
+        Assert.Contains("# Value note\nValueFirst = Value text\n", written);
+        Assert.Contains("# Comment note\nCommentFirst = Real text\n", written);
+        Assert.Contains("Qualified = Typed text\n", written);
+        Assert.False(written.Contains("NoValue", StringComparison.Ordinal), written);
+        Assert.False(written.Contains("Comparison", StringComparison.Ordinal), written);
+        using JsonDocument envelope = JsonDocument.Parse(import.StandardOutput);
+        JsonElement interchange = envelope.RootElement.GetProperty("payload").GetProperty("interchange");
+        AssertEntry(interchange, "en", "NoValue", "skipped", "RESX-NO-VALUE");
+        AssertEntry(interchange, "en", "Comparison", "skipped", "RESX-NON-STRING");
+        // An empty <value/> is a value: the empty message.
+        Assert.Equal(4, interchange.GetProperty("units").GetProperty("added").GetInt32());
+    }
+
+    [Test, DisplayName("CLI import --from i18next accepts a UTF-8 BOM, refuses a dotted key that a nested key repeats and points v3 plurals at the v4 format")]
+    public void ImportsI18nextEdgeCases()
+    {
+        using TemporaryDirectory temporary = CopyCorpus();
+        Directory.CreateDirectory(temporary.Resolve("legacy"));
+        byte[] json = Encoding.UTF8.GetBytes("{ \"a.b\": \"Flat\", \"a\": { \"b\": \"Nested\" }, \"items\": \"One item\", \"items_plural\": \"{{count}} items\", " +
+            "\"rank_0\": \"none\", \"rank_1\": \"some\", \"step_1\": \"First\", \"step_2\": \"Second\" }");
+        File.WriteAllBytes(temporary.Resolve("legacy", "en.json"), [0xEF, 0xBB, 0xBF, .. json]);
+        ProcessResult import = TestFixture.RunTool(temporary, "import", "--from", "i18next", "legacy/en.json", "--group", "legacy", "--format", "json");
+        Assert.Equal(0, import.ExitCode, import.Combined);
+        string written = File.ReadAllText(temporary.Resolve("translations", "legacy", "en.rmf2"));
+        Assert.Contains("b = Flat\n", written);
+        Assert.False(written.Contains("Nested", StringComparison.Ordinal), written);
+        using JsonDocument envelope = JsonDocument.Parse(import.StandardOutput);
+        JsonElement payload = envelope.RootElement.GetProperty("payload");
+        PayloadSchemas.Validate(PayloadSchemas.Tool, payload);
+        JsonElement interchange = payload.GetProperty("interchange");
+        AssertEntry(interchange, "en", "a.b", "refused", "IMPORT-KEY-COLLISION");
+        AssertNotice(interchange, "legacy/en.json:items_plural", "I18NEXT-PLURAL-V3");
+        AssertNotice(interchange, "legacy/en.json:rank_1", "I18NEXT-PLURAL-V3");
+        Assert.False(interchange.GetProperty("notices").EnumerateArray().Any(notice => notice.GetProperty("location").GetString()!.Contains("step_", StringComparison.Ordinal)),
+            interchange.GetRawText());
     }
 
     [Test, DisplayName("CLI import --from i18next maps nested keys, namespaces, interpolation and plural suffixes to RMF2")]

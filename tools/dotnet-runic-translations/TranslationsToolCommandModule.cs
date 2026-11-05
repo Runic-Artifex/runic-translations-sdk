@@ -228,6 +228,9 @@ internal sealed record TranslationsToolCommandRequest(
     /// <summary>The source format of <c>import</c>: <c>resx</c> or <c>i18next</c>.</summary>
     public string? From { get; init; }
 
+    /// <summary>Whether <c>import</c> replaces the text of existing messages (<c>--overwrite</c>); otherwise they are kept.</summary>
+    public bool Overwrite { get; init; }
+
     /// <summary>The XLIFF document that <c>xliff import</c> reads, or the file or directory that <c>import</c> reads.</summary>
     public string? Source { get; init; }
 
@@ -333,6 +336,8 @@ internal sealed record TranslationsToolInterchangeCounts
     public int Added { get; init; }
     public int Changed { get; init; }
     public int Unchanged { get; init; }
+    /// <summary>Existing messages whose text differs from the source and that <c>import</c> kept (no <c>--overwrite</c>).</summary>
+    public int Kept { get; init; }
     public int Skipped { get; init; }
     public int Refused { get; init; }
     /// <summary>Applied units whose source changed since export, imported as needs-review.</summary>
@@ -342,7 +347,7 @@ internal sealed record TranslationsToolInterchangeCounts
 }
 
 /// <param name="Key">The message key.</param>
-/// <param name="Outcome"><c>added</c>, <c>changed</c>, <c>unchanged</c> (only when its source changed), <c>skipped</c>, <c>refused</c>, <c>marked</c> or <c>demoted</c>.</param>
+/// <param name="Outcome"><c>added</c>, <c>changed</c>, <c>unchanged</c> (only when its source changed), <c>kept</c>, <c>skipped</c>, <c>refused</c>, <c>marked</c> or <c>demoted</c>.</param>
 /// <param name="Code">The reason, such as <c>XLIFF21-UNTRANSLATED</c>; absent for an applied unit.</param>
 /// <param name="Message">The reason as text.</param>
 internal sealed record TranslationsToolInterchangeEntry(string Key, string Outcome,

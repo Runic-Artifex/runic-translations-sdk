@@ -13,12 +13,14 @@ using Runic.Translations.Tooling;
 namespace Runic.Translations.Tool;
 
 /// <summary>The values of <c>import</c>: the source format and path, the selected locales and the optional group.</summary>
-internal sealed record CatalogImportRequest(string From, string Source, IReadOnlyList<string> Locales, string? Group);
+internal sealed record CatalogImportRequest(string From, string Source, IReadOnlyList<string> Locales, string? Group, bool Overwrite = false);
 
 /// <summary>
 /// <c>runic-translations import --from resx|i18next</c>: migrates an existing catalog into the project's <c>.rmf2</c>
-/// sources. Messages go through the same source writer as <c>xliff import</c>: an existing message keeps its file and
-/// comments and only its body changes, a new one is added to <c>&lt;root&gt;[/&lt;group&gt;]/&lt;locale&gt;.rmf2</c>.
+/// sources. Messages go through the same source writer as <c>xliff import</c>: a new one is added to
+/// <c>&lt;root&gt;[/&lt;group&gt;]/&lt;locale&gt;.rmf2</c>. An existing message (base text or translation) whose text differs
+/// is kept and reported as <c>kept</c>, because migration often runs again after the team edited the <c>.rmf2</c> sources;
+/// with <c>--overwrite</c> it keeps its file and comments and only its body changes.
 /// What cannot be mapped is skipped or refused per message and reported; only an unreadable source, an invalid
 /// invocation or a project that does not compile fails the command.
 /// </summary>
@@ -76,6 +78,11 @@ internal static class CatalogImport
         if (files.Count == 0)
             throw new ToolUsageException($"'{request.Source}' has no file for a selected locale that runic.json declares.");
 
+        // The sources before the import: the text of each existing message per locale.
+        var before = project.Locales.ToDictionary(static locale => locale.Tag,
+            static locale => locale.DirectResources.ToDictionary(static resource => resource.Key, static resource => Encoding.UTF8.GetString(resource.Message.Syntax.Source.GetUtf8Bytes()), StringComparer.Ordinal),
+            StringComparer.Ordinal);
+
         // One message per locale and key. The generated key joins the source-root namespace, the group and the path.
         var messages = new SortedDictionary<string, Dictionary<string, Planned>>(StringComparer.Ordinal);
         foreach (ImportedFile file in files)
@@ -97,7 +104,10 @@ internal static class CatalogImport
                     continue;
                 }
                 leaves.Add(logical);
-                byKey[key] = new Planned(message, logical, file.Display);
+                // Without --overwrite an existing message whose text differs is kept: not planned, reported once below.
+                bool kept = !request.Overwrite && before[file.Locale].TryGetValue(key, out string? existingText) &&
+                    TranslationInterchangePattern.Canonical(existingText) != TranslationInterchangePattern.Canonical(message.Pattern);
+                byKey[key] = new Planned(message, logical, file.Display) { Kept = kept };
             }
         }
 
@@ -133,24 +143,27 @@ internal static class CatalogImport
         }
 
         // Counts against the sources before the import.
-        var before = project.Locales.ToDictionary(static locale => locale.Tag,
-            static locale => locale.DirectResources.ToDictionary(static resource => resource.Key, static resource => Encoding.UTF8.GetString(resource.Message.Syntax.Source.GetUtf8Bytes()), StringComparer.Ordinal),
-            StringComparer.Ordinal);
         var applied = new List<TranslationsToolInterchangeEntry>();
         var summary = new List<string>();
-        int added = 0, changed = 0, unchanged = 0;
+        int added = 0, changed = 0, unchanged = 0, keptCount = 0;
         foreach ((string locale, Dictionary<string, Planned> byKey) in messages.OrderBy(pair => pair.Key != project.DefaultLocale))
         {
-            int localeAdded = 0, localeChanged = 0, localeUnchanged = 0;
+            int localeAdded = 0, localeChanged = 0, localeUnchanged = 0, localeKept = 0;
             foreach ((string key, Planned message) in byKey)
             {
+                if (message.Kept)
+                {
+                    localeKept++;
+                    applied.Add(new(key, "kept", "IMPORT-EXISTS", "The message already exists with other text; it was kept. Use --overwrite to replace it.") { Locale = locale });
+                    continue;
+                }
                 if (refused.Contains((locale, key)) || refused.Contains((project.DefaultLocale, key)) || message.NoBase) continue;
                 if (!before[locale].TryGetValue(key, out string? existing)) { localeAdded++; applied.Add(new(key, "added", null, null) { Locale = locale }); }
                 else if (TranslationInterchangePattern.Canonical(existing) != TranslationInterchangePattern.Canonical(message.Message.Pattern)) { localeChanged++; applied.Add(new(key, "changed", null, null) { Locale = locale }); }
                 else localeUnchanged++;
             }
-            summary.Add($"{locale} {localeAdded} added, {localeChanged} changed, {localeUnchanged} unchanged");
-            added += localeAdded; changed += localeChanged; unchanged += localeUnchanged;
+            summary.Add($"{locale} {localeAdded} added, {localeChanged} changed, {localeUnchanged} unchanged" + (localeKept != 0 ? $", {localeKept} kept" : string.Empty));
+            added += localeAdded; changed += localeChanged; unchanged += localeUnchanged; keptCount += localeKept;
         }
 
         var originals = inputs.Messages.ToDictionary(static source => source.Path, static source => source.GetUtf8Bytes(), StringComparer.Ordinal);
@@ -178,6 +191,8 @@ internal static class CatalogImport
         string verb = dryRun ? "would write" : "wrote";
         result.WriteOutputLine($"{(dryRun ? "dry run: " : string.Empty)}imported {request.From}: {string.Join("; ", summary)}; {report.Skipped} skipped, {report.Refused} refused.");
         foreach (InterchangeOperations.SourceWrite write in writes) result.WriteOutputLine($"{verb} {write.DisplayPath}.");
+        if (keptCount != 0)
+            result.WriteOutputLine($"{keptCount} existing message(s) differ from the source and were kept; --overwrite replaces them.");
         foreach (TranslationsToolInterchangeEntry entry in report.Entries.Take(MaximumLines))
             result.WriteOutputLine($"{entry.Outcome} {entry.Locale} {entry.Key}: {entry.Code}: {entry.Message}");
         foreach (TranslationsToolInterchangeNotice notice in report.Notices.Take(MaximumLines))
@@ -196,8 +211,8 @@ internal static class CatalogImport
             Documents = files.Select(static file => new TranslationsToolInterchangeDocument(file.Locale, file.Display, file.Read)).ToArray(),
             Units = new TranslationsToolInterchangeCounts
             {
-                Total = added + changed + unchanged + report.Skipped + report.Refused,
-                Applied = added + changed + unchanged, Added = added, Changed = changed, Unchanged = unchanged,
+                Total = added + changed + unchanged + keptCount + report.Skipped + report.Refused,
+                Applied = added + changed + unchanged, Added = added, Changed = changed, Unchanged = unchanged, Kept = keptCount,
                 Skipped = report.Skipped, Refused = report.Refused,
             },
             Entries = entries.Take(MaximumEntries).ToArray(),
@@ -215,6 +230,8 @@ internal static class CatalogImport
         internal string Display { get; } = display;
         /// <summary>Set by a planning round: a translation whose key has no base message.</summary>
         internal bool NoBase { get; set; }
+        /// <summary>An existing message with other text that the import keeps (no <c>--overwrite</c>).</summary>
+        internal bool Kept { get; init; }
     }
 
     // A path that equals, contains or lies inside an earlier one would make a leaf and a group of the same name.
@@ -242,7 +259,7 @@ internal static class CatalogImport
         if (messages.TryGetValue(baseLocale, out Dictionary<string, Planned>? baseMessages))
         {
             string file = InputFiles.DisplayPath(Path.Combine(directory, baseLocale + ".rmf2"), currentDirectory);
-            var values = baseMessages.Where(pair => !refused.Contains((baseLocale, pair.Key)))
+            var values = baseMessages.Where(pair => !refused.Contains((baseLocale, pair.Key)) && !pair.Value.Kept)
                 .ToDictionary(static pair => pair.Key, static pair => pair.Value.Message.Pattern, StringComparer.Ordinal);
             var additions = baseMessages.ToDictionary(static pair => pair.Key,
                 pair => new TranslationSourceAddition(pair.Value.LogicalPath, file, pair.Value.Message.Comments), StringComparer.Ordinal);
@@ -266,7 +283,7 @@ internal static class CatalogImport
             {
                 // A translation of a refused base message is not applied either.
                 message.NoBase = !baseKeys.Contains(key) || refused.Contains((baseLocale, key));
-                if (refused.Contains((locale, key))) continue;
+                if (refused.Contains((locale, key)) || message.Kept) continue;
                 if (message.NoBase) { noBase.Add((locale, key)); continue; }
                 values[key] = message.Message.Pattern;
             }

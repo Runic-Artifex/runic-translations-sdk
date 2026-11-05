@@ -213,11 +213,17 @@ internal static class ResxImport
                 {
                     using XmlReader data = reader.ReadSubtree();
                     data.Read();
-                    while (data.Read())
+                    data.Read();
+                    // ReadElementContentAsString already moves to the next node, so it must not be followed by Read():
+                    // that would skip a sibling written without whitespace in between (minified or tool-written .resx).
+                    while (!data.EOF)
                     {
-                        if (data.NodeType != XmlNodeType.Element || data.Depth != 1) continue;
-                        if (data.LocalName == "value") value = data.ReadElementContentAsString();
-                        else if (data.LocalName == "comment") comment = data.ReadElementContentAsString();
+                        if (data.NodeType == XmlNodeType.Element && data.Depth == 1)
+                        {
+                            if (data.LocalName == "value") { value = data.ReadElementContentAsString(); continue; }
+                            if (data.LocalName == "comment") { comment = data.ReadElementContentAsString(); continue; }
+                        }
+                        data.Read();
                     }
                 }
                 if (name is null) continue;
@@ -227,15 +233,20 @@ internal static class ResxImport
                     report.Skip(locale, name, "RESX-DESIGNER", "Windows Forms designer metadata is not text.");
                     continue;
                 }
-                if (mimeType is not null || type is not null && !type.StartsWith("System.String", StringComparison.Ordinal))
+                if (mimeType is not null || type is not null && !IsStringType(type))
                 {
                     report.Skip(locale, name, "RESX-NON-STRING", $"The entry is not a string ({type ?? mimeType}); only text is imported.");
+                    continue;
+                }
+                if (value is null)
+                {
+                    report.Skip(locale, name, "RESX-NO-VALUE", "The entry has no <value> element; it was not imported.");
                     continue;
                 }
                 messages.Add(new ImportedMessage(
                     name,
                     [ImportMapping.Segment(name.Replace('.', '_'))],
-                    ToPattern(value ?? string.Empty, display + ":" + name, report),
+                    ToPattern(value, display + ":" + name, report),
                     string.IsNullOrWhiteSpace(comment) || !isBase ? [] : [comment.Trim()]));
             }
         }
@@ -244,6 +255,14 @@ internal static class ResxImport
             throw new ImportSourceException("RESX-MALFORMED", $"{display}: not well-formed XML ({exception.Message})");
         }
         return new ImportedFile(locale, display, messages, read);
+    }
+
+    // The type name before the assembly qualification: System.String, or System.String, mscorlib, Version=...; not
+    // System.StringComparison or another type whose name starts with it.
+    private static bool IsStringType(string type)
+    {
+        int comma = type.IndexOf(',');
+        return (comma < 0 ? type : type[..comma]).Trim() == "System.String";
     }
 
     /// <summary>A .NET composite format string as an MF2 pattern.</summary>
@@ -363,11 +382,13 @@ internal static class I18nextImport
     {
         string display = ImportMapping.Display(path);
         byte[] bytes = ImportMapping.ReadBytes(path, display);
+        // Windows editors often save JSON with a UTF-8 byte order mark, which JsonDocument does not skip.
+        ReadOnlyMemory<byte> json = bytes.AsSpan().StartsWith((ReadOnlySpan<byte>)[0xEF, 0xBB, 0xBF]) ? bytes.AsMemory(3) : bytes;
         JsonDocument document;
         try
         {
-            new UTF8Encoding(false, true).GetString(bytes);
-            document = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 64 });
+            new UTF8Encoding(false, true).GetString(json.Span);
+            document = JsonDocument.Parse(json, new JsonDocumentOptions { MaxDepth = 64 });
         }
         catch (Exception exception) when (exception is JsonException or DecoderFallbackException)
         {
@@ -395,7 +416,9 @@ internal static class I18nextImport
                 switch (value.ValueKind)
                 {
                     case JsonValueKind.String:
-                        strings[key] = value.GetString()!;
+                        // "a.b": "..." beside "a": { "b": "..." } (or a repeated property) names the same key twice.
+                        if (!strings.TryAdd(key, value.GetString()!))
+                            report.Refuse(locale, key, "IMPORT-KEY-COLLISION", $"'{key}' is written twice (as a dotted key and as nested keys, or as a repeated property); the first one was imported.");
                         break;
                     case JsonValueKind.Array:
                         report.Skip(locale, key, "I18NEXT-ARRAY", "An array (returnObjects) is not a message; split it into keys.");
@@ -453,7 +476,9 @@ internal static class I18nextImport
                 report.Refuse(locale, key, "IMPORT-KEY-COLLISION", $"'{key}' is both a message and the name of plural forms {key}_*; the plain message was not imported.");
                 continue;
             }
-            if (PluralForm(key) is { } single)
+            if (V3PluralBase(key, strings) is { } v3Base)
+                report.Notice(location, "I18NEXT-PLURAL-V3", $"'{key}' looks like an i18next v3 plural form of '{v3Base}' (compatibilityJSON: 'v3'), so it was imported as a plain message. Convert the resources to the v4 format (_one, _other, ...), for example with i18next-v4-format-converter, and import again.");
+            else if (PluralForm(key) is { } single)
                 report.Notice(location, "I18NEXT-PLURAL-INCOMPLETE", $"'{key}' has no {single.Base}{(single.Ordinal ? "_ordinal" : string.Empty)}_other form, so it was imported as a plain message.");
             string? pattern = Simple(value, location, report);
             if (pattern is null) report.Refuse(locale, key, "I18NEXT-NESTING", "The message nests another key ($t(...)); RMF2 messages cannot reference each other.");
@@ -486,6 +511,24 @@ internal static class I18nextImport
             return (head[..^"_ordinal".Length], true, category);
         return (head, false, category);
     }
+
+    // An i18next v3 plural key: <key>_plural, or <key>_<n> beside <key> or beside <key>_0 and another <key>_<n>. A lone
+    // step_1 or step_2 is an ordinary key.
+    private static string? V3PluralBase(string key, Dictionary<string, string> strings)
+    {
+        if (key.EndsWith("_plural", StringComparison.Ordinal) && key.Length > "_plural".Length) return key[..^"_plural".Length];
+        int separator = key.LastIndexOf('_');
+        if (separator <= 0 || separator == key.Length - 1 || !Digits(key.AsSpan(separator + 1))) return null;
+        string head = key[..separator];
+        if (strings.ContainsKey(head)) return head;
+        if (!strings.ContainsKey(head + "_0")) return null;
+        foreach (string other in strings.Keys)
+            if (other != head + "_0" && other.Length > separator + 1 && other.StartsWith(head + "_", StringComparison.Ordinal) && Digits(other.AsSpan(separator + 1)))
+                return head;
+        return null;
+    }
+
+    private static bool Digits(ReadOnlySpan<char> text) => !text.IsEmpty && text.IndexOfAnyExceptInRange('0', '9') < 0;
 
     // .match on $count. _zero is the CLDR zero category where the locale has one, else the exact value 0, which
     // i18next uses for a count of 0 in every language. Forms the locale does not use are dropped and reported.

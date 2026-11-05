@@ -90,8 +90,9 @@ dotnet tool run runic-translations -- import --from i18next public/locales --pro
 ```
 
 `import --from resx|i18next <path>` writes an existing catalog into the project's `.rmf2` sources through the same
-writer as `xliff import`: an existing message keeps its place and comments and only its text changes, a new one goes to
-`<project>[/<group>]/<locale>.rmf2`. A neutral `Strings.resx` brings its declared `Strings.<locale>.resx` satellites;
+writer as `xliff import`: a new message goes to `<project>[/<group>]/<locale>.rmf2`, and an existing one (base text or
+translation) is kept and, when its text differs, reported as `kept` (`IMPORT-EXISTS`). `--overwrite` replaces the text
+of existing messages instead; they keep their place and comments. A neutral `Strings.resx` brings its declared `Strings.<locale>.resx` satellites;
 an i18next directory holds `<lng>.json` or `<lng>/<namespace>.json` files. Keys become RMF2 names (nested i18next keys
 and namespaces become groups), `{0}` becomes `{$arg0}`, `{name}` and `{{name}}` become `{$name}`, i18next plural suffixes
 (`_zero`, `_one`, ..., `_other`, `_ordinal_*`) become `.match $count` on the locale's CLDR categories, and `.resx`

@@ -225,6 +225,11 @@
           "type": "integer",
           "minimum": 0
         },
+        "kept": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Existing messages whose text differs from the source and that import --from kept (no --overwrite)."
+        },
         "skipped": {
           "type": "integer",
           "minimum": 0
@@ -263,6 +268,7 @@
             "added",
             "changed",
             "unchanged",
+            "kept",
             "skipped",
             "refused",
             "marked",
