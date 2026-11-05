@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
@@ -658,6 +659,76 @@ internal sealed class CompositionTests
             !generated.Contains("TranslationCatalogRegistration", StringComparison.Ordinal), "composition surface emitted for an older runtime");
         Assert.True(GeneratorTestHost.Run(GridV1.Inputs).SingleResult.GeneratedSources
             .Any(static item => item.SourceText.ToString().Contains("TranslationCatalogRegistration Registration", StringComparison.Ordinal)), "Registration missing");
+    }
+
+    [Test, DisplayName("overlay precedence follows the case table shared with the web runtime")]
+    public async Task OverlayPrecedenceTable()
+    {
+        // tests/fixtures/translations/overlay-precedence/cases.json; Rmf2EsmOverlayTests runs the same table on the web.
+        using JsonDocument table = JsonDocument.Parse(File.ReadAllBytes(RepositoryFile("tests", "fixtures", "translations", "overlay-precedence", "cases.json")));
+        JsonElement catalog = table.RootElement.GetProperty("catalog");
+        string id = catalog.GetProperty("id").GetString()!;
+        Catalog compiled = Catalog.Compile(TableProject(id, catalog, "Acme.Table", relaxed: false), TableSources(catalog));
+        int requests = 0;
+        foreach (JsonElement @case in table.RootElement.GetProperty("cases").EnumerateArray())
+        {
+            string name = @case.GetProperty("name").GetString()!;
+            TranslationContextBuilder builder = TranslationContext.CreateBuilder().Add(compiled.Registration);
+            int index = 0;
+            foreach (JsonElement overlay in @case.GetProperty("overlays").EnumerateArray())
+            {
+                Dictionary<string, byte[]> packs = Packs(TableProject(id, overlay, "Example.Overlay" + index++, relaxed: true), TableSources(overlay));
+                if (overlay.TryGetProperty("packs", out JsonElement selected))
+                {
+                    HashSet<string> kept = selected.EnumerateArray().Select(static item => item.GetString()!).ToHashSet(StringComparer.Ordinal);
+                    packs = packs.Where(pack => kept.Contains(pack.Key)).ToDictionary(StringComparer.Ordinal);
+                }
+
+                TranslationOverlayLocale[] added = overlay.TryGetProperty("addedLocales", out JsonElement locales)
+                    ? locales.EnumerateArray().Select(static item => new TranslationOverlayLocale(item.GetProperty("locale").GetString()!,
+                        item.TryGetProperty("fallbackLocale", out JsonElement fallback) ? fallback.GetString() : null)).ToArray()
+                    : [];
+                builder.AddOverlay(TranslationOverlay.FromPacks(id, new MemoryPackSource(packs), added));
+            }
+
+            foreach (JsonElement request in @case.GetProperty("requests").EnumerateArray())
+            {
+                string locale = request.GetProperty("locale").GetString()!, key = request.GetProperty("key").GetString()!;
+                TextArgument[] arguments = request.TryGetProperty("inputs", out JsonElement inputs)
+                    ? inputs.EnumerateObject().Select(static input => new TextArgument(input.Name, input.Value.GetInt64())).ToArray()
+                    : [];
+                TranslationContext context = await builder.BuildAsync(locale);
+                Assert.Equal(request.GetProperty("text").GetString(), Text(context, id, key, arguments), name + ": " + locale + " " + key);
+                requests++;
+            }
+        }
+
+        Assert.True(requests >= 15, "the table's requests ran");
+    }
+
+    private static string TableProject(string id, JsonElement project, string codeNamespace, bool relaxed)
+    {
+        var json = new Dictionary<string, object?>
+        {
+            ["schemaVersion"] = 1,
+            ["catalog"] = id,
+            ["code"] = new Dictionary<string, string> { ["namespace"] = codeNamespace, ["className"] = "TableText", ["visibility"] = "public" },
+            ["baseLocale"] = project.GetProperty("baseLocale").GetString(),
+            // A tag, or { tag, fallback }.
+            ["locales"] = project.GetProperty("locales").EnumerateArray().Select(static item => item.Clone()).ToArray(),
+        };
+        if (relaxed) json["validation"] = new Dictionary<string, string> { ["translationCompleteness"] = "allow" };
+        return JsonSerializer.Serialize(json);
+    }
+
+    private static (string Locale, string Text)[] TableSources(JsonElement project) =>
+        project.GetProperty("sources").EnumerateObject().Select(static source => (source.Name, source.Value.GetString()!)).ToArray();
+
+    private static string RepositoryFile(params string[] parts)
+    {
+        for (DirectoryInfo? directory = new(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+            if (File.Exists(Path.Combine(directory.FullName, "Runic.Translations.slnx"))) return Path.Combine([directory.FullName, .. parts]);
+        throw new InvalidOperationException("The repository root was not found above " + AppContext.BaseDirectory + ".");
     }
 
     private static string Text(TranslationContext context, string catalog, string name, params TextArgument[] arguments)

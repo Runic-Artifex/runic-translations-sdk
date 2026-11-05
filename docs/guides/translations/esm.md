@@ -306,11 +306,15 @@ as application text that the ordinary `m.*()` calls use before the catalog's
 own text. Use it for an application's wording of a library's messages, for a
 locale the library lacks, and for translation updates downloaded at run time
 (`installLocalePack`, which reads downloaded pack bytes with the same limits
-and integrity callback as `decodeLocalePack`). The artifact is the `<catalog>.<locale>.locale-v5.json` that
+and integrity callback as `decodeLocalePack`; its `locale` option, the locale
+the pack was requested for, is required, so a pack from a misrouted URL can
+neither replace another locale's text nor add a locale). The artifact is the `<catalog>.<locale>.locale-v5.json` that
 `runic-translations generate --emit-json` writes for a project with the
 catalog's ID, such as the application's own overlay project. Its contract
 fingerprint is not compared: each message is checked by key against this
-catalog's contract, as the .NET `TranslationOverlay` does.
+catalog's contract, as the .NET `TranslationOverlay` does, and precedence is
+the same as in .NET, with each install as one overlay
+(`tests/fixtures/translations/overlay-precedence/cases.json` runs on both).
 
 ```ts
 import { installOverlay } from 'virtual:runic-translations/acme-grid/dynamic';
@@ -330,20 +334,31 @@ else for (const skipped of result.value.diagnostics) console.warn(skipped); // {
   generated runtime embeds the data of the catalog's own languages. The set of
   reasons is open.
 - **Locale-first.** For each locale of the requested locale's chain, the
-  overlays come first, then the catalog, and only then the next locale. A
-  library's German text therefore beats an English override when German is
-  requested.
+  overlays come first, in installation order, then the catalog, and only then
+  the next locale. A library's German text therefore beats an English override
+  when German is requested.
 - **Added locales.** An artifact of a locale the catalog lacks adds it:
   `resolveLocale` and `getLocale` accept it, and its missing keys fall back to
   `options.fallbackLocale` (a locale the catalog declares), else its nearest
-  declared or added parent, else the base locale. Two installs of one locale
-  with different fallbacks throw a `RangeError`. The generated `Locale` type does
-  not list added locales.
+  CLDR parent that the catalog declares or an overlay adds (`de-AT` to `de`,
+  `es-MX` to an added `es-419`), else the catalog locale CLDR likely subtags
+  match, else the base locale. Two installs of one locale with different
+  fallbacks throw a `RangeError`. The generated `Locale` type does not list
+  added locales. The runtime embeds the CLDR data of the catalog's languages,
+  so an added regional locale of a declared language (`de-AT` on a `de`
+  catalog, `pt-PT` on `pt`) uses its own plural, list and relative-time data;
+  a message of another language that needs that data is skipped as
+  `unsupported-locale-data`, and the fallback of such a locale follows its
+  subtags only.
 - **Fallback copies.** A message whose content locale is not the artifact's
-  own locale (a build with relaxed completeness writes such copies) applies
-  only to a locale an overlay adds.
-- **Order and removal.** A later install of the same locale wins per key.
-  `result.value.remove()` uninstalls an artifact. `onOverlayChange(listener)`
+  own locale (a build with relaxed completeness writes such copies) counts at
+  its content locale, only when an overlay adds that locale and only from an
+  install whose own locale is on the requested chain.
+- **Order and removal.** Installs are tried in installation order, as .NET
+  tries overlays in the order they were added: an earlier install wins per key
+  at the same locale, so install the application's own wording before
+  downloaded packs. To replace a pack, install the new one and then remove the
+  old one. `result.value.remove()` uninstalls an artifact. `onOverlayChange(listener)`
   runs after every install and removal, so a page can render again.
 - **Bundle size.** Message functions only test whether an overlay is installed;
   the overlay code and the catalog's contract tables are in `/dynamic`, so a

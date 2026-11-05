@@ -212,24 +212,26 @@ export function negotiateLocale(preferences) {
     if (typeof preference !== "string") continue;
     const canonical = canonicalLocale(preference.replace(/[.@].*$/s, ""));
     if (canonical === null) continue;
-    const match = localeSet.has(canonical) ? canonical : matchLocale(canonical);
+    const match = supportsLocale(canonical) ? canonical : matchLocale(canonical);
     if (match !== undefined) return match;
   }
   return baseLocale;
 }
 
-// A declared locale for a canonical tag that is not declared: CLDR likely-subtag matching, else the nearest
-// declared truncation with the same likely script (tlh-x-a → tlh, but never sr-Latn-RS → sr or zh-Hant → zh),
-// else undefined. The undetermined language (und, und-DE) matches nothing.
-function matchLocale(canonical) {
-  const match = cldrMatch(canonical, locales);
-  if (match !== undefined) return match;
+// A declared (or overlay-added) locale for a canonical tag that is not one: CLDR likely-subtag matching, else the
+// nearest truncation with the same likely script (tlh-x-a → tlh, but never sr-Latn-RS → sr or zh-Hant → zh), else
+// undefined. The undetermined language (und, und-DE) matches nothing. LocaleNegotiation.Match in .NET.
+function matchLocale(canonical, available = overlays === null ? locales : overlays.supported) {
+  return cldrMatch(canonical, available) ?? truncateLocale(canonical, available);
+}
+// The nearest locale of available (canonical tags in ordinal order) left by removing subtags, with the same likely script.
+function truncateLocale(canonical, available) {
   const wanted = cldrMaximize(cldrParse(canonical));
   if (wanted.language === "und") return undefined;
   let parent = canonical;
   while (parent.includes("-")) {
     parent = parent.slice(0, parent.lastIndexOf("-"));
-    if (localeSet.has(parent) && cldrMaximize(cldrParse(parent)).script === wanted.script) return parent;
+    if (available.includes(parent) && cldrMaximize(cldrParse(parent)).script === wanted.script) return parent;
   }
   return undefined;
 }
@@ -957,46 +959,68 @@ export function formatDynamicMessageV5(artifact, key, inputs = Object.create(nul
 // library lacks, or a pack downloaded at run time (dynamic.js installOverlay and installLocalePack). As in .NET's
 // TranslationOverlay, an artifact is checked key by key against the catalog's contract and not by its fingerprint, so a pack
 // built for another release of the catalog keeps the keys both releases share. A key the catalog no longer has, or whose
-// inputs, content kind or markup differ, is skipped with a diagnostic and the catalog's text applies. Resolution is
-// locale-first: for each locale of the requested locale's chain, the overlays (the latest install first), then the catalog,
-// and only then the next locale. A locale the catalog lacks is added; it falls back to the locale its install names, else
-// to its nearest declared or added parent, else to the base locale, and from the first catalog locale on the catalog's
-// chain applies.
+// inputs, content kind or markup differ, is skipped with a diagnostic and the catalog's text applies. Precedence is .NET's
+// OverlayTranslationProvider's, with each install as one overlay: for each locale of the requested locale's chain, the
+// installs in installation order (the first that has the key wins), then the catalog, and only then the next locale. An
+// install's fallback copies (messages whose content locale is not its locale) count at their content locale, only for a
+// locale an overlay adds and only from an install whose locale is on the chain. A locale the catalog lacks is added; it falls
+// back to the locale its install names, else to its nearest CLDR parent that the catalog declares or an overlay adds, else
+// to the catalog locale CLDR likely subtags match, else to the base locale, and from the first catalog locale on the
+// catalog's chain applies.
 function overlayState(tables) {
   if (overlays !== null) return overlays;
   const entries = [], listeners = new Set(), cache = new Map(), added = new Map(), fallbacks = tables.localeFallbacks;
-  const nextOf = tag => {
-    const explicit = added.get(tag); if (explicit !== null) return explicit;
-    for (let parent = tag; parent.includes("-");) { parent = parent.slice(0, parent.lastIndexOf("-")); if (localeSet.has(parent) || added.has(parent)) return parent; }
-    return baseLocale;
-  };
+  // The requested locale, its added parents and the catalog locale they fall back to, then the catalog's chain.
   const chain = locale => {
-    const steps = [], seen = new Set(); let current = locale;
-    while (added.has(current) && !seen.has(current)) { seen.add(current); steps.push(current); current = nextOf(current); }
-    for (; typeof current === "string" && !seen.has(current); current = Object.hasOwn(fallbacks, current) ? fallbacks[current] : null) { seen.add(current); steps.push(current); }
+    const steps = []; let current = locale;
+    while (added.has(current)) { steps.push(current); current = added.get(current); if (steps.includes(current)) { current = baseLocale; break; } }
+    for (; typeof current === "string" && !steps.includes(current); current = Object.hasOwn(fallbacks, current) ? fallbacks[current] : null) steps.push(current);
     return steps;
   };
   overlays = {
     entries, listeners, added,
+    // The catalog's locales and the added ones, in ordinal order.
+    supported: locales,
     // The overlay message for key at locale, or the catalog locale whose own text applies; owns(step) tells whether the
     // catalog has its own text for the key at a catalog locale.
     find(key, locale, owns) {
       const id = locale + "\u0000" + key; if (cache.has(id)) return cache.get(id);
-      let found = baseLocale;
-      search: for (const step of chain(locale)) {
-        for (let index = entries.length - 1; index >= 0; index--) if (entries[index].locale === step && entries[index].own.has(key)) { found = entries[index].own.get(key); break search; }
-        if (!localeSet.has(step)) { for (let index = entries.length - 1; index >= 0; index--) { const copy = entries[index].copies.get(step)?.get(key); if (copy) { found = copy; break search; } } continue; }
-        if (owns(step)) { found = step; break; }
+      const steps = chain(locale); let found = baseLocale;
+      search: for (const step of steps) {
+        const declared = localeSet.has(step);
+        for (const entry of entries) {
+          const message = entry.locale === step ? entry.own.get(key) : declared || !steps.includes(entry.locale) ? undefined : entry.copies.get(step)?.get(key);
+          if (message !== undefined) { found = message; break search; }
+        }
+        if (declared && owns(step)) { found = step; break; }
       }
       cache.set(id, found); return found;
     },
     changed() {
       added.clear(); cache.clear();
-      for (const entry of entries) if (!localeSet.has(entry.locale)) { const explicit = added.get(entry.locale) ?? null; added.set(entry.locale, explicit ?? entry.fallback); }
+      // The first explicit fallback of an added locale applies; installs that name none accept it.
+      const explicit = new Map();
+      for (const entry of entries) if (!localeSet.has(entry.locale) && (explicit.get(entry.locale) ?? null) === null) explicit.set(entry.locale, entry.fallback);
+      const supported = this.supported = Object.freeze([...locales, ...explicit.keys()].sort((left, right) => left < right ? -1 : left > right ? 1 : 0));
+      for (const [locale, fallback] of explicit)
+        added.set(locale, fallback ?? nearestParent(locale, supported) ?? matchLocale(locale, locales) ?? baseLocale);
       for (const listener of [...listeners]) { try { listener(); } catch { /* The overlays are installed. */ } }
     },
   };
   return overlays;
+}
+
+// The nearest parent of a canonical tag among candidates (canonical tags in ordinal order): the nearest of its CLDR parent
+// locales (es-419 for es-MX, de for de-CH), else the nearest truncation with its likely script. Every result is a strict
+// ancestor, so a chain of nearest parents ends. LocaleRequestResolver.NearestParent in .NET.
+function nearestParent(canonical, candidates) {
+  const steps = cldrChain(cldrDataId(canonical)); let best, bestStep = Infinity;
+  for (const candidate of candidates) {
+    if (candidate === canonical) continue;
+    const step = steps.indexOf(cldrDataId(candidate), 1);
+    if (step > 0 && step < bestStep) { best = candidate; bestStep = step; }
+  }
+  return best ?? truncateLocale(canonical, candidates);
 }
 
 export function installOverlayV5(value, tables, options) {
@@ -1050,9 +1074,12 @@ export function installOverlayV5(value, tables, options) {
 export async function installLocalePackV5(content, tables, options) {
   if (options !== undefined && !isRecord(options)) throw new TypeError("Pack options must be an object.");
   const { locale, integrityVerifier, fallbackLocale } = options ?? {};
+  // The locale the pack was requested for, as decodeLocalePack's expected locale: a pack from a misrouted or replaced URL
+  // can then neither replace another locale's text nor add a locale.
+  if (typeof locale !== "string" || canonicalLocale(locale) !== locale) throw new TypeError("installLocalePack needs options.locale, the canonical locale the pack was requested for.");
   if (integrityVerifier !== undefined && typeof integrityVerifier !== "function") throw new TypeError("The integrity verifier must be a function.");
   const read = await readLocalePack(content, integrityVerifier); if (!read.ok) return read;
-  if (locale !== undefined && (!isRecord(read.value) || read.value.locale !== locale)) return failure("RTR0023/locale-mismatch");
+  if (!isRecord(read.value) || read.value.locale !== locale) return failure("RTR0023/locale-mismatch");
   return installOverlayV5(read.value, tables, fallbackLocale === undefined ? undefined : { fallbackLocale });
 }
 
@@ -1087,16 +1114,19 @@ function orderedInputs(inputs, expected) {
   return ordered;
 }
 
-// Whether this runtime has the CLDR data a message needs in a locale the catalog does not declare.
+// Whether this runtime has the CLDR data a message needs in a locale the catalog does not declare, found as formatting
+// finds it (cldrLocale: the locale's CLDR data ID, its parents and likely subtags), so an added de-AT uses the embedded de
+// rules and an added pt-PT its own rules when they differ from pt's.
 function hasLocaleData(locale, ast) {
-  const language = locale.toLowerCase().split("-")[0], functions = new Set();
+  const functions = new Set();
   const collect = expression => { if (isRecord(expression) && typeof expression.function === "string") functions.add(expression.function); };
   for (const declaration of ast.declarations) collect(declaration.expression);
   for (const variant of ast.variants) for (const node of variant.nodes) if (node.kind === "expression") collect(node.expression);
+  const data = cldrLocale(locale);
   const plural = ast.selectors.some(selector => selector.function !== "exact") || functions.has("runic:relative-time");
-  if (plural && !Object.hasOwn(generatedPluralRules, language)) return false;
-  if (functions.has("runic:relative-time") && !Object.hasOwn(generatedLocaleData.relativeTime, language)) return false;
-  return !functions.has("runic:list") || Object.hasOwn(generatedLocaleData.list, language);
+  if (plural && data.cardinal < 0) return false;
+  if (functions.has("runic:relative-time") && data.relativeTime === undefined) return false;
+  return !functions.has("runic:list") || data.list !== undefined;
 }
 
 export function decodeWireValue(value, type) {

@@ -424,17 +424,18 @@ internal static class Rmf2EsmOutputRendererV5
         /** An installed overlay: the artifact's locale and contract fingerprint (any release of this catalog), the number of messages it supplies, the skipped ones, and `remove()`, which uninstalls it. */
         export interface InstalledOverlay { readonly catalog: string; readonly locale: string; readonly contractFingerprint: string; readonly messages: number; readonly diagnostics: readonly OverlayDiagnostic[]; remove(): void; }
         export type OverlayInstallResult = { readonly ok: true; readonly value: InstalledOverlay } | { readonly ok: false; readonly reason: string };
-        /** For an artifact of a locale the catalog lacks: the catalog locale it falls back to. Default: its nearest declared or added parent, else the base locale. */
+        /** For an artifact of a locale the catalog lacks: the catalog locale it falls back to. Default: its nearest CLDR parent that the catalog declares or an overlay adds, else the catalog locale CLDR likely subtags match, else the base locale. */
         export interface OverlayOptions { readonly fallbackLocale?: string; }
         /**
          * Installs a locale artifact v5 of this catalog (`generate --emit-json`) as application text that `m.*()` uses before the catalog's own text,
          * locale-first. Each message is checked against this catalog's contract by key, so an artifact built for another release of the catalog applies
-         * to the keys both share; the others are reported in `diagnostics`. An artifact of a locale the catalog lacks adds that locale. A later install
-         * of the same locale wins per key. A structurally invalid artifact is not installed (`ok: false`).
+         * to the keys both share; the others are reported in `diagnostics`. An artifact of a locale the catalog lacks adds that locale. Installs are
+         * tried in installation order, as .NET tries overlays in the order they were added: an earlier install of the same locale wins per key. A
+         * structurally invalid artifact is not installed (`ok: false`).
          */
         export declare function installOverlay(artifact: unknown, options?: OverlayOptions): OverlayInstallResult;
-        /** `installOverlay` for downloaded pack bytes: size and depth limits, the integrity callback, UTF-8 and duplicate-member checks first, then the artifact's `locale` against `options.locale`. */
-        export declare function installLocalePack(content: Uint8Array, options?: OverlayOptions & { readonly locale?: string; readonly integrityVerifier?: (content: Uint8Array) => boolean | Promise<boolean> }): Promise<OverlayInstallResult>;
+        /** `installOverlay` for downloaded pack bytes: size and depth limits, the integrity callback, UTF-8 and duplicate-member checks first, then the artifact's `locale` against `options.locale`, the locale the pack was requested for (required, so a misrouted pack cannot add a locale). */
+        export declare function installLocalePack(content: Uint8Array, options: OverlayOptions & { readonly locale: string; readonly integrityVerifier?: (content: Uint8Array) => boolean | Promise<boolean> }): Promise<OverlayInstallResult>;
         /** Calls the listener after an overlay is installed or removed, so a page can render its text again. Returns a function that removes the listener. */
         export declare function onOverlayChange(listener: () => void): () => void;
         """;

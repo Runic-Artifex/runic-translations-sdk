@@ -237,8 +237,9 @@ internal sealed class Rmf2V1CorpusTests
     // Re-pinned for web overlays (0.9): message modules call formatMessage, dynamic.js carries the overlay API and the locale
     // fallbacks, in both digests.
     // Re-pinned for merging main (TB #131) into T1c, with ordered resolver removal, in both digests.
-    private const string EncodedOutputDigest = "2a46c201c36ec93154e17ef49cb2e7a692a6324ab5daa47b968f5fff3cc8dacf";
-    private const string HiddenEncodedOutputDigest = "7437d885c4ab82516c04298416d4a41c287860ddbf0642e8a7b8633ca9a29272";
+    // Re-pinned for merging T1c (with main, TB #131) into the web overlays, with .NET overlay precedence, in both digests.
+    private const string EncodedOutputDigest = "5f52896964adb01db3f83f03d58adcc9a603b7cd0cd1560760f6995fcfa315cc";
+    private const string HiddenEncodedOutputDigest = "b40c7504e8fdcfabeedcc30e25217ce48e45fde8ab8ea2172eda32ca4fd2b329";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

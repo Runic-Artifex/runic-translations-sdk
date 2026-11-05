@@ -1,0 +1,85 @@
+{
+  "$comment": "Overlay precedence shared by .NET (Runic.Translations.Generator.Tests CompositionTests, TranslationContext.AddOverlay) and the web (Runic.Translations.Compiler.Tests Rmf2EsmOverlayTests, dynamic.js installOverlay). Each overlay is a relaxed-completeness project of the catalog's ID; packs lists the locale artifacts it supplies (all by default). On the web each pack is one install, in overlay order, with the fallback its addedLocales entry names.",
+  "catalog": {
+    "id": "acme-table",
+    "baseLocale": "en",
+    "locales": ["de", "en", "es"],
+    "sources": {
+      "en": "title = Grid\nempty = No rows\nrows =\n  .input {$count :integer}\n  .match $count\n  one {{{$count} row}}\n  * {{{$count} rows}}\n",
+      "de": "title = Raster\nempty = Keine Zeilen\nrows =\n  .input {$count :integer}\n  .match $count\n  one {{{$count} Zeile}}\n  * {{{$count} Zeilen}}\n",
+      "es": "title = Cuadrícula\nempty = Sin filas\nrows =\n  .input {$count :integer}\n  .match $count\n  one {{{$count} fila}}\n  * {{{$count} filas}}\n"
+    }
+  },
+  "cases": [
+    {
+      "name": "the first overlay wins for one key and locale; a later one supplies the keys it lacks",
+      "overlays": [
+        { "baseLocale": "en", "locales": ["en"], "sources": { "en": "title = Data grid\n" } },
+        { "baseLocale": "en", "locales": ["en"], "sources": { "en": "title = Table\nempty = Nothing here\n" } }
+      ],
+      "requests": [
+        { "locale": "en", "key": "title", "text": "Data grid" },
+        { "locale": "en", "key": "empty", "text": "Nothing here" },
+        { "locale": "de", "key": "title", "text": "Raster" }
+      ]
+    },
+    {
+      "name": "locale-first: the catalog's own locale beats an override in its fallback",
+      "overlays": [
+        { "baseLocale": "en", "locales": ["en"], "sources": { "en": "title = Data grid\nempty = Nothing here\n" } }
+      ],
+      "requests": [
+        { "locale": "de-CH", "key": "title", "text": "Raster" },
+        { "locale": "fr", "key": "empty", "text": "Nothing here" }
+      ]
+    },
+    {
+      "name": "an added locale with an explicit fallback; a fallback copy in a declared locale is not overlay text",
+      "overlays": [
+        {
+          "baseLocale": "en", "locales": ["en", "fr"], "packs": ["fr"], "addedLocales": [{ "locale": "fr", "fallbackLocale": "en" }],
+          "sources": { "en": "title = Data grid\nempty = Nothing here\n", "fr": "title = Grille\n" }
+        }
+      ],
+      "requests": [
+        { "locale": "fr", "key": "title", "text": "Grille" },
+        { "locale": "fr", "key": "empty", "text": "No rows" },
+        { "locale": "fr-CA", "key": "title", "text": "Grille" }
+      ]
+    },
+    {
+      "name": "fallback copies of an added locale count at their content locale, only from a pack on the chain, in overlay order",
+      "overlays": [
+        {
+          "baseLocale": "en", "locales": ["en", "es-419", { "tag": "es-MX", "fallback": "es-419" }], "packs": ["es-MX"], "addedLocales": [{ "locale": "es-MX" }],
+          "sources": { "en": "title = A grid\nempty = A empty\n", "es-419": "title = A 419\nempty = A 419 vacía\n", "es-MX": "title = A MX\n" }
+        },
+        {
+          "baseLocale": "en", "locales": ["en", "es-419"], "packs": ["es-419"], "addedLocales": [{ "locale": "es-419" }],
+          "sources": { "en": "title = B grid\nempty = B empty\n", "es-419": "empty = B 419 vacía\n" }
+        }
+      ],
+      "requests": [
+        { "locale": "es-MX", "key": "title", "text": "A MX" },
+        { "locale": "es-MX", "key": "empty", "text": "A 419 vacía" },
+        { "locale": "es-419", "key": "empty", "text": "B 419 vacía" },
+        { "locale": "es-419", "key": "title", "text": "Cuadrícula" },
+        { "locale": "es-MX", "key": "rows", "inputs": { "count": 1 }, "text": "1 fila" }
+      ]
+    },
+    {
+      "name": "an added regional locale of a declared language uses that language's plural rules and falls back to it",
+      "overlays": [
+        {
+          "baseLocale": "de-AT", "locales": ["de-AT"], "addedLocales": [{ "locale": "de-AT" }],
+          "sources": { "de-AT": "rows =\n  .input {$count :integer}\n  .match $count\n  one {{Eine Zeile}}\n  * {{{$count} Zeilen insgesamt}}\n" }
+        }
+      ],
+      "requests": [
+        { "locale": "de-AT", "key": "rows", "inputs": { "count": 1 }, "text": "Eine Zeile" },
+        { "locale": "de-AT", "key": "rows", "inputs": { "count": 3 }, "text": "3 Zeilen insgesamt" },
+        { "locale": "de-AT", "key": "title", "text": "Raster" }
+      ]
+    }
+  ]
+}
