@@ -49,6 +49,9 @@ internal sealed record TranslationInterchangeTargetUnit(string Key, string Text,
 {
     internal IReadOnlyList<TranslationInterchangePiece>? Pieces { get; init; }
     internal TextSourceLocation? Location { get; init; }
+
+    /// <summary>The translation's own <c>@maxLength</c>, which can lower the base limit for this locale.</summary>
+    internal int? MaxLength { get; init; }
 }
 
 internal sealed record TranslationInterchangeLocale(
@@ -124,7 +127,7 @@ internal static class TranslationInterchangeProjectionAdapter
                             .Where(static property => property.StartsWith("param ", StringComparison.Ordinal))
                             .Select(static property => property["param ".Length..].Trim())
                             .ToArray(),
-                        MaxLength = MaxLength(source.Properties),
+                        MaxLength = TranslationCompiler.MaxLengthV5(source.Properties),
                     },
                     document)
                 {
@@ -149,6 +152,7 @@ internal static class TranslationInterchangeProjectionAdapter
                         {
                             Pieces = pieces,
                             Location = resource.SourceLocation,
+                            MaxLength = TranslationCompiler.MaxLengthV5(resource.Properties),
                         };
                     })
                     .ToArray()))
@@ -181,16 +185,6 @@ internal static class TranslationInterchangeProjectionAdapter
         {
             SourceFreshness = sourceFreshness ?? TranslationInterchangeFingerprint.ProjectionSource(projection),
         };
-    }
-
-    // "@maxLength N" with a positive N; the compiler reports any other spelling (RTR0051).
-    private static int? MaxLength(IReadOnlyList<string> properties)
-    {
-        foreach (string property in properties)
-            if (property.StartsWith("maxLength ", StringComparison.Ordinal) &&
-                int.TryParse(property["maxLength ".Length..].Trim(), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int value) && value > 0)
-                return value;
-        return null;
     }
 
     private static string RawSyntax(Rmf2MessageV5 message) =>

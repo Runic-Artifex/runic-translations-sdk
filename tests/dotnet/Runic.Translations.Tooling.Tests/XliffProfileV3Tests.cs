@@ -97,6 +97,13 @@ internal sealed class XliffProfileV3Tests
         Require(units.Single(unit => (string?)unit.Attribute("id") == "plain").Attribute(slr + "sizeRestriction") is null, "A unit without @maxLength has a size restriction.");
         TranslationXliffImportResult imported = TranslationInterchange.ImportXliff21(bytes, compilation);
         Require(Message(imported, "save") == "Sichern {$name}", "The restricted unit did not import: " + Message(imported, "save"));
+        // The locale's effective limit, as validate checks it: a translation can lower the base limit, not raise it.
+        string Restriction(string english, string german) =>
+            (string?)XDocument.Parse(Text(TranslationInterchange.ExportXliff21(Compile(english, german)).Documents.Single().Bytes)).Root!
+                .Element(xliff + "file")!.Elements(xliff + "unit").Single(unit => (string?)unit.Attribute("id") == "save").Attribute(slr + "sizeRestriction") ?? "none";
+        Require(Restriction("@maxLength 12\nsave = Save", "@maxLength 8\nsave = Sichern") == "8", "A lower translation limit was not exported.");
+        Require(Restriction("@maxLength 12\nsave = Save", "@maxLength 40\nsave = Sichern") == "12", "A translation raised the exported base limit.");
+        Require(Restriction("save = Save", "@maxLength 8\nsave = Sichern") == "8", "A translation-only limit was not exported.");
         // Without @maxLength nothing of the module is written.
         Require(!Text(TranslationInterchange.ExportXliff21(Compile(English, German)).Documents.Single().Bytes).Contains("sizerestriction", StringComparison.Ordinal), "The module was written without @maxLength.");
     }

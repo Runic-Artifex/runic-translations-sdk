@@ -22,12 +22,25 @@ internal sealed class ManifestModel
     internal TranslationPolicy FormattedBooleans { get; set; } = TranslationPolicy.Warning;
     internal TranslationPolicy MaxLength { get; set; } = TranslationPolicy.Warning;
 
+    private Dictionary<string, Dictionary<string, TranslationPolicy>>? _localePolicies;
+
     /// <summary>The policy of a <c>validation</c> member for a locale: the locale entry's own value, else the project's.</summary>
+    /// <remarks>Called per message and locale, so the locale overrides are indexed once, on first use after the manifest is read.</remarks>
     internal TranslationPolicy Policy(string locale, string member)
     {
-        foreach (LocaleModel model in Locales)
-            if (string.Equals(model.Tag, locale, System.StringComparison.OrdinalIgnoreCase) && model.Validation.TryGetValue(member, out TranslationPolicy own))
-                return own;
+        if (_localePolicies is null)
+        {
+            var policies = new Dictionary<string, Dictionary<string, TranslationPolicy>>(System.StringComparer.OrdinalIgnoreCase);
+            foreach (LocaleModel model in Locales)
+            {
+                if (model.Validation.Count == 0) continue;
+                if (!policies.TryGetValue(model.Tag, out Dictionary<string, TranslationPolicy>? members)) policies[model.Tag] = members = new(System.StringComparer.Ordinal);
+                foreach (KeyValuePair<string, TranslationPolicy> pair in model.Validation) members.TryAdd(pair.Key, pair.Value);
+            }
+            _localePolicies = policies;
+        }
+        if (_localePolicies.TryGetValue(locale, out Dictionary<string, TranslationPolicy>? own) && own.TryGetValue(member, out TranslationPolicy value))
+            return value;
         return member switch
         {
             ValidationMembers.TranslationCompleteness => Completeness,

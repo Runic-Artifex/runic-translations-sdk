@@ -501,7 +501,10 @@ Plural key is never selected in its locale. For example:
 categories are one, other.` The key is checked against the CLDR categories of
 the message's own locale (cardinal for `:integer`/`:number`, ordinal for
 `select=ordinal`), from the same generated rules that both runtimes select with,
-so the variant is dead text. It usually comes from copying another language's
+so the variant is dead text. An integer selector (`:integer`) is checked against
+the categories integers reach: Czech `many` is for decimals only, so `many` under
+`:integer` is reported (`whose plural categories for integers are one, few,
+other`). It usually comes from copying another language's
 variants. Remove the variant, or use an exact number key such as `0` if a value
 was meant. A warning by default; `validation.pluralCategories` sets the policy.
 
@@ -511,7 +514,9 @@ Plural categories of the locale fall to the catch-all variant. For example:
 `'items' has no variant for the plural categories few, many of locale 'cs'; they
 fall to the '*' variant.` Czech selects `few` for 2–4 and `many` for decimals, so
 a translation with only `one` and `*` shows the `*` text, often with the wrong
-grammar. Add a variant for each listed category. A selector whose keys are all
+grammar. Under `:integer` only the categories integers reach are expected:
+`one`, `few` and `*` are a complete Czech integer plural, while French still
+needs `many` (1000000). Add a variant for each listed category. A selector whose keys are all
 exact numbers and `*` chose not to use categories and is not checked. A warning
 by default; `validation.pluralCategories` sets the policy (with `RTR0094`).
 
@@ -540,11 +545,12 @@ forbids it.
 
 Message is longer than its @maxLength. For example: `The 'de' text of 'save'
 is 16 characters long, more than its @maxLength of 10; placeholder values are
-not counted.` `@maxLength N` on a base-locale message applies to every locale;
-a locale's own `@maxLength` replaces it for that locale. The length is the
+not counted.` `@maxLength N` on a base-locale message applies to every locale.
+A locale's own `@maxLength` can only lower it for that locale; a larger value is
+an `RTR0051` warning and the base limit applies. The length is the
 number of Unicode code points of the literal text after NFC normalization, in
 the longest variant, without placeholder values and markup, so a text that
-passes can still overflow at run time. XLIFF export writes the limit as
+passes can still overflow at run time. XLIFF export writes the same per-locale limit as
 `slr:sizeRestriction` with the `xliff:codepoints` profile, so translation tools
 can enforce it. Shorten the translation or raise the limit. A warning by
 default; `validation.maxLength` sets the policy. A `@maxLength` that is not a

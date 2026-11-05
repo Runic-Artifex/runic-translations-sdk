@@ -169,7 +169,10 @@ public static class TranslationInterchange
         using (XmlWriter writer = XmlWriter.Create(stream, new XmlWriterSettings { Encoding = new UTF8Encoding(false), Indent = false, NewLineHandling = NewLineHandling.None, OmitXmlDeclaration = false }))
         {
             writer.WriteStartDocument(); writer.WriteStartElement("xliff", XliffNamespace); writer.WriteAttributeString("version", "2.1"); writer.WriteAttributeString("srcLang", projection.SourceLocale); writer.WriteAttributeString("trgLang", targetLocale.Tag);
-            bool sizeRestrictions = projection.CanonicalUnits.Any(static unit => unit.Metadata.MaxLength is not null && !unit.Structured);
+            // The locale's effective limit, as validate checks it (RTR0098): the base's @maxLength, lowered by the translation's own.
+            int? Limit(TranslationInterchangeSourceUnit unit) =>
+                TranslationCompiler.EffectiveMaxLengthV5(unit.Metadata.MaxLength, direct.TryGetValue(unit.Key, out TranslationInterchangeTargetUnit? own) ? own.MaxLength : null);
+            bool sizeRestrictions = projection.CanonicalUnits.Any(unit => Limit(unit) is not null && !unit.Structured);
             if (sizeRestrictions) writer.WriteAttributeString("xmlns", "slr", null, SizeRestrictionNamespace);
             writer.WriteStartElement("file", XliffNamespace); writer.WriteAttributeString("id", projection.CatalogId); writer.WriteAttributeString("original", projection.CatalogId + "." + targetLocale.Tag + ".xliff");
             // @maxLength counts Unicode code points after NFC, without placeholders: XLIFF's standard codepoints profile.
@@ -194,7 +197,7 @@ public static class TranslationInterchange
                 }
                 writer.WriteStartElement("unit", XliffNamespace); writer.WriteAttributeString("id", source.Key);
                 if (structured) writer.WriteAttributeString("translate", "no");
-                else if (source.Metadata.MaxLength is { } maxLength) writer.WriteAttributeString("slr", "sizeRestriction", SizeRestrictionNamespace, maxLength.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                else if (Limit(source) is { } maxLength) writer.WriteAttributeString("slr", "sizeRestriction", SizeRestrictionNamespace, maxLength.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 WriteNotes(writer, projection, source, structured, entry);
                 writer.WriteStartElement("segment", XliffNamespace); writer.WriteAttributeString("id", "1");
                 // An existing translation without review data is "translated"; a missing one keeps XLIFF's default "initial".
