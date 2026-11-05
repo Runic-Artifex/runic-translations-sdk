@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.eu/schemas/translations/translations-status-v1.schema.json",
+  "title": "runic.translations.status/1",
+  "description": "The payload of runic-translations status inside the runic.commandline/1 envelope of --format json; also fault.data when a locale is below its --min-coverage (exit 1). Later releases may add properties; readers ignore properties they do not know.",
+  "type": "object",
+  "required": [
+    "projects",
+    "belowThreshold"
+  ],
+  "properties": {
+    "projects": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/project"
+      },
+      "description": "One report per --project, in order."
+    },
+    "belowThreshold": {
+      "type": "boolean",
+      "description": "Whether any locale is below its --min-coverage."
+    }
+  },
+  "$defs": {
+    "project": {
+      "type": "object",
+      "required": [
+        "project",
+        "catalog",
+        "baseLocale",
+        "messages",
+        "locales"
+      ],
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "The project's runic.json, relative to the working directory where possible."
+        },
+        "catalog": {
+          "type": "string"
+        },
+        "baseLocale": {
+          "type": "string"
+        },
+        "messages": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The base locale's messages: the total of every locale."
+        },
+        "locales": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/locale"
+          },
+          "description": "The base locale first, then the others by tag."
+        },
+        "reviewFile": {
+          "type": "string",
+          "description": "The review file that stale counts come from; absent when it does not exist."
+        }
+      }
+    },
+    "locale": {
+      "type": "object",
+      "required": [
+        "locale",
+        "translated",
+        "fallback",
+        "missing",
+        "coverage",
+        "belowThreshold"
+      ],
+      "properties": {
+        "locale": {
+          "type": "string"
+        },
+        "fallbackLocale": {
+          "type": "string",
+          "description": "The locale it falls back to; absent for the base locale."
+        },
+        "translated": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Messages the locale translates itself."
+        },
+        "fallback": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Messages a fallback locale other than the base locale serves."
+        },
+        "missing": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Messages shown in the base locale."
+        },
+        "coverage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Translated plus fallback, as a percentage of messages, rounded down to two decimals."
+        },
+        "stale": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Translations whose source changed since the review file recorded them; absent without a review file and for the base locale."
+        },
+        "minimumCoverage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "The --min-coverage that applies to the locale."
+        },
+        "belowThreshold": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

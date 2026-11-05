@@ -87,7 +87,9 @@ internal static class Rmf2CSharpOutputRendererV5
 
     // runtimeAbiCall: the referenced runtime declares the version rule (TranslationsCompatibility.MinimumRuntimeAbiVersion)
     // and with it EnsureRuntimeAbi, so the base ABI is checked with a call.
-    internal static TranslationGeneratedOutput RenderRegistration(Rmf2ProjectV5 project, bool composition = true, bool runtimeAbiCall = true)
+    // readableSurface: the readable file is generated beside it, so Registration also creates the readable surface
+    // (TranslationCatalogRegistration.CreateReadableMessages, used by the WPF TranslationSource.ForCatalog).
+    internal static TranslationGeneratedOutput RenderRegistration(Rmf2ProjectV5 project, bool composition = true, bool runtimeAbiCall = true, bool readableSurface = true)
     {
         GenerationWriter writer = StartFile(project);
         string visibility = Visibility(project), className = GenerationSupport.CSharpIdentifier(project.ClassName);
@@ -118,7 +120,15 @@ internal static class Rmf2CSharpOutputRendererV5
             writer.Line("/// <summary>Describes this catalog to a translation context: its ID, contract and provider factory.</summary>");
             writer.Line("public static global::Runic.Translations.TranslationCatalogRegistration Registration { get; } = new global::Runic.Translations.TranslationCatalogRegistration(");
             // The contract through a lambda: Hot Reload changes the property, but never re-runs this static initializer.
-            writer.Indent(); writer.Line("CatalogId, DefaultLocale, ContractFingerprint, static () => Rmf2MarkupContract, CreateProvider);"); writer.Unindent();
+            writer.Indent();
+            if (readableSurface && Rmf2ReadableNamesV1.SupportsClassName(project.ClassName))
+            {
+                string text = "global::" + string.Join(".", project.CodeNamespace.Split('.').Select(Verbatim)) + "." + Verbatim(project.ClassName);
+                writer.Line("CatalogId, DefaultLocale, ContractFingerprint, static () => Rmf2MarkupContract, CreateProvider,");
+                writer.Line("static manager => new " + text + "(manager).Messages);");
+            }
+            else writer.Line("CatalogId, DefaultLocale, ContractFingerprint, static () => Rmf2MarkupContract, CreateProvider);");
+            writer.Unindent();
             writer.Blank();
         }
         writer.Line("public static global::Runic.Translations.ITranslationProvider CreateProvider("); writer.Indent();
@@ -135,7 +145,15 @@ internal static class Rmf2CSharpOutputRendererV5
             writer.Line("throw new global::System.InvalidOperationException(\"RTR0024: Generated translation code is incompatible with the referenced runtime ABI.\");"); writer.Unindent();
         }
         writer.Line("global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2ProjectV5.RuntimeAbiVersion + ");");
-        writer.Line("return new global::Runic.Translations.CompiledTranslationProvider(" + className + "CatalogData.CreateDefinition().WithOptions(options), valueFormatter, snapshotFactory);");
+        // runtime.bidiIsolation: a runtime with the composition surface (0.9.0 and later) also has WithBidiIsolation, whose
+        // catalogs decide per locale by default.
+        string bidi = !composition ? "" : project.BidiIsolation switch
+        {
+            TranslationBidiIsolation.On => ".WithBidiIsolation(true)",
+            TranslationBidiIsolation.Off => ".WithBidiIsolation(false)",
+            _ => "",
+        };
+        writer.Line("return new global::Runic.Translations.CompiledTranslationProvider(" + className + "CatalogData.CreateDefinition()" + bidi + ".WithOptions(options), valueFormatter, snapshotFactory);");
         writer.Unindent(); writer.Line("}"); writer.Blank();
         writer.Line("public static async global::System.Threading.Tasks.ValueTask<global::Runic.Translations.ITranslationManager> CreateManagerAsync("); writer.Indent();
         writer.Line("string? initialLocale = null,");

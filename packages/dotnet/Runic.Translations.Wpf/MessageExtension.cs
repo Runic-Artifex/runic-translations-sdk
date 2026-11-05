@@ -27,7 +27,7 @@ public sealed class MessageInput
 /// Inputs are bindings. The short form <see cref="Arg0"/> to <see cref="Arg3"/> follows the generated method's
 /// parameter order: <c>{rt:Message greeting, Arg0={Binding UserName}}</c>. The long form names the parameters and has
 /// no limit: <c>&lt;rt:Message Key="greeting"&gt;&lt;rt:MessageInput Name="name" Value="{Binding UserName}"/&gt;&lt;/rt:Message&gt;</c>.
-/// With an explicit <see cref="Source"/> names, input counts and the message kind are checked when the XAML loads; on an element or Style setter the catalog is the inherited <c>TranslationProperties.Source</c> or else the default, so load checks ask all live sources (the XAML fails to load when none has a matching message) and the exact check runs when the binding evaluates, where failures are traced and shown as <c>[key]</c>. The property refreshes when a snapshot is published.
+/// With an explicit <see cref="Source"/> or <see cref="Catalog"/> names, input counts and the message kind are checked when the XAML loads; on an element or Style setter the catalog is the inherited <c>TranslationProperties.Source</c> or else the default, so load checks ask all live sources (the XAML fails to load when none has a matching message) and the exact check runs when the binding evaluates, where failures are traced and shown as <c>[key]</c>. The property refreshes when a snapshot is published.
 /// In a designer without a source it shows <c>[key]</c>.
 /// </summary>
 [MarkupExtensionReturnType(typeof(string))]
@@ -47,6 +47,13 @@ public sealed class MessageExtension : MarkupExtension
     /// <summary>The source to use; defaults to <see cref="TranslationSource.Default"/>.</summary>
     public TranslationSource? Source { get; set; }
 
+    /// <summary>
+    /// The ID of the catalog to use, from the context shared with <see cref="TranslationSource.UseContext"/>:
+    /// <c>{rt:Message grid_title, Catalog=acme-grid}</c>. A control library's <c>Generic.xaml</c> names its own catalog
+    /// this way and follows the application's locale. Do not combine it with <see cref="Source"/>.
+    /// </summary>
+    public string? Catalog { get; set; }
+
     /// <summary>Named inputs (long form). Do not combine with <see cref="Arg0"/> to <see cref="Arg3"/>.</summary>
     public Collection<MessageInput> Inputs { get; } = [];
 
@@ -64,14 +71,21 @@ public sealed class MessageExtension : MarkupExtension
     {
         string key = Key ?? throw new InvalidOperationException("rt:Message needs a message name.");
         (List<BindingBase> bindings, List<string>? names) = CollectInputs();
-        if (Source is null && IsElementTarget(serviceProvider))
+        TranslationSource? named = Source;
+        if (Catalog is not null)
+        {
+            if (Source is not null) throw new InvalidOperationException($"rt:Message '{key}' sets both Source and Catalog; use one.");
+            named = TranslationSource.ForCatalogOrDesign(Catalog);
+            if (named is null) return "[" + key + "]";
+        }
+        if (named is null && IsElementTarget(serviceProvider))
         {
             // The catalog is chosen per element when the binding evaluates: an inherited TranslationProperties.Source,
             // else the default. At load only the live sources can be asked whether any of them could be meant.
             TranslationSource.CheckLive(key, rich: false, bindings.Count, names);
             return InheritedBinding(key, bindings, names).ProvideValue(serviceProvider);
         }
-        TranslationSource? source = Source ?? TranslationSource.UseDefault();
+        TranslationSource? source = named ?? TranslationSource.UseDefault();
         if (source is null)
         {
             if (TranslationDesign.IsInDesignMode) return "[" + key + "]";
@@ -173,6 +187,30 @@ public sealed class MessageExtension : MarkupExtension
         public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture) =>
             throw new NotSupportedException();
     }
+}
+
+/// <summary>
+/// Gets the source of a catalog from the context shared with <see cref="TranslationSource.UseContext"/>, for
+/// <c>rt:TranslationProperties.Source="{rt:CatalogSource acme-grid}"</c> on a template or container: every
+/// <c>{rt:Message}</c> and <c>RichMessage</c> below it uses that catalog.
+/// </summary>
+[MarkupExtensionReturnType(typeof(TranslationSource))]
+public sealed class CatalogSourceExtension : MarkupExtension
+{
+    /// <summary>Creates the extension; set <see cref="Catalog"/>.</summary>
+    public CatalogSourceExtension() { }
+
+    /// <summary>Creates the extension for a catalog ID.</summary>
+    public CatalogSourceExtension(string catalog) => Catalog = catalog;
+
+    /// <summary>The catalog ID, such as <c>acme-grid</c>.</summary>
+    [ConstructorArgument("catalog")]
+    public string? Catalog { get; set; }
+
+    /// <inheritdoc />
+    /// <remarks>In a designer without a shared context it provides <see langword="null"/>.</remarks>
+    public override object? ProvideValue(IServiceProvider serviceProvider) =>
+        TranslationSource.ForCatalogOrDesign(Catalog ?? throw new InvalidOperationException("rt:CatalogSource needs a catalog ID."));
 }
 
 internal static class TranslationDesign

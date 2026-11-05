@@ -13,6 +13,12 @@ namespace Runic.Translations.Tooling;
 internal sealed record TranslationSourceEdit(string Path, byte[]? OriginalBytes, byte[] Bytes);
 
 /// <summary>
+/// Where to add a base-locale message that has no resource yet: its logical segment path (source-root namespace
+/// included), the <c>.rmf2</c> file in the inputs' coordinates, and the comment lines that document it.
+/// </summary>
+internal sealed record TranslationSourceAddition(IReadOnlyList<string> LogicalPath, string File, IReadOnlyList<string> Comments);
+
+/// <summary>
 /// Writes imported translations into a project's <c>.rmf2</c> and <c>.mf2</c> sources, as the Translations Editor and
 /// <c>runic-translations xliff import</c> do. An existing translation keeps its file, comments and formatting and only
 /// its message body changes; a missing one is added beside the base resource: in the target locale's <c>.rmf2</c> file
@@ -34,6 +40,23 @@ internal static class TranslationInterchangeSourceWriter
         Rmf2ProjectCompilation compilation,
         string locale,
         IEnumerable<KeyValuePair<string, string>> values,
+        CancellationToken cancellationToken = default) =>
+        Plan(root, project, sources, compilation, locale, values, null, cancellationToken);
+
+    /// <summary>Plans the edits as <see cref="Plan(string, TranslationSource, IReadOnlyList{TranslationSource}, Rmf2ProjectCompilation, string, IEnumerable{KeyValuePair{string, string}}, CancellationToken)"/> does, adding new base-locale messages.</summary>
+    /// <param name="additions">
+    /// For an import into the base locale: where to add each key that has no base resource yet. Without an entry, a key
+    /// without a base resource is an error, as it is for every other locale. With additions, the values are written
+    /// in the order given (an import keeps its source order); without, in key order.
+    /// </param>
+    internal static IReadOnlyList<TranslationSourceEdit> Plan(
+        string root,
+        TranslationSource project,
+        IReadOnlyList<TranslationSource> sources,
+        Rmf2ProjectCompilation compilation,
+        string locale,
+        IEnumerable<KeyValuePair<string, string>> values,
+        IReadOnlyDictionary<string, TranslationSourceAddition>? additions,
         CancellationToken cancellationToken = default)
     {
         Rmf2ProjectV5 compiled = compilation.Project ?? throw new TranslationAuthoringException("The RMF2 v5 project is unavailable.");
@@ -49,10 +72,28 @@ internal static class TranslationInterchangeSourceWriter
         Rmf2Workspace? workspace = null;
         var direct = new SortedDictionary<string, byte[]>(StringComparer.Ordinal);
 
-        foreach ((string key, string pattern) in values.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
+        foreach ((string key, string pattern) in additions is null ? values.OrderBy(static pair => pair.Key, StringComparer.Ordinal) : values)
         {
             cancellationToken.ThrowIfCancellationRequested();
             string? existingPath = targetByKey.TryGetValue(key, out Rmf2TranslationV5? existing) ? existing.SourceLocation.Path : null;
+            if (existingPath is null && !baseByKey.ContainsKey(key) && additions is not null &&
+                string.Equals(locale, compiled.DefaultLocale, StringComparison.Ordinal) &&
+                additions.TryGetValue(key, out TranslationSourceAddition? addition))
+            {
+                workspace ??= new Rmf2Workspace(
+                    root,
+                    project,
+                    rmf2Sources.Select(static pair => new TranslationSource(pair.Key, pair.Value)),
+                    cancellationToken);
+                string file = addition.File.Replace('\\', '/');
+                if (!file.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(Path.GetFileNameWithoutExtension(file), locale, StringComparison.OrdinalIgnoreCase))
+                    throw new TranslationAuthoringException("A base-locale message is added to the file '" + locale + ".rmf2', not '" + file + "'.");
+                string[] localPath = workspace.LocalPath(file, addition.LogicalPath).ToArray();
+                rmf2Sources[file] = Rmf2ResourceWriter.InsertMessage(
+                    new TranslationSource(file, rmf2Sources.GetValueOrDefault(file, [])), localPath, pattern, addition.Comments);
+                continue;
+            }
             Rmf2TranslationV5 source = baseByKey.TryGetValue(key, out Rmf2TranslationV5? found) ? found
                 : throw new TranslationAuthoringException("The imported key '" + key + "' has no base-locale resource.");
             bool isDirect = (existingPath ?? source.SourceLocation.Path).EndsWith(".mf2", StringComparison.OrdinalIgnoreCase);

@@ -1,4 +1,7 @@
 home {
   title = Willkommen bei Runic
   greeting = Hallo, {$name}!
+  total =
+    .input {$amount :number}
+    {{Summe: {$amount}}}
 }

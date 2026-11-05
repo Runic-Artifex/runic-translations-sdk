@@ -406,15 +406,17 @@ internal sealed class GeneratorTests
         foreach ((string? value, string expected) in new[]
         {
             // ar-XB selects with the Arabic rules: 2 is "two", which the base text does not have, and every ordinal is "other".
-            ("true", "[Śààṽéé Ada]|[\u202ESave \u202CAda]|[\u202EOne item\u202C]|[2\u202E items\u202C]|[1\u202Eth\u202C]|[2ńď]"),
-            ("false", "Save Ada|Save Ada|One item|2 items|1st|2nd"),
-            (null, "Save Ada|Save Ada|One item|2 items|1st|2nd"),
+            // ar-XB is right to left, so its placeholders are isolated by default (FSI for the string, RLI for numbers); without
+            // pseudo-locales an ar-XB request shows the English text, whose string placeholder is still isolated for the RTL request.
+            ("true", "[Śààṽéé Ada]|[\u202ESave \u202C\u2068Ada\u2069]|[\u202EOne item\u202C]|[\u20672\u2069\u202E items\u202C]|[\u20671\u2069\u202Eth\u202C]|[2ńď]"),
+            ("false", "Save Ada|Save \u2068Ada\u2069|One item|2 items|1st|2nd"),
+            (null, "Save Ada|Save \u2068Ada\u2069|One item|2 items|1st|2nd"),
         })
         {
             var properties = value is null ? new Dictionary<string, string>() : new Dictionary<string, string> { ["RunicTranslationsPseudoLocales"] = value };
             GeneratorRun run = GeneratorTestHost.RunWithConsumer(source, properties, ProjectInput(project), MessageInput("save = Save {$name}\n" +
                 "items =\n  .input {$count :integer}\n  .match $count\n  0 {{No items}}\n  one {{One item}}\n  * {{{$count} items}}\n" +
-                "place =\n  .input {$n :integer select=ordinal}\n  .match $n\n  one {{{$n}st}}\n  two {{{$n}nd}}\n  * {{{$n}th}}\n"));
+                "place =\n  .input {$n :integer select=ordinal}\n  .match $n\n  one {{{$n}st}}\n  two {{{$n}nd}}\n  few {{{$n}rd}}\n  * {{{$n}th}}\n"));
             Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
             Assert.Equal(expected, Execute(run, "Example.Localization.PseudoProbe", "Run"), $"RunicTranslationsPseudoLocales={value}");
         }

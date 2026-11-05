@@ -28,7 +28,8 @@ public static class SnapshotTextCatalog
 
     /// <summary>Describes this catalog to a translation context: its ID, contract and provider factory.</summary>
     public static global::Runic.Translations.TranslationCatalogRegistration Registration { get; } = new global::Runic.Translations.TranslationCatalogRegistration(
-        CatalogId, DefaultLocale, ContractFingerprint, static () => Rmf2MarkupContract, CreateProvider);
+        CatalogId, DefaultLocale, ContractFingerprint, static () => Rmf2MarkupContract, CreateProvider,
+        static manager => new global::@Snapshot.@SnapshotText(manager).Messages);
 
     public static global::Runic.Translations.ITranslationProvider CreateProvider(
         global::Runic.Translations.ITextValueFormatter? valueFormatter = null,

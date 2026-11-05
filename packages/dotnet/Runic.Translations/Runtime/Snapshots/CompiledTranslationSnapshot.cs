@@ -231,7 +231,8 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         }
 
         if (message.Rmf2V5 is null) ValidateArguments(_definitions[index], arguments);
-        string text = CompiledTextMessageRuntime.Format(message, arguments, Locale, _valueFormatter, requestedLocale: RequestedLocale);
+        string text = CompiledTextMessageRuntime.Format(message, arguments, Locale, _valueFormatter, requestedLocale: RequestedLocale,
+            bidiIsolation: _catalog.BidiIsolation);
         ReportFallback(index, message);
         return text;
     }
@@ -246,7 +247,8 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         // that contract-wide FormatContent surface.
         if (!message.HasMarkup && message.Rmf2V5 is null) throw new TranslationFormatException("The resource does not produce structured content.");
         if (message.Rmf2V5 is null) ValidateArguments(_definitions[index], arguments);
-        LocalizedTextContent content = CompiledTextMessageRuntime.FormatContent(message, arguments, Locale, _valueFormatter, requestedLocale: RequestedLocale);
+        LocalizedTextContent content = CompiledTextMessageRuntime.FormatContent(message, arguments, Locale, _valueFormatter, requestedLocale: RequestedLocale,
+            bidiIsolation: _catalog.BidiIsolation);
         ReportFallback(index, message);
         return content;
     }

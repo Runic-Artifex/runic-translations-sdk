@@ -117,6 +117,7 @@ internal sealed class Rmf2PseudoLocalesTests
               .match $n
               one {{{$n}st}}
               two {{{$n}nd}}
+              few {{{$n}rd}}
               * {{{$n}th}}
 
             """;

@@ -218,6 +218,49 @@ internal sealed class Rmf2IntegrationTests
         Assert.Contains("shop_title", json); Assert.Contains("runic:strong", json);
         Assert.False(json.Contains("stray", StringComparison.Ordinal), "CLI discovery included a project-directory source outside explicit sourceRoots.");
     }
+    [Test, DisplayName("RMF2 CLI generate --contract writes packs a shipped release accepts")]
+    public void ContractPacksCli()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("translations"));
+        File.WriteAllText(temporary.Resolve("translations/runic.json"), Project[..^1] + ",\"locales\":[\"en\",\"de\"]}");
+        File.WriteAllText(temporary.Resolve("translations/en.rmf2"), "title = Shop\nrenamed = Old\n");
+        File.WriteAllText(temporary.Resolve("translations/de.rmf2"), "title = Laden\nrenamed = Alt\n");
+        ProcessResult shipped = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "shipped", "--emit-json");
+        Assert.Equal(0, shipped.ExitCode, shipped.Combined);
+        string fingerprint = System.Text.Json.JsonDocument.Parse(File.ReadAllText(temporary.Resolve("shipped/app.de.locale-v5.json"))).RootElement.GetProperty("contractFingerprint").GetString()!;
+
+        // The next release changes a key's inputs and adds a key.
+        File.WriteAllText(temporary.Resolve("translations/en.rmf2"), "title = Shop\nrenamed = New {$name}\nadded = Added\n");
+        File.WriteAllText(temporary.Resolve("translations/de.rmf2"), "title = Geschäft\nrenamed = Neu {$name}\nadded = Neu\n");
+        ProcessResult packs = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "packs", "--emit-json", "--contract", "shipped/app.de.locale-v5.json");
+        Assert.Equal(0, packs.ExitCode, packs.Combined);
+        Assert.Contains("contract: de added: unknown-key.", packs.Combined);
+        Assert.Contains("contract: de renamed: incompatible-inputs.", packs.Combined);
+        Assert.Equal("app.asset-manifest-v1.json|app.de.locale-v5.json|app.en.locale-v5.json", string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("packs"))));
+        using (var pack = System.Text.Json.JsonDocument.Parse(File.ReadAllText(temporary.Resolve("packs/app.de.locale-v5.json"))))
+        {
+            Assert.Equal(fingerprint, pack.RootElement.GetProperty("contractFingerprint").GetString());
+            Assert.Equal("title", string.Join('|', pack.RootElement.GetProperty("messages").EnumerateObject().Select(static item => item.Name)));
+        }
+        ProcessResult verify = TestFixture.RunTool(temporary, "verify", "--project", "translations", "--output", "packs", "--emit-json", "--contract", "shipped/app.de.locale-v5.json");
+        Assert.Equal(0, verify.ExitCode, verify.Combined);
+        Assert.Contains("contract: the shipped release is taken to accept the message features of 0.8.0", packs.Combined);
+
+        // A later release drops German: no German pack, and the command says the release keeps its own German text.
+        File.WriteAllText(temporary.Resolve("translations/runic.json"), Project[..^1] + ",\"locales\":[\"en\"]}");
+        File.Delete(temporary.Resolve("translations/de.rmf2"));
+        ProcessResult dropped = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "dropped", "--emit-json", "--contract", "shipped/app.de.locale-v5.json");
+        Assert.Equal(0, dropped.ExitCode, dropped.Combined);
+        Assert.Contains("contract: de: the current sources no longer declare this locale", dropped.Combined);
+        Assert.Equal("app.asset-manifest-v1.json|app.en.locale-v5.json", string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("dropped"))));
+
+        ProcessResult esm = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "mixed", "--emit-esm", "--contract", "shipped/app.de.locale-v5.json");
+        Assert.Equal(2, esm.ExitCode, esm.Combined); Assert.Contains("--contract", esm.Combined);
+        File.WriteAllText(temporary.Resolve("other.json"), "{}");
+        ProcessResult invalid = TestFixture.RunTool(temporary, "generate", "--project", "translations", "--output", "invalid", "--emit-json", "--contract", "other.json");
+        Assert.False(invalid.ExitCode == 0, invalid.Combined); Assert.Contains("locale artifact v5", invalid.Combined);
+    }
     [Test, DisplayName("RMF2 CLI accepts symlinked ancestors but rejects links below the project")]
     public void LinkedAncestorCli()
     {

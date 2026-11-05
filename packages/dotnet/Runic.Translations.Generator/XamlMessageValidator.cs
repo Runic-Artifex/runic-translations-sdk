@@ -65,6 +65,9 @@ internal sealed class XamlMessageValidator
     // can apply to any element, an attached source to its element's content.
     private XObject? _fileSource;
     private readonly Dictionary<XElement, XObject> _scopedSources = [];
+    // Attached sources that name their catalog statically ({rt:CatalogSource id}): keys below them are checked against it.
+    private readonly Dictionary<XObject, string> _sourceCatalogs = [];
+    private readonly HashSet<string> _reportedCatalogs = new(StringComparer.Ordinal);
     private readonly HashSet<XObject> _reportedSources = [];
 
     private XamlMessageValidator(SourceProductionContext context, TranslationsGenerator.GeneratorInput input, XamlCatalogs catalogs)
@@ -109,7 +112,11 @@ internal sealed class XamlMessageValidator
         foreach (XElement element in elements)
         {
             if (SetterSource(element) is { } setter) _fileSource ??= setter;
-            else if (AttachedSource(element) is { } attached) _scopedSources.TryAdd(attached.Scope, attached.Site);
+            else if (AttachedSource(element) is { } attached)
+            {
+                _scopedSources.TryAdd(attached.Scope, attached.Site);
+                if (CatalogSourceId(element, attached.Site) is { } catalogId) _sourceCatalogs[attached.Site] = catalogId;
+            }
         }
         foreach (XElement element in elements)
         {
@@ -173,6 +180,37 @@ internal sealed class XamlMessageValidator
         if (CompiledAttributes(element).FirstOrDefault(static attribute =>
                 IsRunic(attribute.Name.NamespaceName) && attribute.Name.LocalName == "TranslationProperties.Source") is { } attribute)
             return (element, attribute);
+        return null;
+    }
+
+    // The catalog of an attached source written as {rt:CatalogSource id} (or <rt:CatalogSource Catalog="id"/>), else null.
+    private static string? CatalogSourceId(XElement element, XObject site)
+    {
+        if (site is XAttribute attribute)
+        {
+            if (!TryReadMarkup(attribute.Value, out string type, out List<string> parts, out _) || !IsCatalogSource(element, type)) return null;
+            foreach (string part in parts)
+            {
+                TrySplit(part, '=', out List<string> assignment);
+                if (assignment.Count == 1) return StaticValue(part);
+                if (assignment[0].Trim() == "Catalog") return StaticValue(string.Join("=", assignment.Skip(1)));
+            }
+            return null;
+        }
+        if (site is XElement property && property.Elements().Count() == 1 && property.Elements().Single() is { } child &&
+            IsRunic(child.Name.NamespaceName) && child.Name.LocalName is "CatalogSource" or "CatalogSourceExtension")
+            return StaticValue(child.Attribute("Catalog")?.Value);
+        return null;
+    }
+
+    private static bool IsCatalogSource(XElement element, string name) => Resolves(element, name, "CatalogSource") || Resolves(element, name, "CatalogSourceExtension");
+
+    // The catalog named by the nearest enclosing {rt:CatalogSource id}, when no style setter can replace it.
+    private string? ScopeCatalog(XElement element)
+    {
+        if (_fileSource is not null || _sourceCatalogs.Count == 0) return null;
+        for (XElement? current = element; current is not null; current = current.Parent)
+            if (_scopedSources.TryGetValue(current, out XObject? site)) return _sourceCatalogs.TryGetValue(site, out string? catalog) ? catalog : null;
         return null;
     }
 
@@ -344,15 +382,42 @@ internal sealed class XamlMessageValidator
             return;
         }
         bool explicitSource = properties.ContainsKey("Source");
+        string? namedCatalog = null;
+        if (properties.TryGetValue("Catalog", out string? catalogValue) && !IsNullValue(element, catalogValue))
+        {
+            if (explicitSource)
+            {
+                Report(TranslationsDiagnostics.XamlDeclaration, location, "Message sets both Source and Catalog; use one.");
+                return;
+            }
+            namedCatalog = StaticValue(catalogValue);
+            // A Catalog bound at run time names no catalog the build can know.
+            if (namedCatalog is null) return;
+            if (namedCatalog.Length == 0) { Report(TranslationsDiagnostics.XamlDeclaration, location, "Message needs a nonempty Catalog."); return; }
+        }
         Check(element, location, key, rich: false,
             unresolved || properties.ContainsKey("Inputs") ? null : hasInputs ? names.Count : args.Count,
-            hasInputs ? names : null, explicitSource);
+            hasInputs ? names : null, explicitSource, namedCatalog);
     }
 
-    private void Check(XElement element, XObject location, string? key, bool rich, int? count, List<string>? names, bool explicitSource = false)
+    private void Check(XElement element, XObject location, string? key, bool rich, int? count, List<string>? names, bool explicitSource = false,
+        string? namedCatalog = null)
     {
         if (key is null) return; // Binding, x:Static, resource or other runtime key.
-        string? catalog = _input.Catalog;
+        // A catalog the XAML names (Catalog= on the message, or {rt:CatalogSource} on an enclosing element) is certain.
+        string? catalog = namedCatalog ?? (explicitSource ? null : ScopeCatalog(element));
+        if (catalog is not null)
+        {
+            if (!_catalogs.TryGet(catalog, out _))
+            {
+                // A library's catalog is checked where the library is built; the application has only its assembly.
+                if (_reportedCatalogs.Add(catalog))
+                    Report(TranslationsDiagnostics.XamlSourceNotChecked, location, "Catalog '" + catalog + "' (first: '" + key +
+                        "') is not the catalog of the local RunicTranslationProject or of a referenced project, so its keys are not checked at build time; they are checked when the XAML loads.");
+                return;
+            }
+        }
+        else catalog = _input.Catalog;
         if (string.IsNullOrWhiteSpace(catalog))
         {
             catalog = _input.DefaultCatalog;

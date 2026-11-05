@@ -45,6 +45,9 @@
             packages = [ pkgs.git dotnet nodejs bun_1_4_4 pkgs.python3 pkgs.clang pkgs.pkg-config pkgs.zlib ];
             DOTNET_CLI_TELEMETRY_OPTOUT = "1";
             DOTNET_NOLOGO = "1";
+            # .NET, Node and Bun load the same ICU major here, so LocalizedFormatComparisonTests must compare dates
+            # strictly; it fails instead of only reporting them when a toolchain update splits the versions.
+            RUNIC_EXPECT_STRICT_DATES = "1";
             DOTNET_ROOT = "${dotnet}/share/dotnet";
             shellHook = ''export NUGET_PACKAGES="$PWD/.cache/nuget"'';
           };

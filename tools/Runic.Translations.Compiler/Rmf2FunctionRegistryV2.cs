@@ -46,7 +46,9 @@ internal static class Rmf2FunctionRegistryV2
     internal static bool IsTimeZone(string value) => value.Length is > 0 and <= 64 && System.Text.RegularExpressions.Regex.IsMatch(value, TimeZonePattern, System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     internal static Rmf2FunctionRuleV2? Find(string name) => Functions.FirstOrDefault(function => function.Name == name);
-    private static Rmf2FunctionRuleV2 Function(string name, string type, string selection, params Rmf2OptionRuleV2[] options) => new(name, type, selection, Array.AsReadOnly(options));
+    // Every function also takes MF2's u:dir (LDML 48 u: options), a literal that sets the placeholder's direction for bidi isolation.
+    private static Rmf2FunctionRuleV2 Function(string name, string type, string selection, params Rmf2OptionRuleV2[] options) =>
+        new(name, type, selection, Array.AsReadOnly([.. options, Enum("u:dir", "the function's", false, "ltr", "rtl", "auto", "inherit")]));
     // Unicode MessageFormat 2 spec/functions/number.md: useGrouping on :number and :integer, default auto.
     private static Rmf2OptionRuleV2 Grouping() => Enum("useGrouping", "auto", true, "auto", "always", "never", "min2");
     private static Rmf2OptionRuleV2 Enum(string name, string fallback, bool dynamic, params string[] values) => new(name, "string", true, dynamic, fallback, Array.AsReadOnly(values));

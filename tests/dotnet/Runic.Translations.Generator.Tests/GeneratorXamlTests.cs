@@ -290,6 +290,59 @@ internal sealed class GeneratorXamlTests
         Assert.Equal(0, Run("<TextBlock Text=\"{rt:Message application_title, Source={StaticResource App}}\"/>", catalog: "app").Length, "file assertion checks explicit sources");
     }
 
+    [Test, DisplayName("XAML checks a message's Catalog and a {rt:CatalogSource} scope against the named catalog")]
+    public void NamedCatalogs()
+    {
+        const string SharedProject = "C:/shared/translations/runic.json";
+        const string Shared = """
+            { "schemaVersion": 1, "catalog": "shared", "code": { "namespace": "Shared", "className": "SharedText" }, "baseLocale": "en" }
+            """;
+        Diagnostic[] Check(string content, string? catalog = null)
+        {
+            GeneratorRun run = GeneratorTestHost.Run(
+                new TestInput("C:/repo/translations/runic.json", "Project", Project), new TestInput("C:/repo/translations/en.rmf2", "Rmf2", English),
+                new TestInput(SharedProject, "XamlCatalogProject", Shared), new TestInput("C:/shared/translations/en.rmf2", "XamlCatalogSource", "ok = OK\nrows = {$count :integer} rows\n", Owner: SharedProject),
+                new TestInput("C:/repo/Themes/Generic.xaml", "Xaml", """
+                    <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                                        xmlns:rt="https://runic-artifex.eu/xaml/translations">
+                    """ + "\n" + content + "\n</ResourceDictionary>", catalog, DefaultCatalog: "app"));
+            return run.SingleResult.Diagnostics.Where(static diagnostic => diagnostic.Id.StartsWith("RTR008", StringComparison.Ordinal)).ToArray();
+        }
+        string Ids(Diagnostic[] diagnostics) => string.Join(",", diagnostics.Select(static diagnostic => diagnostic.Id).Order(StringComparer.Ordinal));
+
+        // Catalog= checks against the named catalog, including the file's own or a referenced one, whatever the default.
+        Assert.Equal("", Ids(Check("""<ControlTemplate x:Key="T"><TextBlock Text="{rt:Message ok, Catalog=shared}"/></ControlTemplate>""")), "referenced");
+        Assert.Equal("", Ids(Check("""<ControlTemplate x:Key="T"><TextBlock Text="{rt:Message application_title, Catalog=app}"/></ControlTemplate>""", catalog: "shared")), "own over the file assertion");
+        Diagnostic typo = Check("""<ControlTemplate x:Key="T"><TextBlock Text="{rt:Message okk, Catalog=shared}"/></ControlTemplate>""").Single();
+        Assert.True(typo.Id == "RTR0081" && typo.GetMessage(CultureInfo.InvariantCulture).Contains("catalog 'shared'", StringComparison.Ordinal), typo.ToString());
+        Assert.Equal("RTR0082", Ids(Check("""<TextBlock x:Key="T" Text="{rt:Message rows, Catalog=shared}"/>""")), "inputs of the named catalog");
+        Assert.Equal("", Ids(Check("""<rt:Message x:Key="M" Key="rows" Catalog="shared"><rt:MessageInput Name="count" Value="{Binding Rows}"/></rt:Message>""")), "long form");
+        // An unknown catalog is not checked and says so once.
+        Diagnostic[] external = Check("""<TextBlock x:Key="A" Text="{rt:Message anything, Catalog=acme-grid}"/><TextBlock x:Key="B" Text="{rt:Message other, Catalog=acme-grid}"/>""");
+        Assert.True(external.Length == 1 && external[0].Id == "RTR0085" && external[0].Severity == DiagnosticSeverity.Info &&
+            external[0].GetMessage(CultureInfo.InvariantCulture).Contains("Catalog 'acme-grid' (first: 'anything')", StringComparison.Ordinal), string.Join("\n", external.AsEnumerable()));
+        Assert.Equal("RTR0080", Ids(Check("""<TextBlock x:Key="T" Text="{rt:Message ok, Catalog=shared, Source={x:Static x:Null}}"/>""")), "Source and Catalog");
+        Assert.Equal("", Ids(Check("""<TextBlock x:Key="T" Text="{rt:Message whatever, Catalog={Binding Id}}"/>""")), "a bound catalog is a run-time value");
+
+        // {rt:CatalogSource id} on a template root checks its content against that catalog, rich messages included.
+        Assert.Equal("", Ids(Check("""
+            <ControlTemplate x:Key="T"><StackPanel rt:TranslationProperties.Source="{rt:CatalogSource shared}">
+              <TextBlock Text="{rt:Message ok}"/><TextBlock Text="{rt:Message rows, Arg0={Binding Rows}}"/>
+            </StackPanel></ControlTemplate>
+            """)), "scope");
+        Assert.Equal("RTR0081", Ids(Check("""<StackPanel x:Key="P" rt:TranslationProperties.Source="{rt:CatalogSource Catalog=shared}"><TextBlock Text="{rt:Message application_title}"/></StackPanel>""")),
+            "a key of another catalog in the scope");
+        Assert.Equal("RTR0083", Ids(Check("""<StackPanel x:Key="P" rt:TranslationProperties.Source="{rt:CatalogSource app}"><TextBlock rt:TranslationProperties.RichMessage="application_title"/></StackPanel>""")),
+            "rich kind in the scope");
+        Assert.Equal("", Ids(Check("""<StackPanel x:Key="P"><rt:TranslationProperties.Source><rt:CatalogSource Catalog="shared"/></rt:TranslationProperties.Source><TextBlock Text="{rt:Message ok}"/></StackPanel>""")),
+            "property element form");
+        Assert.Equal("RTR0085", Ids(Check("""<StackPanel x:Key="P" rt:TranslationProperties.Source="{rt:CatalogSource acme-grid}"><TextBlock Text="{rt:Message anything}"/></StackPanel>""")),
+            "an unknown catalog scope");
+        // A message's own Catalog wins over the scope.
+        Assert.Equal("", Ids(Check("""<StackPanel x:Key="P" rt:TranslationProperties.Source="{rt:CatalogSource shared}"><TextBlock Text="{rt:Message application_title, Catalog=app}"/></StackPanel>""")),
+            "Catalog over scope");
+    }
+
     [Test, DisplayName("XAML checks plain, inline rich and document content kinds")]
     public void MessageKinds()
     {

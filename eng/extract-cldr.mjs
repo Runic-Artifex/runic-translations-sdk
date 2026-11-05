@@ -34,6 +34,8 @@ const ordinalSource = (await supplemental("ordinals.json"))["plurals-type-ordina
 const likelySource = (await supplemental("likelySubtags.json")).likelySubtags;
 const parentSource = (await supplemental("parentLocales.json")).parentLocales;
 const aliasSource = (await supplemental("aliases.json")).metadata.alias.languageAlias;
+const numberingSource = (await supplemental("numberingSystems.json")).numberingSystems;
+const dayPeriodSource = (await supplemental("dayPeriods.json")).dayPeriodRuleSet;
 const available = (await json("cldr-core", "availableLocales.json")).availableLocales.full.filter((id) => id !== "und" && id !== "root");
 if (JSON.stringify(parentSource._localeRules) !== JSON.stringify({ parentLocale: { nonlikelyScript: "root" } }))
   throw new Error("Unexpected CLDR parentLocales rules; review eng/cldr-locales.mjs.");
@@ -136,19 +138,63 @@ for (const id of available) {
       .map((offset) => [offset, field[`relative-type-${offset}`]]));
     return [unit, { past: counts("past"), future: counts("future"), relative }];
   }));
-  const minimumGroupingDigits = Number(numbers.main[id].numbers.minimumGroupingDigits);
+  const numberData = numbers.main[id].numbers;
+  const minimumGroupingDigits = Number(numberData.minimumGroupingDigits);
+  // The default numbering system and, for it and for latn (-u-nu-latn), the symbols and the standard decimal and
+  // percent patterns, verbatim.
+  const system = numberData.defaultNumberingSystem;
+  const numberFormats = { system };
+  for (const name of [...new Set([system, "latn"])]) {
+    const symbols = numberData[`symbols-numberSystem-${name}`];
+    const decimal = numberData[`decimalFormats-numberSystem-${name}`]?.standard, percent = numberData[`percentFormats-numberSystem-${name}`]?.standard;
+    if (!symbols || !decimal || !percent) throw new Error(`${id} has no ${name} number symbols or patterns.`);
+    if (numberingSource[name]?._type !== "numeric") throw new Error(`${id} uses the non-numeric numbering system ${name}.`);
+    numberFormats[name] = { decimal: symbols.decimal, group: symbols.group, minusSign: symbols.minusSign, percentSign: symbols.percentSign, decimalFormat: decimal, percentFormat: percent };
+  }
+  // Platform date data that .NET cannot reach: the format-context weekday names where they differ from the stand-alone
+  // names (.NET's dddd), and the flexible day periods of a time pattern with B, as [from (minutes), name] pairs.
+  const gregorian = (await json("cldr-dates-full", `main/${id}/ca-gregorian.json`)).main[id].dates.calendars.gregorian;
+  const dayKeys = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  const formatDays = dayKeys.map((day) => gregorian.days.format.wide[day]), standAloneDays = dayKeys.map((day) => gregorian.days["stand-alone"].wide[day]);
+  const unquoted = (pattern) => (typeof pattern === "string" ? pattern : pattern._value).replace(/'[^']*'/g, "");
+  // Only date patterns with a format-context weekday (E) need them; Finnish writes the stand-alone cccc.
+  const formatWeekday = ["short", "medium", "long", "full"].some((style) => /E/.test(unquoted(gregorian.dateFormats[style])));
+  const weekdays = !formatWeekday || JSON.stringify(formatDays) === JSON.stringify(standAloneDays) ? [] : formatDays;
+  let dayPeriods = [];
+  const times = [gregorian.timeFormats.short, gregorian.timeFormats.medium].map(unquoted);
+  if (times.some((pattern) => /B/.test(pattern))) {
+    if (times.some((pattern) => /BB|b/.test(pattern))) throw new Error(`${id} uses an unsupported day period width.`);
+    const ruleKey = chainOf(dataId(id, likely)).map((item) => item.replaceAll("-", "_")).concat(parseTag(id).language).find((item) => dayPeriodSource[item] !== undefined);
+    if (ruleKey === undefined) throw new Error(`${id} has no day period rules.`);
+    const minutes = (time) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+    // ICU writes B with the from/before periods only; the at periods (midnight, noon) are not used.
+    dayPeriods = Object.entries(dayPeriodSource[ruleKey]).filter(([, rule]) => rule._from !== undefined)
+      .map(([name, rule]) => [minutes(rule._from), gregorian.dayPeriods.format.abbreviated[name], minutes(rule._before)])
+      .sort((a, b) => a[0] - b[0]);
+    let next = 0;
+    for (const [from, name, before] of dayPeriods) {
+      if (from !== next || typeof name !== "string") throw new Error(`The day periods of ${id} do not cover the day.`);
+      next = before;
+    }
+    if (next !== 1440) throw new Error(`The day periods of ${id} do not cover the day.`);
+    dayPeriods = dayPeriods.map(([from, name]) => [from, name]);
+  }
   const key = dataId(id, likely);
-  if (resolved.has(key) && JSON.stringify(resolved.get(key)) !== JSON.stringify({ minimumGroupingDigits, listPatterns, relativeTime }))
+  const record = { minimumGroupingDigits, numbers: numberFormats, weekdays, dayPeriods, listPatterns, relativeTime };
+  if (resolved.has(key) && JSON.stringify(resolved.get(key)) !== JSON.stringify(record))
     throw new Error(`CLDR locales ${id} and ${resolved.get(key).id} share data ID ${key} but differ.`);
-  resolved.set(key, { minimumGroupingDigits, listPatterns, relativeTime });
+  resolved.set(key, record);
 }
 const localeEntries = [];
 for (const id of [...resolved.keys()].sort(ordinalSort)) {
   const data = resolved.get(id), entry = {};
   const ancestor = chainOf(id).slice(1).find((candidate) => resolved.has(candidate));
   const base = ancestor === undefined ? undefined : resolved.get(ancestor);
-  for (const name of ["minimumGroupingDigits", "listPatterns", "relativeTime"])
-    if (base === undefined || JSON.stringify(base[name]) !== JSON.stringify(data[name])) entry[name] = data[name];
+  for (const name of ["minimumGroupingDigits", "numbers", "weekdays", "dayPeriods", "listPatterns", "relativeTime"]) {
+    // Weekdays and day periods are empty for most locales; an empty value is stored only to override an ancestor's.
+    const empty = Array.isArray(data[name]) && data[name].length === 0;
+    if (base === undefined ? !empty : JSON.stringify(base[name]) !== JSON.stringify(data[name])) entry[name] = data[name];
+  }
   if (Object.keys(entry).length > 0) localeEntries.push([id, entry]);
 }
 // Every data ID must reach stored data through its chain.
@@ -164,6 +210,14 @@ for (const [alias, replacement] of Object.entries(languageAliases))
       throw new Error(`The plural rules of alias ${alias} differ from those of ${replacement}.`);
   }
 
+// The digits of every numbering system a locale uses, from supplemental/numberingSystems.json.
+const usedSystems = new Set([...resolved.values()].flatMap((data) => Object.keys(data.numbers).filter((name) => name !== "system")));
+const numberingSystems = sortedObject([...usedSystems].map((name) => {
+  const digits = [...numberingSource[name]._digits];
+  if (digits.length !== 10) throw new Error(`Numbering system ${name} does not have ten digits.`);
+  return [name, numberingSource[name]._digits];
+}));
+
 const subset = {
   source: {
     ...previous.source,
@@ -175,6 +229,9 @@ const subset = {
   likelySubtags: likely,
   parentLocales: parents,
   plurals: { cardinal: pluralRules(cardinalSource), ordinal: pluralRules(ordinalSource) },
+  numberingSystems,
+  // Every CLDR locale as a data ID, for the cross-runtime comparisons of platform-data formatting.
+  availableLocales: [...resolved.keys()].sort(ordinalSort),
   locales: Object.fromEntries(localeEntries),
 };
 if (!subset.source.packageIntegrity) throw new Error("Record source.packageIntegrity (npm dist.integrity per package) first.");
@@ -184,7 +241,7 @@ const lines = ["{"];
 const top = Object.entries(subset);
 top.forEach(([name, value], index) => {
   const comma = index < top.length - 1 ? "," : "";
-  if (name === "rightToLeftScripts") { lines.push(`  ${JSON.stringify(name)}: ${JSON.stringify(value)}${comma}`); return; }
+  if (name === "rightToLeftScripts" || name === "availableLocales") { lines.push(`  ${JSON.stringify(name)}: ${JSON.stringify(value)}${comma}`); return; }
   if (name === "plurals") {
     lines.push(`  "plurals": {`);
     ["cardinal", "ordinal"].forEach((type, typeIndex) => {
@@ -202,7 +259,7 @@ top.forEach(([name, value], index) => {
   lines.push(`  }${comma}`);
 });
 lines.push("}");
-const text = lines.join("\n").replaceAll("\u00a0", "\\u00a0").replaceAll("\u202f", "\\u202f").replaceAll("\u200f", "\\u200f").replaceAll("\u200e", "\\u200e") + "\n";
+const text = lines.join("\n").replaceAll("\u00a0", "\\u00a0").replaceAll("\u202f", "\\u202f").replaceAll("\u200f", "\\u200f").replaceAll("\u200e", "\\u200e").replaceAll("\u061c", "\\u061c") + "\n";
 JSON.parse(text);
 if (check) {
   if ((await readFile(subsetPath, "utf8")) !== text) throw new Error(`${relative(root, subsetPath)} differs from the packages.`);

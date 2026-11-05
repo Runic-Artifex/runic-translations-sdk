@@ -13,8 +13,11 @@ namespace Runic.Translations.Tooling;
 /// <remarks>
 /// This facade exchanges the compiler's supported execution model. It is not a general XLIFF processor. Plain
 /// messages, text with placeholders, are exchanged losslessly: every placeholder is an XLIFF <c>&lt;ph&gt;</c> whose
-/// <c>equiv</c> is the exact MF2 expression. Messages with selectors, declarations or markup are exported for
-/// translator visibility, reported as lossy and skipped on import, never flattened into a different message.
+/// <c>equiv</c> is the exact MF2 expression. A message with selectors or declarations is one unit: its declarations
+/// and <c>.match</c> are one protected <c>&lt;ph&gt;</c>, and every variant is a <c>&lt;pc&gt;</c> whose start code is
+/// its keys, so a translator edits only the variant texts; import checks the declarations, the caller contract and
+/// the target locale's plural categories. Messages with markup are exported for translator visibility, reported as
+/// lossy and skipped on import, never flattened into a different message.
 /// Import is tolerant of what translation management systems write: each unit is applied, skipped or refused on
 /// its own.
 /// </remarks>
@@ -166,7 +169,7 @@ public static class TranslationInterchange
         var direct = targetLocale.DirectResources.ToDictionary(static resource => resource.Key, StringComparer.Ordinal);
         var reviewByKey = review?.Entries.Where(entry => string.Equals(entry.Locale, targetLocale.Tag, StringComparison.Ordinal)).ToDictionary(static entry => entry.Key, StringComparer.Ordinal) ?? new Dictionary<string, TranslationInterchangeReviewEntry>(StringComparer.Ordinal);
         using var stream = new MemoryStream();
-        using (XmlWriter writer = XmlWriter.Create(stream, new XmlWriterSettings { Encoding = new UTF8Encoding(false), Indent = false, NewLineHandling = NewLineHandling.None, OmitXmlDeclaration = false }))
+        using (XmlWriter writer = XmlWriter.Create(stream, new XmlWriterSettings { Encoding = new UTF8Encoding(false), Indent = false, NewLineHandling = NewLineHandling.Entitize, OmitXmlDeclaration = false }))
         {
             writer.WriteStartDocument(); writer.WriteStartElement("xliff", XliffNamespace); writer.WriteAttributeString("version", "2.1"); writer.WriteAttributeString("srcLang", projection.SourceLocale); writer.WriteAttributeString("trgLang", targetLocale.Tag);
             // The locale's effective limit, as validate checks it (RTR0098): the base's @maxLength, lowered by the translation's own.
@@ -185,10 +188,21 @@ public static class TranslationInterchange
             foreach (TranslationInterchangeSourceUnit source in projection.CanonicalUnits)
             {
                 direct.TryGetValue(source.Key, out TranslationInterchangeTargetUnit? target);
+                int? limit = Limit(source);
                 bool structured = source.Structured || target?.Structured == true;
-                if (structured) losses.Add(new("XLIFF21-STRUCTURED-MESSAGE", "/" + source.Key, source.Document
+                // XML 1.0 forbids most C0 controls. Text carries them as <cp hex>, but a code's equiv attribute cannot,
+                // so a unit whose header, keys or placeholders hold one is exported as not translatable.
+                if (!structured && (HasXmlInvalidCode(source.Pieces, source.Selector) || HasXmlInvalidCode(target?.Pieces, target?.Selector)))
+                {
+                    structured = true;
+                    losses.Add(new("XLIFF21-CONTROL-CHARACTER", "/" + source.Key, "A placeholder, selector or variant key holds a character that XML 1.0 cannot carry in an attribute; the unit is exported as not translatable and its import is skipped.", true));
+                }
+                else if (structured) losses.Add(new("XLIFF21-STRUCTURED-MESSAGE", "/" + source.Key, source.Document
                     ? "Document message (RMF2 document profile v1): its block structure and markup are not losslessly representable by the closed XLIFF text profile, and its import is skipped."
-                    : "Selectors, declarations or markup are not losslessly representable by the closed XLIFF text profile; the unit is exported as not translatable and its import is skipped.", true));
+                    : "Markup, or a pattern that reads a value only its declarations define, is not losslessly representable by the closed XLIFF text profile; the unit is exported as not translatable and its import is skipped.", true));
+                // A missing translation of a plural message whose locale selects other categories than the source
+                // gets a target in state initial with the locale's variants, so a translator can fill in each one.
+                TranslationInterchangeSelector? prefill = !structured && target is null && source.Selector is { } sourceSelector ? Prefill(sourceSelector, targetLocale.Tag) : null;
                 TranslationInterchangeReviewEntry? entry = reviewByKey.TryGetValue(source.Key, out TranslationInterchangeReviewEntry? found) ? found : null;
                 if (entry is { State: TranslationReviewState.Approved } && !string.Equals(entry.SourceFingerprint, source.SourceFingerprint, StringComparison.Ordinal))
                 {
@@ -197,7 +211,7 @@ public static class TranslationInterchange
                 }
                 writer.WriteStartElement("unit", XliffNamespace); writer.WriteAttributeString("id", source.Key);
                 if (structured) writer.WriteAttributeString("translate", "no");
-                else if (Limit(source) is { } maxLength) writer.WriteAttributeString("slr", "sizeRestriction", SizeRestrictionNamespace, maxLength.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                else if (source.Selector is null && limit is { } maxLength) writer.WriteAttributeString("slr", "sizeRestriction", SizeRestrictionNamespace, maxLength.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 WriteNotes(writer, projection, source, structured, entry);
                 writer.WriteStartElement("segment", XliffNamespace); writer.WriteAttributeString("id", "1");
                 // An existing translation without review data is "translated"; a missing one keeps XLIFF's default "initial".
@@ -207,17 +221,17 @@ public static class TranslationInterchange
                     if (entry.State == TranslationReviewState.NeedsReview) writer.WriteAttributeString("subState", NeedsReviewSubState);
                 }
                 else if (target is not null) writer.WriteAttributeString("state", "translated");
-                IReadOnlyList<TranslationInterchangePiece>? sourcePieces = structured ? null : source.Pieces;
+                else if (prefill is not null) writer.WriteAttributeString("state", "initial");
                 Dictionary<string, string> sourceIds = new(StringComparer.Ordinal);
                 writer.WriteStartElement("source", XliffNamespace);
-                if (sourcePieces is null) writer.WriteString(source.Text);
-                else WritePieces(writer, sourcePieces, null, sourceIds);
+                if (structured) WriteText(writer, source.Text);
+                else new InlineWriter(writer, null, sourceIds, limit).Write(source.Pieces, source.Selector);
                 writer.WriteEndElement();
-                if (target is not null)
+                if (target is not null || prefill is not null)
                 {
                     writer.WriteStartElement("target", XliffNamespace);
-                    if (sourcePieces is null || target.Pieces is null) writer.WriteString(target.Text);
-                    else WritePieces(writer, target.Pieces, sourceIds, null);
+                    if (structured) WriteText(writer, target!.Text);
+                    else new InlineWriter(writer, sourceIds, null, limit).Write(target?.Pieces, target?.Selector ?? prefill);
                     writer.WriteEndElement();
                 }
                 writer.WriteEndElement(); writer.WriteEndElement();
@@ -228,40 +242,150 @@ public static class TranslationInterchange
         return stream.ToArray();
     }
 
-    // Source placeholders are numbered 1..n in order. A target placeholder reuses the id of an unused source
-    // placeholder with the same expression; any other gets its own t1..tn id and carries its expression in equiv.
-    private static void WritePieces(XmlWriter writer, IReadOnlyList<TranslationInterchangePiece> pieces, Dictionary<string, string>? sourceIds, Dictionary<string, string>? record)
+    // Source codes: the header is "h", variants "v1".."vn" and placeholders "1".."n" in order. A target code reuses the
+    // id of an unused source code with the same content (expression, header or keys); any other gets its own id
+    // ("th", "tv1".., "t1"..) and carries its content in equiv.
+    private sealed class InlineWriter(XmlWriter writer, Dictionary<string, string>? sourceIds, Dictionary<string, string>? record, int? maxLength)
     {
-        int sourceNumber = 0, targetNumber = 0;
-        var used = new HashSet<string>(StringComparer.Ordinal);
-        foreach (TranslationInterchangePiece piece in pieces)
+        private readonly HashSet<string> _used = new(StringComparer.Ordinal);
+        private int _placeholders, _variants, _targetPlaceholders, _targetVariants;
+
+        internal void Write(IReadOnlyList<TranslationInterchangePiece>? pieces, TranslationInterchangeSelector? selector)
         {
-            if (piece.IsText) { writer.WriteString(piece.Text); continue; }
-            string id;
+            if (selector is null) { WritePieces(pieces ?? []); return; }
+            string header = Id("h", "th", static id => id == "h", TranslationInterchangePattern.CanonicalHeader(selector.Header), TranslationInterchangePattern.CanonicalHeader, selector.Header);
+            writer.WriteStartElement("ph", XliffNamespace);
+            writer.WriteAttributeString("id", header);
+            writer.WriteAttributeString("canCopy", "no");
+            writer.WriteAttributeString("canDelete", "no");
+            writer.WriteAttributeString("equiv", selector.Header);
+            writer.WriteAttributeString("disp", selector.Display);
+            writer.WriteEndElement();
+            foreach (TranslationInterchangeVariant variant in selector.Variants)
+            {
+                string keys = variant.Keys ?? string.Empty;
+                string id = Id("v" + (++_variants).ToString(System.Globalization.CultureInfo.InvariantCulture), "tv" + (_targetVariants + 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    static id => id.StartsWith('v'), TranslationInterchangePattern.CanonicalKeys(keys)!, static value => TranslationInterchangePattern.CanonicalKeys(value)!, keys);
+                if (id.StartsWith("tv", StringComparison.Ordinal)) _targetVariants++;
+                writer.WriteStartElement("pc", XliffNamespace);
+                writer.WriteAttributeString("id", id);
+                writer.WriteAttributeString("canCopy", "no");
+                writer.WriteAttributeString("canOverlap", "no");
+                writer.WriteAttributeString("equivStart", (variant.Keys is null ? "" : variant.Keys + " ") + "{{");
+                writer.WriteAttributeString("equivEnd", "}}");
+                writer.WriteAttributeString("dispStart", variant.Keys ?? "{{");
+                writer.WriteAttributeString("dispEnd", variant.Keys is null ? "}}" : "");
+                if (maxLength is { } limit) writer.WriteAttributeString("slr", "sizeRestriction", SizeRestrictionNamespace, limit.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                WritePieces(variant.Pieces);
+                writer.WriteEndElement();
+            }
+        }
+
+        private void WritePieces(IReadOnlyList<TranslationInterchangePiece> pieces)
+        {
+            foreach (TranslationInterchangePiece piece in pieces)
+            {
+                if (piece.IsText) { WriteText(writer, piece.Text!); continue; }
+                string id = Id((++_placeholders).ToString(System.Globalization.CultureInfo.InvariantCulture), "t" + (_targetPlaceholders + 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    static id => char.IsAsciiDigit(id[0]), piece.Expression!, static value => value, piece.Expression!);
+                if (id.StartsWith('t')) _targetPlaceholders++;
+                writer.WriteStartElement("ph", XliffNamespace);
+                writer.WriteAttributeString("id", id);
+                writer.WriteAttributeString("equiv", piece.Expression);
+                writer.WriteAttributeString("disp", piece.Display);
+                writer.WriteEndElement();
+            }
+        }
+
+        // The source's own id (recorded with its content), or for a target the first unused source id of the same kind
+        // and content, else a target id.
+        private string Id(string sourceId, string targetId, Func<string, bool> kind, string content, Func<string, string> canonical, string recorded)
+        {
             if (sourceIds is null)
             {
-                id = (++sourceNumber).ToString(System.Globalization.CultureInfo.InvariantCulture);
-                record![id] = piece.Expression!;
+                record![sourceId] = recorded;
+                _used.Add(sourceId);
+                return sourceId;
             }
-            else
-            {
-                string? match = sourceIds.Where(pair => pair.Value == piece.Expression && !used.Contains(pair.Key)).Select(static pair => pair.Key).OrderBy(static key => key.Length).ThenBy(static key => key, StringComparer.Ordinal).FirstOrDefault();
-                id = match ?? "t" + (++targetNumber).ToString(System.Globalization.CultureInfo.InvariantCulture);
-            }
-            used.Add(id);
-            writer.WriteStartElement("ph", XliffNamespace);
-            writer.WriteAttributeString("id", id);
-            writer.WriteAttributeString("equiv", piece.Expression);
-            writer.WriteAttributeString("disp", piece.Display);
-            writer.WriteEndElement();
+            string? match = sourceIds.Where(pair => kind(pair.Key) && !_used.Contains(pair.Key) && canonical(pair.Value) == content)
+                .Select(static pair => pair.Key).OrderBy(static key => key.Length).ThenBy(static key => key, StringComparer.Ordinal).FirstOrDefault();
+            string id = match ?? targetId;
+            _used.Add(id);
+            return id;
         }
+    }
+
+    // Text with the characters XML 1.0 cannot hold (C0 controls other than tab, LF and CR, U+FFFE, U+FFFF, lone
+    // surrogates) written as XLIFF <cp hex="…"/>, which import reads back.
+    private static void WriteText(XmlWriter writer, string text)
+    {
+        int start = 0;
+        for (int index = 0; index < text.Length; index++)
+        {
+            char character = text[index];
+            if (char.IsHighSurrogate(character) && index + 1 < text.Length && char.IsLowSurrogate(text[index + 1])) { index++; continue; }
+            if (XmlConvert.IsXmlChar(character)) continue;
+            if (index > start) writer.WriteString(text[start..index]);
+            writer.WriteStartElement("cp", XliffNamespace);
+            writer.WriteAttributeString("hex", ((int)character).ToString("X4", System.Globalization.CultureInfo.InvariantCulture));
+            writer.WriteEndElement();
+            start = index + 1;
+        }
+        if (start < text.Length) writer.WriteString(start == 0 ? text : text[start..]);
+    }
+
+    private static bool IsXmlText(string value)
+    {
+        for (int index = 0; index < value.Length; index++)
+        {
+            if (char.IsHighSurrogate(value[index]) && index + 1 < value.Length && char.IsLowSurrogate(value[index + 1])) { index++; continue; }
+            if (!XmlConvert.IsXmlChar(value[index])) return false;
+        }
+        return true;
+    }
+
+    private static string XmlSafe(string value)
+    {
+        var safe = new StringBuilder(value.Length);
+        for (int index = 0; index < value.Length; index++)
+        {
+            if (char.IsHighSurrogate(value[index]) && index + 1 < value.Length && char.IsLowSurrogate(value[index + 1])) { safe.Append(value, index++, 2); continue; }
+            safe.Append(XmlConvert.IsXmlChar(value[index]) ? value[index] : '\uFFFD');
+        }
+        return safe.ToString();
+    }
+
+    // Whether a code's attribute (header, variant keys, placeholder expression) holds a character XML cannot carry.
+    private static bool HasXmlInvalidCode(IReadOnlyList<TranslationInterchangePiece>? pieces, TranslationInterchangeSelector? selector)
+    {
+        IEnumerable<string> codes = (pieces ?? []).Concat(selector?.Pieces ?? []).Where(static piece => !piece.IsText).Select(static piece => piece.Expression!);
+        if (selector is not null) codes = codes.Append(selector.Header).Concat(selector.Variants.Select(static variant => variant.Keys ?? string.Empty));
+        return codes.Any(static code => !IsXmlText(code));
+    }
+
+    // The variants a locale needs for a single plural or ordinal selector: keys of categories it never selects are
+    // dropped, and each category it selects that has no key gets the catch-all's text. Null when nothing changes.
+    private static TranslationInterchangeSelector? Prefill(TranslationInterchangeSelector source, string locale)
+    {
+        if (source.PluralFunction is null) return null;
+        IReadOnlyList<string> categories = Rmf2AuthoringService.PluralCategories(locale, source.PluralFunction == "ordinal", source.IntegerOperand);
+        TranslationInterchangeVariant? catchAll = source.Variants.FirstOrDefault(static variant => variant.Keys == "*");
+        if (categories.Count == 0 || catchAll is null) return null;
+        static bool IsCategory(string? keys) => keys is "zero" or "one" or "two" or "few" or "many" or "other";
+        var variants = source.Variants.Where(variant => !IsCategory(variant.Keys) || variant.Keys == "other" || categories.Contains(variant.Keys)).ToList();
+        int at = variants.IndexOf(catchAll);
+        foreach (string category in categories)
+            if (category != "other" && variants.All(variant => variant.Keys != category))
+                variants.Insert(at++, new TranslationInterchangeVariant(category, catchAll.Pieces));
+        return variants.Select(static variant => variant.Keys).SequenceEqual(source.Variants.Select(static variant => variant.Keys)) ? null : source with { Variants = variants };
     }
 
     private static void WriteNotes(XmlWriter writer, TranslationInterchangeProjection projection, TranslationInterchangeSourceUnit source, bool structured, TranslationInterchangeReviewEntry? review)
     {
         writer.WriteStartElement("notes", XliffNamespace);
         string? description = ReadableDescription(source.Metadata);
-        if (description is not null) { writer.WriteStartElement("note", XliffNamespace); writer.WriteAttributeString("category", "description"); writer.WriteString(description); writer.WriteEndElement(); }
+        // A note is plain text without <cp>: a character XML cannot hold is shown as U+FFFD; import ignores the description.
+        if (description is not null) { writer.WriteStartElement("note", XliffNamespace); writer.WriteAttributeString("category", "description"); writer.WriteString(IsXmlText(description) ? description : XmlSafe(description)); writer.WriteEndElement(); }
         writer.WriteStartElement("note", XliffNamespace); writer.WriteAttributeString("category", "runic:unit"); writer.WriteString(SerializeUnitNote(projection, source, structured)); writer.WriteEndElement();
         if (review is not null) { writer.WriteStartElement("note", XliffNamespace); writer.WriteAttributeString("category", "runic:review"); writer.WriteAttributeString("appliesTo", "target"); writer.WriteString(SerializeReviewNote(review, source.SourceFingerprint)); writer.WriteEndElement(); }
         writer.WriteEndElement();

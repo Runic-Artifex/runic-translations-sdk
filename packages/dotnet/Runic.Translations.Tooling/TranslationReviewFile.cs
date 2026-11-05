@@ -312,7 +312,10 @@ internal sealed class TranslationXliffImportPlan
     internal int Count(string outcome) => Units.Count(unit => unit.Outcome == outcome);
     internal int SourceChanged => Units.Count(static unit => unit.SourceChanged && unit.Outcome is "added" or "changed" or "unchanged");
 
-    /// <summary>Compares each applied unit with the target locale's current translation; equivalent MF2 spellings are unchanged.</summary>
+    /// <summary>
+    /// Compares each applied unit with the target locale's current translation; equivalent MF2 spellings are unchanged,
+    /// including selector messages (<see cref="TranslationInterchangePattern.CanonicalMessage"/>).
+    /// </summary>
     internal static TranslationXliffImportPlan Create(Rmf2ProjectCompilation compilation, TranslationXliffImportResult import)
     {
         ArgumentNullException.ThrowIfNull(compilation);
@@ -338,7 +341,7 @@ internal sealed class TranslationXliffImportPlan
                 values[unit.Key] = pattern;
                 units.Add(new(unit.Key, "added", null, pattern, state, unit.SourceChanged, code, null));
             }
-            else if (TranslationInterchangePattern.Canonical(before) != TranslationInterchangePattern.Canonical(pattern))
+            else if (TranslationInterchangePattern.CanonicalMessage(before) != TranslationInterchangePattern.CanonicalMessage(pattern))
             {
                 values[unit.Key] = pattern;
                 units.Add(new(unit.Key, "changed", before, pattern, state, unit.SourceChanged, code, null));

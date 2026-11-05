@@ -13,3 +13,4 @@
 /tools/*/artifacts/
 /examples/bun/operation-history/generated/
 /examples/bun/operation-history/history/current.log
+/packages/web/translations-sveltekit/test/generated-*/
