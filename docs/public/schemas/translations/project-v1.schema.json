@@ -102,6 +102,27 @@
     "validation": {
       "$ref": "#/$defs/validation"
     },
+    "overrides": {
+      "type": "array",
+      "description": "Library catalogs this application overrides. The overrides of a catalog are translations/overrides/<catalog>/<locale>.rmf2 beside runic.json, keyed by the library's full logical keys; they may replace messages of the library's locales and add locales. The build validates them against the catalog the package packs (RunicTranslationsPackCatalog, package.json runicTranslations) and compiles them into the application.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["catalog", "from"],
+        "properties": {
+          "catalog": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9.-]*$",
+            "description": "The library's catalog ID, such as acme.grid."
+          },
+          "from": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The NuGet package ID or npm package name that ships the catalog, such as Acme.Grid or @acme/grid."
+          }
+        }
+      }
+    },
     "runtime": {
       "$ref": "#/$defs/runtime"
     },

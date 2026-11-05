@@ -81,6 +81,15 @@ public sealed class TranslationContextBuilder
         return this;
     }
 
+    /// <summary>Attaches each overlay to the catalog it names, such as the overlays a build compiles from runic.json <c>overrides</c> (<c>AppTextCatalog.Overlays</c>).</summary>
+    /// <remarks>Equivalent to <see cref="AddOverlay"/> for each overlay in order.</remarks>
+    public TranslationContextBuilder AddOverlays(IEnumerable<TranslationOverlay> overlays)
+    {
+        ArgumentNullException.ThrowIfNull(overlays);
+        foreach (TranslationOverlay overlay in overlays) AddOverlay(overlay ?? throw new ArgumentException("The overlays cannot contain null.", nameof(overlays)));
+        return this;
+    }
+
     /// <summary>Uses <paramref name="valueFormatter"/> for every catalog instead of the default formatter.</summary>
     public TranslationContextBuilder UseValueFormatter(ITextValueFormatter valueFormatter)
     {

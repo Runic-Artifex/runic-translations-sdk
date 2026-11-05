@@ -14,6 +14,22 @@ namespace Runic.Translations.Internal;
 internal sealed record TranslationManifestLayout(IReadOnlyList<string> SourceRoots, string? BaseLocale, string? Error)
 {
     internal bool IsValid => Error is null;
+
+    /// <summary>
+    /// The <c>overrides</c> directory beside runic.json when the manifest declares <c>overrides</c>: its
+    /// <c>&lt;catalog&gt;/&lt;locale&gt;.rmf2</c> files override library catalogs and are not sources of the project's catalog.
+    /// </summary>
+    internal string? OverridesRoot { get; init; }
+
+    /// <summary>Whether a file belongs to the overrides of library catalogs rather than to the project's catalog.</summary>
+    internal bool IsOverrideSource(string fullPath)
+    {
+        if (OverridesRoot is null) return false;
+        string relative = Path.GetRelativePath(OverridesRoot, fullPath);
+        return !Path.IsPathRooted(relative) && relative != ".." && relative != "." &&
+            !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) &&
+            !relative.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
+    }
 }
 
 /// <summary>
@@ -48,8 +64,9 @@ internal static class TranslationManifestReader
             if (root.ValueKind != JsonValueKind.Object) return Invalid(NotAnObject);
             string? baseLocale = root.TryGetProperty("baseLocale", out JsonElement locale) && locale.ValueKind == JsonValueKind.String
                 ? locale.GetString() : null;
+            string? overridesRoot = root.TryGetProperty("overrides", out _) ? Path.Combine(Path.GetFullPath(projectDirectory), "overrides") : null;
             if (!root.TryGetProperty("sourceRoots", out JsonElement mounts))
-                return new TranslationManifestLayout([projectDirectory], baseLocale, null);
+                return new TranslationManifestLayout([projectDirectory], baseLocale, null) { OverridesRoot = overridesRoot };
             if (mounts.ValueKind != JsonValueKind.Array) return Invalid(SourceRootsNotArray, baseLocale);
             var roots = new List<string>();
             foreach (JsonElement mount in mounts.EnumerateArray())
@@ -64,7 +81,7 @@ internal static class TranslationManifestReader
                     return Invalid(SourceRootInvalidPath, baseLocale);
                 }
             }
-            return new TranslationManifestLayout(roots, baseLocale, null);
+            return new TranslationManifestLayout(roots, baseLocale, null) { OverridesRoot = overridesRoot };
         }
     }
 

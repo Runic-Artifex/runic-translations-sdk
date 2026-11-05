@@ -41,6 +41,7 @@ internal sealed class SchemaTests
         AssertMembers(definitions.GetProperty("runtime"), TranslationCompiler.RuntimeMembers, "runtime");
         AssertMembers(definitions.GetProperty("validation"), ValidationMembers.All, "validation");
         AssertMembers(root.GetProperty("properties").GetProperty("formats"), TranslationCompiler.FormatsMembers, "formats");
+        AssertMembers(root.GetProperty("properties").GetProperty("overrides").GetProperty("items"), TranslationCompiler.OverrideMembers, "overrides[]");
 
         static void AssertMembers(JsonElement schemaObject, string[] accepted, string context)
         {

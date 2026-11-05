@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -151,9 +151,21 @@ test("rejects hostile, stale, and forged v3 output", async () => {
     const manifest = await writeV3Fixture(generated);
     await writeFile(join(generated, "extra.js"), "export {};\n");
     const valid = JSON.parse(await readFile(manifest, "utf8"));
+    // Members a later compiler adds within ESM ABI 4 are ignored (T1e): a library built by a newer patch still loads.
+    for (const [label, mutate] of [
+      ["unknown root member", document => { document.extra = true; }],
+      ["unknown asset member", document => { document.assets[0].extra = true; }],
+      ["unknown entrypoint", document => { document.entrypoints.extra = "extra.js"; }],
+    ]) {
+      const document = JSON.parse(JSON.stringify(valid));
+      mutate(document);
+      await writeFile(manifest, JSON.stringify(document));
+      await runicTranslations({ manifest, typeDeclarations: false }).buildStart.call({ addWatchFile() {} });
+      assert.ok(true, label);
+    }
     const rejected = [
-      ["unknown root member", document => { document.extra = true; }, /unknown member/],
-      ["unknown asset member", document => { document.assets[0].extra = true; }, /unknown asset member/],
+      ["malformed asset", document => { document.assets[0] = 1; }, /malformed asset/],
+      ["shared runtime outside its place", document => { document.sharedRuntime = { path: "../../runtime-core.js", sha256: "0".repeat(64), byteLength: 0 }; }, /shared runtime/],
       ["duplicate non-entrypoint asset path", document => {
         const asset = document.assets.find(item => item.path === "messages.js");
         document.assets.push({ ...asset, path: "extra.js" }, { ...asset, path: "extra.js", mediaType: "text/typescript" });
@@ -290,6 +302,65 @@ test("project mode compiles and watches canonical RMF2 v3 output", async () => {
     const changed = new Promise((resolve, reject) => { const timer = setTimeout(() => reject(new Error("No RMF2 membership update")), 5000); reloads.once("reload", value => { clearTimeout(timer); resolve(value); }); });
     watcher.emit("add", german);
     assert.equal((await changed).type, "full-reload"); assert.ok(watched.includes(german));
+    plugin.closeBundle();
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("dependencies: runic.json overrides and locales regenerate the dependency catalogs; an invalid runic.json keeps the last settings", async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "runic-vite-dependencies-")));
+  try {
+    const project = join(root, "translations"), output = join(root, "generated"), config = join(project, "runic.json");
+    await mkdir(join(project, "overrides", "acme.grid"), { recursive: true });
+    await writeFile(join(project, "overrides", "acme.grid", "en.rmf2"), "empty = Nothing\n");
+    await writeFile(join(project, "en.rmf2"), "title = Shop\n");
+    const settings = locales => JSON.stringify({ schemaVersion: 1, catalog: "app", baseLocale: "en", locales, overrides: [{ catalog: "acme.grid", from: "@acme/grid" }] });
+    await writeFile(config, settings(["en", "fr"]));
+    await writeFile(join(root, "package.json"), JSON.stringify({ name: "shop", dependencies: { "@acme/grid": "1.0.0" } }));
+    const library = join(root, "node_modules", "@acme", "grid");
+    await mkdir(join(library, "runic", "acme.grid"), { recursive: true });
+    await mkdir(join(library, "translations", "acme.grid.esm-v5"), { recursive: true });
+    await writeFile(join(library, "package.json"), JSON.stringify({ name: "@acme/grid", version: "1.0.0",
+      exports: { "./runic-translations": "./translations/acme.grid.esm-v5/web-module-manifest-v3.json" }, runicTranslations: { catalog: "acme.grid", project: "./runic/acme.grid/runic.json" } }));
+    await writeFile(join(library, "runic", "acme.grid", "runic.json"), "{}");
+    await writeFile(join(library, "translations", "acme.grid.esm-v5", "web-module-manifest-v3.json"), JSON.stringify({ catalog: "acme.grid", contractFingerprint: fingerprint }));
+    await writeV3Fixture(join(output, "app.esm-v5"));
+    await writeV3Fixture(join(output, "dependencies", "acme.grid.esm-v5"), { catalog: "acme.grid" });
+    const calls = join(root, "calls.txt"), compiler = join(root, "compiler.mjs");
+    await writeFile(compiler, `import { appendFile } from "node:fs/promises"; await appendFile(${JSON.stringify(calls)}, process.argv.slice(2).join("|") + "\\n");`);
+    const dependencyCalls = async () => (await readFile(calls, "utf8")).split("\n").filter(line => line.includes("--shared-runtime"));
+    const plugin = runicTranslations({ project, output, cwd: root, dependencies: "auto", command: process.execPath, commandArguments: [compiler], persistentCompiler: false, typeDeclarations: false });
+    const warnings = [];
+    plugin.config({ root: join(root, "src") });
+    plugin.configResolved({ logger: { warn: message => warnings.push(message), info() {} }, mode: "production" });
+    const watcher = new EventEmitter(), watched = [], reloads = new EventEmitter();
+    watcher.add = paths => watched.push(...(Array.isArray(paths) ? paths : [paths]));
+    const server = { watcher, httpServer: new EventEmitter(), ws: { send: value => reloads.emit("reload", value) }, moduleGraph: { getModuleById: () => undefined, getModulesByFile: () => new Set(), invalidateModule() {} } };
+    plugin.configureServer(server);
+    await plugin.buildStart.call({ addWatchFile() {} });
+    assert.ok(watched.includes(join(project, "overrides")), "the overrides directory is watched");
+    assert.match((await dependencyCalls()).join("\n"), /--overrides\|.*acme\.grid\|--locales\|en,fr$/);
+
+    // Mid-edit, runic.json is invalid: reported once, and the dependencies keep their settings.
+    await writeFile(config, "{");
+    watcher.emit("change", config);
+    await new Promise(resolve => setTimeout(resolve, 200));
+    assert.equal((await dependencyCalls()).length, 1);
+    assert.ok(warnings.some(message => /runic\.json cannot be read.*last valid overrides and locales/.test(message)), warnings.join("\n"));
+
+    // New locales regenerate the dependencies and reload.
+    await writeFile(config, settings(["en", "de", "it"]));
+    const reloaded = new Promise((resolve, reject) => { const timer = setTimeout(() => reject(new Error("No reload")), 5000); reloads.once("reload", value => { clearTimeout(timer); resolve(value); }); });
+    watcher.emit("change", config);
+    assert.equal((await reloaded).type, "full-reload");
+    assert.match((await dependencyCalls()).at(-1), /--locales\|en,de,it$/);
+
+    // An override of a catalog no dependency ships is an error, as RTR0104 is in a .NET build.
+    await writeFile(config, JSON.stringify({ schemaVersion: 1, catalog: "app", baseLocale: "en", overrides: [{ catalog: "acme.grid", from: "@acme/grid" }, { catalog: "acme.menu", from: "@acme/menu" }] }));
+    const failed = new Promise((resolve, reject) => { const timer = setTimeout(() => reject(new Error("No error")), 5000); reloads.once("reload", value => { clearTimeout(timer); resolve(value); }); });
+    watcher.emit("change", config);
+    const error = await failed;
+    assert.equal(error.type, "error");
+    assert.match(error.err.message, /RTR0104: Catalog 'acme\.menu' to override is not shipped by any dependency/);
     plugin.closeBundle();
   } finally { await rm(root, { recursive: true, force: true }); }
 });
@@ -784,6 +855,6 @@ test("published package inventory contains only declared runtime files", async (
     const archives = (await readdir(output)).filter(file => file.endsWith(".tgz")); assert.equal(archives.length, 1);
     const { stdout } = await execFileAsync("tar", ["-tzf", join(output, archives[0])]);
     const files = stdout.split("\n").filter(file => file.startsWith("package/") && !file.endsWith("/")).map(file => file.slice("package/".length)).sort();
-    assert.deepEqual(files, ["LICENSE", "README.md", "dist/compiler-service.d.ts", "dist/compiler-service.js", "dist/index.d.ts", "dist/index.js", "package.json"]);
+    assert.deepEqual(files, ["LICENSE", "README.md", "dist/compiler-service.d.ts", "dist/compiler-service.js", "dist/dependencies.d.ts", "dist/dependencies.js", "dist/index.d.ts", "dist/index.js", "package.json"]);
   } finally { await rm(output, { recursive: true, force: true }); }
 });

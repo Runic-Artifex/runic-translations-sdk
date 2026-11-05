@@ -7,7 +7,9 @@ using Runic.Translations.Compiler;
 namespace Runic.Translations.Tool;
 
 /// <param name="ManifestError">Why runic.json yields no source layout, or <see langword="null"/> when it is usable.</param>
-internal sealed record CompilerInputs(TranslationSource Project, IReadOnlyList<TranslationSource> Messages, IReadOnlyList<string>? SourceRoots = null, string? ManifestError = null);
+/// <param name="OverrideSources">The sources under translations/overrides when runic.json declares <c>overrides</c>, which belong to library catalogs.</param>
+internal sealed record CompilerInputs(TranslationSource Project, IReadOnlyList<TranslationSource> Messages, IReadOnlyList<string>? SourceRoots = null, string? ManifestError = null,
+    IReadOnlyList<TranslationSource>? OverrideSources = null);
 
 internal static class InputFiles
 {
@@ -35,11 +37,37 @@ internal static class InputFiles
         IReadOnlyList<string> roots = layout.SourceRoots;
         foreach (string sourceRoot in roots)
         foreach (string candidate in EnumerateFilesWithoutReparsePoints(sourceRoot, root, projectPath))
-            if (string.Equals(Path.GetExtension(candidate), ".mf2", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(Path.GetExtension(candidate), ".rmf2", StringComparison.OrdinalIgnoreCase))
+            if (IsSourceFile(candidate) && !layout.IsOverrideSource(Path.GetFullPath(candidate)))
                 messages.Add(ReadSource(candidate, DisplayPath(candidate, currentDirectory)));
         messages.Sort((left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
-        return new CompilerInputs(project, messages, roots);
+        var overrides = new List<TranslationSource>();
+        if (layout.OverridesRoot is { } overridesRoot && Directory.Exists(overridesRoot))
+        {
+            foreach (string candidate in EnumerateFilesWithoutReparsePoints(overridesRoot, root, projectPath))
+                if (IsSourceFile(candidate)) overrides.Add(ReadSource(candidate, DisplayPath(candidate, currentDirectory)));
+            overrides.Sort((left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
+        }
+        return new CompilerInputs(project, messages, roots, null, overrides);
+
+        static bool IsSourceFile(string path) =>
+            string.Equals(Path.GetExtension(path), ".mf2", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(Path.GetExtension(path), ".rmf2", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The <c>&lt;locale&gt;.rmf2</c> override sources of a directory (generate --overrides); none for a missing directory or null.</summary>
+    internal static IReadOnlyList<TranslationSource> ReadOverrides(string? directory)
+    {
+        if (directory is null) return [];
+        string currentDirectory = Path.GetFullPath(Environment.CurrentDirectory);
+        string root = Path.GetFullPath(directory, currentDirectory);
+        if (!Directory.Exists(root)) return [];
+        var sources = new List<TranslationSource>();
+        foreach (string candidate in EnumerateFilesWithoutReparsePoints(root, root, directory))
+            if (string.Equals(Path.GetExtension(candidate), ".rmf2", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Path.GetExtension(candidate), ".mf2", StringComparison.OrdinalIgnoreCase))
+                sources.Add(ReadSource(candidate, DisplayPath(candidate, currentDirectory)));
+        sources.Sort((left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
+        return sources;
     }
 
     private static TranslationSource ReadSource(string fullPath, string displayPath)

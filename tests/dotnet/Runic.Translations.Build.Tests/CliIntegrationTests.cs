@@ -82,6 +82,25 @@ internal sealed class CliIntegrationTests
         Assert.Contains("@<file>", help.StandardOutput);
     }
 
+    [Test, DisplayName("CLI project mode leaves translations/overrides to the library catalogs runic.json overrides")]
+    public void OverrideSourcesAreNotProjectSources()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("translations", "overrides", "acme.grid"));
+        File.WriteAllText(temporary.Resolve("translations", "runic.json"), """
+            { "schemaVersion": 1, "catalog": "app", "code": { "namespace": "Example", "className": "AppText" }, "baseLocale": "en",
+              "overrides": [{ "catalog": "acme.grid", "from": "Acme.Grid" }] }
+            """, new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("translations", "en.rmf2"), "title = Shop\n", new UTF8Encoding(false));
+        // As a source of the project's own catalog, this would be the namespace overrides.acme.grid, and fr an undeclared locale.
+        File.WriteAllText(temporary.Resolve("translations", "overrides", "acme.grid", "en.rmf2"), "empty = Nothing\n", new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("translations", "overrides", "acme.grid", "fr.rmf2"), "empty = Rien\n", new UTF8Encoding(false));
+
+        ProcessResult validate = TestFixture.RunTool(temporary, "validate", "--project", "translations");
+        Assert.Equal(0, validate.ExitCode, validate.Combined);
+        Assert.Contains("1 source document(s)", validate.StandardOutput);
+    }
+
     [Test, DisplayName("CLI project mode validates and generates direct MF2")]
     public void ProjectModeValidatesAndGenerates()
     {
@@ -108,6 +127,31 @@ internal sealed class CliIntegrationTests
         Assert.Equal(0, verify.ExitCode, verify.Combined);
         using JsonDocument verified = JsonDocument.Parse(verify.StandardOutput);
         Assert.Equal("verify", verified.RootElement.GetProperty("command").GetString());
+    }
+
+    [Test, DisplayName("generate of a dependency catalog rejects invalid --locales and removes stale modules of its catalog")]
+    public void DependencyCatalogGeneration()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("library"));
+        File.WriteAllText(temporary.Resolve("library", "runic.json"), """
+            { "schemaVersion": 1, "catalog": "acme.grid", "code": { "namespace": "Acme.Grid", "className": "GridText" }, "baseLocale": "en", "locales": ["en", "de"] }
+            """, new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("library", "en.rmf2"), "empty = No rows\n", new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("library", "de.rmf2"), "empty = Keine Zeilen\n", new UTF8Encoding(false));
+
+        ProcessResult invalid = TestFixture.RunTool(temporary, "generate", "--project", "library", "--output", "dependencies", "--emit-esm", "--locales", "en,de_DE!");
+        Assert.True(invalid.ExitCode != 0 && invalid.Combined.Contains("'de_DE!' is not a valid BCP 47 locale tag", StringComparison.Ordinal), invalid.Combined);
+        Assert.False(Directory.Exists(temporary.Resolve("dependencies")), "nothing generated for an invalid locale");
+
+        Directory.CreateDirectory(temporary.Resolve("dependencies", "acme.grid.esm-v5", "messages"));
+        File.WriteAllText(temporary.Resolve("dependencies", "acme.grid.esm-v5", "messages", "stale.js"), "export {};\n", new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("dependencies", "other.js"), "export {};\n", new UTF8Encoding(false));
+        ProcessResult generate = TestFixture.RunTool(temporary, "generate", "--project", "library", "--output", "dependencies", "--emit-esm", "--shared-runtime", "--locales", "en");
+        Assert.Equal(0, generate.ExitCode, generate.Combined);
+        Assert.False(File.Exists(temporary.Resolve("dependencies", "acme.grid.esm-v5", "messages", "stale.js")), "the stale module is removed: " + generate.Combined);
+        Assert.True(File.Exists(temporary.Resolve("dependencies", "acme.grid.esm-v5", "messages.js")) && File.Exists(temporary.Resolve("dependencies", "runtime-core.js")), generate.Combined);
+        Assert.True(File.Exists(temporary.Resolve("dependencies", "other.js")), "files outside the catalog's directory stay");
     }
 
     [Test, DisplayName("CLI help and invalid invocation use stable exit codes")]

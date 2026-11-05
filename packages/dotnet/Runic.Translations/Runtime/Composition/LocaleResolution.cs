@@ -79,35 +79,8 @@ internal static class LocaleRequestResolver
             : LocaleResolution.Related;
     }
 
-    /// <summary>
-    /// The nearest parent of a canonical tag among <paramref name="candidates"/> (canonical tags in ordinal order): the
-    /// nearest of its CLDR parent locales (<c>es-419</c> for <c>es-MX</c>, <c>zh-Hant</c> for <c>zh-TW</c>, <c>de</c>
-    /// for <c>de-CH</c>), else the nearest tag left by removing subtags that keeps its likely script (<c>tlh</c> for
-    /// <c>tlh-x-a</c>, but never a Cyrillic <c>sr</c> for <c>sr-Latn-RS</c> or <c>zh</c> for <c>zh-Hant</c>).
-    /// </summary>
-    /// <remarks>
-    /// Every result is a strict ancestor: its CLDR data ID is nearer the root than the tag's, or it is a shorter tag. A
-    /// chain of nearest parents therefore ends.
-    /// </remarks>
-    internal static string? NearestParent(string canonicalLocale, string[] candidates)
-    {
-        List<string> chain = CldrLocales.Chain(CldrLocales.DataId(canonicalLocale));
-        string? best = null;
-        int bestStep = int.MaxValue;
-        foreach (string candidate in candidates)
-        {
-            if (string.Equals(candidate, canonicalLocale, StringComparison.Ordinal)) continue;
-            int step = chain.IndexOf(CldrLocales.DataId(candidate), 1);
-            // Ties keep the ordinal order of the candidates.
-            if (step > 0 && step < bestStep)
-            {
-                best = candidate;
-                bestStep = step;
-            }
-        }
-
-        return best ?? CldrLocales.Truncate(canonicalLocale, candidates);
-    }
+    /// <summary>The nearest parent of a canonical tag among <paramref name="candidates"/>; see <see cref="CldrLocales.NearestParent"/>.</summary>
+    internal static string? NearestParent(string canonicalLocale, string[] candidates) => CldrLocales.NearestParent(canonicalLocale, candidates);
 
     /// <summary>Canonicalizes a requested tag; an empty tag, the name of the invariant culture, stays empty.</summary>
     internal static string Canonicalize(string requestedLocale, string parameterName)
