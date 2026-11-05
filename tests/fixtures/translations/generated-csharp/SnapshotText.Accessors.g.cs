@@ -10,9 +10,17 @@ public sealed partial class SnapshotText
     private readonly global::Runic.Translations.ITranslationManager __translationManager;
 
     /// <summary>Creates accessors over a locale manager.</summary>
+    [global::System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
     public SnapshotText(global::Runic.Translations.ITranslationManager manager)
     {
         __translationManager = manager ?? throw new global::System.ArgumentNullException(nameof(manager));
+    }
+
+    /// <summary>Creates accessors over this catalog's manager in a translation context that registers it.</summary>
+    /// <exception cref="global::System.Collections.Generic.KeyNotFoundException">The context does not register the catalog.</exception>
+    public SnapshotText(global::Runic.Translations.ITranslationContext context)
+    {
+        __translationManager = (context ?? throw new global::System.ArgumentNullException(nameof(context))).GetManager(SnapshotTextCatalog.CatalogId);
     }
 
     /// <summary>Hello {$name}</summary>

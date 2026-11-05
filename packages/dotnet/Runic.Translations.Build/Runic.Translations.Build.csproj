@@ -27,6 +27,12 @@
     <None Update="build\Runic.Translations.Build.targets"
           Pack="true"
           PackagePath="build\Runic.Translations.Build.targets" />
+    <None Update="build\Runic.Translations.Build.Pack.targets"
+          Pack="true"
+          PackagePath="build\Runic.Translations.Build.Pack.targets" />
+    <None Update="buildMultiTargeting\Runic.Translations.Build.targets"
+          Pack="true"
+          PackagePath="buildMultiTargeting\Runic.Translations.Build.targets" />
   </ItemGroup>
 
   <Target Name="BuildTranslationAnalyzers" BeforeTargets="BundleTranslationAnalyzers" DependsOnTargets="ResolveProjectReferences" Condition="'$(NoBuild)' != 'true'" />

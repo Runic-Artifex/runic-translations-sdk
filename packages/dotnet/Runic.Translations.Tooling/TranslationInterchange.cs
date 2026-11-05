@@ -172,7 +172,10 @@ public static class TranslationInterchange
         using (XmlWriter writer = XmlWriter.Create(stream, new XmlWriterSettings { Encoding = new UTF8Encoding(false), Indent = false, NewLineHandling = NewLineHandling.Entitize, OmitXmlDeclaration = false }))
         {
             writer.WriteStartDocument(); writer.WriteStartElement("xliff", XliffNamespace); writer.WriteAttributeString("version", "2.1"); writer.WriteAttributeString("srcLang", projection.SourceLocale); writer.WriteAttributeString("trgLang", targetLocale.Tag);
-            bool sizeRestrictions = projection.CanonicalUnits.Any(static unit => unit.Metadata.MaxLength is not null && !unit.Structured);
+            // The locale's effective limit, as validate checks it (RTR0098): the base's @maxLength, lowered by the translation's own.
+            int? Limit(TranslationInterchangeSourceUnit unit) =>
+                TranslationCompiler.EffectiveMaxLengthV5(unit.Metadata.MaxLength, direct.TryGetValue(unit.Key, out TranslationInterchangeTargetUnit? own) ? own.MaxLength : null);
+            bool sizeRestrictions = projection.CanonicalUnits.Any(unit => Limit(unit) is not null && !unit.Structured);
             if (sizeRestrictions) writer.WriteAttributeString("xmlns", "slr", null, SizeRestrictionNamespace);
             writer.WriteStartElement("file", XliffNamespace); writer.WriteAttributeString("id", projection.CatalogId); writer.WriteAttributeString("original", projection.CatalogId + "." + targetLocale.Tag + ".xliff");
             // @maxLength counts Unicode code points after NFC, without placeholders: XLIFF's standard codepoints profile.
@@ -185,8 +188,16 @@ public static class TranslationInterchange
             foreach (TranslationInterchangeSourceUnit source in projection.CanonicalUnits)
             {
                 direct.TryGetValue(source.Key, out TranslationInterchangeTargetUnit? target);
+                int? limit = Limit(source);
                 bool structured = source.Structured || target?.Structured == true;
-                if (structured) losses.Add(new("XLIFF21-STRUCTURED-MESSAGE", "/" + source.Key, source.Document
+                // XML 1.0 forbids most C0 controls. Text carries them as <cp hex>, but a code's equiv attribute cannot,
+                // so a unit whose header, keys or placeholders hold one is exported as not translatable.
+                if (!structured && (HasXmlInvalidCode(source.Pieces, source.Selector) || HasXmlInvalidCode(target?.Pieces, target?.Selector)))
+                {
+                    structured = true;
+                    losses.Add(new("XLIFF21-CONTROL-CHARACTER", "/" + source.Key, "A placeholder, selector or variant key holds a character that XML 1.0 cannot carry in an attribute; the unit is exported as not translatable and its import is skipped.", true));
+                }
+                else if (structured) losses.Add(new("XLIFF21-STRUCTURED-MESSAGE", "/" + source.Key, source.Document
                     ? "Document message (RMF2 document profile v1): its block structure and markup are not losslessly representable by the closed XLIFF text profile, and its import is skipped."
                     : "Markup, or a pattern that reads a value only its declarations define, is not losslessly representable by the closed XLIFF text profile; the unit is exported as not translatable and its import is skipped.", true));
                 // A missing translation of a plural message whose locale selects other categories than the source
@@ -200,7 +211,7 @@ public static class TranslationInterchange
                 }
                 writer.WriteStartElement("unit", XliffNamespace); writer.WriteAttributeString("id", source.Key);
                 if (structured) writer.WriteAttributeString("translate", "no");
-                else if (source.Selector is null && source.Metadata.MaxLength is { } maxLength) writer.WriteAttributeString("slr", "sizeRestriction", SizeRestrictionNamespace, maxLength.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                else if (source.Selector is null && limit is { } maxLength) writer.WriteAttributeString("slr", "sizeRestriction", SizeRestrictionNamespace, maxLength.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 WriteNotes(writer, projection, source, structured, entry);
                 writer.WriteStartElement("segment", XliffNamespace); writer.WriteAttributeString("id", "1");
                 // An existing translation without review data is "translated"; a missing one keeps XLIFF's default "initial".
@@ -213,14 +224,14 @@ public static class TranslationInterchange
                 else if (prefill is not null) writer.WriteAttributeString("state", "initial");
                 Dictionary<string, string> sourceIds = new(StringComparer.Ordinal);
                 writer.WriteStartElement("source", XliffNamespace);
-                if (structured) writer.WriteString(source.Text);
-                else new InlineWriter(writer, null, sourceIds, source.Metadata.MaxLength).Write(source.Pieces, source.Selector);
+                if (structured) WriteText(writer, source.Text);
+                else new InlineWriter(writer, null, sourceIds, limit).Write(source.Pieces, source.Selector);
                 writer.WriteEndElement();
                 if (target is not null || prefill is not null)
                 {
                     writer.WriteStartElement("target", XliffNamespace);
-                    if (structured) writer.WriteString(target!.Text);
-                    else new InlineWriter(writer, sourceIds, null, source.Metadata.MaxLength).Write(target?.Pieces, target?.Selector ?? prefill);
+                    if (structured) WriteText(writer, target!.Text);
+                    else new InlineWriter(writer, sourceIds, null, limit).Write(target?.Pieces, target?.Selector ?? prefill);
                     writer.WriteEndElement();
                 }
                 writer.WriteEndElement(); writer.WriteEndElement();
@@ -274,7 +285,7 @@ public static class TranslationInterchange
         {
             foreach (TranslationInterchangePiece piece in pieces)
             {
-                if (piece.IsText) { writer.WriteString(piece.Text); continue; }
+                if (piece.IsText) { WriteText(writer, piece.Text!); continue; }
                 string id = Id((++_placeholders).ToString(System.Globalization.CultureInfo.InvariantCulture), "t" + (_targetPlaceholders + 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
                     static id => char.IsAsciiDigit(id[0]), piece.Expression!, static value => value, piece.Expression!);
                 if (id.StartsWith('t')) _targetPlaceholders++;
@@ -304,14 +315,62 @@ public static class TranslationInterchange
         }
     }
 
+    // Text with the characters XML 1.0 cannot hold (C0 controls other than tab, LF and CR, U+FFFE, U+FFFF, lone
+    // surrogates) written as XLIFF <cp hex="…"/>, which import reads back.
+    private static void WriteText(XmlWriter writer, string text)
+    {
+        int start = 0;
+        for (int index = 0; index < text.Length; index++)
+        {
+            char character = text[index];
+            if (char.IsHighSurrogate(character) && index + 1 < text.Length && char.IsLowSurrogate(text[index + 1])) { index++; continue; }
+            if (XmlConvert.IsXmlChar(character)) continue;
+            if (index > start) writer.WriteString(text[start..index]);
+            writer.WriteStartElement("cp", XliffNamespace);
+            writer.WriteAttributeString("hex", ((int)character).ToString("X4", System.Globalization.CultureInfo.InvariantCulture));
+            writer.WriteEndElement();
+            start = index + 1;
+        }
+        if (start < text.Length) writer.WriteString(start == 0 ? text : text[start..]);
+    }
+
+    private static bool IsXmlText(string value)
+    {
+        for (int index = 0; index < value.Length; index++)
+        {
+            if (char.IsHighSurrogate(value[index]) && index + 1 < value.Length && char.IsLowSurrogate(value[index + 1])) { index++; continue; }
+            if (!XmlConvert.IsXmlChar(value[index])) return false;
+        }
+        return true;
+    }
+
+    private static string XmlSafe(string value)
+    {
+        var safe = new StringBuilder(value.Length);
+        for (int index = 0; index < value.Length; index++)
+        {
+            if (char.IsHighSurrogate(value[index]) && index + 1 < value.Length && char.IsLowSurrogate(value[index + 1])) { safe.Append(value, index++, 2); continue; }
+            safe.Append(XmlConvert.IsXmlChar(value[index]) ? value[index] : '\uFFFD');
+        }
+        return safe.ToString();
+    }
+
+    // Whether a code's attribute (header, variant keys, placeholder expression) holds a character XML cannot carry.
+    private static bool HasXmlInvalidCode(IReadOnlyList<TranslationInterchangePiece>? pieces, TranslationInterchangeSelector? selector)
+    {
+        IEnumerable<string> codes = (pieces ?? []).Concat(selector?.Pieces ?? []).Where(static piece => !piece.IsText).Select(static piece => piece.Expression!);
+        if (selector is not null) codes = codes.Append(selector.Header).Concat(selector.Variants.Select(static variant => variant.Keys ?? string.Empty));
+        return codes.Any(static code => !IsXmlText(code));
+    }
+
     // The variants a locale needs for a single plural or ordinal selector: keys of categories it never selects are
     // dropped, and each category it selects that has no key gets the catch-all's text. Null when nothing changes.
     private static TranslationInterchangeSelector? Prefill(TranslationInterchangeSelector source, string locale)
     {
         if (source.PluralFunction is null) return null;
-        string[] categories = Rmf2AuthoringService.PluralCategories(locale, source.PluralFunction == "ordinal");
+        IReadOnlyList<string> categories = Rmf2AuthoringService.PluralCategories(locale, source.PluralFunction == "ordinal", source.IntegerOperand);
         TranslationInterchangeVariant? catchAll = source.Variants.FirstOrDefault(static variant => variant.Keys == "*");
-        if (categories.Length == 0 || catchAll is null) return null;
+        if (categories.Count == 0 || catchAll is null) return null;
         static bool IsCategory(string? keys) => keys is "zero" or "one" or "two" or "few" or "many" or "other";
         var variants = source.Variants.Where(variant => !IsCategory(variant.Keys) || variant.Keys == "other" || categories.Contains(variant.Keys)).ToList();
         int at = variants.IndexOf(catchAll);
@@ -325,7 +384,8 @@ public static class TranslationInterchange
     {
         writer.WriteStartElement("notes", XliffNamespace);
         string? description = ReadableDescription(source.Metadata);
-        if (description is not null) { writer.WriteStartElement("note", XliffNamespace); writer.WriteAttributeString("category", "description"); writer.WriteString(description); writer.WriteEndElement(); }
+        // A note is plain text without <cp>: a character XML cannot hold is shown as U+FFFD; import ignores the description.
+        if (description is not null) { writer.WriteStartElement("note", XliffNamespace); writer.WriteAttributeString("category", "description"); writer.WriteString(IsXmlText(description) ? description : XmlSafe(description)); writer.WriteEndElement(); }
         writer.WriteStartElement("note", XliffNamespace); writer.WriteAttributeString("category", "runic:unit"); writer.WriteString(SerializeUnitNote(projection, source, structured)); writer.WriteEndElement();
         if (review is not null) { writer.WriteStartElement("note", XliffNamespace); writer.WriteAttributeString("category", "runic:review"); writer.WriteAttributeString("appliesTo", "target"); writer.WriteString(SerializeReviewNote(review, source.SourceFingerprint)); writer.WriteEndElement(); }
         writer.WriteEndElement();

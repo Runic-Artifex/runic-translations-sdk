@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
@@ -56,8 +57,8 @@ internal static class Rmf2AuthoringService
         bool supported = syntax.Success && semantic is not null;
         return new(Revision(source), supported, supported ? null : "The compiler cannot safely project this syntax. Edit the MF2 source.",
             inputs, syntax.Match?.Selectors ?? Array.Empty<string>(), semantic?.Selectors.Select(selector => selector.Function).ToArray() ?? [], variants, PluralCategories(locale,
-                semantic is { Selectors.Count: > 0 } && semantic.Selectors[0].Function == "ordinal"),
-            semantic?.Selectors.Select(selector => (IReadOnlyList<string>)PluralCategories(locale, selector.Function == "ordinal")).ToArray() ?? [], TranslationCapabilityRegistry.CldrVersion);
+                semantic is { Selectors.Count: > 0 } && semantic.Selectors[0].Function == "ordinal", semantic is { Selectors.Count: > 0 } && semantic.Selectors[0].Type == "int64"),
+            semantic?.Selectors.Select(selector => (IReadOnlyList<string>)PluralCategories(locale, selector.Function == "ordinal", selector.Type == "int64")).ToArray() ?? [], TranslationCapabilityRegistry.CldrVersion);
         void Add(string id, IReadOnlyList<string> keys, int start, int length) => variants.Add(new(id, keys,
             Encoding.UTF8.GetString(source.Bytes, start, length), start, length));
     }
@@ -226,15 +227,25 @@ internal static class Rmf2AuthoringService
     }
     // Extract category names from the same generated CLDR rules shipped to ESM.
     // This avoids a host Intl evaluator or a second hand-maintained locale table.
-    internal static string[] PluralCategories(string locale, bool ordinal)
+    // An integer selector (`:integer`, an int64 operand) has no visible fraction digits, so only the
+    // categories its rule reaches with v = 0 are selectable: Czech `many` is fractions only.
+    internal static IReadOnlyList<string> PluralCategories(string locale, bool ordinal, bool integer = false)
     {
         string language = locale.Split('-', '_')[0].ToLowerInvariant();
+        return Categories.GetOrAdd((language, ordinal, integer), static key => ReadCategories(key.Language, key.Ordinal, key.Integer));
+    }
+
+    private static readonly ConcurrentDictionary<(string Language, bool Ordinal, bool Integer), string[]> Categories = new();
+
+    private static string[] ReadCategories(string language, bool ordinal, bool integer)
+    {
         string rules = TranslationCapabilityRegistry.EsmPluralRulesSource;
         var mapping = Regex.Match(rules, "\\\"" + Regex.Escape(language) + "\\\": Object.freeze\\(\\[pluralRule(\\d+), pluralRule(\\d+)\\]\\)");
         if (!mapping.Success) return Array.Empty<string>();
         string index = mapping.Groups[ordinal ? 2 : 1].Value;
         var body = Regex.Match(rules, "const pluralRule" + index + " = \\(o\\) => \\{(.*?)\\};", RegexOptions.Singleline);
-        var categories = Regex.Matches(body.Value, "return \"(.*?)\"").Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
+        IReadOnlySet<string> categories = Regex.Matches(body.Value, "return \"(.*?)\"").Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
+        if (integer && PluralRuleReachability.IntegerCategories(body.Groups[1].Value) is { } reachable) categories = reachable;
         return CategoryOrder.Where(categories.Contains).ToArray();
     }
 }

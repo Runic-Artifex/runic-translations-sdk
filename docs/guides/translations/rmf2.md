@@ -82,9 +82,9 @@ Comments and `@param $name - description` / `@example {JSON}` attach to the next
 entry or group without an intervening blank line. Parameters and example input
 types are checked; unknown properties remain in the resource model with a warning.
 `@maxLength N` limits a message's text to N characters (Unicode code points after
-NFC, without placeholder values) in every locale; a translation may declare its
-own. `validate` warns about a longer text (`RTR0098`), and XLIFF export writes the
-limit as `slr:sizeRestriction` for translation tools:
+NFC, without placeholder values) in every locale; a translation may lower it with
+its own. `validate` warns about a longer text (`RTR0098`), and XLIFF export writes
+the same per-locale limit as `slr:sizeRestriction` for translation tools:
 
 ```text
 @maxLength 12

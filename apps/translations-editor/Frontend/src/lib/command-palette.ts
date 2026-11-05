@@ -56,6 +56,8 @@ export interface EditorPaletteState {
   readonly selectedLocale: string;
   readonly editorMode: "translation" | "raw";
   readonly uiLocale: string;
+  /** The editor catalog's locales with their names in their own language, which the interface language commands list. */
+  readonly uiLocales: ReadonlyArray<{ tag: string; name: string }>;
   readonly themeMode: ThemeMode;
   readonly workspaceReady: boolean;
   readonly searchAvailable: boolean;
@@ -279,22 +281,14 @@ export function buildEditorCommandPalette(
       run: () => actions.selectLocale(locale.tag),
     });
   }
-  if (state.uiLocale !== "en") {
+  for (const { tag: uiLocale, name: language } of state.uiLocales) {
+    if (uiLocale === state.uiLocale) continue;
     push({
-      id: "view.ui-locale-en",
-      title: (ui?.text("ui_palette_interface_language_english") ?? "Interface language · English"),
+      id: `view.ui-locale-${uiLocale}`,
+      title: ui?.text("ui_palette_interface_language", { language }) ?? `Interface language · ${language}`,
       group: "view",
-      keywords: "ui language english menues",
-      run: () => actions.setUiLocale("en"),
-    });
-  }
-  if (state.uiLocale !== "de") {
-    push({
-      id: "view.ui-locale-de",
-      title: (ui?.text("ui_palette_interface_language_deutsch") ?? "Interface language · Deutsch"),
-      group: "view",
-      keywords: "ui language german",
-      run: () => actions.setUiLocale("de"),
+      keywords: `ui language interface menus ${uiLocale} ${language}`,
+      run: () => actions.setUiLocale(uiLocale),
     });
   }
   for (const mode of ["light", "dark", "system"] as const) {

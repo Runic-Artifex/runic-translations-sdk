@@ -80,7 +80,6 @@ public static partial class TranslationCompiler
     {
         cancellationToken.ThrowIfCancellationRequested();
         var diagnostics = new DiagnosticBag();
-        var pluralCategories = new Dictionary<(string, bool), IReadOnlyList<string>>();
         Rmf2ProjectCompilation Result(Rmf2ProjectV5? value = null) => new(value, Array.AsReadOnly(diagnostics.ToSortedArray()));
         bool Failed() => diagnostics.Items.Any(d => d.Severity == TranslationDiagnosticSeverity.Error);
         if (RejectDuplicateSourcePaths(new[] { project }, sources, diagnostics)) return Result();
@@ -330,11 +329,10 @@ public static partial class TranslationCompiler
                 if (!origin.Linked.Message.Inputs.Any(expected => expected.Name == input.Name && expected.Type == input.Type))
                     diagnostics.Add("RTR0016", TranslationDiagnosticSeverity.Error, "Translation introduces or changes caller input '" + input.Name + "' for '" + origin.Source.Key + "'.", translated.Source.Node.NameLocation);
         }
-        IReadOnlyList<string> PluralCategories(string locale, bool ordinal) =>
-            pluralCategories.TryGetValue((locale, ordinal), out var known) ? known : pluralCategories[(locale, ordinal)] = Rmf2AuthoringService.PluralCategories(locale, ordinal);
         // RTR0094/RTR0095: plural or ordinal keys checked against the categories of the message's own locale, from
         // the generated CLDR rule metadata that both runtimes select with. A selector position whose keys are all
-        // exact numbers (and the catch-all) chose not to use categories and is not checked for missing ones.
+        // exact numbers (and the catch-all) chose not to use categories and is not checked for missing ones. An
+        // integer selector (int64, as `:integer` declares) is checked against the categories integers reach.
         void ValidatePluralCategories(Rmf2ProjectSourceV5 source, Rmf2MessageV5 message)
         {
             TranslationPolicy policy = manifest.Policy(source.Locale, ValidationMembers.PluralCategories);
@@ -345,7 +343,8 @@ public static partial class TranslationCompiler
                 Rmf2SelectorV5 selector = message.Selectors[position];
                 if (selector.Function is not ("plural" or "ordinal")) continue;
                 bool ordinal = selector.Function == "ordinal";
-                IReadOnlyList<string> categories = PluralCategories(source.Locale, ordinal);
+                IReadOnlyList<string> categories = Rmf2AuthoringService.PluralCategories(source.Locale, ordinal, selector.Type == "int64");
+                bool integer = categories.Count != Rmf2AuthoringService.PluralCategories(source.Locale, ordinal).Count;
                 if (categories.Count == 0) continue; // RTR0031 reports a locale without rules.
                 var used = new SortedSet<string>(StringComparer.Ordinal);
                 for (int index = 0; index < message.Variants.Count; index++)
@@ -356,7 +355,7 @@ public static partial class TranslationCompiler
                     if (categories.Contains(key.Value)) continue;
                     TextSourceLocation location = message.Syntax.Variants[index].KeyLocations[position];
                     AddPolicyDiagnostic("RTR0094", policy, "Variant key '" + key.Value + "' of '" + logical + "' is never selected in locale '" + source.Locale + "', whose " +
-                        (ordinal ? "ordinal" : "plural") + " categories are " + string.Join(", ", categories) + ".", source.Source, MessageSpan(source, location), diagnostics);
+                        (ordinal ? "ordinal" : "plural") + " categories" + (integer ? " for integers" : "") + " are " + string.Join(", ", categories) + ".", source.Source, MessageSpan(source, location), diagnostics);
                 }
                 if (used.Count == 0) continue;
                 string[] missing = categories.Where(category => category != "other" && !used.Contains(category)).ToArray();
@@ -394,8 +393,14 @@ public static partial class TranslationCompiler
         // RTR0098: the literal text of a variant is longer than @maxLength; placeholder values and markup are not counted.
         void ValidateMaxLength(Rmf2ProjectEntryV5 origin, Rmf2ProjectEntryV5 translated)
         {
+            // The base locale's limit is the developer's UI constraint: a translation may only tighten it, and XLIFF
+            // export writes the same effective limit (EffectiveMaxLengthV5) as the unit's size restriction.
+            if (MaxLengthV5(translated.Source.Node.Properties) is { } own && MaxLengthV5(origin.Source.Node.Properties) is { } baseLimit && own > baseLimit)
+                diagnostics.Add("RTR0051", TranslationDiagnosticSeverity.Warning, "The '" + translated.Source.Locale + "' @maxLength " + own.ToString(CultureInfo.InvariantCulture) + " of '" +
+                    string.Join(".", origin.Source.Path) + "' is larger than the limit of " + baseLimit.ToString(CultureInfo.InvariantCulture) + " in base locale '" + manifest.DefaultLocale +
+                    "'; a translation can only lower it, so " + baseLimit.ToString(CultureInfo.InvariantCulture) + " applies.", translated.Source.Source, NameSpan(translated.Source));
             TranslationPolicy policy = manifest.Policy(translated.Source.Locale, ValidationMembers.MaxLength);
-            if (policy == TranslationPolicy.Allow || (MaxLengthV5(translated.Source.Node.Properties) ?? MaxLengthV5(origin.Source.Node.Properties)) is not { } limit) return;
+            if (policy == TranslationPolicy.Allow || EffectiveMaxLengthV5(MaxLengthV5(origin.Source.Node.Properties), MaxLengthV5(translated.Source.Node.Properties)) is not { } limit) return;
             int longest = translated.Linked.Message.Variants.Select(variant => TextLengthV5(variant.Nodes)).DefaultIfEmpty(0).Max();
             if (longest > limit)
                 AddPolicyDiagnostic("RTR0098", policy, "The '" + translated.Source.Locale + "' text of '" + string.Join(".", origin.Source.Path) + "' is " + longest.ToString(CultureInfo.InvariantCulture) +
@@ -446,7 +451,7 @@ public static partial class TranslationCompiler
     }
 
     // The @maxLength of a message's properties, or null when it declares none or an invalid one (RTR0051).
-    private static int? MaxLengthV5(IReadOnlyList<string> properties)
+    internal static int? MaxLengthV5(IReadOnlyList<string> properties)
     {
         foreach (string property in properties)
         {
@@ -456,6 +461,10 @@ public static partial class TranslationCompiler
         }
         return null;
     }
+
+    // The limit a translation is held to: the smaller of the base's and its own @maxLength, either of which may be absent.
+    internal static int? EffectiveMaxLengthV5(int? baseLimit, int? translationLimit) =>
+        baseLimit is { } a && translationLimit is { } b ? Math.Min(a, b) : baseLimit ?? translationLimit;
 
     // Unicode code points of the literal text after NFC normalization, as XLIFF's xliff:codepoints profile counts.
     private static int TextLengthV5(IReadOnlyList<Rmf2NodeV5> nodes)
