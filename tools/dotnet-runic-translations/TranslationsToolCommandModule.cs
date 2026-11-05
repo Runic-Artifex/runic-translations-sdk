@@ -14,7 +14,7 @@ namespace Runic.Translations.Tool;
 internal static class TranslationsToolCommandModule
 {
     /// <summary>The translation commands, whose human output <see cref="ToolOutcomePresenter"/> writes.</summary>
-    internal static readonly string[] Commands = ["init", "lsp", "serve", "validate", "generate", "verify", "import-text", "import", "schema", "xliff export", "xliff import", "review mark", "locale add", "locale remove"];
+    internal static readonly string[] Commands = ["init", "lsp", "serve", "validate", "generate", "verify", "import-text", "import", "schema", "xliff export", "xliff import", "review mark", "locale add", "locale remove", "overrides add", "overrides list"];
 
     /// <summary>Writes a catalog-level response through the standard command-line transport.</summary>
     internal static ValueTask PresentAsync(

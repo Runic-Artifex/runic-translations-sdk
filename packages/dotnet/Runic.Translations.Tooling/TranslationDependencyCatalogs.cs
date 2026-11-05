@@ -70,8 +70,29 @@ internal sealed record TranslationOverrideTarget(string Catalog, string? From, s
 internal sealed record TranslationDependencyResolution(string ProjectPath, string? OverridesRoot, IReadOnlyList<TranslationDependencyCatalog> Catalogs,
     IReadOnlyList<TranslationOverrideTarget> Overrides, IReadOnlyList<string> Warnings)
 {
+    /// <summary>
+    /// The files the resolution read besides runic.json (restore outputs, the application's package.json and
+    /// <c>node_modules/.package-lock.json</c>): a cache of the resolution is valid while they are unchanged.
+    /// </summary>
+    internal IReadOnlyList<string> Inputs { get; init; } = [];
+
     /// <summary>The override target of a catalog ID, or null.</summary>
     internal TranslationOverrideTarget? Override(string catalog) => Overrides.FirstOrDefault(target => string.Equals(target.Catalog, catalog, StringComparison.Ordinal));
+
+    /// <summary>
+    /// The override target of a catalog: the runic.json entry, an unlisted directory, or for an installed catalog runic.json
+    /// does not override yet a new unlisted target (<see cref="TranslationOverrideChanges.Declare"/> lists it). Null when no
+    /// installed package ships the catalog and runic.json does not name it.
+    /// </summary>
+    internal TranslationOverrideTarget? TargetFor(string catalog)
+    {
+        if (Override(catalog) is { } target) return target;
+        TranslationDependencyCatalog? installed = Catalogs.FirstOrDefault(item => item.Catalog == catalog);
+        if (installed is null || !TranslationReviewFile.IsFileName(catalog)) return null;
+        string directory = Path.Combine(OverridesRoot ?? Path.Combine(Path.GetDirectoryName(ProjectPath)!, "overrides"), catalog);
+        return new TranslationOverrideTarget(catalog, installed.Package, directory, installed,
+            $"Catalog '{catalog}' is not listed in runic.json \"overrides\".") { Listed = false };
+    }
 
     /// <summary>The override target whose directory holds <paramref name="path"/>, or null when the file is not an override source.</summary>
     internal TranslationOverrideTarget? OverrideOf(string path)
@@ -107,18 +128,24 @@ internal static class TranslationDependencyCatalogs
 
     /// <summary>Resolves the library catalogs of the project whose runic.json is <paramref name="projectPath"/>.</summary>
     /// <param name="projectBytes">The runic.json content to use instead of the file (an unsaved buffer), or null.</param>
-    internal static TranslationDependencyResolution Resolve(string projectPath, ReadOnlyMemory<byte>? projectBytes = null, CancellationToken cancellationToken = default)
+    internal static TranslationDependencyResolution Resolve(string projectPath, byte[]? projectBytes = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(projectPath);
         string fullProject = Path.GetFullPath(projectPath);
         string directory = Path.GetDirectoryName(fullProject)!;
         var warnings = new List<string>();
-        byte[] bytes = projectBytes?.ToArray() ?? (File.Exists(fullProject) ? File.ReadAllBytes(fullProject) : []);
+        byte[] bytes = projectBytes ?? (File.Exists(fullProject) ? File.ReadAllBytes(fullProject) : []);
         IReadOnlyList<Rmf2OverrideV5> declared = bytes.Length == 0 ? [] : TranslationCompiler.ReadOverridesV5(new TranslationSource(fullProject, bytes));
         bool declaresOverrides = DeclaresOverrides(bytes);
         string? overridesRoot = declaresOverrides ? Path.Combine(directory, "overrides") : null;
 
         var catalogs = new List<TranslationDependencyCatalog>();
+        var inputs = new List<string>(AssetsFiles(directory));
+        if (FindApplicationRoot(directory) is { } npmRoot)
+        {
+            inputs.Add(Path.Combine(npmRoot, "package.json"));
+            inputs.Add(Path.Combine(npmRoot, "node_modules", ".package-lock.json"));
+        }
         catalogs.AddRange(DiscoverNuGet(directory, warnings, cancellationToken));
         catalogs.AddRange(DiscoverNpm(directory, warnings, cancellationToken));
         catalogs.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.Catalog, right.Catalog) is var order and not 0 ? order : left.Origin.CompareTo(right.Origin));
@@ -145,7 +172,7 @@ internal static class TranslationDependencyCatalogs
                 targets.Add(new TranslationOverrideTarget(name, null, child, catalogs.FirstOrDefault(catalog => catalog.Catalog == name),
                     $"translations/overrides/{name} is not listed in runic.json \"overrides\"; its sources are ignored.") { Listed = false });
             }
-        return new TranslationDependencyResolution(fullProject, overridesRoot, catalogs, targets, warnings);
+        return new TranslationDependencyResolution(fullProject, overridesRoot, catalogs, targets, warnings) { Inputs = inputs };
     }
 
     private static bool DeclaresOverrides(byte[] bytes)
@@ -242,9 +269,7 @@ internal static class TranslationDependencyCatalogs
     /// </summary>
     internal static IReadOnlyList<TranslationDependencyCatalog> DiscoverNpm(string directory, List<string> warnings, CancellationToken cancellationToken = default)
     {
-        string? root = null;
-        for (string? current = Path.GetFullPath(directory); current is not null; current = Path.GetDirectoryName(current))
-            if (File.Exists(Path.Combine(current, "package.json"))) { root = current; break; }
+        string? root = FindApplicationRoot(directory);
         var result = new List<TranslationDependencyCatalog>();
         if (root is null) return result;
         JsonElement? application = ReadPackage(Path.Combine(root, "package.json"), warnings);
@@ -293,6 +318,14 @@ internal static class TranslationDependencyCatalogs
                     foreach (System.Text.Json.JsonProperty dependency in value.EnumerateObject()) names.Add(dependency.Name);
             foreach (string name in names) queue.Add((name, from));
         }
+    }
+
+    // The nearest directory at or above directory with a package.json, as the Vite plugin finds the application.
+    private static string? FindApplicationRoot(string directory)
+    {
+        for (string? current = Path.GetFullPath(directory); current is not null; current = Path.GetDirectoryName(current))
+            if (File.Exists(Path.Combine(current, "package.json"))) return current;
+        return null;
     }
 
     private static JsonElement? ReadPackage(string path, List<string> warnings)

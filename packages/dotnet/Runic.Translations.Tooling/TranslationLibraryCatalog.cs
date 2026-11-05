@@ -363,6 +363,47 @@ internal static class TranslationOverrideChanges
         return new TranslationOverridePlan(path, bytes, null) { Creates = true, AddedLocaleFallback = AddedFallback(catalog, tag) };
     }
 
+    /// <summary>
+    /// runic.json with <c>{ "catalog": …, "from": … }</c> added to <c>overrides</c> (created after the last member when missing),
+    /// keeping the rest of the file byte for byte. Returns null when the catalog is already listed.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">runic.json is not a valid JSON object, or <c>overrides</c> is not an array.</exception>
+    internal static byte[]? Declare(TranslationSource project, string catalog, string from)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        var diagnostics = new DiagnosticBag();
+        ParsedJson parsed = StrictJsonParser.Parse(project, diagnostics, new TranslationCompilerOptions(), default);
+        if (parsed.Root is not { Kind: JsonKind.Object } root || diagnostics.Items.Any(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error))
+            throw new InvalidOperationException($"{project.Path} is not a valid runic.json; fix it first.");
+        byte[] bytes = project.GetUtf8Bytes();
+        string text = StrictUtf8.GetString(bytes);
+        string newLine = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        string entry = "{ \"catalog\": " + System.Text.Json.JsonSerializer.Serialize(catalog) + ", \"from\": " + System.Text.Json.JsonSerializer.Serialize(from) + " }";
+        if (root.Property("overrides") is { } overrides)
+        {
+            if (overrides.Value.Kind != JsonKind.Array) throw new InvalidOperationException("runic.json \"overrides\" must be an array.");
+            if (overrides.Value.Items.Any(item => item.Kind == JsonKind.Object && item.Property("catalog")?.Value.Text == catalog)) return null;
+            JsonValue array = overrides.Value;
+            int close = array.Span.Start + array.Span.Length - 1;
+            if (array.Items.Count == 0) return Splice(bytes, close, entry);
+            JsonValue last = array.Items[^1];
+            int end = last.Span.Start + last.Span.Length;
+            bool multiline = StrictUtf8.GetString(bytes, array.Span.Start, array.Items[0].Span.Start - array.Span.Start).Contains('\n', StringComparison.Ordinal);
+            return Splice(bytes, end, multiline ? "," + newLine + LineIndent(bytes, last.Span.Start) + entry : ", " + entry);
+        }
+        if (root.Properties.Count == 0) return Splice(bytes, root.Span.Start + 1, newLine + "  \"overrides\": [" + entry + "]" + newLine);
+        JsonProperty final = root.Properties[^1];
+        return Splice(bytes, final.Value.Span.Start + final.Value.Span.Length, "," + newLine + LineIndent(bytes, final.NameSpan.Start) + "\"overrides\": [" + entry + "]");
+
+        static byte[] Splice(byte[] bytes, int at, string value) => [.. bytes.AsSpan(0, at), .. StrictUtf8.GetBytes(value), .. bytes.AsSpan(at)];
+        static string LineIndent(byte[] bytes, int at)
+        {
+            int start = at;
+            while (start > 0 && bytes[start - 1] is (byte)' ' or (byte)'\t') start--;
+            return StrictUtf8.GetString(bytes, start, at - start);
+        }
+    }
+
     /// <summary>Writes a plan: the override source (or deletes it), then the review file.</summary>
     internal static void Apply(TranslationOverridePlan plan, TranslationOverrideTarget target)
     {
