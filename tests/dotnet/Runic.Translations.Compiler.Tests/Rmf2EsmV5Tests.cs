@@ -338,22 +338,28 @@ internal sealed class Rmf2EsmV5Tests
             string plugin = RepositoryPaths.Resolve("packages", "web", "vite-plugin-runic-translations", "dist", "index.js");
             File.WriteAllText(Path.Combine(directory, "namespace.js"), "import { m } from \"virtual:runic-translations/budget\";\nexport const result = m.greet({ name: \"Ada\" });\n");
             File.WriteAllText(Path.Combine(directory, "direct.js"), "import { " + Rmf2GeneratedNamesV1.Identifier("greet") + " as greet } from \"./budget.esm-v5/" + module + "\";\nexport const result = greet({ name: \"Ada\" });\n");
+            // A page that installs overlays: the overlay code is bundled only here.
+            File.WriteAllText(Path.Combine(directory, "overlay.js"), "import { m } from \"virtual:runic-translations/budget\";\nimport { installOverlay } from \"virtual:runic-translations/budget/dynamic\";\nexport const installed = installOverlay;\nexport const result = m.greet({ name: \"Ada\" });\n");
             string script = Path.Combine(directory, "budget.mjs");
             File.WriteAllText(script, "import { createRequire } from \"node:module\";\nimport { readFile } from \"node:fs/promises\";\nimport { join } from \"node:path\";\n" +
                 "const plugin = " + JsonString(plugin) + ", budget = " + budget.ToString(CultureInfo.InvariantCulture) + ";\n" + """
                 const { runicTranslations } = await import(plugin);
                 const { build } = await import(createRequire(plugin).resolve("vite"));
                 const root = import.meta.dirname, sizes = {};
-                for (const name of ["namespace", "direct"]) {
+                // Strings that only the overlay code (installOverlay, installLocalePack) contains.
+                const overlayCode = ["unsupported-locale-data", "incompatible-inputs", "localeFallbacks"];
+                for (const name of ["namespace", "direct", "overlay"]) {
                   const outDir = join(root, "dist-" + name);
                   await build({ configFile: false, root, logLevel: "silent", plugins: [runicTranslations({ manifest: join(root, "budget.esm-v5", "web-module-manifest-v3.json") })],
                     build: { outDir, minify: false, lib: { entry: join(root, name + ".js"), formats: ["es"], fileName: () => "bundle.js" } } });
                   const bundle = await readFile(join(outDir, "bundle.js"), "utf8"); sizes[name] = Buffer.byteLength(bundle);
                   if (!bundle.includes("Hello ") || !bundle.includes("Hallo ")) throw new Error(name + ": the called message is missing");
-                  for (const text of ["Unused sentinel", "Ungenutzter Platzhalter", "message_"]) if (bundle.includes(text)) throw new Error(name + ": the bundle contains " + text);
+                  for (const text of ["Unused sentinel", "Ungenutzter Platzhalter", "message_"]) if (name !== "overlay" && bundle.includes(text)) throw new Error(name + ": the bundle contains " + text);
+                  for (const text of overlayCode) if (bundle.includes(text) !== (name === "overlay")) throw new Error(name + ": overlay code " + text + (name === "overlay" ? " is missing" : " is bundled"));
                   const { result } = await import(join(outDir, "bundle.js")); if (result !== "Hello Ada, welcome") throw new Error(name + ": " + result);
                 }
                 console.log(JSON.stringify({ budget, ...sizes }));
+                delete sizes.overlay;
                 if (sizes.namespace > sizes.direct + 64) throw new Error(`m.greet() bundles ${sizes.namespace} B, its module alone ${sizes.direct} B`);
                 if (sizes.namespace > budget) throw new Error(`m.greet() bundles ${sizes.namespace} B, over runtime.js plus its module (${budget} B)`);
                 """, new UTF8Encoding(false));

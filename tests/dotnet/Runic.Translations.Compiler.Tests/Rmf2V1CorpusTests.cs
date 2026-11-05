@@ -234,6 +234,8 @@ internal sealed class Rmf2V1CorpusTests
     // Re-pinned for merging T1g with main (TE, TC, TD) through T1a/T1b, in both digests.
     // Re-pinned for merging TB (#131) with T1g (#132), in both digests.
     // Re-pinned for T1c (0.9): the shared locale channel in runtime.js, server.js and transport.js, in both digests.
+    // Re-pinned for web overlays (0.9): message modules call formatMessage, dynamic.js carries the overlay API and the locale
+    // fallbacks, in both digests.
     // Re-pinned for merging main (TB #131) into T1c, with ordered resolver removal, in both digests.
     // Re-pinned for TR 0.9 batch TJ: <Class>Catalog.SourceHash and Rmf2MarkupContract are static properties rather than
     // constants, so .NET Hot Reload applies text-only catalog edits, in both digests (C# only).
@@ -257,8 +259,10 @@ internal sealed class Rmf2V1CorpusTests
     // Re-pinned for merging T2f (#146) with T1f (#145), beside the readable surface only.
     // Re-pinned for merging T1c (#142) with main (#136-#140), in both digests.
     // Re-pinned for merging T1c (#142) with main (#145, #146, #148), in both digests.
-    private const string EncodedOutputDigest = "c5bb98e3cc8c89deb8eaeef8dbb0648fca4ad1ae4a5270f3acd592fc8cfe5541";
-    private const string HiddenEncodedOutputDigest = "cc1322e5269afd9c69f510cb7cda199322d199ac0874bdbe1ce4f52c724ea311";
+    // Re-pinned for merging T1c (with main, TB #131) into the web overlays, with .NET overlay precedence, in both digests.
+    // Re-pinned for merging T1c/T4b (#143) with T1c (#142) and main (#145, #146, #148), in both digests.
+    private const string EncodedOutputDigest = "b04be97e2a35fcaa6cc98ec18398006294591235fee3034eb1f821dfc2bdcd94";
+    private const string HiddenEncodedOutputDigest = "6cec539bdb153386f9a1e0c988c705d9f6ed5edd4558ea6c403190ab825a3c96";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]
