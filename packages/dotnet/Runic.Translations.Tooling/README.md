@@ -22,7 +22,21 @@ locale. Plain messages, text with placeholders, are exchanged losslessly: each
 placeholder is a `<ph>` whose `equiv` is its exact MF2 expression, and import
 checks it against the caller contract. A message's comment and `@param` lines
 become a readable `<note category="description">` beside the machine notes.
-Messages with selectors, declarations or markup and source-layer provenance are
+A message with selectors (plurals, selects) or declarations is one unit holding
+the raw MF2 message with its syntax protected: the declarations and `.match` are
+one `<ph>`, each variant a `<pc>` whose `equivStart` is its keys (`one {{`), so a
+translator edits only the variant texts and may add exact-number variants. A
+missing translation for a locale with other plural categories is prefilled with
+that locale's variants in state `initial` (for an `:integer` selector, only the
+categories integers reach). Import refuses a target that changes the declarations
+or `.match` (`XLIFF21-SELECTOR-CHANGED`), drops every variant code where the
+locale needs variants (also `XLIFF21-SELECTOR-CHANGED`), adds a variant whose
+`equivStart` is more than MF2 keys (`XLIFF21-VARIANT-KEY`; the composed message
+must read back as the same header, keys and texts) or leaves a variant empty
+(`XLIFF21-EMPTY-VARIANT`). A unit whose translation is unchanged keeps its
+source bytes. Characters XML cannot hold travel as `<cp>`. Import checks the plural categories of the target
+locale by its `validation.pluralCategories` policy (`XLIFF21-PLURAL-CATEGORIES`,
+a notice under `warning`, a refusal under `error`). Messages with markup are
 never silently flattened: export marks them `translate="no"` and records
 deterministic loss events, and import skips them. Document messages are not
 exchanged through XLIFF; translate them in the `.rmf2` sources or the editor.

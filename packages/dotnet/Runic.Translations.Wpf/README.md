@@ -33,7 +33,8 @@ contract once and pass the `Rmf2MarkupContract`; custom factories and the theme
 go in an options object:
 
 ```csharp
-Rmf2MarkupContract contract = Rmf2MarkupContract.Link(AppTextCatalog.Rmf2MarkupContract);
+// Linked through a function, the contract follows a .NET Hot Reload edit of the catalog.
+Rmf2MarkupContract contract = Rmf2MarkupContract.Link(() => AppTextCatalog.Rmf2MarkupContract);
 var renderer = new WpfInlineRenderer(contract, Navigate,
     new WpfInlineRendererOptions { Custom = factories, Theme = ApplyTheme });
 var documents = new WpfDocumentRenderer(contract, Navigate) { HeadingBase = 2 };
@@ -41,7 +42,9 @@ var documents = new WpfDocumentRenderer(contract, Navigate) { HeadingBase = 2 };
 
 `WpfDocumentRendererOptions` carries the document renderer's factories and
 `TextElement` theme. A linked contract is immutable and can be shared by any
-number of renderers.
+number of renderers; one linked through a function is replaced as a whole when
+a Hot Reload update changes the generated contract, and a contract linked from
+the JSON string keeps the startup contract.
 
 Icons use `InlineIconBinding` with a `Func<FrameworkElement>` that creates a fresh
 asset for every render. Meaningful icons require a localized accessible name;
@@ -246,8 +249,9 @@ new snapshot, from any thread: the source marshals to the dispatcher it was
 created on, and each rich element renders on its own dispatcher. Several changes
 in a row render once. The source follows `ITranslationManager.SnapshotPublished`,
 which a manager raises for a locale switch and for `RefreshAsync` (for example
-after external pack bytes change), although a refresh never raises
-`LocaleChanged`.
+after external pack bytes change, or after a text-only `.rmf2` edit under
+`dotnet watch`; see [Edit text while the app runs](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/quickstart-dotnet.md#edit-text-while-the-app-runs)),
+although a refresh never raises `LocaleChanged`.
 
 Nothing leaks when windows close: the manager holds only a weak reference to the
 source, the source holds rich elements weakly, and WPF's own bindings do the
@@ -266,9 +270,10 @@ catalog has the same key; elsewhere `TranslationSource.Default` applies. A singl
 `{rt:Message Source=...}` overrides both. Style setters follow the styled element,
 like any other element. Locale and culture
 are separate: the source follows the manager's locale only, so set `CultureInfo` and
-`FrameworkElement.Language` yourself where existing resources need them. There is
-no `.resx` importer and no `FlowDocument` conversion; use `WpfDocumentRenderer`
-for document messages.
+`FrameworkElement.Language` yourself where existing resources need them. Existing
+`.resx` strings move over with `runic-translations import --from resx`
+([Migrate from .resx](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/migrate-resx.md)).
+There is no `FlowDocument` conversion; use `WpfDocumentRenderer` for document messages.
 
 Create every `TranslationSource` before loading the views that use it (in
 `OnStartup`, before `InitializeComponent`). A message that only a source created

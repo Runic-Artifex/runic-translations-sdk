@@ -274,6 +274,7 @@ internal static class Program
     {
         ToolCommand.Help => CommandPath.Root,
         ToolCommand.ImportText => new CommandPath(["import-text"]),
+        ToolCommand.Import => new CommandPath(["import"]),
         ToolCommand.XliffExport => new CommandPath(["xliff", "export"]),
         ToolCommand.XliffImport => new CommandPath(["xliff", "import"]),
         ToolCommand.ReviewMark => new CommandPath(["review", "mark"]),
@@ -454,8 +455,8 @@ internal static class Program
     private static int RunSemanticV5(ToolInvocation invocation, CompilerInputs inputs, ToolOperationResult result, SourceUnitCache? units)
     {
         Rmf2ProjectCompilation compilation = units is null
-            ? TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, inputs.Messages)
-            : TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, units.Resolve(inputs.Messages), units.Options);
+            ? TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, inputs.Messages, null, invocation.PseudoLocales)
+            : TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, units.Resolve(inputs.Messages), units.Options, invocation.PseudoLocales);
         compilation = TranslationManifestReader.WithManifestErrors(compilation, inputs.Project.Path, inputs.ManifestError);
         // In a build whose source generator reports the same compilation diagnostics, they are
         // omitted here so each appears once, with its help link, from the generator.
@@ -628,6 +629,8 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
             "verify" => ExecuteCompilation(request, ToolCommand.Verify, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitEsm), OmitSourceDiagnostics()),
             "schema" => Program.Execute(new ToolInvocation(ToolCommand.Schema, request.Output, ToolEmission.None, null)),
             "import-text" => ExecuteImport(request),
+            "import" => ExecuteInterchange(request, ToolCommand.Import, (project, result) =>
+                CatalogImport.Run(project, new CatalogImportRequest(request.From!, request.Source!, request.Locales ?? [], request.Group, request.Overwrite), request.DryRun, result)),
             "xliff export" => ExecuteInterchange(request, ToolCommand.XliffExport, (project, result) =>
                 InterchangeOperations.Export(project, request.Output!, request.Locales ?? [], request.Review, result)),
             "xliff import" => ExecuteInterchange(request, ToolCommand.XliffImport, (project, result) =>
@@ -673,7 +676,7 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
                 {
                     try
                     {
-                        if (Program.RunInto(new ToolInvocation(ToolCommand.Validate, null, ToolEmission.None, null, project), result) != Program.Success) exit = 1;
+                        if (Program.RunInto(new ToolInvocation(ToolCommand.Validate, null, ToolEmission.None, null, project, PseudoLocales: request.PseudoLocales), result) != Program.Success) exit = 1;
                     }
                     // A project that cannot be read (no runic.json, an inaccessible file) does not stop the others: with
                     // several projects it is reported, and the SARIF report records it as a run-level notification.
@@ -739,7 +742,7 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
         string? project = string.IsNullOrWhiteSpace(request.Project) ? DefaultProject() : request.Project;
         if (project is null)
             return Program.Usage("no runic.json in the current directory or in ./translations; pass --project <directory>.", command);
-        return Program.Execute(new ToolInvocation(command, output, emission, null, project, OmitSourceDiagnostics: omitSourceDiagnostics));
+        return Program.Execute(new ToolInvocation(command, output, emission, null, project, OmitSourceDiagnostics: omitSourceDiagnostics, PseudoLocales: request.PseudoLocales));
     }
 
     // Runic.Translations.Build sets this when its source generator reports the same compilation

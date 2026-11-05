@@ -97,8 +97,10 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("public const string CatalogId = " + GenerationSupport.CSharpString(project.Id) + ";");
         writer.Line("public const string DefaultLocale = " + GenerationSupport.CSharpString(project.DefaultLocale) + ";");
         writer.Line("public const string ContractFingerprint = " + GenerationSupport.CSharpString(project.CallerFingerprint) + ";");
-        writer.Line("public const string SourceHash = " + GenerationSupport.CSharpString(project.SourceHash) + ";");
-        writer.Line("public const string Rmf2MarkupContract = " + GenerationSupport.CSharpString(project.MarkupContract) + ";");
+        // Properties, not constants: a text-only edit changes them, and .NET Hot Reload can update a property body but
+        // not a constant's value (ENC0011), so a constant would force a restart for every catalog edit.
+        writer.Line("public static string SourceHash => " + GenerationSupport.CSharpString(project.SourceHash) + ";");
+        writer.Line("public static string Rmf2MarkupContract => " + GenerationSupport.CSharpString(project.MarkupContract) + ";");
         writer.Line("public const string Rmf2Profile = " + GenerationSupport.CSharpString(Rmf2ProjectV5.Profile) + ";");
         writer.Line("public const int RuntimeAbiVersion = 1;");
         writer.Line("public const int Rmf2RuntimeAbiVersion = " + Rmf2ProjectV5.RuntimeAbiVersion + ";");
@@ -115,7 +117,8 @@ internal static class Rmf2CSharpOutputRendererV5
         {
             writer.Line("/// <summary>Describes this catalog to a translation context: its ID, contract and provider factory.</summary>");
             writer.Line("public static global::Runic.Translations.TranslationCatalogRegistration Registration { get; } = new global::Runic.Translations.TranslationCatalogRegistration(");
-            writer.Indent(); writer.Line("CatalogId, DefaultLocale, ContractFingerprint, Rmf2MarkupContract, CreateProvider);"); writer.Unindent();
+            // The contract through a lambda: Hot Reload changes the property, but never re-runs this static initializer.
+            writer.Indent(); writer.Line("CatalogId, DefaultLocale, ContractFingerprint, static () => Rmf2MarkupContract, CreateProvider);"); writer.Unindent();
             writer.Blank();
         }
         writer.Line("public static global::Runic.Translations.ITranslationProvider CreateProvider("); writer.Indent();
