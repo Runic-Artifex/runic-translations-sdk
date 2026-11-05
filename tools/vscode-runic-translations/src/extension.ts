@@ -7,7 +7,7 @@ import { escapeHtml, resolvePreviewHtml, type Preview, type RenderedPreview } fr
 import { PreviewSession, exampleSamples, sampleChoices, type Samples } from "./preview-session.js";
 import { ForwardedWatchers } from "./watchers.js";
 import { OneTimeNotice, errorSummary, localeStatus, parseStatus, statusHtml, statusPresentation, type DocumentInfo, type ServerState, type StatusResult } from "./status.js";
-import { libraryCatalogChoices, libraryDocumentProject, libraryLocaleChoices, libraryMessageChoices, libraryScheme, messageLine, overrideSourcePath, overridesAddArguments, type LibraryCatalogs } from "./libraries.js";
+import { canonicalLocale, isOverriddenIn, libraryCatalogChoices, libraryInstallPattern, libraryDocumentProject, libraryLocaleChoices, libraryMessageChoices, libraryScheme, messageLine, overrideSourcePath, overridesAddArguments, unsavedDocuments, type LibraryCatalogs } from "./libraries.js";
 
 const extensionId = "runic-artifex.runic-translations";
 /**
@@ -197,7 +197,11 @@ async function clientFor(uri: vscode.Uri): Promise<LanguageClient> {
         // The review file changes the server's RTR0090 warnings and hover review state.
         const reviewWatcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, "**/*.review.json"));
         reviewWatcher.onDidCreate(uri => forward(uri, 1)); reviewWatcher.onDidChange(uri => forward(uri, 2)); reviewWatcher.onDidDelete(uri => forward(uri, 3));
-        reviewWatchers.set(key, reviewWatcher);
+        // A restore or an install changes which library catalogs override sources resolve against (RTR0104, completion,
+        // hover): the restore output and the package managers' install state.
+        const installWatcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, libraryInstallPattern));
+        installWatcher.onDidCreate(uri => forward(uri, 1)); installWatcher.onDidChange(uri => forward(uri, 2)); installWatcher.onDidDelete(uri => forward(uri, 3));
+        reviewWatchers.set(key, vscode.Disposable.from(reviewWatcher, installWatcher));
         const openingDocuments: Promise<void>[] = [];
         const options: LanguageClientOptions = {
           documentSelector: [{ scheme: "file", language: "rmf2", pattern: `${folder.uri.fsPath.replaceAll("\\", "/")}/**/*.{mf2,rmf2}` }, { scheme: "file", language: "json", pattern: `${folder.uri.fsPath.replaceAll("\\", "/")}/**/runic.json` }],
@@ -459,10 +463,25 @@ export function activate(context: vscode.ExtensionContext) {
     if (!message) return;
     const other = { label: "Another locale…", description: "a locale the library lacks", value: "" };
     let locale = (await vscode.window.showQuickPick([...libraryLocaleChoices(catalog, message), other], { placeHolder: `Locale to override ${message.path} in` }))?.value;
-    if (locale === "") locale = await vscode.window.showInputBox({ prompt: "BCP 47 locale tag the application adds, such as fr or de-CH", validateInput: value => /^[A-Za-z]{2,8}([-_][A-Za-z0-9]{1,8})*$/.test(value) ? undefined : "Use a BCP 47 locale tag." });
+    if (locale === "") locale = await vscode.window.showInputBox({ prompt: "BCP 47 locale tag the application adds, such as fr or de-CH", validateInput: value => canonicalLocale(value) ? undefined : "Use a BCP 47 locale tag." });
     if (!locale) return;
-    if (!message.overridden.includes(locale)) await runTool(folder, overridesAddArguments(project, catalog.catalog, locale, message.key));
-    const path = overrideSourcePath(project, catalog.catalog, locale);
+    const tag = canonicalLocale(locale);
+    if (!tag) throw new Error(`"${locale}" is not a BCP 47 locale tag.`);
+    const path = overrideSourcePath(project, catalog.catalog, tag);
+    if (!isOverriddenIn(message, tag)) {
+      // The tool writes the override source and possibly runic.json; unsaved edits there would be overwritten underneath the editor.
+      const unsaved = unsavedDocuments(vscode.workspace.textDocuments.map(document => ({ document, fsPath: document.uri.fsPath, isDirty: document.uri.scheme === "file" && document.isDirty })), [path, project]);
+      if (unsaved.length) {
+        const save = "Save and continue";
+        const names = unsaved.map(entry => vscode.workspace.asRelativePath(entry.document.uri)).join(", ");
+        const answer = await vscode.window.showWarningMessage(`${names} has unsaved changes that runic-translations overrides add would overwrite. Save or revert it first.`, { modal: true }, save);
+        if (answer !== save) return;
+        for (const entry of unsaved) {
+          if (!await entry.document.save()) throw new Error(`Could not save ${vscode.workspace.asRelativePath(entry.document.uri)}.`);
+        }
+      }
+      await runTool(folder, overridesAddArguments(project, catalog.catalog, tag, message.key));
+    }
     const document = await vscode.workspace.openTextDocument(vscode.Uri.file(path));
     const line = messageLine(document.getText(), message.path);
     await vscode.window.showTextDocument(document, { selection: new vscode.Range(line, 0, line, 0) });

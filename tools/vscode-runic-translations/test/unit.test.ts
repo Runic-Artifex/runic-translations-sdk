@@ -8,7 +8,7 @@ import type { Preview } from "../src/preview.js";
 import { PreviewSession, sampleChoices, type PreviewHost, type PreviewState, type Samples } from "../src/preview-session.js";
 import { ForwardedWatchers, type DisposableLike, type WatcherLike } from "../src/watchers.js";
 import { OneTimeNotice, coverageLine, errorSummary, localeStatus, parseStatus, statusHtml, statusPresentation, type DocumentInfo } from "../src/status.js";
-import { libraryCatalogChoices, libraryDocumentProject, libraryLocaleChoices, libraryMessageChoices, messageLine, overrideSourcePath, overridesAddArguments, type LibraryCatalogs } from "../src/libraries.js";
+import { canonicalLocale, isOverriddenIn, libraryCatalogChoices, libraryInstallPattern, libraryDocumentProject, libraryLocaleChoices, libraryMessageChoices, messageLine, overrideSourcePath, overridesAddArguments, unsavedDocuments, type LibraryCatalogs } from "../src/libraries.js";
 
 class MockWatcher implements WatcherLike<string> {
   readonly created: ((uri: string) => void)[] = [];
@@ -367,6 +367,32 @@ test("Override Library Message offers installed catalogs, messages and locales, 
   expect(messageLine("# header {\n#   sort = x\n# }\nrows = Rows\nheader {\n  sort = Trier\n}\n", "header.sort")).toBe(5);
   expect(messageLine("rows = Rows\n", "missing")).toBe(0);
 });
+test("typed override locales are canonicalized and compared case-insensitively", () => {
+  expect(canonicalLocale("de_ch")).toBe("de-CH");
+  expect(canonicalLocale(" DE-ch ")).toBe("de-CH");
+  expect(canonicalLocale("zh_hant_tw")).toBe("zh-Hant-TW");
+  expect(canonicalLocale("fr")).toBe("fr");
+  expect(canonicalLocale("not a locale")).toBeUndefined();
+  expect(canonicalLocale("de--CH")).toBeUndefined();
+  expect(canonicalLocale("")).toBeUndefined();
+  const message = { overridden: ["de-CH"] };
+  expect(isOverriddenIn(message, "de-ch")).toBe(true);
+  expect(isOverriddenIn(message, "DE-CH")).toBe(true);
+  expect(isOverriddenIn(message, "de")).toBe(false);
+});
+test("overrides add stops for unsaved edits to the files it writes", () => {
+  const source = join("/work", "overrides", "acme.table", "de-CH.rmf2");
+  const manifest = join("/work", "runic.json");
+  const documents = [
+    { fsPath: source, isDirty: true },
+    { fsPath: manifest, isDirty: false },
+    { fsPath: join("/work", "other.rmf2"), isDirty: true },
+  ];
+  expect(unsavedDocuments(documents, [source, manifest], "linux")).toEqual([documents[0]]);
+  expect(unsavedDocuments(documents, [source.toUpperCase(), manifest], "linux")).toEqual([]);
+  expect(unsavedDocuments(documents, [source.toUpperCase(), manifest], "win32")).toEqual([documents[0]]);
+  expect(unsavedDocuments([{ fsPath: manifest, isDirty: true }], [source, manifest], "linux")).toHaveLength(1);
+});
 test("library documents name their project in the query, encoded or not", () => {
   const project = "file:///work/my%20shop/translations/runic.json";
   expect(libraryDocumentProject(`project=${encodeURIComponent(project)}`)).toBe(project);
@@ -374,4 +400,9 @@ test("library documents name their project in the query, encoded or not", () => 
   expect(libraryDocumentProject("other=1")).toBeUndefined();
   expect(statusPresentation("running", { project: null, catalog: "acme.table", baseLocale: null, locale: "fr", library: "Acme.Table 1.0.0" }).tooltip)
     .toContain("Catalog: acme.table (library Acme.Table 1.0.0, overridden by the application)");
+});
+
+test("the restore and install files of every package manager are watched for library catalogs", () => {
+  for (const file of ["obj/project.assets.json", "node_modules/.package-lock.json", "node_modules/.modules.yaml", "node_modules/.yarn-state.yml", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock"])
+    expect(libraryInstallPattern).toContain(file);
 });
