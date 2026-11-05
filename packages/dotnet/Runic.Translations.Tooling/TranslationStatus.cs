@@ -38,7 +38,9 @@ internal static class TranslationStatus
     /// <param name="compilation">A successful compilation of the project.</param>
     /// <param name="review">
     /// The review file, or null when it does not exist or cannot be read (translations that predate a change to their
-    /// source are counted as validate's RTR0090 reports them; without the file the stale column stays empty).
+    /// source are counted as validate's RTR0090 reports them; without the file the stale column stays empty). A
+    /// translation it marks <c>draft</c> is not translated yet: it counts as missing, as the starter copies of the base
+    /// text that the Translations Editor adds with a new language are, until it is recorded as translated.
     /// </param>
     /// <param name="reviewFile">The review file's path as reported; used only with <paramref name="review"/>.</param>
     /// <param name="thresholds">The minimum coverage per locale, <c>*</c> for every translated locale (<see cref="ParseThresholds"/>).</param>
@@ -48,7 +50,11 @@ internal static class TranslationStatus
         Rmf2ProjectV5 project = compilation.Project ?? throw new ArgumentException("The compilation has no project.", nameof(compilation));
         string[] keys = project.CanonicalMessages.Select(static contract => contract.Key).ToArray();
         var locales = project.Locales.ToDictionary(static locale => locale.Tag, StringComparer.Ordinal);
-        var own = project.Locales.ToDictionary(static locale => locale.Tag, static locale => locale.DirectResources.Select(static resource => resource.Key).ToHashSet(StringComparer.Ordinal), StringComparer.Ordinal);
+        // A draft (a starter copy of the base text, XLIFF's "initial") is not the locale's own translation yet.
+        var drafts = (review?.Entries ?? []).Where(static entry => entry.State == TranslationReviewState.Draft)
+            .Select(static entry => TranslationReviewFile.Identity(entry.Key, entry.Locale)).ToHashSet(StringComparer.Ordinal);
+        var own = project.Locales.ToDictionary(static locale => locale.Tag, locale => locale.DirectResources.Select(static resource => resource.Key)
+            .Where(key => locale.Tag == project.DefaultLocale || !drafts.Contains(TranslationReviewFile.Identity(key, locale.Tag))).ToHashSet(StringComparer.Ordinal), StringComparer.Ordinal);
         ILookup<string, TranslationReviewStaleEntry>? stale = review is null ? null
             : TranslationReviewFile.Stale(compilation, review).ToLookup(static item => item.Entry.Locale, StringComparer.Ordinal);
 
@@ -99,6 +105,32 @@ internal static class TranslationStatus
         if (compilation.Diagnostics.Any(static diagnostic => diagnostic.Id == "RTR0052")) return null;
         Rmf2ProjectCompilation relaxed = TranslationCompiler.CompileRmf2ProjectV5(project, sources, new TranslationCompilerOptions { RelaxedValidation = true }, cancellationToken);
         return relaxed.Success && relaxed.Project is not null ? relaxed : null;
+    }
+
+    /// <summary>
+    /// The base messages each translated locale shows in the base locale (status's missing column without a review file):
+    /// neither the locale nor a fallback locale other than the base translates them. By locale, then key, in ordinal order;
+    /// locales that miss nothing are left out.
+    /// </summary>
+    internal static IReadOnlyList<(string Locale, IReadOnlyList<string> Keys)> MissingKeys(Rmf2ProjectV5 project)
+    {
+        var locales = project.Locales.ToDictionary(static locale => locale.Tag, StringComparer.Ordinal);
+        var own = project.Locales.ToDictionary(static locale => locale.Tag, static locale => locale.DirectResources.Select(static resource => resource.Key).ToHashSet(StringComparer.Ordinal), StringComparer.Ordinal);
+        var result = new List<(string, IReadOnlyList<string>)>();
+        foreach (Rmf2LocaleV5 locale in project.Locales.Where(locale => locale.Tag != project.DefaultLocale).OrderBy(static locale => locale.Tag, StringComparer.Ordinal))
+        {
+            var missing = new List<string>();
+            foreach (string key in project.CanonicalMessages.Select(static contract => contract.Key).Order(StringComparer.Ordinal))
+            {
+                bool served = own[locale.Tag].Contains(key);
+                var visited = new HashSet<string>(StringComparer.Ordinal) { locale.Tag };
+                for (string? next = locale.FallbackTag; !served && next is not null && next != project.DefaultLocale && visited.Add(next) && locales.TryGetValue(next, out Rmf2LocaleV5? parent); next = parent.FallbackTag)
+                    served = own[next].Contains(key);
+                if (!served) missing.Add(key);
+            }
+            if (missing.Count != 0) result.Add((locale.Tag, missing));
+        }
+        return result;
     }
 
     internal static string Percent(double value) => value.ToString("0.##", CultureInfo.InvariantCulture) + "%";
@@ -152,9 +184,9 @@ internal sealed record TranslationsStatusProject(string Project, string Catalog,
 
 /// <param name="Locale">The locale tag.</param>
 /// <param name="FallbackLocale">The locale it falls back to; absent for the base locale.</param>
-/// <param name="Translated">Messages the locale translates itself.</param>
+/// <param name="Translated">Messages the locale translates itself, except those the review file marks <c>draft</c>.</param>
 /// <param name="Fallback">Messages a fallback locale other than the base locale serves.</param>
-/// <param name="Missing">Messages shown in the base locale.</param>
+/// <param name="Missing">Messages shown in the base locale, and translations the review file marks <c>draft</c> (starter copies of the base text).</param>
 /// <param name="Coverage">Translated plus fallback, as a percentage of <see cref="TranslationsStatusProject.Messages"/>, rounded down to two decimals.</param>
 internal sealed record TranslationsStatusLocale(string Locale,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FallbackLocale,

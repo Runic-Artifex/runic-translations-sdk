@@ -184,6 +184,16 @@ internal static class EditorSmokeTest
         string russian = await File.ReadAllTextAsync(Path.Combine(project, "ru.rmf2")).ConfigureAwait(false);
         Require(russian.Contains("few {{{$count} files}}", StringComparison.Ordinal) && russian.Contains("many {{{$count} files}}", StringComparison.Ordinal) && russian.Contains("one {{One file}}", StringComparison.Ordinal),
             "The copied starter didn't get ru's plural categories: " + russian);
+        // The starter copies are drafts: ru's coverage starts at 0 %, not 100 %; saving an edited one records it translated.
+        Require(added.Snapshot?.Status?.Locales.SingleOrDefault(locale => locale.Locale == "ru") is { Translated: 0, Missing: 1, Coverage: 0 },
+            "A new language's starter copies counted as translated: " + JsonSerializer.Serialize(added.Snapshot?.Status?.Locales.Select(locale => locale.Locale + " " + locale.Coverage)));
+        Require((await File.ReadAllTextAsync(Path.Combine(project, "locales.review.json")).ConfigureAwait(false)).Contains("\"draft\"", StringComparison.Ordinal), "The starter copies weren't recorded as drafts.");
+        EditorDocument starter = added.Snapshot!.Documents.Single(document => document.Path == "ru.rmf2");
+        EditorOperationResult translated = await session.SaveAsync(starter.Path, starter.Content.Replace("One file", "Один файл", StringComparison.Ordinal), starter.Revision).ConfigureAwait(false);
+        Require(translated.Ok && translated.Message is null, "Saving the edited starter failed: " + translated.Message);
+        string promoted = await File.ReadAllTextAsync(Path.Combine(project, "locales.review.json")).ConfigureAwait(false);
+        Require(promoted.Contains("\"translated\"", StringComparison.Ordinal) && !promoted.Contains("\"draft\"", StringComparison.Ordinal), "The edited starter wasn't recorded translated: " + promoted);
+        Require((await session.LoadAsync().ConfigureAwait(false)).Status?.Locales.SingleOrDefault(locale => locale.Locale == "ru") is { Translated: 1, Coverage: 100 }, "The translated starter didn't count.");
 
         await File.WriteAllTextAsync(Path.Combine(project, "locales.review.json"), "{\"$schema\":\"runic.translations.interchange-review/2\",\"catalog\":\"locales\",\"entries\":[{\"key\":\"files\",\"locale\":\"ru\",\"state\":\"approved\"},{\"key\":\"files\",\"locale\":\"de\",\"state\":\"approved\"}]}\n").ConfigureAwait(false);
         var remove = new EditorMutationRequest("remove-locale", "ru", null, null, null, null, null, null);

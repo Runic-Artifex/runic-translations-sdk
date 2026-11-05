@@ -64,6 +64,12 @@
           {#if plan.diagnostics.length > 0}<Alert.Description><ul>{#each plan.diagnostics as diagnostic, index (index)}<li><Badge variant="destructive">{diagnostic.id}</Badge> {diagnostic.message} <span class="text-muted-foreground">({diagnostic.path}:{diagnostic.line})</span></li>{/each}</ul></Alert.Description>{/if}
         </Alert.Root>
       {:else}
+        {#if plan.diagnostics.length > 0}
+          <Alert.Root>
+            <Alert.Title>{ui.text("ui_catalog_import_preexisting")}</Alert.Title>
+            <Alert.Description><ul>{#each plan.diagnostics as diagnostic, index (index)}<li><Badge variant="outline">{diagnostic.id}</Badge> {diagnostic.message} <span class="text-muted-foreground">({diagnostic.path}:{diagnostic.line})</span></li>{/each}</ul></Alert.Description>
+          </Alert.Root>
+        {/if}
         <ul class="text-sm">
           {#each plan.locales as locale (locale.locale)}<li>{ui.text("ui_catalog_import_locale_summary", { locale: locale.locale, added: String(locale.added), changed: String(locale.changed), unchanged: String(locale.unchanged), kept: String(locale.kept) })}</li>{/each}
           <li class="text-muted-foreground">{ui.text("ui_catalog_import_totals", { skipped: String(plan.skipped), refused: String(plan.refused) })}</li>

@@ -4081,6 +4081,16 @@ ui {
   }
 }
 ui {
+  backend {
+    locale_drafts_not_recorded = {$locale} wurde hinzugefügt, aber die Startkopien konnten nicht als Entwürfe in {$path} vermerkt werden; die Abdeckung zählt sie daher als übersetzt.
+  }
+}
+ui {
+  backend {
+    review_drafts_not_updated = Gespeichert, aber die bearbeiteten Startnachrichten konnten nicht als übersetzt in {$path} vermerkt werden; status zählt sie weiter als fehlend.
+  }
+}
+ui {
   preview_formatting = Vorschau-Formatierung
 }
 ui {
@@ -4195,6 +4205,9 @@ ui {
 }
 ui {
   catalog_import_title = Aus .resx oder i18next importieren
+}
+ui {
+  catalog_import_preexisting = Der Katalog hat diese Fehler bereits. Der Import verursacht und behebt sie nicht; validate meldet sie, bis sie behoben sind.
 }
 ui {
   catalog_import_description = Übernimmt einen bestehenden Katalog mit dem Importer von runic-translations in die .rmf2-Quellen dieses Projekts. Prüfe den Import zuerst; geschrieben wird erst, wenn du ihn anwendest.

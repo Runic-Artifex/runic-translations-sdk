@@ -65,13 +65,27 @@ languages) are rendered by the SDK's pseudo-locale generator, exactly as a
 `--pseudo-locales` build produces them. The language list shows the coverage of
 `runic-translations status` (translated, from a fallback locale, missing, stale, and
 whether missing translations are errors). Adding a language suggests the SDK's CLDR
-locales, names the CLDR locale a tag resolves to (`zh-TW` → `zh-Hant-TW`) and the
+locales, names the CLDR data a tag formats with (`zh-TW` uses `zh-Hant-TW`) and the
 plural and ordinal categories it needs, and gives copied starter messages those
-categories; adding and removing languages runs the same code as
-`runic-translations locale add|remove` and keeps `runic.json`'s formatting. **Import
-from .resx or i18next** (in **Interchange**, and as a step of the new-project wizard)
-runs `runic-translations import`'s importer: a dry run lists each message's outcome
-before a one-use confirmation writes it.
+categories. For a region tag whose CLDR data is in another script it offers the
+script-level locale that runtime negotiation resolves the region to (`zh-TW` and
+`zh-HK` → `zh-Hant`, `sr-ME` → `sr-Latn`); the typed tag stays unless you choose it.
+For both, it lists the requested tags that would reach the locale under the
+catalog's `runtime.unsupportedLocale`: under `exact` a locale serves only its own
+tag, so an app whose platforms send `zh-TW` declares `zh-TW`. The starter copies
+of a new language are recorded as `draft` in the review file, so its coverage
+starts at what it really translates, not 100 %; saving an edited starter message
+records it `translated` (as `runic-translations review mark --state translated`
+does), and `status` counts a `draft` translation as missing. Adding and removing
+languages runs the same code as `runic-translations locale add|remove` and keeps
+`runic.json`'s formatting; a review file that cannot be read or updated is named in
+a notice. **Import from .resx or i18next** (in **Interchange**, and as a step of the
+new-project wizard) runs `runic-translations import`'s importer: a dry run lists
+each message's outcome before a one-use confirmation writes it. Changing the format,
+the source or **Overwrite** discards the dry run, so the import applies only a plan
+made for the inputs shown; errors the catalog already had are listed as such. The
+editor and the language server read `runic.json` as the compiler does: a UTF-8 BOM
+is skipped and a duplicate member is the compiler's diagnostic.
 The closed XLIFF 2.1 profile (version 3, shared with `runic-translations xliff`)
 deterministically round-trips plain RMF2 messages, with placeholders as `<ph>`,
 reports structured messages as semantic loss and skips them on import instead of

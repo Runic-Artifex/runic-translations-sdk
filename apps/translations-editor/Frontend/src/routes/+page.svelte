@@ -300,7 +300,11 @@
   let catalogImportFrom = $state<"resx" | "i18next">("resx");
   let catalogImportSource = $state("");
   let catalogImportOverwrite = $state(false);
-  let catalogImportPlan = $state.raw<EditorCatalogImportPlan>();
+  let catalogImportPlanned = $state.raw<{ inputs: string; plan: EditorCatalogImportPlan }>();
+  // The dry run of the current inputs only: changing the format, the source or "overwrite" invalidates it, so "Import once"
+  // never applies a plan made for other inputs (its token stays unused and expires with the next dry run).
+  const catalogImportInputs = $derived(JSON.stringify([catalogImportFrom, catalogImportSource.trim(), catalogImportOverwrite]));
+  const catalogImportPlan = $derived(catalogImportPlanned?.inputs === catalogImportInputs ? catalogImportPlanned.plan : undefined);
 
   let labels = $derived(labelsFor(uiLocale));
   $effect(() => {
@@ -1300,7 +1304,9 @@
     if (interchangeBusy || catalogImportSource.trim() === "") return;
     interchangeBusy = true;
     try {
-      catalogImportPlan = await bridge.previewCatalogImport({ from: catalogImportFrom, source: catalogImportSource.trim(), overwrite: catalogImportOverwrite });
+      const inputs = catalogImportInputs;
+      const plan = await bridge.previewCatalogImport({ from: catalogImportFrom, source: catalogImportSource.trim(), overwrite: catalogImportOverwrite });
+      catalogImportPlanned = { inputs, plan };
     } catch (error) {
       operationMessage = errorNotice(error);
     } finally {
@@ -1312,10 +1318,12 @@
     if (interchangeBusy || catalogImportPlan?.confirmationToken === undefined || !confirmDiscardUnsavedWork("ui_confirm_apply_catalog_import")) return;
     interchangeBusy = true;
     try {
-      const result = await bridge.applyCatalogImport(catalogImportPlan.confirmationToken);
+      const token = catalogImportPlan.confirmationToken;
+      // The token is one-use on the host whether or not the import commits: a failed apply needs a fresh dry run.
+      catalogImportPlanned = undefined;
+      const result = await bridge.applyCatalogImport(token);
       operationMessage = result.message ?? (result.ok ? notice("ui_feedback_catalog_imported") : notice("ui_backend_import_messages_invalid"));
       if (result.snapshot !== undefined) installSnapshot(result.snapshot, true);
-      if (result.ok) catalogImportPlan = undefined;
     } catch (error) {
       operationMessage = errorNotice(error);
     } finally {
@@ -1783,7 +1791,7 @@
         catalogImportFrom = wizardImportFrom;
         catalogImportSource = wizardImportSource.trim();
         catalogImportOverwrite = false;
-        catalogImportPlan = undefined;
+        catalogImportPlanned = undefined;
         interchangeOpen = true;
         projectBusy = false;
         await previewCatalogImport();

@@ -4081,6 +4081,16 @@ ui {
   }
 }
 ui {
+  backend {
+    locale_drafts_not_recorded = {$locale} was added, but its starter copies could not be recorded as drafts in {$path}, so its coverage counts them as translated.
+  }
+}
+ui {
+  backend {
+    review_drafts_not_updated = Saved, but the edited starter messages could not be recorded as translated in {$path}; status still counts them as missing.
+  }
+}
+ui {
   preview_formatting = Preview formatting
 }
 ui {
@@ -4195,6 +4205,9 @@ ui {
 }
 ui {
   catalog_import_title = Import from .resx or i18next
+}
+ui {
+  catalog_import_preexisting = The catalog already has these errors. The import neither causes nor fixes them; validate reports them until they are fixed.
 }
 ui {
   catalog_import_description = Migrates an existing catalog into this project's .rmf2 sources with the runic-translations importer. Check the import first; nothing is written until you apply it.

@@ -108,6 +108,17 @@ internal sealed class EditorSession : IDisposable
             // Commit is the point of no return.  Reconcile state from this exact plan
             // before any filesystem read can observe an external writer.
             _history.Record(null);
+            if (request.Kind == "add-locale" && request.Locale is { } added)
+            {
+                // The starter copies are recorded as drafts, so the new language's coverage starts at what it really
+                // translates (0 %), not 100 %. The language is added whether or not this succeeds.
+                string[] created = plan.Edits.Where(static edit => edit.Kind == TranslationWorkspaceEditKind.Create).Select(static edit => edit.RelativePath.Replace('\\', '/')).ToArray();
+                try { _workspace.RecordStarterDrafts(added.Trim(), created); }
+                catch (Exception exception) when (exception is Runic.Translations.Tooling.TranslationInterchangeException or IOException or UnauthorizedAccessException or EditorUserException)
+                {
+                    warning = EditorNotice.Create("ui_backend_locale_drafts_not_recorded", ("locale", added.Trim()), ("path", _workspace.ReviewDisplayPath() ?? "review.json")) with { Detail = exception.Message };
+                }
+            }
             if (request.Kind == "remove-locale" && request.Locale is { } removed)
             {
                 // The review entries of a removed locale go too. The locale is gone whether or not this succeeds, so a
