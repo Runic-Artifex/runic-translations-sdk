@@ -139,4 +139,10 @@ public sealed class TranslationDiagnostic
     public TranslationDiagnosticSeverity Severity { get; }
     public string Message { get; }
     public TextSourceLocation Location { get; }
+
+    /// <summary>The canonical key of the message a per-message project check is about (RTR0010, RTR0094–RTR0098, RTR0090), or null.</summary>
+    internal string? MessageKey { get; init; }
+
+    /// <summary>The locale of the translation that check is about, or null.</summary>
+    internal string? Locale { get; init; }
 }

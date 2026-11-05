@@ -79,6 +79,10 @@ internal sealed class DiagnosticBag
     internal void Add(string id, TranslationDiagnosticSeverity severity, string message, TextSourceLocation location)
         => _items.Add(new TranslationDiagnostic(id, severity, message, location));
 
+    // A per-message check: the diagnostic also names the message and the locale it is about, so editors can attach it to a row.
+    internal void Add(string id, TranslationDiagnosticSeverity severity, string message, TranslationSource source, ByteSpan span, string key, string locale)
+        => _items.Add(new TranslationDiagnostic(id, severity, message, Location(source, span)) { MessageKey = key, Locale = locale });
+
     internal TranslationDiagnostic[] ToSortedArray()
     {
         _items.Sort((left, right) =>

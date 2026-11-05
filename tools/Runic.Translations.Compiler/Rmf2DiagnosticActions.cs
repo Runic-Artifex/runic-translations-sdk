@@ -102,15 +102,80 @@ internal static class Rmf2DiagnosticActions
             "Make message explicitly empty", diagnostic.Id, diagnostic.Location, revision, at, end - at, " {{}}");
     }
 
+    /// <summary>
+    /// Repairs that need the compiled project, for the diagnostics of <paramref name="compilation"/> located in
+    /// <paramref name="source"/>: RTR0095 adds the missing plural or ordinal variants of a single-selector message as
+    /// copies of its catch-all variant, inserted before it with the same separator. Messages with several selectors get
+    /// no repair. <paramref name="compilation"/> must be compiled from <paramref name="source"/>'s current bytes.
+    /// </summary>
+    public static IReadOnlyList<Rmf2DiagnosticQuickFix> GetProjectQuickFixes(Rmf2ProjectCompilation compilation, TranslationSource source, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(compilation);
+        ArgumentNullException.ThrowIfNull(source);
+        if (compilation.Project is not { } project) return Array.Empty<Rmf2DiagnosticQuickFix>();
+        Rmf2ResourceDocument? document = null;
+        string? revision = null;
+        var fixes = new List<Rmf2DiagnosticQuickFix>();
+        foreach (TranslationDiagnostic diagnostic in compilation.Diagnostics)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (diagnostic.Id != "RTR0095" || diagnostic.MessageKey is not { } key || diagnostic.Locale is not { } locale ||
+                !string.Equals(diagnostic.Location.Path.Replace('\\', '/'), source.Path, StringComparison.Ordinal)) continue;
+            Rmf2TranslationV5? resource = project.Locales.FirstOrDefault(item => item.Tag == locale)?.DirectResources
+                .FirstOrDefault(item => item.Key == key && string.Equals(item.SourceLocation.Path.Replace('\\', '/'), source.Path, StringComparison.Ordinal));
+            if (resource is null) continue;
+            bool rmf2 = source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase);
+            document ??= rmf2 ? Rmf2ResourceReader.Analyze(source, cancellationToken: cancellationToken) : Rmf2ResourceReader.AnalyzeDirect(source, cancellationToken: cancellationToken);
+            Rmf2ResourceNode? node = rmf2
+                ? document.Nodes.FirstOrDefault(item => !item.IsGroup && item.NameLocation.StartByte == resource.SourceLocation.StartByte)
+                : document.Nodes.Count == 1 ? document.Nodes[0] : null;
+            if (node?.MessageSyntax is not { Match: { } match } syntax) continue;
+            Rmf2MessageV5 message = resource.Message;
+            if (message.Selectors.Count != 1 || message.Selectors[0].Function is not ("plural" or "ordinal") || syntax.Variants.Count != message.Variants.Count) continue;
+            bool ordinal = message.Selectors[0].Function == "ordinal";
+            IReadOnlyList<string> categories = Rmf2AuthoringService.PluralCategories(locale, ordinal, message.Selectors[0].Type == "int64");
+            var used = new HashSet<string>(message.Variants.Select(static variant => variant.Keys[0])
+                .Where(static item => item.Kind == "literal" && item.Canonical is null && item.Value is not null).Select(static item => item.Value!), StringComparer.Ordinal);
+            string[] missing = categories.Where(category => category != "other" && !used.Contains(category)).ToArray();
+            int catchAll = -1;
+            for (int index = 0; index < syntax.Variants.Count; index++)
+                if (syntax.Variants[index].Keys.Count == 1 && syntax.Variants[index].Keys[0] == "*") { catchAll = index; break; }
+            if (missing.Length == 0 || catchAll < 0) continue;
+            IReadOnlyList<int> map = node.MessageByteMap;
+            int Map(int offset) => map[Math.Min(offset, map.Count - 1)];
+            Mf2VariantSyntax variant = syntax.Variants[catchAll];
+            int insertAt = Map(variant.Location.StartByte);
+            int separatorFrom = Map(catchAll > 0 ? End(syntax.Variants[catchAll - 1].Location) : End(match.Location));
+            string separator = separatorFrom < insertAt ? Utf8.GetString(source.Bytes, separatorFrom, insertAt - separatorFrom) : string.Empty;
+            if (separator.Length == 0 || separator.Any(static character => !char.IsWhiteSpace(character))) separator = " ";
+            int patternFrom = Map(variant.PatternLocation.StartByte), patternTo = Map(End(variant.PatternLocation));
+            string pattern = Utf8.GetString(source.Bytes, patternFrom, patternTo - patternFrom);
+            fixes.Add(new Rmf2DiagnosticQuickFix("rmf2.plural-variants:" + diagnostic.Location.StartByte.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "Add the missing " + (ordinal ? "ordinal" : "plural") + " " + (missing.Length == 1 ? "variant " : "variants ") + string.Join(", ", missing) + " (copies of the * variant)",
+                diagnostic.Id, diagnostic.Location, revision ??= Revision(source), insertAt, 0,
+                string.Concat(missing.Select(category => category + " " + pattern + separator))));
+        }
+        return fixes.AsReadOnly();
+        static int End(TextSourceLocation location) => location.StartByte + location.LengthBytes;
+    }
+
     /// <summary>Refuses stale or altered repair data and applies only a newly authorized compiler edit.</summary>
-    public static TranslationSource ApplyQuickFix(TranslationSource source, Rmf2DiagnosticQuickFix fix)
+    public static TranslationSource ApplyQuickFix(TranslationSource source, Rmf2DiagnosticQuickFix fix) => ApplyQuickFix(source, fix, null);
+
+    /// <summary>
+    /// As <see cref="ApplyQuickFix(TranslationSource, Rmf2DiagnosticQuickFix)"/>, also accepting the project repairs of
+    /// <see cref="GetProjectQuickFixes"/>; <paramref name="compilation"/> must be compiled from <paramref name="source"/>.
+    /// </summary>
+    public static TranslationSource ApplyQuickFix(TranslationSource source, Rmf2DiagnosticQuickFix fix, Rmf2ProjectCompilation? compilation)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(fix);
         ArgumentNullException.ThrowIfNull(fix.Location);
         if (!string.Equals(Revision(source), fix.ExpectedRevision, StringComparison.Ordinal))
             throw new InvalidOperationException("The source changed since this quick fix was offered.");
-        Rmf2DiagnosticQuickFix? current = GetQuickFixes(Rmf2ResourceReader.Analyze(source)).FirstOrDefault(candidate => candidate.Id == fix.Id);
+        IEnumerable<Rmf2DiagnosticQuickFix> candidates = GetQuickFixes(Rmf2ResourceReader.Analyze(source));
+        if (compilation is not null) candidates = candidates.Concat(GetProjectQuickFixes(compilation, source));
+        Rmf2DiagnosticQuickFix? current = candidates.FirstOrDefault(candidate => candidate.Id == fix.Id);
         if (current is null || current.DiagnosticId != fix.DiagnosticId || !SameLocation(current.Location, fix.Location) ||
             current.StartByte != fix.StartByte || current.LengthBytes != fix.LengthBytes || current.NewText != fix.NewText)
             throw new InvalidOperationException("The quick fix no longer matches a compiler diagnostic.");

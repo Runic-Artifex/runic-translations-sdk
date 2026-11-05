@@ -31,6 +31,52 @@ internal sealed class Rmf2QualityCheckTests
     private static void None(Rmf2ProjectCompilation result, params string[] ids) =>
         Assert.True(!result.Diagnostics.Any(d => ids.Contains(d.Id)), "Unexpected " + string.Join("/", ids) + ":\n" + All(result));
 
+    [Test, DisplayName("per-message checks name their message and locale for editors")]
+    public void DiagnosticsNameTheirMessage()
+    {
+        var result = Compile(",\"locales\":[\"en\",\"cs\",\"de\"],\"validation\":{\"translationCompleteness\":\"warning\"}",
+            ("en", Plural + "\nlater = Later"),
+            ("cs", "items =\n  .input {$n :integer}\n  .match $n\n  one {{Jedna položka}}\n  * {{{$n} položek}}\nlater = Později"),
+            ("de", "items =\n  .input {$n :integer}\n  .match $n\n  one {{Ein Element}}\n  * {{{$n} Elemente}}"));
+        TranslationDiagnostic missing = Single(result, "RTR0095");
+        Assert.Equal("items", missing.MessageKey);
+        Assert.Equal("cs", missing.Locale);
+        TranslationDiagnostic untranslated = Single(result, "RTR0010");
+        Assert.Equal("later", untranslated.MessageKey);
+        Assert.Equal("de", untranslated.Locale);
+    }
+
+    [Test, DisplayName("the RTR0095 quick fix adds the missing categories as copies of the catch-all, and applies only against the project")]
+    public void MissingCategoryQuickFix()
+    {
+        const string czech = "items =\n  .input {$n :number}\n  .match $n\n  one {{Jedna položka}}\n  * {{{$n} položek}}\nlater = Později\n";
+        var result = Compile(",\"locales\":[\"en\",\"cs\"]", ("en", DecimalPlural + "\nlater = Later\n"), ("cs", czech));
+        TranslationSource source = Source("translations/cs.rmf2", czech);
+        Rmf2DiagnosticQuickFix fix = Rmf2DiagnosticActions.GetProjectQuickFixes(result, source).Single();
+        Assert.Equal("RTR0095", fix.DiagnosticId);
+        Assert.Equal("Add the missing plural variants few, many (copies of the * variant)", fix.Title);
+        TranslationSource fixedSource = Rmf2DiagnosticActions.ApplyQuickFix(source, fix, result);
+        Assert.Equal("items =\n  .input {$n :number}\n  .match $n\n  one {{Jedna položka}}\n  few {{{$n} položek}}\n  many {{{$n} položek}}\n  * {{{$n} položek}}\nlater = Později\n",
+            Encoding.UTF8.GetString(fixedSource.Bytes));
+        var repaired = Compile(",\"locales\":[\"en\",\"cs\"]", ("en", DecimalPlural + "\nlater = Later\n"), ("cs", Encoding.UTF8.GetString(fixedSource.Bytes)));
+        Assert.True(repaired.Success, All(repaired));
+        None(repaired, "RTR0094", "RTR0095");
+
+        // The document-only overload does not authorize a project repair, and a changed source refuses it.
+        Assert.Throws<System.InvalidOperationException>(() => Rmf2DiagnosticActions.ApplyQuickFix(source, fix), "A project repair applied without the project.");
+        Assert.Throws<System.InvalidOperationException>(() => Rmf2DiagnosticActions.ApplyQuickFix(fixedSource, fix, repaired), "A stale repair applied.");
+
+        // A direct .mf2 message on one line gets the space it uses between variants.
+        const string direct = ".input {$n :number} .match $n one {{Jedna}} * {{Více}}";
+        var mf2 = TranslationCompiler.CompileRmf2ProjectV5(
+            Source("translations/runic.json", "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"en\",\"locales\":[\"en\",\"cs\"]}"),
+            [Source("translations/en/items.mf2", ".input {$n :number} .match $n one {{One}} * {{More}}"), Source("translations/cs/items.mf2", direct)]);
+        TranslationSource directSource = Source("translations/cs/items.mf2", direct);
+        Rmf2DiagnosticQuickFix directFix = Rmf2DiagnosticActions.GetProjectQuickFixes(mf2, directSource).Single();
+        Assert.Equal(".input {$n :number} .match $n one {{Jedna}} few {{Více}} many {{Více}} * {{Více}}",
+            Encoding.UTF8.GetString(Rmf2DiagnosticActions.ApplyQuickFix(directSource, directFix, mf2).Bytes));
+    }
+
     [Test, DisplayName("RTR0094 reports a plural key the locale never selects, at the key")]
     public void UnreachableCategory()
     {
