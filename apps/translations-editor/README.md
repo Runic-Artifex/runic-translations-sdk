@@ -100,6 +100,37 @@ source, boundary whitespace, terminology, bidirectional text). `RTR0095` offers
 a quick fix that adds the missing plural or ordinal variants as copies of the
 `*` variant.
 
+## Catalogs and library catalogs
+
+The editor finds every `runic.json` below the workspace directory, by the same
+rules as the language server (build output, `node_modules`, VCS and tool
+directories are skipped). It opens `runic.json` or `translations/runic.json` at
+the top, or the only project; with several and none at the top, the welcome
+screen lists them. The **Catalogs** section of the sidebar switches between
+them; each catalog keeps its own selected message, locale, filter and search.
+
+The same section lists the open project's **library catalogs**: catalogs that an
+installed package packs (a restored NuGet package's `runic/<catalog>/`, or an npm
+dependency's `runicTranslations`), found through the restore output and
+`node_modules` as the build and the Vite plugin find them; restore the project
+first. **Libraries…** shows a library catalog in two layers: the library's text
+(layer 0) is read-only, and your overrides (layer 1) are the
+`translations/overrides/<catalog>/<locale>.rmf2` files the build compiles into
+the application. **Override** adds a message to that file, seeded with the text
+the locale shows now and with the library's base text as comments; the first
+override of a catalog adds it to runic.json `"overrides"`. An override shows an
+**Overridden** badge, can be edited and saved, and **Revert to library** removes
+it. Each override records the library's base text it was written for
+(`translations/overrides/<catalog>/<catalog>.review.json`); after a library
+update that changes it, the override is marked **Library text changed since
+override** (`RTR0090`) until you **Keep override**. **Add locale** adds a locale
+the library lacks; it falls back by the rule of the compiler and both runtimes
+(its nearest CLDR parent among the library's and your locales, then the library
+locale CLDR likely subtags match, then the base locale) and is built once it has
+its first override. Each locale shows how many of the library's messages it shows
+in its own text. The build's diagnostics of your overrides (unknown keys
+`RTR0103`, changed inputs) are listed below.
+
 Machine-translation providers and signed stable distribution are not available yet.
 
 ## Build from source

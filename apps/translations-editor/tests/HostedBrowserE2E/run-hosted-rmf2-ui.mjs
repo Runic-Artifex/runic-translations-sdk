@@ -17,7 +17,7 @@ const reportDirectory = process.env.RUNIC_EDITOR_HOSTED_E2E_REPORT_DIR
   ? resolve(process.env.RUNIC_EDITOR_HOSTED_E2E_REPORT_DIR)
   : await mkdtemp(join(process.env.RUNIC_EDITOR_HOSTED_E2E_TEMP_ROOT ?? "/tmp", "runic-editor-hosted-report-"));
 await mkdir(reportDirectory, { recursive: true });
-for (const name of ["browser-metadata.json", "failure.png", "failure.html", "failure.json", "conflict-en.png", "repaired-en.png"])
+for (const name of ["browser-metadata.json", "failure.png", "failure.html", "failure.json", "conflict-en.png", "repaired-en.png", "library-catalog.png"])
   await rm(join(reportDirectory, name), { force: true });
 const temporaryRoot = await mkdtemp(join(process.env.RUNIC_EDITOR_HOSTED_E2E_TEMP_ROOT ?? "/tmp", "runic-editor-hosted-work-"));
 const workspace = join(temporaryRoot, "workspace");
