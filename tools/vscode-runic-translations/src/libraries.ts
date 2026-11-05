@@ -3,6 +3,12 @@ import { dirname, join } from "node:path";
 /** The URI scheme of the read-only library sources that "Go to Definition" opens from an override source. */
 export const libraryScheme = "runic-library";
 
+/**
+ * The files a restore or an install rewrites (NuGet's restore output, npm/pnpm/Yarn/Bun install state and lockfiles): the
+ * language server resolves library catalogs again when one changes.
+ */
+export const libraryInstallPattern = "**/{obj/project.assets.json,node_modules/.package-lock.json,node_modules/.modules.yaml,node_modules/.yarn-state.yml,package-lock.json,pnpm-lock.yaml,yarn.lock,bun.lock,bun.lockb}";
+
 /** A locale of a library catalog as the application sees it (`runic/libraryCatalogs`). */
 export interface LibraryLocale {
   tag: string;
@@ -75,9 +81,43 @@ export function libraryLocaleChoices(catalog: LibraryCatalog, message?: LibraryM
     description: locale.origin === "library"
       ? `library${locale.tag === catalog.baseLocale ? " base locale" : ""}`
       : `added by the application, falls back to ${locale.fallback ?? catalog.baseLocale}`,
-    detail: `${locale.covered}/${locale.messages} messages in its own text` + (message?.overridden.includes(locale.tag) ? "; this message is overridden here" : ""),
+    detail: `${locale.covered}/${locale.messages} messages in its own text` + (message && isOverriddenIn(message, locale.tag) ? "; this message is overridden here" : ""),
     value: locale.tag,
   }));
+}
+
+/**
+ * The canonical BCP 47 form of a typed locale tag (`de_ch` and `DE-ch` become `de-CH`), as the CLI names override
+ * sources; undefined when it is not a well-formed tag.
+ */
+export function canonicalLocale(input: string): string | undefined {
+  const value = input.trim().replaceAll("_", "-");
+  if (!value) return undefined;
+  try {
+    return Intl.getCanonicalLocales(value)[0];
+  } catch (error) {
+    if (error instanceof RangeError) return undefined;
+    throw error;
+  }
+}
+
+/** Whether the application already overrides `message` in `locale`; locale tags compare case-insensitively. */
+export function isOverriddenIn(message: Pick<LibraryMessage, "overridden">, locale: string): boolean {
+  const wanted = locale.toLowerCase();
+  return message.overridden.some(tag => tag.toLowerCase() === wanted);
+}
+
+/** An open document as far as the unsaved-changes check needs it. */
+export interface OpenDocument { fsPath: string; isDirty: boolean }
+
+/**
+ * The open documents with unsaved changes among `paths` (file system paths compared case-sensitively, except on
+ * Windows), which a CLI writing those files would overwrite underneath the editor.
+ */
+export function unsavedDocuments<T extends OpenDocument>(documents: readonly T[], paths: readonly string[], platform: string = process.platform): T[] {
+  const key = (path: string) => platform === "win32" ? path.toLowerCase() : path;
+  const wanted = new Set(paths.map(key));
+  return documents.filter(document => document.isDirty && wanted.has(key(document.fsPath)));
 }
 
 /** `runic-translations overrides add <catalog> --locale <tag> [--key <key>]` for the project of `manifest` (its runic.json). */
