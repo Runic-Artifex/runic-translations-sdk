@@ -1750,10 +1750,9 @@ internal sealed class EditorWorkspace : IDisposable
             throw new TranslationAuthoringException(discovery.Message);
         var sources = state.Files.Where(file => file.Kind == DocumentKind.Resource && IsSourcePath(file.Path)).Select(file => Source(file.Path, file.Content)).ToArray();
         if (sources.Length == 0) return null;
+        if (request.Kind is "add-locale" or "remove-locale" or "set-fallback")
+            return PlanLocaleChange(request, config, layout, sources);
         var workspace = new Rmf2Workspace(_root, new TranslationSource(Path.GetRelativePath(_root, config).Replace('\\', '/'), File.ReadAllBytes(config)), sources);
-        if (request.Kind == "add-locale") return workspace.AddLocale(request.Locale ?? "", request.Fallback, request.CopyFromLocale);
-        if (request.Kind == "remove-locale") return workspace.RemoveLocale(request.Locale ?? "", request.ReplacementFallback);
-        if (request.Kind == "set-fallback") return workspace.SetFallback(request.Locale ?? "", request.Fallback);
         string[] Target() => (request.TargetKey ?? "").Split('.', StringSplitOptions.RemoveEmptyEntries);
         if (request.Kind == "create-key")
         {
@@ -1775,6 +1774,77 @@ internal sealed class EditorWorkspace : IDisposable
             "delete-key" => workspace.MutateResource(logical, null),
             _ => throw new TranslationAuthoringException("This operation is not available for RMF2 resources."),
         };
+    }
+
+    // Locale changes go through Tooling's planner, the code of runic-translations locale add|remove: runic.json keeps its
+    // formatting and only the changed entry's bytes change. The editor seeds a new locale from a declared one (copyFrom)
+    // and gives the copied messages the plural and ordinal variants the new locale needs (RTR0095's repair: copies of
+    // the * variant); removing a locale redirects the locales that fall back to it (the base locale by default).
+    private TranslationWorkspaceTransactionPlan PlanLocaleChange(EditorMutationRequest request, string config, TranslationManifestLayout layout, TranslationSource[] sources)
+    {
+        string baseLocale = layout.BaseLocale ?? throw new TranslationAuthoringException(TranslationManifestReader.MissingBaseLocale);
+        var project = new TranslationSource(NormalizeRelativePath(Path.GetRelativePath(_root, config)), File.ReadAllBytes(config));
+        var inputs = new TranslationProjectSources(_root, project, sources, layout.SourceRoots);
+        TranslationLocalePlan plan;
+        try
+        {
+            plan = request.Kind switch
+            {
+                "add-locale" => TranslationLocaleChanges.PlanAdd(inputs, request.Locale ?? "", request.Fallback, request.CopyFromLocale ?? baseLocale),
+                "remove-locale" => TranslationLocaleChanges.PlanRemove(inputs, request.Locale ?? "", request.ReplacementFallback ?? baseLocale),
+                _ => TranslationLocaleChanges.PlanSetFallback(inputs, request.Locale ?? "", request.Fallback ?? baseLocale),
+            };
+        }
+        catch (TranslationToolingUsageException exception) { throw new TranslationAuthoringException(exception.Message, exception); }
+
+        var created = plan.CreatedFiles.Select(file => new TranslationSource(inputs.DisplayPath(file.Path), file.Bytes)).ToList();
+        if (created.Count != 0) created = SeedPluralCategories(plan, inputs, sources, created);
+        var deleted = plan.DeletedFiles.Select(inputs.DisplayPath).ToHashSet(StringComparer.Ordinal);
+        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource(project.Path, plan.ProjectBytes),
+            sources.Where(source => !deleted.Contains(source.Path)).Concat(created).ToArray());
+        if (!compilation.Success || compilation.Project is null)
+            throw new TranslationAuthoringException("The complete edited catalog is invalid: " + string.Join("; ", compilation.Diagnostics
+                .Where(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error).Select(static diagnostic => diagnostic.Message)));
+
+        var edits = new List<TranslationWorkspaceEdit>
+        {
+            new(project.Path, TranslationWorkspaceEditKind.Replace, WorkspaceRevision(project.GetUtf8Bytes()), plan.ProjectBytes),
+        };
+        foreach (TranslationSource source in created) edits.Add(new(source.Path, TranslationWorkspaceEditKind.Create, null, source.GetUtf8Bytes()));
+        foreach (TranslationSource source in sources.Where(source => deleted.Contains(source.Path)))
+            edits.Add(new(source.Path, TranslationWorkspaceEditKind.Delete, WorkspaceRevision(source.GetUtf8Bytes()), null));
+        return new TranslationWorkspaceTransactionPlan(_root, compilation.Project.Id, edits, compilation);
+    }
+
+    private static string WorkspaceRevision(byte[] bytes) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes));
+
+    // Each copied message whose plural or ordinal selector lacks a category the new locale needs gets it, as the RTR0095
+    // quick fix adds it: a copy of the * variant. Repairs within one file never overlap, so they apply back to front.
+    private static List<TranslationSource> SeedPluralCategories(TranslationLocalePlan plan, TranslationProjectSources inputs,
+        TranslationSource[] sources, List<TranslationSource> created)
+    {
+        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource(inputs.Project.Path, plan.ProjectBytes),
+            sources.Concat(created).ToArray());
+        var seeded = new List<TranslationSource>(created.Count);
+        foreach (TranslationSource source in created)
+        {
+            byte[] bytes = source.GetUtf8Bytes();
+            foreach (Rmf2DiagnosticQuickFix fix in Rmf2DiagnosticActions.GetProjectQuickFixes(compilation, source).OrderByDescending(static fix => fix.StartByte))
+                bytes = [.. bytes.AsSpan(0, fix.StartByte), .. Encoding.UTF8.GetBytes(fix.NewText), .. bytes.AsSpan(fix.StartByte + fix.LengthBytes)];
+            seeded.Add(new TranslationSource(source.Path, bytes));
+        }
+        return seeded;
+    }
+
+    /// <summary>After a locale's removal: its entries leave the review file, as runic-translations locale remove drops them.</summary>
+    internal void CompleteLocaleRemoval(string locale)
+    {
+        if (_catalogId is null || FindMf2ProjectConfig() is not { } config) return;
+        string reviewPath = TranslationReviewFile.PathFor(config, _catalogId);
+        // Compare-and-swap: a write by the command line or the language server in between is kept.
+        TranslationReviewFile.Update(reviewPath, _catalogId, existing => existing is null || !existing.Entries.Any(entry => string.Equals(entry.Locale, locale, StringComparison.OrdinalIgnoreCase))
+            ? existing
+            : new TranslationInterchangeReview(existing.CatalogId, existing.Entries.Where(entry => !string.Equals(entry.Locale, locale, StringComparison.OrdinalIgnoreCase))));
     }
 
     private Rmf2Workspace Rmf2Catalog()

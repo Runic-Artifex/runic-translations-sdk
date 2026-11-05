@@ -96,6 +96,12 @@ internal sealed class EditorSession : IDisposable
             // Commit is the point of no return.  Reconcile state from this exact plan
             // before any filesystem read can observe an external writer.
             _history.Record(null);
+            if (request.Kind == "remove-locale" && request.Locale is { } removed)
+            {
+                // The review entries of a removed locale go too; the locale is gone whether or not this succeeds.
+                try { _workspace.CompleteLocaleRemoval(removed.Trim()); }
+                catch (Exception exception) when (exception is Runic.Translations.Tooling.TranslationInterchangeException or IOException or UnauthorizedAccessException) { }
+            }
             try
             {
                 WorkspaceSnapshot snapshot = await _workspace.LoadAsync(CancellationToken.None).ConfigureAwait(false);

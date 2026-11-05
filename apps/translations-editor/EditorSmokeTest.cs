@@ -130,6 +130,41 @@ internal static class EditorSmokeTest
             "The CLDR locale list is incomplete.");
     }
 
+    // L5-24: adding and removing a locale goes through Tooling's planner (runic-translations locale add|remove):
+    // runic.json keeps its formatting, the copied starter messages get the plural categories the new locale needs, and
+    // a removed locale's review entries leave the review file.
+    private static async Task LocaleChangeJourneyAsync(string project)
+    {
+        Directory.CreateDirectory(project);
+        const string manifest = "{\n  \"schemaVersion\": 1,\n  \"catalog\": \"locales\",\n  \"code\": { \"namespace\": \"Smoke.Translations\", \"className\": \"SmokeText\" },\n  \"baseLocale\": \"en\",\n  \"locales\": [\"en\", \"de\"]\n}\n";
+        await File.WriteAllTextAsync(Path.Combine(project, "runic.json"), manifest).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), "files =\n  .input {$count :integer}\n  .match $count\n  one {{One file}}\n  * {{{$count} files}}\n").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "de.rmf2"), "files =\n  .input {$count :integer}\n  .match $count\n  one {{Eine Datei}}\n  * {{{$count} Dateien}}\n").ConfigureAwait(false);
+        using var session = new EditorSession(project);
+        Require((await session.LoadAsync().ConfigureAwait(false)).Success, "The locale fixture did not load.");
+
+        var add = new EditorMutationRequest("add-locale", "ru", null, null, "en", null, null, null);
+        EditorMutationPreview preview = session.PreviewMutation(add);
+        Require(preview.Ok && preview.Files.Any(file => file.Path == "ru.rmf2" && file.Kind == "create"), "Adding ru wasn't planned: " + preview.Message?.Code);
+        EditorOperationResult added = await session.ApplyMutationAsync(add with { ConfirmationToken = preview.ConfirmationToken }).ConfigureAwait(false);
+        Require(added.Ok, "Adding ru failed: " + added.Message?.Code + " " + added.Message?.Detail);
+        string updated = await File.ReadAllTextAsync(Path.Combine(project, "runic.json")).ConfigureAwait(false);
+        Require(updated == manifest.Replace("[\"en\", \"de\"]", "[\"en\", \"de\", \"ru\"]", StringComparison.Ordinal), "runic.json lost its formatting: " + updated);
+        string russian = await File.ReadAllTextAsync(Path.Combine(project, "ru.rmf2")).ConfigureAwait(false);
+        Require(russian.Contains("few {{{$count} files}}", StringComparison.Ordinal) && russian.Contains("many {{{$count} files}}", StringComparison.Ordinal) && russian.Contains("one {{One file}}", StringComparison.Ordinal),
+            "The copied starter didn't get ru's plural categories: " + russian);
+
+        await File.WriteAllTextAsync(Path.Combine(project, "locales.review.json"), "{\"$schema\":\"runic.translations.interchange-review/2\",\"catalog\":\"locales\",\"entries\":[{\"key\":\"files\",\"locale\":\"ru\",\"state\":\"approved\"},{\"key\":\"files\",\"locale\":\"de\",\"state\":\"approved\"}]}\n").ConfigureAwait(false);
+        var remove = new EditorMutationRequest("remove-locale", "ru", null, null, null, null, null, null);
+        EditorMutationPreview removal = session.PreviewMutation(remove);
+        Require(removal.Ok, "Removing ru wasn't planned: " + removal.Message?.Code + " " + removal.Message?.Detail);
+        EditorOperationResult removed = await session.ApplyMutationAsync(remove with { ConfirmationToken = removal.ConfirmationToken }).ConfigureAwait(false);
+        Require(removed.Ok && !File.Exists(Path.Combine(project, "ru.rmf2")), "Removing ru failed: " + removed.Message?.Code);
+        Require(await File.ReadAllTextAsync(Path.Combine(project, "runic.json")).ConfigureAwait(false) == manifest, "Removing ru didn't restore runic.json byte for byte.");
+        string review = await File.ReadAllTextAsync(Path.Combine(project, "locales.review.json")).ConfigureAwait(false);
+        Require(!review.Contains("\"ru\"", StringComparison.Ordinal) && review.Contains("\"de\"", StringComparison.Ordinal), "The removed locale's review entries stayed: " + review);
+    }
+
     private static async Task MalformedManifestJourneyAsync(string root)
     {
         // A hand-edited or half-saved runic.json must produce diagnostics, not
@@ -484,6 +519,7 @@ internal static class EditorSmokeTest
             await AuthoringJourneyAsync(Path.Combine(container, "authoring")).ConfigureAwait(false);
             await MountedContextJourneyAsync(Path.Combine(container, "mounted-context")).ConfigureAwait(false);
             await PreviewFormattingJourneyAsync(Path.Combine(container, "preview-formatting")).ConfigureAwait(false);
+            await LocaleChangeJourneyAsync(Path.Combine(container, "locale-change")).ConfigureAwait(false);
             await MalformedManifestJourneyAsync(Path.Combine(container, "malformed-manifest")).ConfigureAwait(false);
             await InterchangeOutputJourneyAsync(Path.Combine(container, "interchange-output"), commandLine).ConfigureAwait(false);
             await ReviewStampJourneyAsync(Path.Combine(container, "review-stamp")).ConfigureAwait(false);
