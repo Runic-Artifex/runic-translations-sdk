@@ -217,6 +217,15 @@ changed inputs are `RTR0016`/`RTR0065`, markup in a plain-text message `RTR0103`
   `"overrides": [{ "catalog": "runic-command-line", "from": "Runic.Translations.CommandLine" }]` replaces its built-in
   help and error text.
 
+**Tooling.** `runic-translations overrides add <catalog> --locale <tag> --key <key>` scaffolds an override seeded with
+the library's text and its base text as comments, and `overrides list` shows the library's locales, the ones the
+application adds and its overrides (see [the tool's README](../../../tools/dotnet-runic-translations/README.md#override-library-catalogs)).
+The language server treats override sources as overlays on the installed library: it reports the build's diagnostics
+while you type, completes the library's keys and inputs, shows the library's base text on hover and opens the library's
+source from **Go to Definition**; the VS Code command **Override Library Message…** wraps `overrides add`. All of them
+find the library in the restore output or `node_modules`, so restore first. When a library update changes the base
+text of a message you override, they report it (`RTR0090`).
+
 The overrides compile into the application's assembly as `AppTextCatalog.Overlays`, one compiled overlay per library
 catalog. Attach them where the library catalogs are registered:
 

@@ -85,6 +85,32 @@ locale that another locale falls back to. Both accept `--project` and `--dry-run
 directories and marks those outside the `runic.json` directory (from `sourceRoots`). Edits to `runic.json` keep
 its line endings.
 
+## Override library catalogs
+
+```bash
+dotnet tool run runic-translations -- overrides list
+dotnet tool run runic-translations -- overrides add acme.grid --locale fr
+dotnet tool run runic-translations -- overrides add acme.grid --locale de --key grid.title --key grid.empty
+```
+
+An application overrides the text of a library catalog that a package it uses packs (see
+[Build-time overrides](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/composition.md#build-time-overrides)).
+Both commands find the library in the restore output (`obj/project.assets.json` of the project that holds
+`runic.json`) or in `node_modules` (`package.json#runicTranslations`), as the build and the Vite plugin do, so
+restore first. `overrides list` lists the installed library catalogs and, for each catalog `runic.json` overrides,
+its locales (the library's and those the application adds, with their fallback and the messages shown in each
+locale's own text), the overridden messages, overrides whose library text changed, and the build's diagnostics.
+
+`overrides add <catalog> --locale <tag> --key <key>` adds each message to
+`translations/overrides/<catalog>/<tag>.rmf2`, seeded with the library's text in that locale (for a locale the
+library lacks, the text of the locale it falls back to) and with the library's base text as comments above it, and
+records that base text in `translations/overrides/<catalog>/<catalog>.review.json`, so the language server, the
+Translations Editor and `overrides list` mark the override (`RTR0090`) when a library update changes it. Keys are
+logical (`grid.title`) or canonical (`grid_title`). Without `--key`, it creates `<tag>.rmf2` with every library
+message as a commented-out template. A locale the library lacks is added with its first message and falls back by
+the build's rule. An installed catalog that `runic.json` does not list yet is added to `"overrides"`. `--dry-run`
+reports the change without writing it.
+
 ## Generate C# and ESM
 
 ```bash
