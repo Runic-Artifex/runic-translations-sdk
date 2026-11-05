@@ -26,6 +26,7 @@ public sealed class CompiledTranslationCatalog
     // The generated types whose code creates the deferred locale data; Hot Reload resets the catalog only when one of
     // them changed. Null when not tracked.
     private readonly Type[]? _generatedTypes;
+    private string[]? _localeTags;
 
     /// <summary>Creates a validated compiled catalog from generated closed data.</summary>
     public CompiledTranslationCatalog(
@@ -193,20 +194,35 @@ public sealed class CompiledTranslationCatalog
 
     internal CompiledTranslationDefinition[] DefinitionArray => _definitions;
 
+    /// <summary>
+    /// Chooses the declared locale for an ordered preference list, such as the operating system's user languages,
+    /// with CLDR likely subtags and parent locales; the default locale when no preference matches.
+    /// </summary>
+    /// <remarks>See <see cref="LocaleNegotiation"/> for the matching rules. The unsupported-locale policy does not apply.</remarks>
+    /// <param name="preferredLocales">The preferences, most preferred first; invalid tags are skipped.</param>
+    public string NegotiateLocale(IEnumerable<string> preferredLocales)
+    {
+        ArgumentNullException.ThrowIfNull(preferredLocales);
+        return LocaleNegotiation.Negotiate(preferredLocales, LocaleTags()) ?? DefaultLocale;
+    }
+
     internal string ResolveRequestedLocale(string requestedLocale) => ResolveRequest(requestedLocale).Locale;
 
     internal LocaleRequest ResolveRequest(string requestedLocale) =>
-        LocaleRequestResolver.Resolve(requestedLocale, DeclaresLocale, UnsupportedLocale, DefaultLocale, Catalog);
+        LocaleRequestResolver.Resolve(requestedLocale, LocaleTags(), UnsupportedLocale, DefaultLocale, Catalog);
 
     internal bool DeclaresLocale(string canonicalLocale) => _localeByTag.ContainsKey(canonicalLocale);
 
     internal string? GetFallbackLocale(string canonicalLocale) => _localeByTag[canonicalLocale].FallbackLocale;
 
-    /// <summary>The declared locale tags in ordinal order.</summary>
-    internal string[] LocaleTags()
+    /// <summary>The declared locale tags in ordinal order; callers must not modify the array.</summary>
+    internal string[] LocaleTags() => _localeTags ??= CreateLocaleTags(_locales);
+
+    private static string[] CreateLocaleTags(CompiledTranslationLocale[] locales)
     {
-        var tags = new string[_locales.Length];
-        for (int i = 0; i < tags.Length; i++) tags[i] = _locales[i].Locale;
+        string[] tags = new string[locales.Length];
+        for (int index = 0; index < tags.Length; index++) tags[index] = locales[index].Locale;
+        Array.Sort(tags, StringComparer.Ordinal);
         return tags;
     }
 

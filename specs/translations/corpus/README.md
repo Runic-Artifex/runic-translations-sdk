@@ -1,6 +1,6 @@
 # Runic Translations conformance corpora
 
-The current release contract is exercised by eight complementary fixtures:
+The current release contract is exercised by ten complementary fixtures:
 
 - [`rmf2-v1/index.json`](rmf2-v1/index.json) is the cross-backend release oracle
   for resource syntax `rmf2-v1` executed as `rmf2-execution-v2`, grammar/AST and
@@ -13,10 +13,26 @@ The current release contract is exercised by eight complementary fixtures:
 - [`v5-project`](v5-project/README.md) isolates project linking, caller and
   freshness hashes, generated backends, and strict pack decoding;
 - [`rmf2-list-conformance.json`](rmf2-list-conformance.json) is the
-  cross-backend oracle for `:runic:list`: every supported locale family, each
-  type and style, and the Spanish `y`/`e` and `o`/`u` forms. Each case must
-  format exactly as expected in a linked .NET message, a loaded .NET pack,
-  generated ESM and a dynamically decoded ESM artifact;
+  cross-backend oracle for `:runic:list`: the 0.8 locale families and locales
+  whose patterns differ in kind (`pt-PT`, scripts, `mi` text after `{1}`), each
+  type and style, the Spanish `y`/`e` and `o`/`u` forms and the Hebrew `ו-`.
+  Each case must format exactly as expected in a linked .NET message, a loaded
+  .NET pack, generated ESM and a dynamically decoded ESM artifact. The
+  expectations are `Intl.ListFormat`'s output;
+- [`rmf2-relative-time-conformance.json`](rmf2-relative-time-conformance.json)
+  is the cross-backend oracle for `:runic:relative-time`: CLDR plural
+  categories, past and future, `numeric=auto` texts and localized digits. The
+  expectations are `Intl.RelativeTimeFormat`'s output; .NET and the ESM
+  runtime must format each case exactly;
+- [`locale-negotiation.json`](locale-negotiation.json) is the cross-backend
+  oracle for locale negotiation with CLDR likely subtags and parent locales:
+  .NET `LocaleNegotiation.Negotiate` and the ESM `negotiateLocale` must choose
+  the expected declared locale for each preference list. The .NET runner
+  (`CldrLocaleConformanceTests`) also compares both runtimes' lists, relative
+  times, plural categories and negotiation for every CLDR locale, and their
+  canonicalization and negotiation of non-canonical inputs (case, `_`, POSIX
+  code sets, extensions, grandfathered and malformed tags) and of 1,500
+  generated two- to four-entry preference lists;
 - [`rmf2-grouping-conformance.json`](rmf2-grouping-conformance.json) is the
   cross-backend oracle for `useGrouping` on `:integer` and `:number`: the
   `auto` default in every supported locale family, each value in `en`, `de`,

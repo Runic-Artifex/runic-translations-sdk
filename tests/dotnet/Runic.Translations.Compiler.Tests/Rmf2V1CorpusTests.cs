@@ -223,15 +223,23 @@ internal sealed class Rmf2V1CorpusTests
     // new XText(null) still compiles, in both digests. Every other output is unchanged.
     // Re-pinned for merging T1a/T1b with main (TE, TC, TD): the context constructor sits before the base-text
     // accessor summaries and the References factories, in both digests.
+    // Re-pinned for merging TB (#131) with TC and TE: runtime.js embeds the catalog's CLDR tables (likely subtags,
+    // parents, aliases, plural selectors, lists, relative time) and negotiates locales, and the C# registration adds
+    // SupportedLocales, ResolveLocale and CreateManagerFromPreferences[Async], in both digests.
+    // Re-pinned for merging TB with T1a/T1b: the registration has both SupportedLocales/ResolveLocale and Registration,
+    // and runtime.js prefers, among equal maximized locales, the one nearest in the preference's CLDR chain
+    // (en-US-posix to en-US before en), in both digests.
     // Re-pinned for T1g (0.9): the generated base ABI check is a call, TranslationsCompatibility.EnsureRuntimeAbi(1),
     // in both digests.
     // Re-pinned for merging T1g with main (TE, TC, TD) through T1a/T1b, in both digests.
+    // Re-pinned for merging TB (#131) with T1g (#132), in both digests.
     // Re-pinned for TR 0.9 batch TJ: <Class>Catalog.SourceHash and Rmf2MarkupContract are static properties rather than
     // constants, so .NET Hot Reload applies text-only catalog edits, in both digests (C# only).
     // Re-pinned for the TJ Hot Reload review: Registration reads the markup contract through static () => Rmf2MarkupContract,
     // so overlays follow a Hot Reload update of it, in both digests (C# only).
-    private const string EncodedOutputDigest = "7bc69a212639eaefb4b230932b0a70b3dbc8db29da882774f931a50a9f414be1";
-    private const string HiddenEncodedOutputDigest = "bfdf1b1f93dc1babbe1634dd8b13c0eafd4652c764a1be61f4a77c86aabfef47";
+    // Re-pinned for merging the TJ Hot Reload review with TB (#131), in both digests.
+    private const string EncodedOutputDigest = "4f14e58d36415a0a33af819db5e55d8d916d5b263218d286e19bcfdb141c8508";
+    private const string HiddenEncodedOutputDigest = "8714c2424a25f1cc235bb4c335c2599a941bb1232010b48fe12c0079d451a6d5";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

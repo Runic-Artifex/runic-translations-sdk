@@ -102,6 +102,16 @@ public sealed class TranslationManager : ITranslationManager
     }
 
     /// <inheritdoc />
+    public ValueTask SetLocaleFromPreferencesAsync(
+        IEnumerable<string> preferredLocales,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(preferredLocales);
+        cancellationToken.ThrowIfCancellationRequested();
+        return SetLocaleAsync(_provider.NegotiateLocale(preferredLocales), cancellationToken);
+    }
+
+    /// <inheritdoc />
     public ValueTask RefreshAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

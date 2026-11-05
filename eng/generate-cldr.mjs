@@ -1,25 +1,21 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { deflateRawSync, inflateRawSync } from "node:zlib";
 import {
   csharpRuleBody,
   javascriptRuleFunction,
   parseRuleSet,
+  pluralCategories,
 } from "./cldr-plural-rules.mjs";
+import { chain, dataId, parseTag } from "./cldr-locales.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const sourcePath = resolve(
-  root,
-  "specs/translations/cldr/runic-subset-48.2.json",
-);
-const registryPath = resolve(
-  root,
-  "tools/Runic.Translations.Compiler/TranslationCapabilityRegistry.cs",
-);
-const runtimePath = resolve(
-  root,
-  "packages/dotnet/Runic.Translations/Formatting/GeneratedLocaleData.cs",
-);
+const sourcePath = resolve(root, "specs/translations/cldr/runic-subset-48.2.json");
+const registryPath = resolve(root, "tools/Runic.Translations.Compiler/TranslationCapabilityRegistry.cs");
+const runtimePath = resolve(root, "packages/dotnet/Runic.Translations/Formatting/GeneratedLocaleData.cs");
+const tablesPath = resolve(root, "packages/dotnet/Runic.Translations/Formatting/GeneratedLocaleTables.cs");
+const resourcePath = resolve(root, "packages/dotnet/Runic.Translations/Formatting/GeneratedLocaleData.bin");
 const matrixPath = resolve(root, "specs/translations/capabilities-v1.json");
 // The matrix describes the SDK release built from this checkout.
 const releaseTarget = (
@@ -34,281 +30,234 @@ if (process.argv.length > (check ? 3 : 2))
 const source = JSON.parse(await readFile(sourcePath, "utf8"));
 if (!source.source || typeof source.source !== "object")
   throw new Error("CLDR subset has no source metadata.");
-for (const name of [
-  "cldrVersion",
-  "cldrJsonTag",
-  "archive",
-  "archiveSha512",
-  "license",
-])
-  if (
-    typeof source.source[name] !== "string" ||
-    source.source[name].length === 0
-  )
-    throw new Error(
-      `CLDR subset source metadata '${name}' must be a non-empty string.`,
-    );
+for (const name of ["cldrVersion", "cldrJsonTag", "archive", "archiveSha512", "license"])
+  if (typeof source.source[name] !== "string" || source.source[name].length === 0)
+    throw new Error(`CLDR subset source metadata '${name}' must be a non-empty string.`);
+
+const ordinalSort = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+const sortedKeys = (object, label) => {
+  const keys = Object.keys(object);
+  keys.forEach((key, index) => {
+    if (index > 0 && keys[index - 1] >= key) throw new Error(`${label} must be unique and ordinal-sorted.`);
+  });
+  return keys;
+};
 
 // CLDR's right-to-left scripts (scriptMetadata rtl: YES), for the ESM runtime's localeDirection.
 const rightToLeftScripts = source.rightToLeftScripts;
 if (
-  !Array.isArray(rightToLeftScripts) ||
-  rightToLeftScripts.length === 0 ||
-  rightToLeftScripts.some((script, index) =>
-    typeof script !== "string" || !/^[A-Z][a-z]{3}$/.test(script) ||
+  !Array.isArray(rightToLeftScripts) || rightToLeftScripts.length === 0 ||
+  rightToLeftScripts.some((script, index) => typeof script !== "string" || !/^[A-Z][a-z]{3}$/.test(script) ||
     (index > 0 && rightToLeftScripts[index - 1] >= script))
 )
   throw new Error("CLDR subset rightToLeftScripts must be sorted, unique ISO 15924 codes.");
 
-const locales = source.locales;
-if (!Array.isArray(locales) || locales.length === 0)
-  throw new Error("CLDR subset has no locales.");
-for (let index = 0; index < locales.length; index++) {
-  const locale = locales[index];
-  if (!locale || typeof locale !== "object" || !/^[a-z]{2,3}$/.test(locale.tag))
-    throw new Error(`Invalid locale tag at index ${index}.`);
-  // Parsing validates both complete CLDR rule sets before anything is emitted.
-  locale.rules = {
-    cardinal: parseRuleSet(locale.cardinal, `${locale.tag} cardinal`),
-    ordinal: parseRuleSet(locale.ordinal, `${locale.tag} ordinal`),
-  };
-  // CLDR numbers.minimumGroupingDigits: `useGrouping=auto` groups only when the
-  // integer part has at least this many digits above the primary group.
-  if (!Number.isInteger(locale.minimumGroupingDigits) || locale.minimumGroupingDigits < 1 || locale.minimumGroupingDigits > 4)
-    throw new Error(`Locale '${locale.tag}' needs minimumGroupingDigits 1..4.`);
-  if (index > 0 && locales[index - 1].tag >= locale.tag)
-    throw new Error("Locales must be unique and ordinal-sorted.");
-}
+const tagPattern = /^[a-z]{2,3}(?:-[A-Z][a-z]{3})?(?:-(?:[A-Z]{2}|\d{3}))?(?:-[a-z0-9]{4,8})*$/;
+const checkTable = (name, pattern) => {
+  const table = source[name];
+  if (!table || typeof table !== "object") throw new Error(`CLDR subset has no ${name}.`);
+  for (const key of sortedKeys(table, name))
+    if (!tagPattern.test(key) || typeof table[key] !== "string" || !pattern.test(table[key]))
+      throw new Error(`Invalid ${name} entry '${key}'.`);
+  return table;
+};
+const likely = checkTable("likelySubtags", /^[a-z]{2,3}-[A-Z][a-z]{3}-(?:[A-Z]{2}|\d{3})$/);
+const parents = checkTable("parentLocales", /^(?:root|[a-z]{2,3}(?:-[A-Z][a-z]{3})?(?:-(?:[A-Z]{2}|\d{3}))?)$/);
+const aliases = checkTable("languageAliases", /^[a-z]{2,3}(?:-[A-Z][a-z]{3})?(?:-(?:[A-Z]{2}|\d{3}))?$/);
+for (const key of Object.keys(likely)) if (likely[parseTag(key).language] === undefined)
+  throw new Error(`Likely subtags for '${key}' have no language entry.`);
 
-const cardinal = locales.map((locale) => locale.tag);
-const ordinal = locales.map((locale) => locale.tag);
-const relativeLanguages = locales
-  .filter((locale) => locale.relativeTime)
-  .map((locale) => locale.tag);
+// Plural rules by CLDR data ID. Identical rule sets share one generated selector; rule 0 is
+// CLDR's root rule (`other` only), which ordinals of a language without ordinal rules use.
+const rules = [];
+const ruleIndex = new Map();
+const addRule = (ruleSet) => {
+  const key = csharpRuleBody(ruleSet, "");
+  if (!ruleIndex.has(key)) {
+    ruleIndex.set(key, rules.length);
+    rules.push({ csharp: csharpRuleBody(ruleSet, "        "), javascript: javascriptRuleFunction(ruleSet), categories: ruleSet.map((rule) => rule.category) });
+  }
+  return ruleIndex.get(key);
+};
+addRule(parseRuleSet({ other: "" }, "root"));
+const pluralTable = (type) => {
+  const table = source.plurals?.[type];
+  if (!table || typeof table !== "object") throw new Error(`CLDR subset has no ${type} plural rules.`);
+  return Object.fromEntries(sortedKeys(table, `plurals.${type}`).map((id) => {
+    if (!tagPattern.test(id)) throw new Error(`Invalid plural locale '${id}'.`);
+    return [id, addRule(parseRuleSet(table[id], `${id} ${type}`))];
+  }));
+};
+const cardinal = pluralTable("cardinal");
+const ordinal = pluralTable("ordinal");
 
-// CLDR list patterns as [start, middle, end, 2] for each Intl.ListFormat type and
-// style. Every pinned pattern has the form "{0}<separator>{1}", so the generated
-// data keeps only the separators; a pin that breaks this form fails generation.
+// Per-locale data by CLDR data ID, stored where it differs from the parent's.
+const units = ["second", "minute", "hour", "day", "week", "month", "year"];
+const offsets = ["-2", "-1", "0", "1", "2"];
 const listTypes = ["conjunction", "disjunction", "unit"];
 const listStyles = ["long", "short", "narrow"];
-const listSeparators = (locale) => {
-  const data = locale.listPatterns;
-  if (!data || typeof data !== "object")
-    throw new Error(`List patterns for '${locale.tag}' are missing.`);
-  if (Object.keys(data).join() !== listTypes.join())
-    throw new Error(`List patterns for '${locale.tag}' must list ${listTypes.join(", ")}.`);
-  return listTypes.flatMap((type) => {
-    if (Object.keys(data[type]).join() !== listStyles.join())
-      throw new Error(`List patterns '${locale.tag}/${type}' must list ${listStyles.join(", ")}.`);
-    return listStyles.flatMap((style) => {
-      const patterns = data[type][style];
-      if (!Array.isArray(patterns) || patterns.length !== 4)
-        throw new Error(`List patterns '${locale.tag}/${type}/${style}' must be [start, middle, end, 2].`);
-      return patterns.map((pattern) => {
-        const separator =
-          typeof pattern === "string" && pattern.startsWith("{0}") && pattern.endsWith("{1}")
-            ? pattern.slice(3, -3)
-            : null;
-        if (separator === null || /[{}]/.test(separator))
-          throw new Error(`List pattern '${locale.tag}/${type}/${style}' must have the form "{0}…{1}".`);
-        return separator;
+const locales = source.locales;
+if (!locales || typeof locales !== "object") throw new Error("CLDR subset has no locales.");
+const grouping = {}, list = {}, relativeTime = {};
+for (const id of sortedKeys(locales, "locales")) {
+  if (!tagPattern.test(id)) throw new Error(`Invalid locale '${id}'.`);
+  const data = locales[id];
+  if (data.minimumGroupingDigits !== undefined) {
+    // CLDR numbers.minimumGroupingDigits: `useGrouping=auto` groups only when the
+    // integer part has at least this many digits above the primary group.
+    if (!Number.isInteger(data.minimumGroupingDigits) || data.minimumGroupingDigits < 1 || data.minimumGroupingDigits > 4)
+      throw new Error(`Locale '${id}' needs minimumGroupingDigits 1..4.`);
+    // Kept only where it differs from the value the parent chain gives (1 at the root).
+    const inherited = chain(id, parents).slice(1).find((candidate) => locales[candidate]?.minimumGroupingDigits !== undefined);
+    if (data.minimumGroupingDigits !== (inherited === undefined ? 1 : locales[inherited].minimumGroupingDigits))
+      grouping[id] = data.minimumGroupingDigits;
+  }
+  // CLDR list patterns as [start, middle, end, 2] for each Intl.ListFormat type and style, 36
+  // patterns in all. Each has {0} before {1}; some add text before, between or after (mi, ti).
+  if (data.listPatterns !== undefined) {
+    if (Object.keys(data.listPatterns).join() !== listTypes.join())
+      throw new Error(`List patterns for '${id}' must list ${listTypes.join(", ")}.`);
+    list[id] = listTypes.flatMap((type) => {
+      if (Object.keys(data.listPatterns[type]).join() !== listStyles.join())
+        throw new Error(`List patterns '${id}/${type}' must list ${listStyles.join(", ")}.`);
+      return listStyles.flatMap((style) => {
+        const patterns = data.listPatterns[type][style];
+        if (!Array.isArray(patterns) || patterns.length !== 4)
+          throw new Error(`List patterns '${id}/${type}/${style}' must be [start, middle, end, 2].`);
+        for (const pattern of patterns) {
+          const first = typeof pattern === "string" ? pattern.indexOf("{0}") : -1, second = first < 0 ? -1 : pattern.indexOf("{1}");
+          if (first < 0 || second < first || /[{}]/.test(pattern.replace("{0}", "").replace("{1}", "")))
+            throw new Error(`List pattern '${id}/${type}/${style}' must contain {0} and then {1}.`);
+        }
+        return patterns;
       });
     });
-  });
-};
-const listLocales = locales
-  .filter((locale) => locale.listPatterns)
-  .map((locale) => ({ tag: locale.tag, separators: listSeparators(locale) }));
-const listLanguages = listLocales.map((locale) => locale.tag);
-
-// Locales with identical cardinal (or ordinal) rule sets share one generated
-// selector, named after the first locale that uses it.
-const ruleMethods = new Map();
-const ruleMethod = (locale, type) => {
-  const body = csharpRuleBody(locale.rules[type], "        ");
-  const key = locale.rules[type].length === 1 ? "other" : `${type}\n${body}`;
-  if (!ruleMethods.has(key))
-    ruleMethods.set(key, {
-      body,
-      name: locale.rules[type].length === 1
-        ? "AlwaysOther"
-        : `${type === "cardinal" ? "Cardinal" : "Ordinal"}${locale.tag[0].toUpperCase()}${locale.tag.slice(1)}`,
-      javascript: javascriptRuleFunction(locale.rules[type]),
-      index: ruleMethods.size,
+  }
+  // Relative time as 17 slots per unit: the past patterns by plural category (zero … other), the
+  // future patterns likewise, then the texts of relative-type -2 … 2; absent entries are null.
+  if (data.relativeTime !== undefined) {
+    if (Object.keys(data.relativeTime).join() !== units.join())
+      throw new Error(`Relative time for '${id}' must list ${units.join(", ")}.`);
+    relativeTime[id] = units.flatMap((unit) => {
+      const field = data.relativeTime[unit];
+      const patterns = (direction) => pluralCategories.map((category) => {
+        const pattern = field[direction]?.[category];
+        if (pattern !== undefined && (typeof pattern !== "string" || pattern.split("{0}").length > 2 || /[{}]/.test(pattern.replace("{0}", ""))))
+          throw new Error(`Relative-time pattern '${id}/${unit}/${direction}/${category}' may contain {0} at most once.`);
+        return pattern ?? null;
+      });
+      const past = patterns("past"), future = patterns("future");
+      if (past[5] === null || future[5] === null) throw new Error(`Relative time '${id}/${unit}' needs 'other' patterns.`);
+      for (const key of Object.keys(field.relative ?? {})) if (!offsets.includes(key)) throw new Error(`Unknown relative type '${id}/${unit}/${key}'.`);
+      return [...past, ...future, ...offsets.map((offset) => field.relative?.[offset] ?? null)];
     });
-  return ruleMethods.get(key);
-};
-const selectors = locales.map((locale) => ({
-  tag: locale.tag,
-  cardinal: ruleMethod(locale, "cardinal"),
-  ordinal: ruleMethod(locale, "ordinal"),
-}));
-const esmPluralRules = [
-  "// CLDR plural rules over BigInt operands { i, v, w, f, t, e } of the visible decimal.",
-  ...[...ruleMethods.values()].map(
-    (method) => `const pluralRule${method.index} = ${method.javascript};`,
-  ),
-  `const generatedPluralRules = Object.freeze({ ${selectors
-    .map(
-      (selector) =>
-        `${JSON.stringify(selector.tag)}: Object.freeze([pluralRule${selector.cardinal.index}, pluralRule${selector.ordinal.index}])`,
-    )
-    .join(", ")} });`,
-].join("\n");
-const esmLocaleData = JSON.stringify({
-  relativeTime: Object.fromEntries(
-    locales
-      .filter((locale) => locale.relativeTime)
-      .map((locale) => [locale.tag, locale.relativeTime]),
-  ),
-  list: Object.fromEntries(
-    listLocales.map((locale) => [locale.tag, locale.separators]),
-  ),
-  // Only the locales that differ from the default of 1.
-  minimumGroupingDigits: Object.fromEntries(
-    locales
-      .filter((locale) => locale.minimumGroupingDigits !== 1)
-      .map((locale) => [locale.tag, locale.minimumGroupingDigits]),
-  ),
-  rightToLeftScripts,
-});
-// No-break spaces (in the Czech list patterns) stay visible as escapes.
+  }
+}
+
+// The compressed resource holds the lists and relative times; .NET reads it lazily.
+const resourceJson = JSON.stringify({ list, relativeTime });
+const resource = deflateRawSync(Buffer.from(resourceJson, "utf8"), { level: 9 });
+
+// No-break spaces and bidi marks stay visible as escapes.
 const csString = (value) =>
   JSON.stringify(value)
-    .replaceAll("\u00a0", "\\u00a0")
-    .replaceAll("\u202f", "\\u202f")
-    .replaceAll("\u2028", "\\u2028")
-    .replaceAll("\u2029", "\\u2029");
-const csArray = (values) => `[${values.map(csString).join(", ")}]`;
+    .replaceAll("\u00a0", "\\u00a0").replaceAll("\u202f", "\\u202f")
+    .replaceAll("\u200e", "\\u200e").replaceAll("\u200f", "\\u200f")
+    .replaceAll("\u2028", "\\u2028").replaceAll("\u2029", "\\u2029");
+const wrap = (items, indent) => {
+  const lines = []; let line = "";
+  for (const item of items) {
+    if (line.length + item.length + 2 > 116 - indent.length) { lines.push(line.trimEnd()); line = ""; }
+    line += item + ", ";
+  }
+  if (line) lines.push(line.replace(/, $/, ""));
+  return lines.map((text) => indent + text).join("\n");
+};
+const csArray = (type, values, indent = "        ") =>
+  values.length === 0 ? "[]" : `\n    [\n${wrap(values.map((value) => (type === "string" ? csString(value) : String(value))), indent)}\n    ]`;
+const keysAndValues = (name, table, valueType = "string") =>
+  `    internal static readonly string[] ${name}Keys =${csArray("string", Object.keys(table))};\n` +
+  `    internal static readonly ${valueType}[] ${name}Values =${csArray(valueType, Object.values(table))};`;
 
-const registry = `// <auto-generated by eng/generate-cldr.mjs from CLDR ${source.source.cldrVersion} />
-using System;
-
+const tables = `// <auto-generated by eng/generate-cldr.mjs from CLDR ${source.source.cldrVersion} />
+// Linked into Runic.Translations and Runic.Translations.Compiler; each assembly gets its own internal copy.
+#if RUNIC_TRANSLATIONS_COMPILER
 namespace Runic.Translations.Compiler;
+#else
+namespace Runic.Translations;
+#endif
 
-internal static class TranslationCapabilityRegistry
+/// <summary>Pinned CLDR locale tables, each sorted by key in ordinal order.</summary>
+internal static class GeneratedLocaleTables
 {
     internal const string CldrVersion = ${csString(source.source.cldrVersion)};
-    internal const string EsmLocaleDataJson = ${csString(esmLocaleData)};
-    internal const string EsmPluralRulesSource = ${csString(esmPluralRules)};
-    internal static readonly string[] CardinalLanguages = ${csArray(cardinal)};
-    internal static readonly string[] OrdinalLanguages = ${csArray(ordinal)};
-    internal static readonly string[] RelativeTimeLanguages = ${csArray(relativeLanguages)};
-    internal static readonly string[] ListLanguages = ${csArray(listLanguages)};
-
-    internal static bool SupportsCardinal(string locale) => Contains(CardinalLanguages, Language(locale));
-    internal static bool SupportsOrdinal(string locale) => Contains(OrdinalLanguages, Language(locale));
-    internal static bool SupportsRelativeTime(string locale) => Contains(RelativeTimeLanguages, Language(locale));
-    internal static bool SupportsList(string locale) => Contains(ListLanguages, Language(locale));
-    private static string Language(string locale) => locale.Split('-', '_')[0].ToLowerInvariant();
-    private static bool Contains(string[] values, string value) => Array.BinarySearch(values, value, StringComparer.Ordinal) >= 0;
+    /// <summary>The number of plural rule sets; rule 0 is the root rule (<c>other</c> only).</summary>
+    internal const int PluralRuleCount = ${rules.length};
+    /// <summary>CLDR likelySubtags of the languages with CLDR data, without entries that shorter keys imply.</summary>
+${keysAndValues("Likely", likely)}
+    /// <summary>CLDR parentLocales as data IDs, without the parents the default rules give; <c>root</c> ends a chain.</summary>
+${keysAndValues("Parent", parents)}
+    /// <summary>Deprecated and legacy language codes and their replacements: <c>iw</c> → <c>he</c>, <c>sh</c> → <c>sr-Latn</c>.</summary>
+${keysAndValues("Alias", aliases)}
+    /// <summary>The cardinal plural rule set of each CLDR plural locale.</summary>
+${keysAndValues("Cardinal", cardinal, "byte")}
+    /// <summary>The ordinal plural rule set of each CLDR ordinal locale.</summary>
+${keysAndValues("Ordinal", ordinal, "byte")}
+    /// <summary>CLDR <c>minimumGroupingDigits</c> where it differs from the parent locale's (1 at the root).</summary>
+${keysAndValues("Grouping", grouping, "byte")}
+    /// <summary>The data IDs with list patterns in <c>GeneratedLocaleData.bin</c>.</summary>
+    internal static readonly string[] ListIds =${csArray("string", Object.keys(list))};
+    /// <summary>The data IDs with relative-time data in <c>GeneratedLocaleData.bin</c>.</summary>
+    internal static readonly string[] RelativeTimeIds =${csArray("string", Object.keys(relativeTime))};
 }
 `;
 
-const pluralSwitch = selectors
-  .map(
-    (selector) =>
-      `        ${csString(selector.tag)} => ordinal ? ${selector.ordinal.name}(in operands) : ${selector.cardinal.name}(in operands),`,
-  )
-  .join("\n");
-const pluralMethods = [...ruleMethods.values()]
-  .map(
-    (method) => `
-    private static string ${method.name}(in PluralOperands o)
+const ruleCases = rules.map((_, index) => `        ${index} => Rule${index}(in operands),`).join("\n");
+const ruleMethods = rules.map((rule, index) => `
+    private static string Rule${index}(in PluralOperands o)
     {
-${method.body}
-    }`,
-  )
-  .join("\n");
-const relativeRows = locales
-  .filter((locale) => locale.relativeTime)
-  .map((locale) => {
-    const data = locale.relativeTime;
-    if (
-      !Array.isArray(data.autoDay) ||
-      typeof data.past !== "string" ||
-      typeof data.future !== "string" ||
-      !data.units
-    )
-      throw new Error(`Relative-time data for '${locale.tag}' is incomplete.`);
-    const units = Object.entries(data.units)
-      .map(([unit, forms]) => {
-        if (
-          !Array.isArray(forms) ||
-          forms.length !== 2 ||
-          forms.some((form) => typeof form !== "string")
-        )
-          throw new Error(
-            `Relative-time unit '${locale.tag}/${unit}' must have two forms.`,
-          );
-        return `new(${csString(unit)}, ${csString(forms[0])}, ${csString(forms[1])})`;
-      })
-      .join(", ");
-    return `        new(${csString(locale.tag)}, ${csArray(data.autoDay)}, ${csString(data.past)}, ${csString(data.future)}, [${units}]),`;
-  })
-  .join("\n");
-const groupingCases = locales
-  .filter((locale) => locale.minimumGroupingDigits !== 1)
-  .map((locale) => `        ${csString(locale.tag)} => ${locale.minimumGroupingDigits},`)
-  .join("\n");
-const listRows = listLocales
-  .map((locale) => `        new(${csString(locale.tag)}, ${csArray(locale.separators)}),`)
-  .join("\n");
+${rule.csharp}
+    }`).join("\n");
 const runtime = `// <auto-generated by eng/generate-cldr.mjs from CLDR ${source.source.cldrVersion} />
 #nullable enable
 namespace Runic.Translations;
 
-internal sealed record GeneratedRelativeTimeUnit(string Name, string One, string Other);
-internal sealed record GeneratedRelativeTimeLocale(string Language, string[] AutoDay, string Past, string Future, GeneratedRelativeTimeUnit[] Units);
-/// <summary>CLDR list separators: for each type (conjunction, disjunction, unit) and style (long, short, narrow), the start, middle, end and two-item separators.</summary>
-internal sealed record GeneratedListLocale(string Language, string[] Separators);
-
-internal static class GeneratedLocaleData
+internal static partial class GeneratedLocaleData
 {
     internal const string CldrVersion = ${csString(source.source.cldrVersion)};
-    internal static readonly GeneratedRelativeTimeLocale[] RelativeTimeLocales =
-    [
-${relativeRows}
-    ];
-    internal static readonly GeneratedListLocale[] ListLocales =
-    [
-${listRows}
-    ];
 
-    // POSIX-style tags such as en_US select the same language family as en-US.
-    internal static string Language(string locale) => locale.Split('-', '_')[0].ToLowerInvariant();
-
-    /// <summary>Applies the pinned CLDR rules to the operands of a visible decimal, or returns null for an unsupported language.</summary>
-    internal static string? SelectPlural(string language, bool ordinal, in PluralOperands operands) => language switch
+    /// <summary>Applies a pinned CLDR plural rule set (an index from <see cref="CldrLocales.PluralRule"/>) to the operands of a visible decimal.</summary>
+    internal static string ApplyPluralRule(int rule, in PluralOperands operands) => rule switch
     {
-${pluralSwitch}
-        _ => null,
+${ruleCases}
+        _ => throw new System.ArgumentOutOfRangeException(nameof(rule)),
     };
-
-    /// <summary>CLDR <c>minimumGroupingDigits</c> of a language family: 1 for every language without pinned data.</summary>
-    internal static int MinimumGroupingDigits(string language) => language switch
-    {
-${groupingCases}
-        _ => 1,
-    };
-
-    internal static GeneratedRelativeTimeLocale? FindRelativeTime(string language)
-    {
-        for (int index = 0; index < RelativeTimeLocales.Length; index++)
-            if (RelativeTimeLocales[index].Language == language) return RelativeTimeLocales[index];
-        return null;
-    }
-
-    internal static GeneratedListLocale? FindList(string language)
-    {
-        for (int index = 0; index < ListLocales.Length; index++)
-            if (ListLocales[index].Language == language) return ListLocales[index];
-        return null;
-    }
-${pluralMethods}
+${ruleMethods}
 }
 `;
 
+const esmPluralRuleSources = rules.map((rule) => rule.javascript);
+const registry = `// <auto-generated by eng/generate-cldr.mjs from CLDR ${source.source.cldrVersion} />
+namespace Runic.Translations.Compiler;
+
+internal static partial class TranslationCapabilityRegistry
+{
+    internal const string CldrVersion = ${csString(source.source.cldrVersion)};
+    /// <summary>CLDR's right-to-left scripts, for the ESM runtime's <c>localeDirection</c>.</summary>
+    internal const string RightToLeftScriptsJson = ${csString(JSON.stringify(rightToLeftScripts))};
+    /// <summary>The JavaScript selector of each plural rule set over BigInt operands <c>{ i, v, w, f, t, e }</c>.</summary>
+    internal static readonly string[] EsmPluralRuleSources =${csArray("string", esmPluralRuleSources)};
+    /// <summary>The categories each plural rule set can select, in CLDR order.</summary>
+    internal static readonly string[][] PluralRuleCategories =${csArray("raw", rules.map((rule) => `[${rule.categories.map(csString).join(", ")}]`))};
+}
+`;
+
+// The capability matrix lists every CLDR language and script locale (regional variants inherit).
+const pluralLanguage = (table, id) => chain(dataId(id, likely), {}, true).some((candidate) => Object.hasOwn(table, candidate));
+const dataLocale = (table, id) => chain(dataId(id, likely), parents).some((candidate) => Object.hasOwn(table, candidate));
+const matrixTags = [...new Set([...Object.keys(cardinal), ...Object.keys(locales)])]
+  .filter((id) => parseTag(id).region === null && parseTag(id).variants.length === 0)
+  .sort(ordinalSort);
 const matrix =
   JSON.stringify(
     {
@@ -323,39 +272,31 @@ const matrix =
       },
       backends: ["dotnet", "esm"],
       equivalence: {
-        exact:
-          "Backends produce the same canonical value for every accepted portable input.",
-        semantic:
-          "Backends preserve meaning but platform globalization can change punctuation, spacing, names, or representable decimal precision.",
+        exact: "Backends produce the same canonical value for every accepted portable input.",
+        semantic: "Backends preserve meaning but platform globalization can change punctuation, spacing, names, or representable decimal precision.",
       },
       formatterProfile: {
         string: { default: "exact" },
         boolean: { default: "exact" },
         integer: { plain: "exact", grouped: "semantic" },
-        number: {
-          plain: "semantic",
-          grouped: "semantic",
-          fixed: "semantic",
-          percent: "semantic",
-        },
+        number: { plain: "semantic", grouped: "semantic", fixed: "semantic", percent: "semantic" },
         date: { iso: "exact", localized: "semantic" },
         time: { iso: "exact", localized: "semantic" },
         datetime: { iso: "semantic", localized: "semantic" },
         uuid: { d: "exact", n: "exact" },
       },
-      messageProfile: {
-        cardinal: "exact",
-        ordinal: "exact",
-        relativeTime: "semantic",
-        list: "exact",
-      },
-      locales: locales.map((locale) => ({
-        tag: locale.tag,
-        cardinal: locale.rules.cardinal.length > 0,
-        ordinal: locale.rules.ordinal.length > 0,
-        relativeTime: Boolean(locale.relativeTime),
-        list: Boolean(locale.listPatterns),
-      })),
+      messageProfile: { cardinal: "exact", ordinal: "exact", relativeTime: "semantic", list: "exact" },
+      locales: matrixTags.map((tag) => {
+        // A locale with CLDR data but no plural rules of its own (agq, rw) uses the root rule, `other` only.
+        const plural = pluralLanguage(cardinal, tag) || dataLocale(list, tag) || dataLocale(relativeTime, tag);
+        return {
+          tag,
+          cardinal: plural,
+          ordinal: plural,
+          relativeTime: plural && dataLocale(relativeTime, tag),
+          list: dataLocale(list, tag),
+        };
+      }),
     },
     null,
     2,
@@ -364,17 +305,27 @@ const matrix =
 await Promise.all([
   emit(registryPath, registry),
   emit(runtimePath, runtime),
+  emit(tablesPath, tables),
+  emitResource(resourcePath, resource, resourceJson),
   emit(matrixPath, matrix),
 ]);
 
 async function emit(file, content) {
   if (check) {
     const current = await readFile(file, "utf8").catch(() => "");
-    if (current !== content)
-      throw new Error(
-        `${relative(root, file)} is stale; run bun eng/generate-cldr.mjs`,
-      );
+    if (current !== content) throw new Error(`${relative(root, file)} is stale; run bun eng/generate-cldr.mjs`);
     return;
   }
   await writeFile(file, content, "utf8");
+}
+
+// The check compares the decompressed content, so another zlib build cannot make it fail.
+async function emitResource(file, content, json) {
+  if (check) {
+    const current = await readFile(file).catch(() => null);
+    if (current === null || inflateRawSync(current).toString("utf8") !== json)
+      throw new Error(`${relative(root, file)} is stale; run bun eng/generate-cldr.mjs`);
+    return;
+  }
+  await writeFile(file, content);
 }

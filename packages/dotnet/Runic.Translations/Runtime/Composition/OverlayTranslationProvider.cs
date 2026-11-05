@@ -16,8 +16,8 @@ internal sealed class OverlayTranslationProvider : ITranslationProvider, ITransl
     private readonly Rmf2MarkupContract _markup;
     private readonly ITextValueFormatter _valueFormatter;
     private readonly TranslationOverlay[] _overlays;
-    // An added locale and the next locale of its chain: its explicit fallback, else its nearest declared or added parent,
-    // else the catalog's default locale.
+    // An added locale and the next locale of its chain: its explicit fallback, else its nearest declared or added CLDR
+    // parent, else the library locale CLDR likely subtags match, else the catalog's default locale.
     private readonly Dictionary<string, string> _addedLocales = new(StringComparer.Ordinal);
     // Each snapshot with the catalog generation and contract link version it was composed from (Hot Reload).
     private readonly ConcurrentDictionary<string, Composed> _snapshots = new(StringComparer.Ordinal);
@@ -56,19 +56,21 @@ internal sealed class OverlayTranslationProvider : ITranslationProvider, ITransl
             _overlays[index] = overlay;
         }
 
-        // Without an explicit fallback, an added locale falls back along its parents into the library first (de-CH to the
-        // library's de), then to the library's default locale.
+        var supported = new List<string>(catalog.LocaleTags());
+        supported.AddRange(explicitFallbacks.Keys);
+        supported.Sort(StringComparer.Ordinal);
+        SupportedLocales = supported.ToArray();
+
+        // Without an explicit fallback, an added locale falls back to its nearest CLDR parent that the library declares or
+        // an overlay adds (de-CH to the library's de, es-MX to es-419, zh-TW to zh-Hant, never sr-Latn-RS to a Cyrillic sr),
+        // then to the library locale that CLDR likely subtags match (de-CH to de-DE), then to the library's default locale.
         foreach ((string locale, string? fallback) in explicitFallbacks)
         {
             _addedLocales.Add(locale, fallback ??
-                LocaleRequestResolver.NearestParent(locale, candidate => catalog.DeclaresLocale(candidate) || explicitFallbacks.ContainsKey(candidate)) ??
+                LocaleRequestResolver.NearestParent(locale, SupportedLocales) ??
+                LocaleNegotiation.Match(locale, catalog.LocaleTags()) ??
                 catalog.DefaultLocale);
         }
-
-        var supported = new List<string>(catalog.LocaleTags());
-        supported.AddRange(_addedLocales.Keys);
-        supported.Sort(StringComparer.Ordinal);
-        SupportedLocales = supported.ToArray();
     }
 
     /// <summary>The catalog's locales and the locales the overlays add, in ordinal order.</summary>
@@ -77,8 +79,8 @@ internal sealed class OverlayTranslationProvider : ITranslationProvider, ITransl
     public async ValueTask<ITranslationSnapshot> GetSnapshotAsync(string requestedLocale, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        LocaleRequest request = LocaleRequestResolver.Resolve(requestedLocale, Declares, _catalog.UnsupportedLocale, _catalog.DefaultLocale,
-            _catalog.Catalog);
+        LocaleRequest request = LocaleRequestResolver.Resolve(requestedLocale, SupportedLocales, _catalog.UnsupportedLocale,
+            _catalog.DefaultLocale, _catalog.Catalog);
         if (!_snapshots.TryGetValue(request.Locale, out Composed? composed) || !composed.IsCurrent(this))
         {
             // Read before composing, so a snapshot that may have read replaced data is never current.
@@ -98,12 +100,18 @@ internal sealed class OverlayTranslationProvider : ITranslationProvider, ITransl
             Generation == owner._catalog.Generation && LinkVersion == owner._markup.LinkVersion;
     }
 
+    /// <summary>Chooses among the catalog's and the overlay-added locales, else the catalog's default locale.</summary>
+    public string NegotiateLocale(IEnumerable<string> preferredLocales)
+    {
+        ArgumentNullException.ThrowIfNull(preferredLocales);
+        return LocaleNegotiation.Negotiate(preferredLocales, SupportedLocales) ?? _catalog.DefaultLocale;
+    }
+
     void ITranslationSnapshotCacheInvalidator.InvalidateSnapshot(string canonicalLocale) => _snapshots.TryRemove(canonicalLocale, out _);
 
-    private bool Declares(string locale) => _catalog.DeclaresLocale(locale) || _addedLocales.ContainsKey(locale);
-
     // The requested locale, then (for an added locale) its added parents and the library locale they fall back to, then the
-    // library chain. Every added step is shorter than the previous one or a library locale, so the chain is finite.
+    // library chain. Every added step without an explicit fallback is a strict CLDR ancestor or a shorter tag, and an
+    // explicit fallback is a library locale, so the chain is finite; the visited check only guards that invariant.
     private List<string> Chain(string locale)
     {
         var chain = new List<string>();
@@ -112,6 +120,11 @@ internal sealed class OverlayTranslationProvider : ITranslationProvider, ITransl
         {
             chain.Add(current);
             current = next;
+            if (chain.Contains(current))
+            {
+                current = _catalog.DefaultLocale;
+                break;
+            }
         }
 
         for (; current is not null; current = _catalog.GetFallbackLocale(current)) chain.Add(current);
