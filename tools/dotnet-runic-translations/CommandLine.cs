@@ -35,7 +35,8 @@ internal sealed record ToolInvocation(
     string? ProjectPath = null,
     bool DryRun = false,
     bool OmitSourceDiagnostics = false,
-    TextImportRequest? TextImport = null);
+    TextImportRequest? TextImport = null,
+    bool PseudoLocales = false);
 
 internal sealed class ToolUsageException : Exception
 {

@@ -81,13 +81,25 @@ an empty pattern. `#` or `=` inside a body is ordinary text.
 Comments and `@param $name - description` / `@example {JSON}` attach to the next
 entry or group without an intervening blank line. Parameters and example input
 types are checked; unknown properties remain in the resource model with a warning.
+`@maxLength N` limits a message's text to N characters (Unicode code points after
+NFC, without placeholder values) in every locale; a translation may lower it with
+its own. `validate` warns about a longer text (`RTR0098`), and XLIFF export writes
+the same per-locale limit as `slr:sizeRestriction` for translation tools:
+
+```text
+@maxLength 12
+toolbar.save = Save
+```
 The raw source, segment paths, comments, properties, spans, and byte map are public
 through `Rmf2ResourceReader`. `Read` recovers the resource outline;
 `Analyze` adds execution-profile message diagnostics.
 
 The base locale defines caller inputs and functional slots. Translations may omit
 unused inputs, select on them differently, reorder content, and add decorative
-markup. They cannot introduce inputs or change functional slot kinds. Source
+markup. An input the base displays and no variant of a translation displays is
+reported as a warning (`RTR0096`), as are plural keys a locale never selects and
+categories it needs that fall to `*` (`RTR0094`, `RTR0095`) and booleans printed
+as text (`RTR0097`); see `validation` in [diagnostics](diagnostics.md). They cannot introduce inputs or change functional slot kinds. Source
 selector trees do not participate in the RMF2 caller fingerprint. Integer/number
 selectors default to cardinal selection; explicit `select=ordinal` and
 `select=exact` remain available. Numeric exact keys are tested before a variant
@@ -680,6 +692,59 @@ The [VS Code extension](../../../tools/vscode-runic-translations/README.md) and
 [Visual Studio extension](../../../tools/visualstudio-runic-translations/README.md)
 package this language server with native IDE navigation and preview commands.
 Their READMEs describe configuration, supported refactor scope and host checks.
+
+## Pseudo-locales
+
+A pseudo-locale shows untranslated, clipped and mirrored text while you develop,
+before any translation exists. Declare them in `runic.json`:
+
+```json
+{
+  "baseLocale": "en",
+  "locales": ["en", "de"],
+  "pseudoLocales": ["en-XA", "ar-XB"]
+}
+```
+
+In a development build the compiler generates each one from the base locale, as
+if `<tag>.rmf2` files existed beside every `<baseLocale>.rmf2` (or `<tag>/` beside
+a direct `<baseLocale>/` directory), with the base locale as its fallback. Select
+it like any locale: `CreateManager("en-XA")`, `SetLocaleAsync("ar-XB")`, or
+`{ locale: "en-XA" }` in ESM.
+
+| Tag | Text | Direction |
+| --- | --- | --- |
+| `en-XA` | `Save {$name}` reads `[Śààṽéé Ada]`: ASCII letters accented, vowels doubled, padded with `~` to at least 35% more characters, and bracketed | left to right |
+| `ar-XB` | `Save {$name}` reads `[`, U+202E, `Save `, U+202C, `Ada]`: each run of text displays reversed under a right-to-left override (U+202E … U+202C), bracketed | right to left (`localeDirection("ar-XB")` is `rtl`) |
+
+Only the text of each pattern changes: placeholders, markup and its slots,
+declarations, selectors and variant keys stay as written, so a pseudo message has
+the base caller contract and formats the same in .NET and ESM. A label that
+shows no brackets, or plain English, does not come from the catalog. Text that
+is cut off before the closing bracket does not fit. In a document message the
+brackets and padding go inside each paragraph, heading and list item, and empty
+blocks stay empty. Plural selection uses the
+pseudo tag's language (English for `en-XA`, Arabic for `ar-XB`), and numbers and
+dates format for the tag. `ar-XB` keeps the base message's variants, so a count
+whose Arabic category the base does not have (`two`, `few`, `many`, or any
+ordinal, which is always `other` in Arabic) selects the `*` variant: `{$n}st` for
+1 in English reads as the `*` text in `ar-XB`.
+
+Release builds leave the pseudo-locales out:
+
+- MSBuild (`Runic.Translations.Build`, the source generator) generates them when
+  `Configuration` is `Debug`; set `RunicTranslationsPseudoLocales` to `true` or
+  `false` to override.
+- The Vite plugin generates them when Vite's mode is `development` (the dev
+  server); the `pseudoLocales` option overrides it. In manifest mode it takes
+  them out of the bundle otherwise, even when a Debug `dotnet build` generated
+  them.
+- The CLI generates them with `--pseudo-locales` on `validate`, `generate` and
+  `verify` (and `pseudoLocales: true` in a `serve` request).
+
+`pseudoLocales` accepts `en-XA` and `ar-XB`. A tag that is also in `locales`,
+or that has source files of its own (`en-XA.rmf2`, `en-XA/*.mf2`), is `RTR0004`
+in every build, so a stray file cannot ship as a real locale in release.
 
 ## Import a text-keyed catalog
 

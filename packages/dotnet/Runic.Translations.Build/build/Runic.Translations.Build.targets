@@ -43,6 +43,16 @@
     <Error Condition="'$(TranslationsEmitCpp)' != ''" Code="RTR0086" HelpKeyword="RTR0086" Text="The MSBuild property 'TranslationsEmitCpp' was removed: Runic Translations does not generate C++ (C++ is planned for 2.0). Delete the property." />
   </Target>
 
+  <!-- runic.json pseudoLocales (en-XA, ar-XB) are generated in Debug builds only, so release builds and packages leave
+       them out. Set RunicTranslationsPseudoLocales to true or false to override. -->
+  <PropertyGroup>
+    <RunicTranslationsPseudoLocales Condition="'$(RunicTranslationsPseudoLocales)' == '' and '$(Configuration)' == 'Debug'">true</RunicTranslationsPseudoLocales>
+    <RunicTranslationsPseudoLocales Condition="'$(RunicTranslationsPseudoLocales)' == ''">false</RunicTranslationsPseudoLocales>
+  </PropertyGroup>
+  <ItemGroup>
+    <CompilerVisibleProperty Include="RunicTranslationsPseudoLocales" />
+  </ItemGroup>
+
   <!-- A Runic project marker is the single declaration; its locale documents are discovered beside the declared marker. -->
   <ItemGroup Condition="'@(RunicTranslationProject)' == '' and Exists('$(MSBuildProjectDirectory)\translations\runic.json')">
     <RunicTranslationProject Include="$(MSBuildProjectDirectory)\translations\runic.json" />
@@ -244,6 +254,7 @@
       <_TranslationsDesiredResponseLine Include="&quot;$(_TranslationsStagingDirectory)&quot;" />
       <_TranslationsDesiredResponseLine Include="--emit-json" Condition="'$(RunicTranslationsEmitJson)' == 'true' or ('$(RunicTranslationsGenerateOnBuild)' == 'true' and '$(_TranslationsEmitAny)' != 'true')" />
       <_TranslationsDesiredResponseLine Include="--emit-esm" Condition="'$(RunicTranslationsEmitEsm)' == 'true' or ('$(RunicTranslationsGenerateOnBuild)' == 'true' and '$(_TranslationsEmitAny)' != 'true')" />
+      <_TranslationsDesiredResponseLine Include="--pseudo-locales" Condition="'$(RunicTranslationsPseudoLocales)' == 'true'" />
       <_TranslationsDesiredResponseLine Include="$(RunicTranslationsToolAdditionalArguments)" Condition="'$(RunicTranslationsToolAdditionalArguments)' != ''" />
       <_TranslationsMissingArtifact Include="@(_TranslationsOwnedInventoryEntry)"
                                      Condition="!Exists('%(_OwnedFullPath)')" />

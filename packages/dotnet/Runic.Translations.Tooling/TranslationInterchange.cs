@@ -26,6 +26,8 @@ public static class TranslationInterchange
     public const int XliffProfileVersion = 3;
     internal const string XliffNamespace = "urn:oasis:names:tc:xliff:document:2.0";
     internal const string NeedsReviewSubState = "runic:needs-review";
+    /// <summary>The XLIFF 2 Size and Length Restriction module, for <c>@maxLength</c>.</summary>
+    internal const string SizeRestrictionNamespace = "urn:oasis:names:tc:xliff:sizerestriction:2.0";
     internal const string ReviewSchema = "runic.translations.interchange-review/2";
     internal const string FormerReviewSchema = "runic.translations.interchange-review/1";
     internal const int MaximumXliffBytes = 8 * 1024 * 1024;
@@ -167,7 +169,19 @@ public static class TranslationInterchange
         using (XmlWriter writer = XmlWriter.Create(stream, new XmlWriterSettings { Encoding = new UTF8Encoding(false), Indent = false, NewLineHandling = NewLineHandling.None, OmitXmlDeclaration = false }))
         {
             writer.WriteStartDocument(); writer.WriteStartElement("xliff", XliffNamespace); writer.WriteAttributeString("version", "2.1"); writer.WriteAttributeString("srcLang", projection.SourceLocale); writer.WriteAttributeString("trgLang", targetLocale.Tag);
+            // The locale's effective limit, as validate checks it (RTR0098): the base's @maxLength, lowered by the translation's own.
+            int? Limit(TranslationInterchangeSourceUnit unit) =>
+                TranslationCompiler.EffectiveMaxLengthV5(unit.Metadata.MaxLength, direct.TryGetValue(unit.Key, out TranslationInterchangeTargetUnit? own) ? own.MaxLength : null);
+            bool sizeRestrictions = projection.CanonicalUnits.Any(unit => Limit(unit) is not null && !unit.Structured);
+            if (sizeRestrictions) writer.WriteAttributeString("xmlns", "slr", null, SizeRestrictionNamespace);
             writer.WriteStartElement("file", XliffNamespace); writer.WriteAttributeString("id", projection.CatalogId); writer.WriteAttributeString("original", projection.CatalogId + "." + targetLocale.Tag + ".xliff");
+            // @maxLength counts Unicode code points after NFC, without placeholders: XLIFF's standard codepoints profile.
+            if (sizeRestrictions)
+            {
+                writer.WriteStartElement("slr", "profiles", SizeRestrictionNamespace); writer.WriteAttributeString("generalProfile", "xliff:codepoints");
+                writer.WriteStartElement("slr", "normalization", SizeRestrictionNamespace); writer.WriteAttributeString("general", "nfc"); writer.WriteEndElement();
+                writer.WriteEndElement();
+            }
             foreach (TranslationInterchangeSourceUnit source in projection.CanonicalUnits)
             {
                 direct.TryGetValue(source.Key, out TranslationInterchangeTargetUnit? target);
@@ -183,6 +197,7 @@ public static class TranslationInterchange
                 }
                 writer.WriteStartElement("unit", XliffNamespace); writer.WriteAttributeString("id", source.Key);
                 if (structured) writer.WriteAttributeString("translate", "no");
+                else if (Limit(source) is { } maxLength) writer.WriteAttributeString("slr", "sizeRestriction", SizeRestrictionNamespace, maxLength.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 WriteNotes(writer, projection, source, structured, entry);
                 writer.WriteStartElement("segment", XliffNamespace); writer.WriteAttributeString("id", "1");
                 // An existing translation without review data is "translated"; a missing one keeps XLIFF's default "initial".
