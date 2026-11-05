@@ -155,14 +155,21 @@ internal static class Rmf2SemanticCompilerV5
                         Error("Dynamic option '" + property.Name + "' requires a declared " + rule.InputType + " input or a local of that type, and must permit dynamic values.", property.Location);
                     if (symbol is not null) dependencies.UnionWith(symbol.Inputs);
                 }
+                else if (rule.Accepts is not null && value.Kind == "string-literal" && !rule.AcceptsLiteral(value))
+                    _diagnostics.Add(UnknownFormatDiagnostic, TranslationDiagnosticSeverity.Error, property.Name == "currency"
+                        ? "Unknown currency '" + value.Value + "': use an ISO 4217 code that CLDR lists as current tender, such as EUR or USD."
+                        : "Unknown unit '" + value.Value + "': use a CLDR unit that Intl.NumberFormat accepts, such as kilometer or megabyte, or X-per-Y of two of them.", property.Location);
                 else if (!rule.AcceptsLiteral(value)) Error("Invalid literal for option '" + property.Name + "'.", property.Location);
             }
+            // MF2: a numeric operand without a currency or unit option is a Bad Operand error.
+            if (function?.Name is Rmf2FormatDataV1.CurrencyFunction or Rmf2FormatDataV1.UnitFunction && expression.Options.All(option => option.Name != function.Name))
+                Error("':" + function.Name + "' requires the '" + function.Name + "' option.", expression.Location);
             if (function is not null && loweredOptions.All(option => option.Value.Kind is not ("input" or "local")))
             {
                 string? error = Rmf2FunctionRegistryV2.ValidateResolvedOptions(function.Name, loweredOptions.ToDictionary(p => p.Name, p => p.Value, StringComparer.Ordinal));
                 if (error is not null) Error(error, expression.Location);
             }
-            else if (function?.Name == "number")
+            else if (function?.Name is "number" or Rmf2FormatDataV1.UnitFunction)
             {
                 var supplied = loweredOptions.ToDictionary(option => option.Name, option => option.Value, StringComparer.Ordinal);
                 bool percent = supplied.TryGetValue("style", out var style) && style.Kind == "string-literal" && style.Value == "percent";
@@ -171,6 +178,10 @@ internal static class Rmf2SemanticCompilerV5
                 int? Digits(string name, int? fallback) => !supplied.TryGetValue(name, out var value) ? fallback : value.Kind == "number-literal" && int.TryParse(value.Canonical, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int digits) ? digits : null;
             }
             string selection = Selection(expression, function?.Selection ?? inherited.Selection);
+            // MF2's :currency fractionDigits=auto is the default (the currency's CLDR digits), so the AST leaves it out and
+            // the runtimes see only digit sizes.
+            if (function?.Name == Rmf2FormatDataV1.CurrencyFunction)
+                loweredOptions.RemoveAll(option => option.Name == "fractionDigits" && option.Value.Kind == "string-literal" && option.Value.Value == "auto");
             return (new(operand, inherited.ValueType, expression.Function, loweredOptions, Annotations(expression)), new("local", inherited.ValueType, selection, dependencies.Order(StringComparer.Ordinal).ToArray()));
         }
 
@@ -271,6 +282,8 @@ internal static class Rmf2SemanticCompilerV5
             for (int index = 0; index < value.Length; index++) { if (value[index] == '\\' && index + 1 < value.Length) index++; result.Append(value[index]); }
             return result.ToString();
         }
+        /// <summary>RTR0101: a currency or unit outside the pinned CLDR data.</summary>
+        internal const string UnknownFormatDiagnostic = "RTR0101";
         private void Error(string message, TextSourceLocation location) => _diagnostics.Add("RTR0065", TranslationDiagnosticSeverity.Error, message, location);
         private void DataError(string message, TextSourceLocation location) => _diagnostics.Add("RTR0067", TranslationDiagnosticSeverity.Error, message, location);
         private bool HasErrors() => _diagnostics.Items.Any(diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error);

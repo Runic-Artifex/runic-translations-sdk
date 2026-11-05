@@ -231,6 +231,8 @@ public sealed class ExternalTranslationSnapshotFactory : ITranslationSnapshotFac
     {
         IReadOnlyList<VerifiedTranslationPackMessage> messages = verified.Messages;
         var replacements = new CompiledTranslationValue[messages.Count];
+        // A pack without its own currency, unit or compact data formats with the catalog's.
+        Rmf2FormatData? catalogData = CompiledTranslationCatalog.FormatData(catalog.GetDirect(verified.Locale));
         CompiledTranslationDefinition[] definitions = catalog.DefinitionArray;
         for (int i = 0; i < messages.Count; i++)
         {
@@ -243,6 +245,7 @@ public sealed class ExternalTranslationSnapshotFactory : ITranslationSnapshotFac
                 throw PackError("A verified external pack message has an invalid compiled key identity.");
             }
 
+            message.Message.Rmf2V5?.BindCatalogFormatData(catalogData);
             replacements[i] = new CompiledTranslationValue(id, string.Empty, message.Message);
         }
 

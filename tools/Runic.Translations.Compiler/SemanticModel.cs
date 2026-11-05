@@ -15,6 +15,9 @@ internal sealed class ManifestModel
     internal List<LocaleModel> Locales { get; } = new();
     /// <summary>The development pseudo-locales of <c>pseudoLocales</c>, generated only when a build asks for them.</summary>
     internal List<LocaleModel> PseudoLocales { get; } = new();
+    /// <summary><c>formats.currencies</c> and <c>formats.units</c>: what a currency or unit option may take from a variable.</summary>
+    internal List<string> FormatCurrencies { get; } = new();
+    internal List<string> FormatUnits { get; } = new();
     internal TranslationPolicy Completeness { get; set; } = TranslationPolicy.Error;
     internal TranslationPolicy ExtraKeys { get; set; } = TranslationPolicy.Error;
     internal TranslationPolicy EmptyValues { get; set; } = TranslationPolicy.Allow;

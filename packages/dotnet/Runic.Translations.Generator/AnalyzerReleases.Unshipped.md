@@ -13,3 +13,5 @@ RTR0096 | Runic.Translations | Warning | Translation drops a placeholder the bas
 RTR0097 | Runic.Translations | Warning | Boolean is formatted as text
 RTR0098 | Runic.Translations | Warning | Message is longer than its @maxLength
 RTR0100 | Runic.Translations | Info | Message is not referenced from C# code
+RTR0101 | Runic.Translations | Error | Currency or unit is not in the pinned CLDR data
+RTR0102 | Runic.Translations | Error | Run-time currency or unit has no declared set

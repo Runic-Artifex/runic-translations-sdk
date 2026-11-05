@@ -119,7 +119,7 @@ internal static class Rmf2RuntimeValidation
     private static TextArgumentType FunctionInputType(string function) => function switch
     {
         "string" => TextArgumentType.String, "integer" => TextArgumentType.Int,
-        "number" or "runic:relative-time" => TextArgumentType.Number, "runic:boolean" => TextArgumentType.Bool,
+        "number" or "runic:relative-time" or "currency" or "unit" => TextArgumentType.Number, "runic:boolean" => TextArgumentType.Bool,
         "date" => TextArgumentType.Date, "time" => TextArgumentType.Time, "datetime" => TextArgumentType.DateTime,
         "runic:uuid" => TextArgumentType.Guid, "runic:list" => TextArgumentType.List,
         _ => throw new ArgumentException("Unknown v5 input function.", nameof(function)),
@@ -128,7 +128,12 @@ internal static class Rmf2RuntimeValidation
     {
         (_, "u:dir") => TextArgumentType.String,
         ("string" or "runic:boolean" or "integer" or "number", "select") => TextArgumentType.String,
-        ("integer" or "number", "useGrouping") => TextArgumentType.String,
+        ("integer" or "number" or "currency" or "unit", "useGrouping") => TextArgumentType.String,
+        ("number", "runic:notation" or "runic:compactDisplay") => TextArgumentType.String,
+        ("currency", "currency" or "currencyDisplay" or "currencySign") => TextArgumentType.String,
+        ("currency", "fractionDigits") => TextArgumentType.Int,
+        ("unit", "unit" or "unitDisplay") => TextArgumentType.String,
+        ("unit", "minimumFractionDigits" or "maximumFractionDigits") => TextArgumentType.Int,
         ("number" or "date" or "time" or "datetime" or "runic:uuid", "style") => TextArgumentType.String,
         ("datetime", "timeZone") => TextArgumentType.String,
         ("number", "minimumFractionDigits" or "maximumFractionDigits") => TextArgumentType.Int,
@@ -141,12 +146,12 @@ internal static class Rmf2RuntimeValidation
         string? function = expression.Function;
         if (function is null && expression.OptionArray.Length != 0) throw new ArgumentException("Options require an explicit function.", nameof(expression));
         if (function is not null && function != DefaultFunction(expression.ValueType) &&
-            !(expression.ValueType is TextArgumentType.Int or TextArgumentType.Number && function is "number" or "runic:relative-time"))
+            !(expression.ValueType is TextArgumentType.Int or TextArgumentType.Number && function is "number" or "runic:relative-time" or "currency" or "unit"))
             throw new ArgumentException("Function is incompatible with the underlying carrier.", nameof(expression));
         if (expression.Operand.Kind is "string-literal" or "number-literal")
         {
             TextArgumentType bound = function is null ? expression.Operand.Kind == "number-literal" ? TextArgumentType.Number : TextArgumentType.String :
-                function is "number" or "runic:relative-time" ? TextArgumentType.Number : expression.ValueType;
+                function is "number" or "runic:relative-time" or "currency" or "unit" ? TextArgumentType.Number : expression.ValueType;
             if (bound != expression.ValueType) throw new ArgumentException("Literal binding disagrees with its carrier.", nameof(expression));
             _ = Literal(expression.Operand, bound);
         }
@@ -168,7 +173,8 @@ internal static class Rmf2RuntimeValidation
             }
         }
         if (!dynamic && function is not null) _ = new Rmf2ResolvedFormat(function, resolved);
-        if (dynamic && function == "number")
+        if (function is "currency" or "unit" && !HasOption(expression, function)) throw new ArgumentException("':" + function + "' requires the '" + function + "' option.", nameof(expression));
+        if (dynamic && function is "number" or "unit")
         {
             long? min = ReadDigits(resolved, "minimumFractionDigits", 0);
             long? max = ReadDigits(resolved, "maximumFractionDigits", HasOption(expression, "style") ? null : 6);
