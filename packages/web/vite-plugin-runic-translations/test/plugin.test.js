@@ -151,9 +151,21 @@ test("rejects hostile, stale, and forged v3 output", async () => {
     const manifest = await writeV3Fixture(generated);
     await writeFile(join(generated, "extra.js"), "export {};\n");
     const valid = JSON.parse(await readFile(manifest, "utf8"));
+    // Members a later compiler adds within ESM ABI 4 are ignored (T1e): a library built by a newer patch still loads.
+    for (const [label, mutate] of [
+      ["unknown root member", document => { document.extra = true; }],
+      ["unknown asset member", document => { document.assets[0].extra = true; }],
+      ["unknown entrypoint", document => { document.entrypoints.extra = "extra.js"; }],
+    ]) {
+      const document = JSON.parse(JSON.stringify(valid));
+      mutate(document);
+      await writeFile(manifest, JSON.stringify(document));
+      await runicTranslations({ manifest, typeDeclarations: false }).buildStart.call({ addWatchFile() {} });
+      assert.ok(true, label);
+    }
     const rejected = [
-      ["unknown root member", document => { document.extra = true; }, /unknown member/],
-      ["unknown asset member", document => { document.assets[0].extra = true; }, /unknown asset member/],
+      ["malformed asset", document => { document.assets[0] = 1; }, /malformed asset/],
+      ["shared runtime outside its place", document => { document.sharedRuntime = { path: "../../runtime-core.js", sha256: "0".repeat(64), byteLength: 0 }; }, /shared runtime/],
       ["duplicate non-entrypoint asset path", document => {
         const asset = document.assets.find(item => item.path === "messages.js");
         document.assets.push({ ...asset, path: "extra.js" }, { ...asset, path: "extra.js", mediaType: "text/typescript" });
@@ -784,6 +796,6 @@ test("published package inventory contains only declared runtime files", async (
     const archives = (await readdir(output)).filter(file => file.endsWith(".tgz")); assert.equal(archives.length, 1);
     const { stdout } = await execFileAsync("tar", ["-tzf", join(output, archives[0])]);
     const files = stdout.split("\n").filter(file => file.startsWith("package/") && !file.endsWith("/")).map(file => file.slice("package/".length)).sort();
-    assert.deepEqual(files, ["LICENSE", "README.md", "dist/compiler-service.d.ts", "dist/compiler-service.js", "dist/index.d.ts", "dist/index.js", "package.json"]);
+    assert.deepEqual(files, ["LICENSE", "README.md", "dist/compiler-service.d.ts", "dist/compiler-service.js", "dist/dependencies.d.ts", "dist/dependencies.js", "dist/index.d.ts", "dist/index.js", "package.json"]);
   } finally { await rm(output, { recursive: true, force: true }); }
 });

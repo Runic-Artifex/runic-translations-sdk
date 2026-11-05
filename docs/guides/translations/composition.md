@@ -215,6 +215,10 @@ It follows every rule of the next section: it is checked key by key again at run
 removes an overridden key skips that message instead of failing, and it resolves locale-first. A locale the overrides
 add (`fr`) falls back as an added locale does.
 
+On the web, the same `overrides` and `translations/overrides/` apply to npm library catalogs through the Vite plugin's
+`dependencies: "auto"`, which regenerates each library catalog with them, filtered to the application's locales (see
+[the plugin's README](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/packages/web/vite-plugin-runic-translations#library-catalogs-from-dependencies)).
+
 ## Overriding library text
 
 An overlay holds the application's messages for a library catalog. Besides the compiled overlays of

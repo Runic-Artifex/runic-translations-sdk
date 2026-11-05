@@ -54,6 +54,22 @@ internal static class InputFiles
             string.Equals(Path.GetExtension(path), ".rmf2", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>The <c>&lt;locale&gt;.rmf2</c> override sources of a directory (generate --overrides); none for a missing directory or null.</summary>
+    internal static IReadOnlyList<TranslationSource> ReadOverrides(string? directory)
+    {
+        if (directory is null) return [];
+        string currentDirectory = Path.GetFullPath(Environment.CurrentDirectory);
+        string root = Path.GetFullPath(directory, currentDirectory);
+        if (!Directory.Exists(root)) return [];
+        var sources = new List<TranslationSource>();
+        foreach (string candidate in EnumerateFilesWithoutReparsePoints(root, root, directory))
+            if (string.Equals(Path.GetExtension(candidate), ".rmf2", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Path.GetExtension(candidate), ".mf2", StringComparison.OrdinalIgnoreCase))
+                sources.Add(ReadSource(candidate, DisplayPath(candidate, currentDirectory)));
+        sources.Sort((left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
+        return sources;
+    }
+
     private static TranslationSource ReadSource(string fullPath, string displayPath)
     {
         var information = new FileInfo(fullPath);

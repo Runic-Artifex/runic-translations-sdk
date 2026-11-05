@@ -120,19 +120,25 @@ public static partial class TranslationCompiler
     /// locales they add (falling back to their nearest declared parent, else the library's base locale);
     /// <see cref="Rmf2ProjectV5.OverlayKeys"/> lists the overridden keys. The contract fingerprint is the library's.
     /// </remarks>
+    /// <param name="locales">
+    /// The application's locales, or <see langword="null"/> for all: the result keeps the library locales they resolve to (the
+    /// locale itself, else its nearest declared parent by truncation), their fallback chains and the base locale, and drops
+    /// the others, so an application that supports two locales does not ship a library's thirty.
+    /// </param>
     internal static Rmf2ProjectCompilation CompileRmf2OverlayV5(TranslationSource libraryProject, IEnumerable<TranslationSource> librarySources,
-        IEnumerable<TranslationSource> overrideSources, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default)
+        IEnumerable<TranslationSource> overrideSources, TranslationCompilerOptions? options = null, IReadOnlyCollection<string>? locales = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(libraryProject);
         ArgumentNullException.ThrowIfNull(librarySources);
         ArgumentNullException.ThrowIfNull(overrideSources);
         return CompileRmf2ProjectV5(libraryProject, Materialize(librarySources), null, options ?? new TranslationCompilerOptions(), cancellationToken,
-            false, Materialize(overrideSources));
+            false, Materialize(overrideSources), locales);
     }
 
     private static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project, TranslationSource[] sources,
         IReadOnlyDictionary<TranslationSource, Rmf2SourceUnitV5>? units, TranslationCompilerOptions options, CancellationToken cancellationToken,
-        bool pseudoLocales = false, TranslationSource[]? overlaySources = null)
+        bool pseudoLocales = false, TranslationSource[]? overlaySources = null, IReadOnlyCollection<string>? keepLocales = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var diagnostics = new DiagnosticBag();
@@ -345,6 +351,27 @@ public static partial class TranslationCompiler
             foreach (var pair in keysByLocale) overlayKeys[pair.Key] = pair.Value.ToArray();
             overlayAdded.Sort(StringComparer.Ordinal);
             locales = locales.Concat(added).OrderBy(locale => locale.Tag, StringComparer.Ordinal).ToArray();
+        }
+        if (keepLocales is not null)
+        {
+            var declared = locales.ToDictionary(locale => locale.Tag, StringComparer.OrdinalIgnoreCase);
+            var kept = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { manifest.DefaultLocale };
+            foreach (string requested in keepLocales)
+            {
+                if (!TryCanonicalizeLocale(requested, out string tag)) continue;
+                string? current = tag;
+                while (current is not null && !declared.ContainsKey(current))
+                    current = current.LastIndexOf('-') is > 0 and var dash ? current[..dash] : null;
+                // The locale and its fallback chain; the graph was validated, the bound only guards against a cycle.
+                for (int hops = 0; current is not null && hops <= locales.Length && declared.TryGetValue(current, out var model); hops++)
+                {
+                    kept.Add(model.Tag);
+                    current = model.Fallback;
+                }
+            }
+            locales = locales.Where(locale => kept.Contains(locale.Tag)).ToArray();
+            foreach (string key in overlayKeys.Keys.Where(key => !kept.Contains(key)).ToArray()) overlayKeys.Remove(key);
+            overlayAdded.RemoveAll(locale => !kept.Contains(locale));
         }
         var linkedLocales = new List<Rmf2LocaleV5>();
         var byTag = locales.ToDictionary(locale => locale.Tag, StringComparer.OrdinalIgnoreCase);

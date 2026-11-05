@@ -8,7 +8,7 @@ namespace Runic.Translations.Tool;
 
 internal static class CompilerOutputAdapter
 {
-    internal static IReadOnlyList<ToolArtifact> Render(Rmf2ProjectV5 project, ToolEmission emission)
+    internal static IReadOnlyList<ToolArtifact> Render(Rmf2ProjectV5 project, ToolEmission emission, bool sharedRuntime = false)
     {
         ArgumentNullException.ThrowIfNull(project);
         if (emission == ToolEmission.None) emission = ToolEmission.CSharp | ToolEmission.Json | ToolEmission.Esm;
@@ -30,7 +30,7 @@ internal static class CompilerOutputAdapter
             outputs.Add(TranslationOutputRenderer.RenderRmf2V5AssetManifestJson(project, outputs));
         }
         if ((emission & ToolEmission.Esm) != 0)
-            outputs.AddRange(TranslationOutputRenderer.RenderRmf2V5EsmModules(project));
+            outputs.AddRange(TranslationOutputRenderer.RenderRmf2V5EsmModules(project, sharedRuntime));
 
         return ArtifactFiles.Normalize(outputs
             .Select(static output => new ToolArtifact(output.RelativePath, output.GetUtf8Bytes()))

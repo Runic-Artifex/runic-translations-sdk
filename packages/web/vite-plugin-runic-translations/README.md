@@ -68,6 +68,46 @@ build must regenerate the ESM package and manifest before the refresh is served;
 otherwise the plugin will reload the still-current manifest bytes, not detect
 that authoring sources are newer than them.
 
+## Library catalogs from dependencies
+
+A library package ships its catalog for applications with three things in its `package.json` and files:
+
+```json
+{
+  "name": "@acme/grid",
+  "exports": {
+    ".": "./index.js",
+    "./runic-translations": "./translations/acme.grid.esm-v5/web-module-manifest-v3.json"
+  },
+  "runicTranslations": { "catalog": "acme.grid", "project": "./runic/acme.grid/runic.json" }
+}
+```
+
+- `runic/acme.grid/` holds the catalog's `runic.json` and sources, so the application can regenerate it;
+- `./runic-translations` exports the prebuilt catalog's web module manifest (`runic-translations generate --emit-esm`);
+- the library's own code imports its catalog by a relative path (`./translations/acme.grid.esm-v5/messages.js`), not a
+  virtual ID. Catalog IDs that start with `runic-` are reserved for the `@runic-artifex` packages.
+
+`runicTranslations({ dependencies: "auto" })` finds every direct dependency of the application's `package.json` that
+declares `runicTranslations`, and regenerates its catalog into `<output>/dependencies/` with the same compiler command
+as project mode:
+
+- with the application's overrides: runic.json `"overrides": [{ "catalog": "acme.grid", "from": "@acme/grid" }]` and
+  `translations/overrides/acme.grid/<locale>.rmf2`, validated against the library's catalog key by key, which may add
+  locales the library lacks;
+- filtered to `locales` (default: the locales of the project's runic.json): only the library locales these resolve to,
+  their fallbacks and the library's base locale are bundled;
+- over one `runtime-core.js` that all regenerated catalogs share, so the runtime code is bundled once.
+
+The library's imports of its own catalog modules are redirected to the regenerated ones, the catalog is also available as
+`virtual:runic-translations/acme.grid`, and its declarations are written to `<output>/dependencies/acme.grid.d.ts`, which
+the application's `virtual.d.ts` references; nothing is written into `node_modules`. These packages are excluded from
+Vite's dependency pre-bundling and are not externalized for server rendering, so the plugin sees their imports. Editing
+an override or a library source in the development server regenerates the dependencies and reloads the page.
+
+The plugin ignores manifest members, entrypoints and asset members that a later compiler adds within ESM ABI 4, so a
+library built by a newer compiler patch still loads.
+
 ## TypeScript virtual modules
 
 After validating the manifest and every generated declaration asset, the plugin
