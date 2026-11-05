@@ -17,18 +17,18 @@ const subset = JSON.parse(
 
 test("generated ESM plural rules select every pinned CLDR sample", () => {
   let samples = 0;
-  for (const locale of subset.locales)
-    for (const type of ["cardinal", "ordinal"]) {
-      const ruleSet = parseRuleSet(locale[type], `${locale.tag} ${type}`);
+  for (const type of ["cardinal", "ordinal"])
+    for (const [tag, rules] of Object.entries(subset.plurals[type])) {
+      const ruleSet = parseRuleSet(rules, `${tag} ${type}`);
       // The emitted source is evaluated exactly as the generated ESM runtime embeds it.
       const select = new Function(`return ${javascriptRuleFunction(ruleSet)};`)();
       for (const rule of ruleSet)
         for (const sample of expandSamples([...rule.samples.integer, ...rule.samples.decimal])) {
-          assert.equal(select(Object.freeze(sampleOperands(sample))), rule.category, `${locale.tag} ${type} ${sample}`);
+          assert.equal(select(Object.freeze(sampleOperands(sample))), rule.category, `${tag} ${type} ${sample}`);
           samples++;
         }
     }
-  assert.ok(samples > 500, `only ${samples} samples were checked`);
+  assert.ok(samples > 10000, `only ${samples} samples were checked`);
 });
 
 test("CLDR operands follow the visible decimal", () => {

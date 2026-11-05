@@ -59,8 +59,8 @@ internal static class Rmf2EsmOutputRendererV5
         writer.Line("export const baseLocale = " + GenerationSupport.JsonString(project.DefaultLocale) + ";");
         writer.Line("export const locales = Object.freeze(" + JsonSerializer.Serialize(project.Locales.Select(item => item.Tag).OrderBy(item => item, StringComparer.Ordinal)) + ");");
         writer.Line("const unsupportedLocalePolicy = " + GenerationSupport.JsonString(project.UnsupportedLocale.ToString()) + ";");
-        writer.Line("const generatedLocaleData = " + TranslationCapabilityRegistry.EsmLocaleDataJson + ";");
-        writer.Line(TranslationCapabilityRegistry.EsmPluralRulesSource);
+        // Only the CLDR data of the catalog's languages is embedded.
+        writer.Line(TranslationCapabilityRegistry.EsmLocaleSource(project.Locales.Select(item => item.Tag)));
         // Only the markup contracts: per-message contracts live in the message modules and dynamic.js.
         writer.Line("const markupContracts = freezeTrusted(JSON.parse(" + GenerationSupport.JsonString(MarkupContractsJson(project)) + "));");
         // The renderers' table of structured messages; a function, so a bundle without a renderer drops it.
@@ -286,6 +286,8 @@ internal static class Rmf2EsmOutputRendererV5
         export declare const locales: readonly Locale[];
         export declare function decimal(value: string): Rmf2Decimal;
         export declare function resolveLocale(locale: string): Locale;
+        /** The best declared locale for an ordered preference list (navigator.languages, Accept-Language, LANGUAGE), matched with CLDR likely subtags; the base locale when none matches. */
+        export declare function negotiateLocale(preferences: Iterable<string>): Locale;
         /** The text direction of any BCP 47 locale tag's script, for the page's `dir` attribute. */
         export declare function localeDirection(locale: string): "ltr" | "rtl";
         export declare function getLocale(): Locale;
@@ -297,7 +299,7 @@ internal static class Rmf2EsmOutputRendererV5
         export declare function onFallback(listener: (key: string, requested: Locale, content: Locale) => void): () => void;
         /** Sets the locale of this catalog only, over the shared locale; returns a function that removes the resolver. */
         export declare function configureLocaleResolver(resolver: () => string): () => void;
-        /** Sets the locale of every catalog on the page (or in the process) that has no resolver of its own, such as a library's: the shared locale channel. Each catalog resolves the tag under its own locales, so pass the requested tag (`source.getRequestedLocale`). Inside `runWithLocale`, the request's locale applies instead. Returns a function that removes the resolver. */
+        /** Sets the locale of every catalog on the page (or in the process) that has no resolver of its own, such as a library's: the shared locale channel. Each catalog resolves the tag under its own locales, so pass the requested tag (`source.getRequestedLocale`). Inside `runWithLocale`, the request's locale applies instead; on a server, use `runWithLocale`, as this resolver is process-wide. Returns a function that removes this resolver: the latest one still installed then applies, whatever order they are removed in. */
         export declare function configureSharedLocaleResolver(resolver: () => string): () => void;
         /** Sets the zone that `timeZone=local` formats in, such as the browser's zone that an SSR request carries in a cookie; `undefined`, or a zone the engine does not know, means the host's zone. Returns a function that removes the resolver. */
         export declare function configureTimeZoneResolver(resolver: () => string | null | undefined): () => void;
@@ -422,17 +424,18 @@ internal static class Rmf2EsmOutputRendererV5
         /** An installed overlay: the artifact's locale and contract fingerprint (any release of this catalog), the number of messages it supplies, the skipped ones, and `remove()`, which uninstalls it. */
         export interface InstalledOverlay { readonly catalog: string; readonly locale: string; readonly contractFingerprint: string; readonly messages: number; readonly diagnostics: readonly OverlayDiagnostic[]; remove(): void; }
         export type OverlayInstallResult = { readonly ok: true; readonly value: InstalledOverlay } | { readonly ok: false; readonly reason: string };
-        /** For an artifact of a locale the catalog lacks: the catalog locale it falls back to. Default: its nearest declared or added parent, else the base locale. */
+        /** For an artifact of a locale the catalog lacks: the catalog locale it falls back to. Default: its nearest CLDR parent that the catalog declares or an overlay adds, else the catalog locale CLDR likely subtags match, else the base locale. */
         export interface OverlayOptions { readonly fallbackLocale?: string; }
         /**
          * Installs a locale artifact v5 of this catalog (`generate --emit-json`) as application text that `m.*()` uses before the catalog's own text,
          * locale-first. Each message is checked against this catalog's contract by key, so an artifact built for another release of the catalog applies
-         * to the keys both share; the others are reported in `diagnostics`. An artifact of a locale the catalog lacks adds that locale. A later install
-         * of the same locale wins per key. A structurally invalid artifact is not installed (`ok: false`).
+         * to the keys both share; the others are reported in `diagnostics`. An artifact of a locale the catalog lacks adds that locale. Installs are
+         * tried in installation order, as .NET tries overlays in the order they were added: an earlier install of the same locale wins per key. A
+         * structurally invalid artifact is not installed (`ok: false`).
          */
         export declare function installOverlay(artifact: unknown, options?: OverlayOptions): OverlayInstallResult;
-        /** `installOverlay` for downloaded pack bytes: size and depth limits, the integrity callback, UTF-8 and duplicate-member checks first, then the artifact's `locale` against `options.locale`. */
-        export declare function installLocalePack(content: Uint8Array, options?: OverlayOptions & { readonly locale?: string; readonly integrityVerifier?: (content: Uint8Array) => boolean | Promise<boolean> }): Promise<OverlayInstallResult>;
+        /** `installOverlay` for downloaded pack bytes: size and depth limits, the integrity callback, UTF-8 and duplicate-member checks first, then the artifact's `locale` against `options.locale`, the locale the pack was requested for (required, so a misrouted pack cannot add a locale). */
+        export declare function installLocalePack(content: Uint8Array, options: OverlayOptions & { readonly locale: string; readonly integrityVerifier?: (content: Uint8Array) => boolean | Promise<boolean> }): Promise<OverlayInstallResult>;
         /** Calls the listener after an overlay is installed or removed, so a page can render its text again. Returns a function that removes the listener. */
         export declare function onOverlayChange(listener: () => void): () => void;
         """;
@@ -478,8 +481,8 @@ internal static class Rmf2EsmOutputRendererV5
         export declare function resolveTextReference(value: unknown, handlers: TextReferenceHandlers, options?: MessageOptions): TextReferenceResolution;
         export declare const catalog: string;
         export declare const contractFingerprint: string;
-        /** A catalog for createReferenceResolver: its generated transport module (`import * as transport from ".../transport.js"`) and its message namespace `m`. */
-        export interface ReferenceCatalog { readonly transport: Readonly<{ catalog: string; resolveTextReference(value: unknown, handlers: TextReferenceHandlers, options?: MessageOptions): TextReferenceResolution }>; readonly messages: TextReferenceHandlers; }
+        /** A catalog for createReferenceResolver: its generated transport module (`import * as transport from ".../transport.js"`) and its message namespace `m`. A transport module generated before Runic Translations 0.9 does not export its catalog ID, so its entry names it in `catalog`. */
+        export interface ReferenceCatalog { readonly catalog?: string; readonly transport: Readonly<{ catalog?: string; resolveTextReference(value: unknown, handlers: TextReferenceHandlers, options?: MessageOptions): TextReferenceResolution }>; readonly messages: TextReferenceHandlers; }
         /** Resolves references of every listed catalog, such as the application's and its libraries', by the reference's catalog, with that catalog's resolveTextReference (a version 2 reference written against another release of a catalog is checked key by key and reports `contract-changed`). A reference of an unlisted catalog shows its fallback text (`catalog-mismatch`). */
         export declare function createReferenceResolver(catalogs: readonly ReferenceCatalog[]): (value: unknown, options?: MessageOptions) => TextReferenceResolution;
         """;

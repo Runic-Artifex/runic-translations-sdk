@@ -92,7 +92,7 @@ internal sealed class Rmf2RuntimeV5Tests
         Assert.Equal("りんご、なし", plain.Format([Items("りんご", "なし")], "ja"));
         Assert.Equal("3 h 5 min", unit.Format([Items("3 h", "5 min"), new("style", "narrow")], "fr"));
         Assert.Throws<TranslationFormatException>(() => unit.Format([Items("a"), new("style", "wide")], "en"));
-        Assert.Throws<TranslationFormatException>(() => plain.Format([Items("a")], "pl"));
+        Assert.Throws<TranslationFormatException>(() => plain.Format([Items("a")], "tlh"));
         Assert.Throws<TranslationFormatException>(() => plain.Format([new("items", "a")], "en"));
         // Transport version 1 has no list value.
         Assert.Throws<ArgumentException>(() => _ = new TranslationReferenceArgument(TextArgumentType.List, "a"));
@@ -312,7 +312,7 @@ internal sealed class Rmf2RuntimeV5Tests
     {
         Assert.Throws<TranslationFormatException>(() => Simple([], [], new CompiledRmf2Node("12345")).Format([], "en", 4));
         Assert.Throws<TranslationFormatException>(() => NumericMessage(new CompiledRmf2Variant([new()], [])).Format([new("n", 2m)], "zz"));
-        Assert.Throws<TranslationFormatException>(() => Simple([], [], Output(Number("1"), TextArgumentType.Number, "runic:relative-time")).Format([], "da"));
+        Assert.Throws<TranslationFormatException>(() => Simple([], [], Output(Number("1"), TextArgumentType.Number, "runic:relative-time")).Format([], "zz"));
     }
     private static CompiledTranslationSnapshot Snapshot(CompiledRmf2Message message, CompiledRmf2Input[] inputs) => new(new("test", "en",
         [CompiledTranslationDefinition.FromRmf2Inputs("Value", inputs)], [new("en", null, [new(0, "compatibility", CompiledTextMessage.FromRmf2(message))])]), "en");
