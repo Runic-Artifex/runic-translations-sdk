@@ -31,6 +31,9 @@ internal sealed record TranslationInterchangeVariant(string? Keys, IReadOnlyList
 /// <param name="PluralFunction"><c>plural</c> or <c>ordinal</c> when the message has exactly one selector and it selects by plural category.</param>
 internal sealed record TranslationInterchangeSelector(string Header, string Display, IReadOnlyList<TranslationInterchangeVariant> Variants, string? PluralFunction)
 {
+    /// <summary>Whether the plural selector's operand is an integer (<c>:integer</c>), which reaches fewer categories.</summary>
+    internal bool IntegerOperand { get; init; }
+
     /// <summary>Every placeholder piece of every variant, in order.</summary>
     internal IEnumerable<TranslationInterchangePiece> Pieces => Variants.SelectMany(static variant => variant.Pieces);
 }
@@ -148,13 +151,27 @@ internal static class TranslationInterchangePattern
         if (header.Length == 0) return null;
         string display = header.Split('\n')[^1].Trim();
         string? plural = compiled.Selectors.Count == 1 && compiled.Selectors[0].Function is "plural" or "ordinal" ? compiled.Selectors[0].Function : null;
-        return new(header, display, variants, plural);
+        return new(header, display, variants, plural) { IntegerOperand = plural is not null && compiled.Selectors[0].Type == "int64" };
     }
 
     /// <summary>Writes a selector message: the header, then each variant on its own line.</summary>
     internal static string Compose(TranslationInterchangeSelector selector) =>
         selector.Header + "\n" + string.Join("\n", selector.Variants.Select(static variant =>
             (variant.Keys is null ? "" : variant.Keys + " ") + "{{" + Body(variant.Pieces) + "}}"));
+
+    // One MF2 key: the catch-all, a |quoted| literal, or an unquoted name or number literal.
+    private static readonly System.Text.RegularExpressions.Regex VariantKeyList = new(
+        @"^\s*(?:\*|\|(?:[^\\|]|\\[\\|{}])*\||[^\s{}|\\*]+)(?:\s+(?:\*|\|(?:[^\\|]|\\[\\|{}])*\||[^\s{}|\\*]+))*\s*$",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>Whether a string is a list of MF2 variant keys and nothing else: no braces, patterns or expressions.</summary>
+    internal static bool IsVariantKeyList(string keys) => keys.Length <= 4096 && VariantKeyList.IsMatch(keys);
+
+    /// <summary>Whether two selector views have the same header, the same keys in order and the same variant texts.</summary>
+    internal static bool SameSelector(TranslationInterchangeSelector left, TranslationInterchangeSelector right) =>
+        CanonicalHeader(left.Header) == CanonicalHeader(right.Header) && left.Variants.Count == right.Variants.Count &&
+        left.Variants.Zip(right.Variants).All(static pair => CanonicalKeys(pair.First.Keys) == CanonicalKeys(pair.Second.Keys) &&
+            Compose(Canonical(pair.First.Pieces)) == Compose(Canonical(pair.Second.Pieces)));
 
     /// <summary>Header spellings compare without the whitespace that only separates syntax.</summary>
     internal static string CanonicalHeader(string header) => string.Join(' ', header.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));

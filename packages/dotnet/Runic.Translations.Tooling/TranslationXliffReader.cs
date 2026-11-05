@@ -392,6 +392,9 @@ internal static class TranslationXliffReader
             // translation would escape its syntax, so the unit is skipped until the catalog is exported again.
             if (live?.Selector is not null && sourceContent.Selector is null)
                 return UnitDecision.Skip(key, "XLIFF21-STRUCTURED-SKIPPED", "The unit holds a selector message as plain text, as exports before selector units wrote it; export the catalog again to translate it through XLIFF.");
+            // The keys of a variant a translator adds come from its equivStart; they must be keys and nothing else.
+            if (targetContent.Selector?.Variants.FirstOrDefault(static variant => variant.Keys is not null && !TranslationInterchangePattern.IsVariantKeyList(variant.Keys)) is { } badKeys)
+                return UnitDecision.Refuse(key, "XLIFF21-VARIANT-KEY", "The variant keys '" + badKeys.Keys + "' are not MF2 variant keys; an equivStart holds only keys (such as '*', '0', 'few' or '|text|', one per selector) and \"{{\".");
         }
         string sourcePattern = sourceContent.Compose(), targetPattern = targetContent.Compose();
 
@@ -404,6 +407,13 @@ internal static class TranslationXliffReader
         bool copiedSource = !translatedState && CopiesSource(targetContent, sourceContent);
 
         TranslationInterchangeTargetUnit? liveTarget = context.LiveTargets.GetValueOrDefault(key);
+        // A plain target for a message with variants joins the variant texts, which is what a tool that strips every
+        // code writes. It is accepted only where one pattern is right: the live translation is already plain, or the
+        // locale selects a single plural category (Japanese).
+        if (context.ProfileVersion >= 3 && targetContent.Selector is null && liveTarget is not { Selector: null }
+            && TranslationInterchangePattern.DecomposeSelector(live?.Text ?? sourcePattern) is { } sourceSelector && sourceSelector.Variants.Any(static variant => variant.Keys is not null)
+            && !(sourceSelector.PluralFunction is { } function && Rmf2AuthoringService.PluralCategories(context.TargetLocale, function == "ordinal", sourceSelector.IntegerOperand).Count == 1))
+            return UnitDecision.Refuse(key, "XLIFF21-SELECTOR-CHANGED", "The target has no variants (<pc>) although the message selects between variants in this locale; translate each variant, keeping the header <ph> and the <pc> codes.");
         if (targetContent.Selector is { } targetSelector)
         {
             // Translators edit the variant texts; declarations and selectors stay those of the source or the translation.
@@ -452,6 +462,26 @@ internal static class TranslationXliffReader
             }
             targetPattern = targetContent.Compose();
         }
+        // The composed message must read back as exactly the header, keys and variant texts it was composed from, so
+        // nothing a key or code carries can add a declaration, selector, variant or placeholder.
+        if (targetContent.Selector is { } composed)
+        {
+            if (TranslationInterchangePattern.DecomposeSelector(targetPattern) is not { } reparsed)
+            {
+                var message = new TranslationSource("interchange/message.mf2", Encoding.UTF8.GetBytes(targetPattern));
+                Mf2SyntaxDocument syntax = Mf2SyntaxReader.Read(message);
+                if (!syntax.Success || (syntax.Match is { } match && syntax.Variants.Any(variant => variant.Keys.Count != match.Selectors.Count)))
+                    return UnitDecision.Refuse(key, "XLIFF21-VARIANT-KEY", "The variant keys do not form a valid message with the declarations and .match statement; each variant needs one key per selector.");
+                TranslationDiagnostic? error = Rmf2SemanticCompilerV5.Compile(message).Diagnostics.FirstOrDefault(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error);
+                return UnitDecision.Refuse(key, "XLIFF21-TARGET-INVALID", error is null ? "The target does not form a valid message." : "[" + error.Id + "] " + error.Message);
+            }
+            if (!TranslationInterchangePattern.SameSelector(reparsed, composed))
+                return UnitDecision.Refuse(key, "XLIFF21-PLACEHOLDER-CHANGED", "The variant keys change the message's declarations, selectors or placeholders; a translation through XLIFF may change only the variant texts and keys.");
+        }
+        // An unchanged translation keeps its bytes: the composed form normalizes spacing between keys and variants.
+        if (liveTarget is not null && !string.Equals(liveTarget.Text, targetPattern, StringComparison.Ordinal)
+            && TranslationInterchangePattern.CanonicalMessage(liveTarget.Text) == TranslationInterchangePattern.CanonicalMessage(targetPattern))
+            targetPattern = liveTarget.Text;
         IReadOnlyList<TranslationInterchangePiece>? sourcePieces = sourceContent.Pieces;
 
         // The source the translator saw, and whether the live source changed since.

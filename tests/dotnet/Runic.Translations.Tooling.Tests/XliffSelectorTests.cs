@@ -113,9 +113,14 @@ internal sealed class XliffSelectorTests
         XElement segment = Unit(xml, "items").Element(XName.Get("segment", Xliff))!;
         Require((string?)segment.Attribute("state") == "initial", "The prefilled segment is not initial.");
         string[] keys = segment.Element(XName.Get("target", Xliff))!.Elements(XName.Get("pc", Xliff)).Select(pc => (string)pc.Attribute("equivStart")!).ToArray();
-        Require(keys.SequenceEqual(["one {{", "few {{", "many {{", "* {{"]), "The Czech variants differ: " + string.Join(", ", keys));
-        Require(segment.Element(XName.Get("target", Xliff))!.Elements(XName.Get("pc", Xliff)).Select(pc => (string)pc.Attribute("id")!).SequenceEqual(["v1", "tv1", "tv2", "v2"]),
+        // `:integer` never selects Czech `many` (fractions only), so it is not asked for.
+        Require(keys.SequenceEqual(["one {{", "few {{", "* {{"]), "The Czech variants differ: " + string.Join(", ", keys));
+        Require(segment.Element(XName.Get("target", Xliff))!.Elements(XName.Get("pc", Xliff)).Select(pc => (string)pc.Attribute("id")!).SequenceEqual(["v1", "tv1", "v2"]),
             "The added variants do not have target ids.");
+        // A decimal selector reaches `many`.
+        string[] decimalKeys = Unit(Export(Compile(Items.Replace(":integer", ":number", StringComparison.Ordinal), locale: "cs")), "items").Descendants(XName.Get("target", Xliff)).Single()
+            .Elements(XName.Get("pc", Xliff)).Select(pc => (string)pc.Attribute("equivStart")!).ToArray();
+        Require(decimalKeys.SequenceEqual(["one {{", "few {{", "many {{", "* {{"]), "The Czech decimal variants differ: " + string.Join(", ", decimalKeys));
 
         // Returned untouched, the prefill is skipped; returned translated without a state, it is a copy for review.
         Require(Outcome(Import(xml, czech), "items").Code == "XLIFF21-UNTRANSLATED", "The untouched prefill was imported.");
@@ -123,10 +128,13 @@ internal sealed class XliffSelectorTests
         Require(Outcome(Import(copy, czech), "items").State == TranslationReviewState.NeedsReview, "A stateless copy of the prefill was imported as translated.");
 
         string translated = SetTarget(xml, "items", "<ph id=\"h\"/><pc id=\"v1\">Jedna položka</pc><pc id=\"tv1\" equivStart=\"few {{\" equivEnd=\"}}\"><ph id=\"1\"/> položky</pc>" +
-            "<pc id=\"tv2\" equivStart=\"many {{\" equivEnd=\"}}\"><ph id=\"1\"/> položky</pc><pc id=\"v2\"><ph id=\"1\"/> položek</pc>");
+            "<pc id=\"v2\"><ph id=\"1\"/> položek</pc>");
         TranslationXliffImportResult imported = Import(translated, czech);
-        Require(Message(imported, "items") == Header + "\none {{Jedna položka}}\nfew {{{$n} položky}}\nmany {{{$n} položky}}\n* {{{$n} položek}}", "The Czech plural did not import: " + Message(imported, "items"));
+        Require(Message(imported, "items") == Header + "\none {{Jedna položka}}\nfew {{{$n} položky}}\n* {{{$n} položek}}", "The Czech plural did not import: " + Message(imported, "items"));
         Require(imported.Report.Losses.All(loss => loss.Code != "XLIFF21-PLURAL-CATEGORIES"), "A complete Czech plural was reported.");
+        // A `many` variant added for `:integer` is never selected: reported under the default warning policy.
+        TranslationXliffImportResult many = Import(translated.Replace("<pc id=\"v2\">", "<pc id=\"tv2\" equivStart=\"many {{\" equivEnd=\"}}\"><ph id=\"1\"/> položky</pc><pc id=\"v2\">", StringComparison.Ordinal), czech);
+        Require(many.Report.Losses.Any(loss => loss.Code == "XLIFF21-PLURAL-CATEGORIES" && loss.Message.Contains("RTR0094", StringComparison.Ordinal)), "An integer many was not reported.");
 
         // A locale that selects fewer categories drops the unreachable ones: Japanese has only other.
         string japanese = Export(Compile(Items, locale: "ja"));
@@ -142,9 +150,9 @@ internal sealed class XliffSelectorTests
         const string onlyOne = "<ph id=\"h\"/><pc id=\"v1\">Jedna položka</pc><pc id=\"v2\"><ph id=\"1\"/> položek</pc>";
         Rmf2ProjectCompilation warning = Compile(Items, locale: "cs");
         TranslationXliffImportResult applied = Import(SetTarget(Export(warning), "items", onlyOne), warning);
-        Require(Outcome(applied, "items").Outcome == TranslationXliffUnitOutcome.Applied, "A Czech plural without few and many was not applied under the warning policy.");
+        Require(Outcome(applied, "items").Outcome == TranslationXliffUnitOutcome.Applied, "A Czech plural without few was not applied under the warning policy.");
         TranslationInterchangeLoss notice = applied.Report.Losses.Single(loss => loss.Code == "XLIFF21-PLURAL-CATEGORIES");
-        Require(notice.Location == "/items" && notice.Message.Contains("RTR0095", StringComparison.Ordinal) && notice.Message.Contains("few, many", StringComparison.Ordinal), "The notice is wrong: " + notice.Message);
+        Require(notice.Location == "/items" && notice.Message.Contains("RTR0095", StringComparison.Ordinal) && notice.Message.Contains("category few of", StringComparison.Ordinal), "The notice is wrong: " + notice.Message);
 
         Rmf2ProjectCompilation error = Compile(Items, locale: "cs", validation: ",\"pluralCategories\":\"error\"");
         TranslationXliffImportResult refused = Import(SetTarget(Export(error), "items", onlyOne), error);
@@ -188,6 +196,77 @@ internal sealed class XliffSelectorTests
         string ja = Export(japanese);
         Require(Unit(ja, "items").Descendants(XName.Get("target", Xliff)).Single().Elements(XName.Get("pc", Xliff)).Any() == false, "A plain translation was exported with variants.");
         Require(Message(Import(SetTarget(ja, "items", "<ph id=\"1\"/> 件"), japanese), "items") == "{$n} 件", "A plain translation of a plural did not import.");
+    }
+
+    [Test, DisplayName("keys of an added variant are only keys: equivStart cannot inject text, placeholders or variants")]
+    public void AddedVariantKeysAreValidated()
+    {
+        Rmf2ProjectCompilation compilation = Compile(Items, "items =\n  .input {$n :integer}\n  .match $n\n  one {{Ein Element}}\n  * {{{$n} Elemente}}");
+        string xml = Export(compilation);
+        TranslationXliffUnitResult Probe(string equivStart) =>
+            Outcome(Import(SetTarget(xml, "items", "<ph id=\"h\"/><pc id=\"tv1\" equivStart=\"" + equivStart + "\" equivEnd=\"}}\">Ein Element</pc><pc id=\"v2\"><ph id=\"1\"/> Elemente</pc>"), compilation), "items");
+
+        // The review's reproduction: a variant whose start code carries a whole variant with a new formatter.
+        TranslationXliffUnitResult injected = Probe("one {{Ein {$n :number style=percent}}} * {{");
+        Require(injected is { Outcome: TranslationXliffUnitOutcome.Refused, Code: "XLIFF21-VARIANT-KEY" }, "An injected placeholder was accepted: " + injected.Code + " " + injected.Message);
+        Require(Probe("one {{Ein {|x| :string}}} * {{").Code == "XLIFF21-VARIANT-KEY", "An injected literal expression was accepted.");
+        Require(Probe("* {{x}} .local $y = {1} {{").Code == "XLIFF21-VARIANT-KEY", "An injected declaration was accepted.");
+        // One key per selector; a plural key is a number or a plural category.
+        TranslationXliffUnitResult two = Probe("one two {{"); Require(two.Code == "XLIFF21-VARIANT-KEY", "Two keys for one selector were accepted: " + two.Outcome + " " + two.Code + " " + two.Message);
+        TranslationXliffUnitResult word = Outcome(Import(SetTarget(xml, "items", "<ph id=\"h\"/><pc id=\"tv1\" equivStart=\"lots {{\" equivEnd=\"}}\">Viele</pc><pc id=\"v2\"><ph id=\"1\"/> Elemente</pc>"), compilation), "items");
+        Require(word is { Outcome: TranslationXliffUnitOutcome.Refused, Code: "XLIFF21-TARGET-INVALID" }, "A plural key that is no category was accepted: " + word.Code);
+        // Quoted and exact keys stay allowed.
+        TranslationXliffImportResult exact = Import(SetTarget(xml, "items", "<ph id=\"h\"/><pc id=\"tv1\" equivStart=\"|0| {{\" equivEnd=\"}}\">Keine</pc><pc id=\"v2\"><ph id=\"1\"/> Elemente</pc>"), compilation);
+        Require(Message(exact, "items") == Header + "\n|0| {{Keine}}\n* {{{$n} Elemente}}", "A quoted exact key did not import: " + Outcome(exact, "items").Code + " " + Outcome(exact, "items").Message);
+    }
+
+    [Test, DisplayName("re-importing an unchanged selector translation keeps its bytes")]
+    public void UnchangedImportIsByteExact()
+    {
+        const string aligned = "items =\n  .input {$n :integer}\n  .match $n\n  one   {{Ein Element}}\n  *     {{{$n} Elemente}}";
+        TranslationSource project = new("translations/runic.json", Encoding.UTF8.GetBytes(ProjectJson(",{\"tag\":\"de\",\"fallback\":\"en\"}")));
+        TranslationSource[] sources = [new("translations/en.rmf2", Encoding.UTF8.GetBytes(Items + "\n")), new("translations/de.rmf2", Encoding.UTF8.GetBytes(aligned + "\n"))];
+        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileProject(project, sources);
+        Require(compilation.Success, "The fixture did not compile.");
+        string live = Encoding.UTF8.GetString(compilation.Project!.Locales.Single(locale => locale.Tag == "de").DirectResources.Single(resource => resource.Key == "items").Message.Syntax.Source.GetUtf8Bytes());
+        TranslationXliffImportResult imported = Import(Export(compilation), compilation);
+        Require(Message(imported, "items") == live, "The unchanged translation was rewritten: " + Message(imported, "items"));
+        IReadOnlyList<TranslationSourceEdit> edits = TranslationInterchangeSourceWriter.Plan(Environment.CurrentDirectory, project, sources, compilation, "de", [new("items", Message(imported, "items")!)]);
+        Require(TranslationInterchangeSourceWriter.Apply(sources, edits).Single(source => source.Path.EndsWith("de.rmf2", StringComparison.Ordinal)).GetUtf8Bytes().AsSpan().SequenceEqual(sources[1].GetUtf8Bytes()),
+            "Writing the unchanged translation changed de.rmf2.");
+        // An edited variant is written in the composed form.
+        string edited = SetTarget(Export(compilation), "items", "<ph id=\"h\"/><pc id=\"v1\">Ein Ding</pc><pc id=\"v2\"><ph id=\"1\"/> Elemente</pc>");
+        Require(Message(Import(edited, compilation), "items") == Header + "\none {{Ein Ding}}\n* {{{$n} Elemente}}", "An edited translation was not applied.");
+    }
+
+    [Test, DisplayName("a plain target for a message with variants is refused unless one pattern is right for the locale")]
+    public void PlainTargetForSelector()
+    {
+        // A tool that strips every code joins the variant texts.
+        Rmf2ProjectCompilation german = Compile(Items);
+        TranslationXliffUnitResult stripped = Outcome(Import(SetTarget(Export(german), "items", "Ein Element <ph id=\"1\"/> Elemente"), german), "items");
+        Require(stripped is { Outcome: TranslationXliffUnitOutcome.Refused, Code: "XLIFF21-SELECTOR-CHANGED" }, "A stripped selector target was accepted: " + stripped.Code);
+        Require(Outcome(Import(SetTarget(Export(german), "items", "Elemente"), german), "items").Code == "XLIFF21-SELECTOR-CHANGED", "A plain target without codes was accepted.");
+        // An existing plain translation stays plain.
+        Rmf2ProjectCompilation plain = Compile(Items, "items = {$n} Elemente");
+        Require(Message(Import(SetTarget(Export(plain), "items", "<ph id=\"1\"/> Dinge"), plain), "items") == "{$n} Dinge", "A plain translation of a plural was refused.");
+    }
+
+    [Test, DisplayName("characters XML cannot hold export as <cp> and import back")]
+    public void ControlCharactersRoundTrip()
+    {
+        Rmf2ProjectCompilation compilation = Compile("x = A\u0001B {$n}\n" + Items + "\ny = Text {|\u0002|}", "x = C\u0001D {$n}\nitems =\n  .input {$n :integer}\n  .match $n\n  one {{Ein\u0003}}\n  * {{{$n} Elemente}}");
+        TranslationXliffExportResult export = TranslationInterchange.ExportXliff21(compilation);
+        byte[] bytes = export.Documents.Single().Bytes.ToArray();
+        ValidateSchema(bytes);
+        string xml = Encoding.UTF8.GetString(bytes);
+        Require(xml.Contains("<source>A<cp hex=\"0001\" />B ", StringComparison.Ordinal) && xml.Contains("<target>C<cp hex=\"0001\" />D ", StringComparison.Ordinal), "The control character was not written as <cp>: " + xml);
+        // A literal placeholder whose expression holds one cannot be an attribute: the unit is not translatable.
+        Require(export.Report.Losses.Any(loss => loss.Code == "XLIFF21-CONTROL-CHARACTER" && loss.Location == "/y"), "The unrepresentable placeholder was not reported.");
+        Require((string?)Unit(xml, "y").Attribute("translate") == "no", "The unrepresentable unit is translatable.");
+        TranslationXliffImportResult imported = Import(SetTarget(xml, "x", "E<cp hex=\"0001\"/>F <ph id=\"1\"/>"), compilation);
+        Require(Message(imported, "x") == "E\u0001F {$n}", "The control character did not import: " + Message(imported, "x"));
+        Require(Message(Import(xml, compilation), "items")?.Contains("Ein\u0003", StringComparison.Ordinal) == true, "A control character in a variant did not round-trip.");
     }
 
     [Test, DisplayName("@maxLength on a selector message restricts every variant")]

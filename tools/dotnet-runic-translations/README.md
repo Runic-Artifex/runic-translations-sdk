@@ -112,8 +112,12 @@ locale, or only for the `--locale` ones (repeatable). Each message is one unit w
   ```
 
   A missing translation into a locale whose plural categories differ from the source's gets a target in state
-  `initial` with that locale's variants (Czech: `one`, `few`, `many`, `*`; Japanese: `*`), filled with the
-  source text for the translator to replace. `@maxLength` becomes a size restriction on each variant.
+  `initial` with that locale's variants (Czech `:integer`: `one`, `few`, `*`, and `many` too for a decimal
+  `:number`; Japanese: `*`), filled with the source text for the translator to replace. `@maxLength` becomes a
+  size restriction on each variant.
+- Text holds characters that XML 1.0 forbids (such as U+0001) as `<cp hex="0001"/>`, which import reads back. A
+  placeholder, header or key that holds one cannot be an attribute, so its unit is exported as `translate="no"`
+  and reported (`XLIFF21-CONTROL-CHARACTER`).
 - A message with markup is exported as `translate="no"` with its MF2 source and reported as loss
   (`XLIFF21-STRUCTURED-MESSAGE`); translate it in the `.rmf2` sources or the editor.
 - An existing translation is in state `translated`, a missing one has no target. With a review file (below),
@@ -133,6 +137,8 @@ notes (ignored; a dropped translator note is reported as `XLIFF21-NOTE-IGNORED`)
 | markup message, a selector message from an export before selector units, or `translate="no"` | skipped, `XLIFF21-STRUCTURED-SKIPPED` |
 | a selector target that changes the declarations or `.match` | refused, `XLIFF21-SELECTOR-CHANGED`; a translation may change variant texts and add or remove variants, such as an exact `0 {{…}}` |
 | a selector target with an empty variant (unless the source's variant with those keys is empty) | refused, `XLIFF21-EMPTY-VARIANT` |
+| an added variant whose `equivStart` is not only MF2 keys (`*`, a number, a category or a literal, one per selector) and `{{` | refused, `XLIFF21-VARIANT-KEY`; the composed message must read back as the same header, keys and variant texts, else `XLIFF21-PLACEHOLDER-CHANGED` |
+| a plain target (no `<pc>`) for a message with variants, unless the current translation is plain or the locale has one plural category | refused, `XLIFF21-SELECTOR-CHANGED`; a tool that strips every code joins the variant texts |
 | plural keys the target locale never selects or categories it lacks (`RTR0094`, `RTR0095`) | applied with the notice `XLIFF21-PLURAL-CATEGORIES`, or refused with that code when the locale's `validation.pluralCategories` is `error` |
 | a placeholder outside the message's caller contract, an unknown inline code, invalid MF2 | refused, `XLIFF21-PLACEHOLDER`, `XLIFF21-INLINE` or `XLIFF21-TARGET-INVALID` |
 | a target `<ph>` whose `equiv` changes a placeholder (another function or options, or a literal for a variable) | refused, `XLIFF21-PLACEHOLDER-CHANGED`; a target may only use the expressions of the current source and translation, compared in canonical form |

@@ -216,7 +216,7 @@ internal static class InterchangeOperations
             string pattern = messages[unit.Key];
             string state = ReviewFile.TranslationReviewStatesText(unit.State ?? TranslationReviewState.Translated);
             if (!existingTargets.TryGetValue(unit.Key, out string? before)) { added++; values[unit.Key] = pattern; entries.Add(new(unit.Key, "added", unit.SourceChanged ? "XLIFF21-SOURCE-CHANGED" : null, null) { State = state }); }
-            else if (TranslationInterchangePattern.Canonical(before) != TranslationInterchangePattern.Canonical(pattern)) { changed++; values[unit.Key] = pattern; entries.Add(new(unit.Key, "changed", unit.SourceChanged ? "XLIFF21-SOURCE-CHANGED" : null, null) { State = state }); }
+            else if (TranslationInterchangePattern.CanonicalMessage(before) != TranslationInterchangePattern.CanonicalMessage(pattern)) { changed++; values[unit.Key] = pattern; entries.Add(new(unit.Key, "changed", unit.SourceChanged ? "XLIFF21-SOURCE-CHANGED" : null, null) { State = state }); }
             else
             {
                 unchanged++;

@@ -626,7 +626,9 @@ is not one MF2 placeholder, or a placeholder the message's caller contract does
 not have), `XLIFF21-PLACEHOLDER-CHANGED` (a target `<ph>` whose expression is
 not one of the message's placeholders: another function or options, or a literal
 in place of a variable), `XLIFF21-INLINE` (an inline element other than `<ph>`, `<mrk>` and
-`<cp>`), `XLIFF21-TARGET-INVALID` (the target does not compile against the base
+`<cp>`), `XLIFF21-SELECTOR-CHANGED` (a target that changes a selector message's
+declarations or `.match`, or drops its variants), `XLIFF21-VARIANT-KEY` (an added
+variant whose `equivStart` is not only MF2 keys), `XLIFF21-TARGET-INVALID` (the target does not compile against the base
 message), `XLIFF21-UNKNOWN-KEY`, `XLIFF21-DUPLICATE-UNIT`, `XLIFF21-UNIT-ID`,
 `XLIFF21-STATE` (an unknown segment state), `XLIFF21-SOURCE-CHANGED` (with
 `--source-changed refuse`) or `XLIFF21-METADATA` (an unreadable Runic note).
