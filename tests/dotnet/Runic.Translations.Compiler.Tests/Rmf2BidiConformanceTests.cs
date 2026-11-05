@@ -102,6 +102,8 @@ internal sealed class Rmf2BidiConformanceTests
                 Rmf2MessageContractV5 contract = project.CanonicalMessages.Single(item => item.Key == key);
                 TextArgument[] arguments = Arguments(vectors[index].Arguments);
                 CompiledRmf2Message direct = Rmf2V1CorpusTests.Lower(linked.Message with { Inputs = contract.Inputs }, linked.ContentLocale);
+                // The CLDR currency, unit and compact data the compiler embeds with the message, as a generated catalog does.
+                if (project.FormatData([linked.ContentLocale], [linked.Message]) is { } formats) direct.FormatData = Rmf2FormatData.Parse(System.Text.Encoding.UTF8.GetBytes(formats));
                 Check(vectors[index], Format(direct, arguments, vectors[index]), "linked");
                 CompiledRmf2Message loaded = pack.Messages.Single(item => item.Key.Name == key).Message!.Rmf2V5!;
                 Check(vectors[index], Format(loaded, arguments, vectors[index]), "pack");

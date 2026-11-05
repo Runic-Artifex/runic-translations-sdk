@@ -118,6 +118,7 @@ internal static class Rmf2ContractPackV5
             writer.WriteString("locale", locale.Tag);
             writer.WriteString("contractFingerprint", shipped.ContractFingerprint);
             writer.WriteStartObject("messages");
+            var kept = new List<Rmf2TranslationV5>();
             foreach (Rmf2TranslationV5 resource in locale.ResolvedResources.OrderBy(item => item.Key, StringComparer.Ordinal))
             {
                 Rmf2MessageContractV5 contract = contracts[resource.Key];
@@ -139,10 +140,18 @@ internal static class Rmf2ContractPackV5
                 writer.WritePropertyName("ast");
                 ast.RootElement.WriteTo(writer);
                 writer.WriteEndObject();
+                kept.Add(resource);
             }
             writer.WriteEndObject();
             writer.WritePropertyName("markupContract");
             writer.WriteRawValue(shipped.MarkupContract, skipInputValidation: false);
+            // The CLDR data of the messages kept, for a release whose loaders accept formatData; an earlier release formats
+            // numbers with its own data and has no message that needs the rest.
+            if (Rmf2ReleaseFeaturesV5.AcceptsMember(shipped.FeatureLevel, "formatData") && Rmf2LocaleArtifactV5.FormatData(project, locale, kept) is { } formats)
+            {
+                writer.WritePropertyName("formatData");
+                writer.WriteRawValue(formats, skipInputValidation: false);
+            }
             writer.WriteEndObject();
         }
         return new TranslationGeneratedOutput(TranslationGeneratedOutputKind.LocaleJson,
@@ -217,14 +226,35 @@ internal static class Rmf2ReleaseFeaturesV5
             },
             ["runic:list"] = new(StringComparer.Ordinal) { ["type"] = ["conjunction", "disjunction", "unit"], ["style"] = ["long", "short", "narrow"] },
         }),
-        // Localized date and time styles and time zones (TC).
+        // Localized date and time styles and time zones (TC); :currency, :unit and compact notation (TK).
         ("0.9.0", new(StringComparer.Ordinal)
         {
             ["date"] = new(StringComparer.Ordinal) { ["style"] = ["medium", "full"] },
             ["time"] = new(StringComparer.Ordinal) { ["style"] = ["medium", "full"] },
             ["datetime"] = new(StringComparer.Ordinal) { ["style"] = ["medium", "full"], ["timeZone"] = null },
+            ["number"] = new(StringComparer.Ordinal) { ["runic:notation"] = ["standard", "compact"], ["runic:compactDisplay"] = ["short", "long"] },
+            ["currency"] = new(StringComparer.Ordinal)
+            {
+                ["currency"] = null, ["currencyDisplay"] = ["symbol", "narrowSymbol", "code", "name"], ["currencySign"] = ["standard", "accounting"],
+                ["useGrouping"] = ["auto", "always", "never", "min2"], ["fractionDigits"] = null,
+            },
+            ["unit"] = new(StringComparer.Ordinal)
+            {
+                ["unit"] = null, ["unitDisplay"] = ["short", "long", "narrow"], ["useGrouping"] = ["auto", "always", "never", "min2"],
+                ["minimumFractionDigits"] = null, ["maximumFractionDigits"] = null,
+            },
         }),
     ];
+
+    // The optional members of a locale artifact v5 and the level whose loaders accept them: a loader rejects an artifact
+    // with a member it does not know (unknown-member), so a pack for an earlier release leaves the member out.
+    private static readonly Dictionary<string, string> ArtifactMembers = new(StringComparer.Ordinal) { ["formatData"] = "0.9.0" };
+
+    /// <summary>The first level whose loaders accept an optional artifact member (<c>formatData</c>).</summary>
+    internal static int MemberLevel(string member) => Array.FindIndex(Levels, item => item.Release == ArtifactMembers[member]);
+
+    /// <summary>Whether the loaders of a release level accept the optional artifact member.</summary>
+    internal static bool AcceptsMember(int level, string member) => level >= MemberLevel(member);
 
     /// <summary>The newest level this compiler knows.</summary>
     internal static int Newest => Levels.Length - 1;
@@ -287,6 +317,8 @@ internal static class Rmf2ReleaseFeaturesV5
     // A dynamic value (an input or local variable) is checked when the message formats, so only its option name counts.
     private static int OptionLevel(string function, string option, string? literal)
     {
+        // MF2's u:dir on every function (TH, 0.9.0); the runtimes check it apart from their option tables.
+        if (option == "u:dir") return Math.Max(FunctionLevel(function), Array.FindIndex(Levels, item => item.Release == "0.9.0"));
         for (int index = 0; index < Levels.Length; index++)
             if (Levels[index].Adds.TryGetValue(function, out Dictionary<string, string[]?>? options) && options.TryGetValue(option, out string[]? values) &&
                 (values is null || literal is null || values.Contains(literal, StringComparer.Ordinal)))

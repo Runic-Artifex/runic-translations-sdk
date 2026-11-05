@@ -139,8 +139,8 @@ an older runtime runs it.
 ## RTR0031
 
 Built-in formatter does not support the content locale. A plural, ordinal,
-relative-time or list formatter is used for a locale that the pinned CLDR data
-does not cover. Every CLDR locale is covered, including regional and script
+relative-time, list, currency, unit or compact-notation formatter is used for a
+locale that the pinned CLDR data does not cover. Every CLDR locale is covered, including regional and script
 variants such as `pt-PT`, `sr-Latn` and `zh-TW`; a locale with CLDR data but no
 plural rules of its own (`agq`, `rw`, `mi`) uses CLDR's root rule, which selects
 `other`. So the diagnostic only reports languages without CLDR data, such as
@@ -363,6 +363,15 @@ rebuild the pack from the same sources as the application. A document message
 that breaks the block rules themselves (text outside a block, a misplaced
 element, or a leaf that starts or ends with whitespace) is
 `RTR0023/malformed-pattern`.
+`RTR0023/malformed` also covers a `formatData` member (the CLDR data a pack
+carries for its numbers, currencies, units and compact numbers) that breaks
+the [embedded format data rules](../../../specs/translations/rmf2-execution-v2.md#embedded-format-data),
+in both runtimes and in overlays as in exact packs.
+`RTR0023/unsupported-function` (ESM) means an exact pack uses `:currency`,
+`:unit` or compact notation, which the catalog was built without because none
+of its messages uses them; an overlay skips such a message with the diagnostic
+`unsupported-function`. Rebuild the catalog with a message that uses the
+function.
 
 ## RTR0080
 
@@ -599,6 +608,47 @@ message used only by a key string, from XAML markup that no generated code reads
 from another assembly or from the web is reported too; the ESM side has its own report in
 `vite-plugin-runic-translations` (`reportUnused`). Remove the message from every
 locale, or keep it and leave the report off.
+
+## RTR0101
+
+Currency or unit is not in the pinned CLDR data. A `:currency` `currency`
+option, a `:unit` `unit` option, or an entry of `runic.json` `formats.currencies`
+or `formats.units` names a code or unit the compiler has no data for:
+
+```rmf2
+total = {$n :currency currency=XYZ}
+distance = {$n :unit unit=furlong}
+```
+
+Currencies are the ISO 4217 codes that CLDR 48.2 lists as current tender in some
+region (153, such as `EUR`, `USD`, `JPY`); historical codes such as `DEM` are not
+included. Units are the 45 simple units `Intl.NumberFormat` accepts (`kilometer`,
+`hour`, `liter`, `megabyte`, `percent`, …) and `X-per-Y` of two of them
+(`kilometer-per-hour`). Use a listed code or unit, or format the amount with
+`:number` and write the unit in the text. See
+[currencies, units and compact numbers](rmf2.md#currencies-units-and-compact-numbers).
+
+## RTR0102
+
+Run-time currency or unit has no declared set. A message takes its currency or
+unit from a variable (`currency=$code`, `unit=$unit`), but `runic.json` declares
+no `formats.currencies` or `formats.units`, so the compiler cannot know which
+CLDR data to embed:
+
+```rmf2
+price =
+  .input {$code :string}
+  {{{$amount :currency currency=$code}}}
+```
+
+List the values the variable may take:
+
+```json
+{ "formats": { "currencies": ["EUR", "GBP", "USD"] } }
+```
+
+At run time a value outside the declared set is a formatting error in both
+runtimes.
 
 ## RCLI8201
 

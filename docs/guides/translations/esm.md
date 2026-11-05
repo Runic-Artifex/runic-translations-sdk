@@ -335,10 +335,12 @@ else for (const skipped of result.value.diagnostics) console.warn(skipped); // {
   kind differs (`content-kind-changed`), or whose markup the catalog's contract
   rejects, including markup in a message the catalog formats as plain text
   (`incompatible-markup`), is skipped and reported; the catalog's text applies.
-  A message of an added locale that needs plural, list or relative-time data
-  this runtime does not embed is skipped as `unsupported-locale-data`; the
-  generated runtime embeds the data of the catalog's own languages. The set of
-  reasons is open.
+  A message of an added locale that needs plural, list, relative-time or number
+  data this runtime does not embed is skipped as `unsupported-locale-data`; the
+  generated runtime embeds the data of the catalog's own languages, and an
+  artifact's `formatData` brings the number records of its languages. A message
+  that uses `:currency`, `:unit` or compact notation in a catalog built without
+  them is skipped as `unsupported-function`. The set of reasons is open.
 - **Locale-first.** For each locale of the requested locale's chain, the
   overlays come first, in installation order, then the catalog, and only then
   the next locale. A library's German text therefore beats an English override
@@ -355,7 +357,10 @@ else for (const skipped of result.value.diagnostics) console.warn(skipped); // {
   catalog, `pt-PT` on `pt`) uses its own plural, list and relative-time data;
   a message of another language that needs that data is skipped as
   `unsupported-locale-data`, and the fallback of such a locale follows its
-  subtags only.
+  subtags only. Numbers, dates and times of another language format with the
+  number records the artifact brings (`formatData.numbers`, which the compiler
+  writes when its messages format them), so a `de` overlay on an `en` catalog
+  writes `1.234,50 €`.
 - **Fallback copies.** A message whose content locale is not the artifact's
   own locale (a build with relaxed completeness writes such copies) counts at
   its content locale, only when an overlay adds that locale and only from an

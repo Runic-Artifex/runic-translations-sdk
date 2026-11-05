@@ -19,7 +19,10 @@ internal static class TextRelativeTimeFormatter
     /// RMF2 passes the content locale and the formatting locale, so the number is written as <c>:number</c> writes it in
     /// the same message (<c>fa-u-nu-latn</c>: Latin digits; <c>ar-EG</c> over <c>ar</c>: Arabic-Indic digits).
     /// </remarks>
-    public static string Format(decimal value, string unit, string numeric, string locale, string? numberLocale = null)
+    public static string Format(decimal value, string unit, string numeric, string locale, string? numberLocale = null) => Format(value, unit, numeric, locale, numberLocale, null);
+
+    // formatData: the message's own number records (a locale artifact's), which the number checks first.
+    internal static string Format(decimal value, string unit, string numeric, string locale, string? numberLocale, Rmf2FormatData? formatData)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(unit);
         ArgumentException.ThrowIfNullOrWhiteSpace(numeric);
@@ -41,7 +44,7 @@ internal static class TextRelativeTimeFormatter
         int patterns = offset + (value < 0 ? 0 : 6);
         string pattern = data[patterns + Array.IndexOf(Categories, category)] ?? data[patterns + 5]!;
         // As :number with its default options: grouping auto, zero to six fraction digits, halfExpand.
-        return pattern.Replace("{0}", Rmf2NumberFormats.Decimal(visible, "auto", numberLocale ?? locale), StringComparison.Ordinal);
+        return pattern.Replace("{0}", Rmf2NumberFormats.Decimal(visible, "auto", numberLocale ?? locale, formatData), StringComparison.Ordinal);
     }
 
     private static TranslationFormatException Unsupported(string locale) =>

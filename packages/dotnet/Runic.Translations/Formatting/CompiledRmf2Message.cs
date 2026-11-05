@@ -282,4 +282,20 @@ public sealed class CompiledRmf2Message
     internal CompiledRmf2Selector[] SelectorArray { get; }
     internal CompiledRmf2Variant[] VariantArray { get; }
     internal bool HasMarkup { get; set; }
+    /// <summary>
+    /// The pinned CLDR data the compiler embedded with this message: a generated catalog's currency, unit and compact data,
+    /// or a locale artifact's <c>formatData</c>; null when it has none.
+    /// </summary>
+    internal Rmf2FormatData? FormatData { get; set; }
+
+    private Rmf2FormatData? _bound;
+
+    /// <summary>
+    /// The data formatting uses: <see cref="FormatData"/>, with the catalog's currency, unit and compact data when a pack
+    /// or overlay message brings none of its own (<see cref="BindCatalogFormatData"/>), as the ESM runtime borrows them.
+    /// </summary>
+    internal Rmf2FormatData? EffectiveFormatData => _bound ?? FormatData;
+
+    /// <summary>Binds a pack or overlay message to the catalog it formats for; the last binding wins.</summary>
+    internal void BindCatalogFormatData(Rmf2FormatData? catalog) => _bound = Rmf2FormatData.Combine(FormatData, catalog);
 }

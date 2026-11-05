@@ -309,6 +309,8 @@ public static partial class TranslationCompiler
                 BidiIsolation = manifest.BidiIsolation,
                 PluralCategoryPolicies = locales.ToDictionary(locale => locale.Tag, locale => manifest.Policy(locale.Tag, ValidationMembers.PluralCategories), StringComparer.Ordinal),
                 CompletenessPolicies = locales.ToDictionary(locale => locale.Tag, locale => manifest.Policy(locale.Tag, ValidationMembers.TranslationCompleteness), StringComparer.Ordinal),
+                FormatCurrencies = manifest.FormatCurrencies.Order(StringComparer.Ordinal).ToArray(),
+                FormatUnits = manifest.FormatUnits.Order(StringComparer.Ordinal).ToArray(),
             });
 
         Rmf2ProjectEntryV5? Compile(Rmf2ProjectSourceV5 source, IReadOnlyList<Rmf2InputV5>? callerInputs)
@@ -464,6 +466,19 @@ public static partial class TranslationCompiler
             var expressions = resource.Message.Declarations.Select(d => d.Expression).Concat(resource.Message.Variants.SelectMany(v => v.Nodes).OfType<Rmf2ExpressionNodeV5>().Select(n => n.Expression)).ToArray();
             if (expressions.Any(expression => expression.Function == "runic:relative-time") && !SupportsRelativeTime(resource.ContentLocale))
                 diagnostics.Add("RTR0031", TranslationDiagnosticSeverity.Error, "The built-in relative-time registry does not support content locale '" + resource.ContentLocale + "'.", resource.SourceLocation);
+            if (expressions.Any(expression => expression.Function is Rmf2FormatDataV1.CurrencyFunction or Rmf2FormatDataV1.UnitFunction ||
+                    expression.Options.Any(option => option.Name == Rmf2FormatDataV1.NotationOption)) && !Rmf2FormatDataV1.Supports(resource.ContentLocale))
+                diagnostics.Add("RTR0031", TranslationDiagnosticSeverity.Error, "The pinned CLDR currency, unit and compact-notation data does not cover content locale '" + resource.ContentLocale + "'.", resource.SourceLocation);
+            // D055.4: a currency or unit chosen at run time comes from the set runic.json declares.
+            foreach (var expression in expressions)
+            {
+                if (expression.Function is not (Rmf2FormatDataV1.CurrencyFunction or Rmf2FormatDataV1.UnitFunction) ||
+                    !expression.Options.Any(option => option.Name == expression.Function && option.Value.Kind is "input" or "local")) continue;
+                bool currency = expression.Function == Rmf2FormatDataV1.CurrencyFunction;
+                if ((currency ? manifest.FormatCurrencies : manifest.FormatUnits).Count == 0)
+                    diagnostics.Add("RTR0102", TranslationDiagnosticSeverity.Error, "A " + (currency ? "currency" : "unit") + " chosen at run time must come from a declared set: list the " +
+                        (currency ? "currencies" : "units") + " it may take in runic.json formats." + (currency ? "currencies" : "units") + ".", resource.SourceLocation);
+            }
             // A list value formats with the list patterns even without an explicit :runic:list.
             if (expressions.Any(expression => expression.Function == "runic:list" || expression.ValueType == "list") && !TranslationCapabilityRegistry.SupportsList(resource.ContentLocale))
                 diagnostics.Add("RTR0031", TranslationDiagnosticSeverity.Error, "The built-in list registry does not support content locale '" + resource.ContentLocale + "'.", resource.SourceLocation);

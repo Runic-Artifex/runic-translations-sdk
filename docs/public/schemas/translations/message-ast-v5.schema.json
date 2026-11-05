@@ -191,7 +191,9 @@
             "runic:uuid",
             "runic:boolean",
             "runic:relative-time",
-            "runic:list"
+            "runic:list",
+            "currency",
+            "unit"
           ]
         },
         "options": {

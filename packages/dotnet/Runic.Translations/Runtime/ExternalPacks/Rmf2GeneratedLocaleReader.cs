@@ -25,6 +25,7 @@ internal sealed class Rmf2GeneratedLocaleReader
     private readonly HashSet<string> _strings = new(StringComparer.Ordinal);
     private readonly HashSet<string>.AlternateLookup<ReadOnlySpan<char>> _lookup;
     private readonly TranslationPackLimits _limits = new();
+    private Rmf2FormatData? _formatData;
     private readonly List<CompiledRmf2Input> _inputs = [];
     private readonly List<CompiledRmf2Declaration> _declarations = [];
     private readonly List<CompiledRmf2Selector> _selectors = [];
@@ -36,10 +37,11 @@ internal sealed class Rmf2GeneratedLocaleReader
 
     private Rmf2GeneratedLocaleReader() => _lookup = _strings.GetAlternateLookup<ReadOnlySpan<char>>();
 
-    internal static CompiledTranslationValue[] Read(ReadOnlySpan<byte> content)
+    // formatData: the CLDR currency, unit and compact data the compiler embedded for these messages, if any.
+    internal static CompiledTranslationValue[] Read(ReadOnlySpan<byte> content, Rmf2FormatData? formatData = null)
     {
         var reader = new Utf8JsonReader(content, new JsonReaderOptions { MaxDepth = TranslationPackLimits.DefaultMaximumDepth });
-        try { return new Rmf2GeneratedLocaleReader().ReadValues(ref reader); }
+        try { return new Rmf2GeneratedLocaleReader { _formatData = formatData }.ReadValues(ref reader); }
         catch (TranslationPackException) { throw; }
         catch (JsonException exception) { throw Error("Generated locale data is malformed JSON near byte " + exception.BytePositionInLine + "."); }
         // Utf8JsonReader reports a token of another type, and CopyString invalid UTF-8, as InvalidOperationException.
@@ -77,7 +79,7 @@ internal sealed class Rmf2GeneratedLocaleReader
         }
         if (contentLocale is null) throw Missing("contentLocale");
         if (ast is not { } value) throw Missing("ast");
-        return new CompiledRmf2Message(TrustedRmf2.Compiler, value.Inputs, value.Declarations, value.Selectors, value.Variants, contentLocale);
+        return new CompiledRmf2Message(TrustedRmf2.Compiler, value.Inputs, value.Declarations, value.Selectors, value.Variants, contentLocale) { FormatData = _formatData };
     }
 
     private readonly record struct Ast(CompiledRmf2Input[] Inputs, CompiledRmf2Declaration[] Declarations,

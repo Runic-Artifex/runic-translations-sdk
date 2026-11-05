@@ -261,8 +261,12 @@ internal sealed class Rmf2V1CorpusTests
     // Re-pinned for merging T1c (#142) with main (#145, #146, #148), in both digests.
     // Re-pinned for merging T1c (with main, TB #131) into the web overlays, with .NET overlay precedence, in both digests.
     // Re-pinned for merging T1c/T4b (#143) with T1c (#142) and main (#145, #146, #148), in both digests.
-    private const string EncodedOutputDigest = "b04be97e2a35fcaa6cc98ec18398006294591235fee3034eb1f821dfc2bdcd94";
-    private const string HiddenEncodedOutputDigest = "6cec539bdb153386f9a1e0c988c705d9f6ed5edd4558ea6c403190ab825a3c96";
+    // Re-pinned for TK (currency, units, compact notation): the ESM runtime validates the new functions' options, accepts
+    // namespaced options and an artifact's formatData, and carries stubs for the formatters it leaves out, in both digests (ESM only), after merging T1c (#142) and the web overlays (#143).
+    // Re-pinned for the TK review: an artifact's number records (formatData.numbers), the strict format data rules and the
+    // marked function and option entries that a catalog without the formatters leaves out, in both digests (ESM only).
+    private const string EncodedOutputDigest = "b724b53e615443aa589b22104bbbf8027b9fdff2edd355e62ae3222fc7da3497";
+    private const string HiddenEncodedOutputDigest = "bcdac246e170d76ee8c735c2b5faa0fbda30e8d0383ebc070813e6c861cef1ad";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]
