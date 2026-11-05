@@ -35,6 +35,23 @@ public static partial class TranslationCompiler
         CancellationToken cancellationToken = default)
         => CompileRmf2ProjectV5(project, messages, options, cancellationToken);
 
+    /// <summary>
+    /// Reads runic.json exactly as a compile reads it, without the message sources: a UTF-8 BOM is skipped, and a
+    /// duplicate member or any other error is a diagnostic in <paramref name="diagnostics"/>, never an exception. For
+    /// tools (the language server, the editor) that need a member such as <c>pseudoLocales</c> without compiling.
+    /// </summary>
+    /// <returns>The manifest as far as it could be read; null when runic.json is not a JSON object.</returns>
+    internal static ManifestModel? ReadProjectManifest(TranslationSource project, out IReadOnlyList<TranslationDiagnostic> diagnostics, TranslationCompilerOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        options ??= new TranslationCompilerOptions();
+        var bag = new DiagnosticBag();
+        ParsedJson parsed = StrictJsonParser.Parse(project, bag, options, default);
+        ManifestModel? manifest = parsed.Root is null ? null : ReadMf2Project(parsed, bag, options);
+        diagnostics = Array.AsReadOnly(bag.ToSortedArray());
+        return manifest;
+    }
+
     private static ManifestModel? ReadMf2Project(ParsedJson parsed, DiagnosticBag diagnostics, TranslationCompilerOptions options)
     {
         JsonValue root = parsed.Root!;

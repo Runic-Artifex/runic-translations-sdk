@@ -54,6 +54,20 @@ export interface EditorLocaleDescription {
   cardinal: string[];
   ordinal: string[];
   message?: EditorNotice;
+  /** The script-level locale for a region tag whose CLDR data is in another script: `zh-TW` → `zh-Hant`. */
+  suggested?: string;
+  /** The open catalog's `runtime.unsupportedLocale` policy; absent when the catalog does not compile. */
+  unsupportedLocale?: "exact" | "parentsThenDefault" | "default";
+  /** The requested tags the runtime would resolve to the typed locale under that policy. */
+  matches?: EditorLocaleMatches;
+  /** The requested tags the runtime would resolve to the suggested locale. */
+  suggestedMatches?: EditorLocaleMatches;
+}
+
+/** Requested tags that reach a locale: the first few (the tag itself, then the shortest) and how many in all. */
+export interface EditorLocaleMatches {
+  tags: string[];
+  count: number;
 }
 
 export interface EditorMessageEntry {

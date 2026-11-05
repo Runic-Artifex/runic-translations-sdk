@@ -21,6 +21,7 @@
     EditorExternalFileChange,
     EditorLocaleCatalog,
     EditorLocaleDescription,
+    EditorLocaleMatches,
     EditorMessageOperation,
     EditorMutationPreview,
     EditorMutationRequest,
@@ -219,6 +220,12 @@
   // What the typed new locale means in CLDR (canonical form, data ID, direction, plural and ordinal categories).
   let mutationLocaleDescription = $state.raw<EditorLocaleDescription>();
   let describeLocaleTimer: ReturnType<typeof setTimeout> | undefined;
+  // "With unsupportedLocale "exact", zh-Hant serves requests for: zh-Hant." (the tags the runtime resolves to it).
+  function localeMatchesText(locale: string, matches: EditorLocaleMatches, policy: string): string {
+    const more = matches.count - matches.tags.length;
+    const tags = matches.tags.join(", ") + (more > 0 ? " " + ui.text("ui_locale_matches_more", { count: more }) : "");
+    return ui.text("ui_locale_matches", { locale, policy, tags });
+  }
   let describeLocaleGeneration = 0;
   let mutationSourceKey = $state("");
   let mutationTargetKey = $state("");
@@ -1882,7 +1889,8 @@
       installSnapshot(result.snapshot, true);
       if (buildRows(result.snapshot, {}).some((row) => row.key === preferredKey)) selectedKey = preferredKey;
       mutationDialogOpen = false;
-      operationMessage = notice("ui_feedback_workspace_updated");
+      // A committed change can carry a warning, such as review entries a locale removal could not drop.
+      operationMessage = result.message ?? notice("ui_feedback_workspace_updated");
       configureEditor();
     } catch (error) {
       mutationError = errorNotice(error);
@@ -2832,8 +2840,17 @@
           {#if mutationLocaleDescription?.valid && mutationLocaleDescription.canonical}
             <p class="text-muted-foreground">{ui.text("ui_locale_cldr_summary", { locale: mutationLocaleDescription.canonical, data: mutationLocaleDescription.cldrLocale ?? "root", direction: mutationLocaleDescription.direction === "rtl" ? ui.text("ui_locale_direction_rtl") : ui.text("ui_locale_direction_ltr") })}</p>
             {#if mutationLocaleDescription.dataId && mutationLocaleDescription.dataId !== mutationLocaleDescription.canonical}
-              <p class="flex flex-wrap items-center gap-2"><span>{ui.text("ui_locale_cldr_canonical", { locale: mutationLocaleDescription.dataId })}</span>
-                <Button variant="outline" size="xs" onclick={() => { mutationLocale = mutationLocaleDescription?.dataId ?? mutationLocale; invalidateMutationPreview(); describeMutationLocale(); }}>{ui.text("ui_locale_cldr_use", { locale: mutationLocaleDescription.dataId })}</Button></p>
+              <p class="text-muted-foreground">{ui.text("ui_locale_cldr_canonical", { locale: mutationLocaleDescription.dataId })}</p>
+            {/if}
+            {#if mutationLocaleDescription.matches && mutationLocaleDescription.unsupportedLocale}
+              <p data-locale-matches={mutationLocaleDescription.canonical}>{localeMatchesText(mutationLocaleDescription.canonical, mutationLocaleDescription.matches, mutationLocaleDescription.unsupportedLocale)}</p>
+            {/if}
+            {#if mutationLocaleDescription.suggested}
+              <p class="flex flex-wrap items-center gap-2"><span>{ui.text("ui_locale_script_suggestion", { locale: mutationLocaleDescription.suggested, typed: mutationLocaleDescription.canonical })}</span>
+                <Button variant="outline" size="xs" onclick={() => { mutationLocale = mutationLocaleDescription?.suggested ?? mutationLocale; invalidateMutationPreview(); describeMutationLocale(); }}>{ui.text("ui_locale_cldr_use", { locale: mutationLocaleDescription.suggested })}</Button></p>
+              {#if mutationLocaleDescription.suggestedMatches && mutationLocaleDescription.unsupportedLocale}
+                <p class="text-muted-foreground" data-locale-matches={mutationLocaleDescription.suggested}>{localeMatchesText(mutationLocaleDescription.suggested, mutationLocaleDescription.suggestedMatches, mutationLocaleDescription.unsupportedLocale)}</p>
+              {/if}
             {/if}
             <p>{ui.text("ui_locale_plural_categories", { categories: mutationLocaleDescription.cardinal.join(", ") || "other" })} · {ui.text("ui_locale_ordinal_categories", { categories: mutationLocaleDescription.ordinal.join(", ") || "other" })}</p>
             <p class="text-muted-foreground">{ui.text("ui_locale_categories_seeded")}</p>

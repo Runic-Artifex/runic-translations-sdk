@@ -84,6 +84,62 @@ internal sealed class Rmf2PreviewLspTests
         Assert.True(ast["error"] is null && ast["result"]?["ast"] is not null, ast.ToJsonString());
     }
 
+    [Test, DisplayName("LSP reads runic.json as the compiler does: a UTF-8 BOM keeps the pseudo-locales, a duplicate member is the compiler's diagnostic")]
+    public void ManifestWithBomOrDuplicateMember()
+    {
+        // A BOM, as Visual Studio saves runic.json: runic/message still lists en-XA, the preview generates it, and
+        // runic/documentInfo still names the catalog.
+        using (TemporaryDirectory temporary = new())
+        {
+            File.WriteAllBytes(temporary.Resolve("runic.json"), [0xEF, 0xBB, 0xBF, .. System.Text.Encoding.UTF8.GetBytes(Project)]);
+            (Session session, string uri) = Open(temporary);
+            using (session)
+            {
+                JsonNode message = Message(session, uri);
+                Assert.True(message["error"] is null, message.ToJsonString());
+                Assert.Equal("en-XA", string.Join(',', message["result"]!["pseudoLocales"]!.AsArray().Select(item => item!.GetValue<string>())));
+                JsonNode pseudo = Render(session, uri, "en-XA", timeZone: "utc");
+                Assert.True(pseudo["error"] is null && Text(pseudo).StartsWith('['), pseudo.ToJsonString());
+                JsonNode info = session.Request("runic/documentInfo", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = uri } });
+                Assert.Equal("app", info["result"]?["catalog"]?.GetValue<string>());
+                Assert.Equal("en", info["result"]?["baseLocale"]?.GetValue<string>());
+            }
+        }
+
+        // A duplicate member: runic/message answers (no -32602), and an en-XA preview fails with the compiler's diagnostic.
+        using (TemporaryDirectory temporary = new())
+        {
+            File.WriteAllText(temporary.Resolve("runic.json"), Project.Replace("\"catalog\":\"app\"", "\"catalog\":\"app\",\"catalog\":\"app\"", StringComparison.Ordinal));
+            (Session session, string uri) = Open(temporary);
+            using (session)
+            {
+                JsonNode message = Message(session, uri);
+                Assert.True(message["error"] is null && message["result"] is JsonObject, message.ToJsonString());
+                JsonNode pseudo = Render(session, uri, "en-XA", timeZone: "utc");
+                Assert.Contains("Duplicate JSON property 'catalog'", pseudo["error"]?["message"]?.GetValue<string>() ?? pseudo.ToJsonString());
+                JsonNode info = session.Request("runic/documentInfo", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = uri } });
+                Assert.True(info["error"] is null, info.ToJsonString());
+            }
+        }
+
+        static (Session Session, string Uri) Open(TemporaryDirectory temporary)
+        {
+            File.WriteAllText(temporary.Resolve("en.rmf2"), English);
+            File.WriteAllText(temporary.Resolve("de.rmf2"), German);
+            string uri = new Uri(temporary.Resolve("en.rmf2")).AbsoluteUri;
+            Session session = new(temporary.Path);
+            session.Request("initialize", new JsonObject { ["rootUri"] = new Uri(temporary.Path).AbsoluteUri, ["capabilities"] = new JsonObject() });
+            session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = uri, ["version"] = 1, ["text"] = English } });
+            return (session, uri);
+        }
+
+        static JsonNode Message(Session session, string uri) => session.Request("runic/message", new JsonObject
+        {
+            ["textDocument"] = new JsonObject { ["uri"] = uri },
+            ["position"] = new JsonObject { ["line"] = 0, ["character"] = 1 },
+        });
+    }
+
     [Test, DisplayName("LSP preview renders :currency, :unit and compact notation in the requested locale")]
     public void CurrencyUnitAndCompact()
     {

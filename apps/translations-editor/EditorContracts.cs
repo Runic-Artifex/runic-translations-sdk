@@ -21,9 +21,20 @@ internal sealed record EditorLayer(string Name, int Priority);
 internal sealed record EditorLocaleCatalog(string CldrVersion, IReadOnlyList<string> Locales);
 
 // A typed locale tag: canonical form, CLDR data ID through likely subtags (zh-TW -> zh-Hant-TW), the CLDR locale its
-// data comes from (null: none, only root), text direction, and the plural and ordinal categories it needs.
+// data comes from (null: none, only root), text direction, and the plural and ordinal categories it needs. Suggested is
+// the script-level locale for a region tag (zh-TW -> zh-Hant); with a compiled catalog, UnsupportedLocale is its policy
+// and Matches/SuggestedMatches the requested tags the runtime would resolve to the typed and the suggested locale.
 internal sealed record EditorLocaleDescription(bool Valid, string? Canonical, string? DataId, string? CldrLocale,
-    string Direction, IReadOnlyList<string> Cardinal, IReadOnlyList<string> Ordinal, EditorNotice? Message);
+    string Direction, IReadOnlyList<string> Cardinal, IReadOnlyList<string> Ordinal, EditorNotice? Message)
+{
+    public string? Suggested { get; init; }
+    public string? UnsupportedLocale { get; init; }
+    public EditorLocaleMatches? Matches { get; init; }
+    public EditorLocaleMatches? SuggestedMatches { get; init; }
+}
+
+// Requested tags that resolve to a locale: the first few (the tag itself, then the shortest) and how many in all.
+internal sealed record EditorLocaleMatches(IReadOnlyList<string> Tags, int Count);
 
 internal sealed record EditorCatalogSummary(
     string Id,
@@ -345,6 +356,7 @@ internal sealed record PreparedInterchangeDocument(
 [JsonSerializable(typeof(EditorMessagePreview))]
 [JsonSerializable(typeof(EditorLocaleCatalog))]
 [JsonSerializable(typeof(EditorLocaleDescription))]
+[JsonSerializable(typeof(EditorLocaleMatches))]
 [JsonSerializable(typeof(EditorReviewSnapshot))]
 [JsonSerializable(typeof(EditorReviewSaveRequest))]
 [JsonSerializable(typeof(EditorReviewOperationResult))]

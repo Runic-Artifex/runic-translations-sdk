@@ -4071,6 +4071,16 @@ ui {
   }
 }
 ui {
+  backend {
+    locale_review_invalid = {$locale} wurde nicht entfernt: Die Review-Datei {$path} kann nicht gelesen werden. Reparieren oder löschen Sie sie und entfernen Sie die Sprache dann erneut.
+  }
+}
+ui {
+  backend {
+    locale_review_not_updated = {$locale} wurde entfernt, aber die Review-Zustände stehen noch in {$path}. Entfernen Sie sie dort, bevor Sie {$locale} erneut hinzufügen, sonst gelten sie für die neuen Übersetzungen.
+  }
+}
+ui {
   preview_formatting = Vorschau-Formatierung
 }
 ui {
@@ -4128,7 +4138,7 @@ ui {
   locale_direction_rtl = von rechts nach links
 }
 ui {
-  locale_cldr_canonical = CLDR nennt diese Sprache {$locale} (wahrscheinliche Subtags).
+  locale_cldr_canonical = CLDR formatiert diese Locale mit den Daten von {$locale} (Likely Subtags).
 }
 ui {
   locale_cldr_use = {$locale} verwenden
@@ -4141,4 +4151,18 @@ ui {
 }
 ui {
   locale_categories_seeded = Kopierte Startwerte erhalten für jede Pluralkategorie, die die Sprache braucht, eine Variante als Kopie der *-Variante.
+}
+ui {
+  locale_script_suggestion = {$locale} ist die Locale auf Schriftebene: Die Laufzeit-Aushandlung ordnet {$typed} und die anderen Regionen mit dieser Schrift ihr zu. Behalten Sie {$typed}, wenn nur diese Region gemeint ist.
+}
+ui {
+  locale_matches = Mit unsupportedLocale "{$policy}" bedient {$locale} Anfragen für: {$tags}.
+}
+ui {
+  locale_matches_more =
+    .input {$count :integer select=plural}
+    .match $count
+    one {{und eine weitere}}
+    * {{und {$count} weitere}}
+
 }

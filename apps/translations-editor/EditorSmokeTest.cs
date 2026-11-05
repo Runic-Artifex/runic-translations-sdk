@@ -3,6 +3,7 @@ using Runic.Translations.Compiler;
 using ReactiveUI;
 using ReactiveUI.Primitives;
 using ReactiveUI.Primitives.Signals;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Runic.Translations.Internal;
@@ -121,8 +122,38 @@ internal static class EditorSmokeTest
             Require(text.StartsWith('[') && (pseudo == "ar-XB" ? text.Contains('\u202E') : !text.Contains("Total", StringComparison.Ordinal)),
                 $"The {pseudo} preview wasn't the generated pseudo-locale: " + generated.RenderedJson);
         }
+        // runic.json as the compiler reads it: with a UTF-8 BOM (as Visual Studio saves it) the pseudo-locales still
+        // preview; a duplicate member is the compiler's diagnostic, not an exception.
+        string manifestPath = Path.Combine(project, "runic.json");
+        string manifestText = await File.ReadAllTextAsync(manifestPath).ConfigureAwait(false);
+        await File.WriteAllBytesAsync(manifestPath, [0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes(manifestText)]).ConfigureAwait(false);
+        foreach (string pseudo in new[] { "en-XA", "ar-XB" })
+        {
+            var bom = await session.PreviewMessageAsync(german.Path, german.Content, pseudo, "price", samples, null, "utc").ConfigureAwait(false);
+            Require(bom.Success && bom.RenderedJson?.Contains('[') == true, $"The {pseudo} preview failed on a runic.json with a BOM: " + string.Join("; ", bom.Diagnostics.Select(item => item.Id + " " + item.Message)));
+        }
+        Require((await session.LoadAsync().ConfigureAwait(false)).Catalog?.PseudoLocales?.SequenceEqual(["ar-XB"]) == true, "A runic.json with a BOM lost its pseudo-locales.");
+        await File.WriteAllTextAsync(manifestPath, manifestText.Replace("\"catalog\":\"formatting\"", "\"catalog\":\"formatting\",\"catalog\":\"formatting\"", StringComparison.Ordinal)).ConfigureAwait(false);
+        var duplicate = await session.PreviewMessageAsync(german.Path, german.Content, "en-XA", "price", samples, null, "utc").ConfigureAwait(false);
+        Require(!duplicate.Success && duplicate.Diagnostics.Any(item => item.Message.Contains("Duplicate JSON property 'catalog'", StringComparison.Ordinal)) &&
+            duplicate.Diagnostics.All(item => item.Id != "PREVIEW"), "A duplicate runic.json member wasn't the compiler's diagnostic: " + string.Join("; ", duplicate.Diagnostics.Select(item => item.Id + " " + item.Message)));
+        await File.WriteAllTextAsync(manifestPath, manifestText).ConfigureAwait(false);
+
+        // The picker suggests the script-level locale runtime negotiation produces (zh-TW → zh-Hant), and lists which
+        // requested tags reach the typed and the suggested locale under the catalog's unsupportedLocale policy.
         EditorLocaleDescription chinese = EditorLocales.Describe("zh-TW"), russian = EditorLocales.Describe("ru"), invalid = EditorLocales.Describe("not a tag");
-        Require(chinese.Valid && chinese.Canonical == "zh-TW" && chinese.DataId == "zh-Hant-TW" && chinese.Cardinal.SequenceEqual(["other"]), "zh-TW wasn't described through likely subtags.");
+        Require(chinese.Valid && chinese.Canonical == "zh-TW" && chinese.DataId == "zh-Hant-TW" && chinese.Suggested == "zh-Hant" && chinese.Cardinal.SequenceEqual(["other"]), "zh-TW wasn't described through likely subtags.");
+        Require(EditorLocales.Describe("sr-ME").Suggested == "sr-Latn" && EditorLocales.Describe("de-CH").Suggested is null && EditorLocales.Describe("zh-Hant-HK").Suggested is null,
+            "The script-level suggestion differs.");
+        EditorLocaleDescription negotiated = await session.DescribeLocaleAsync("zh-TW").ConfigureAwait(false);
+        Require(negotiated is { UnsupportedLocale: "parentsThenDefault", Matches.Tags: ["zh-TW", ..], SuggestedMatches: { } parents } &&
+            parents.Tags.Contains("zh-TW") && parents.Tags.Contains("zh-HK") && parents.Tags.Contains("zh-Hant") && !parents.Tags.Contains("zh"),
+            "The requested tags under parentsThenDefault differ: " + JsonSerializer.Serialize(negotiated.SuggestedMatches?.Tags));
+        await File.WriteAllTextAsync(manifestPath, manifestText.Replace("\"pseudoLocales\"", "\"runtime\":{\"unsupportedLocale\":\"exact\"},\"pseudoLocales\"", StringComparison.Ordinal)).ConfigureAwait(false);
+        EditorLocaleDescription exact = await session.DescribeLocaleAsync("zh-TW").ConfigureAwait(false);
+        Require(exact is { UnsupportedLocale: "exact", Matches.Tags: ["zh-TW"], SuggestedMatches.Tags: ["zh-Hant"] },
+            "Under exact, a locale must serve only its own tag: " + JsonSerializer.Serialize(exact.Matches?.Tags) + " " + JsonSerializer.Serialize(exact.SuggestedMatches?.Tags));
+        await File.WriteAllTextAsync(manifestPath, manifestText).ConfigureAwait(false);
         Require(russian.Cardinal.SequenceEqual(["one", "few", "many", "other"]) && russian.Direction == "ltr" && EditorLocales.Describe("fa").Direction == "rtl",
             "Plural categories or direction came from somewhere other than the SDK's CLDR data.");
         Require(!invalid.Valid && invalid.Message?.Code == "ui_backend_locale_invalid", "An invalid tag wasn't refused.");
@@ -163,6 +194,12 @@ internal static class EditorSmokeTest
         Require(await File.ReadAllTextAsync(Path.Combine(project, "runic.json")).ConfigureAwait(false) == manifest, "Removing ru didn't restore runic.json byte for byte.");
         string review = await File.ReadAllTextAsync(Path.Combine(project, "locales.review.json")).ConfigureAwait(false);
         Require(!review.Contains("\"ru\"", StringComparison.Ordinal) && review.Contains("\"de\"", StringComparison.Ordinal), "The removed locale's review entries stayed: " + review);
+
+        // A corrupt review file refuses the removal with a notice that names it, instead of a raw failure.
+        await File.WriteAllTextAsync(Path.Combine(project, "locales.review.json"), "{ not json").ConfigureAwait(false);
+        EditorMutationPreview corrupt = session.PreviewMutation(remove with { Locale = "de" });
+        Require(!corrupt.Ok && corrupt.Message is { Code: "ui_backend_locale_review_invalid", Detail: not null } notice &&
+            notice.Args.Any(argument => argument is { Name: "path", Value: "locales.review.json" }), "A corrupt review file wasn't a clear notice: " + corrupt.Message);
     }
 
     private static async Task MalformedManifestJourneyAsync(string root)
