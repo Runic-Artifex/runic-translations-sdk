@@ -2,25 +2,46 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.IO;
+using Runic.Translations.Compiler;
+using Runic.Translations.Tooling;
 
 namespace Runic.Translations.Tool;
 
-/// <summary>
-/// Supplies a message's review state for hover. The language server has no source yet: the SDK
-/// review file (<c>&lt;catalog&gt;.review.json</c>, T3c) is read through Tooling once it exists, and
-/// its per-unit fingerprint decides whether an approval is stale. Until then
-/// <see cref="Rmf2LanguageServer"/> uses <see cref="None"/> and hover shows no review line.
-/// </summary>
+/// <summary>Supplies a message's review state for hover.</summary>
 internal interface IRmf2ReviewStateSource
 {
-    /// <summary>A short state such as <c>approved</c>, <c>needs-review</c> or <c>stale</c>, or null when unknown.</summary>
-    string? Describe(string projectDirectory, string key, string locale);
+    /// <summary>A short state such as <c>approved</c> or <c>needs-review, stale …</c>, or null when unknown.</summary>
+    string? Describe(string projectDirectory, Rmf2ProjectCompilation compilation, string key, string locale);
 
     internal static IRmf2ReviewStateSource None { get; } = new NoReviewState();
 
     private sealed class NoReviewState : IRmf2ReviewStateSource
     {
-        public string? Describe(string projectDirectory, string key, string locale) => null;
+        public string? Describe(string projectDirectory, Rmf2ProjectCompilation compilation, string key, string locale) => null;
+    }
+}
+
+/// <summary>
+/// Review state from the SDK review file (<c>&lt;catalog&gt;.review.json</c> beside runic.json) through Tooling: the
+/// recorded state, and whether the source changed since it was recorded (the per-unit fingerprint, RTR0090).
+/// </summary>
+internal sealed class Rmf2ReviewFileState : IRmf2ReviewStateSource
+{
+    public string? Describe(string projectDirectory, Rmf2ProjectCompilation compilation, string key, string locale)
+    {
+        if (compilation.Project is not { } project || locale == project.DefaultLocale || !TranslationReviewFile.IsFileName(project.Id)) return null;
+        TranslationInterchangeReview? review;
+        try { review = TranslationReviewFile.Read(TranslationReviewFile.PathFor(Path.Combine(projectDirectory, "runic.json"), project.Id), project.Id); }
+        catch (Exception exception) when (exception is TranslationInterchangeException or IOException or UnauthorizedAccessException)
+        {
+            return "unknown (the review file cannot be read: " + exception.Message + ")";
+        }
+        TranslationInterchangeReviewEntry? entry = review?.Entries.FirstOrDefault(item => item.Key == key && item.Locale == locale);
+        if (entry is null) return null;
+        string state = TranslationReviewFile.StateText(entry.State);
+        return TranslationReviewFile.IsStale(entry, TranslationInterchange.ComputeSourceFingerprints(compilation))
+            ? state + ", stale: the source changed since it was recorded (RTR0090)" : state;
     }
 }
 
