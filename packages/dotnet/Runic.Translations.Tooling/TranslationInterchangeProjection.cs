@@ -49,6 +49,9 @@ internal sealed record TranslationInterchangeTargetUnit(string Key, string Text,
 {
     internal IReadOnlyList<TranslationInterchangePiece>? Pieces { get; init; }
     internal TextSourceLocation? Location { get; init; }
+
+    /// <summary>The translation's own <c>@maxLength</c>, which can lower the base limit for this locale.</summary>
+    internal int? MaxLength { get; init; }
 }
 
 internal sealed record TranslationInterchangeLocale(
@@ -65,6 +68,9 @@ internal sealed record TranslationInterchangeUnitMetadata(
 {
     /// <summary>The documented parameters, each <c>$name - text</c>, shown in the readable description note.</summary>
     internal IReadOnlyList<string> Parameters { get; init; } = Array.Empty<string>();
+
+    /// <summary>The message's <c>@maxLength</c> in Unicode code points, exported as an XLIFF size restriction.</summary>
+    internal int? MaxLength { get; init; }
 }
 
 internal sealed record TranslationInterchangePlaceholder(string Name, string Type, string Format);
@@ -121,6 +127,7 @@ internal static class TranslationInterchangeProjectionAdapter
                             .Where(static property => property.StartsWith("param ", StringComparison.Ordinal))
                             .Select(static property => property["param ".Length..].Trim())
                             .ToArray(),
+                        MaxLength = TranslationCompiler.MaxLengthV5(source.Properties),
                     },
                     document)
                 {
@@ -145,6 +152,7 @@ internal static class TranslationInterchangeProjectionAdapter
                         {
                             Pieces = pieces,
                             Location = resource.SourceLocation,
+                            MaxLength = TranslationCompiler.MaxLengthV5(resource.Properties),
                         };
                     })
                     .ToArray()))

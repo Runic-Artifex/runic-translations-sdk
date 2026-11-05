@@ -81,13 +81,25 @@ an empty pattern. `#` or `=` inside a body is ordinary text.
 Comments and `@param $name - description` / `@example {JSON}` attach to the next
 entry or group without an intervening blank line. Parameters and example input
 types are checked; unknown properties remain in the resource model with a warning.
+`@maxLength N` limits a message's text to N characters (Unicode code points after
+NFC, without placeholder values) in every locale; a translation may lower it with
+its own. `validate` warns about a longer text (`RTR0098`), and XLIFF export writes
+the same per-locale limit as `slr:sizeRestriction` for translation tools:
+
+```text
+@maxLength 12
+toolbar.save = Save
+```
 The raw source, segment paths, comments, properties, spans, and byte map are public
 through `Rmf2ResourceReader`. `Read` recovers the resource outline;
 `Analyze` adds execution-profile message diagnostics.
 
 The base locale defines caller inputs and functional slots. Translations may omit
 unused inputs, select on them differently, reorder content, and add decorative
-markup. They cannot introduce inputs or change functional slot kinds. Source
+markup. An input the base displays and no variant of a translation displays is
+reported as a warning (`RTR0096`), as are plural keys a locale never selects and
+categories it needs that fall to `*` (`RTR0094`, `RTR0095`) and booleans printed
+as text (`RTR0097`); see `validation` in [diagnostics](diagnostics.md). They cannot introduce inputs or change functional slot kinds. Source
 selector trees do not participate in the RMF2 caller fingerprint. Integer/number
 selectors default to cardinal selection; explicit `select=ordinal` and
 `select=exact` remain available. Numeric exact keys are tested before a variant

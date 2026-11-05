@@ -16,9 +16,11 @@ internal sealed class GeneratorReferenceTests
           "catalog": "notes",
           "code": { "namespace": "Example.Notes", "className": "NotesText"FALLBACK },
           "baseLocale": "en",
-          "locales": [ "en", "de" ]
+          "locales": [ "en", "de" ],
+          "validation": { "formattedBooleans": "allow" }
         }
         """;
+    // `saved` formats every argument type, a boolean included (RTR0097 is allowed for it), to cover reference transport.
     private const string English = """
         # Shown on the toolbar.
         title = Notes

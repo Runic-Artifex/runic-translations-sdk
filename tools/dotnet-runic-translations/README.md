@@ -98,6 +98,9 @@ locale, or only for the `--locale` ones (repeatable). Each message is one unit w
   expression, so a placeholder round-trips losslessly.
 - The message's comment and its `@param` lines are a readable `<note category="description">`. The
   `runic:unit` and `runic:review` notes beside it are machine data (Base64 JSON) for the import.
+- A message with `@maxLength N` has `slr:sizeRestriction="N"` (the XLIFF Size and Length Restriction module,
+  profile `xliff:codepoints` with NFC), so a TMS can stop a longer translation; placeholders are not counted.
+  Import ignores the attribute, and `validate` checks the length (`RTR0098`).
 - A message with selectors, declarations or markup is exported as `translate="no"` with its MF2 source and
   reported as loss (`XLIFF21-STRUCTURED-MESSAGE`); translate it in the `.rmf2` sources or the editor.
 - An existing translation is in state `translated`, a missing one has no target. With a review file (below),

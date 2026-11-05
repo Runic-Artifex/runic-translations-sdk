@@ -16,6 +16,43 @@ internal sealed class ManifestModel
     internal TranslationPolicy Completeness { get; set; } = TranslationPolicy.Error;
     internal TranslationPolicy ExtraKeys { get; set; } = TranslationPolicy.Error;
     internal TranslationPolicy EmptyValues { get; set; } = TranslationPolicy.Allow;
+    // The QA checks of 0.9 (RTR0094-RTR0098) are warnings unless runic.json says otherwise.
+    internal TranslationPolicy PluralCategories { get; set; } = TranslationPolicy.Warning;
+    internal TranslationPolicy InputParity { get; set; } = TranslationPolicy.Warning;
+    internal TranslationPolicy FormattedBooleans { get; set; } = TranslationPolicy.Warning;
+    internal TranslationPolicy MaxLength { get; set; } = TranslationPolicy.Warning;
+
+    private Dictionary<string, Dictionary<string, TranslationPolicy>>? _localePolicies;
+
+    /// <summary>The policy of a <c>validation</c> member for a locale: the locale entry's own value, else the project's.</summary>
+    /// <remarks>Called per message and locale, so the locale overrides are indexed once, on first use after the manifest is read.</remarks>
+    internal TranslationPolicy Policy(string locale, string member)
+    {
+        if (_localePolicies is null)
+        {
+            var policies = new Dictionary<string, Dictionary<string, TranslationPolicy>>(System.StringComparer.OrdinalIgnoreCase);
+            foreach (LocaleModel model in Locales)
+            {
+                if (model.Validation.Count == 0) continue;
+                if (!policies.TryGetValue(model.Tag, out Dictionary<string, TranslationPolicy>? members)) policies[model.Tag] = members = new(System.StringComparer.Ordinal);
+                foreach (KeyValuePair<string, TranslationPolicy> pair in model.Validation) members.TryAdd(pair.Key, pair.Value);
+            }
+            _localePolicies = policies;
+        }
+        if (_localePolicies.TryGetValue(locale, out Dictionary<string, TranslationPolicy>? own) && own.TryGetValue(member, out TranslationPolicy value))
+            return value;
+        return member switch
+        {
+            ValidationMembers.TranslationCompleteness => Completeness,
+            ValidationMembers.ExtraLocaleKeys => ExtraKeys,
+            ValidationMembers.EmptyValues => EmptyValues,
+            ValidationMembers.PluralCategories => PluralCategories,
+            ValidationMembers.InputParity => InputParity,
+            ValidationMembers.FormattedBooleans => FormattedBooleans,
+            ValidationMembers.MaxLength => MaxLength,
+            _ => throw new System.ArgumentOutOfRangeException(nameof(member), member, "Unknown validation member."),
+        };
+    }
     internal TranslationUnsupportedLocalePolicy UnsupportedLocale { get; set; } = TranslationUnsupportedLocalePolicy.ParentsThenDefault;
     internal TranslationMissingKeyPolicy MissingKey { get; set; } = TranslationMissingKeyPolicy.Throw;
     internal ByteSpan DefaultLocaleSpan { get; set; }
@@ -29,6 +66,21 @@ internal sealed class LocaleModel
     internal string? Fallback { get; }
     internal ByteSpan Span { get; }
     internal ByteSpan FallbackSpan { get; }
+    /// <summary>The locale entry's own <c>validation</c> policies, by member name; they override the project's.</summary>
+    internal Dictionary<string, TranslationPolicy> Validation { get; } = new(System.StringComparer.Ordinal);
+}
+
+/// <summary>The members of a <c>validation</c> object, in runic.json and on a locale entry.</summary>
+internal static class ValidationMembers
+{
+    internal const string TranslationCompleteness = "translationCompleteness";
+    internal const string ExtraLocaleKeys = "extraLocaleKeys";
+    internal const string EmptyValues = "emptyValues";
+    internal const string PluralCategories = "pluralCategories";
+    internal const string InputParity = "inputParity";
+    internal const string FormattedBooleans = "formattedBooleans";
+    internal const string MaxLength = "maxLength";
+    internal static readonly string[] All = { TranslationCompleteness, ExtraLocaleKeys, EmptyValues, PluralCategories, InputParity, FormattedBooleans, MaxLength };
 }
 
 internal sealed class PlaceholderModel
