@@ -4071,6 +4071,16 @@ ui {
   }
 }
 ui {
+  backend {
+    locale_review_invalid = {$locale} was not removed: the review file {$path} cannot be read. Repair or delete it, then remove the language again.
+  }
+}
+ui {
+  backend {
+    locale_review_not_updated = {$locale} was removed, but its review states are still in {$path}. Remove them there before adding {$locale} again, or they apply to its new translations.
+  }
+}
+ui {
   preview_formatting = Preview formatting
 }
 ui {
@@ -4128,7 +4138,7 @@ ui {
   locale_direction_rtl = right to left
 }
 ui {
-  locale_cldr_canonical = CLDR names this locale {$locale} (likely subtags).
+  locale_cldr_canonical = CLDR formats this locale with the data of {$locale} (likely subtags).
 }
 ui {
   locale_cldr_use = Use {$locale}
@@ -4247,4 +4257,16 @@ ui {
   confirm {
     apply_catalog_import = Discard unsaved document drafts, repair text, and workflow/terminology changes to apply this import?
   }
+  locale_script_suggestion = {$locale} is the script-level locale: runtime negotiation resolves {$typed} and the other regions that write this script to it. Keep {$typed} if you want this region only.
+}
+ui {
+  locale_matches = With unsupportedLocale "{$policy}", {$locale} serves requests for: {$tags}.
+}
+ui {
+  locale_matches_more =
+    .input {$count :integer select=plural}
+    .match $count
+    one {{and one more}}
+    * {{and {$count} more}}
+
 }

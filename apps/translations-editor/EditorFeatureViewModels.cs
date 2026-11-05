@@ -116,7 +116,7 @@ public sealed class EditorWorkspaceViewModel : EditorFeatureViewModel
         UndoCommand = CreateCommand(async argument => await Session.UndoAsync(), (result, value) => { LastUndo = result; UndoResultJson = value; });
         RedoCommand = CreateCommand(async argument => await Session.RedoAsync(), (result, value) => { LastRedo = result; RedoResultJson = value; });
         ListLocalesCommand = CreateCommand(_ => Task.FromResult(EditorLocales.Catalog), (_, value) => ListLocalesResultJson = value);
-        DescribeLocaleCommand = CreateCommand(argument => Task.FromResult(EditorLocales.Describe(Optional(argument, "tag"))), (_, value) => DescribeLocaleResultJson = value);
+        DescribeLocaleCommand = CreateCommand(async argument => await Session.DescribeLocaleAsync(Optional(argument, "tag")), (_, value) => DescribeLocaleResultJson = value);
     }
 
     public string LoadResultJson { get => _loadResultJson; private set => this.RaiseAndSetIfChanged(ref _loadResultJson, value); }

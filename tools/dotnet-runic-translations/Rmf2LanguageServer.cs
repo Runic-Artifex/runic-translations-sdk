@@ -561,10 +561,11 @@ internal sealed class Rmf2LanguageServer
         try
         {
             byte[] bytes = TryGetBuffer(manifestPath, out _, out Buffer? manifestBuffer) ? Utf8.GetBytes(manifestBuffer.Text) : File.ReadAllBytes(manifestPath);
-            if (JsonNode.Parse(bytes) is JsonObject manifest)
+            // As the compiler reads runic.json: a BOM is skipped, and a duplicate member is a diagnostic, not an exception.
+            if (TranslationCompiler.ReadProjectManifest(new TranslationSource(manifestPath, bytes), out _) is { } manifest)
             {
-                if (manifest["catalog"] is JsonValue catalog && catalog.TryGetValue(out string? catalogId)) result["catalog"] = catalogId;
-                if (manifest["baseLocale"] is JsonValue baseLocale && baseLocale.TryGetValue(out string? baseTag)) result["baseLocale"] = baseTag;
+                if (manifest.Id.Length != 0) result["catalog"] = manifest.Id;
+                if (manifest.DefaultLocale.Length != 0) result["baseLocale"] = manifest.DefaultLocale;
             }
             if (!configuration)
             {
@@ -1365,18 +1366,11 @@ internal sealed class Rmf2LanguageServer
     private static string? OptionalArgument(JsonArray arguments, int index) =>
         arguments.Count > index && arguments[index] is JsonValue value && value.TryGetValue(out string? text) && !string.IsNullOrWhiteSpace(text) ? text : null;
 
-    // The pseudo-locales runic.json configures, in their canonical spelling; none when runic.json does not parse.
-    internal static IReadOnlyList<string> ConfiguredPseudoLocales(Rmf2Workspace workspace)
-    {
-        try
-        {
-            // A runic.json that is not an object has no pseudo-locales; validation reports it.
-            if (JsonNode.Parse(workspace.ProjectSource.GetUtf8Bytes()) is not JsonObject root || root["pseudoLocales"] is not JsonArray configured) return [];
-            return Rmf2PseudoLocalesV5.Supported.Where(tag => configured.Any(item => item is JsonValue value && value.TryGetValue(out string? text) &&
-                string.Equals(text, tag, StringComparison.OrdinalIgnoreCase))).ToArray();
-        }
-        catch (System.Text.Json.JsonException) { return []; }
-    }
+    // The pseudo-locales runic.json configures, in their canonical spelling, read as the compiler reads runic.json (a
+    // UTF-8 BOM is skipped; a duplicate member is the compiler's diagnostic, which validation publishes); none when
+    // runic.json is not an object.
+    internal static IReadOnlyList<string> ConfiguredPseudoLocales(Rmf2Workspace workspace) =>
+        TranslationCompiler.ReadProjectManifest(workspace.ProjectSource, out _)?.PseudoLocales.Select(static pseudo => pseudo.Tag).ToArray() ?? [];
 
     // runic.markReviewed: records the entry's state again for the source on disk, as runic-translations review mark
     // does, and republishes the diagnostics. It refuses while the base message's or the translation's file has unsaved

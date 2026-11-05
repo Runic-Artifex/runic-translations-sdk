@@ -38,6 +38,8 @@ internal static class TranslationManifestReader
     internal static TranslationManifestLayout Read(ReadOnlyMemory<byte> utf8, string projectDirectory)
     {
         JsonDocument document;
+        // A UTF-8 BOM (Visual Studio saves runic.json with one) is skipped, as the compiler skips it.
+        if (utf8.Span.StartsWith((ReadOnlySpan<byte>)[0xEF, 0xBB, 0xBF])) utf8 = utf8[3..];
         try { document = JsonDocument.Parse(utf8); }
         catch (JsonException) { return Invalid(InvalidJson); }
         using (document)

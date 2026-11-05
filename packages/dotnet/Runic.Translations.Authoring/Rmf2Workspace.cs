@@ -36,7 +36,7 @@ internal sealed class Rmf2Workspace
         _cancellationToken = cancellationToken; cancellationToken.ThrowIfCancellationRequested();
         _root = Path.GetFullPath(root); _project = project;
         _projectDirectory = Path.GetDirectoryName(Path.GetFullPath(_project.Path, _root))!;
-        using var config = JsonDocument.Parse(_project.GetUtf8Bytes());
+        using var config = JsonDocument.Parse(Utf8Bom.Skip(_project.GetUtf8Bytes()));
         // An unsaved or hand-edited runic.json may be malformed. Construction
         // stays tolerant so Validate() can report the compiler's located
         // diagnostics (for example "Missing required member 'namespace'")
@@ -269,7 +269,7 @@ internal sealed class Rmf2Workspace
             .Where(item => logicalPath.Count <= item.mount.Prefix.Length && item.mount.Prefix.Take(logicalPath.Count).SequenceEqual(logicalPath, StringComparer.Ordinal)).Select(item => item.index).ToHashSet();
         if (_hasMounts && renamedMounts.Count > 0)
         {
-            byte[] bytes = _project.GetUtf8Bytes(); var reader = new Utf8JsonReader(bytes);
+            byte[] bytes = _project.GetUtf8Bytes(); int bom = Utf8Bom.Length(bytes); var reader = new Utf8JsonReader(bytes.AsSpan(bom));
             var edits = new List<(int, int, byte[])>(); int mountIndex = -1, segment = -1; bool roots = false, ns = false;
             while (reader.Read())
             {
@@ -281,7 +281,7 @@ internal sealed class Rmf2Workspace
                 {
                     segment++;
                     if (renamedMounts.Contains(mountIndex) && segment == logicalPath.Count - 1)
-                        edits.Add(((int)reader.TokenStartIndex, (int)(reader.BytesConsumed - reader.TokenStartIndex), JsonSerializer.SerializeToUtf8Bytes(newName)));
+                        edits.Add((bom + (int)reader.TokenStartIndex, (int)(reader.BytesConsumed - reader.TokenStartIndex), JsonSerializer.SerializeToUtf8Bytes(newName)));
                 }
             }
             changes[_project.Path] = Rmf2ResourceWriter.Replace(bytes, edits);
@@ -423,7 +423,7 @@ internal sealed class Rmf2Workspace
     private static JsonObject ProjectObject(byte[] bytes)
     {
         JsonNode? node;
-        try { node = JsonNode.Parse(bytes); }
+        try { node = JsonNode.Parse(Utf8Bom.Skip(bytes).Span); }
         catch (JsonException exception) { throw new TranslationAuthoringException("runic.json is malformed.", exception); }
         return node as JsonObject ?? throw new TranslationAuthoringException("Runic project root must be an object.");
     }
@@ -446,14 +446,14 @@ internal sealed class Rmf2Workspace
             changed = true;
         }
         if (!changed) return;
-        var reader = new Utf8JsonReader(bytes); bool markup = false;
+        int bom = Utf8Bom.Length(bytes); var reader = new Utf8JsonReader(bytes.AsSpan(bom)); bool markup = false;
         while (reader.Read())
         {
             if (reader.TokenType != JsonTokenType.PropertyName) continue;
             if (reader.CurrentDepth == 1) markup = reader.ValueTextEquals("markup");
             if (!markup || reader.CurrentDepth != 2 || !reader.ValueTextEquals("slots")) continue;
             reader.Read(); int start = (int)reader.TokenStartIndex; reader.Skip();
-            changes[_project.Path] = Rmf2ResourceWriter.Replace(bytes, [(start, (int)reader.BytesConsumed - start, Utf8.GetBytes(slots.ToJsonString()))]);
+            changes[_project.Path] = Rmf2ResourceWriter.Replace(bytes, [(bom + start, (int)reader.BytesConsumed - start, Utf8.GetBytes(slots.ToJsonString()))]);
             return;
         }
     }

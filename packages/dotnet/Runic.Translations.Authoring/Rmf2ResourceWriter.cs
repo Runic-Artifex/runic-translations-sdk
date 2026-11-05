@@ -117,7 +117,7 @@ internal static class Rmf2ResourceWriter
         var functional = new HashSet<string>(FunctionalNames, StringComparer.Ordinal);
         if (project is not null)
         {
-            using var config = JsonDocument.Parse(project.GetUtf8Bytes());
+            using var config = JsonDocument.Parse(Utf8Bom.Skip(project.GetUtf8Bytes()));
             if (config.RootElement.ValueKind == JsonValueKind.Object && config.RootElement.TryGetProperty("markup", out var markup) &&
                 markup.ValueKind == JsonValueKind.Object && markup.TryGetProperty("aliases", out var aliases) && aliases.ValueKind == JsonValueKind.Object)
                 foreach (var alias in aliases.EnumerateObject())

@@ -164,7 +164,10 @@ internal static class TranslationLocaleChanges
     /// The declared locale that the locales falling back to <paramref name="tag"/> fall back to instead; null refuses
     /// to remove a locale that another locale falls back to.
     /// </param>
-    /// <exception cref="TranslationToolingUsageException">The project or the tag is invalid, or the locale cannot be removed.</exception>
+    /// <exception cref="TranslationToolingUsageException">
+    /// The project or the tag is invalid, or the locale cannot be removed: another locale falls back to it and there is
+    /// no replacement, or the replacement's fallback chain would come back to a locale on it.
+    /// </exception>
     /// <exception cref="TranslationInterchangeException">The review file cannot be read.</exception>
     internal static TranslationLocalePlan PlanRemove(TranslationProjectSources sources, string tag, string? replacementFallback = null)
     {
@@ -177,16 +180,22 @@ internal static class TranslationLocaleChanges
             throw new TranslationToolingUsageException($"locale '{locale}' is not declared ({string.Join(", ", declared)}).");
         string[] dependents = (manifest.Locales?.Value.Items ?? []).Where(static item => item.Kind == JsonKind.Object)
             .Where(item => item.Property("fallback")?.Value.Text is { } value && TranslationCompiler.TryCanonicalizeLocale(value, out string canonical) && string.Equals(canonical, locale, StringComparison.OrdinalIgnoreCase))
-            .Select(static item => item.Property("tag")?.Value.Text ?? "?").ToArray();
+            .Select(static item => item.Property("tag")?.Value.Text).OfType<string>().ToArray();
         string? replacement = null;
         if (replacementFallback is not null)
         {
             string requested = Canonical(replacementFallback, "the replacement fallback");
             replacement = declared.FirstOrDefault(item => string.Equals(item, requested, StringComparison.OrdinalIgnoreCase))
                 ?? throw new TranslationToolingUsageException($"the replacement fallback {requested} is not a declared locale ({string.Join(", ", declared)}).");
-            if (string.Equals(replacement, locale, StringComparison.OrdinalIgnoreCase) ||
-                dependents.Any(dependent => TranslationCompiler.TryCanonicalizeLocale(dependent, out string canonical) && string.Equals(canonical, replacement, StringComparison.OrdinalIgnoreCase)))
-                throw new TranslationToolingUsageException($"the replacement fallback {replacement} falls back to '{locale}' itself; choose another locale.");
+            if (string.Equals(replacement, locale, StringComparison.OrdinalIgnoreCase))
+                throw new TranslationToolingUsageException($"the replacement fallback {replacement} is the locale being removed; choose another locale.");
+            // The whole chain after the edit: the dependents fall back to the replacement, and the removed locale is gone.
+            Dictionary<string, string> fallbacks = Fallbacks(manifest);
+            fallbacks.Remove(locale);
+            foreach (string dependent in dependents)
+                if (TranslationCompiler.TryCanonicalizeLocale(dependent, out string canonical)) fallbacks[canonical] = replacement;
+            if (Cycle(fallbacks, replacement) is { } cycle)
+                throw new TranslationToolingUsageException($"the replacement fallback {replacement} would form a fallback cycle ({cycle}); choose another locale.");
         }
         else if (dependents.Length != 0)
             throw new TranslationToolingUsageException($"locale '{locale}' is the fallback of {string.Join(", ", dependents)}; remove or change those first.");
@@ -264,7 +273,10 @@ internal static class TranslationLocaleChanges
     /// <c>"tag"</c> entry becomes <c>{ "tag": …, "fallback": … }</c>, and an object entry of only those two members
     /// becomes the plain tag again when the fallback is the base locale and the other entries are plain tags.
     /// </summary>
-    /// <exception cref="TranslationToolingUsageException">The project or a locale is invalid, or the fallback would form a cycle.</exception>
+    /// <exception cref="TranslationToolingUsageException">
+    /// The project or a locale is invalid, or the fallback would form a cycle: the chain from <paramref name="tag"/>
+    /// through <paramref name="fallback"/> and the declared fallbacks comes back to a locale on it.
+    /// </exception>
     internal static TranslationLocalePlan PlanSetFallback(TranslationProjectSources sources, string tag, string fallback)
     {
         Manifest manifest = ReadManifest(sources.Project);
@@ -279,6 +291,11 @@ internal static class TranslationLocaleChanges
             throw new TranslationToolingUsageException($"'{locale}' is the base locale and has no fallback.");
         if (string.Equals(locale, target, StringComparison.Ordinal))
             throw new TranslationToolingUsageException($"locale '{locale}' cannot fall back to itself.");
+
+        Dictionary<string, string> fallbacks = Fallbacks(manifest);
+        fallbacks[locale] = target;
+        if (Cycle(fallbacks, locale) is { } cycle)
+            throw new TranslationToolingUsageException($"locale '{locale}' cannot fall back to {target}: that forms a fallback cycle ({cycle}).");
 
         string updated = SetFallback(manifest, declared, locale, target);
         var project = new TranslationSource(manifest.Source.Path, Encoding.UTF8.GetBytes(updated));
@@ -341,6 +358,31 @@ internal static class TranslationLocaleChanges
         var found = compilation.Locales.ToList();
         if (!found.Contains(manifest.BaseLocale, StringComparer.OrdinalIgnoreCase)) found.Insert(0, manifest.BaseLocale);
         return found.OrderBy(locale => locale == manifest.BaseLocale ? 0 : 1).ThenBy(static locale => locale, StringComparer.Ordinal).ToList();
+    }
+
+    // The declared fallbacks of runic.json's object entries by canonical tag; a plain tag falls back to the base locale.
+    private static Dictionary<string, string> Fallbacks(Manifest manifest)
+    {
+        var fallbacks = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (JsonValue item in manifest.Locales is { Value.Kind: JsonKind.Array } locales ? locales.Value.Items : [])
+            if (item.Kind == JsonKind.Object && item.Property("tag")?.Value.Text is { } tag && item.Property("fallback")?.Value.Text is { } fallback &&
+                TranslationCompiler.TryCanonicalizeLocale(tag, out string from) && TranslationCompiler.TryCanonicalizeLocale(fallback, out string to))
+                fallbacks.TryAdd(from, to);
+        return fallbacks;
+    }
+
+    // The fallback chain from start when it comes back to a locale already on it ("a → b → a"), or null when it ends.
+    private static string? Cycle(Dictionary<string, string> fallbacks, string start)
+    {
+        var chain = new List<string> { start };
+        for (string current = start; fallbacks.TryGetValue(current, out string? next);)
+        {
+            chain.Add(next);
+            if (chain.FindIndex(item => string.Equals(item, next, StringComparison.OrdinalIgnoreCase)) is var first && first < chain.Count - 1)
+                return string.Join(" → ", chain.Skip(first));
+            current = next;
+        }
+        return null;
     }
 
     private static string Canonical(string value, string what) =>

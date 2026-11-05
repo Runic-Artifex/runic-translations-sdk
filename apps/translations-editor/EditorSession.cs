@@ -35,6 +35,16 @@ internal sealed class EditorSession : IDisposable
         }
     }
 
+    /// <summary>A typed locale tag, with the requested tags that would reach it in the open catalog (<see cref="EditorLocales.Describe"/>).</summary>
+    public async Task<EditorLocaleDescription> DescribeLocaleAsync(string? tag, CancellationToken cancellationToken = default)
+    {
+        EditorLocaleContext? context;
+        try { context = await WithWorkspaceAsync(static (workspace, token) => workspace.LocaleContextAsync(token), cancellationToken).ConfigureAwait(false); }
+        // Without a readable catalog the description has no matches; the workspace view reports why.
+        catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException or TranslationAuthoringException) { context = null; }
+        return EditorLocales.Describe(tag, context);
+    }
+
     public Task<EditorExternalChanges> CheckExternalChangesAsync(CancellationToken cancellationToken = default) =>
         WithWorkspaceAsync(static (workspace, token) => workspace.CheckExternalChangesAsync(token), cancellationToken);
 
@@ -94,19 +104,25 @@ internal sealed class EditorSession : IDisposable
             _preparedDestructiveMutation = null;
             InvalidatePreparedImports();
             TranslationWorkspaceTransaction.Commit(plan);
+            EditorNotice? warning = null;
             // Commit is the point of no return.  Reconcile state from this exact plan
             // before any filesystem read can observe an external writer.
             _history.Record(null);
             if (request.Kind == "remove-locale" && request.Locale is { } removed)
             {
-                // The review entries of a removed locale go too; the locale is gone whether or not this succeeds.
+                // The review entries of a removed locale go too. The locale is gone whether or not this succeeds, so a
+                // failure is a warning on the successful result: left behind, the entries would apply to the rows of
+                // the same locale added again later.
                 try { _workspace.CompleteLocaleRemoval(removed.Trim()); }
-                catch (Exception exception) when (exception is Runic.Translations.Tooling.TranslationInterchangeException or IOException or UnauthorizedAccessException) { }
+                catch (Exception exception) when (exception is Runic.Translations.Tooling.TranslationInterchangeException or IOException or UnauthorizedAccessException)
+                {
+                    warning = EditorNotice.Create("ui_backend_locale_review_not_updated", ("locale", removed.Trim()), ("path", _workspace.ReviewDisplayPath() ?? "review.json")) with { Detail = exception.Message };
+                }
             }
             try
             {
                 WorkspaceSnapshot snapshot = await _workspace.LoadAsync(CancellationToken.None).ConfigureAwait(false);
-                return Success("mutated", Decorate(snapshot));
+                return Success("mutated", Decorate(snapshot)) with { Message = warning };
             }
             catch (Exception exception) when (IsReloadFailure(exception))
             {
