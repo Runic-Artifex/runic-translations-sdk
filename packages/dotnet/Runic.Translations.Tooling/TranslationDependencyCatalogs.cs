@@ -163,7 +163,7 @@ internal static class TranslationDependencyCatalogs
         }
         var conflicts = new Dictionary<string, string>(StringComparer.Ordinal);
         catalogs.AddRange(DiscoverNuGet(directory, warnings, cancellationToken));
-        catalogs.AddRange(DiscoverNpm(directory, warnings, cancellationToken, conflicts));
+        catalogs.AddRange(DiscoverNpm(directory, warnings, conflicts, cancellationToken));
         catalogs.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.Catalog, right.Catalog) is var order and not 0 ? order : left.Origin.CompareTo(right.Origin));
 
         var targets = new List<TranslationOverrideTarget>();
@@ -330,8 +330,8 @@ internal static class TranslationDependencyCatalogs
     /// the Vite plugin's <c>dependencies: "auto"</c> finds them; none without a package.json.
     /// </summary>
     /// <param name="conflicts">Receives, per catalog ID, why the Vite plugin rejects it: two versions of it, or two packages that ship it.</param>
-    internal static IReadOnlyList<TranslationDependencyCatalog> DiscoverNpm(string directory, List<string> warnings, CancellationToken cancellationToken = default,
-        Dictionary<string, string>? conflicts = null)
+    internal static IReadOnlyList<TranslationDependencyCatalog> DiscoverNpm(string directory, List<string> warnings, Dictionary<string, string>? conflicts = null,
+        CancellationToken cancellationToken = default)
     {
         string? root = FindApplicationRoot(directory);
         var result = new List<TranslationDependencyCatalog>();
