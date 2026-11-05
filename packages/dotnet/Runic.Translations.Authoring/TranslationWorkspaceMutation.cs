@@ -134,7 +134,7 @@ internal static class TranslationWorkspaceMutation
             (File.GetAttributes(configPath) & FileAttributes.ReparsePoint) != 0) throw Error("The workspace configuration crosses a symbolic link or reparse point.");
         byte[] configBytes = ReadBounded(configPath);
         JsonObject config;
-        try { config = JsonNode.Parse(configBytes) as JsonObject ?? throw Error("runic.json must contain an object."); }
+        try { config = JsonNode.Parse(Utf8Bom.Skip(configBytes).Span) as JsonObject ?? throw Error("runic.json must contain an object."); }
         catch (JsonException exception) { throw new TranslationAuthoringException("runic.json is malformed.", exception); }
         string actualCatalog = config["catalog"]?.GetValue<string>() ?? string.Empty;
         if (!string.Equals(actualCatalog, catalogId, StringComparison.Ordinal)) throw Error($"Catalog '{catalogId}' was not found.");

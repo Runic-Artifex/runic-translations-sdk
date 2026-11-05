@@ -12,6 +12,8 @@ export interface EditorWorkspaceState {
   readonly recoverTransactionResultJson: string;
   readonly undoResultJson: string;
   readonly redoResultJson: string;
+  readonly listLocalesResultJson: string;
+  readonly describeLocaleResultJson: string;
   readonly isLoadExecuting: boolean;
   readonly isCheckExternalChangesExecuting: boolean;
   readonly isPickWorkspaceExecuting: boolean;
@@ -20,6 +22,8 @@ export interface EditorWorkspaceState {
   readonly isRecoverTransactionExecuting: boolean;
   readonly isUndoExecuting: boolean;
   readonly isRedoExecuting: boolean;
+  readonly isListLocalesExecuting: boolean;
+  readonly isDescribeLocaleExecuting: boolean;
 }
 
 export interface EditorWorkspaceLoadOperation extends BridgeOperation<void> {}
@@ -30,6 +34,8 @@ export interface EditorWorkspaceApplyMutationOperation extends BridgeOperation<v
 export interface EditorWorkspaceRecoverTransactionOperation extends BridgeOperation<void> {}
 export interface EditorWorkspaceUndoOperation extends BridgeOperation<void> {}
 export interface EditorWorkspaceRedoOperation extends BridgeOperation<void> {}
+export interface EditorWorkspaceListLocalesOperation extends BridgeOperation<void> {}
+export interface EditorWorkspaceDescribeLocaleOperation extends BridgeOperation<void> {}
 
 /**
  * A connected EditorWorkspace ViewModel. Dispose it when its presentation ends.
@@ -53,6 +59,12 @@ export interface EditorWorkspaceClient extends ViewClient<EditorWorkspaceState> 
   canUndo(input: string): Promise<boolean>;
   redo(input: string): Promise<EditorWorkspaceState>;
   canRedo(input: string): Promise<boolean>;
+  /** The CLDR locales the add-language picker suggests. */
+  listLocales(input: string): Promise<EditorWorkspaceState>;
+  canListLocales(input: string): Promise<boolean>;
+  /** What a typed locale tag means: canonical form, CLDR locale, direction, plural and ordinal categories. */
+  describeLocale(input: string): Promise<EditorWorkspaceState>;
+  canDescribeLocale(input: string): Promise<boolean>;
   /**
    * Starts `Load` as an operation that the page can observe, cancel and recover. `options.requestId` names it;
    * the default is a random id. A start with a request id that .NET already admitted returns that operation.
@@ -109,6 +121,20 @@ export interface EditorWorkspaceClient extends ViewClient<EditorWorkspaceState> 
   startRedo(input: string, options?: BridgeOperationStartOptions): Promise<EditorWorkspaceRedoOperation>;
   /** Returns the `Redo` operation started with `requestId`, for example after the page reloaded. */
   recoverRedo(requestId: string): Promise<EditorWorkspaceRedoOperation>;
+  /**
+   * Starts `ListLocales` as an operation that the page can observe, cancel and recover. `options.requestId` names it;
+   * the default is a random id. A start with a request id that .NET already admitted returns that operation.
+   */
+  startListLocales(input: string, options?: BridgeOperationStartOptions): Promise<EditorWorkspaceListLocalesOperation>;
+  /** Returns the `ListLocales` operation started with `requestId`, for example after the page reloaded. */
+  recoverListLocales(requestId: string): Promise<EditorWorkspaceListLocalesOperation>;
+  /**
+   * Starts `DescribeLocale` as an operation that the page can observe, cancel and recover. `options.requestId` names it;
+   * the default is a random id. A start with a request id that .NET already admitted returns that operation.
+   */
+  startDescribeLocale(input: string, options?: BridgeOperationStartOptions): Promise<EditorWorkspaceDescribeLocaleOperation>;
+  /** Returns the `DescribeLocale` operation started with `requestId`, for example after the page reloaded. */
+  recoverDescribeLocale(requestId: string): Promise<EditorWorkspaceDescribeLocaleOperation>;
 }
 
 export interface EditorWorkspacePageReference {
@@ -127,6 +153,8 @@ const members: BridgeMemberDecoders<EditorWorkspaceState> = {
   recoverTransactionResultJson: (wire: unknown) => bridgeWire.string(wire),
   undoResultJson: (wire: unknown) => bridgeWire.string(wire),
   redoResultJson: (wire: unknown) => bridgeWire.string(wire),
+  listLocalesResultJson: (wire: unknown) => bridgeWire.string(wire),
+  describeLocaleResultJson: (wire: unknown) => bridgeWire.string(wire),
   isLoadExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isCheckExternalChangesExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isPickWorkspaceExecuting: (wire: unknown) => bridgeWire.boolean(wire),
@@ -135,8 +163,10 @@ const members: BridgeMemberDecoders<EditorWorkspaceState> = {
   isRecoverTransactionExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isUndoExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isRedoExecuting: (wire: unknown) => bridgeWire.boolean(wire),
+  isListLocalesExecuting: (wire: unknown) => bridgeWire.boolean(wire),
+  isDescribeLocaleExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorWorkspaceViewModel:AD00A5B4BE47AA9A45169F855E1B9CE367A214E3C59A59057362787C22ABD400";
+const bridgeContract = "Runic.Translations.Editor.EditorWorkspaceViewModel:65CB9514BADD2A468BEE5C0905089A11636FF7E3BA9F1133DE5231364EDD720E";
 const loadOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const checkExternalChangesOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const pickWorkspaceOperation: BridgeOperationCodec<void> = { decode: value => undefined };
@@ -145,6 +175,8 @@ const applyMutationOperation: BridgeOperationCodec<void> = { decode: value => un
 const recoverTransactionOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const undoOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const redoOperation: BridgeOperationCodec<void> = { decode: value => undefined };
+const listLocalesOperation: BridgeOperationCodec<void> = { decode: value => undefined };
+const describeLocaleOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 
 /**
  * Connects a EditorWorkspace client. It waits up to `options.timeout` milliseconds (default 5000) for the
@@ -153,7 +185,7 @@ const redoOperation: BridgeOperationCodec<void> = { decode: value => undefined }
  */
 export function connectEditorWorkspace(options?: BridgeConnectOptions): Promise<EditorWorkspaceClient & globalThis.Disposable> { return connectEditorWorkspaceAt("editorWorkspace", options); }
 async function connectEditorWorkspaceAt(route: string, options?: BridgeConnectOptions): Promise<EditorWorkspaceClient & globalThis.Disposable> {
-  const view = await connectView<EditorWorkspaceState>({ contract: bridgeContract, route, members, texts: ["loadResultJson", "checkExternalChangesResultJson", "pickWorkspaceResultJson", "previewMutationResultJson", "applyMutationResultJson", "recoverTransactionResultJson", "undoResultJson", "redoResultJson"], operations: bridgeOperations, timeout: options?.timeout, signal: options?.signal });
+  const view = await connectView<EditorWorkspaceState>({ contract: bridgeContract, route, members, texts: ["loadResultJson", "checkExternalChangesResultJson", "pickWorkspaceResultJson", "previewMutationResultJson", "applyMutationResultJson", "recoverTransactionResultJson", "undoResultJson", "redoResultJson", "listLocalesResultJson", "describeLocaleResultJson"], operations: bridgeOperations, timeout: options?.timeout, signal: options?.signal });
   return disposable<EditorWorkspaceClient>({
     get snapshot() { return view.snapshot; },
     subscribe: view.subscribe,
@@ -174,6 +206,10 @@ async function connectEditorWorkspaceAt(route: string, options?: BridgeConnectOp
     async canUndo(input) { return view.can("undo", input); },
     async redo(input) { return view.command("redo", input); },
     async canRedo(input) { return view.can("redo", input); },
+    async listLocales(input) { return view.command("listLocales", input); },
+    async canListLocales(input) { return view.can("listLocales", input); },
+    async describeLocale(input) { return view.command("describeLocale", input); },
+    async canDescribeLocale(input) { return view.can("describeLocale", input); },
     startLoad(input: string, options?: BridgeOperationStartOptions) { return view.start("load", options?.requestId ?? globalThis.crypto.randomUUID(), input, loadOperation); },
     recoverLoad(requestId: string) { return view.recover("load", requestId, loadOperation); },
     startCheckExternalChanges(input: string, options?: BridgeOperationStartOptions) { return view.start("checkExternalChanges", options?.requestId ?? globalThis.crypto.randomUUID(), input, checkExternalChangesOperation); },
@@ -190,5 +226,9 @@ async function connectEditorWorkspaceAt(route: string, options?: BridgeConnectOp
     recoverUndo(requestId: string) { return view.recover("undo", requestId, undoOperation); },
     startRedo(input: string, options?: BridgeOperationStartOptions) { return view.start("redo", options?.requestId ?? globalThis.crypto.randomUUID(), input, redoOperation); },
     recoverRedo(requestId: string) { return view.recover("redo", requestId, redoOperation); },
+    startListLocales(input: string, options?: BridgeOperationStartOptions) { return view.start("listLocales", options?.requestId ?? globalThis.crypto.randomUUID(), input, listLocalesOperation); },
+    recoverListLocales(requestId: string) { return view.recover("listLocales", requestId, listLocalesOperation); },
+    startDescribeLocale(input: string, options?: BridgeOperationStartOptions) { return view.start("describeLocale", options?.requestId ?? globalThis.crypto.randomUUID(), input, describeLocaleOperation); },
+    recoverDescribeLocale(requestId: string) { return view.recover("describeLocale", requestId, describeLocaleOperation); },
   });
 }

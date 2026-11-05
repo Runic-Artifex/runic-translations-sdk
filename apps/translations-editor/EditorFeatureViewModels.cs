@@ -101,6 +101,8 @@ public sealed class EditorWorkspaceViewModel : EditorFeatureViewModel
     private EditorOperationResult? _lastUndo;
     private string _redoResultJson = "null";
     private EditorOperationResult? _lastRedo;
+    private string _listLocalesResultJson = "null";
+    private string _describeLocaleResultJson = "null";
 
     internal EditorWorkspaceViewModel(EditorSession session, EditorViewModel owner, ISequencer scheduler) : base(session, owner, scheduler)
     {
@@ -113,6 +115,8 @@ public sealed class EditorWorkspaceViewModel : EditorFeatureViewModel
         RecoverTransactionCommand = CreateCommand(async argument => await Session.RecoverTransactionAsync(new EditorRecoveryRequest(Required(argument, "mode"))), (result, value) => { LastRecoverTransaction = result; RecoverTransactionResultJson = value; });
         UndoCommand = CreateCommand(async argument => await Session.UndoAsync(), (result, value) => { LastUndo = result; UndoResultJson = value; });
         RedoCommand = CreateCommand(async argument => await Session.RedoAsync(), (result, value) => { LastRedo = result; RedoResultJson = value; });
+        ListLocalesCommand = CreateCommand(_ => Task.FromResult(EditorLocales.Catalog), (_, value) => ListLocalesResultJson = value);
+        DescribeLocaleCommand = CreateCommand(async argument => await Session.DescribeLocaleAsync(Optional(argument, "tag")), (_, value) => DescribeLocaleResultJson = value);
     }
 
     public string LoadResultJson { get => _loadResultJson; private set => this.RaiseAndSetIfChanged(ref _loadResultJson, value); }
@@ -140,6 +144,13 @@ public sealed class EditorWorkspaceViewModel : EditorFeatureViewModel
     public ReactiveCommand<string, RxVoid> RecoverTransactionCommand { get; }
     public ReactiveCommand<string, RxVoid> UndoCommand { get; }
     public ReactiveCommand<string, RxVoid> RedoCommand { get; }
+
+    public string ListLocalesResultJson { get => _listLocalesResultJson; private set => this.RaiseAndSetIfChanged(ref _listLocalesResultJson, value); }
+    public string DescribeLocaleResultJson { get => _describeLocaleResultJson; private set => this.RaiseAndSetIfChanged(ref _describeLocaleResultJson, value); }
+    /// <summary>The CLDR locales the add-language picker suggests.</summary>
+    public ReactiveCommand<string, RxVoid> ListLocalesCommand { get; }
+    /// <summary>What a typed locale tag means: canonical form, CLDR locale, direction, plural and ordinal categories.</summary>
+    public ReactiveCommand<string, RxVoid> DescribeLocaleCommand { get; }
 }
 
 /// <summary>DocumentTools operations exposed as individual generated View commands.</summary>
@@ -157,7 +168,7 @@ public sealed class EditorDocumentToolsViewModel : EditorFeatureViewModel
         ApplyAuthoringOperationCommand = CreateCommand(async argument => await Session.ApplyAuthoringOperationAsync(Required(argument, "path"), Required(argument, "content"), Required(argument, "key"), Required(argument, "expectedRevision"), Parse<EditorMessageOperation>(argument.GetProperty("operation"))), (_, value) => ApplyAuthoringOperationResultJson = value);
         ApplyDiagnosticFixCommand = CreateCommand(async argument => await Session.ApplyDiagnosticFixAsync(Required(argument, "path"), Required(argument, "content"), Parse<Runic.Translations.Compiler.Rmf2DiagnosticQuickFix>(argument.GetProperty("fix"))), (_, value) => ApplyDiagnosticFixResultJson = value);
         TransformDocumentCommand = CreateCommand(async argument => await Session.TransformDocumentAsync(Required(argument, "path"), Required(argument, "content"), Optional(argument, "key"), Optional(argument, "value")), (result, value) => { LastTransformDocument = result; TransformDocumentResultJson = value; });
-        PreviewMessageCommand = CreateCommand(async argument => await Session.PreviewMessageAsync(Required(argument, "path"), Required(argument, "content"), Required(argument, "locale"), Required(argument, "key"), Optional(argument, "samplesJson")), (result, value) => { LastPreviewMessage = result; PreviewMessageResultJson = value; });
+        PreviewMessageCommand = CreateCommand(async argument => await Session.PreviewMessageAsync(Required(argument, "path"), Required(argument, "content"), Required(argument, "locale"), Required(argument, "key"), Optional(argument, "samplesJson"), Optional(argument, "requestedLocale"), Optional(argument, "timeZone")), (result, value) => { LastPreviewMessage = result; PreviewMessageResultJson = value; });
     }
 
     public string ApplyAuthoringOperationResultJson { get => _applyAuthoringOperationResultJson; private set => this.RaiseAndSetIfChanged(ref _applyAuthoringOperationResultJson, value); }
@@ -206,6 +217,8 @@ public sealed class EditorInterchangeViewModel : EditorFeatureViewModel
     private EditorReviewImportPlan? _lastPreviewReviewJsonImport;
     private string _applyReviewJsonImportResultJson = "null";
     private EditorReviewOperationResult? _lastApplyReviewJsonImport;
+    private string _previewCatalogImportResultJson = "null";
+    private string _applyCatalogImportResultJson = "null";
 
     internal EditorInterchangeViewModel(EditorSession session, EditorViewModel owner, ISequencer scheduler) : base(session, owner, scheduler)
     {
@@ -215,7 +228,16 @@ public sealed class EditorInterchangeViewModel : EditorFeatureViewModel
         ExportReviewJsonCommand = CreateCommand(async argument => await Session.ExportReviewJsonAsync(Optional(argument, "path")), (result, value) => { LastExportReviewJson = result; ExportReviewJsonResultJson = value; });
         PreviewReviewJsonImportCommand = CreateCommand(async argument => await Session.PreviewReviewJsonImportAsync(Required(argument, "path")), (result, value) => { LastPreviewReviewJsonImport = result; PreviewReviewJsonImportResultJson = value; });
         ApplyReviewJsonImportCommand = CreateCommand(async argument => await Session.ApplyReviewJsonImportAsync(Required(argument, "confirmationToken")), (result, value) => { LastApplyReviewJsonImport = result; ApplyReviewJsonImportResultJson = value; });
+        PreviewCatalogImportCommand = CreateCommand(async argument => await Session.PreviewCatalogImportAsync(Parse<EditorCatalogImportRequest>(argument)), (_, value) => PreviewCatalogImportResultJson = value);
+        ApplyCatalogImportCommand = CreateCommand(async argument => await Session.ApplyCatalogImportAsync(Required(argument, "confirmationToken")), (_, value) => ApplyCatalogImportResultJson = value);
     }
+
+    public string PreviewCatalogImportResultJson { get => _previewCatalogImportResultJson; private set => this.RaiseAndSetIfChanged(ref _previewCatalogImportResultJson, value); }
+    public string ApplyCatalogImportResultJson { get => _applyCatalogImportResultJson; private set => this.RaiseAndSetIfChanged(ref _applyCatalogImportResultJson, value); }
+    /// <summary>The dry run of importing a .resx or i18next catalog (runic-translations import).</summary>
+    public ReactiveCommand<string, RxVoid> PreviewCatalogImportCommand { get; }
+    /// <summary>Applies the previewed catalog import once, by its confirmation token.</summary>
+    public ReactiveCommand<string, RxVoid> ApplyCatalogImportCommand { get; }
 
     public string ExportXliffResultJson { get => _exportXliffResultJson; private set => this.RaiseAndSetIfChanged(ref _exportXliffResultJson, value); }
     internal EditorXliffExportResult? LastExportXliff { get => _lastExportXliff; private set => this.RaiseAndSetIfChanged(ref _lastExportXliff, value); }

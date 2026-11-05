@@ -5,7 +5,7 @@ import type { MockBridge, MockTypedView, MockCommandHandler, MockTypedOperation,
 import type { EditorWorkspaceClient, EditorWorkspaceState } from "./editorWorkspace.js";
 
 /** The state of a mock EditorWorkspace: the client state, with content as `{ kind, id }` and command state optional. */
-export type EditorWorkspaceMockState = Omit<EditorWorkspaceState, "isLoadExecuting" | "isCheckExternalChangesExecuting" | "isPickWorkspaceExecuting" | "isPreviewMutationExecuting" | "isApplyMutationExecuting" | "isRecoverTransactionExecuting" | "isUndoExecuting" | "isRedoExecuting"> & Partial<Pick<EditorWorkspaceState, "isLoadExecuting" | "isCheckExternalChangesExecuting" | "isPickWorkspaceExecuting" | "isPreviewMutationExecuting" | "isApplyMutationExecuting" | "isRecoverTransactionExecuting" | "isUndoExecuting" | "isRedoExecuting">>;
+export type EditorWorkspaceMockState = Omit<EditorWorkspaceState, "isLoadExecuting" | "isCheckExternalChangesExecuting" | "isPickWorkspaceExecuting" | "isPreviewMutationExecuting" | "isApplyMutationExecuting" | "isRecoverTransactionExecuting" | "isUndoExecuting" | "isRedoExecuting" | "isListLocalesExecuting" | "isDescribeLocaleExecuting"> & Partial<Pick<EditorWorkspaceState, "isLoadExecuting" | "isCheckExternalChangesExecuting" | "isPickWorkspaceExecuting" | "isPreviewMutationExecuting" | "isApplyMutationExecuting" | "isRecoverTransactionExecuting" | "isUndoExecuting" | "isRedoExecuting" | "isListLocalesExecuting" | "isDescribeLocaleExecuting">>;
 
 export interface EditorWorkspaceMockDefinition {
   /** Presents the mock as content on route `content{id}`; omit it for the root route `editorWorkspace`. */
@@ -20,6 +20,8 @@ export interface EditorWorkspaceMockDefinition {
     readonly recoverTransaction?: MockCommandHandler<EditorWorkspaceMockState, [input: string]>;
     readonly undo?: MockCommandHandler<EditorWorkspaceMockState, [input: string]>;
     readonly redo?: MockCommandHandler<EditorWorkspaceMockState, [input: string]>;
+    readonly listLocales?: MockCommandHandler<EditorWorkspaceMockState, [input: string]>;
+    readonly describeLocale?: MockCommandHandler<EditorWorkspaceMockState, [input: string]>;
   };
   /** Availability of commands with an argument. */
   readonly canExecute?: {
@@ -31,6 +33,8 @@ export interface EditorWorkspaceMockDefinition {
     readonly recoverTransaction?: (state: EditorWorkspaceMockState, input: string) => boolean;
     readonly undo?: (state: EditorWorkspaceMockState, input: string) => boolean;
     readonly redo?: (state: EditorWorkspaceMockState, input: string) => boolean;
+    readonly listLocales?: (state: EditorWorkspaceMockState, input: string) => boolean;
+    readonly describeLocale?: (state: EditorWorkspaceMockState, input: string) => boolean;
   };
   /** Operation handlers; without one an operation runs its command handler and succeeds. */
   readonly operations?: {
@@ -42,17 +46,19 @@ export interface EditorWorkspaceMockDefinition {
     readonly recoverTransaction?: MockTypedOperationHandler<EditorWorkspaceMockState, string, void> | "manual";
     readonly undo?: MockTypedOperationHandler<EditorWorkspaceMockState, string, void> | "manual";
     readonly redo?: MockTypedOperationHandler<EditorWorkspaceMockState, string, void> | "manual";
+    readonly listLocales?: MockTypedOperationHandler<EditorWorkspaceMockState, string, void> | "manual";
+    readonly describeLocale?: MockTypedOperationHandler<EditorWorkspaceMockState, string, void> | "manual";
   };
 }
 
 export interface EditorWorkspaceMock extends MockTypedView<EditorWorkspaceMockState, EditorWorkspaceClient, "editorWorkspace"> {
-  readonly operations: { readonly load: readonly MockTypedOperation<string, void>[]; readonly checkExternalChanges: readonly MockTypedOperation<string, void>[]; readonly pickWorkspace: readonly MockTypedOperation<string, void>[]; readonly previewMutation: readonly MockTypedOperation<string, void>[]; readonly applyMutation: readonly MockTypedOperation<string, void>[]; readonly recoverTransaction: readonly MockTypedOperation<string, void>[]; readonly undo: readonly MockTypedOperation<string, void>[]; readonly redo: readonly MockTypedOperation<string, void>[]; };
+  readonly operations: { readonly load: readonly MockTypedOperation<string, void>[]; readonly checkExternalChanges: readonly MockTypedOperation<string, void>[]; readonly pickWorkspace: readonly MockTypedOperation<string, void>[]; readonly previewMutation: readonly MockTypedOperation<string, void>[]; readonly applyMutation: readonly MockTypedOperation<string, void>[]; readonly recoverTransaction: readonly MockTypedOperation<string, void>[]; readonly undo: readonly MockTypedOperation<string, void>[]; readonly redo: readonly MockTypedOperation<string, void>[]; readonly listLocales: readonly MockTypedOperation<string, void>[]; readonly describeLocale: readonly MockTypedOperation<string, void>[]; };
 }
 
 const spec: MockTypedViewSpec = {
   kind: "editorWorkspace",
   route: "editorWorkspace",
-  contract: "Runic.Translations.Editor.EditorWorkspaceViewModel:AD00A5B4BE47AA9A45169F855E1B9CE367A214E3C59A59057362787C22ABD400",
+  contract: "Runic.Translations.Editor.EditorWorkspaceViewModel:65CB9514BADD2A468BEE5C0905089A11636FF7E3BA9F1133DE5231364EDD720E",
   fields: {
     loadResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     checkExternalChangesResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
@@ -62,9 +68,11 @@ const spec: MockTypedViewSpec = {
     recoverTransactionResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     undoResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     redoResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
+    listLocalesResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
+    describeLocaleResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
   },
-  defaults: { isLoadExecuting: false, isCheckExternalChangesExecuting: false, isPickWorkspaceExecuting: false, isPreviewMutationExecuting: false, isApplyMutationExecuting: false, isRecoverTransactionExecuting: false, isUndoExecuting: false, isRedoExecuting: false },
-  texts: ["loadResultJson", "checkExternalChangesResultJson", "pickWorkspaceResultJson", "previewMutationResultJson", "applyMutationResultJson", "recoverTransactionResultJson", "undoResultJson", "redoResultJson"],
+  defaults: { isLoadExecuting: false, isCheckExternalChangesExecuting: false, isPickWorkspaceExecuting: false, isPreviewMutationExecuting: false, isApplyMutationExecuting: false, isRecoverTransactionExecuting: false, isUndoExecuting: false, isRedoExecuting: false, isListLocalesExecuting: false, isDescribeLocaleExecuting: false },
+  texts: ["loadResultJson", "checkExternalChangesResultJson", "pickWorkspaceResultJson", "previewMutationResultJson", "applyMutationResultJson", "recoverTransactionResultJson", "undoResultJson", "redoResultJson", "listLocalesResultJson", "describeLocaleResultJson"],
   commands: {
     load: { member: "load", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
     checkExternalChanges: { member: "checkExternalChanges", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
@@ -74,6 +82,8 @@ const spec: MockTypedViewSpec = {
     recoverTransaction: { member: "recoverTransaction", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
     undo: { member: "undo", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
     redo: { member: "redo", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    listLocales: { member: "listLocales", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    describeLocale: { member: "describeLocale", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
   },
   operations: {
     load: { member: "load", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
@@ -84,6 +94,8 @@ const spec: MockTypedViewSpec = {
     recoverTransaction: { member: "recoverTransaction", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
     undo: { member: "undo", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
     redo: { member: "redo", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    listLocales: { member: "listLocales", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    describeLocale: { member: "describeLocale", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
   },
 };
 

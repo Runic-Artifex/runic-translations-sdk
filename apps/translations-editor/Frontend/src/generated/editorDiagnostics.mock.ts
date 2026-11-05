@@ -40,7 +40,7 @@ export interface EditorDiagnosticsMock extends MockTypedView<EditorDiagnosticsMo
 const spec: MockTypedViewSpec = {
   kind: "editorDiagnostics",
   route: "editorDiagnostics",
-  contract: "Runic.Translations.Editor.EditorDiagnosticsViewModel:AD00A5B4BE47AA9A45169F855E1B9CE367A214E3C59A59057362787C22ABD400",
+  contract: "Runic.Translations.Editor.EditorDiagnosticsViewModel:65CB9514BADD2A468BEE5C0905089A11636FF7E3BA9F1133DE5231364EDD720E",
   fields: {
     aboutResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     createDiagnosticBundleResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },

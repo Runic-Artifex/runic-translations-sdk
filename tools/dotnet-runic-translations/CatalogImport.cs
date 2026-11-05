@@ -16,6 +16,7 @@ internal static class CatalogImport
 {
     private const int MaximumEntries = 1000;
     private const int MaximumLines = 32;
+    private const int MaximumKeys = 10;
 
     internal static int Run(string projectPath, TranslationCatalogImportRequest request, bool dryRun, ToolOperationResult result)
     {
@@ -67,6 +68,9 @@ internal static class CatalogImport
         foreach (InterchangeOperations.SourceWrite write in writes) result.WriteOutputLine($"{verb} {write.DisplayPath}.");
         if (plan.Kept != 0)
             result.WriteOutputLine($"{plan.Kept} existing message(s) differ from the source and were kept; --overwrite replaces them.");
+        // What the import leaves to translate: validate reports RTR0010 for each until it is translated.
+        foreach (TranslationImportUntranslated locale in plan.Untranslated)
+            result.WriteOutputLine($"untranslated {locale.Locale}: {locale.Keys.Count} message(s) ({string.Join(", ", locale.Keys.Take(MaximumKeys))}{(locale.Keys.Count > MaximumKeys ? ", …" : "")}); validate reports RTR0010 until they are translated.");
         foreach (TranslationImportEntry entry in plan.Entries.Take(MaximumLines))
             result.WriteOutputLine($"{entry.Outcome} {entry.Locale} {entry.Key}: {entry.Code}: {entry.Message}");
         foreach (TranslationImportNotice notice in plan.Notices.Take(MaximumLines))
@@ -93,6 +97,8 @@ internal static class CatalogImport
             EntriesTruncated = entries.Count > MaximumEntries,
             Notices = plan.Notices.Take(MaximumEntries).Select(static notice => new TranslationsToolInterchangeNotice(notice.Code, notice.Location, notice.Message)).ToArray(),
             Files = writes.Select(static write => new TranslationsToolInterchangeFile(write.DisplayPath, write.OriginalBytes is null ? "added" : "changed")).ToArray(),
+            Untranslated = plan.Untranslated.Count == 0 ? null
+                : plan.Untranslated.Select(static locale => new TranslationsToolInterchangeUntranslated(locale.Locale, locale.Keys.Count, locale.Keys.Take(MaximumEntries).ToArray())).ToArray(),
         };
         return 0;
     }

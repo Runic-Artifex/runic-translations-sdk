@@ -80,6 +80,14 @@
         "title": "Runic: Change Preview Locale"
       },
       {
+        "command": "runicTranslations.previewRequestedLocale",
+        "title": "Runic: Change Preview Regional Locale"
+      },
+      {
+        "command": "runicTranslations.previewTimeZone",
+        "title": "Runic: Change Preview Time Zone"
+      },
+      {
         "command": "runicTranslations.renameInput",
         "title": "Runic: Rename Input in Resource Sources"
       },
@@ -110,6 +118,14 @@
       {
         "command": "runicTranslations.overrideLibraryMessage",
         "title": "Runic: Override Library Message…"
+      },
+      {
+        "command": "runicTranslations.showStatus",
+        "title": "Runic: Show Translation Status"
+      },
+      {
+        "command": "runicTranslations.importCatalog",
+        "title": "Runic: Import .resx or i18next Catalog"
       }
     ],
     "configuration": {

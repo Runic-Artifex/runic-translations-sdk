@@ -19,6 +19,10 @@
     EditorDiagnosticQuickFix,
     EditorDocument,
     EditorExternalFileChange,
+    EditorCatalogImportPlan,
+    EditorLocaleCatalog,
+    EditorLocaleDescription,
+    EditorLocaleMatches,
     EditorMessageOperation,
     EditorMutationPreview,
     EditorMutationRequest,
@@ -44,6 +48,7 @@
   } from "#lib/appearance.js";
   import AppDialog from "#lib/AppDialog.svelte";
   import ArtifactPreviewPanel from "#lib/ArtifactPreviewPanel.svelte";
+  import { localeDirection } from "#lib/locale-text.js";
   import DocumentPreview from "#lib/DocumentPreview.svelte";
   import CommandPalette from "#lib/CommandPalette.svelte";
   import { buildEditorCommandPalette } from "#lib/command-palette.js";
@@ -79,7 +84,7 @@
   import * as Sidebar from "#lib/components/ui/sidebar/index.js";
   import { Spinner } from "#lib/components/ui/spinner/index.js";
   import { Textarea } from "#lib/components/ui/textarea/index.js";
-  import type { MessageArtifact, MessagePreviewResult, PreviewNode } from "#lib/message-composer.js";
+  import type { MessageArtifact, MessagePreviewResult, PreviewFormatting, PreviewNode } from "#lib/message-composer.js";
   import {
     createMessagePreviewRequest,
     createMessagePreviewOwnership,
@@ -103,7 +108,7 @@
   } from "#lib/local-state.js";
   import {
     buildRows,
-    coverage,
+    localeCoverage,
     formatJson,
     preview,
     type ResourceValue,
@@ -123,9 +128,10 @@
     rebaseReview,
   } from "#lib/review-model.js";
   import {
+    isPseudoLocale,
     readUiSimulation,
     saveUiSimulation,
-    simulatePreviewResult,
+    type PseudoLocale,
     type UiDirection,
   } from "#lib/simulation.js";
 
@@ -178,6 +184,9 @@
   let validationEpoch = 0;
   let projectDialogOpen = $state(false);
   let projectStep = $state(1);
+  // The wizard's optional import step: after creating the project, the import's dry run opens for confirmation.
+  let wizardImportFrom = $state<"" | "resx" | "i18next">("");
+  let wizardImportSource = $state("");
   let projectDirectory = $state("");
   let projectCatalog = $state("product");
   let projectDefaultLocale = $state("en");
@@ -212,6 +221,16 @@
   let mutationFallback = $state("");
   let mutationReplacementFallback = $state("");
   let mutationCopyFrom = $state("");
+  // What the typed new locale means in CLDR (canonical form, data ID, direction, plural and ordinal categories).
+  let mutationLocaleDescription = $state.raw<EditorLocaleDescription>();
+  let describeLocaleTimer: ReturnType<typeof setTimeout> | undefined;
+  // "With unsupportedLocale "exact", zh-Hant serves requests for: zh-Hant." (the tags the runtime resolves to it).
+  function localeMatchesText(locale: string, matches: EditorLocaleMatches, policy: string): string {
+    const more = matches.count - matches.tags.length;
+    const tags = matches.tags.join(", ") + (more > 0 ? " " + ui.text("ui_locale_matches_more", { count: more }) : "");
+    return ui.text("ui_locale_matches", { locale, policy, tags });
+  }
+  let describeLocaleGeneration = 0;
   let mutationSourceKey = $state("");
   let mutationTargetKey = $state("");
   let mutationInitialValue = $state("");
@@ -228,6 +247,15 @@
   let previewAst = $state.raw<MessageArtifact>();
   let previewSamples = $state.raw<Record<string, string>>(createPreviewSamples());
   let previewResult = $state.raw<MessagePreviewResult>();
+  // The preview's formatting: the locale a user requests (de-CH for de text) and the zone timeZone=local formats in.
+  let previewRequestedLocale = $state("");
+  let previewTimeZone = $state("");
+  // The pseudo-locale the simulation previews, rendered by the host's SDK generator (en-XA unless chosen in the sidebar).
+  let pseudoLocale = $state<PseudoLocale>("en-XA");
+  let pseudoPreviewResult = $state.raw<MessagePreviewResult>();
+  let pseudoPreviewError = $state<UiMessage>();
+  // The SDK's CLDR locales (add-language picker, regional preview locales); loaded once.
+  let localeCatalog = $state.raw<EditorLocaleCatalog>();
   let previewRequest = $state.raw<PreviewRequest>();
   let reviewEntries = $state<EditorReviewEntry[]>([]);
   let terminology = $state<EditorTerminologyEntry[]>([]);
@@ -268,6 +296,15 @@
   let xliffPreview = $state.raw<EditorXliffImportPreview>();
   let reviewExport = $state.raw<EditorReviewFileResult>();
   let reviewPreview = $state.raw<EditorReviewImportPreview>();
+  // Import from .resx or i18next (runic-translations import): a dry run, then once by its confirmation token.
+  let catalogImportFrom = $state<"resx" | "i18next">("resx");
+  let catalogImportSource = $state("");
+  let catalogImportOverwrite = $state(false);
+  let catalogImportPlanned = $state.raw<{ inputs: string; plan: EditorCatalogImportPlan }>();
+  // The dry run of the current inputs only: changing the format, the source or "overwrite" invalidates it, so "Import once"
+  // never applies a plan made for other inputs (its token stays unused and expires with the next dry run).
+  const catalogImportInputs = $derived(JSON.stringify([catalogImportFrom, catalogImportSource.trim(), catalogImportOverwrite]));
+  const catalogImportPlan = $derived(catalogImportPlanned?.inputs === catalogImportInputs ? catalogImportPlanned.plan : undefined);
 
   let labels = $derived(labelsFor(uiLocale));
   $effect(() => {
@@ -287,15 +324,20 @@
   let reviewMutationBlocked = $derived(editorMutationBlocked || reviewSaving || snapshot?.review?.migrationPending === true);
   let rows = $derived(buildRows(snapshot, drafts, parsedDrafts));
   let messageSearch = $derived(createMessageSearchIndex(rows));
+  // Coverage from runic-translations status (Tooling), the numbers of the command line, for the saved files.
   let localeSummaries = $derived.by(() => (snapshot?.catalog?.locales ?? []).map((locale) => {
-    const state = coverage(rows, locale.tag);
+    const state = localeCoverage(snapshot?.status, rows, locale.tag);
     return {
       tag: locale.tag,
       name: localeName(locale.tag),
       fallback: locale.fallback,
       translated: state.translated,
+      fallbackCount: state.fallback,
+      missing: state.missing,
+      stale: state.stale,
+      completeness: state.completeness,
       total: state.total,
-      percent: state.total === 0 ? 100 : Math.round((state.translated / state.total) * 100),
+      percent: state.percent,
       isSource: locale.tag === snapshot?.catalog?.defaultLocale,
     };
   }));
@@ -345,9 +387,41 @@
       return searchMatches.has(row);
     });
   });
-  let simulatedPreviewResult = $derived(
-    previewResult === undefined ? undefined : simulatePreviewResult(previewResult, { pseudoLocalization }),
-  );
+  let simulatedPreviewResult = $derived(pseudoLocalization ? pseudoPreviewResult : previewResult);
+  let previewDirection = $derived(localeDirection(pseudoLocalization ? pseudoLocale : selectedLocale));
+  // The time zones the preview offers: the host's, UTC, then the engine's IANA zones.
+  const previewTimeZones = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
+  // Regional variants of the selected locale's language that CLDR has data for (de → de-AT, de-CH, …).
+  let regionalLocaleSuggestions = $derived.by(() => {
+    const language = selectedLocale.split("-")[0]?.toLowerCase() ?? "";
+    return (localeCatalog?.locales ?? []).filter((tag) => tag.toLowerCase() === language || tag.toLowerCase().startsWith(`${language}-`));
+  });
+
+  function describeMutationLocale(): void {
+    const generation = ++describeLocaleGeneration;
+    if (describeLocaleTimer !== undefined) clearTimeout(describeLocaleTimer);
+    const tag = mutationLocale.trim();
+    if (tag === "") { mutationLocaleDescription = undefined; return; }
+    describeLocaleTimer = setTimeout(() => {
+      void bridge.describeLocale(tag).then((description) => {
+        if (generation === describeLocaleGeneration) mutationLocaleDescription = description;
+      }, () => { if (generation === describeLocaleGeneration) mutationLocaleDescription = undefined; });
+    }, 200);
+  }
+
+  function previewFormattingSummary(formatting: PreviewFormatting | undefined): string | undefined {
+    if (formatting === undefined) return undefined;
+    const parts: string[] = [];
+    if (formatting.requestedLocale !== undefined && formatting.requestedLocale !== selectedLocale) {
+      parts.push(ui.text("ui_preview_requested_summary", {
+        requested: formatting.requestedLocale,
+        resolution: ui.text(formatting.resolution === "parent" ? "ui_preview_resolution_parent" : formatting.resolution === "related" ? "ui_preview_resolution_related" : "ui_preview_resolution_exact"),
+      }));
+    }
+    if (formatting.formattingLocale !== undefined) parts.push(ui.text("ui_preview_formats_in", { locale: formatting.formattingLocale }));
+    parts.push(formatting.timeZone === undefined ? ui.text("ui_preview_time_zone_host") : ui.text("ui_preview_time_zone_summary", { zone: formatting.timeZone }));
+    return parts.join(" · ");
+  }
   let messageListItems = $derived.by((): MessageListItem[] => visibleRows.map((row) => {
     const cell = row.cells[selectedLocale];
     const rowReview = reviewIndex.get(reviewIdentity(row.key, selectedLocale));
@@ -461,6 +535,8 @@
       if (themeMode === "system") applyAppearance(themeMode, themePalette);
     };
     colorScheme.addEventListener("change", updateSystemTheme);
+    // The CLDR locale list only feeds suggestions; without it the fields stay free text.
+    void bridge.listLocales().then((catalog) => { if (!disposed) localeCatalog = catalog; }, () => undefined);
     void (async () => {
       try {
         const nativeStateRecovered = await loadLocalEditorState();
@@ -534,6 +610,28 @@
   function togglePseudoLocalization(): void {
     pseudoLocalization = !pseudoLocalization;
     saveUiSimulation(pseudoLocalization, uiDirection, setLocalEditorState);
+    refreshCurrentPreview();
+  }
+
+  // A configured pseudo-locale in the sidebar previews in it; choosing it again turns the simulation off.
+  function selectPseudoLocale(locale: string): void {
+    if (!isPseudoLocale(locale)) return;
+    if (pseudoLocalization && pseudoLocale === locale) pseudoLocalization = false;
+    else { pseudoLocale = locale; pseudoLocalization = true; }
+    saveUiSimulation(pseudoLocalization, uiDirection, setLocalEditorState);
+    refreshCurrentPreview();
+  }
+
+  function changePreviewFormatting(requestedLocale: string, timeZone: string): void {
+    previewRequestedLocale = requestedLocale;
+    previewTimeZone = timeZone;
+    refreshCurrentPreview();
+  }
+
+  function refreshCurrentPreview(): void {
+    if (currentDocument !== undefined && currentContent !== undefined) {
+      schedulePreview(currentDocument.path, currentContent, selectedKey, selectedLocale);
+    }
   }
 
   function toggleUiDirection(): void {
@@ -867,7 +965,7 @@
   }
 
   function schedulePreview(path: string, content: string, key: string, locale: string): void {
-    const request = createMessagePreviewRequest(path, content, key, locale);
+    const request = createMessagePreviewRequest(path, content, key, locale, { requestedLocale: previewRequestedLocale, timeZone: previewTimeZone });
     const beginning = previewOwnership.begin(request);
     previewRequest = beginning.request;
     previewAst = beginning.ast;
@@ -876,8 +974,8 @@
     previewBusy = true;
     previewScheduler.schedule(450, (epoch) => {
       void routeMessagePreview(
-        (requestPath, requestContent, requestLocale, requestKey, samplesJson) =>
-          bridge.previewMessage(requestPath, requestContent, requestLocale, requestKey, samplesJson),
+        (requestPath, requestContent, requestLocale, requestKey, samplesJson, requestedLocale, timeZone) =>
+          bridge.previewMessage(requestPath, requestContent, requestLocale, requestKey, samplesJson, requestedLocale, timeZone),
         request,
         previewSamples,
         defaultSample,
@@ -903,6 +1001,7 @@
           return;
         }
         previewResult = parseRenderedMessagePreview(rendered.renderedJson);
+        return renderPseudoPreview(request, routed.samples, () => previewScheduler.isCurrent(epoch));
       }).catch((error) => {
         if (previewScheduler.isCurrent(epoch)) previewError = errorNotice(error);
       }).finally(() => {
@@ -1201,6 +1300,37 @@
     }
   }
 
+  async function previewCatalogImport(): Promise<void> {
+    if (interchangeBusy || catalogImportSource.trim() === "") return;
+    interchangeBusy = true;
+    try {
+      const inputs = catalogImportInputs;
+      const plan = await bridge.previewCatalogImport({ from: catalogImportFrom, source: catalogImportSource.trim(), overwrite: catalogImportOverwrite });
+      catalogImportPlanned = { inputs, plan };
+    } catch (error) {
+      operationMessage = errorNotice(error);
+    } finally {
+      interchangeBusy = false;
+    }
+  }
+
+  async function applyCatalogImport(): Promise<void> {
+    if (interchangeBusy || catalogImportPlan?.confirmationToken === undefined || !confirmDiscardUnsavedWork("ui_confirm_apply_catalog_import")) return;
+    interchangeBusy = true;
+    try {
+      const token = catalogImportPlan.confirmationToken;
+      // The token is one-use on the host whether or not the import commits: a failed apply needs a fresh dry run.
+      catalogImportPlanned = undefined;
+      const result = await bridge.applyCatalogImport(token);
+      operationMessage = result.message ?? (result.ok ? notice("ui_feedback_catalog_imported") : notice("ui_backend_import_messages_invalid"));
+      if (result.snapshot !== undefined) installSnapshot(result.snapshot, true);
+    } catch (error) {
+      operationMessage = errorNotice(error);
+    } finally {
+      interchangeBusy = false;
+    }
+  }
+
   async function exportReviewJson(): Promise<void> {
     if (interchangeBusy) return;
     interchangeBusy = true;
@@ -1258,6 +1388,8 @@
       request.locale,
       request.key,
       JSON.stringify(previewSamples),
+      request.requestedLocale,
+      request.timeZone,
     );
     if (!previewScheduler.isCurrent(epoch)) return;
     if (!result.success || result.renderedJson === undefined) {
@@ -1267,6 +1399,26 @@
     }
     previewResult = parseRenderedMessagePreview(result.renderedJson);
     previewError = undefined;
+    await renderPseudoPreview(request, previewSamples, () => previewScheduler.isCurrent(epoch));
+  }
+
+  // The simulated pseudo-locale, generated from the base locale by the host as a --pseudo-locales build does. Its
+  // formatting follows the pseudo-locale, so only the time zone carries over.
+  async function renderPseudoPreview(request: PreviewRequest, samples: Record<string, string>, isCurrent: () => boolean): Promise<void> {
+    if (!pseudoLocalization) {
+      pseudoPreviewResult = undefined;
+      pseudoPreviewError = undefined;
+      return;
+    }
+    const result = await bridge.previewMessage(request.path, request.content, pseudoLocale, request.key, JSON.stringify(samples), undefined, request.timeZone);
+    if (!isCurrent()) return;
+    if (!result.success || result.renderedJson === undefined) {
+      pseudoPreviewResult = undefined;
+      pseudoPreviewError = result.diagnostics[0]?.notice ?? result.diagnostics[0]?.message ?? notice("ui_feedback_preview_failed");
+      return;
+    }
+    pseudoPreviewResult = parseRenderedMessagePreview(result.renderedJson);
+    pseudoPreviewError = undefined;
   }
 
   function previewInputEntries(ast: MessageArtifact): Array<[string, { type: string }]> {
@@ -1526,6 +1678,8 @@
   function openProjectWizard(): void {
     if (historyBusy) return;
     projectStep = 1;
+    wizardImportFrom = "";
+    wizardImportSource = "";
     projectDirectory = "";
     projectCatalog = "product";
     projectDefaultLocale = "en";
@@ -1586,6 +1740,10 @@
       projectError = notice("ui_feedback_namespace_required");
       return false;
     }
+    if (projectStep === 4 && wizardImportFrom !== "" && wizardImportSource.trim() === "") {
+      projectError = notice("ui_backend_import_source_required");
+      return false;
+    }
     projectError = undefined;
     return true;
   }
@@ -1593,7 +1751,7 @@
   async function advanceProjectWizard(): Promise<void> {
     if (historyBusy) return;
     if (!validateProjectStep()) return;
-    if (projectStep < 3) {
+    if (projectStep < 4) {
       projectStep += 1;
       return;
     }
@@ -1605,7 +1763,7 @@
         projectError = plan.message ?? notice("ui_feedback_project_invalid");
         return;
       }
-      projectStep = 4;
+      projectStep = 5;
     } catch (error) {
       projectError = errorNotice(error);
     } finally {
@@ -1628,6 +1786,16 @@
       installSnapshot(result.snapshot, true);
       operationMessage = notice("ui_feedback_project_created");
       projectDialogOpen = false;
+      if (wizardImportFrom !== "" && wizardImportSource.trim() !== "") {
+        // The import step: its dry run opens in the interchange dialog, applied only after confirmation.
+        catalogImportFrom = wizardImportFrom;
+        catalogImportSource = wizardImportSource.trim();
+        catalogImportOverwrite = false;
+        catalogImportPlanned = undefined;
+        interchangeOpen = true;
+        projectBusy = false;
+        await previewCatalogImport();
+      }
     } catch (error) {
       projectError = errorNotice(error);
     } finally {
@@ -1702,6 +1870,7 @@
       ? (selectedLocale === current.catalog.defaultLocale ? firstNonDefault : selectedLocale)
       : "";
     mutationFallback = current.catalog.defaultLocale;
+    mutationLocaleDescription = undefined;
     mutationReplacementFallback = current.catalog.defaultLocale;
     mutationCopyFrom = current.catalog.defaultLocale;
     mutationSourceKey = selectedKey;
@@ -1785,7 +1954,8 @@
       installSnapshot(result.snapshot, true);
       if (buildRows(result.snapshot, {}).some((row) => row.key === preferredKey)) selectedKey = preferredKey;
       mutationDialogOpen = false;
-      operationMessage = notice("ui_feedback_workspace_updated");
+      // A committed change can carry a warning, such as review entries a locale removal could not drop.
+      operationMessage = result.message ?? notice("ui_feedback_workspace_updated");
       configureEditor();
     } catch (error) {
       mutationError = errorNotice(error);
@@ -2244,6 +2414,9 @@
             {selectedLocale}
             onselect={selectLocale}
             onmanage={() => prepareMutation("add-locale")}
+            pseudoLocales={snapshot?.catalog?.pseudoLocales ?? []}
+            activePseudoLocale={pseudoLocalization ? pseudoLocale : undefined}
+            onselectpseudo={selectPseudoLocale}
             bind:open={languagesOpen}
           />
         {/snippet}
@@ -2410,8 +2583,27 @@
             <section class="message-preview" aria-live="polite">
               <header>
                 <div><strong>{ui.text("ui_page_preview_title")}</strong><span>{ui.text("ui_page_preview_description")}</span></div>
-                <span class="preview-state">{previewBusy ? ui.text("ui_page_preview_compiling") : previewAst === undefined ? ui.text("ui_page_preview_unavailable") : selectedLocale}</span>
+                <span class="preview-state">{previewBusy ? ui.text("ui_page_preview_compiling") : previewAst === undefined ? ui.text("ui_page_preview_unavailable") : pseudoLocalization ? ui.text("ui_preview_pseudo_locale", { locale: pseudoLocale }) : selectedLocale}</span>
               </header>
+              <div class="flex flex-wrap items-end gap-3 px-4 pt-3" aria-label={ui.text("ui_preview_formatting")}>
+                <label class="grid gap-1 text-xs">
+                  <span class="text-muted-foreground">{ui.text("ui_preview_regional_locale")}</span>
+                  <Input class="h-8 w-40" value={previewRequestedLocale} placeholder={selectedLocale} list="preview-regional-locales" autocomplete="off"
+                    title={ui.text("ui_preview_regional_locale_description")}
+                    onchange={(event) => changePreviewFormatting(event.currentTarget.value, previewTimeZone)} />
+                </label>
+                <datalist id="preview-regional-locales">{#each regionalLocaleSuggestions as tag (tag)}<option value={tag}></option>{/each}</datalist>
+                <label class="grid gap-1 text-xs">
+                  <span class="text-muted-foreground">{ui.text("ui_preview_time_zone")}</span>
+                  <select class="h-8 max-w-56 rounded-md border bg-background px-2 text-sm" value={previewTimeZone}
+                    title={ui.text("ui_preview_time_zone_description")}
+                    onchange={(event) => changePreviewFormatting(previewRequestedLocale, event.currentTarget.value)}>
+                    <option value="">{ui.text("ui_preview_time_zone_host")}</option>
+                    <option value="utc">UTC</option>
+                    {#each previewTimeZones as zone (zone)}<option value={zone}>{zone}</option>{/each}
+                  </select>
+                </label>
+              </div>
               {#if currentExamples.length > 0}
                 <div class="flex flex-wrap items-center gap-2 px-4 py-3" aria-label={ui.text("ui_preview_examples")}>
                   <span class="text-xs text-muted-foreground">{ui.text("ui_preview_examples")}</span>
@@ -2427,11 +2619,13 @@
                   {/each}
                 </div>
               {/if}
-              <div class="preview-canvas">
+              <div class="preview-canvas" lang={pseudoLocalization ? pseudoLocale : selectedLocale} dir={previewDirection}>
                 {#if previewBusy}
                   <span class="preview-placeholder">{ui.text("ui_page_preview_compiling_draft")}</span>
                 {:else if previewError}
                   <span class="preview-error">{displayNotice(previewError, ui)}</span>
+                {:else if pseudoLocalization && pseudoPreviewError}
+                  <span class="preview-error">{displayNotice(pseudoPreviewError, ui)}</span>
                 {:else if simulatedPreviewResult?.kind === "text"}
                   <p>{simulatedPreviewResult.value}</p>
                 {:else if simulatedPreviewResult?.kind === "content"}
@@ -2442,6 +2636,7 @@
                   <span class="preview-placeholder">{ui.text("ui_page_preview_edit_to_build")}</span>
                 {/if}
               </div>
+              {#if previewFormattingSummary(simulatedPreviewResult?.formatting)}<p class="safe-note">{previewFormattingSummary(simulatedPreviewResult?.formatting)}</p>{/if}
               <p class="safe-note">{ui.text("ui_page_preview_safe_markup")}{pseudoLocalization ? ` ${ui.text("ui_page_preview_pseudo_active")}` : ""}{uiDirection === "rtl" ? ` ${ui.text("ui_page_preview_rtl_active")}` : ""}</p>
             </section>
 
@@ -2612,6 +2807,12 @@
   onexportreview={() => void exportReviewJson()}
   onpreviewreview={() => void previewReviewJsonImport()}
   onapplyreview={() => void applyReviewJsonImport()}
+  bind:catalogImportFrom
+  bind:catalogImportSource
+  bind:catalogImportOverwrite
+  {catalogImportPlan}
+  onpreviewcatalog={() => void previewCatalogImport()}
+  onapplycatalog={() => void applyCatalogImport()}
 />
 
 {#if repairDocument !== undefined}
@@ -2688,9 +2889,10 @@
         </Field.Field>
       {/if}
 
+      <datalist id="cldr-locales">{#each localeCatalog?.locales ?? [] as tag (tag)}<option value={tag}></option>{/each}</datalist>
       {#if mutationKind === "add-locale"}
         <div class="grid gap-4 sm:grid-cols-2">
-          <Field.Field><Field.Label for="mutation-locale">{ui.text("ui_page_mutation_new_locale_tag")}</Field.Label><Input id="mutation-locale" bind:value={mutationLocale} oninput={invalidateMutationPreview} placeholder="fr-FR" autocomplete="off" /></Field.Field>
+          <Field.Field><Field.Label for="mutation-locale">{ui.text("ui_page_mutation_new_locale_tag")}</Field.Label><Input id="mutation-locale" bind:value={mutationLocale} oninput={() => { invalidateMutationPreview(); describeMutationLocale(); }} placeholder="fr-FR" list="cldr-locales" autocomplete="off" aria-describedby="mutation-locale-cldr" /></Field.Field>
           <Field.Field><Field.Label for="mutation-fallback">{ui.text("ui_page_mutation_fallback")}</Field.Label>
             <Select.Root type="single" value={mutationFallback} onValueChange={(value) => { mutationFallback = value; invalidateMutationPreview(); }}>
               <Select.Trigger id="mutation-fallback" class="w-full">{mutationFallback} · {localeName(mutationFallback)}</Select.Trigger>
@@ -2704,6 +2906,27 @@
             </Select.Root>
             <Field.Description>{ui.text("ui_page_mutation_copy_starter_values_description")}</Field.Description>
           </Field.Field>
+        </div>
+        <div id="mutation-locale-cldr" class="mt-3 grid gap-1 text-sm" aria-live="polite">
+          {#if mutationLocaleDescription?.valid && mutationLocaleDescription.canonical}
+            <p class="text-muted-foreground">{ui.text("ui_locale_cldr_summary", { locale: mutationLocaleDescription.canonical, data: mutationLocaleDescription.cldrLocale ?? "root", direction: mutationLocaleDescription.direction === "rtl" ? ui.text("ui_locale_direction_rtl") : ui.text("ui_locale_direction_ltr") })}</p>
+            {#if mutationLocaleDescription.dataId && mutationLocaleDescription.dataId !== mutationLocaleDescription.canonical}
+              <p class="text-muted-foreground">{ui.text("ui_locale_cldr_canonical", { locale: mutationLocaleDescription.dataId })}</p>
+            {/if}
+            {#if mutationLocaleDescription.matches && mutationLocaleDescription.unsupportedLocale}
+              <p data-locale-matches={mutationLocaleDescription.canonical}>{localeMatchesText(mutationLocaleDescription.canonical, mutationLocaleDescription.matches, mutationLocaleDescription.unsupportedLocale)}</p>
+            {/if}
+            {#if mutationLocaleDescription.suggested}
+              <p class="flex flex-wrap items-center gap-2"><span>{ui.text("ui_locale_script_suggestion", { locale: mutationLocaleDescription.suggested, typed: mutationLocaleDescription.canonical })}</span>
+                <Button variant="outline" size="xs" onclick={() => { mutationLocale = mutationLocaleDescription?.suggested ?? mutationLocale; invalidateMutationPreview(); describeMutationLocale(); }}>{ui.text("ui_locale_cldr_use", { locale: mutationLocaleDescription.suggested })}</Button></p>
+              {#if mutationLocaleDescription.suggestedMatches && mutationLocaleDescription.unsupportedLocale}
+                <p class="text-muted-foreground" data-locale-matches={mutationLocaleDescription.suggested}>{localeMatchesText(mutationLocaleDescription.suggested, mutationLocaleDescription.suggestedMatches, mutationLocaleDescription.unsupportedLocale)}</p>
+              {/if}
+            {/if}
+            <p>{ui.text("ui_locale_plural_categories", { categories: mutationLocaleDescription.cardinal.join(", ") || "other" })} · {ui.text("ui_locale_ordinal_categories", { categories: mutationLocaleDescription.ordinal.join(", ") || "other" })}</p>
+            <p class="text-muted-foreground">{ui.text("ui_locale_categories_seeded")}</p>
+          {/if}
+          {#if mutationLocaleDescription?.message}<p class="text-muted-foreground">{displayNotice(mutationLocaleDescription.message, ui)}</p>{/if}
         </div>
       {:else if mutationKind === "remove-locale"}
         <div class="grid gap-4 sm:grid-cols-2">
@@ -2788,8 +3011,8 @@
     showCloseButton={!projectBusy}
     onopenchange={(open) => { if (!open && !projectBusy) closeProjectWizard(); }}
   >
-    <ol class="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label={ui.text("ui_page_project_wizard_steps_aria_label")}>
-      {#each [ui.text("ui_page_project_wizard_step_project"), ui.text("ui_page_project_wizard_step_languages"), ui.text("ui_page_project_wizard_step_settings"), ui.text("ui_page_project_wizard_step_review")] as title, index (title)}
+    <ol class="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-5" aria-label={ui.text("ui_page_project_wizard_steps_aria_label")}>
+      {#each [ui.text("ui_page_project_wizard_step_project"), ui.text("ui_page_project_wizard_step_languages"), ui.text("ui_page_project_wizard_step_settings"), ui.text("ui_page_project_wizard_step_import"), ui.text("ui_page_project_wizard_step_review")] as title, index (title)}
         <li class="flex items-center gap-2 text-sm" aria-current={projectStep === index + 1 ? "step" : undefined}>
           <Badge variant={projectStep === index + 1 ? "default" : projectStep > index + 1 ? "secondary" : "outline"}>{projectStep > index + 1 ? "✓" : index + 1}</Badge>
           <span class={projectStep === index + 1 ? "font-medium" : "text-muted-foreground"}>{title}</span>
@@ -2807,12 +3030,12 @@
       <div class="mb-5"><h3 class="font-medium">{ui.text("ui_page_project_wizard_which_languages")}</h3><p class="text-sm text-muted-foreground">{ui.text("ui_page_project_wizard_language_description")}</p></div>
       <div class="grid gap-3">
         <div class="grid items-end gap-3 rounded-xl border p-4 sm:grid-cols-[1fr_auto]">
-          <Field.Field><Field.Label for="project-default-locale">{ui.text("ui_page_project_wizard_source_default")}</Field.Label><Input id="project-default-locale" bind:value={projectDefaultLocale} placeholder="de" autocomplete="off" /></Field.Field>
+          <Field.Field><Field.Label for="project-default-locale">{ui.text("ui_page_project_wizard_source_default")}</Field.Label><Input id="project-default-locale" bind:value={projectDefaultLocale} placeholder="de" list="cldr-locales-wizard" autocomplete="off" /></Field.Field>
           <Badge variant="secondary" class="mb-2">{ui.text("ui_page_project_wizard_canonical_source")}</Badge>
         </div>
         {#each projectLocales as locale (locale.id)}
           <div class="grid items-end gap-3 rounded-xl border p-4 sm:grid-cols-[1fr_1fr_auto]">
-            <Field.Field><Field.Label for={`project-locale-${locale.id}`}>{ui.text("ui_page_project_wizard_additional_language")}</Field.Label><Input id={`project-locale-${locale.id}`} bind:value={locale.tag} placeholder="en" autocomplete="off" /></Field.Field>
+            <Field.Field><Field.Label for={`project-locale-${locale.id}`}>{ui.text("ui_page_project_wizard_additional_language")}</Field.Label><Input id={`project-locale-${locale.id}`} bind:value={locale.tag} placeholder="en" list="cldr-locales-wizard" autocomplete="off" /></Field.Field>
             <Field.Field><Field.Label for={`project-fallback-${locale.id}`}>{ui.text("ui_page_mutation_fallback")}</Field.Label>
               <Select.Root type="single" value={locale.fallback} onValueChange={(value) => locale.fallback = value}>
                 <Select.Trigger id={`project-fallback-${locale.id}`} class="w-full">{locale.fallback || `${ui.text("ui_page_project_wizard_default")} (${projectDefaultLocale || ui.text("ui_page_project_wizard_source")})`}</Select.Trigger>
@@ -2822,6 +3045,7 @@
             <Button variant="ghost" size="icon-sm" aria-label={ui.text("ui_project_remove_locale", { locale: locale.tag || ui.text("ui_page_project_wizard_row") })} onclick={() => removeProjectLocale(locale.id)}><Trash2Icon /></Button>
           </div>
         {/each}
+        <datalist id="cldr-locales-wizard">{#each localeCatalog?.locales ?? [] as tag (tag)}<option value={tag}></option>{/each}</datalist>
         <Button variant="outline" class="justify-self-start" onclick={addProjectLocale}><PlusIcon data-icon="inline-start" />{ui.text("ui_page_project_wizard_add_language")}</Button>
       </div>
     {:else if projectStep === 3}
@@ -2833,9 +3057,27 @@
         </div>
         <Field.Field orientation="horizontal"><Checkbox id="project-starter" bind:checked={projectIncludeStarter} /><Field.Content><Field.Label for="project-starter">{ui.text("ui_page_project_wizard_add_starter")}</Field.Label><Field.Description>{ui.text("ui_page_project_wizard_add_starter_description")}</Field.Description></Field.Content></Field.Field>
       </Field.FieldGroup>
-    {:else if projectStep === 4 && projectPlan !== undefined}
+    {:else if projectStep === 4}
+      <div class="mb-5"><h3 class="font-medium">{ui.text("ui_catalog_import_title")}</h3><p class="text-sm text-muted-foreground">{ui.text("ui_page_project_wizard_import_description")}</p></div>
+      <Field.FieldGroup>
+        <Field.Field><Field.Label for="wizard-import-format">{ui.text("ui_catalog_import_format")}</Field.Label>
+          <select id="wizard-import-format" class="h-9 rounded-md border bg-background px-2 text-sm" bind:value={wizardImportFrom}>
+            <option value="">{ui.text("ui_page_project_wizard_import_none")}</option>
+            <option value="resx">.resx</option>
+            <option value="i18next">i18next</option>
+          </select>
+        </Field.Field>
+        {#if wizardImportFrom !== ""}
+          <Field.Field><Field.Label for="wizard-import-source">{ui.text("ui_catalog_import_source")}</Field.Label>
+            <Input id="wizard-import-source" bind:value={wizardImportSource} placeholder={wizardImportFrom === "resx" ? "/projects/customer-app/Properties/Strings.resx" : "/projects/customer-web/public/locales"} autocomplete="off" />
+            <Field.Description>{wizardImportFrom === "resx" ? ui.text("ui_catalog_import_format_resx") : ui.text("ui_catalog_import_format_i18next")}</Field.Description>
+          </Field.Field>
+        {/if}
+      </Field.FieldGroup>
+    {:else if projectStep === 5 && projectPlan !== undefined}
       <Alert.Root><Alert.Title>{ui.text("ui_page_project_wizard_ready_create")} {projectPlan.catalogId}</Alert.Title><Alert.Description>{ui.text("ui_count_project_summary", { languages: projectPlan.locales.length, files: projectPlan.files.length })}</Alert.Description></Alert.Root>
       <dl class="mt-4 grid gap-3 rounded-xl border p-4"><div class="grid gap-1 sm:grid-cols-[7rem_1fr]"><dt class="text-muted-foreground">{ui.text("ui_page_project_wizard_directory")}</dt><dd class="m-0 truncate font-mono text-xs">{projectPlan.directory}</dd></div><div class="grid gap-1 sm:grid-cols-[7rem_1fr]"><dt class="text-muted-foreground">{ui.text("ui_page_project_wizard_languages")}</dt><dd class="m-0 font-medium">{projectPlan.locales.map((locale) => locale.tag).join(", ")}</dd></div></dl>
+      {#if wizardImportFrom !== ""}<p class="mt-4 text-sm">{ui.text("ui_catalog_import_title")}: <code>{wizardImportSource}</code></p>{/if}
       <section class="mt-4 overflow-hidden rounded-xl border" aria-label={ui.text("ui_page_project_wizard_files_to_create")}><h4 class="border-b px-4 py-3 font-medium">{ui.text("ui_page_project_wizard_files_to_create")}</h4>{#each projectPlan.files as file (file)}<div class="border-b px-4 py-3 last:border-b-0"><code class="text-xs">{file}</code></div>{/each}</section>
     {/if}
 
@@ -2843,7 +3085,7 @@
     {#snippet footer()}
       <Button variant="outline" disabled={projectBusy} onclick={closeProjectWizard}>{ui.text("ui_page_cancel")}</Button>
       {#if projectStep > 1}<Button variant="ghost" disabled={projectBusy} onclick={() => { projectStep -= 1; projectError = undefined; }}>{ui.text("ui_page_back")}</Button>{/if}
-      {#if projectStep < 4}
+      {#if projectStep < 5}
         <Button disabled={projectBusy} onclick={() => void advanceProjectWizard()}>{#if projectBusy}<Spinner data-icon="inline-start" />{/if}{projectBusy ? ui.text("ui_page_validating") : ui.text("ui_page_continue")}</Button>
       {:else}
         <Button disabled={projectBusy || projectPlan?.ok !== true} onclick={() => void createProject()}>{#if projectBusy}<Spinner data-icon="inline-start" />{/if}{projectBusy ? ui.text("ui_page_creating") : ui.text("ui_page_project_wizard_create_project")}</Button>

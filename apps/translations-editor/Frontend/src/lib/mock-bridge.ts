@@ -363,13 +363,40 @@ async function validate(path: string, content: string) {
   }
 }
 
-async function previewMessage(path: string, content: string, locale: string, key: string, samplesJson?: string) {
+// The mock has no compiler: a small locale list, and plural categories from the browser's Intl.PluralRules.
+const mockLocales = ["ar", "de", "de-AT", "de-CH", "en", "en-GB", "es", "es-419", "fr", "he", "ja", "pl", "ru", "zh", "zh-Hant"];
+function describeMockLocale(tag: string | undefined) {
+  let canonical: string;
+  try { canonical = Intl.getCanonicalLocales(tag?.trim() ?? "")[0] ?? ""; }
+  catch { canonical = ""; }
+  if (canonical === "") return { valid: false, direction: "ltr", cardinal: [], ordinal: [], message: { code: "ui_backend_locale_invalid", args: [{ name: "locale", value: tag ?? "" }] } };
+  const categories = (type: Intl.PluralRuleType) => {
+    const order = ["zero", "one", "two", "few", "many", "other"];
+    const found = new Intl.PluralRules(canonical, { type }).resolvedOptions().pluralCategories as string[];
+    return order.filter((category) => found.includes(category));
+  };
+  const script = new Intl.Locale(canonical).maximize().script;
+  return {
+    valid: true, canonical, dataId: canonical, cldrLocale: canonical,
+    direction: script === "Arab" || script === "Hebr" ? "rtl" : "ltr",
+    cardinal: categories("cardinal"), ordinal: categories("ordinal"),
+  };
+}
+
+async function previewMessage(path: string, content: string, locale: string, key: string, samplesJson?: string, requestedLocale?: string, timeZone?: string) {
   try {
     const inputs = mockPreviewInputs(content);
     const astJson = JSON.stringify({ astVersion: 5, profile: "rmf2-execution-v2", inputs });
+    const formatting = {
+      requestedLocale: requestedLocale ?? locale,
+      resolution: requestedLocale === undefined || requestedLocale === locale ? "exact" : requestedLocale.startsWith(`${locale}-`) ? "parent" : "related",
+      formattingLocale: requestedLocale?.split("-")[0] === locale.split("-")[0] ? requestedLocale : locale,
+      direction: describeMockLocale(locale).direction,
+      ...(timeZone === undefined ? {} : { timeZone }),
+    };
     const renderedJson = samplesJson === undefined
       ? undefined
-      : JSON.stringify({ key, locale, runs: [{ text: mockPreviewText(content, parseMockSamples(samplesJson)) }] });
+      : JSON.stringify({ key, locale, runs: [{ text: mockPreviewText(content, parseMockSamples(samplesJson)) }], ...formatting });
     return { success: true, locale, astJson, renderedJson, diagnostics: [] };
   } catch (error) {
     return {
@@ -716,7 +743,17 @@ export async function mockExecute(operation: string, argument: unknown): Promise
       return { ...validation, content, entries: path.endsWith(".mf2")
         ? [{ key, content, valueStartByte: 0, valueLengthBytes: new TextEncoder().encode(content).length }] : [] };
     }
-    case "PreviewMessage": return previewMessage(value.path as string, value.content as string, value.locale as string, value.key as string, value.samplesJson as string | undefined);
+    case "PreviewMessage": return previewMessage(value.path as string, value.content as string, value.locale as string, value.key as string, value.samplesJson as string | undefined, value.requestedLocale as string | undefined, value.timeZone as string | undefined);
+    case "ListLocales": return { cldrVersion: "48.2", locales: mockLocales };
+    // The mock has no importer: it reports a two-message dry run and applies nothing.
+    case "PreviewCatalogImport": return {
+      ok: true, confirmationToken: "mock-catalog-import", from: value.from, source: value.source,
+      locales: [{ locale: "en", added: 2, changed: 0, unchanged: 0, kept: 0 }],
+      entries: [{ locale: "en", key: "greeting", outcome: "added" }, { locale: "en", key: "farewell", outcome: "added" }],
+      entriesOverflowed: false, files: ["en.rmf2"], skipped: 0, refused: 0, diagnostics: [],
+    };
+    case "ApplyCatalogImport": return { ok: false, kind: "catalog-import", message: { code: "ui_backend_import_messages_invalid", args: [] } };
+    case "DescribeLocale": return describeMockLocale(value.tag as string | undefined);
     case "SaveDocument": return save(value.path as string, value.content as string, value.revision as string);
     case "SaveReview": return saveReview(argument as EditorReviewSaveRequest);
     case "About": return about();

@@ -5,13 +5,15 @@ import type { MockBridge, MockTypedView, MockCommandHandler, MockTypedOperation,
 import type { EditorInterchangeClient, EditorInterchangeState } from "./editorInterchange.js";
 
 /** The state of a mock EditorInterchange: the client state, with content as `{ kind, id }` and command state optional. */
-export type EditorInterchangeMockState = Omit<EditorInterchangeState, "isExportXliffExecuting" | "isPreviewXliffImportExecuting" | "isApplyXliffImportExecuting" | "isExportReviewJsonExecuting" | "isPreviewReviewJsonImportExecuting" | "isApplyReviewJsonImportExecuting"> & Partial<Pick<EditorInterchangeState, "isExportXliffExecuting" | "isPreviewXliffImportExecuting" | "isApplyXliffImportExecuting" | "isExportReviewJsonExecuting" | "isPreviewReviewJsonImportExecuting" | "isApplyReviewJsonImportExecuting">>;
+export type EditorInterchangeMockState = Omit<EditorInterchangeState, "isPreviewCatalogImportExecuting" | "isApplyCatalogImportExecuting" | "isExportXliffExecuting" | "isPreviewXliffImportExecuting" | "isApplyXliffImportExecuting" | "isExportReviewJsonExecuting" | "isPreviewReviewJsonImportExecuting" | "isApplyReviewJsonImportExecuting"> & Partial<Pick<EditorInterchangeState, "isPreviewCatalogImportExecuting" | "isApplyCatalogImportExecuting" | "isExportXliffExecuting" | "isPreviewXliffImportExecuting" | "isApplyXliffImportExecuting" | "isExportReviewJsonExecuting" | "isPreviewReviewJsonImportExecuting" | "isApplyReviewJsonImportExecuting">>;
 
 export interface EditorInterchangeMockDefinition {
   /** Presents the mock as content on route `content{id}`; omit it for the root route `editorInterchange`. */
   readonly id?: string;
   readonly state: EditorInterchangeMockState;
   readonly commands?: {
+    readonly previewCatalogImport?: MockCommandHandler<EditorInterchangeMockState, [input: string]>;
+    readonly applyCatalogImport?: MockCommandHandler<EditorInterchangeMockState, [input: string]>;
     readonly exportXliff?: MockCommandHandler<EditorInterchangeMockState, [input: string]>;
     readonly previewXliffImport?: MockCommandHandler<EditorInterchangeMockState, [input: string]>;
     readonly applyXliffImport?: MockCommandHandler<EditorInterchangeMockState, [input: string]>;
@@ -21,6 +23,8 @@ export interface EditorInterchangeMockDefinition {
   };
   /** Availability of commands with an argument. */
   readonly canExecute?: {
+    readonly previewCatalogImport?: (state: EditorInterchangeMockState, input: string) => boolean;
+    readonly applyCatalogImport?: (state: EditorInterchangeMockState, input: string) => boolean;
     readonly exportXliff?: (state: EditorInterchangeMockState, input: string) => boolean;
     readonly previewXliffImport?: (state: EditorInterchangeMockState, input: string) => boolean;
     readonly applyXliffImport?: (state: EditorInterchangeMockState, input: string) => boolean;
@@ -30,6 +34,8 @@ export interface EditorInterchangeMockDefinition {
   };
   /** Operation handlers; without one an operation runs its command handler and succeeds. */
   readonly operations?: {
+    readonly previewCatalogImport?: MockTypedOperationHandler<EditorInterchangeMockState, string, void> | "manual";
+    readonly applyCatalogImport?: MockTypedOperationHandler<EditorInterchangeMockState, string, void> | "manual";
     readonly exportXliff?: MockTypedOperationHandler<EditorInterchangeMockState, string, void> | "manual";
     readonly previewXliffImport?: MockTypedOperationHandler<EditorInterchangeMockState, string, void> | "manual";
     readonly applyXliffImport?: MockTypedOperationHandler<EditorInterchangeMockState, string, void> | "manual";
@@ -40,14 +46,16 @@ export interface EditorInterchangeMockDefinition {
 }
 
 export interface EditorInterchangeMock extends MockTypedView<EditorInterchangeMockState, EditorInterchangeClient, "editorInterchange"> {
-  readonly operations: { readonly exportXliff: readonly MockTypedOperation<string, void>[]; readonly previewXliffImport: readonly MockTypedOperation<string, void>[]; readonly applyXliffImport: readonly MockTypedOperation<string, void>[]; readonly exportReviewJson: readonly MockTypedOperation<string, void>[]; readonly previewReviewJsonImport: readonly MockTypedOperation<string, void>[]; readonly applyReviewJsonImport: readonly MockTypedOperation<string, void>[]; };
+  readonly operations: { readonly previewCatalogImport: readonly MockTypedOperation<string, void>[]; readonly applyCatalogImport: readonly MockTypedOperation<string, void>[]; readonly exportXliff: readonly MockTypedOperation<string, void>[]; readonly previewXliffImport: readonly MockTypedOperation<string, void>[]; readonly applyXliffImport: readonly MockTypedOperation<string, void>[]; readonly exportReviewJson: readonly MockTypedOperation<string, void>[]; readonly previewReviewJsonImport: readonly MockTypedOperation<string, void>[]; readonly applyReviewJsonImport: readonly MockTypedOperation<string, void>[]; };
 }
 
 const spec: MockTypedViewSpec = {
   kind: "editorInterchange",
   route: "editorInterchange",
-  contract: "Runic.Translations.Editor.EditorInterchangeViewModel:AD00A5B4BE47AA9A45169F855E1B9CE367A214E3C59A59057362787C22ABD400",
+  contract: "Runic.Translations.Editor.EditorInterchangeViewModel:65CB9514BADD2A468BEE5C0905089A11636FF7E3BA9F1133DE5231364EDD720E",
   fields: {
+    previewCatalogImportResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
+    applyCatalogImportResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     exportXliffResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     previewXliffImportResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     applyXliffImportResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
@@ -55,9 +63,11 @@ const spec: MockTypedViewSpec = {
     previewReviewJsonImportResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     applyReviewJsonImportResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
   },
-  defaults: { isExportXliffExecuting: false, isPreviewXliffImportExecuting: false, isApplyXliffImportExecuting: false, isExportReviewJsonExecuting: false, isPreviewReviewJsonImportExecuting: false, isApplyReviewJsonImportExecuting: false },
-  texts: ["exportXliffResultJson", "previewXliffImportResultJson", "applyXliffImportResultJson", "exportReviewJsonResultJson", "previewReviewJsonImportResultJson", "applyReviewJsonImportResultJson"],
+  defaults: { isPreviewCatalogImportExecuting: false, isApplyCatalogImportExecuting: false, isExportXliffExecuting: false, isPreviewXliffImportExecuting: false, isApplyXliffImportExecuting: false, isExportReviewJsonExecuting: false, isPreviewReviewJsonImportExecuting: false, isApplyReviewJsonImportExecuting: false },
+  texts: ["previewCatalogImportResultJson", "applyCatalogImportResultJson", "exportXliffResultJson", "previewXliffImportResultJson", "applyXliffImportResultJson", "exportReviewJsonResultJson", "previewReviewJsonImportResultJson", "applyReviewJsonImportResultJson"],
   commands: {
+    previewCatalogImport: { member: "previewCatalogImport", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    applyCatalogImport: { member: "applyCatalogImport", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
     exportXliff: { member: "exportXliff", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
     previewXliffImport: { member: "previewXliffImport", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
     applyXliffImport: { member: "applyXliffImport", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
@@ -66,6 +76,8 @@ const spec: MockTypedViewSpec = {
     applyReviewJsonImport: { member: "applyReviewJsonImport", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
   },
   operations: {
+    previewCatalogImport: { member: "previewCatalogImport", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    applyCatalogImport: { member: "applyCatalogImport", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
     exportXliff: { member: "exportXliff", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
     previewXliffImport: { member: "previewXliffImport", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
     applyXliffImport: { member: "applyXliffImport", decodeInput: (wire: unknown) => bridgeWire.string(wire) },

@@ -7,12 +7,12 @@ namespace Runic.Translations.Compiler;
 
 public static partial class TranslationCompiler
 {
-    private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceRoots", "markup", "pseudoLocales", "formats", "overrides" };
-    private static readonly string[] FormatsMembers = { "currencies", "units" };
-    private static readonly string[] OverrideMembers = { "catalog", "from" };
-    private static readonly string[] CodeMembers = { "namespace", "className", "visibility", "referenceFallbackText" };
-    private static readonly string[] LocaleMembers = { "tag", "fallback", "validation" };
-    private static readonly string[] RuntimeMembers = { "unsupportedLocale", "missingKey", "bidiIsolation" };
+    internal static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceRoots", "markup", "pseudoLocales", "formats", "overrides" };
+    internal static readonly string[] FormatsMembers = { "currencies", "units" };
+    internal static readonly string[] OverrideMembers = { "catalog", "from" };
+    internal static readonly string[] CodeMembers = { "namespace", "className", "visibility", "referenceFallbackText" };
+    internal static readonly string[] LocaleMembers = { "tag", "fallback", "validation" };
+    internal static readonly string[] RuntimeMembers = { "unsupportedLocale", "missingKey", "bidiIsolation" };
 
     /// <summary>Compiles a convention-based Runic project whose messages are standard MF2 files.</summary>
     /// <remarks>
@@ -35,6 +35,23 @@ public static partial class TranslationCompiler
         TranslationCompilerOptions? options = null,
         CancellationToken cancellationToken = default)
         => CompileRmf2ProjectV5(project, messages, options, cancellationToken);
+
+    /// <summary>
+    /// Reads runic.json exactly as a compile reads it, without the message sources: a UTF-8 BOM is skipped, and a
+    /// duplicate member or any other error is a diagnostic in <paramref name="diagnostics"/>, never an exception. For
+    /// tools (the language server, the editor) that need a member such as <c>pseudoLocales</c> without compiling.
+    /// </summary>
+    /// <returns>The manifest as far as it could be read; null when runic.json is not a JSON object.</returns>
+    internal static ManifestModel? ReadProjectManifest(TranslationSource project, out IReadOnlyList<TranslationDiagnostic> diagnostics, TranslationCompilerOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        options ??= new TranslationCompilerOptions();
+        var bag = new DiagnosticBag();
+        ParsedJson parsed = StrictJsonParser.Parse(project, bag, options, default);
+        ManifestModel? manifest = parsed.Root is null ? null : ReadMf2Project(parsed, bag, options);
+        diagnostics = Array.AsReadOnly(bag.ToSortedArray());
+        return manifest;
+    }
 
     private static ManifestModel? ReadMf2Project(ParsedJson parsed, DiagnosticBag diagnostics, TranslationCompilerOptions options)
     {

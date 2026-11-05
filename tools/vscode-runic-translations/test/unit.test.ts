@@ -2,12 +2,12 @@ import { test, expect } from "bun:test";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, symlinkSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { nearestProjectManifest, projectManifest, serverLaunch, sourceWatchRoots, toolLaunch, xliffExportArguments, xliffImportDryRunArguments } from "../src/server.js";
-import { resolvePreviewHtml } from "../src/preview.js";
+import { importArguments, nearestProjectManifest, projectManifest, serverLaunch, sourceWatchRoots, statusArguments, toolLaunch, xliffExportArguments, xliffImportDryRunArguments } from "../src/server.js";
+import { previewDescription, renderedPreviewHtml, resolvePreviewHtml } from "../src/preview.js";
 import type { Preview } from "../src/preview.js";
 import { PreviewSession, sampleChoices, type PreviewHost, type PreviewState, type Samples } from "../src/preview-session.js";
 import { ForwardedWatchers, type DisposableLike, type WatcherLike } from "../src/watchers.js";
-import { OneTimeNotice, errorSummary, statusPresentation, type DocumentInfo } from "../src/status.js";
+import { OneTimeNotice, coverageLine, errorSummary, localeStatus, parseStatus, statusHtml, statusPresentation, type DocumentInfo } from "../src/status.js";
 import { libraryCatalogChoices, libraryDocumentProject, libraryLocaleChoices, libraryMessageChoices, messageLine, overrideSourcePath, overridesAddArguments, type LibraryCatalogs } from "../src/libraries.js";
 
 class MockWatcher implements WatcherLike<string> {
@@ -152,6 +152,17 @@ test("execution-v2 preview selects server rendering and remains inert", async ()
   expect(html).toContain("title=\"shop:badge\"");
 });
 
+test("the preview names the requested locale, its resolution, the formatting locale and the time zone, and sets the direction", () => {
+  const swiss = { key: "price", locale: "de", runs: [{ text: "1'234.5" }], requestedLocale: "de-CH", resolution: "parent" as const, formattingLocale: "de-CH", direction: "ltr" as const, timeZone: "Europe/Zurich" };
+  expect(previewDescription(swiss)).toBe("de · requested de-CH (parent) · formats in de-CH · time zone Europe/Zurich · inert preview");
+  expect(previewDescription({ key: "price", locale: "de", runs: [], requestedLocale: "de", resolution: "exact", formattingLocale: "de" })).toBe("de · inert preview");
+  const mirrored = renderedPreviewHtml({ key: "price", locale: "ar-XB", runs: [{ text: "<b>" }], direction: "rtl" });
+  expect(mirrored).toContain('lang="ar-XB" dir="rtl"');
+  expect(mirrored).toContain("&lt;b&gt;");
+  // An older server reports no direction: left to right.
+  expect(renderedPreviewHtml({ key: "k", locale: "en", runs: [] })).toContain('dir="ltr"');
+});
+
 const metadata = (key = "count"): Preview => ({ key, locale: "en", inputs: [{ name: "count", type: "integer" }], examples: [{ count: 1 }, { count: 2 }], ast: { astVersion: 5, profile: "rmf2-execution-v2", inputs: [] } });
 const target = (key = "count", locale = "en") => ({ uri: "file:///en.rmf2", key, locale });
 function deferred<T>() {
@@ -294,6 +305,32 @@ test("the VSIX validates runic.json against the schema copied from the specifica
   const readme = readFileSync(join(here, "README.md"), "utf8");
   for (const command of manifest.contributes.commands as { title: string }[])
     expect(readme).toContain(command.title.replace(/^Runic: /, ""));
+});
+
+test("coverage for the file's locale comes from runic-translations status, with its threshold and completeness policy", () => {
+  const stdout = JSON.stringify({ protocol: "runic.commandline/1", command: "status", success: true, exitCode: 0, payloadType: "runic.translations.status/1",
+    payload: { belowThreshold: false, projects: [{ project: "runic.json", catalog: "app", baseLocale: "en", messages: 40, reviewFile: "app.review.json", locales: [
+      { locale: "en", translated: 40, fallback: 0, missing: 0, coverage: 100, belowThreshold: false },
+      { locale: "de-CH", fallbackLocale: "de", translated: 30, fallback: 5, missing: 5, coverage: 87.5, stale: 1, minimumCoverage: 90, belowThreshold: true, completeness: "warning" },
+    ] }] }, fault: null, diagnostics: [] });
+  const result = parseStatus(stdout);
+  const swiss = localeStatus(result, "DE-ch")!;
+  expect(coverageLine(swiss)).toBe("Coverage de-CH: 87.5% (30 translated, 5 from de, 5 missing, 1 stale), below its minimum 90%; missing translations are warnings");
+  const info: DocumentInfo = { project: "file:///w/runic.json", catalog: "app", baseLocale: "en", locale: "de-CH" };
+  const presentation = statusPresentation("running", info, undefined, swiss);
+  expect(presentation.text).toBe("$(globe) Runic: app · de-CH 87.5%");
+  expect(presentation.tooltip).toContain("Coverage de-CH: 87.5%");
+  const html = statusHtml(result);
+  expect(html).toContain("<th scope=\"col\">Stale</th>"); expect(html).toContain('class="below"'); expect(html).toContain("warning"); expect(html).not.toContain("<script");
+  expect(() => parseStatus(JSON.stringify({ success: false, payloadType: null, payload: null, fault: { message: "The catalog does not compile." } }))).toThrow("The catalog does not compile.");
+  expect(statusArguments("/w/runic.json")).toEqual(["status", "--project", "/w/runic.json", "--format", "json"]);
+});
+
+test("catalog import runs the tool's importer: a dry run first, then the import, optionally overwriting", () => {
+  expect(importArguments("/w/runic.json", "resx", "/w/Strings resx/Strings.resx", { dryRun: true }))
+    .toEqual(["import", "--from", "resx", "/w/Strings resx/Strings.resx", "--project", "/w/runic.json", "--dry-run"]);
+  expect(importArguments("/w/runic.json", "i18next", "/w/locales", { dryRun: false, overwrite: true }))
+    .toEqual(["import", "--from", "i18next", "/w/locales", "--project", "/w/runic.json", "--overwrite"]);
 });
 test("Override Library Message offers installed catalogs, messages and locales, and runs overrides add for the project", () => {
   const result: LibraryCatalogs = {

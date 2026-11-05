@@ -34,78 +34,13 @@ const semanticReviewUrl = await tsModuleUrl("../src/lib/semantic-review.ts");
 const reviewModel = await importTs("../src/lib/review-model.ts", { "./semantic-review": semanticReviewUrl });
 const paletteModule = await importTs("../src/lib/command-palette.ts");
 
-// --- Pseudo-localization transform: determinism and shape ---
+// --- Pseudo-localization comes from the SDK's generator on the preview host ---
 
-const sample = "Save 3 files before 12:30";
-assert.equal(simulation.pseudoLocalizeText(sample), simulation.pseudoLocalizeText(sample),
-  "The pseudo-localization transform must be deterministic.");
-const transformed = simulation.pseudoLocalizeText(sample);
-assert.notEqual(transformed, sample, "The transform must visibly alter letters.");
-assert.ok(transformed.includes("é") && transformed.includes("à"),
-  "Accent substitution did not apply its deterministic map.");
-assert.ok(transformed.replace(/[^\d:]/g, "") === sample.replace(/[^\d:]/g, ""),
-  "Digits and punctuation must survive the transform unchanged.");
-assert.ok(transformed.length > sample.length && transformed.includes("àà"),
-  "Controlled vowel lengthening must expand the output.");
-assert.equal(simulation.pseudoLocalizeText(""), "", "Empty input must stay empty.");
-
-// --- Simulation over the message-preview result shape ---
-
-const textResult = { kind: "text", value: "Welcome back" };
-const simulatedText = simulation.simulatePreviewResult(textResult, { pseudoLocalization: true });
-assert.deepEqual(simulatedText, { kind: "text", value: "[Ŵééĺćööḿéé ḃààćķ]" },
-  "Plain text results must be bracket-delimited and transformed.");
-assert.equal(simulation.simulatePreviewResult(textResult, { pseudoLocalization: false }), textResult,
-  "With simulation off, the result must pass through untouched.");
-
-const contentResult = {
-  kind: "content",
-  nodes: [
-    {
-      kind: "element",
-      name: "script",
-      attributes: { tone: "critical", payload: "<img src=x onerror=alert(1)>" },
-      children: [
-        { kind: "text", value: "items for" },
-        { kind: "element", name: "b", attributes: {}, children: [{ kind: "text", value: "Ada" }] },
-      ],
-    },
-    { kind: "text", value: "done" },
-  ],
-};
-const simulatedContent = simulation.simulatePreviewResult(contentResult, { pseudoLocalization: true });
-assert.equal(simulatedContent.kind, "content");
-assert.equal(simulatedContent.nodes[0].value, "[", "Content results must open with a delimiter node.");
-assert.equal(simulatedContent.nodes.at(-1).value, "]", "Content results must close with a delimiter node.");
-const element = simulatedContent.nodes[1];
-assert.equal(element.name, "script", "Markup names must never be transformed.");
-assert.deepEqual(element.attributes, { tone: "critical", payload: "<img src=x onerror=alert(1)>" },
-  "Markup attributes must never be transformed.");
-assert.equal(element.children[0].value, "ïïťééḿś ḟööŕ",
-  "Nested text nodes must be transformed while the element wrapper stays intact.");
-assert.equal(element.children[1].children[0].value, "ÀÀďàà", "Deeply nested text nodes must be transformed.");
-
-const documentResult = {
-  kind: "document",
-  blocks: [
-    { name: "runic:h", occurrence: "h[1]", options: { level: "1" }, blocks: [], nodes: [{ kind: "text", value: "Title" }] },
-    { name: "runic:ol", occurrence: "ol[1]", options: { start: "1", marker: "lower-alpha" }, nodes: [],
-      blocks: [{ name: "runic:li", occurrence: "ol[1]/li[1]", options: {}, blocks: [], nodes: [{ kind: "text", value: "Step" }] }] },
-  ],
-};
-const simulatedDocument = simulation.simulatePreviewResult(documentResult, { pseudoLocalization: true });
-assert.deepEqual(simulatedDocument, {
-  kind: "document",
-  blocks: [
-    { name: "runic:h", occurrence: "h[1]", options: { level: "1" }, blocks: [],
-      nodes: [{ kind: "text", value: "[" }, { kind: "text", value: "Ťïïťĺéé" }, { kind: "text", value: "]" }] },
-    { name: "runic:ol", occurrence: "ol[1]", options: { start: "1", marker: "lower-alpha" }, nodes: [],
-      blocks: [{ name: "runic:li", occurrence: "ol[1]/li[1]", options: {}, blocks: [],
-        nodes: [{ kind: "text", value: "[" }, { kind: "text", value: "Śťééṕ" }, { kind: "text", value: "]" }] }] },
-  ],
-}, "Document simulation must delimit each leaf and keep block names, options and occurrences.");
-assert.equal(simulation.simulatePreviewResult(documentResult, { pseudoLocalization: false }), documentResult,
-  "With simulation off, a document result must pass through untouched.");
+// The editor renders en-XA/ar-XB through the host (Rmf2Preview with pseudo-locales), so it shows exactly what a
+// --pseudo-locales build produces; the frontend keeps no transform of its own.
+assert.equal(simulation.pseudoLocalizeText, undefined, "The frontend must not carry its own pseudo-localization algorithm.");
+assert.equal(simulation.simulatePreviewResult, undefined, "Preview results must not be transformed in the frontend.");
+assert.deepEqual([...simulation.pseudoLocales], ["en-XA", "ar-XB"], "The SDK's pseudo-locales, accented first.");
 
 // --- Persistence mirrors the appearance module contract ---
 
@@ -208,4 +143,4 @@ assert.deepEqual(calls.slice(-3),
   ["togglePseudoLocalization", "toggleUiDirection", "toggleArtifactPreview"],
   "W03 entries must dispatch through their handed-in handlers.");
 
-console.log(`PASS: W03 simulation transforms are deterministic and markup-inert, persist across sessions, emit bidi findings into the shared quality model, and register Alt+P/Alt+B/Alt+R palette entries (${commands.length} total).`);
+console.log(`PASS: W03 simulation uses the host's pseudo-locales, persists across sessions, emit bidi findings into the shared quality model, and register Alt+P/Alt+B/Alt+R palette entries (${commands.length} total).`);

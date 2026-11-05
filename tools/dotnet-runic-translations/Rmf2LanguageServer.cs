@@ -244,13 +244,19 @@ internal sealed partial class Rmf2LanguageServer
             if (command is "runic.preview" or "runic.renderPreview")
             {
                 string key = arguments[1]!.GetValue<string>(), locale = arguments[2]!.GetValue<string>();
-                Rmf2ProjectCompilation compilation = workspace.Validate();
+                // A configured pseudo-locale (en-XA, ar-XB) is generated from the base locale by the same code as a
+                // --pseudo-locales build, so the preview shows exactly what that build produces.
+                Rmf2ProjectCompilation compilation = ConfiguredPseudoLocales(workspace).Contains(locale, StringComparer.Ordinal)
+                    ? TranslationCompiler.CompileRmf2ProjectV5(workspace.ProjectSource, workspace.Sources, null, pseudoLocales: true, _requestCancellation)
+                    : workspace.Validate();
                 if (!compilation.Success) throw new TranslationAuthoringException(string.Join("; ", compilation.Diagnostics.Select(d => d.Message)));
                 Rmf2ProjectV5 project = compilation.Project!;
                 JsonNode message;
                 JsonNode markup;
                 JsonArray inputContract;
-                if (command == "runic.renderPreview") return Rmf2Preview.Render(project, key, locale, arguments[3]!.AsObject());
+                // Optional: the requested locale (de-CH for de content) and the zone timeZone=local formats in.
+                if (command == "runic.renderPreview")
+                    return Rmf2Preview.Render(project, key, locale, arguments[3]!.AsObject(), OptionalArgument(arguments, 4), OptionalArgument(arguments, 5));
                 JsonNode artifact = JsonNode.Parse(Rmf2LocaleArtifactV5.Render(project, locale).Text)!;
                 message = artifact["messages"]?[key]?["ast"] ?? throw new TranslationAuthoringException("Unknown preview message.");
                 markup = JsonNode.Parse(project.MarkupContract)!;
@@ -437,6 +443,8 @@ internal sealed partial class Rmf2LanguageServer
                 ["path"] = new JsonArray(entry.Path.Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
                 ["locale"] = workspace.Locale(sourcePath),
                 ["locales"] = new JsonArray(workspace.Documents.Select(document => workspace.Locale(document.Source.Path)).Distinct(StringComparer.OrdinalIgnoreCase).Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
+                // runic.json pseudoLocales: generated, read-only preview locales.
+                ["pseudoLocales"] = new JsonArray(ConfiguredPseudoLocales(workspace).Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
                 ["inputs"] = new JsonArray(inputs.Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
                 ["slots"] = new JsonArray(slots.Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
             };
@@ -564,10 +572,11 @@ internal sealed partial class Rmf2LanguageServer
         try
         {
             byte[] bytes = TryGetBuffer(manifestPath, out _, out Buffer? manifestBuffer) ? Utf8.GetBytes(manifestBuffer.Text) : File.ReadAllBytes(manifestPath);
-            if (JsonNode.Parse(bytes) is JsonObject manifest)
+            // As the compiler reads runic.json: a BOM is skipped, and a duplicate member is a diagnostic, not an exception.
+            if (TranslationCompiler.ReadProjectManifest(new TranslationSource(manifestPath, bytes), out _) is { } manifest)
             {
-                if (manifest["catalog"] is JsonValue catalog && catalog.TryGetValue(out string? catalogId)) result["catalog"] = catalogId;
-                if (manifest["baseLocale"] is JsonValue baseLocale && baseLocale.TryGetValue(out string? baseTag)) result["baseLocale"] = baseTag;
+                if (manifest.Id.Length != 0) result["catalog"] = manifest.Id;
+                if (manifest.DefaultLocale.Length != 0) result["baseLocale"] = manifest.DefaultLocale;
             }
             if (!configuration && Dependencies(project) is { } dependencies && dependencies.OverrideOf(path) is { } target)
             {
@@ -1382,6 +1391,15 @@ internal sealed partial class Rmf2LanguageServer
         }
         return unsaved;
     }
+
+    private static string? OptionalArgument(JsonArray arguments, int index) =>
+        arguments.Count > index && arguments[index] is JsonValue value && value.TryGetValue(out string? text) && !string.IsNullOrWhiteSpace(text) ? text : null;
+
+    // The pseudo-locales runic.json configures, in their canonical spelling, read as the compiler reads runic.json (a
+    // UTF-8 BOM is skipped; a duplicate member is the compiler's diagnostic, which validation publishes); none when
+    // runic.json is not an object.
+    internal static IReadOnlyList<string> ConfiguredPseudoLocales(Rmf2Workspace workspace) =>
+        TranslationCompiler.ReadProjectManifest(workspace.ProjectSource, out _)?.PseudoLocales.Select(static pseudo => pseudo.Tag).ToArray() ?? [];
 
     // runic.markReviewed: records the entry's state again for the source on disk, as runic-translations review mark
     // does, and republishes the diagnostics. It refuses while the base message's or the translation's file has unsaved
