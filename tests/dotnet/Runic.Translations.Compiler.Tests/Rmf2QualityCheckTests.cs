@@ -94,9 +94,8 @@ internal sealed class Rmf2QualityCheckTests
     [Test, DisplayName("integer plural categories are evaluated from every generated CLDR rule")]
     public void IntegerCategories()
     {
-        string rules = TranslationCapabilityRegistry.EsmPluralRulesSource;
-        foreach (System.Text.RegularExpressions.Match rule in System.Text.RegularExpressions.Regex.Matches(rules, "const pluralRule\\d+ = \\(o\\) => \\{(.*?)\\};", System.Text.RegularExpressions.RegexOptions.Singleline))
-            Assert.True(PluralRuleReachability.IntegerCategories(rule.Groups[1].Value) is { Count: > 0 }, "The evaluator does not accept " + rule.Value);
+        foreach (string rule in TranslationCapabilityRegistry.EsmPluralRuleSources)
+            Assert.True(PluralRuleReachability.IntegerCategories(rule[(rule.IndexOf('{') + 1)..rule.LastIndexOf('}')]) is { Count: > 0 }, "The evaluator does not accept " + rule);
         string Of(string locale, bool ordinal = false) => string.Join(",", Rmf2AuthoringService.PluralCategories(locale, ordinal, integer: true));
         Assert.Equal("one,few,other", Of("cs"));
         Assert.Equal("one,few,many,other", string.Join(",", Rmf2AuthoringService.PluralCategories("cs", ordinal: false)));

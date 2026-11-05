@@ -9,6 +9,8 @@ internal static class LocaleTag
     internal static bool TryCanonicalize(string value, out string canonical)
     {
         canonical = string.Empty;
+        // POSIX-style tags such as de_DE name the same locale as de-DE.
+        value = value?.Replace('_', '-')!;
         if (string.IsNullOrEmpty(value) || value[0] == '-' || value[^1] == '-')
         {
             return false;

@@ -52,6 +52,17 @@ await translations.SetLocaleAsync("fr");   // every catalog switches together
 catalog in the new locale and another in the old one. When any catalog fails, or the call is canceled, nothing changes.
 `Build()` does the same without awaiting, for startup code that cannot await.
 
+**Starting from the user's languages.** `SetLocaleFromPreferencesAsync` takes an ordered preference list, such as the
+operating system's user languages, and chooses the locale with CLDR likely subtags and parent locales, as
+`LocaleNegotiation` does: first among `translations.SupportedLocales`, the locales every catalog shows, so no screen
+mixes languages; when no preference matches those, among each catalog's own locales in registration order (the
+application's catalog first); else the first catalog's default locale. It then switches as `SetLocaleAsync` does. A
+manager's `SetLocaleFromPreferencesAsync` does the same for the whole context.
+
+```csharp
+await translations.SetLocaleFromPreferencesAsync(["de-CH", "fr", "en"]);   // de when every catalog declares de
+```
+
 **The latest switch wins.** A `SetLocaleAsync` call supersedes every earlier call that has not published yet: the earlier
 call's preparation is canceled through its token, its result is discarded and it completes without error. When the user
 picks German, whose overlay pack is still downloading, and then English again, the context stays on English, and a
@@ -96,8 +107,13 @@ foreach (TranslationCatalogStatus catalog in translations.Catalogs)
         logger.LogInformation("{Catalog} shows {Locale} for {Requested}", catalog.CatalogId, catalog.Locale, catalog.RequestedLocale);
 ```
 
-`Exact` means the catalog (or an overlay) declares the locale, `Parent` that it uses a parent such as `fr` for
-`fr-CA`, and `Default` that it falls back to its default locale. The same values are on every snapshot
+`Exact` means the catalog (or an overlay) declares the locale. Otherwise, under the default `ParentsThenDefault`
+policy, the catalog matches the request with the pinned CLDR likely subtags and parent locales, and the language and
+likely script must agree (a `sr-Latn-RS` request never shows Cyrillic `sr` text). `Parent` means it uses a parent, by
+removing subtags or by CLDR parent locales: `fr` for `fr-CA`, `es-419` for `es-MX`, `zh-Hant` for `zh-TW`. `Related`
+means it uses another locale those rules match: a sibling region (`de-DE` for `de-CH` when the catalog has no `de`),
+a more specific locale (`de-DE` for `de`), a closely related language (`nb` for `nn`) or the same locale written
+differently (`he` for `iw`). `Default` means it falls back to its default locale. The same values are on every snapshot
 (`ITranslationSnapshot.RequestedLocale`, `LocaleResolution`) and on the managers' event data, also for a standalone
 `TranslationManager` and for external packs. A snapshot from a custom `ITranslationSnapshotFactory` reports what it
 implements; the interface's defaults report its locale as `Exact`.
@@ -147,8 +163,10 @@ library, and only then the next locale. A German user therefore sees the library
 application overrides the English one.
 
 **Added locales.** `addedLocales` declares locales the library lacks. An added locale falls back to `fallbackLocale`
-when it names one. Without it, it falls back to its nearest parent that the library declares or an overlay adds, so
-`de-CH` falls back to the library's `de`, and without such a parent to the library's default locale. From the first
+when it names one. Without it, it falls back to its nearest CLDR parent that the library declares or an overlay adds
+(`de-CH` to the library's `de`, `es-MX` to `es-419`, `zh-TW` to `zh-Hant`), then to the library locale that CLDR likely
+subtags match (`de-CH` to `de-DE` when the library has no `de`), and only then to the library's default locale. The
+likely script must agree, so an added `sr-Latn` never falls back to a Cyrillic `sr`. From the first
 library locale on, the library's chain applies. Keys the overlay does not translate show the overlay's text for that
 fallback locale if it has one, else the library's. A locale that a later library release declares itself keeps the
 library's chain. Two overlays that add one locale with different fallbacks are an error.

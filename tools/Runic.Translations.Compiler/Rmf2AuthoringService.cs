@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
@@ -225,27 +224,8 @@ internal static class Rmf2AuthoringService
     {
         if (function is null || Rmf2FunctionRegistryV2.Find(function) is null) throw new ArgumentException("Choose a compiler-supported input formatter.");
     }
-    // Extract category names from the same generated CLDR rules shipped to ESM.
-    // This avoids a host Intl evaluator or a second hand-maintained locale table.
-    // An integer selector (`:integer`, an int64 operand) has no visible fraction digits, so only the
-    // categories its rule reaches with v = 0 are selectable: Czech `many` is fractions only.
-    internal static IReadOnlyList<string> PluralCategories(string locale, bool ordinal, bool integer = false)
-    {
-        string language = locale.Split('-', '_')[0].ToLowerInvariant();
-        return Categories.GetOrAdd((language, ordinal, integer), static key => ReadCategories(key.Language, key.Ordinal, key.Integer));
-    }
-
-    private static readonly ConcurrentDictionary<(string Language, bool Ordinal, bool Integer), string[]> Categories = new();
-
-    private static string[] ReadCategories(string language, bool ordinal, bool integer)
-    {
-        string rules = TranslationCapabilityRegistry.EsmPluralRulesSource;
-        var mapping = Regex.Match(rules, "\\\"" + Regex.Escape(language) + "\\\": Object.freeze\\(\\[pluralRule(\\d+), pluralRule(\\d+)\\]\\)");
-        if (!mapping.Success) return Array.Empty<string>();
-        string index = mapping.Groups[ordinal ? 2 : 1].Value;
-        var body = Regex.Match(rules, "const pluralRule" + index + " = \\(o\\) => \\{(.*?)\\};", RegexOptions.Singleline);
-        IReadOnlySet<string> categories = Regex.Matches(body.Value, "return \"(.*?)\"").Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
-        if (integer && PluralRuleReachability.IntegerCategories(body.Groups[1].Value) is { } reachable) categories = reachable;
-        return CategoryOrder.Where(categories.Contains).ToArray();
-    }
+    // The categories of the same generated CLDR rules shipped to both runtimes. An integer selector (`:integer`, an
+    // int64 operand) has no visible fraction digits, so only the categories its rule reaches with v = 0 are selectable.
+    internal static IReadOnlyList<string> PluralCategories(string locale, bool ordinal, bool integer = false) =>
+        integer ? TranslationCapabilityRegistry.IntegerPluralCategories(locale, ordinal) : TranslationCapabilityRegistry.PluralCategories(locale, ordinal);
 }
