@@ -20,6 +20,7 @@ public sealed class CompiledTranslationCatalog
     private readonly Dictionary<string, int> _idByName;
     private readonly Dictionary<string, LocaleState> _localeByTag;
     private readonly object _stateGate;
+    private string[]? _localeTags;
 
     /// <summary>Creates a validated compiled catalog from generated closed data.</summary>
     public CompiledTranslationCatalog(
@@ -178,45 +179,45 @@ public sealed class CompiledTranslationCatalog
 
     internal CompiledTranslationDefinition[] DefinitionArray => _definitions;
 
-    internal string ResolveRequestedLocale(string requestedLocale)
+    /// <summary>
+    /// Chooses the declared locale for an ordered preference list, such as the operating system's user languages,
+    /// with CLDR likely subtags and parent locales; the default locale when no preference matches.
+    /// </summary>
+    /// <remarks>See <see cref="LocaleNegotiation"/> for the matching rules. The unsupported-locale policy does not apply.</remarks>
+    /// <param name="preferredLocales">The preferences, most preferred first; invalid tags are skipped.</param>
+    public string NegotiateLocale(IEnumerable<string> preferredLocales)
     {
-        ArgumentNullException.ThrowIfNull(requestedLocale);
-        // An empty tag, the name of the invariant culture (for example under LANG=C), names no locale.
-        // It is an unsupported locale without subtags, so the policy chooses the default locale or rejects it.
-        string canonical = string.Empty;
-        if (requestedLocale.Length != 0 && !LocaleTag.TryCanonicalize(requestedLocale, out canonical))
-        {
-            throw new ArgumentException("The requested locale is not a structurally valid BCP 47 tag.", nameof(requestedLocale));
-        }
+        ArgumentNullException.ThrowIfNull(preferredLocales);
+        return LocaleNegotiation.Negotiate(preferredLocales, LocaleTags()) ?? DefaultLocale;
+    }
 
-        if (_localeByTag.ContainsKey(canonical))
-        {
-            return canonical;
-        }
+    internal string ResolveRequestedLocale(string requestedLocale) => ResolveRequest(requestedLocale).Locale;
 
-        switch (UnsupportedLocale)
-        {
-            case UnsupportedLocalePolicy.Default:
-                return DefaultLocale;
-            case UnsupportedLocalePolicy.ParentsThenDefault:
-                int separator = canonical.LastIndexOf('-');
-                while (separator > 0)
-                {
-                    canonical = canonical[..separator];
-                    if (_localeByTag.ContainsKey(canonical))
-                    {
-                        return canonical;
-                    }
+    internal LocaleRequest ResolveRequest(string requestedLocale) =>
+        LocaleRequestResolver.Resolve(requestedLocale, LocaleTags(), UnsupportedLocale, DefaultLocale, Catalog);
 
-                    separator = canonical.LastIndexOf('-');
-                }
+    internal bool DeclaresLocale(string canonicalLocale) => _localeByTag.ContainsKey(canonicalLocale);
 
-                return DefaultLocale;
-            case UnsupportedLocalePolicy.Exact:
-            default:
-                throw new TranslationNotFoundException(
-                    $"Locale '{canonical}' is not declared by catalog '{Catalog}'.");
-        }
+    internal string? GetFallbackLocale(string canonicalLocale) => _localeByTag[canonicalLocale].FallbackLocale;
+
+    /// <summary>The declared locale tags in ordinal order; callers must not modify the array.</summary>
+    internal string[] LocaleTags() => _localeTags ??= CreateLocaleTags(_locales);
+
+    private static string[] CreateLocaleTags(CompiledTranslationLocale[] locales)
+    {
+        string[] tags = new string[locales.Length];
+        for (int index = 0; index < tags.Length; index++) tags[index] = locales[index].Locale;
+        Array.Sort(tags, StringComparer.Ordinal);
+        return tags;
+    }
+
+    /// <summary>The values a declared locale defines itself, without its fallback chain.</summary>
+    internal (string?[] Patterns, CompiledTextMessage?[] Messages) GetDirect(string canonicalLocale)
+    {
+        // Resolving the locale builds the direct values of every locale in its chain.
+        _ = Resolve(canonicalLocale);
+        LocaleState state = _localeByTag[canonicalLocale];
+        return (state.DirectPatterns!, state.DirectMessages!);
     }
 
     internal string?[] GetResolvedPatterns(string canonicalLocale) =>

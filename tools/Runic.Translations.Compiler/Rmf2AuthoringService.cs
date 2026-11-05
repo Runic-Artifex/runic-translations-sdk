@@ -224,17 +224,7 @@ internal static class Rmf2AuthoringService
     {
         if (function is null || Rmf2FunctionRegistryV2.Find(function) is null) throw new ArgumentException("Choose a compiler-supported input formatter.");
     }
-    // Extract category names from the same generated CLDR rules shipped to ESM.
-    // This avoids a host Intl evaluator or a second hand-maintained locale table.
-    internal static string[] PluralCategories(string locale, bool ordinal)
-    {
-        string language = locale.Split('-', '_')[0].ToLowerInvariant();
-        string rules = TranslationCapabilityRegistry.EsmPluralRulesSource;
-        var mapping = Regex.Match(rules, "\\\"" + Regex.Escape(language) + "\\\": Object.freeze\\(\\[pluralRule(\\d+), pluralRule(\\d+)\\]\\)");
-        if (!mapping.Success) return Array.Empty<string>();
-        string index = mapping.Groups[ordinal ? 2 : 1].Value;
-        var body = Regex.Match(rules, "const pluralRule" + index + " = \\(o\\) => \\{(.*?)\\};", RegexOptions.Singleline);
-        var categories = Regex.Matches(body.Value, "return \"(.*?)\"").Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
-        return CategoryOrder.Where(categories.Contains).ToArray();
-    }
+    // The categories of the same generated CLDR rules shipped to both runtimes.
+    internal static string[] PluralCategories(string locale, bool ordinal) =>
+        TranslationCapabilityRegistry.PluralCategories(locale, ordinal).ToArray();
 }

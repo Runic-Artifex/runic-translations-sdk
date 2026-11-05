@@ -59,8 +59,8 @@ internal static class Rmf2EsmOutputRendererV5
         writer.Line("export const baseLocale = " + GenerationSupport.JsonString(project.DefaultLocale) + ";");
         writer.Line("export const locales = Object.freeze(" + JsonSerializer.Serialize(project.Locales.Select(item => item.Tag).OrderBy(item => item, StringComparer.Ordinal)) + ");");
         writer.Line("const unsupportedLocalePolicy = " + GenerationSupport.JsonString(project.UnsupportedLocale.ToString()) + ";");
-        writer.Line("const generatedLocaleData = " + TranslationCapabilityRegistry.EsmLocaleDataJson + ";");
-        writer.Line(TranslationCapabilityRegistry.EsmPluralRulesSource);
+        // Only the CLDR data of the catalog's languages is embedded.
+        writer.Line(TranslationCapabilityRegistry.EsmLocaleSource(project.Locales.Select(item => item.Tag)));
         // Only the markup contracts: per-message contracts live in the message modules and dynamic.js.
         writer.Line("const markupContracts = freezeTrusted(JSON.parse(" + GenerationSupport.JsonString(MarkupContractsJson(project)) + "));");
         // The renderers' table of structured messages; a function, so a bundle without a renderer drops it.
@@ -288,6 +288,8 @@ internal static class Rmf2EsmOutputRendererV5
         export declare const locales: readonly Locale[];
         export declare function decimal(value: string): Rmf2Decimal;
         export declare function resolveLocale(locale: string): Locale;
+        /** The best declared locale for an ordered preference list (navigator.languages, Accept-Language, LANGUAGE), matched with CLDR likely subtags; the base locale when none matches. */
+        export declare function negotiateLocale(preferences: Iterable<string>): Locale;
         /** The text direction of any BCP 47 locale tag's script, for the page's `dir` attribute. */
         export declare function localeDirection(locale: string): "ltr" | "rtl";
         export declare function getLocale(): Locale;

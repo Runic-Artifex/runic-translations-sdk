@@ -493,8 +493,9 @@ internal sealed class GeneratorReadableTests
         Assert.Equal("AppText.Accessors.g.cs|AppText.CatalogData.g.cs|AppText.Keys.g.cs|AppText.Readable.g.cs|AppText.Registration.g.cs",
             string.Join("|", run.SingleResult.GeneratedSources.Select(static item => item.HintName).Order(StringComparer.Ordinal)), "hint files");
         // The encoded files are the same with and without the readable surface, except that encoded members with a
-        // readable counterpart leave completion lists. Without the readable surface they stay visible.
-        GeneratorRun old = GeneratorTestHost.Run(RuntimeReferenceMode.Rmf2V3, ProjectInput(), EnglishInput(), GermanInput());
+        // readable counterpart leave completion lists. Without the readable surface they stay visible. The runtime
+        // differs only in the readable surface; both have the composition surface and the version rule.
+        GeneratorRun old = GeneratorTestHost.Run(RuntimeReferenceMode.Rmf2V3CompositionVersionRule, ProjectInput(), EnglishInput(), GermanInput());
         foreach (GeneratedSourceResult encoded in old.SingleResult.GeneratedSources)
             Assert.Equal(WithoutHidden(encoded.SourceText.ToString()),
                 WithoutHidden(run.SingleResult.GeneratedSources.Single(item => item.HintName == encoded.HintName).SourceText.ToString()), encoded.HintName);

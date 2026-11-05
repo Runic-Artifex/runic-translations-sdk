@@ -136,6 +136,10 @@ public static class TranslationReferenceResolver
         return text is null ? Fallback(reference, diagnostics) : new(TranslationReferenceOutcome.Translated, text, diagnostics);
     }
 
+    // A reference of a catalog the receiver does not have: its fallback text, with a catalog-mismatch diagnostic.
+    internal static TranslationReferenceResolution CatalogMismatch(TranslationReference reference) =>
+        Fallback(reference, [new("$", TranslationReferenceDiagnosticReason.CatalogMismatch)]);
+
     private static TranslationReferenceResolution Fallback(TranslationReference reference, List<TranslationReferenceDiagnostic> diagnostics) =>
         reference.FallbackText is { } fallback
             ? new(TranslationReferenceOutcome.Fallback, fallback, diagnostics)

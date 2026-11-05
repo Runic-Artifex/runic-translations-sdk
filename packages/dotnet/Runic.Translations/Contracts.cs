@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -15,6 +16,19 @@ public interface ITranslationSnapshot
     string Catalog { get; }
     /// <summary>The canonical locale tag.</summary>
     string Locale { get; }
+    /// <summary>
+    /// The canonical locale tag that was requested before it resolved to <see cref="Locale"/>, such as <c>de-CH</c> for a
+    /// <c>de</c> snapshot or <c>fr-CA</c> for an <c>fr</c> one. Messages format numbers, percentages, dates and times in
+    /// it when its language matches the message's content locale.
+    /// </summary>
+    /// <remarks>
+    /// Empty when the invariant culture's name was requested; messages then format in their content locale. Snapshots
+    /// that do not record the request report <see cref="Locale"/>, as do snapshots created directly for a declared locale.
+    /// </remarks>
+    string RequestedLocale => Locale;
+    /// <summary>How the catalog resolved <see cref="RequestedLocale"/> to <see cref="Locale"/>.</summary>
+    /// <remarks>Snapshots that do not record the request report <see cref="LocaleResolution.Exact"/>.</remarks>
+    LocaleResolution LocaleResolution => LocaleResolution.Exact;
     /// <summary>Attempts to resolve a resource pattern.</summary>
     bool TryGet(TranslationKey key, out string pattern);
     /// <summary>Resolves a resource pattern under the catalog missing-key policy.</summary>
@@ -43,12 +57,6 @@ public interface ITranslationSnapshot
         placeholders = default;
         return false;
     }
-    /// <summary>
-    /// The canonical locale tag that was requested before it resolved to <see cref="Locale"/>, such as <c>de-CH</c> for a
-    /// <c>de</c> snapshot. Messages format numbers, percentages, dates and times in it when its language matches the
-    /// message's content locale. Snapshots that do not track it return <see cref="Locale"/>.
-    /// </summary>
-    string RequestedLocale => Locale;
     /// <summary>
     /// Attempts to get the effective content locale of a message: the locale whose text it shows, which differs from
     /// <see cref="Locale"/> after a fallback. Use it for the <c>lang</c> of a string message. Snapshots that cannot tell
@@ -145,6 +153,15 @@ public interface ITranslationProvider
     /// <see cref="UnsupportedLocalePolicy.Exact"/>.
     /// </remarks>
     ValueTask<ITranslationSnapshot> GetSnapshotAsync(string requestedLocale, CancellationToken cancellationToken = default);
+    /// <summary>Chooses the provided locale for an ordered preference list, such as the operating system's user languages.</summary>
+    /// <remarks>
+    /// <see cref="CompiledTranslationProvider"/> matches with CLDR likely subtags and parent locales
+    /// (<see cref="LocaleNegotiation"/>) and returns the default locale when no preference matches. The default
+    /// implementation throws <see cref="NotSupportedException"/>.
+    /// </remarks>
+    /// <param name="preferredLocales">The preferences, most preferred first.</param>
+    string NegotiateLocale(IEnumerable<string> preferredLocales) =>
+        throw new NotSupportedException("This provider does not negotiate locales.");
 }
 
 /// <summary>Owns the currently active immutable locale snapshot.</summary>
@@ -166,6 +183,15 @@ public interface ITranslationManager
     /// text but formats numbers and dates for Switzerland, so it publishes a snapshot and raises <see cref="LocaleChanged"/>.
     /// </remarks>
     ValueTask SetLocaleAsync(string locale, CancellationToken cancellationToken = default);
+    /// <summary>Negotiates a locale for an ordered preference list and activates it as <see cref="SetLocaleAsync"/> does.</summary>
+    /// <remarks>
+    /// <see cref="TranslationManager"/> asks its provider's <see cref="ITranslationProvider.NegotiateLocale"/>. The default
+    /// implementation throws <see cref="NotSupportedException"/>.
+    /// </remarks>
+    /// <param name="preferredLocales">The preferences, most preferred first, such as the operating system's user languages.</param>
+    /// <param name="cancellationToken">Cancels this caller's wait.</param>
+    ValueTask SetLocaleFromPreferencesAsync(IEnumerable<string> preferredLocales, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("This manager does not negotiate locales.");
     /// <summary>
     /// Rebuilds and atomically republishes the active locale's snapshot from its sources as if the
     /// locale were being entered fresh, without changing locales.
@@ -238,6 +264,10 @@ public sealed class TranslationLocaleChangedEventArgs : EventArgs
     public string OldLocale => OldSnapshot.Locale;
     /// <summary>The new canonical locale.</summary>
     public string NewLocale => NewSnapshot.Locale;
+    /// <summary>The requested locale that the new snapshot resolved (<see cref="ITranslationSnapshot.RequestedLocale"/>).</summary>
+    public string RequestedLocale => NewSnapshot.RequestedLocale;
+    /// <summary>How the requested locale resolved to <see cref="NewLocale"/>.</summary>
+    public LocaleResolution LocaleResolution => NewSnapshot.LocaleResolution;
 }
 
 /// <summary>Opaque caller-owned bytes for an external locale pack.</summary>
@@ -277,6 +307,10 @@ public sealed class TranslationSnapshotPublishedEventArgs : EventArgs
     public ITranslationSnapshot Snapshot { get; }
     /// <summary>Why the snapshot was published.</summary>
     public TranslationSnapshotPublishReason Reason { get; }
+    /// <summary>The requested locale that the snapshot resolved (<see cref="ITranslationSnapshot.RequestedLocale"/>).</summary>
+    public string RequestedLocale => Snapshot.RequestedLocale;
+    /// <summary>How the requested locale resolved to the snapshot's locale.</summary>
+    public LocaleResolution LocaleResolution => Snapshot.LocaleResolution;
 }
 
 /// <summary>A generated readable message surface, such as <c>new AppText(manager).Messages</c>.</summary>
