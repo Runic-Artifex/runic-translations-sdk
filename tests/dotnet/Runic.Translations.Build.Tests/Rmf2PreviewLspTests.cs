@@ -83,4 +83,38 @@ internal sealed class Rmf2PreviewLspTests
         });
         Assert.True(ast["error"] is null && ast["result"]?["ast"] is not null, ast.ToJsonString());
     }
+
+    [Test, DisplayName("LSP preview renders :currency, :unit and compact notation in the requested locale")]
+    public void CurrencyUnitAndCompact()
+    {
+        const string project = """{"schemaVersion":1,"catalog":"app","code":{"namespace":"Example","className":"Text"},"baseLocale":"en","locales":["en","de"],"formats":{"currencies":["CHF","EUR"]}}""";
+        const string english = "total = {$amount :currency currency=EUR}\nprice =\n  .input {$code :string}\n  {{{$amount :currency currency=$code}}}\ndistance = {$km :unit unit=kilometer unitDisplay=long}\nfollowers = {$count :number runic:notation=compact} followers\n";
+        const string german = "total = {$amount :currency currency=EUR}\nprice =\n  .input {$code :string}\n  {{{$amount :currency currency=$code}}}\ndistance = {$km :unit unit=kilometer unitDisplay=long}\nfollowers = {$count :number runic:notation=compact} Follower\n";
+        using TemporaryDirectory temporary = new();
+        File.WriteAllText(temporary.Resolve("runic.json"), project);
+        File.WriteAllText(temporary.Resolve("en.rmf2"), english);
+        File.WriteAllText(temporary.Resolve("de.rmf2"), german);
+        string uri = new Uri(temporary.Resolve("en.rmf2")).AbsoluteUri;
+        using Session session = new(temporary.Path);
+        session.Request("initialize", new JsonObject { ["rootUri"] = new Uri(temporary.Path).AbsoluteUri, ["capabilities"] = new JsonObject() });
+        session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = uri, ["version"] = 1, ["text"] = english } });
+        string Render(string key, string locale, string? requested, JsonObject samples)
+        {
+            JsonNode response = session.Request("workspace/executeCommand", new JsonObject
+            {
+                ["command"] = "runic.renderPreview", ["arguments"] = new JsonArray(uri, key, locale, samples, requested, null),
+            });
+            Assert.True(response["error"] is null, key + ": " + response.ToJsonString());
+            return Text(response);
+        }
+        string germany = Render("total", "de", null, new JsonObject { ["amount"] = "1234.5" });
+        string switzerland = Render("total", "de", "de-CH", new JsonObject { ["amount"] = "1234.5" });
+        Assert.Contains("1.234,50", germany);
+        Assert.Contains("€", germany);
+        Assert.True(switzerland != germany && switzerland.Contains("1'234.50", StringComparison.Ordinal), "de-CH currency: " + switzerland);
+        Assert.Contains("CHF", Render("price", "de", "de-CH", new JsonObject { ["amount"] = "12", ["code"] = "CHF" }));
+        Assert.Contains("Kilometer", Render("distance", "de", null, new JsonObject { ["km"] = "12" }));
+        Assert.Contains("Follower", Render("followers", "de", null, new JsonObject { ["count"] = "12500" }));
+        Assert.Contains("K followers", Render("followers", "en", null, new JsonObject { ["count"] = "12500" }));
+    }
 }
