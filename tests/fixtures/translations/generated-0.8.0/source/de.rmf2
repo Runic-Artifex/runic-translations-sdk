@@ -8,3 +8,6 @@ grid_hint = Drücken Sie {#strong}Eingabe{/strong} zum Bearbeiten
 grid_total =
   .input {$amount :number}
   {{Summe {$amount}}}
+grid_updated =
+  .input {$when :date style=long}
+  {{Aktualisiert am {$when}}}
