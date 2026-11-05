@@ -30,6 +30,18 @@
           "values": [
             "exact"
           ]
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
+          ]
         }
       }
     },
@@ -58,6 +70,18 @@
             "always",
             "never",
             "min2"
+          ]
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
           ]
         }
       }
@@ -116,6 +140,18 @@
           "values": [],
           "minimum": 0,
           "maximum": 6
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
+          ]
         }
       }
     },
@@ -135,6 +171,18 @@
             "long",
             "full"
           ]
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
+          ]
         }
       }
     },
@@ -153,6 +201,18 @@
             "medium",
             "long",
             "full"
+          ]
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
           ]
         }
       }
@@ -185,6 +245,18 @@
           ],
           "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z0-9_+-]+)*$",
           "maximumLength": 64
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
+          ]
         }
       }
     },
@@ -203,6 +275,18 @@
             "b",
             "p"
           ]
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
+          ]
         }
       }
     },
@@ -217,6 +301,18 @@
           "default": "exact",
           "values": [
             "exact"
+          ]
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
           ]
         }
       }
@@ -249,6 +345,18 @@
             "always",
             "auto"
           ]
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
+          ]
         }
       }
     },
@@ -276,6 +384,18 @@
             "long",
             "short",
             "narrow"
+          ]
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
           ]
         }
       }
@@ -330,6 +450,12 @@
     "rule": "numbers, percentages, dates and times format in the requested locale, without extensions and private-use subtags, when its language subtag equals the content locale's and both have the same implied script (the explicit script, else the CLDR likely script of the language and region); otherwise in the content locale",
     "contentLocale": "plural, ordinal, list and relative-time data, and the locale reported on content, stay on the message's effective content locale",
     "requested": "the canonical tag the caller asked for, before it was resolved to a catalog locale"
+  },
+  "bidi": {
+    "strategy": "Unicode MessageFormat 2's default bidi strategy (LDML 48 Handling Bidirectional Text): with msgdir the direction of the message's content locale and dir the direction of a placeholder, a left-to-right placeholder stays bare when msgdir is left to right and its u:dir is absent or inherit, else it is wrapped in U+2066 LRI and U+2069 PDI; a right-to-left placeholder is wrapped in U+2067 RLI and PDI; one of unknown direction in U+2068 FSI and PDI",
+    "isolation": "runtime.bidiIsolation in runic.json: default isolates placeholders when the catalog declares a right-to-left locale, on always, off never; an explicit u:dir of ltr, rtl or auto isolates its placeholder in every mode",
+    "placeholderDirection": "u:dir ltr, rtl, auto (unknown) or inherit (msgdir); without it, integer, number, date, time and datetime have the formatting locale's direction, runic:relative-time the content locale's, runic:uuid and runic:boolean are left to right, and string and runic:list are unknown; a functionless local alias keeps its u:dir and an explicit function replaces it",
+    "localeDirection": "right to left when the explicit script, else the CLDR likely script of the tag, is one of CLDR's right-to-left scripts"
   },
   "percent": {
     "pattern": "the formatting locale's positive and negative percent patterns from platform globalization: prefix, digits and suffix",

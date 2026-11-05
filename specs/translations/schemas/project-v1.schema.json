@@ -304,6 +304,15 @@
             "returnKey",
             "returnMarker"
           ]
+        },
+        "bidiIsolation": {
+          "description": "Isolates placeholders with Unicode MessageFormat 2's default bidi strategy (FSI, LRI or RLI before a placeholder, PDI after it). default: on when the catalog declares a right-to-left locale, off otherwise; on: always; off: never. A u:dir option of ltr, rtl or auto isolates its placeholder in every mode.",
+          "enum": [
+            "default",
+            "on",
+            "off"
+          ],
+          "default": "default"
         }
       },
       "additionalProperties": false

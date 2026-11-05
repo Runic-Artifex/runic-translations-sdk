@@ -602,12 +602,14 @@ internal sealed class Rmf2EsmV5Tests
                 """, new UTF8Encoding(false));
             Run("bun", [script], directory);
 
-            // Without Intl.Locale only an explicit script subtag counts.
+            // Without Intl.Locale the catalog's pinned likely subtags still give its own languages' scripts (as .NET's
+            // LocaleDirection does); for another language only an explicit script subtag counts.
             string fallback = Path.Combine(directory, "fallback.mjs");
             File.WriteAllText(fallback, """
                 delete Intl.Locale;
                 const { localeDirection } = await import("./direction.esm-v5/runtime.js");
-                if(localeDirection("ar-Arab")!=="rtl"||localeDirection("ar")!=="ltr"||localeDirection("en")!=="ltr")throw new Error("explicit scripts only");
+                if(localeDirection("ar-Arab")!=="rtl"||localeDirection("ar")!=="rtl"||localeDirection("he-IL")!=="rtl"||localeDirection("en")!=="ltr"||localeDirection("ar-Latn")!=="ltr")throw new Error("catalog languages");
+                if(localeDirection("fa")!=="ltr"||localeDirection("fa-Arab")!=="rtl")throw new Error("explicit scripts only for other languages");
                 """, new UTF8Encoding(false));
             Run("bun", [fallback], directory);
         }
@@ -683,7 +685,11 @@ internal sealed class Rmf2EsmV5Tests
     }
 
     internal static Rmf2ProjectV5 CompileProject(string id, string baseLocale, IReadOnlyList<string> locales,
-        bool allowExtras, params (string Locale, string Source)[] sources)
+        bool allowExtras, params (string Locale, string Source)[] sources) => CompileProject(id, baseLocale, locales, allowExtras, null, sources);
+
+    // bidiIsolation: runtime.bidiIsolation; the formatting conformance corpora pass "off", since isolation has its own corpus.
+    internal static Rmf2ProjectV5 CompileProject(string id, string baseLocale, IReadOnlyList<string> locales,
+        bool allowExtras, string? bidiIsolation, params (string Locale, string Source)[] sources)
     {
         string json = JsonSerializer.Serialize(new
         {
@@ -693,6 +699,7 @@ internal sealed class Rmf2EsmV5Tests
             baseLocale,
             locales,
             validation = allowExtras ? new { extraLocaleKeys = "allow" } : null,
+            runtime = bidiIsolation is null ? null : new { bidiIsolation },
         }, ProjectJsonOptions);
         Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(
             new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(json)),

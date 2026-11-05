@@ -141,6 +141,27 @@ internal sealed class CompositionTests
         Assert.True(!context.TryGetManager("missing", out _), "unknown catalog");
     }
 
+    [Test, DisplayName("generated catalogs isolate placeholders when they declare a right-to-left locale, as runtime.bidiIsolation says")]
+    public async Task BidiIsolation()
+    {
+        static async Task<string> Greeting(string project, string locale, params (string Locale, string Text)[] sources)
+        {
+            ITranslationProvider provider = Catalog.Compile(project, sources).Registration.CreateProvider();
+            ITranslationSnapshot snapshot = await provider.GetSnapshotAsync(locale);
+            Assert.True(snapshot.TryGetKey("greeting", out TranslationKey key), "greeting");
+            return snapshot.Format(key, [Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument("name", new TextArgument("_", "Ada"))]);
+        }
+        static string Project(string id, string locales, string? runtime = null) => "{\"schemaVersion\":1,\"catalog\":\"" + id +
+            "\",\"code\":{\"namespace\":\"Example.Bidi\",\"className\":\"" + char.ToUpperInvariant(id[0]) + id[1..] + "Text\",\"visibility\":\"public\"},\"baseLocale\":\"en\",\"locales\":[" +
+            locales + "]" + (runtime is null ? "" : ",\"runtime\":{\"bidiIsolation\":\"" + runtime + "\"}") + "}";
+
+        Assert.Equal("Hello \u2068Ada\u2069", await Greeting(Project("mixed", "\"en\",\"ar\""), "en", ("en", "greeting = Hello {$name}\n"), ("ar", "greeting = مرحبا {$name}\n")), "en in an en/ar catalog");
+        Assert.Equal("مرحبا \u2068Ada\u2069", await Greeting(Project("mixed", "\"en\",\"ar\""), "ar", ("en", "greeting = Hello {$name}\n"), ("ar", "greeting = مرحبا {$name}\n")), "ar");
+        Assert.Equal("Hello Ada", await Greeting(Project("plain", "\"en\",\"de\""), "en", ("en", "greeting = Hello {$name}\n"), ("de", "greeting = Hallo {$name}\n")), "en/de catalog");
+        Assert.Equal("Hello \u2068Ada\u2069", await Greeting(Project("forced", "\"en\"", "on"), "en", ("en", "greeting = Hello {$name}\n")), "on");
+        Assert.Equal("Hello Ada", await Greeting(Project("quiet", "\"en\",\"he\"", "off"), "en", ("en", "greeting = Hello {$name}\n"), ("he", "greeting = שלום {$name}\n")), "off");
+    }
+
     [Test, DisplayName("a context publishes every catalog together and changes none when one fails")]
     public async Task AtomicSwitch()
     {

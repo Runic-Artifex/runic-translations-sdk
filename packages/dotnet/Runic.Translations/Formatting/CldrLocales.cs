@@ -68,6 +68,18 @@ internal static class CldrLocales
     }
 
     /// <summary>
+    /// Whether a canonical tag is written right to left: its explicit script, else its likely script (CLDR likelySubtags),
+    /// is one of CLDR's right-to-left scripts. <c>ar</c>, <c>pa-PK</c> and <c>ku-Arab</c> are; <c>ku</c>, <c>he-Latn</c>,
+    /// <c>sd-Deva</c> and a language without likely subtags are not.
+    /// </summary>
+    internal static bool IsRightToLeft(string canonical)
+    {
+        Parts tag = Canonicalize(Parse(canonical));
+        string? script = tag.Script ?? Maximize(tag).Script;
+        return script is not null && Array.BinarySearch(GeneratedLocaleTables.RightToLeftScripts, script, StringComparer.Ordinal) >= 0;
+    }
+
+    /// <summary>
     /// The CLDR data ID: the likely script is added, then omitted again when it is the language's default
     /// script, so <c>zh-TW</c> is <c>zh-Hant-TW</c>, <c>zh-Hans-SG</c> is <c>zh-SG</c> and <c>sr-Latn</c> stays.
     /// </summary>

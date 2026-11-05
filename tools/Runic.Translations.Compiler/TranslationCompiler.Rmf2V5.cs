@@ -259,7 +259,11 @@ public static partial class TranslationCompiler
         return Result(new(manifest.Id, manifest.CodeNamespace, manifest.ClassName, manifest.Visibility, manifest.DefaultLocale,
             manifest.UnsupportedLocale, manifest.MissingKey, contracts.AsReadOnly(), extraContracts.AsReadOnly(), linkedLocales.AsReadOnly(), usedContracts,
             Rmf2ProjectMarkupV5.Export(usedContracts, contracts.Concat(extraContracts).ToArray(), linkedLocales), HashV5(Encoding.UTF8.GetBytes(callerContract)), SourceHashV5(project, sources))
-            { ReferenceFallbackText = manifest.ReferenceFallbackText });
+            {
+                ReferenceFallbackText = manifest.ReferenceFallbackText,
+                BidiIsolation = manifest.BidiIsolation == TranslationBidiIsolation.On ||
+                    (manifest.BidiIsolation == TranslationBidiIsolation.Default && linkedLocales.Any(locale => CldrLocales.IsRightToLeft(locale.Tag))),
+            });
 
         Rmf2ProjectEntryV5? Compile(Rmf2ProjectSourceV5 source, IReadOnlyList<Rmf2InputV5>? callerInputs)
         {

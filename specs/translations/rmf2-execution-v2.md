@@ -149,6 +149,7 @@ option permits a typed dynamic value.
 | `runic:relative-time` | `numeric` | string: `always`, `auto` | `always` |
 | `runic:list` | `type` | string: `conjunction`, `disjunction`, `unit` | `conjunction` |
 | `runic:list` | `style` | string: `long`, `short`, `narrow` | `long` |
+| every function | `u:dir` | string: `ltr`, `rtl`, `auto`, `inherit`; literal-only | the function's direction (see [Bidirectional text](#bidirectional-text)) |
 
 For number formatting, `0 <= minimum <= maximum <= 6` for decimal and
 `0 <= minimum <= maximum <= 4` for percent. Omitted bounds use the table defaults;
@@ -343,6 +344,32 @@ The ESM runtime also accepts a `Date` or an ISO 8601 string with seconds, an
 optional fraction and `Z` or an offset for a `datetime` input. It drops
 sub-second digits and keeps the canonical UTC carrier, so the transport form
 stays `yyyy-MM-ddTHH:mm:ssZ`.
+
+## Bidirectional text
+
+Placeholders are isolated with Unicode MessageFormat 2's default bidi strategy
+([LDML 48](https://github.com/unicode-org/cldr/blob/release-48-2/docs/ldml/tr35-messageFormat.md)).
+The message direction (`msgdir`) is the direction of the message's effective
+content locale. A placeholder's direction is its `u:dir` (`ltr`, `rtl`, `auto` for
+unknown, `inherit` for `msgdir`); without one, `integer`, `number`, `date`, `time`
+and `datetime` have their formatting locale's direction, `runic:relative-time`
+the content locale's, `runic:uuid` and `runic:boolean` are left to right, and
+`string`, `runic:list` and literals of those types are unknown. A left-to-right
+placeholder stays bare when `msgdir` is left to right and its `u:dir` is absent or
+`inherit`, and is otherwise wrapped in U+2066 LRI and U+2069 PDI; a right-to-left
+one in U+2067 RLI and PDI; one of unknown direction in U+2068 FSI and PDI. Markup
+is not isolated; placeholders inside markup are isolated like any other.
+
+The catalog's `runtime.bidiIsolation` (`default`, `on`, `off`) decides whether the
+strategy applies: `default` resolves at compile time to on when a declared locale
+is right to left and to off otherwise. With it off, only a placeholder whose
+`u:dir` is `ltr`, `rtl` or `auto` is isolated. `u:dir` is a formatting option
+like the others: a functionless local alias keeps it, an explicit function
+replaces it, and formatters ignore it. A locale is right to left when its
+explicit script, else its CLDR likely script, is one of CLDR's right-to-left
+scripts; both runtimes use the pinned likely subtags (.NET `LocaleDirection`, ESM
+`localeDirection`). The cross-runtime oracle is
+[`corpus/rmf2-bidi-conformance.json`](corpus/rmf2-bidi-conformance.json).
 
 ## Annotations and markup
 

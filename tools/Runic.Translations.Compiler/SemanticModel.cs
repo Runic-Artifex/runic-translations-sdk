@@ -18,6 +18,7 @@ internal sealed class ManifestModel
     internal TranslationPolicy EmptyValues { get; set; } = TranslationPolicy.Allow;
     internal TranslationUnsupportedLocalePolicy UnsupportedLocale { get; set; } = TranslationUnsupportedLocalePolicy.ParentsThenDefault;
     internal TranslationMissingKeyPolicy MissingKey { get; set; } = TranslationMissingKeyPolicy.Throw;
+    internal TranslationBidiIsolation BidiIsolation { get; set; } = TranslationBidiIsolation.Default;
     internal ByteSpan DefaultLocaleSpan { get; set; }
 }
 

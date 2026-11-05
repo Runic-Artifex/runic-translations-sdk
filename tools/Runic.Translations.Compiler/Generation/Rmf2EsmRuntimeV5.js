@@ -171,18 +171,48 @@ function matchLocale(canonical) {
   return undefined;
 }
 
-// The direction of a locale's script: the explicit script subtag, else the likely script CLDR gives Intl.Locale's
-// maximize(), so "ar", "pa-PK" and "ku-Arab" are right-to-left and "ku", "he-Latn" and "sd-Deva" left-to-right. Any
-// valid tag is accepted, not only the catalog's locales; without Intl.Locale only an explicit script counts.
+// The direction of a locale's script: the explicit script subtag, else its likely script from the pinned CLDR
+// likelySubtags (as .NET's LocaleDirection), so "ar", "pa-PK" and "ku-Arab" are right-to-left and "ku", "he-Latn" and
+// "sd-Deva" left-to-right. The catalog carries likely subtags only for its own languages; for another language the likely
+// script comes from Intl.Locale's maximize(), and without Intl.Locale only an explicit script counts.
 const rightToLeftScripts = new Set(generatedLocaleData.rightToLeftScripts);
 export function localeDirection(locale) {
   if (typeof locale !== "string") throw new RangeError("A locale string is required.");
   const canonical = canonicalLocale(locale); if (canonical === null) throw new RangeError(`Invalid locale '${locale}'.`);
-  let script = canonical.split("-").find((part) => part.length === 4 && /^[A-Z][a-z]{3}$/.test(part));
+  return rightToLeft(canonical) ? "rtl" : "ltr";
+}
+const directionCache = new Map();
+function rightToLeft(canonical) {
+  let cached = directionCache.get(canonical); if (cached !== undefined) return cached;
+  const tag = cldrCanonicalize(cldrParse(canonical));
+  let script = tag.script ?? cldrMaximize(tag).script;
   if (script === undefined && typeof Intl === "object" && typeof Intl.Locale === "function") {
     try { script = new Intl.Locale(canonical).maximize().script; } catch { script = undefined; }
   }
-  return script !== undefined && rightToLeftScripts.has(script) ? "rtl" : "ltr";
+  cached = script !== undefined && rightToLeftScripts.has(script);
+  if (directionCache.size < 64) directionCache.set(canonical, cached);
+  return cached;
+}
+
+// Unicode MessageFormat 2's default bidi strategy (LDML 48 "Handling Bidirectional Text"), as .NET's Rmf2Bidi: a
+// placeholder of left-to-right direction stays bare in a left-to-right message unless its u:dir asks for isolation, and
+// is otherwise wrapped in LRI…PDI; a right-to-left one in RLI…PDI; one of unknown direction in FSI…PDI. Without the
+// catalog's bidiIsolation only an explicit u:dir of ltr, rtl or auto isolates. Numbers, dates and times have the
+// direction of their formatting locale, relative times of the content locale, UUIDs and booleans are left to right, and
+// text and lists from the caller have none.
+function isolate(text, value, contentLocale, formatLocale) {
+  const option = value.format.options["u:dir"];
+  if (!generatedLocaleData.bidiIsolation && (option === undefined || option === "inherit")) return text;
+  const messageRtl = rightToLeft(contentLocale), fn = value.format.function;
+  const direction = option === "ltr" ? "ltr" : option === "rtl" ? "rtl" : option === "auto" ? "unknown"
+    : option === "inherit" ? (messageRtl ? "rtl" : "ltr")
+    : ["integer", "number", "date", "time", "datetime"].includes(fn) ? (rightToLeft(formatLocale) ? "rtl" : "ltr")
+    : fn === "runic:relative-time" ? (messageRtl ? "rtl" : "ltr")
+    : ["runic:uuid", "runic:boolean"].includes(fn) ? "ltr" : "unknown";
+  const explicit = option === "ltr" || option === "rtl" || option === "auto";
+  if (direction === "ltr") return !messageRtl && !explicit ? text : `\u2066${text}\u2069`;
+  if (direction === "rtl") return `\u2067${text}\u2069`;
+  return `\u2068${text}\u2069`;
 }
 
 export function decimal(value) { return parseDecimal(value); }
@@ -285,6 +315,7 @@ function validateInputs(inputs, contract) {
 function defaultFunction(type) { return ({ string: "string", int64: "integer", decimal: "number", boolean: "runic:boolean", date: "date", time: "time", datetime: "datetime", guid: "runic:uuid", list: "runic:list" })[type]; }
 function functionType(name) { return ({ string: "string", integer: "int64", number: "decimal", "runic:boolean": "boolean", date: "date", time: "time", datetime: "datetime", "runic:uuid": "guid", "runic:relative-time": "decimal", "runic:list": "list" })[name]; }
 function optionType(fn, name) {
+  if (name === "u:dir" && functionType(fn) !== undefined) return "string";
   if (["string", "runic:boolean", "integer", "number"].includes(fn) && name === "select") return "string";
   if ((fn === "integer" || fn === "number") && name === "useGrouping") return "string";
   if (["number", "date", "time", "datetime", "runic:uuid"].includes(fn) && name === "style") return "string";
@@ -348,6 +379,7 @@ function validateResolvedOptions(fn, options) {
   }[fn];
   if (!allowed) throw new TypeError("Unknown formatter.");
   for (const name of Object.keys(options)) {
+    if (name === "u:dir") { if (!["ltr", "rtl", "auto", "inherit"].includes(options[name])) throw new RangeError("Invalid formatter option value."); continue; }
     if (!Object.hasOwn(allowed, name) && !(fn === "number" && ["minimumFractionDigits", "maximumFractionDigits"].includes(name))) throw new TypeError("Unknown formatter option.");
     if (fn === "number" && ["minimumFractionDigits", "maximumFractionDigits"].includes(name)) { if (typeof options[name] !== "bigint" || options[name] < 0n || options[name] > 6n) throw new RangeError("Fraction digits are outside 0..6."); }
     else if (allowed[name] === null) { if (!validTimeZone(options[name])) throw new RangeError("Invalid time zone."); }
@@ -772,7 +804,7 @@ function buildNodes(nodes, context, locale, contentLocale, path) {
   for (let index = 0; index < nodes.length; index++) {
     const node = nodes[index], parent = stack.at(-1).children;
     if (node.kind === "text") parent.push({ kind: "text", value: node.value, annotations: [] });
-    else if (node.kind === "expression") parent.push({ kind: "text", value: formatResolved(context.expression(node.expression), locale, contentLocale), annotations: annotations(node.expression.annotations) });
+    else if (node.kind === "expression") { const value = context.expression(node.expression); parent.push({ kind: "text", value: isolate(formatResolved(value, locale, contentLocale), value, contentLocale, locale), annotations: annotations(node.expression.annotations) }); }
     else if (node.markupKind === "open") { const element = { kind: "element", name: node.name, attributes: markupOptions(node.options, context), annotations: annotations(node.annotations), closingAnnotations: [], standalone: false, occurrence: path + index, children: [] }; parent.push(element); stack.push(element); }
     else if (node.markupKind === "standalone") parent.push({ kind: "element", name: node.name, attributes: markupOptions(node.options, context), annotations: annotations(node.annotations), closingAnnotations: [], standalone: true, occurrence: path + index, children: [] });
     else { if (stack.length === 1 || stack.at(-1).name !== node.name) throw new TypeError("Unbalanced markup."); stack.at(-1).closingAnnotations = annotations(node.annotations); stack.pop(); }
@@ -1016,7 +1048,7 @@ function validateExpression(expression, symbols, references) {
 
 function validateOptions(options, symbols, fn) {
   if (!Array.isArray(options) || options.length > 256) return "argument-contract-mismatch"; const names = new Set(), staticEntries=[]; let dynamic=false;
-  for (const option of options) { const memberError=closedMemberError(option,["name","value"]);if(memberError)return memberError==="unknown-member"?memberError:"argument-contract-mismatch";const valueError=validateValue(option.value);if(valueError)return ["unknown-member","malformed"].includes(valueError)?valueError:"argument-contract-mismatch";if(!validName(option.name)||names.has(option.name))return "argument-contract-mismatch";names.add(option.name); if (fn) { const type = optionType(fn,option.name); if (!type) return "argument-contract-mismatch"; if (["input","local"].includes(option.value.kind)) { if (option.name === "select" || !Object.hasOwn(symbols,option.value.value) || symbols[option.value.value].type !== type || !symbols[option.value.value].explicitDependencies) return "argument-contract-mismatch"; dynamic=true; } else { try { staticEntries.push([option.name,literal(option.value,type)]); } catch { return "argument-contract-mismatch"; } } } }
+  for (const option of options) { const memberError=closedMemberError(option,["name","value"]);if(memberError)return memberError==="unknown-member"?memberError:"argument-contract-mismatch";const valueError=validateValue(option.value);if(valueError)return ["unknown-member","malformed"].includes(valueError)?valueError:"argument-contract-mismatch";if(!validName(option.name,true)||names.has(option.name))return "argument-contract-mismatch";names.add(option.name); if (fn) { const type = optionType(fn,option.name); if (!type) return "argument-contract-mismatch"; if (["input","local"].includes(option.value.kind)) { if (option.name === "select" || !Object.hasOwn(symbols,option.value.value) || symbols[option.value.value].type !== type || !symbols[option.value.value].explicitDependencies) return "argument-contract-mismatch"; dynamic=true; } else { try { staticEntries.push([option.name,literal(option.value,type)]); } catch { return "argument-contract-mismatch"; } } } }
   if(fn){try{const resolved=freezeOwnRecord(staticEntries);validateResolvedOptions(fn,resolved);if(dynamic&&fn==="number"){const style=resolved.style,min=resolved.minimumFractionDigits??0n,max=resolved.maximumFractionDigits;if(style==="percent"&&min>4n||max!==undefined&&min>max)return "argument-contract-mismatch";}}catch{return "argument-contract-mismatch";}}
   return null;
 }
@@ -1217,8 +1249,9 @@ function integerOption(text,schema){return typeof text==="string"&&text.length<=
 // and clearContent retire the previous render: its actions stop calling back and its links lose their destination.
 // Paragraphs and headings with no children or only empty text, and lists with no items, are skipped; occurrences keep counting them.
 const domDocumentLifetimes=new WeakMap();
-export function createDomDocumentRenderer(document,{headingBase=2,custom=[]}={}) {
+export function createDomDocumentRenderer(document,{headingBase=2,custom=[],pageDirection="ltr"}={}) {
   if(!Number.isInteger(headingBase)||headingBase<1||headingBase>9)throw new RangeError("headingBase must be an integer from 1 to 9.");
+  if(pageDirection!=="ltr"&&pageDirection!=="rtl")throw new RangeError("pageDirection must be \"ltr\" or \"rtl\".");
   let lifetime=null;
   const empty=new WeakSet();
   const create=(tag,occurrence)=>{const node=document.createElement(tag);node.setAttribute("data-runic-occurrence",occurrence);return node;};
@@ -1241,8 +1274,9 @@ export function createDomDocumentRenderer(document,{headingBase=2,custom=[]}={})
       else if(["runic:p","runic:ul","runic:li"].includes(name))node=create(name.slice(6),occurrence);
       else throw new TypeError(`No DOM renderer linked for block '${name}'.`);
       if(!["runic:ul","runic:ol"].includes(name))node.setAttribute("class","runic-leaf");
-      // Top-level blocks carry the effective content locale, which differs from the requested one after a fallback.
-      if(!occurrence.includes("/"))node.setAttribute("lang",locale);
+      // Top-level blocks carry the effective content locale, which differs from the requested one after a fallback, and its
+      // direction when it differs from the page's (English fallback text in an Arabic page).
+      if(!occurrence.includes("/")){node.setAttribute("lang",locale);const direction=localeDirection(locale);if(direction!==pageDirection)node.setAttribute("dir",direction);}
       node.append(...present);return node;
     }},custom);
   // A nested render (from an icon's accessibleName or a custom binding) restores the outer render's lifetime.
@@ -1254,6 +1288,6 @@ export function createDomDocumentRenderer(document,{headingBase=2,custom=[]}={})
     // Builds first, so a binding failure leaves the displayed content and its callbacks untouched.
     setContent(target,content,options){const {nodes,own}=build(content,options);retire(target);domDocumentLifetimes.set(target,own);target.replaceChildren(...nodes);},
     clearContent(target){retire(target);target.replaceChildren();},
-    extend(extra){return createDomDocumentRenderer(document,{headingBase,custom:[...custom,...extra]});},
+    extend(extra){return createDomDocumentRenderer(document,{headingBase,custom:[...custom,...extra],pageDirection});},
   });
 }

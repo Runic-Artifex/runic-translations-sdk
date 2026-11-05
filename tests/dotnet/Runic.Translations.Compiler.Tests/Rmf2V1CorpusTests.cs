@@ -233,8 +233,12 @@ internal sealed class Rmf2V1CorpusTests
     // in both digests.
     // Re-pinned for merging T1g with main (TE, TC, TD) through T1a/T1b, in both digests.
     // Re-pinned for merging TB (#131) with T1g (#132), in both digests.
-    private const string EncodedOutputDigest = "a3546eed56e08d586a1797a0f091b107cbd29d9af377a87844bbf68b150702ab";
-    private const string HiddenEncodedOutputDigest = "b9c69c821f485298819188a77269bde8adf083f87fc428246fa4d4e7b3f9a3eb";
+    // Re-pinned for T2f (0.9): runtime.js carries the catalog's bidiIsolation, isolates placeholders with MF2's default
+    // bidi strategy, accepts u:dir on every function, takes a locale's direction from the pinned likely subtags first and
+    // gives createDomDocumentRenderer a pageDirection; runtime.d.ts declares it;
+    // the C# output of this left-to-right corpus is unchanged, in both digests.
+    private const string EncodedOutputDigest = "9b8404127396236a57c7e0f5014bfc66750c79c4e30fd466a7b3e2bc23bce7a1";
+    private const string HiddenEncodedOutputDigest = "843191e06b1e62259915a37e37a2e8fe52c94a0d609fff925f20d7ac8ca0fd95";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

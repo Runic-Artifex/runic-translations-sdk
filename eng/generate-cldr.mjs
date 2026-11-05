@@ -209,6 +209,8 @@ ${keysAndValues("Grouping", grouping, "byte")}
     internal static readonly string[] ListIds =${csArray("string", Object.keys(list))};
     /// <summary>The data IDs with relative-time data in <c>GeneratedLocaleData.bin</c>.</summary>
     internal static readonly string[] RelativeTimeIds =${csArray("string", Object.keys(relativeTime))};
+    /// <summary>CLDR's right-to-left scripts (ISO 15924), sorted: a locale is right-to-left when its script, explicit or likely, is one of them.</summary>
+    internal static readonly string[] RightToLeftScripts =${csArray("string", rightToLeftScripts)};
 }
 `;
 

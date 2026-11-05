@@ -36,7 +36,9 @@ internal static partial class TranslationCapabilityRegistry
     /// The ESM runtime's locale data and plural rules for a catalog: only the CLDR entries of its locales'
     /// languages and of the languages their CLDR parents link to (<c>nb</c> and <c>nn</c> with <c>no</c>).
     /// </summary>
-    internal static string EsmLocaleSource(IEnumerable<string> locales)
+    /// <param name="locales">The catalog's locales.</param>
+    /// <param name="bidiIsolation">The catalog's resolved <c>runtime.bidiIsolation</c>.</param>
+    internal static string EsmLocaleSource(IEnumerable<string> locales, bool bidiIsolation = false)
     {
         var languages = new HashSet<string>(locales.Select(locale => CldrLocales.Language(CldrLocales.Parse(locale).Language)), StringComparer.Ordinal);
         for (bool changed = true; changed;)
@@ -59,7 +61,8 @@ internal static partial class TranslationCapabilityRegistry
         for (int index = 0; index < GeneratedLocaleTables.OrdinalKeys.Length; index++)
             if (Selected(GeneratedLocaleTables.OrdinalKeys[index])) rules.Add(GeneratedLocaleTables.OrdinalValues[index]);
         var json = new StringBuilder("{");
-        json.Append("\"rightToLeftScripts\":").Append(RightToLeftScriptsJson);
+        json.Append("\"bidiIsolation\":").Append(bidiIsolation ? "true" : "false");
+        json.Append(",\"rightToLeftScripts\":").Append(RightToLeftScriptsJson);
         Table("likely", GeneratedLocaleTables.LikelyKeys, GeneratedLocaleTables.LikelyValues.Select(Quote).ToArray());
         Table("parents", GeneratedLocaleTables.ParentKeys, GeneratedLocaleTables.ParentValues.Select(Quote).ToArray());
         var aliases = new StringBuilder();

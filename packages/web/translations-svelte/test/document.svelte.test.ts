@@ -7,7 +7,7 @@ import { createServer, type ViteDevServer } from "vite";
 import DocumentFixture from "./DocumentFixture.svelte";
 import { canonicalHtml, corpusNodes, executions, expectedHtml } from "./document-corpus.js";
 import { documentProps } from "./document-props.svelte.js";
-import { documentFactory } from "../src/document/index.js";
+import { documentFactory, type DocumentNode } from "../src/document/index.js";
 import { LocalizedInline } from "../src/inline/index.js";
 
 let vite: ViteDevServer;
@@ -57,6 +57,39 @@ describe("Svelte LocalizedDocument", () => {
       expect(() => ssr({ nodes: corpusNodes("files-one-de"), headingBase })).toThrow(/headingBase/);
       expect(() => ssr({ nodes: [], headingBase })).toThrow(/headingBase/);
     }
+  });
+
+  test("top-level blocks state their content direction beside lang when it differs from the page's", () => {
+    const paragraph = (locale: string, text: string, occurrence = "p[1]") =>
+      documentFactory.block("runic:p", {}, [documentFactory.text(text)], { occurrence, locale });
+    const html = (nodes: DocumentNode[], pageDirection?: "ltr" | "rtl") => {
+      const host = document.createElement("div");
+      host.innerHTML = ssr(pageDirection === undefined ? { nodes } : { nodes, pageDirection });
+      return canonicalHtml(host);
+    };
+    expect(html([paragraph("ar", "مرحبا")])).toBe('<p class="runic-leaf" data-runic-occurrence="p[1]" dir="rtl" lang="ar">مرحبا</p>');
+    expect(html([paragraph("en", "Hello")])).toBe('<p class="runic-leaf" data-runic-occurrence="p[1]" lang="en">Hello</p>');
+    // English fallback text in an Arabic page.
+    expect(html([paragraph("en", "Hello")], "rtl")).toBe('<p class="runic-leaf" data-runic-occurrence="p[1]" dir="ltr" lang="en">Hello</p>');
+    expect(html([paragraph("he", "שלום")], "rtl")).toBe('<p class="runic-leaf" data-runic-occurrence="p[1]" lang="he">שלום</p>');
+    // The client renders the same attributes.
+    const target = document.createElement("div");
+    const component = mount(DocumentFixture, { target, props: { nodes: [paragraph("ar", "مرحبا"), paragraph("en", "Hello", "p[2]")] } });
+    flushSync();
+    expect(canonicalHtml(target)).toBe('<p class="runic-leaf" data-runic-occurrence="p[1]" dir="rtl" lang="ar">مرحبا</p><p class="runic-leaf" data-runic-occurrence="p[2]" lang="en">Hello</p>');
+    unmount(component);
+  });
+
+  test("textDirection follows CLDR's right-to-left scripts", async () => {
+    const { textDirection } = await import("../src/translations/index.js");
+    const subset = (await import("../../../../specs/translations/cldr/runic-subset-48.2.json", { with: { type: "json" } })).default as { rightToLeftScripts: string[] };
+    const source = (await import("node:fs")).readFileSync(resolve("src/translations/direction.ts"), "utf8");
+    for (const script of subset.rightToLeftScripts) {
+      expect(source).toContain(`"${script}"`);
+      expect(textDirection(`und-${script}`)).toBe("rtl");
+    }
+    for (const [tag, direction] of Object.entries({ ar: "rtl", "ar-EG": "rtl", he: "rtl", fa: "rtl", "pa-PK": "rtl", ar_EG: "rtl", "ku-Arab": "rtl", en: "ltr", "he-Latn": "ltr", "sd-Deva": "ltr", "": "ltr", "not a tag": "ltr" }))
+      expect(textDirection(tag), tag).toBe(direction);
   });
 
   test("rejects blocks outside the document profile and blocks in inline content", () => {

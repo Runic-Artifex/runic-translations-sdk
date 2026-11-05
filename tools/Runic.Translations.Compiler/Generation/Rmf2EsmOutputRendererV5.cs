@@ -60,7 +60,7 @@ internal static class Rmf2EsmOutputRendererV5
         writer.Line("export const locales = Object.freeze(" + JsonSerializer.Serialize(project.Locales.Select(item => item.Tag).OrderBy(item => item, StringComparer.Ordinal)) + ");");
         writer.Line("const unsupportedLocalePolicy = " + GenerationSupport.JsonString(project.UnsupportedLocale.ToString()) + ";");
         // Only the CLDR data of the catalog's languages is embedded.
-        writer.Line(TranslationCapabilityRegistry.EsmLocaleSource(project.Locales.Select(item => item.Tag)));
+        writer.Line(TranslationCapabilityRegistry.EsmLocaleSource(project.Locales.Select(item => item.Tag), project.BidiIsolation));
         // Only the markup contracts: per-message contracts live in the message modules and dynamic.js.
         writer.Line("const markupContracts = freezeTrusted(JSON.parse(" + GenerationSupport.JsonString(MarkupContractsJson(project)) + "));");
         // The renderers' table of structured messages; a function, so a bundle without a renderer drops it.
@@ -317,7 +317,7 @@ internal static class Rmf2EsmOutputRendererV5
         export declare function toPlainText<S extends Record<string,string>>(content: LocalizedContent<S> | LocalizedDocument<S>, options: { slots: SlotBindings<S>; allowActionLabels?: boolean; annotateLinkDestinations?: boolean; custom?: readonly MarkupBinding<string>[]; listMarker?: string }): string;
         export declare function createDomInlineRenderer(document: Document, bindings?: readonly MarkupBinding<Node>[]): InlineRenderer<Node>;
         export interface DomDocumentRenderer extends DocumentRenderer<Node> { setContent<S extends Record<string,string>>(target: Element | DocumentFragment, content: LocalizedDocument<S>, options: { slots: SlotBindings<S> }): void; clearContent(target: Element | DocumentFragment): void; extend(bindings: readonly MarkupBinding<Node>[]): DomDocumentRenderer; }
-        export declare function createDomDocumentRenderer(document: Document, options?: { headingBase?: number; custom?: readonly MarkupBinding<Node>[] }): DomDocumentRenderer;
+        export declare function createDomDocumentRenderer(document: Document, options?: { headingBase?: number; custom?: readonly MarkupBinding<Node>[]; /** The page's direction (default "ltr"): a top-level block whose content locale has the other direction gets dir. */ pageDirection?: "ltr" | "rtl" }): DomDocumentRenderer;
         """ + ProjectMarkupType(project);
 
     // The project's own markup contracts (runic.json), typed by name so bindMarkup(projectMarkup["app:tag"], ...)

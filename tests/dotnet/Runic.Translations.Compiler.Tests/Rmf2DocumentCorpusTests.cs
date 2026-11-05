@@ -451,6 +451,11 @@ internal sealed class Rmf2DocumentCorpusTests
         const heading=createDomDocumentRenderer(fake,{headingBase:6}).render(m.whitespace_headings({locale:"en"}),{slots:{}}).map(html).join("");
         if(!heading.startsWith("<h6 class=\"runic-leaf\" data-runic-occurrence=\"h[1]\" lang=\"en\">Title</h6><h6 aria-level=\"7\" class=\"runic-leaf\" data-runic-occurrence=\"h[2]\" lang=\"en\" role=\"heading\">Section</h6>"))throw new Error("heading base: "+heading);
         for(const headingBase of [0,10,1.5,"2"]){let failed=false;try{createDomDocumentRenderer(fake,{headingBase});}catch{failed=true;}if(!failed)throw new Error("headingBase accepted "+headingBase);}
+        // A top-level block states dir beside lang when its content direction differs from the page's (default ltr).
+        const rtlPage=createDomDocumentRenderer(fake,{pageDirection:"rtl"}).render(m.whitespace_headings({locale:"en"}),{slots:{}}).map(html).join("");
+        if(!rtlPage.startsWith("<h2 class=\"runic-leaf\" data-runic-occurrence=\"h[1]\" dir=\"ltr\" lang=\"en\">Title</h2>"))throw new Error("pageDirection rtl: "+rtlPage);
+        if(createDomDocumentRenderer(fake,{pageDirection:"rtl"}).extend([]).render(m.whitespace_headings({locale:"en"}),{slots:{}}).map(html).join("")!==rtlPage)throw new Error("extend keeps pageDirection");
+        for(const pageDirection of ["auto","RTL",1]){let failed=false;try{createDomDocumentRenderer(fake,{pageDirection});}catch{failed=true;}if(!failed)throw new Error("pageDirection accepted "+pageDirection);}
         // Callback retirement: setContent and clearContent retire the previous render, even for retained detached nodes.
         let calls=0;
         const live={guide:linkBinding({href:"https://example.test/guide"}),check:actionBinding({onActivate(){calls++;}})};

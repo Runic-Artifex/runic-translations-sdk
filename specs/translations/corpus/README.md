@@ -55,6 +55,13 @@ The current release contract is exercised by ten complementary fixtures:
   `2026年11月4日 水曜日` for the Japanese full date); each route must produce the
   expected string or one of them. CI runs it on Linux, Windows and macOS, with
   the ESM half in Bun and Node;
+- [`rmf2-bidi-conformance.json`](rmf2-bidi-conformance.json) is the cross-backend
+  oracle for [placeholder isolation](../rmf2-execution-v2.md#bidirectional-text):
+  MF2's default bidi strategy in left-to-right (`en`) and right-to-left (`ar`,
+  `he`) messages, with the catalog's `bidiIsolation` on and off, every `u:dir`
+  value, literals, local aliases and explicit functions. Expectations use `\u2066`
+  to `\u2069` escapes and must format exactly in the same four routes as the list
+  corpus;
 - [`transport-v2-persisted-references.json`](transport-v2-persisted-references.json)
   is the cross-backend oracle for [persisted text references](../transport-v2.md):
   references written against the `writer` catalog are resolved by the changed

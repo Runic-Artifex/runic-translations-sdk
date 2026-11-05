@@ -123,8 +123,10 @@ public sealed class CompiledTranslationCatalog
     private CompiledTranslationCatalog(
         CompiledTranslationCatalog source,
         UnsupportedLocalePolicy unsupportedLocale,
-        MissingTranslationPolicy missingKey)
+        MissingTranslationPolicy missingKey,
+        bool bidiIsolation)
     {
+        BidiIsolation = bidiIsolation;
         _definitions = source._definitions;
         _locales = source._locales;
         _idByName = source._idByName;
@@ -174,8 +176,20 @@ public sealed class CompiledTranslationCatalog
             return this;
         }
 
-        return new CompiledTranslationCatalog(this, unsupportedLocale, missingKey);
+        return new CompiledTranslationCatalog(this, unsupportedLocale, missingKey, BidiIsolation);
     }
+
+    /// <summary>
+    /// Whether formatting isolates placeholders with Unicode MessageFormat 2's default bidi strategy (FSI, LRI or RLI
+    /// before a placeholder and PDI after it), so a value written in the other direction does not reorder the text around
+    /// it. Placeholders with an explicit <c>u:dir</c> option are isolated either way.
+    /// </summary>
+    /// <remarks>Generated catalogs set it from <c>runtime.bidiIsolation</c> in <c>runic.json</c>: on for catalogs that declare a right-to-left locale, unless set to <c>off</c>.</remarks>
+    public bool BidiIsolation { get; }
+
+    /// <summary>Returns a view of the catalog that does or does not isolate placeholders; see <see cref="BidiIsolation"/>.</summary>
+    public CompiledTranslationCatalog WithBidiIsolation(bool enabled = true) =>
+        enabled == BidiIsolation ? this : new CompiledTranslationCatalog(this, UnsupportedLocale, MissingKey, enabled);
 
     internal CompiledTranslationDefinition[] DefinitionArray => _definitions;
 

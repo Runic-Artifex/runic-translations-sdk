@@ -121,3 +121,12 @@ static Runic.Translations.TranslationOverlayDiagnostic.operator ==(Runic.Transla
 virtual Runic.Translations.TranslationProviderFactory.Invoke(Runic.Translations.ITextValueFormatter? valueFormatter, Runic.Translations.ITranslationSnapshotFactory? snapshotFactory, Runic.Translations.TranslationOptions? options) -> Runic.Translations.ITranslationProvider!
 ~override Runic.Translations.TranslationOverlayDiagnostic.Equals(object obj) -> bool
 ~override Runic.Translations.TranslationOverlayDiagnostic.ToString() -> string
+Runic.Translations.LocaleDirection
+Runic.Translations.TextDirection
+Runic.Translations.TextDirection.LeftToRight = 0 -> Runic.Translations.TextDirection
+Runic.Translations.TextDirection.RightToLeft = 1 -> Runic.Translations.TextDirection
+static Runic.Translations.LocaleDirection.Get(string! locale) -> Runic.Translations.TextDirection
+static Runic.Translations.LocaleDirection.IsRightToLeft(string! locale) -> bool
+static Runic.Translations.LocaleDirection.ToHtml(Runic.Translations.TextDirection direction) -> string!
+Runic.Translations.CompiledTranslationCatalog.BidiIsolation.get -> bool
+Runic.Translations.CompiledTranslationCatalog.WithBidiIsolation(bool enabled = true) -> Runic.Translations.CompiledTranslationCatalog!

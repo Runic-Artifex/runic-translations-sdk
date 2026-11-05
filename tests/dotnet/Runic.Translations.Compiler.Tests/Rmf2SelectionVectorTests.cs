@@ -59,7 +59,7 @@ internal sealed class Rmf2SelectionVectorTests
                 source.Append("vector").Append(index).Append(" =\n");
                 foreach (string line in vectors[index].Message.Split('\n')) source.Append("  ").Append(line).Append('\n');
             }
-            Rmf2ProjectV5 project = Rmf2EsmV5Tests.CompileProject("vectors", group.Key, [group.Key], false, (group.Key, source.ToString()));
+            Rmf2ProjectV5 project = Rmf2EsmV5Tests.CompileProject("vectors", group.Key, [group.Key], false, "off", (group.Key, source.ToString()));
             string directory = Rmf2EsmV5Tests.Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(project));
             try
             {

@@ -18,6 +18,8 @@ internal sealed class Rmf2ResolvedFormat
             throw new ArgumentException("Number precision must satisfy 0 <= minimum <= maximum <= 6 (decimal) or 4 (percent).", nameof(options));
     }
     internal string Function { get; }
+    /// <summary>The <c>u:dir</c> option (<c>ltr</c>, <c>rtl</c>, <c>auto</c> or <c>inherit</c>), or null.</summary>
+    internal string? Direction => _options.TryGetValue("u:dir", out var value) ? Get<string>(value) : null;
     private int MinimumDigits => Integer("minimumFractionDigits", 0);
     private int MaximumDigits => Integer("maximumFractionDigits", String("style", "decimal") == "percent" ? 4 : 6);
     private string String(string name, string fallback) => _options.TryGetValue(name, out var value) ? Get<string>(value) : fallback;
@@ -33,6 +35,7 @@ internal sealed class Rmf2ResolvedFormat
         string text = Get<string>(value);
         bool valid = (function, name) switch
         {
+            (_, "u:dir") => text is "ltr" or "rtl" or "auto" or "inherit",
             ("string" or "runic:boolean", "select") => text == "exact",
             ("integer" or "number", "select") => text is "exact" or "plural" or "ordinal",
             ("integer" or "number", "useGrouping") => text is "auto" or "always" or "never" or "min2",
@@ -183,15 +186,21 @@ internal static class Rmf2RuntimeEvaluator
     /// <paramref name="requestedLocale"/> (by default <paramref name="locale"/>) as the requested locale that numbers and
     /// dates format in when it shares the content locale's language.
     /// </summary>
-    internal static string Format(CompiledRmf2Message message, ReadOnlySpan<TextArgument> arguments, string locale, int maximum, string? requestedLocale = null)
+    internal static string Format(CompiledRmf2Message message, ReadOnlySpan<TextArgument> arguments, string locale, int maximum, string? requestedLocale = null,
+        bool bidiIsolation = false)
     {
         if (message.HasMarkup) throw new TranslationFormatException("Structured localized content must be requested through FormatContent.");
-        LocalizedTextContent content = FormatContent(message, arguments, locale, maximum, requestedLocale);
+        LocalizedTextContent content = FormatContent(message, arguments, locale, maximum, requestedLocale, bidiIsolation);
         var builder = new StringBuilder();
         foreach (var node in content.Nodes.Span) builder.Append(node.Value);
         return builder.ToString();
     }
-    internal static LocalizedTextContent FormatContent(CompiledRmf2Message message, ReadOnlySpan<TextArgument> arguments, string locale, int maximum, string? requestedLocale = null)
+    /// <remarks>
+    /// With <paramref name="bidiIsolation"/>, every placeholder is isolated with MF2's default bidi strategy; without it, only
+    /// placeholders with an explicit <c>u:dir</c> of <c>ltr</c>, <c>rtl</c> or <c>auto</c> are.
+    /// </remarks>
+    internal static LocalizedTextContent FormatContent(CompiledRmf2Message message, ReadOnlySpan<TextArgument> arguments, string locale, int maximum, string? requestedLocale = null,
+        bool bidiIsolation = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(locale);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximum);
@@ -220,7 +229,8 @@ internal static class Rmf2RuntimeEvaluator
                 else
                 {
                     Value? expression = node.Expression is null ? null : context.Expression(node.Expression);
-                    string text = expression is null ? node.Value : expression.Format.Format(expression.Carrier, formatting, locale);
+                    string text = expression is null ? node.Value
+                        : Rmf2Bidi.Isolate(expression.Format.Format(expression.Carrier, formatting, locale), expression.Format, locale, formatting, bidiIsolation);
                     AddLength(text.Length);
                     nodes.Add(new(LocalizedTextContentNodeKind.Text, text, null, node.Expression?.AnnotationArray));
                 }
@@ -275,4 +285,54 @@ internal static class Rmf2RuntimeEvaluator
     }
     private static int Compare(int[] left, int[] right)
     { for (int index = 0; index < left.Length; index++) if (left[index] != right[index]) return left[index].CompareTo(right[index]); return 0; }
+}
+
+/// <summary>
+/// Unicode MessageFormat 2's default bidi strategy (LDML 48 "Handling Bidirectional Text"): a placeholder whose direction is
+/// left to right stays bare in a left-to-right message unless its <c>u:dir</c> asks for isolation, and is otherwise wrapped
+/// in LRI…PDI; a right-to-left one in RLI…PDI; one of unknown direction in FSI…PDI. The ESM runtime implements the same.
+/// </summary>
+internal static class Rmf2Bidi
+{
+    internal const char LeftToRightIsolate = '\u2066', RightToLeftIsolate = '\u2067', FirstStrongIsolate = '\u2068', PopDirectionalIsolate = '\u2069';
+    private enum Direction { Unknown, LeftToRight, RightToLeft }
+
+    /// <param name="text">The formatted placeholder.</param>
+    /// <param name="format">Its resolved format, with its function and <c>u:dir</c> option.</param>
+    /// <param name="contentLocale">The locale the message is written in, which gives the message's direction.</param>
+    /// <param name="formattingLocale">The locale numbers and dates format in.</param>
+    /// <param name="isolation">The catalog's bidi isolation: without it only an explicit <c>u:dir</c> isolates.</param>
+    internal static string Isolate(string text, Rmf2ResolvedFormat format, string contentLocale, string formattingLocale, bool isolation)
+    {
+        string? option = format.Direction;
+        if (!isolation && option is null or "inherit") return text;
+        bool messageRightToLeft = CldrLocales.IsRightToLeft(contentLocale);
+        Direction direction = option switch
+        {
+            "ltr" => Direction.LeftToRight,
+            "rtl" => Direction.RightToLeft,
+            "auto" => Direction.Unknown,
+            "inherit" => messageRightToLeft ? Direction.RightToLeft : Direction.LeftToRight,
+            _ => Of(format.Function, contentLocale, formattingLocale),
+        };
+        bool explicitIsolation = option is "ltr" or "rtl" or "auto";
+        return direction switch
+        {
+            Direction.LeftToRight when !messageRightToLeft && !explicitIsolation => text,
+            Direction.LeftToRight => LeftToRightIsolate + text + PopDirectionalIsolate,
+            Direction.RightToLeft => RightToLeftIsolate + text + PopDirectionalIsolate,
+            _ => FirstStrongIsolate + text + PopDirectionalIsolate,
+        };
+    }
+
+    // The direction a function's output has without u:dir: numbers, dates and times are written in their formatting locale
+    // and relative times in the content locale; UUIDs and booleans are ASCII; text and lists of text come from the caller
+    // and have no known direction.
+    private static Direction Of(string function, string contentLocale, string formattingLocale) => function switch
+    {
+        "integer" or "number" or "date" or "time" or "datetime" => CldrLocales.IsRightToLeft(formattingLocale) ? Direction.RightToLeft : Direction.LeftToRight,
+        "runic:relative-time" => CldrLocales.IsRightToLeft(contentLocale) ? Direction.RightToLeft : Direction.LeftToRight,
+        "runic:uuid" or "runic:boolean" => Direction.LeftToRight,
+        _ => Direction.Unknown,
+    };
 }
