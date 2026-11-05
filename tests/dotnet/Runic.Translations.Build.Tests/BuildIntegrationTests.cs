@@ -102,6 +102,42 @@ internal sealed class BuildIntegrationTests
         }
     }
 
+    [Test, DisplayName("build generates the runic.json pseudo-locales in Debug only, unless RunicTranslationsPseudoLocales says otherwise")]
+    public void PseudoLocalesFollowTheConfiguration()
+    {
+        using TemporaryDirectory temporary = PseudoConsumer();
+        foreach ((string arguments, string expected) in new[]
+        {
+            ("-p:Configuration=Debug", "true"), ("-p:Configuration=Release", "false"),
+            ("-p:Configuration=Release -p:RunicTranslationsPseudoLocales=true", "true"), ("-p:Configuration=Debug -p:RunicTranslationsPseudoLocales=false", "false"),
+        })
+        {
+            ProcessResult property = Processes.DotNet(temporary.Path, ["msbuild", "Consumer.csproj", "/nologo", .. arguments.Split(' '), "-getProperty:RunicTranslationsPseudoLocales"]);
+            Assert.Equal(0, property.ExitCode, property.Combined);
+            Assert.Equal(expected, property.StandardOutput.Trim(), arguments);
+        }
+
+        // One directory per configuration: the consumer's intermediate output lies below the project.
+        foreach ((string configuration, string expected) in new[]
+        {
+            ("Debug", "minimal.asset-manifest-v1.json|minimal.en-XA.locale-v5.json|minimal.en.locale-v5.json"),
+            ("Release", "minimal.asset-manifest-v1.json|minimal.en.locale-v5.json"),
+        })
+        {
+            using TemporaryDirectory build = PseudoConsumer();
+            ProcessResult result = Processes.DotNet(build.Path, "build", "Consumer.csproj", "--configuration", configuration, "/nologo", "/v:minimal");
+            Assert.Equal(0, result.ExitCode, result.Combined);
+            Assert.Equal(expected, string.Join('|', GeneratedArtifacts(FindGeneratedDirectory(build, "minimal.en.locale-v5.json"))), configuration);
+        }
+    }
+
+    private static TemporaryDirectory PseudoConsumer()
+    {
+        TemporaryDirectory temporary = CreateConsumer(false, extraProperties: "<RunicTranslationsEmitJson>true</RunicTranslationsEmitJson>");
+        File.WriteAllText(temporary.Resolve("translations", "runic.json"), "{\"schemaVersion\":1,\"catalog\":\"minimal\",\"code\":{\"namespace\":\"Example\",\"className\":\"MinimalText\"},\"baseLocale\":\"en\",\"pseudoLocales\":[\"en-XA\"]}\n", new UTF8Encoding(false));
+        return temporary;
+    }
+
     // Permanent guard: a name from before the Runic prefix fails with RTR0086 naming its replacement, instead of being ignored.
     [Test, DisplayName("build rejects the MSBuild names from before the Runic prefix with RTR0086")]
     [Arguments("<TranslationsEmitEsm>true</TranslationsEmitEsm>", "", "property 'TranslationsEmitEsm' was renamed to 'RunicTranslationsEmitEsm'")]
