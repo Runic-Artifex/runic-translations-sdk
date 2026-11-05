@@ -5,8 +5,8 @@
     "archive": "https://unicode.org/Public/cldr/48.2/cldr-common-48.2.zip",
     "archiveSha512": "de8660f5371e0fcfd03a42e3b4fc4c686ec6cd602b402f1e3d227844005a54eb7952873894443523837d5828c42874a1a267a19f91ded207a2d166144791fa62",
     "license": "Unicode-3.0",
-    "packageIntegrity": {"cldr-core":"sha512-zfmLothncSwfv2jlevoSrgI2VGgH8SDGHXst6jUEotHA8nq9Igeg9jzdJDFtBso9pgJuG89DK16TzrmZDdo2Bg==","cldr-misc-full":"sha512-dSc2Tr53dQcUGwsTinamEeoP2YXOhQrIZ+SyeuUrv4MzJOSjT/Q0qkSmX11ZwfcTbYSkIqbrgALQLhAm1yf5fA==","cldr-dates-full":"sha512-zMrKvjMO414HDftLr6vKH1fNQHakFNe+F1h4S0eg+zmL4WRi9pI41fxB3UrTJDY42MEM87jCuAw/qlqCgYKcAQ==","cldr-numbers-full":"sha512-0EQ+UkVDsyXOlxnWnL1RIENVZFqCnb04D1Yrku0obnOyttbuZz8tHmUd5c5AEvhGS/Gg2zI4fTaCm51LSGITog=="},
-    "packages": {"cldr-core":"48.2.0","cldr-misc-full":"48.2.0","cldr-dates-full":"48.2.0","cldr-numbers-full":"48.2.0"}
+    "packageIntegrity": {"cldr-core":"sha512-zfmLothncSwfv2jlevoSrgI2VGgH8SDGHXst6jUEotHA8nq9Igeg9jzdJDFtBso9pgJuG89DK16TzrmZDdo2Bg==","cldr-misc-full":"sha512-dSc2Tr53dQcUGwsTinamEeoP2YXOhQrIZ+SyeuUrv4MzJOSjT/Q0qkSmX11ZwfcTbYSkIqbrgALQLhAm1yf5fA==","cldr-dates-full":"sha512-zMrKvjMO414HDftLr6vKH1fNQHakFNe+F1h4S0eg+zmL4WRi9pI41fxB3UrTJDY42MEM87jCuAw/qlqCgYKcAQ==","cldr-numbers-full":"sha512-0EQ+UkVDsyXOlxnWnL1RIENVZFqCnb04D1Yrku0obnOyttbuZz8tHmUd5c5AEvhGS/Gg2zI4fTaCm51LSGITog==","cldr-units-full":"sha512-BjDC7V46eeXzgalnIumrJ1XQDk8wJaOxNLME4hmkBT9Q0hnzxn3XgtavigPUwnljk7FxlNQW9Wx+hbFrARPrQg=="},
+    "packages": {"cldr-core":"48.2.0","cldr-misc-full":"48.2.0","cldr-dates-full":"48.2.0","cldr-numbers-full":"48.2.0","cldr-units-full":"48.2.0"}
   },
   "rightToLeftScripts": ["Adlm","Arab","Armi","Avst","Chrs","Cprt","Elym","Gara","Hatr","Hebr","Hung","Khar","Lydi","Mand","Mani","Mend","Merc","Mero","Narb","Nbat","Nkoo","Orkh","Ougr","Palm","Phli","Phlp","Phnx","Prti","Rohg","Samr","Sarb","Sidt","Sogd","Sogo","Syrc","Thaa","Yezi"],
   "languageAliases": {

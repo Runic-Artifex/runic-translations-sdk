@@ -261,8 +261,10 @@ internal sealed class Rmf2V1CorpusTests
     // Re-pinned for merging T1c (#142) with main (#145, #146, #148), in both digests.
     // Re-pinned for merging T1c (with main, TB #131) into the web overlays, with .NET overlay precedence, in both digests.
     // Re-pinned for merging T1c/T4b (#143) with T1c (#142) and main (#145, #146, #148), in both digests.
-    private const string EncodedOutputDigest = "b04be97e2a35fcaa6cc98ec18398006294591235fee3034eb1f821dfc2bdcd94";
-    private const string HiddenEncodedOutputDigest = "6cec539bdb153386f9a1e0c988c705d9f6ed5edd4558ea6c403190ab825a3c96";
+    // Re-pinned for TK (currency, units, compact notation): the ESM runtime validates the new functions' options, accepts
+    // namespaced options and an artifact's formatData, and carries stubs for the formatters it leaves out, in both digests (ESM only), after merging T1c (#142) and the web overlays (#143).
+    private const string EncodedOutputDigest = "17949005c0c2aeeb9ff7a6a0f7d04fefc1cf40288c0d62e7cc016a16a153234a";
+    private const string HiddenEncodedOutputDigest = "69f5e3bdf7b711cf07921d2a98e84602273b282488d906f4b7bc99a59712288e";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

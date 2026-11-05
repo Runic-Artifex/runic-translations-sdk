@@ -7,7 +7,8 @@ namespace Runic.Translations.Compiler;
 
 public static partial class TranslationCompiler
 {
-    private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceRoots", "markup", "pseudoLocales" };
+    private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceRoots", "markup", "pseudoLocales", "formats" };
+    private static readonly string[] FormatsMembers = { "currencies", "units" };
     private static readonly string[] CodeMembers = { "namespace", "className", "visibility", "referenceFallbackText" };
     private static readonly string[] LocaleMembers = { "tag", "fallback", "validation" };
     private static readonly string[] RuntimeMembers = { "unsupportedLocale", "missingKey", "bidiIsolation" };
@@ -105,11 +106,47 @@ public static partial class TranslationCompiler
         }
         JsonProperty? pseudoLocales = root.Property("pseudoLocales");
         if (pseudoLocales is not null) ReadPseudoLocales(pseudoLocales.Value, model, parsed.Source, diagnostics);
+        JsonProperty? formats = root.Property("formats");
+        if (formats is not null) ReadFormats(formats.Value, model, parsed.Source, diagnostics);
         JsonProperty? validation = root.Property("validation");
         if (validation is not null) ReadValidation(validation, model, parsed.Source, diagnostics);
         JsonProperty? runtime = root.Property("runtime");
         if (runtime is not null) ReadRuntime(runtime, model, parsed.Source, diagnostics);
         return model;
+    }
+
+    // formats: the currencies and units that a currency or unit option may take from a variable at run time (D055.4).
+    private static void ReadFormats(JsonValue value, ManifestModel model, TranslationSource source, DiagnosticBag diagnostics)
+    {
+        if (value.Kind != JsonKind.Object)
+        {
+            diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "formats must be an object with currencies and units arrays.", source, value.Span);
+            return;
+        }
+        ValidateKnownMembers(value, FormatsMembers, source, diagnostics);
+        Read("currencies", model.FormatCurrencies, Rmf2FormatDataV1.IsCurrency, "currency", "an ISO 4217 code that CLDR lists as current tender");
+        Read("units", model.FormatUnits, Rmf2FormatDataV1.IsUnit, "unit", "a CLDR unit that Intl.NumberFormat accepts, or X-per-Y of two of them");
+
+        void Read(string name, List<string> target, Func<string, bool> known, string kind, string expected)
+        {
+            JsonProperty? property = value.Property(name);
+            if (property is null) return;
+            if (property.Value.Kind != JsonKind.Array)
+            {
+                diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "formats." + name + " must be an array of strings.", source, property.Value.Span);
+                return;
+            }
+            foreach (JsonValue item in property.Value.Items)
+            {
+                if (item.Kind != JsonKind.String)
+                    diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "formats." + name + " must be an array of strings.", source, item.Span);
+                else if (!known(item.Text!))
+                    diagnostics.Add("RTR0101", TranslationDiagnosticSeverity.Error, "Unknown " + kind + " '" + item.Text + "' in formats." + name + ": use " + expected + ".", source, item.Span);
+                else if (target.Exists(value => string.Equals(value, item.Text, StringComparison.Ordinal)))
+                    diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Duplicate " + kind + " '" + item.Text + "' in formats." + name + ".", source, item.Span);
+                else target.Add(item.Text!);
+            }
+        }
     }
 
     // pseudoLocales: en-XA and ar-XB, each at most once and not also a declared locale.

@@ -116,22 +116,29 @@ internal static class Rmf2NumberFormats
     internal static string LocalizeDigits(string text, string locale) => Rmf2NumberFormat.For(locale).Digits(text);
 
     // The unsigned digits with the decimal separator and, where useGrouping groups, the group separator.
-    private static string Digits(VisibleDecimal visible, string grouping, string locale, Rmf2NumberFormat format, int primary, int secondary)
+    private static string Digits(VisibleDecimal visible, string grouping, string locale, Rmf2NumberFormat format, int primary, int secondary) =>
+        Digits(visible, grouping, locale, format, primary, secondary, format.Decimal, format.Group);
+
+    /// <summary>
+    /// The unsigned digits in the locale's numbering system, grouped by <paramref name="primary"/> and
+    /// <paramref name="secondary"/> where <paramref name="grouping"/> groups, with the given separators (a currency's own).
+    /// </summary>
+    internal static string Digits(VisibleDecimal visible, string grouping, string locale, Rmf2NumberFormat format, int primary, int secondary, string decimalSeparator, string groupSeparator)
     {
         string all = visible.Coefficient.ToString(CultureInfo.InvariantCulture).PadLeft(visible.Scale + 1, '0');
         string whole = all[..^visible.Scale], fraction = all[^visible.Scale..];
         var builder = new StringBuilder(all.Length * 2);
-        if (Groups(grouping, whole.Length, locale, primary, format.Group))
+        if (Groups(grouping, whole.Length, locale, primary, groupSeparator))
         {
             // Groups from the right: the primary size, then the secondary size (Indian 12,34,567).
             int first = whole.Length - primary, start = first % secondary;
             if (start == 0) start = Math.Min(secondary, first);
             builder.Append(whole, 0, start);
-            for (int index = start; index < first; index += secondary) builder.Append(format.Group).Append(whole, index, secondary);
-            builder.Append(format.Group).Append(whole, first, primary);
+            for (int index = start; index < first; index += secondary) builder.Append(groupSeparator).Append(whole, index, secondary);
+            builder.Append(groupSeparator).Append(whole, first, primary);
         }
         else builder.Append(whole);
-        if (fraction.Length > 0) builder.Append(format.Decimal).Append(fraction);
+        if (fraction.Length > 0) builder.Append(decimalSeparator).Append(fraction);
         return format.Digits(builder.ToString());
     }
 

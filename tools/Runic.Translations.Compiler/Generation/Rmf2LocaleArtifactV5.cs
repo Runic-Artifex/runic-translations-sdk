@@ -52,6 +52,13 @@ internal static class Rmf2LocaleArtifactV5
             writer.WriteEndObject();
             writer.WritePropertyName("markupContract");
             using (JsonDocument markup = JsonDocument.Parse(project.MarkupContract)) markup.RootElement.WriteTo(writer);
+            // Only when the messages use :currency, :unit or compact notation: the CLDR data they need (D055.4).
+            if (project.FormatData(locale.ResolvedResources.Select(item => item.ContentLocale).Append(locale.Tag), locale.ResolvedResources.Select(item => item.Message)) is { } formats)
+            {
+                writer.WritePropertyName("formatData");
+                using JsonDocument data = JsonDocument.Parse(formats);
+                data.RootElement.WriteTo(writer);
+            }
             writer.WriteEndObject();
         }
         return new TranslationGeneratedOutput(TranslationGeneratedOutputKind.LocaleJson,

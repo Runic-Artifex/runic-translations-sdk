@@ -546,9 +546,11 @@ internal static class Rmf2CSharpOutputRendererV5
         int index = 0;
         foreach (Rmf2LocaleV5 locale in project.Locales.OrderBy(item => item.Tag, StringComparer.Ordinal))
         {
+            // A locale whose messages use :currency, :unit or compact notation reads its embedded CLDR data with them.
+            string formats = LocaleFormatData(project, locale) is null ? "" : ", Locale" + index + "Formats";
             writer.Line("global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateDeferredLocale(" + GenerationSupport.CSharpString(locale.Tag) + ", " +
                 (locale.FallbackTag is null ? "null" : GenerationSupport.CSharpString(locale.FallbackTag)) +
-                ", static () => global::Runic.Translations.Generated.GeneratedCatalogSupport.ReadValues(Locale" + index++ + "Data)),");
+                ", static () => global::Runic.Translations.Generated.GeneratedCatalogSupport.ReadValues(Locale" + index++ + "Data" + formats + ")),");
         }
         writer.Unindent(); writer.Line("},");
     }
@@ -604,11 +606,21 @@ internal static class Rmf2CSharpOutputRendererV5
                 json.WriteEndArray();
             }
             // Text stays readable UTF-8; the C# literal escapes what a string literal cannot hold.
-            writer.Line("private static global::System.ReadOnlySpan<byte> Locale" + index++ + "Data => " +
+            writer.Line("private static global::System.ReadOnlySpan<byte> Locale" + index + "Data => " +
                 GenerationSupport.CSharpString(System.Text.Encoding.UTF8.GetString(stream.ToArray())) + "u8;");
             writer.Blank();
+            if (LocaleFormatData(project, locale) is { } formats)
+            {
+                writer.Line("private static global::System.ReadOnlySpan<byte> Locale" + index + "Formats => " + GenerationSupport.CSharpString(formats) + "u8;");
+                writer.Blank();
+            }
+            index++;
         }
     }
+
+    // The CLDR currency, unit and compact data of a locale's direct messages, for their content locales (D055.4).
+    private static string? LocaleFormatData(Rmf2ProjectV5 project, Rmf2LocaleV5 locale) =>
+        project.FormatData(locale.DirectResources.Select(resource => resource.ContentLocale).Append(locale.Tag), locale.DirectResources.Select(resource => resource.Message));
 
     private static void WriteMessage(GenerationWriter writer, Rmf2MessageV5 message, string contentLocale, string suffix)
     {

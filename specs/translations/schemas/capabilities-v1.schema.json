@@ -47,7 +47,10 @@
         "date": { "$ref": "#/$defs/temporalFormat" },
         "time": { "$ref": "#/$defs/temporalFormat" },
         "datetime": { "$ref": "#/$defs/temporalFormat" },
-        "uuid": { "$ref": "#/$defs/uuidFormat" }
+        "uuid": { "$ref": "#/$defs/uuidFormat" },
+        "currency": { "$ref": "#/$defs/currencyFormat" },
+        "unit": { "$ref": "#/$defs/unitFormat" },
+        "compact": { "$ref": "#/$defs/compactFormat" }
       }
     },
     "messageProfile": {
@@ -91,6 +94,24 @@
     "uuidFormat": {
       "type": "object", "additionalProperties": false, "required": ["d", "n"],
       "properties": { "d": { "$ref": "#/$defs/equivalence" }, "n": { "$ref": "#/$defs/equivalence" } }
+    },
+    "currencyFormat": {
+      "type": "object", "additionalProperties": false, "required": ["symbol", "narrowSymbol", "code", "name", "accounting"],
+      "properties": {
+        "symbol": { "$ref": "#/$defs/equivalence" }, "narrowSymbol": { "$ref": "#/$defs/equivalence" }, "code": { "$ref": "#/$defs/equivalence" },
+        "name": { "$ref": "#/$defs/equivalence" }, "accounting": { "$ref": "#/$defs/equivalence" }
+      }
+    },
+    "unitFormat": {
+      "type": "object", "additionalProperties": false, "required": ["short", "long", "narrow", "compound"],
+      "properties": {
+        "short": { "$ref": "#/$defs/equivalence" }, "long": { "$ref": "#/$defs/equivalence" },
+        "narrow": { "$ref": "#/$defs/equivalence" }, "compound": { "$ref": "#/$defs/equivalence" }
+      }
+    },
+    "compactFormat": {
+      "type": "object", "additionalProperties": false, "required": ["short", "long"],
+      "properties": { "short": { "$ref": "#/$defs/equivalence" }, "long": { "$ref": "#/$defs/equivalence" } }
     },
     "locale": {
       "type": "object",

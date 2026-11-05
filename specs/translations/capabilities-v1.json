@@ -48,6 +48,23 @@
     "uuid": {
       "d": "exact",
       "n": "exact"
+    },
+    "currency": {
+      "symbol": "exact",
+      "narrowSymbol": "exact",
+      "code": "exact",
+      "name": "exact",
+      "accounting": "exact"
+    },
+    "unit": {
+      "short": "exact",
+      "long": "exact",
+      "narrow": "exact",
+      "compound": "exact"
+    },
+    "compact": {
+      "short": "exact",
+      "long": "exact"
     }
   },
   "messageProfile": {

@@ -203,8 +203,9 @@ public sealed class CompiledTranslationLocale
     /// constructor to validate a model from another source.
     /// </remarks>
     /// <exception cref="TranslationPackException">The data is not in that form.</exception>
-    internal static IReadOnlyList<CompiledTranslationValue> ReadRmf2Values(ReadOnlySpan<byte> utf8Json) =>
-        TranslationPackV5Loader.ReadGeneratedValues(utf8Json);
+    /// <param name="formatData">The CLDR currency, unit and compact data the compiler embedded for the locale's messages, if any.</param>
+    internal static IReadOnlyList<CompiledTranslationValue> ReadRmf2Values(ReadOnlySpan<byte> utf8Json, Rmf2FormatData? formatData = null) =>
+        TranslationPackV5Loader.ReadGeneratedValues(utf8Json, formatData);
 
     /// <summary>The canonical declared locale.</summary>
     public string Locale { get; }

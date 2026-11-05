@@ -38,21 +38,10 @@ internal static partial class TranslationCapabilityRegistry
     /// </summary>
     /// <param name="locales">The catalog's locales.</param>
     /// <param name="bidiIsolation">The catalog's <c>runtime.bidiIsolation</c>.</param>
-    internal static string EsmLocaleSource(IEnumerable<string> locales, TranslationBidiIsolation bidiIsolation = TranslationBidiIsolation.Default)
+    /// <param name="formatData">The catalog's currency, unit and compact data (Rmf2FormatDataV1.Select), if it uses any.</param>
+    internal static string EsmLocaleSource(IEnumerable<string> locales, TranslationBidiIsolation bidiIsolation = TranslationBidiIsolation.Default, string? formatData = null)
     {
-        var languages = new HashSet<string>(locales.Select(locale => CldrLocales.Language(CldrLocales.Parse(locale).Language)), StringComparer.Ordinal);
-        for (bool changed = true; changed;)
-        {
-            changed = false;
-            for (int index = 0; index < GeneratedLocaleTables.ParentKeys.Length; index++)
-            {
-                string child = GeneratedLocaleTables.ParentKeys[index], parent = GeneratedLocaleTables.ParentValues[index];
-                if (parent == "root") continue;
-                string childLanguage = CldrLocales.Parse(child).Language, parentLanguage = CldrLocales.Parse(parent).Language;
-                if (languages.Contains(childLanguage)) changed |= languages.Add(parentLanguage);
-                if (languages.Contains(parentLanguage) && child == childLanguage) changed |= languages.Add(childLanguage);
-            }
-        }
+        HashSet<string> languages = CatalogLanguages(locales);
         bool Selected(string id) => languages.Contains(CldrLocales.Parse(id).Language);
 
         var rules = new SortedSet<int> { 0 };
@@ -85,6 +74,8 @@ internal static partial class TranslationCapabilityRegistry
             }
             json.Append('}');
         }
+        // Currencies, units and compact patterns: only those the catalog uses (Rmf2FormatDataV1.Select).
+        if (formatData is not null) json.Append(",\"formats\":").Append(formatData);
         json.Append('}');
 
         var source = new StringBuilder("const generatedLocaleData = ").Append(json).Append(";\n");
@@ -106,6 +97,28 @@ internal static partial class TranslationCapabilityRegistry
             json.Append('}');
         }
         static string Rule(byte value) => value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// The CLDR languages a catalog's data covers: its locales' languages and the languages their CLDR parents link to
+    /// (<c>nb</c> and <c>nn</c> with <c>no</c>).
+    /// </summary>
+    internal static HashSet<string> CatalogLanguages(IEnumerable<string> locales)
+    {
+        var languages = new HashSet<string>(locales.Select(locale => CldrLocales.Language(CldrLocales.Parse(locale).Language)), StringComparer.Ordinal);
+        for (bool changed = true; changed;)
+        {
+            changed = false;
+            for (int index = 0; index < GeneratedLocaleTables.ParentKeys.Length; index++)
+            {
+                string child = GeneratedLocaleTables.ParentKeys[index], parent = GeneratedLocaleTables.ParentValues[index];
+                if (parent == "root") continue;
+                string childLanguage = CldrLocales.Parse(child).Language, parentLanguage = CldrLocales.Parse(parent).Language;
+                if (languages.Contains(childLanguage)) changed |= languages.Add(parentLanguage);
+                if (languages.Contains(parentLanguage) && child == childLanguage) changed |= languages.Add(childLanguage);
+            }
+        }
+        return languages;
     }
 
     // Locale tags are ASCII letters, digits and hyphens.

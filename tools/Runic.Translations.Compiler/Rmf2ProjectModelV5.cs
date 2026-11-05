@@ -109,6 +109,13 @@ internal sealed record Rmf2ProjectV5(string Id, string CodeNamespace, string Cla
     // or, by default, when the locale a format call runs in is written right to left, which the runtime decides per call, so
     // an RTL overlay on an LTR catalog is isolated too.
     internal TranslationBidiIsolation BidiIsolation { get; init; } = TranslationBidiIsolation.Default;
+    /// <summary>runic.json <c>formats</c>: the currencies and units a currency or unit option may take from a variable.</summary>
+    internal IReadOnlyList<string> FormatCurrencies { get; init; } = Array.Empty<string>();
+    internal IReadOnlyList<string> FormatUnits { get; init; } = Array.Empty<string>();
+
+    /// <summary>The currency, unit and compact data that messages need, for the locales of their content (Rmf2FormatDataV1.Select); null when none.</summary>
+    internal string? FormatData(IEnumerable<string> locales, IEnumerable<Rmf2MessageV5> messages) =>
+        Rmf2FormatDataV1.Select(locales, Rmf2FormatDataV1.Collect(messages, FormatCurrencies, FormatUnits));
 }
 
 internal static class Rmf2ProjectV5EmissionEligibility

@@ -117,7 +117,7 @@ range.
 | --- | --- | --- |
 | `string` | string | string literal |
 | `integer` | int64 | exact integral number literal in int64 range |
-| `number`, `runic:relative-time` | decimal | portable number literal |
+| `number`, `runic:relative-time`, `currency`, `unit` | decimal | portable number literal |
 | `runic:boolean` | boolean | string literal `true` or `false` |
 | `date` | date | string literal exactly `yyyy-MM-dd`, valid calendar date |
 | `time` | time | string literal exactly `HH:mm:ss`, valid clock time |
@@ -149,6 +149,16 @@ option permits a typed dynamic value.
 | `runic:relative-time` | `numeric` | string: `always`, `auto` | `always` |
 | `runic:list` | `type` | string: `conjunction`, `disjunction`, `unit` | `conjunction` |
 | `runic:list` | `style` | string: `long`, `short`, `narrow` | `long` |
+| `number` | `runic:notation` | string: `standard`, `compact` | `standard` |
+| `number` | `runic:compactDisplay` | string: `short`, `long` | `short` |
+| `currency` | `currency` | string: a pinned ISO 4217 code (required) | — |
+| `currency` | `currencyDisplay` | string: `symbol`, `narrowSymbol`, `code`, `name` | `symbol` |
+| `currency` | `currencySign` | string: `standard`, `accounting` | `standard` |
+| `currency`, `unit` | `useGrouping` | string: `auto`, `always`, `never`, `min2` | `auto` |
+| `currency` | `fractionDigits` | int64: 0..6 | the currency's CLDR digits |
+| `unit` | `unit` | string: a pinned unit or `X-per-Y` of two pinned simple units (required) | — |
+| `unit` | `unitDisplay` | string: `short`, `long`, `narrow` | `short` |
+| `unit` | `minimumFractionDigits`, `maximumFractionDigits` | int64: 0..6 | 0 and 6 |
 | every function | `u:dir` | string: `ltr`, `rtl`, `auto`, `inherit`; literal-only | the function's direction (see [Bidirectional text](#bidirectional-text)) |
 
 For number formatting, `0 <= minimum <= maximum <= 6` for decimal and
@@ -424,6 +434,60 @@ The ESM runtime also accepts a `Date` or an ISO 8601 string with seconds, an
 optional fraction and `Z` or an offset for a `datetime` input. It drops
 sub-second digits and keeps the canonical UTC carrier, so the transport form
 stays `yyyy-MM-ddTHH:mm:ssZ`.
+
+### Currencies, units and compact notation
+
+`:currency`, `:unit` and `:number runic:notation=compact` format from the
+pinned CLDR data of `specs/translations/cldr/runic-formats-48.2.json` that the
+compiler embeds with the messages (D055.4): the currencies and units they use
+or `runic.json` `formats` declares, and the compact styles they use, for every
+CLDR data ID of the catalog's languages. A .NET catalog locale embeds the data of
+its own messages, a locale artifact (`formatData`) that of its messages, and the
+ESM runtime that of the catalog. `:currency` and `:unit` are formatters only:
+their selection is `none`. An unknown code or unit is `RTR0101`; a `currency`
+or `unit` option from a variable requires the `runic.json` set (`RTR0102`), and a
+value outside it is an evaluation error. Every lookup walks CLDR's parent chain
+of the formatting locale's data ID to the first locale with the entry; the
+numbering system is the formatting locale's (its default, or `latn` for
+`-u-nu-latn`), and plural categories are the formatting locale's cardinal ones
+of the visible number.
+
+- **Currency.** The amount is rounded halfExpand to `fractionDigits`, else the
+  currency's CLDR digits, with trailing zeros kept. `name` writes the visible
+  number with the locale's standard decimal pattern and the currency's separators
+  (its own `decimal`/`group`, else the locale's `currencyDecimal`/`currencyGroup`,
+  else the number symbols) into the locale's currency unit pattern of the number's
+  plural category, with the currency's display name of that category. The other
+  displays take the accounting pattern for `accounting`, else the currency's own
+  pattern, else the standard pattern; group sizes, affixes and the negative
+  subpattern (an implicit one puts the minus sign first) come from it, `¤` becomes
+  the symbol, the narrow symbol or the code, and CLDR's currency spacing inserts a
+  no-break space between a digit and a symbol whose adjacent character is neither
+  of category S nor Z. ICU applies the default currency's own pattern of a locale
+  to every currency and does not use `alphaNextToNumber` patterns; RMF2 follows
+  TR35 (`specs/translations/corpus/currency-unit-divergences.json`).
+- **Unit.** The number is formatted as `:number` with the same fraction
+  digits and grouping and replaces `{0}` in the unit's pattern for its plural
+  category and width; a missing width uses the next wider one. `percent` in
+  `short` and `narrow` uses the locale's percent pattern without multiplying.
+  `X-per-Y` without its own CLDR entry formats X's pattern, then applies Y's
+  `perUnitPattern` or, without one, the locale's per pattern with Y's `one`
+  pattern stripped of `{0}` and trimmed.
+- **Compact.** For the magnitude m of the value, the pattern of 10^min(m,
+  largest) gives the divisor 10^(m − zeros + 1) (none for a `0` pattern or below
+  10³). The scaled value is rounded halfExpand to the fraction digit options when
+  given, else to whole numbers with at least two significant digits, without
+  trailing zeros; when rounding reaches the next magnitude and its divisor
+  differs, the value is scaled and rounded again with it (999999 → 1M). The
+  pattern of the rounded magnitude is chosen by the plural category of the
+  scaled number (an explicit `1` pattern for exactly 1); its run of zeros is
+  replaced by the number, grouped as `min2` under `useGrouping=auto`, and the
+  minus sign goes first unless the pattern has a negative subpattern. Plural
+  selection on a compact `:number` uses the visible number without compact
+  notation. Compact notation does not apply to `style=percent`.
+
+Placeholders of `:currency` and `:unit` have the direction of their formatting
+locale for bidi isolation, as numbers do.
 
 ## Bidirectional text
 

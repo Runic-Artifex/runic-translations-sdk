@@ -17,6 +17,9 @@ const runtimePath = resolve(root, "packages/dotnet/Runic.Translations/Formatting
 const tablesPath = resolve(root, "packages/dotnet/Runic.Translations/Formatting/GeneratedLocaleTables.cs");
 const resourcePath = resolve(root, "packages/dotnet/Runic.Translations/Formatting/GeneratedLocaleData.bin");
 const matrixPath = resolve(root, "specs/translations/capabilities-v1.json");
+const formatsSourcePath = resolve(root, "specs/translations/cldr/runic-formats-48.2.json");
+// Currency, unit and compact-notation data for the compiler only: a catalog embeds the entries it uses (D055.4).
+const formatResourcePath = resolve(root, "tools/Runic.Translations.Compiler/GeneratedFormatData.bin");
 // The matrix describes the SDK release built from this checkout.
 const releaseTarget = (
   await readFile(resolve(root, "eng/Versions.props"), "utf8")
@@ -217,6 +220,47 @@ function numberFields(id, system, formats) {
     String(positive.primary), String(positive.secondary), affix(positive.prefix), affix(positive.suffix), affix(negative.prefix), affix(negative.suffix)];
 }
 
+// Currencies, units and compact notation (runic-formats-48.2.json): checked here, then deflated whole into the
+// compiler's resource, which selects the entries a catalog uses (Rmf2FormatDataV1.Select).
+const formatsSource = JSON.parse(await readFile(formatsSourcePath, "utf8"));
+if (formatsSource.source?.cldrVersion !== source.source.cldrVersion) throw new Error("The formats pin and the CLDR subset differ in version.");
+for (const [code, digits] of Object.entries(formatsSource.currencies ?? {}))
+  if (!/^[A-Z]{3}$/.test(code) || !Number.isInteger(digits) || digits < 0 || digits > 4) throw new Error(`Invalid currency '${code}'.`);
+sortedKeys(formatsSource.currencies, "currencies");
+if (!Array.isArray(formatsSource.units) || formatsSource.units.some((unit, index) => !/^[a-z]+(?:-[a-z0-9]+)*$/.test(unit) || (index > 0 && formatsSource.units[index - 1] >= unit)))
+  throw new Error("Formats units must be sorted, unique unit identifiers.");
+const patternSlot = (value, label) => { if (value !== null && (typeof value !== "string" || value.length === 0 || value.length > 128)) throw new Error(`Invalid pattern ${label}.`); };
+const slotArray = (value, maximum, label) => {
+  if (!Array.isArray(value) || value.length === 0 || value.length > maximum || value.at(-1) === null) throw new Error(`Invalid record ${label}.`);
+  value.forEach((item, index) => patternSlot(item, `${label}[${index}]`));
+  if (value[0] === null) throw new Error(`Record ${label} needs its first value.`);
+};
+for (const id of sortedKeys(formatsSource.locales, "formats locales")) {
+  if (!tagPattern.test(id)) throw new Error(`Invalid formats locale '${id}'.`);
+  const data = formatsSource.locales[id];
+  for (const section of Object.keys(data)) if (!["currencyFormats", "currencies", "units", "per", "compact"].includes(section)) throw new Error(`Unknown formats section ${id}/${section}.`);
+  for (const [system, record] of Object.entries(data.currencyFormats ?? {})) {
+    if (!Object.hasOwn(numberingSystems, system)) throw new Error(`Currency formats ${id}/${system} use an unknown numbering system.`);
+    slotArray(record, 10, `${id}/currencyFormats/${system}`);
+    for (const pattern of record.slice(0, 2)) if (!/¤/.test(pattern)) throw new Error(`Currency pattern ${id}/${system} has no currency sign.`);
+  }
+  for (const [code, record] of Object.entries(data.currencies ?? {})) {
+    if (!Object.hasOwn(formatsSource.currencies, code)) throw new Error(`Currency ${id}/${code} is not pinned.`);
+    slotArray(record, 11, `${id}/currencies/${code}`);
+  }
+  for (const [unit, record] of Object.entries(data.units ?? {})) {
+    if (!formatsSource.units.includes(unit) || !Array.isArray(record) || record.length === 0 || record.length > 3 || record[0] === null) throw new Error(`Invalid unit ${id}/${unit}.`);
+    record.forEach((width, index) => { if (width !== null) slotArray(width, 7, `${id}/units/${unit}/${index}`); });
+  }
+  for (const [width, pattern] of Object.entries(data.per ?? {})) if (!["long", "short", "narrow"].includes(width) || !/\{0\}/.test(pattern) || !/\{1\}/.test(pattern)) throw new Error(`Invalid per pattern ${id}/${width}.`);
+  for (const [system, styles] of Object.entries(data.compact ?? {})) for (const [style, magnitudes] of Object.entries(styles)) {
+    if (!["short", "long"].includes(style) || !Array.isArray(magnitudes) || magnitudes.length < 12) throw new Error(`Invalid compact table ${id}/${system}/${style}.`);
+    magnitudes.forEach((record, index) => slotArray(record, 7, `${id}/compact/${system}/${style}/${index + 3}`));
+  }
+}
+const formatResourceJson = JSON.stringify(formatsSource);
+const formatResource = deflateRawSync(Buffer.from(formatResourceJson, "utf8"), { level: 9 });
+
 // The compressed resource holds the number formats, lists and relative times; .NET reads it lazily.
 const resourceJson = JSON.stringify({ numbers, weekdays, dayPeriods, list, relativeTime });
 const resource = deflateRawSync(Buffer.from(resourceJson, "utf8"), { level: 9 });
@@ -355,6 +399,9 @@ const matrix =
         time: { iso: "exact", localized: "semantic" },
         datetime: { iso: "semantic", localized: "semantic" },
         uuid: { d: "exact", n: "exact" },
+        currency: { symbol: "exact", narrowSymbol: "exact", code: "exact", name: "exact", accounting: "exact" },
+        unit: { short: "exact", long: "exact", narrow: "exact", compound: "exact" },
+        compact: { short: "exact", long: "exact" },
       },
       messageProfile: { cardinal: "exact", ordinal: "exact", relativeTime: "exact", list: "exact" },
       locales: matrixTags.map((tag) => {
@@ -378,6 +425,7 @@ await Promise.all([
   emit(runtimePath, runtime),
   emit(tablesPath, tables),
   emitResource(resourcePath, resource, resourceJson),
+  emitResource(formatResourcePath, formatResource, formatResourceJson),
   emit(matrixPath, matrix),
 ]);
 

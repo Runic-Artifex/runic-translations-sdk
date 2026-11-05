@@ -303,7 +303,7 @@ function isolate(text, value, messageRtl, formatLocale, isolation) {
   const fn = value.format.function;
   const direction = option === "ltr" ? "ltr" : option === "rtl" ? "rtl" : option === "auto" ? "unknown"
     : option === "inherit" ? (messageRtl ? "rtl" : "ltr")
-    : ["integer", "number", "date", "time", "datetime"].includes(fn) ? (rightToLeftTag(formatLocale) ? "rtl" : "ltr")
+    : ["integer", "number", "currency", "unit", "date", "time", "datetime"].includes(fn) ? (rightToLeftTag(formatLocale) ? "rtl" : "ltr")
     : fn === "runic:relative-time" || fn === "runic:list" ? (messageRtl ? "rtl" : "ltr")
     : ["runic:uuid", "runic:boolean"].includes(fn) ? "ltr" : "unknown";
   const explicit = option === "ltr" || option === "rtl" || option === "auto";
@@ -410,11 +410,16 @@ function validateInputs(inputs, contract) {
 }
 
 function defaultFunction(type) { return ({ string: "string", int64: "integer", decimal: "number", boolean: "runic:boolean", date: "date", time: "time", datetime: "datetime", guid: "runic:uuid", list: "runic:list" })[type]; }
-function functionType(name) { return ({ string: "string", integer: "int64", number: "decimal", "runic:boolean": "boolean", date: "date", time: "time", datetime: "datetime", "runic:uuid": "guid", "runic:relative-time": "decimal", "runic:list": "list" })[name]; }
+function functionType(name) { return ({ string: "string", integer: "int64", number: "decimal", "runic:boolean": "boolean", date: "date", time: "time", datetime: "datetime", "runic:uuid": "guid", "runic:relative-time": "decimal", "runic:list": "list", currency: "decimal", unit: "decimal" })[name]; }
 function optionType(fn, name) {
   if (name === "u:dir" && functionType(fn) !== undefined) return "string";
   if (["string", "runic:boolean", "integer", "number"].includes(fn) && name === "select") return "string";
-  if ((fn === "integer" || fn === "number") && name === "useGrouping") return "string";
+  if (["integer", "number", "currency", "unit"].includes(fn) && name === "useGrouping") return "string";
+  if (fn === "number" && ["runic:notation", "runic:compactDisplay"].includes(name)) return "string";
+  if (fn === "currency" && ["currency", "currencyDisplay", "currencySign"].includes(name)) return "string";
+  if (fn === "currency" && name === "fractionDigits") return "int64";
+  if (fn === "unit" && ["unit", "unitDisplay"].includes(name)) return "string";
+  if (fn === "unit" && ["minimumFractionDigits", "maximumFractionDigits"].includes(name)) return "int64";
   if (["number", "date", "time", "datetime", "runic:uuid"].includes(fn) && name === "style") return "string";
   if (fn === "datetime" && name === "timeZone") return "string";
   if (fn === "number" && ["minimumFractionDigits", "maximumFractionDigits"].includes(name)) return "int64";
@@ -457,7 +462,9 @@ function contextFor(wrapper, inputs, contract) {
       return [option.name, resolve(option.value, type).carrier];
     });
     const options = freezeOwnRecord(entries); validateResolvedOptions(expressionValue.function, options);
-    return Object.freeze({ carrier: inherited.carrier, type: inherited.type, format: Object.freeze({ function: expressionValue.function, options }) });
+    // A currency or unit from a variable must be in the catalog's declared set (runic.json formats).
+    const dynamicCode = expressionValue.options.some(option => option.name === expressionValue.function && ["input", "local"].includes(option.value.kind));
+    return Object.freeze({ carrier: inherited.carrier, type: inherited.type, format: Object.freeze({ function: expressionValue.function, options, dynamicCode }) });
   };
   for (const declaration of wrapper.ast.declarations) {
     const resolved = expression(declaration.expression);
@@ -469,20 +476,26 @@ function contextFor(wrapper, inputs, contract) {
 function validateResolvedOptions(fn, options) {
   const allowed = {
     string: { select: ["exact"] }, "runic:boolean": { select: ["exact"] }, integer: { select: ["plural", "ordinal", "exact"], useGrouping: ["auto", "always", "never", "min2"] },
-    number: { select: ["plural", "ordinal", "exact"], style: ["decimal", "percent"], useGrouping: ["auto", "always", "never", "min2"] }, date: { style: ["iso", "short", "medium", "long", "full"] },
+    number: { select: ["plural", "ordinal", "exact"], style: ["decimal", "percent"], useGrouping: ["auto", "always", "never", "min2"], "runic:notation": ["standard", "compact"], "runic:compactDisplay": ["short", "long"] },
+    currency: { currency: /^[A-Z]{3}$/, currencyDisplay: ["symbol", "narrowSymbol", "code", "name"], currencySign: ["standard", "accounting"], useGrouping: ["auto", "always", "never", "min2"] },
+    unit: { unit: /^[a-z0-9-]{1,64}$/, unitDisplay: ["short", "long", "narrow"], useGrouping: ["auto", "always", "never", "min2"] },
+    date: { style: ["iso", "short", "medium", "long", "full"] },
     time: { style: ["iso", "short", "medium", "long", "full"] }, datetime: { style: ["iso", "short", "medium", "long", "full"], timeZone: null }, "runic:uuid": { style: ["d", "n", "b", "p"] },
     "runic:relative-time": { unit: ["second", "minute", "hour", "day", "week", "month", "year"], numeric: ["always", "auto"] },
     "runic:list": { type: ["conjunction", "disjunction", "unit"], style: ["long", "short", "narrow"] },
   }[fn];
   if (!allowed) throw new TypeError("Unknown formatter.");
+  const digitOption = name => ((fn === "number" || fn === "unit") && ["minimumFractionDigits", "maximumFractionDigits"].includes(name)) || (fn === "currency" && name === "fractionDigits");
   for (const name of Object.keys(options)) {
     if (name === "u:dir") { if (!["ltr", "rtl", "auto", "inherit"].includes(options[name])) throw new RangeError("Invalid formatter option value."); continue; }
-    if (!Object.hasOwn(allowed, name) && !(fn === "number" && ["minimumFractionDigits", "maximumFractionDigits"].includes(name))) throw new TypeError("Unknown formatter option.");
-    if (fn === "number" && ["minimumFractionDigits", "maximumFractionDigits"].includes(name)) { if (typeof options[name] !== "bigint" || options[name] < 0n || options[name] > 6n) throw new RangeError("Fraction digits are outside 0..6."); }
+    if (!Object.hasOwn(allowed, name) && !digitOption(name)) throw new TypeError("Unknown formatter option.");
+    if (digitOption(name)) { if (typeof options[name] !== "bigint" || options[name] < 0n || options[name] > 6n) throw new RangeError("Fraction digits are outside 0..6."); }
     else if (allowed[name] === null) { if (!validTimeZone(options[name])) throw new RangeError("Invalid time zone."); }
+    else if (allowed[name] instanceof RegExp) { if (typeof options[name] !== "string" || !allowed[name].test(options[name])) throw new RangeError("Invalid formatter option value."); }
     else if (!allowed[name].includes(options[name])) throw new RangeError("Invalid formatter option value.");
   }
-  if (fn === "number") {
+  if (fn === "number" && options["runic:notation"] === "compact" && options.style === "percent") throw new RangeError("Compact notation does not apply to percentages.");
+  if (fn === "number" || fn === "unit") {
     const style = options.style ?? "decimal", minimum = options.minimumFractionDigits ?? 0n, maximum = options.maximumFractionDigits ?? (style === "percent" ? 4n : 6n);
     if (minimum > maximum || maximum > (style === "percent" ? 4n : 6n)) throw new RangeError("Invalid number precision.");
   }
@@ -496,7 +509,12 @@ function formatResolved(value, locale, contentLocale = locale, isolateItems = fa
     case "string": return value.carrier;
     case "runic:boolean": return value.carrier ? "true" : "false";
     case "integer": return formatInteger(value.carrier, locale, options.useGrouping ?? "auto");
-    case "number": return formatDecimal(value.type === "int64" ? decimalFromInteger(value.carrier) : value.carrier, locale, options);
+    case "number": {
+      const number = value.type === "int64" ? decimalFromInteger(value.carrier) : value.carrier;
+      return options["runic:notation"] === "compact" ? formatCompact(number, options["runic:compactDisplay"] ?? "short", options, locale) : formatDecimal(number, locale, options);
+    }
+    case "currency": return formatCurrency(value.type === "int64" ? decimalFromInteger(value.carrier) : value.carrier, options, locale, value.format.dynamicCode);
+    case "unit": return formatUnit(value.type === "int64" ? decimalFromInteger(value.carrier) : value.carrier, options, locale, value.format.dynamicCode);
     case "date": return formatTemporal(value.carrier, fn, options.style ?? "iso", locale, "local");
     case "time": return formatTemporal(value.carrier, fn, options.style ?? "iso", locale, "local");
     case "datetime": return formatTemporal(value.carrier, fn, options.style ?? "iso", locale, options.timeZone ?? "local");
@@ -635,6 +653,190 @@ function formatRelative(value, unit, numeric, locale, numberLocale = locale) {
   const patterns = offset + (value.negative ? 0 : 6), pattern = data[patterns + pluralCategoryOrder.indexOf(selectPlural(visible, locale, false))] ?? data[patterns + 5];
   return pattern.replace("{0}", formatDecimal(absolute, numberLocale, {}));
 }
+
+// A dynamic artifact's or an overlay's own formatData applies while its messages format (formatCompiledMessage).
+let activeFormatData;
+const messageFormatData = new WeakMap();
+// @runic-formats-begin: the renderer replaces this block with stubs when the catalog uses none of these functions.
+// :currency, :unit and compact notation from the CLDR data the compiler embedded for the catalog (D055.4): only the
+// currencies, units and compact styles its messages use, for the CLDR locales of its languages. The .NET runtime's
+// Rmf2CldrFormats applies the same steps, which follow ICU. Records: currency formats [standard, accounting, unit
+// patterns other … many, currency decimal, currency group]; currencies [symbol, narrow, names other … many, pattern,
+// decimal, group]; units [long, short, narrow] of [other … many, per]; compact by magnitude from 3 of [other … many, "1"].
+const formatSlots = ["other", "zero", "one", "two", "few", "many"];
+function formatData() {
+  const data = activeFormatData ?? generatedLocaleData.formats;
+  if (data === undefined) throw new RangeError("The catalog embeds no CLDR currency, unit or compact data.");
+  return data;
+}
+// The first entry along CLDR's parent chain of the formatting locale's data ID.
+function formatEntry(locale, section, key, select = value => value) {
+  const locales = formatData().locales;
+  for (let id = cldrDataId(withoutExtensions(locale)), depth = 0; id !== undefined && depth < 16; id = cldrParent(id, false), depth++) {
+    const value = locales[id]?.[section]?.[key];
+    if (value !== undefined && select(value) !== undefined) return select(value);
+  }
+  return undefined;
+}
+function formatPlural(record, offset, category) { return record[offset + formatSlots.indexOf(category)] ?? record[offset]; }
+function formatCategory(visible, locale) { return cldrLocale(locale).cardinal < 0 ? "other" : selectPlural(visible, locale, false); }
+function formatSubstitute(pattern, zero, one) { return pattern.replace(/\{([01])\}/g, (_, index) => index === "0" ? zero : one); }
+// A number pattern's subpatterns as [prefix, suffix, primary, secondary]; an implicit negative puts "-" first.
+const formatPatternCache = new Map();
+function formatPattern(pattern) {
+  let parsed = formatPatternCache.get(pattern);
+  if (parsed) return parsed;
+  const split = formatUnquoted(pattern, ";");
+  const sub = text => {
+    let first = -1, last = -1, quoted = false;
+    for (let index = 0; index < text.length; index++) { if (text[index] === "'") { quoted = !quoted; continue; } if (!quoted && "#0,.".includes(text[index])) { if (first < 0) first = index; last = index; } }
+    const groups = text.slice(first, last + 1).split(".")[0].split(",");
+    const primary = groups.length > 1 ? groups[groups.length - 1].length : 0, secondary = groups.length > 2 ? groups[groups.length - 2].length : primary;
+    return [text.slice(0, first), text.slice(last + 1), primary, secondary];
+  };
+  const positive = sub(split < 0 ? pattern : pattern.slice(0, split));
+  parsed = [positive, split < 0 ? ["-" + positive[0], positive[1], positive[2], positive[3]] : sub(pattern.slice(split + 1))];
+  formatPatternCache.set(pattern, parsed);
+  return parsed;
+}
+function formatUnquoted(text, value) { let quoted = false; for (let index = 0; index < text.length; index++) { if (text[index] === "'") quoted = !quoted; else if (!quoted && text[index] === value) return index; } return -1; }
+// An affix without its quotes ('' is a quote) and with "-" as the locale's minus sign; "¤" stays.
+function formatAffix(affix, minus) { return affix.replace(/'([^']*)'|-/g, (match, quoted) => quoted === undefined ? minus : quoted === "" ? "'" : quoted); }
+function formatDigitText(visible, grouping, locale, format, primary, secondary, decimal, group) {
+  const digits = visible.coefficient.toString().padStart(visible.scale + 1, "0");
+  const whole = digits.slice(0, digits.length - visible.scale), fraction = digits.slice(digits.length - visible.scale);
+  return localizeDigits(`${groupDigits(whole, grouping, group, primary, secondary, locale)}${fraction ? decimal + fraction : ""}`, format);
+}
+function formatRounded(value, minimum, maximum) { return visibleNumber(value, { minimumFractionDigits: BigInt(minimum), maximumFractionDigits: BigInt(maximum) }); }
+
+function formatCurrency(value, options, locale, dynamic) {
+  const data = formatData(), code = options.currency, display = options.currencyDisplay ?? "symbol", grouping = options.useGrouping ?? "auto";
+  if (dynamic && !(data.dynamicCurrencies ?? []).includes(code)) throw new RangeError(`Currency '${code}' is not in the catalog's runic.json formats.currencies.`);
+  const cldrDigits = Object.hasOwn(data.currencies, code) ? data.currencies[code] : undefined;
+  if (cldrDigits === undefined) throw new RangeError(`The catalog does not embed currency '${code}'.`);
+  const digits = options.fractionDigits === undefined ? cldrDigits : Number(options.fractionDigits);
+  const visible = formatRounded(value, digits, digits), format = numberFormat(locale);
+  const formats = formatEntry(locale, "currencyFormats", format.system), currency = formatEntry(locale, "currencies", code);
+  if (!formats || !currency) throw new RangeError(`No data for currency '${code}' in locale '${locale}'.`);
+  const decimal = currency[9] ?? formats[8] ?? format.decimal, group = currency[10] ?? formats[9] ?? format.group;
+  if (display === "name") {
+    const number = (visible.negative ? format.minus : "") + formatDigitText(visible, grouping, locale, format, format.primary, format.secondary, decimal, group);
+    const category = formatCategory(visible, locale);
+    return formatSubstitute(formatPlural(formats, 2, category), number, formatPlural(currency, 2, category));
+  }
+  const symbol = display === "code" ? code : display === "narrowSymbol" ? currency[1] ?? currency[0] : currency[0];
+  // A currency's own pattern replaces the standard pattern for that currency.
+  const [positive, negative] = formatPattern(options.currencySign === "accounting" ? formats[1] : currency[8] ?? formats[0]);
+  const [prefixPattern, suffixPattern, primary, secondary] = visible.negative ? negative : positive;
+  const text = formatDigitText(visible, grouping, locale, format, primary, secondary, decimal, group);
+  let prefix = formatAffix(prefixPattern, format.minus), suffix = formatAffix(suffixPattern, format.minus);
+  // CLDR currency spacing (root's in every locale): a no-break space between a digit and a symbol whose adjacent
+  // character is neither a symbol (S) nor a separator (Z).
+  const spaced = character => character !== undefined && !/[\p{S}\p{Z}]/u.test(character), digit = character => character !== undefined && /\p{Nd}/u.test(character);
+  const characters = Array.from(symbol), textCharacters = Array.from(text);
+  if (prefix.endsWith("¤") && spaced(characters[characters.length - 1]) && digit(textCharacters[0])) prefix += " ";
+  if (suffix.startsWith("¤") && spaced(characters[0]) && digit(textCharacters[textCharacters.length - 1])) suffix = " " + suffix;
+  return prefix.replaceAll("¤", symbol) + text + suffix.replaceAll("¤", symbol);
+}
+
+function formatUnit(value, options, locale, dynamic) {
+  const data = formatData(), unit = options.unit, display = options.unitDisplay ?? "short", grouping = options.useGrouping ?? "auto";
+  if (dynamic && !(data.dynamicUnits ?? []).includes(unit)) throw new RangeError(`Unit '${unit}' is not in the catalog's runic.json formats.units.`);
+  const visible = visibleNumber(value, options);
+  if (unit === "percent" && display !== "long") {
+    const format = numberFormat(locale), digits = numberDigits(visible, grouping, locale, format, true);
+    return visible.negative ? format.negativePercentPrefix + digits + format.negativePercentSuffix : format.percentPrefix + digits + format.percentSuffix;
+  }
+  const format = numberFormat(locale), number = `${visible.negative ? format.minus : ""}${numberDigits(visible, grouping, locale, format, false)}`;
+  const category = formatCategory(visible, locale), width = ["long", "short", "narrow"].indexOf(display);
+  // A width CLDR does not repeat is the nearest wider one's.
+  const widthOf = record => { for (let index = Math.min(width, record.length - 1); index >= 0; index--) if (record[index] !== null) return record[index]; throw new RangeError("A unit record has no long width."); };
+  const own = formatEntry(locale, "units", unit);
+  if (own !== undefined) return formatSubstitute(formatPlural(widthOf(own), 0, category), number, "");
+  const split = unit.indexOf("-per-"), numeratorRecord = formatEntry(locale, "units", unit.slice(0, split)), denominatorRecord = formatEntry(locale, "units", unit.slice(split + 5));
+  if (split < 0 || !numeratorRecord || !denominatorRecord) throw new RangeError(`The catalog does not embed unit '${unit}' for locale '${locale}'.`);
+  const numerator = widthOf(numeratorRecord), denominator = widthOf(denominatorRecord), text = formatSubstitute(formatPlural(numerator, 0, category), number, "");
+  if (denominator[6] != null) return formatSubstitute(denominator[6], text, "");
+  const per = formatEntry(locale, "per", display);
+  if (per === undefined) throw new RangeError(`The catalog does not embed unit '${unit}' for locale '${locale}'.`);
+  return formatSubstitute(per, text, formatSubstitute(formatPlural(denominator, 0, "one"), "", "").trim());
+}
+
+// Compact notation: the number scaled by the CLDR pattern of its magnitude and rounded, by default to whole numbers with
+// at least two significant digits, else to the fraction digit options; a value that rounds up to the next magnitude
+// takes that magnitude's pattern (999999 → 1M). The pattern follows the plural category of the scaled number, and
+// useGrouping=auto groups as min2, as ICU does.
+function formatCompact(value, display, options, locale) {
+  const format = numberFormat(locale), table = formatEntry(locale, "compact", format.system, systems => systems[display]);
+  if (!table) throw new RangeError(`No compact patterns for locale '${locale}'.`);
+  let coefficient = value.coefficient, scale = value.scale;
+  while (scale > 0 && coefficient % 10n === 0n) { coefficient /= 10n; scale--; }
+  const magnitudeOf = (c, s) => c === 0n ? 0 : c.toString().length - s - 1, magnitude = magnitudeOf(coefficient, scale);
+  const largest = table.length + 2;
+  const multiplier = m => {
+    if (m < 3) return 0;
+    const capped = Math.min(m, largest), pattern = table[capped - 3][0];
+    if (pattern === "0") return 0;
+    const start = formatUnquoted(pattern, "0");
+    if (start < 0) return capped;
+    let zeros = 0; while (pattern[start + zeros] === "0") zeros++;
+    return capped - (zeros - 1);
+  };
+  const round = shift => {
+    let c = coefficient, s = scale + shift;
+    if (s < 0) { c *= 10n ** BigInt(-s); s = 0; }
+    const whole = c === 0n ? 1 : c.toString().length - s;
+    const minimum = options.minimumFractionDigits === undefined ? 0 : Number(options.minimumFractionDigits);
+    let maximum = options.maximumFractionDigits === undefined ? Math.max(0, whole >= 2 ? 0 : 2 - whole) : Number(options.maximumFractionDigits);
+    if (options.minimumFractionDigits !== undefined && options.maximumFractionDigits === undefined) maximum = Math.max(maximum, minimum);
+    if (s > maximum) { const divisor = 10n ** BigInt(s - maximum), remainder = c % divisor; c = c / divisor + (remainder * 2n >= divisor ? 1n : 0n); s = maximum; }
+    while (s > minimum && c % 10n === 0n) { c /= 10n; s--; }
+    while (s < minimum) { c *= 10n; s++; }
+    return Object.freeze({ coefficient: c, scale: s, negative: value.negative && c !== 0n });
+  };
+  let exponent = multiplier(magnitude), rounded = round(exponent);
+  if (rounded.coefficient !== 0n && magnitudeOf(rounded.coefficient, rounded.scale) + exponent !== magnitude) {
+    const next = multiplier(magnitude + 1);
+    if (next !== exponent) { exponent = next; rounded = round(exponent); }
+  }
+  const shown = rounded.coefficient === 0n ? 0 : magnitudeOf(rounded.coefficient, rounded.scale) + exponent;
+  const grouping = options.useGrouping ?? "auto";
+  const number = formatDigitText(rounded, grouping === "auto" ? "min2" : grouping, locale, format, format.primary, format.secondary, format.decimal, format.group);
+  const sign = rounded.negative ? format.minus : "";
+  if (exponent === 0 && shown < 3) return sign + number;
+  const record = table[Math.min(shown, largest) - 3];
+  let pattern = formatPlural(record, 0, formatCategory(rounded, locale));
+  if (rounded.coefficient === 1n && rounded.scale === 0 && record[6] != null) pattern = record[6];
+  if (pattern === "0") return sign + number;
+  const zeros = text => { const start = formatUnquoted(text, "0"); if (start < 0) return formatAffix(text, format.minus); let end = start; while (text[end] === "0") end++; return formatAffix(text.slice(0, start), format.minus) + number + formatAffix(text.slice(end), format.minus); };
+  const split = formatUnquoted(pattern, ";");
+  if (rounded.negative && split >= 0) return zeros(pattern.slice(split + 1));
+  return sign + zeros(split < 0 ? pattern : pattern.slice(0, split));
+}
+
+// The shape of embedded format data (Rmf2FormatDataV1.Select): records of strings and nulls, nothing else.
+function validFormatData(value) {
+  const record = item => isRecord(item), strings = (item, first) => Array.isArray(item) && item.length > 0 && item.length <= 16 && item.every((entry, index) => typeof entry === "string" || (entry === null && (index > 0 || !first)));
+  if (!record(value) || Object.keys(value).some(name => !["currencies", "dynamicCurrencies", "dynamicUnits", "locales"].includes(name)) || !record(value.currencies) || !record(value.locales)) return false;
+  if (Object.entries(value.currencies).some(([code, digits]) => !/^[A-Z]{3}$/.test(code) || !Number.isInteger(digits) || digits < 0 || digits > 6)) return false;
+  for (const name of ["dynamicCurrencies", "dynamicUnits"]) if (value[name] !== undefined && (!Array.isArray(value[name]) || value[name].some(item => typeof item !== "string"))) return false;
+  for (const entry of Object.values(value.locales)) {
+    if (!record(entry)) return false;
+    for (const [section, members] of Object.entries(entry)) {
+      if (!record(members)) return false;
+      for (const member of Object.values(members)) {
+        const valid = section === "currencyFormats" || section === "currencies" ? strings(member, true)
+          : section === "units" ? Array.isArray(member) && member.length > 0 && member.length <= 3 && member.every((width, index) => (width === null && index > 0) || strings(width, true))
+          : section === "per" ? typeof member === "string"
+          : section === "compact" ? record(member) && Object.values(member).every(table => Array.isArray(table) && table.length > 0 && table.length <= 32 && table.every(item => strings(item, true)))
+          : false;
+        if (!valid) return false;
+      }
+    }
+  }
+  return true;
+}
+// @runic-formats-end
 
 // Joins the items with the pinned CLDR list patterns, as Intl.ListFormat does: end(n-2, n-1), then
 // middle(i, rest) and start(0, rest). The .NET runtime applies the same generated patterns and Spanish rule.
@@ -924,6 +1126,14 @@ export function formatMessage(key, messages, inputs, options) {
 // requestedLocale is the tag the caller asked for (de-CH), resolvedLocale the catalog locale it resolved to (de),
 // which defaults to the requested one; the wrapper's content locale differs from it after a fallback.
 export function formatCompiledMessage(key, wrapper, inputs, requestedLocale, resolvedLocale = requestedLocale) {
+  const data = wrapper ? messageFormatData.get(wrapper) : undefined;
+  if (data === undefined) return formatWrapper(key, wrapper, inputs, requestedLocale, resolvedLocale);
+  const previous = activeFormatData; activeFormatData = data;
+  try { return formatWrapper(key, wrapper, inputs, requestedLocale, resolvedLocale); }
+  finally { activeFormatData = previous; }
+}
+
+function formatWrapper(key, wrapper, inputs, requestedLocale, resolvedLocale) {
   if (!wrapper) throw new RangeError(`Unknown message '${key}'.`);
   const contract = validatedMessages.get(wrapper); if (!contract || contract.key !== key) throw new TypeError("A validated v5 message is required.");
   const context = contextFor(wrapper, inputs, contract), locale = wrapper.contentLocale, formatLocale = formattingLocale(requestedLocale, locale);
@@ -1038,7 +1248,11 @@ export function decodeLocaleArtifactV5(value, tables) {
     const error = validateMessageWrapper(message, contract, snapshot.locale, key); if (error) return failure(`RTR0023/${error}`);
     validatedMessages.set(message, contract); entries.push([key,message]);
   }
-  const artifact=Object.freeze({ artifactVersion: 5, messageGrammarVersion: 5, profile, catalog, locale: snapshot.locale, contractFingerprint, messages: freezeOwnRecord(entries), markupContract: tables.rmf2Contract });decodedArtifacts.add(artifact);
+  // formatData: the CLDR currency, unit and compact data of the artifact's messages, when they use them.
+  if (snapshot.formatData !== undefined && !validFormatData(snapshot.formatData)) return failure("RTR0023/malformed");
+  const artifact=Object.freeze({ artifactVersion: 5, messageGrammarVersion: 5, profile, catalog, locale: snapshot.locale, contractFingerprint, messages: freezeOwnRecord(entries), markupContract: tables.rmf2Contract,
+    ...(snapshot.formatData === undefined ? {} : { formatData: freezeTrusted(snapshot.formatData) }) });decodedArtifacts.add(artifact);
+  if (artifact.formatData !== undefined) for (const message of Object.values(artifact.messages)) messageFormatData.set(message, artifact.formatData);
   return Object.freeze({ ok: true, value: artifact });
 }
 
@@ -1143,6 +1357,9 @@ export function installOverlayV5(value, tables, options) {
   const captured = snapshotJson(value, limits.maximumDepth, limits.maximumDocumentBytes);
   if (!captured.ok) return failure(`RTR0023/${captured.reason}`);
   const snapshot = captured.value, envelope = validateOverlayEnvelope(snapshot); if (envelope) return failure(envelope);
+  // formatData: the CLDR currency, unit and compact data of the overlay's messages, when they use them.
+  if (snapshot.formatData !== undefined && !validFormatData(snapshot.formatData)) return failure("RTR0023/malformed");
+  const formats = snapshot.formatData === undefined ? undefined : freezeTrusted(snapshot.formatData);
   const locale = snapshot.locale, declared = localeSet.has(locale);
   if (!declared && fallback === locale) throw new RangeError("A locale cannot fall back to itself.");
   const state = overlayState(tables);
@@ -1173,6 +1390,7 @@ export function installOverlayV5(value, tables, options) {
     // This runtime embeds the plural, list and relative-time data of the catalog's languages only.
     if (!localeSet.has(message.contentLocale) && !hasLocaleData(message.contentLocale, wrapper.ast)) { report("unsupported-locale-data"); continue; }
     const result = cloneFreeze(wrapper); validatedMessages.set(result, contract);
+    if (formats !== undefined) messageFormatData.set(result, formats);
     if (!copy) own.set(key, result);
     else { let table = copies.get(message.contentLocale); if (!table) copies.set(message.contentLocale, table = new Map()); table.set(key, result); }
   }
@@ -1206,7 +1424,7 @@ export function onOverlayChangeV5(listener, tables) {
 function validateOverlayEnvelope(value) {
   const members = ["artifactVersion","messageGrammarVersion","profile","catalog","locale","contractFingerprint","messages","markupContract"];
   if (!isRecord(value)) return "RTR0023/malformed";
-  if (Object.keys(value).some(name => !members.includes(name))) return "RTR0023/unknown-member";
+  if (Object.keys(value).some(name => !members.includes(name) && name !== "formatData")) return "RTR0023/unknown-member";
   if (!members.every(name => Object.hasOwn(value, name))) return "RTR0023/malformed";
   if (value.artifactVersion !== 5) return "RTR0023/artifact-version-mismatch";
   if (value.messageGrammarVersion !== 5 || value.profile !== profile) return "RTR0023/message-grammar-version-mismatch";
@@ -1256,7 +1474,7 @@ export function decodeWireValue(value, type) {
 function validateEnvelope(value, rmf2Contract) {
   const members=["artifactVersion","messageGrammarVersion","profile","catalog","locale","contractFingerprint","messages","markupContract"];
   if (!isRecord(value)) return "RTR0023/malformed";
-  if (Object.keys(value).some(name=>!members.includes(name))) return "RTR0023/unknown-member";
+  if (Object.keys(value).some(name=>!members.includes(name)&&name!=="formatData")) return "RTR0023/unknown-member";
   if (!members.every(name=>Object.hasOwn(value,name))) return "RTR0023/malformed";
   if (value.artifactVersion !== 5) return "RTR0023/artifact-version-mismatch";
   if (value.messageGrammarVersion !== 5 || value.profile !== profile) return "RTR0023/message-grammar-version-mismatch";
@@ -1385,7 +1603,8 @@ function validateExpression(expression, symbols, references) {
 function validateOptions(options, symbols, fn) {
   if (!Array.isArray(options) || options.length > 256) return "argument-contract-mismatch"; const names = new Set(), staticEntries=[]; let dynamic=false;
   for (const option of options) { const memberError=closedMemberError(option,["name","value"]);if(memberError)return memberError==="unknown-member"?memberError:"argument-contract-mismatch";const valueError=validateValue(option.value);if(valueError)return ["unknown-member","malformed"].includes(valueError)?valueError:"argument-contract-mismatch";if(!validName(option.name,true)||names.has(option.name))return "argument-contract-mismatch";names.add(option.name); if (fn) { const type = optionType(fn,option.name); if (!type) return "argument-contract-mismatch"; if (["input","local"].includes(option.value.kind)) { if (option.name === "select" || option.name === "u:dir" || !Object.hasOwn(symbols,option.value.value) || symbols[option.value.value].type !== type || !symbols[option.value.value].explicitDependencies) return "argument-contract-mismatch"; dynamic=true; } else { try { staticEntries.push([option.name,literal(option.value,type)]); } catch { return "argument-contract-mismatch"; } } } }
-  if(fn){try{const resolved=freezeOwnRecord(staticEntries);validateResolvedOptions(fn,resolved);if(dynamic&&fn==="number"){const style=resolved.style,min=resolved.minimumFractionDigits??0n,max=resolved.maximumFractionDigits;if(style==="percent"&&min>4n||max!==undefined&&min>max)return "argument-contract-mismatch";}}catch{return "argument-contract-mismatch";}}
+  if((fn==="currency"||fn==="unit")&&!names.has(fn))return "argument-contract-mismatch";
+  if(fn){try{const resolved=freezeOwnRecord(staticEntries);validateResolvedOptions(fn,resolved);if(dynamic&&(fn==="number"||fn==="unit")){const style=resolved.style,min=resolved.minimumFractionDigits??0n,max=resolved.maximumFractionDigits;if(style==="percent"&&min>4n||max!==undefined&&min>max)return "argument-contract-mismatch";}}catch{return "argument-contract-mismatch";}}
   return null;
 }
 function validateMarkupNode(node,symbols,requirements,counts,stack) {

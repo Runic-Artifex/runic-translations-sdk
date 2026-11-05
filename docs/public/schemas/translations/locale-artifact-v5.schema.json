@@ -239,6 +239,65 @@
         "messages"
       ],
       "additionalProperties": false
+    },
+    "formatData": {
+      "description": "Present only when the messages use :currency, :unit or compact notation: the pinned CLDR data they need (the compiler's selection of specs/translations/cldr/runic-formats-48.2.json for the content locales' languages).",
+      "type": "object",
+      "required": [
+        "currencies",
+        "locales"
+      ],
+      "properties": {
+        "currencies": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[A-Z]{3}$"
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 6
+          }
+        },
+        "dynamicCurrencies": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$"
+          }
+        },
+        "dynamicUnits": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "locales": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "currencyFormats": {
+                "type": "object"
+              },
+              "currencies": {
+                "type": "object"
+              },
+              "units": {
+                "type": "object"
+              },
+              "per": {
+                "type": "object"
+              },
+              "compact": {
+                "type": "object"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

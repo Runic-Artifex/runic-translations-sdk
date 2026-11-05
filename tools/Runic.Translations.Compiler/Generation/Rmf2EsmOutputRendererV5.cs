@@ -60,7 +60,9 @@ internal static class Rmf2EsmOutputRendererV5
         writer.Line("export const locales = Object.freeze(" + JsonSerializer.Serialize(project.Locales.Select(item => item.Tag).OrderBy(item => item, StringComparer.Ordinal)) + ");");
         writer.Line("const unsupportedLocalePolicy = " + GenerationSupport.JsonString(project.UnsupportedLocale.ToString()) + ";");
         // Only the CLDR data of the catalog's languages is embedded.
-        writer.Line(TranslationCapabilityRegistry.EsmLocaleSource(project.Locales.Select(item => item.Tag), project.BidiIsolation));
+        // and only the currencies, units and compact patterns its messages use (D055.4).
+        string? formatData = project.FormatData(project.Locales.Select(item => item.Tag), project.Locales.SelectMany(item => item.DirectResources).Select(resource => resource.Message));
+        writer.Line(TranslationCapabilityRegistry.EsmLocaleSource(project.Locales.Select(item => item.Tag), project.BidiIsolation, formatData));
         // Only the markup contracts: per-message contracts live in the message modules and dynamic.js.
         writer.Line("const markupContracts = freezeTrusted(JSON.parse(" + GenerationSupport.JsonString(MarkupContractsJson(project)) + "));");
         // The renderers' table of structured messages; a function, so a bundle without a renderer drops it.
@@ -69,8 +71,26 @@ internal static class Rmf2EsmOutputRendererV5
         writer.Line("function messageLocaleTable() { return JSON.parse(" + GenerationSupport.JsonString(MessageLocalesJson(project)) + "); }");
         using Stream stream = typeof(Rmf2EsmOutputRendererV5).Assembly.GetManifestResourceStream("Runic.Translations.Compiler.Generation.Rmf2EsmRuntimeV5.js")!;
         using var reader = new StreamReader(stream);
-        writer.Line(reader.ReadToEnd());
+        string runtime = reader.ReadToEnd();
+        // A catalog without :currency, :unit or compact notation does not carry their formatters (about 2 KB gzip).
+        if (formatData is null) runtime = WithoutFormatters(runtime);
+        writer.Line(runtime);
         return writer.ToString();
+    }
+
+    private const string FormattersBegin = "// @runic-formats-begin", FormattersEnd = "// @runic-formats-end";
+    // Stubs for the formatter block: these functions are unreachable without the catalog's data, and a dynamic artifact
+    // that brings its own formatData is rejected as malformed.
+    private const string FormatterStubs =
+        "function formatCurrency() { throw new RangeError(\"The catalog uses no :currency, :unit or compact notation.\"); }\n" +
+        "const formatUnit = formatCurrency, formatCompact = formatCurrency;\n" +
+        "function validFormatData() { return false; }";
+
+    internal static string WithoutFormatters(string runtime)
+    {
+        int start = runtime.IndexOf(FormattersBegin, StringComparison.Ordinal), end = runtime.IndexOf(FormattersEnd, StringComparison.Ordinal);
+        if (start < 0 || end < start) throw new InvalidOperationException("The ESM runtime has no formatter block markers.");
+        return runtime[..start] + FormatterStubs + runtime[(end + FormattersEnd.Length)..];
     }
 
     private static string ContractsJson(Rmf2ProjectV5 project, bool includeExtras)

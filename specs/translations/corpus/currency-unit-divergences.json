@@ -1,0 +1,13 @@
+{
+  "cldrVersion": "48.2",
+  "description": "Differences between the pinned CurrencyUnitComparisonTests output (.NET and ESM, which must agree exactly) and Intl.NumberFormat on ICU 78, by locale and probe kind (currency, accounting, unit, compound, compact). Each group gives the reason; the test fails when a listed difference no longer occurs.",
+  "divergences": [
+    {"kind": "currency", "locales": ["en-150", "en-AT", "en-BE", "en-CH", "en-CZ", "en-DE", "en-DK", "en-EE", "en-ES", "en-FI", "en-FR", "en-GE", "en-HU", "en-IT", "en-LT", "en-LV", "en-NL", "en-NO", "en-PL", "en-PT", "en-RO", "en-SE", "en-SI", "en-SK", "en-UA"], "reason": "CLDR gives EUR its own pattern (¤#,##0.00) in en-150, which these locales inherit. ICU 78 applies the default currency's own pattern to every currency of the locale (en-DE: US$1,234.50 instead of 1.234,50 US$), writes it with en's separators (en-CH: €1,234.50), and also puts the symbol into the long name (€1.00 euros). TR35 scopes a currency's pattern to that currency, as Runic does."},
+    {"kind": "accounting", "locales": ["en-BE", "en-DE", "en-EE", "en-ES", "en-FI", "en-FR", "en-IT", "en-LT", "en-LV", "en-NL", "en-PT", "en-SI", "en-SK"], "reason": "CLDR gives EUR its own pattern (¤#,##0.00) in en-150, which these locales inherit. ICU 78 applies the default currency's own pattern to every currency of the locale (en-DE: US$1,234.50 instead of 1.234,50 US$), writes it with en's separators (en-CH: €1,234.50), and also puts the symbol into the long name (€1.00 euros). TR35 scopes a currency's pattern to that currency, as Runic does."},
+    {"kind": "currency", "locales": ["pt-CV"], "reason": "CLDR gives CVE its own decimal separator ($) in pt-CV; ICU 78 uses it for every currency (1$00 US$). TR35 scopes it to CVE, as Runic does."},
+    {"kind": "accounting", "locales": ["pt-CV"], "reason": "CLDR gives CVE its own decimal separator ($) in pt-CV; ICU 78 uses it for every currency (1$00 US$). TR35 scopes it to CVE, as Runic does."},
+    {"kind": "currency", "locales": ["my", "my-u-nu-latn"], "reason": "CLDR my writes a currency's long name before the number (unitPattern {1} {0}); ICU 78 puts the number first."},
+    {"kind": "compact", "locales": ["ast", "wo"], "reason": "ast and wo have long compact patterns only up to 10^8 and 10^11; cldr-json resolves the larger magnitudes from root (0G, 0T), which the pin keeps, while ICU uses the locale's largest own pattern (123.457 millones)."},
+    {"kind": "compact", "locales": ["ps", "ps-PK", "ps-PK-u-nu-latn", "ps-u-nu-latn"], "reason": "ps has no long compact patterns of its own; cldr-json resolves them from root (0K, 0M, …), which the pin keeps, while ICU 78 does not compact long ps numbers at all."}
+  ]
+}

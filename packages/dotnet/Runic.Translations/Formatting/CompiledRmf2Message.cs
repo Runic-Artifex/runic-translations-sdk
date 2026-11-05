@@ -282,4 +282,6 @@ public sealed class CompiledRmf2Message
     internal CompiledRmf2Selector[] SelectorArray { get; }
     internal CompiledRmf2Variant[] VariantArray { get; }
     internal bool HasMarkup { get; set; }
+    /// <summary>The pinned CLDR currency, unit and compact data the compiler embedded with this message; null when it needs none.</summary>
+    internal Rmf2FormatData? FormatData { get; set; }
 }

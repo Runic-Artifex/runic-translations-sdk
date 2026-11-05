@@ -3,8 +3,10 @@
 `runic-subset-48.2.json` is the normalized, reviewable source derived from
 Unicode CLDR 48.2 (`cldr-json` tag `48.2.0`). The source archive URL and
 SHA-512 digest are recorded in the file, with the npm `dist.integrity` of the
-four `cldr-json` packages it is extracted from: `cldr-core`, `cldr-misc-full`,
-`cldr-dates-full` and `cldr-numbers-full`, all version `48.2.0`.
+five `cldr-json` packages the pin is extracted from: `cldr-core`,
+`cldr-misc-full`, `cldr-dates-full`, `cldr-numbers-full` and `cldr-units-full`,
+all version `48.2.0`. `runic-formats-48.2.json`, extracted in the same run, holds
+the currency, unit and compact-notation data (see below).
 
 It covers every CLDR locale (`availableLocales.full`) and keeps:
 
@@ -44,6 +46,37 @@ It covers every CLDR locale (`availableLocales.full`) and keeps:
   `relative-type` texts from -2 to 2. Each value is stored only where it differs
   from the value the locale's parent chain gives.
 
+`runic-formats-48.2.json` holds the data of `:currency`, `:unit` and compact
+notation. Unlike the subset, no runtime ships it: the compiler embeds the
+entries a catalog uses (D055.4), and `eng/generate-cldr.mjs` deflates it into the
+compiler's `GeneratedFormatData.bin`. It keeps:
+
+- `currencies`: the ISO 4217 codes that `supplemental/currencyData.json` lists
+  as current tender of some region (no `_to`, not `_tender: false`), each with
+  its CLDR fraction digits (`DEFAULT` where none are listed); the extractor
+  checks that no code has a non-cash rounding increment;
+- `units`: the 45 simple units ECMA-402 sanctions for `Intl.NumberFormat` and
+  CLDR's own compound units of two of them (`kilometer-per-hour`, …);
+- `locales`: per data ID, stored per member where it differs from the parent
+  chain's value (a currency, a unit, a numbering system or a width):
+  `currencyFormats` per numbering system (the default one and `latn`, each
+  falling back to `latn`'s members as ICU reads them) as `[standard, accounting,
+  unit patterns other, zero, one, two, few, many, currency decimal, currency
+  group]`; `currencies` as `[symbol, narrow symbol, display names other … many,
+  the currency's own pattern, decimal and group]`; `units` as `[long, short,
+  narrow]`, each `[unit patterns other … many, perUnitPattern]`; `per`, the
+  compound pattern of each width; and `compact`, the short and long decimal
+  patterns per numbering system as one record per magnitude from 10³ to the
+  locale's largest, `[other … many, the explicit "1" pattern]`. A long table the
+  locale lacks falls back to its short one, as ICU does.
+
+Records drop trailing nulls, a plural form equal to `other` is null (lookups
+fall back to `other`, as ICU's do), and a unit width equal to the wider one is
+null. Every locale uses CLDR root's currency spacing, which the extractor
+checks, so the runtimes implement that rule (a no-break space between a digit
+and a currency symbol whose adjacent character is neither a symbol nor a
+separator) rather than reading it.
+
 A **data ID** is a CLDR locale with its likely script added and then omitted
 again when it is the language's default script, so `zh-TW` is `zh-Hant-TW`,
 `zh-Hans-SG` is `zh-SG` and `sr-Latn` stays `sr-Latn`. Lists, relative time and
@@ -76,7 +109,7 @@ deflated number-format, weekday, day-period, list and relative-time resource
 capability matrix. The ESM compiler embeds only the data of a catalog's
 languages, and not the weekdays and day periods, which `Intl` already applies. `eng/render-capabilities.mjs` then renders the guide from that matrix.
 
-To update the pin, download the four packages, check them against the recorded
+To update the pin, download the five packages, check them against the recorded
 integrity, unpack each into `<directory>/<package>/`, and run:
 
 ```bash

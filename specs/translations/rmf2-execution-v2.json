@@ -141,6 +141,26 @@
           "minimum": 0,
           "maximum": 6
         },
+        "runic:notation": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": true,
+          "default": "standard",
+          "values": [
+            "standard",
+            "compact"
+          ]
+        },
+        "runic:compactDisplay": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": true,
+          "default": "short",
+          "values": [
+            "short",
+            "long"
+          ]
+        },
         "u:dir": {
           "inputType": "string",
           "literal": true,
@@ -399,6 +419,142 @@
           ]
         }
       }
+    },
+    "currency": {
+      "inputType": "decimal",
+      "selection": "none",
+      "options": {
+        "currency": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": true,
+          "default": "(required)",
+          "values": [],
+          "accepts": "a pinned ISO 4217 code (runic-formats-48.2.json currencies); a dynamic value must be in runic.json formats.currencies"
+        },
+        "currencyDisplay": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": true,
+          "default": "symbol",
+          "values": [
+            "symbol",
+            "narrowSymbol",
+            "code",
+            "name"
+          ]
+        },
+        "currencySign": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": true,
+          "default": "standard",
+          "values": [
+            "standard",
+            "accounting"
+          ]
+        },
+        "useGrouping": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": true,
+          "default": "auto",
+          "values": [
+            "auto",
+            "always",
+            "never",
+            "min2"
+          ]
+        },
+        "fractionDigits": {
+          "inputType": "int64",
+          "literal": true,
+          "dynamic": true,
+          "default": "the currency's CLDR digits",
+          "values": [],
+          "minimum": 0,
+          "maximum": 6
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
+          ]
+        }
+      }
+    },
+    "unit": {
+      "inputType": "decimal",
+      "selection": "none",
+      "options": {
+        "unit": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": true,
+          "default": "(required)",
+          "values": [],
+          "accepts": "a pinned unit (runic-formats-48.2.json units) or X-per-Y of two pinned simple units; a dynamic value must be in runic.json formats.units"
+        },
+        "unitDisplay": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": true,
+          "default": "short",
+          "values": [
+            "short",
+            "long",
+            "narrow"
+          ]
+        },
+        "useGrouping": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": true,
+          "default": "auto",
+          "values": [
+            "auto",
+            "always",
+            "never",
+            "min2"
+          ]
+        },
+        "minimumFractionDigits": {
+          "inputType": "int64",
+          "literal": true,
+          "dynamic": true,
+          "default": "0",
+          "values": [],
+          "minimum": 0,
+          "maximum": 6
+        },
+        "maximumFractionDigits": {
+          "inputType": "int64",
+          "literal": true,
+          "dynamic": true,
+          "default": "6",
+          "values": [],
+          "minimum": 0,
+          "maximum": 6
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
+          ]
+        }
+      }
     }
   },
   "optionErrors": {
@@ -408,7 +564,9 @@
     "dynamicTypeMismatch": "compile-error",
     "invalidDynamicValue": "evaluation-error",
     "rangeHandling": "reject-never-clamp",
-    "diagnostic": "RTR0065"
+    "diagnostic": "RTR0065",
+    "unknownCurrencyOrUnit": "compile-error RTR0101",
+    "undeclaredDynamicCurrencyOrUnit": "compile-error RTR0102"
   },
   "numberConstraints": {
     "fractionDigits": "0 <= minimum <= maximum <= 6 (decimal) or 4 (percent)",
