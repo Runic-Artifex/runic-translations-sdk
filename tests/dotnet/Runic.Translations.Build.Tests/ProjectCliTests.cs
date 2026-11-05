@@ -51,6 +51,9 @@ internal sealed class ProjectCliTests
         Assert.Equal("en", locales[0].GetProperty("locale").GetString());
         JsonElement swiss = locales.Single(locale => locale.GetProperty("locale").GetString() == "de-CH");
         Assert.Equal(2, swiss.GetProperty("fallback").GetInt32());
+        // The effective validation.translationCompleteness of each translated locale; the base locale has none.
+        Assert.Equal("allow", swiss.GetProperty("completeness").GetString());
+        Assert.False(locales[0].TryGetProperty("completeness", out _), payload.GetRawText());
         Assert.True(swiss.GetProperty("belowThreshold").GetBoolean() && !locales.Single(locale => locale.GetProperty("locale").GetString() == "de").GetProperty("belowThreshold").GetBoolean(), payload.GetRawText());
 
         ProcessResult passing = TestFixture.RunTool(temporary, "status", "--min-coverage", "*=27", "--format", "json");

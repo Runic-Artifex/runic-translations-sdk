@@ -668,7 +668,7 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
             "schema" => Program.Execute(new ToolInvocation(ToolCommand.Schema, request.Output, ToolEmission.None, null)),
             "import-text" => ExecuteImport(request),
             "import" => ExecuteInterchange(request, ToolCommand.Import, (project, result) =>
-                CatalogImport.Run(project, new CatalogImportRequest(request.From!, request.Source!, request.Locales ?? [], request.Group, request.Overwrite), request.DryRun, result)),
+                CatalogImport.Run(project, new TranslationCatalogImportRequest(request.From!, request.Source!, request.Locales ?? [], request.Group, request.Overwrite), request.DryRun, result)),
             "xliff export" => ExecuteInterchange(request, ToolCommand.XliffExport, (project, result) =>
                 InterchangeOperations.Export(project, request.Output!, request.Locales ?? [], request.Review, result)),
             "xliff import" => ExecuteInterchange(request, ToolCommand.XliffImport, (project, result) =>

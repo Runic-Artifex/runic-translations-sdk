@@ -10,6 +10,7 @@ using System.Text.RegularExpressions;
 using Runic.CommandLine;
 using Runic.Translations.Authoring;
 using Runic.Translations.Compiler;
+using Runic.Translations.Tooling;
 
 namespace Runic.Translations.Tool;
 
@@ -47,7 +48,7 @@ internal static class TextCatalogImport
         string supplied = Path.GetFullPath(projectPath, currentDirectory);
         string configPath = Directory.Exists(supplied) ? Path.Combine(supplied, "runic.json") : supplied;
         string root = Path.GetDirectoryName(configPath)!;
-        Manifest manifest = Manifest.Read(current.Project.GetUtf8Bytes(), root);
+        ImportManifest manifest = ToolingUsage.Run(() => ImportManifest.Read(current.Project.GetUtf8Bytes(), root));
         string groupDirectory = Path.Combine(root, request.Group);
         IReadOnlyList<string> prefix = manifest.Namespace(groupDirectory)
             ?? throw new ToolUsageException($"'{InputFiles.DisplayPath(groupDirectory, currentDirectory)}' is not inside a source root of runic.json.");
@@ -154,7 +155,7 @@ internal static class TextCatalogImport
         return validate(planned);
     }
 
-    private static List<(string Locale, string Path)> ParseTables(IReadOnlyList<string> values, Manifest manifest)
+    private static List<(string Locale, string Path)> ParseTables(IReadOnlyList<string> values, ImportManifest manifest)
     {
         var tables = new List<(string Locale, string Path)>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -269,13 +270,7 @@ internal static class TextCatalogImport
         return ReadsBack(quoted, text) ? quoted : null;
     }
 
-    internal static bool NeedsQuotes(string text) =>
-        text.Length == 0 || text[0] == '.' || IsFramingSpace(text[0]) || IsFramingSpace(text[^1]) ||
-        text.Contains('\n') || text.Contains('\r');
-
-    // Whitespace and bidirectional marks that MF2 or RMF2 framing may trim around an unquoted pattern.
-    private static bool IsFramingSpace(char value) =>
-        char.IsWhiteSpace(value) || value is '؜' or '‎' or '‏' or (>= '⁦' and <= '⁩');
+    internal static bool NeedsQuotes(string text) => ImportMapping.NeedsQuotes(text);
 
     private static bool ReadsBack(string pattern, string text)
     {
@@ -398,60 +393,4 @@ internal static class TextCatalogImport
     private static string Quote(string text) => "\"" + JsonEncodedText.Encode(text, JavaScriptEncoder.UnsafeRelaxedJsonEscaping) + "\"";
 
     private static string Display(string path) => path.Replace('\\', '/');
-
-    /// <summary>The parts of runic.json the import needs: locales and source roots.</summary>
-    internal sealed record Manifest(string BaseLocale, IReadOnlyList<string> Locales, IReadOnlyList<(string Path, IReadOnlyList<string> Namespace)> Roots)
-    {
-        internal static Manifest Read(ReadOnlyMemory<byte> utf8, string root)
-        {
-            JsonDocument document;
-            try { document = JsonDocument.Parse(utf8); }
-            catch (JsonException) { throw new ToolUsageException("runic.json is not valid JSON; run validate for its diagnostics."); }
-            using (document)
-            {
-                JsonElement project = document.RootElement;
-                if (project.ValueKind != JsonValueKind.Object || !project.TryGetProperty("baseLocale", out JsonElement baseLocale) || baseLocale.ValueKind != JsonValueKind.String)
-                    throw new ToolUsageException("runic.json must declare a baseLocale string.");
-                string declaredBase = baseLocale.GetString()!;
-                var locales = new List<string> { declaredBase };
-                if (project.TryGetProperty("locales", out JsonElement declared) && declared.ValueKind == JsonValueKind.Array)
-                    foreach (JsonElement item in declared.EnumerateArray())
-                    {
-                        string? tag = item.ValueKind == JsonValueKind.String ? item.GetString()
-                            : item.ValueKind == JsonValueKind.Object && item.TryGetProperty("tag", out JsonElement value) && value.ValueKind == JsonValueKind.String ? value.GetString()
-                            : null;
-                        if (tag is not null && !locales.Contains(tag, StringComparer.OrdinalIgnoreCase)) locales.Add(tag);
-                    }
-                var roots = new List<(string, IReadOnlyList<string>)>();
-                if (!project.TryGetProperty("sourceRoots", out JsonElement mounts))
-                    roots.Add((Path.GetFullPath(root), []));
-                else if (mounts.ValueKind == JsonValueKind.Array)
-                    foreach (JsonElement mount in mounts.EnumerateArray())
-                    {
-                        if (mount.ValueKind != JsonValueKind.Object || !mount.TryGetProperty("path", out JsonElement path) || path.ValueKind != JsonValueKind.String) continue;
-                        var segments = new List<string>();
-                        if (mount.TryGetProperty("namespace", out JsonElement names) && names.ValueKind == JsonValueKind.Array)
-                            foreach (JsonElement name in names.EnumerateArray())
-                                if (name.ValueKind == JsonValueKind.String) segments.Add(name.GetString()!);
-                        roots.Add((Path.GetFullPath(path.GetString()!, root), segments));
-                    }
-                return new Manifest(declaredBase, locales, roots);
-            }
-        }
-
-        /// <summary>The namespace segments of a directory: its source root's namespace and the directories below it.</summary>
-        internal string[]? Namespace(string directory)
-        {
-            foreach ((string path, IReadOnlyList<string> prefix) in Roots)
-            {
-                string relative = System.IO.Path.GetRelativePath(path, directory);
-                if (relative == "." || System.IO.Path.IsPathRooted(relative) || relative == ".." ||
-                    relative.StartsWith(".." + System.IO.Path.DirectorySeparatorChar, StringComparison.Ordinal) ||
-                    relative.StartsWith(".." + System.IO.Path.AltDirectorySeparatorChar, StringComparison.Ordinal))
-                    continue;
-                return prefix.Concat(relative.Split(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar)).ToArray();
-            }
-            return null;
-        }
-    }
 }
