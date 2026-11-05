@@ -414,7 +414,7 @@ internal sealed class GeneratorTests
             var properties = value is null ? new Dictionary<string, string>() : new Dictionary<string, string> { ["RunicTranslationsPseudoLocales"] = value };
             GeneratorRun run = GeneratorTestHost.RunWithConsumer(source, properties, ProjectInput(project), MessageInput("save = Save {$name}\n" +
                 "items =\n  .input {$count :integer}\n  .match $count\n  0 {{No items}}\n  one {{One item}}\n  * {{{$count} items}}\n" +
-                "place =\n  .input {$n :integer select=ordinal}\n  .match $n\n  one {{{$n}st}}\n  two {{{$n}nd}}\n  * {{{$n}th}}\n"));
+                "place =\n  .input {$n :integer select=ordinal}\n  .match $n\n  one {{{$n}st}}\n  two {{{$n}nd}}\n  few {{{$n}rd}}\n  * {{{$n}th}}\n"));
             Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
             Assert.Equal(expected, Execute(run, "Example.Localization.PseudoProbe", "Run"), $"RunicTranslationsPseudoLocales={value}");
         }

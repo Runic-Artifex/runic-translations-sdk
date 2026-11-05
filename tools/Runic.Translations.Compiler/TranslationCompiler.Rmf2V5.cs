@@ -375,6 +375,9 @@ public static partial class TranslationCompiler
         {
             TranslationPolicy policy = manifest.Policy(source.Locale, ValidationMembers.PluralCategories);
             if (policy == TranslationPolicy.Allow || message.Selectors.Count == 0 || message.Syntax.Variants.Count != message.Variants.Count) return;
+            // A pseudo-locale is synthesized from the base locale's variants; nobody can add the categories its own
+            // rules reach, so its plural keys are not checked (the base locale's are).
+            if (manifest.PseudoLocales.Any(pseudo => string.Equals(pseudo.Tag, source.Locale, StringComparison.OrdinalIgnoreCase))) return;
             string logical = string.Join(".", source.Path);
             for (int position = 0; position < message.Selectors.Count; position++)
             {
