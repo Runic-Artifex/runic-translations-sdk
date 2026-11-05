@@ -377,7 +377,7 @@ internal sealed class CompositionTests
         await context.SetLocaleAsync("de-CH");
         Assert.Equal("grid de>de de-CH Parent|published de-CH LocaleChanged|context de>de-CH", string.Join("|", seen), "events");
         string swiss = Text(context, GridId, "rows", new TextArgument("count", 1234567L));
-        Assert.Equal(1234567L.ToString("#,0", System.Globalization.CultureInfo.GetCultureInfo("de-CH")) + " Zeilen", swiss, "Swiss grouping");
+        Assert.Equal("1'234'567 Zeilen", swiss, "Swiss grouping (pinned CLDR 48.2, U+0027 on every platform)");
         Assert.True(german != swiss, "de and de-CH group digits differently: " + german);
 
         await context.SetLocaleAsync("de-CH");

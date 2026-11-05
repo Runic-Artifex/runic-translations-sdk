@@ -328,15 +328,16 @@
   },
   "formattingLocale": {
     "rule": "numbers, percentages, dates and times format in the requested locale, without extensions and private-use subtags, when its language subtag equals the content locale's and both have the same implied script (the explicit script, else the pinned CLDR likely script of the language and region); otherwise in the content locale",
-    "script": "an explicit script that is the likely script of the language and region is dropped for a language whose CLDR likely subtags name one script only (de-Latn-CH formats as de-CH)",
+    "script": "an explicit script that is the likely script of the language and region is dropped for a language whose CLDR likely subtags for the language and its regions (the language-only and language-region keys) name one script only (de-Latn-CH formats as de-CH, en-Latn-US as en-US; sr-Cyrl-BA and zh-Hans-HK stay)",
     "numberingExtension": "-u-nu-latn is kept where the formatting locale's default numbering system is not latn; every other extension is dropped",
-    "contentLocale": "plural, ordinal, list and relative-time data, and the locale reported on content, stay on the message's effective content locale",
+    "contentLocale": "plural, ordinal, list and relative-time patterns, and the locale reported on content, stay on the message's effective content locale; the number in relative time formats in the formatting locale, as :number does",
     "requested": "the canonical tag the caller asked for, before it was resolved to a catalog locale"
   },
   "numberFormat": {
     "source": "pinned CLDR 48.2 numbers of the formatting locale, along its CLDR parent chain; CLDR root without data",
     "numberingSystem": "defaultNumberingSystem, or latn with -u-nu-latn",
-    "never": "useGrouping=never on integer keeps the invariant integer (Latin digits, ASCII minus)",
+    "never": "useGrouping=never writes the locale's minus sign and digits without group separators, for :integer and :number alike",
+    "zero": "a visible decimal of zero has no sign: -0.0001 with maximumFractionDigits=2 is 0 and -0.00001 as a percent is 0%, where Intl.NumberFormat writes -0 and -0%",
     "comparison": "corpus/localized-format-divergences.json"
   },
   "percent": {

@@ -14,8 +14,9 @@ namespace Runic.Translations;
 internal sealed class Rmf2NumberFormat
 {
     private const int FieldCount = 12;
-    private const int MaximumCachedLocales = 64;
-    private static readonly ConcurrentDictionary<string, Rmf2NumberFormat> s_cache = new(StringComparer.Ordinal);
+    // By CLDR data ID, in the default numbering system and in latn: bounded by the pinned data, whatever tags callers request.
+    private static readonly ConcurrentDictionary<string, Rmf2NumberFormat> s_default = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, Rmf2NumberFormat> s_latin = new(StringComparer.Ordinal);
 
     /// <summary>CLDR root: Latin digits, <c>.</c>, <c>,</c>, <c>-</c>, groups of three and <c>#,##0%</c>.</summary>
     internal static readonly Rmf2NumberFormat Root = new("latn", "0123456789", ".", ",", "-", 3, 3, 3, 3, "", "%", "-", "%");
@@ -56,18 +57,17 @@ internal sealed class Rmf2NumberFormat
     /// </summary>
     internal static Rmf2NumberFormat For(string locale)
     {
-        if (s_cache.TryGetValue(locale, out Rmf2NumberFormat? cached)) return cached;
-        Rmf2NumberFormat format = Root;
-        if (GeneratedLocaleData.FindNumbers(locale) is { } record)
+        if (GeneratedLocaleData.NumbersId(locale) is not { } id) return Root;
+        bool latin = Rmf2LocalizedFormats.LatinDigits(locale);
+        return (latin ? s_latin : s_default).GetOrAdd(id, static (id, latin) =>
         {
             // The record holds the default system's fields and, when that is not latn, latn's after them.
-            int offset = Rmf2LocalizedFormats.LatinDigits(locale) && record.Length > 1 + FieldCount ? 1 + FieldCount : 1;
+            string?[] record = GeneratedLocaleData.FindNumbersById(id);
+            int offset = latin && record.Length > 1 + FieldCount ? 1 + FieldCount : 1;
             string system = offset == 1 ? record[0]! : "latn";
-            format = new(system, record[offset]!, record[offset + 1]!, record[offset + 2]!, record[offset + 3]!, Int(record[offset + 4]), Int(record[offset + 5]),
+            return new(system, record[offset]!, record[offset + 1]!, record[offset + 2]!, record[offset + 3]!, Int(record[offset + 4]), Int(record[offset + 5]),
                 Int(record[offset + 6]), Int(record[offset + 7]), record[offset + 8]!, record[offset + 9]!, record[offset + 10]!, record[offset + 11]!);
-        }
-        if (s_cache.Count < MaximumCachedLocales) s_cache.TryAdd(locale, format);
-        return format;
+        }, latin);
 
         static int Int(string? value) => int.Parse(value!, NumberStyles.None, CultureInfo.InvariantCulture);
     }
@@ -106,12 +106,11 @@ internal static class Rmf2NumberFormats
     }
 
     /// <summary>
-    /// An integer. <c>useGrouping=never</c> keeps the invariant integer output (Latin digits, ASCII minus), as before
-    /// localized digits; the grouping strategies use the locale's symbols and digits.
+    /// An integer, as <c>:number</c> writes it without fraction digits: the locale's minus sign and digits for every
+    /// <c>useGrouping</c> value, so <c>:integer useGrouping=never</c> and <c>:number useGrouping=never</c> agree
+    /// (<c>fa</c>: <c>‎−۱۲۳۴</c>). Codes and identifiers that must stay ASCII use <c>:string</c>.
     /// </summary>
-    internal static string Integer(long value, string grouping, string locale) => grouping == "never"
-        ? value.ToString(CultureInfo.InvariantCulture)
-        : Decimal(VisibleDecimal.FromInteger(value), grouping, locale);
+    internal static string Integer(long value, string grouping, string locale) => Decimal(VisibleDecimal.FromInteger(value), grouping, locale);
 
     /// <summary>The ASCII digits of a localized date or time in the locale's numbering system.</summary>
     internal static string LocalizeDigits(string text, string locale) => Rmf2NumberFormat.For(locale).Digits(text);

@@ -185,9 +185,11 @@ matches `Intl.NumberFormat` with the same `useGrouping` value.
 The group separator, the minus sign, the decimal separator, the group sizes
 after the primary one (such as the Indian `12,34,567`) and the digits come from
 the pinned CLDR number formats of the formatting locale (see [Numbers and
-digits](#numbers-and-digits)), not from platform globalization. A grouped or
-`auto` integer therefore uses the locale's minus sign and digits, while
-`useGrouping=never` keeps the invariant integer output (`-1234`, Latin digits).
+digits](#numbers-and-digits)), not from platform globalization. Every
+`useGrouping` value, `never` included, uses the locale's minus sign and digits,
+so `{$n :integer useGrouping=never}` and `{$n :number useGrouping=never
+maximumFractionDigits=0}` write the same text (`-1234` in English, `‎−۱۲۳۴` in
+Persian). Text that must stay ASCII, such as a code, uses `:string`.
 A .NET process without platform locale data (`InvariantGlobalization`) formats
 numbers exactly as with it. Both runtimes apply the same pinned data; the
 [grouping conformance corpus](corpus/rmf2-grouping-conformance.json) records
@@ -195,7 +197,7 @@ the shared expectations.
 
 Before 0.7.0-preview.4, `:integer` defaulted to `never` and accepted only
 `always` and `never`, and `:number` never grouped. Write `useGrouping=never` to
-keep that output.
+keep that output (in a locale with Latin digits and an ASCII minus sign).
 
 ### List formatting
 
@@ -270,9 +272,12 @@ without CLDR data, whose tags then match only when neither names a script). So
 `de-CH` over `de` and `de-Latn-CH` over `de` format in the requested one. The
 formatting locale drops an explicit script that adds nothing, so that platform
 data knows the tag: the likely script of the language and region, for a language
-whose CLDR likely subtags name only one script (`de-Latn-CH` formats as
-`de-CH`). The script of a language CLDR writes in several scripts stays
-(`sr-Cyrl-BA`, `zh-Hans-HK`).
+whose CLDR likely subtags for the language and its regions (the language-only
+and language-region keys, such as `sr` and `sr-ME`) name only one script
+(`de-Latn-CH` formats as `de-CH`, `en-Latn-US` as `en-US`). A language-script key
+such as `en-Shaw` does not count. The script of a language whose likely subtags
+name several scripts stays (`sr-Cyrl-BA`, `zh-Hans-HK`; also `az`, `ha`, `kk`,
+`ku`, `ky`, `mn`, `ms`, `pa`, `sd`, `tg`, `ug`, `uz`, `yue` and a few others).
 
 Extensions are dropped because the runtimes would apply them differently
 (`en-US-u-ca-buddhist` and `ja-JP-u-ca-japanese` format Gregorian dates as `en-US`
@@ -281,8 +286,10 @@ requested tags can come from untrusted input. The one kept keyword is
 `-u-nu-latn`: where the formatting locale's default numbering system is not
 Latin, the formatting locale keeps it (`ar-EG-u-nu-latn`) and numbers, dates and
 times use Latin digits and the locale's Latin-digit symbols (see [Numbers and
-digits](#numbers-and-digits)). Plural and ordinal rules, list patterns, relative time and
-the locale reported on content stay on the content locale. Content reports both
+digits](#numbers-and-digits)). Plural and ordinal rules, list patterns, relative-time
+patterns and the locale reported on content stay on the content locale; the
+number in relative time formats in the formatting locale, as `:number` does
+(`fa` text for a `fa-u-nu-latn` user: `5 روز دیگر`). Content reports both
 (`.NET LocalizedTextContent.Locale`/`FormattingLocale`, ESM
 `locale`/`formatLocale`).
 
@@ -306,8 +313,13 @@ every platform, with or without platform locale data:
   `۵۰٪` in Persian, `50 %` in Occitan with U+202F). Without a negative
   subpattern, the minus sign precedes the positive prefix (`-%12,5`).
 
-A locale without CLDR data uses CLDR root's (`1,234.5`, `-1`, `50%`). The
-digits are the visible decimal, grouped as described under [digit
+A locale without CLDR data uses CLDR root's (`1,234.5`, `-1`, `50%`). A
+visible decimal of zero has no sign: `-0.0001` with `maximumFractionDigits=2`
+is `0`, and `-0.00001` as a percent is `0%`, in both runtimes. This is the
+value plural and exact selection compare (key `0` matches), and the one
+deliberate difference from `Intl.NumberFormat`, which writes `-0` and `-0%`
+(its default `signDisplay`). The all-locale comparison checks it as a known
+difference. The digits are the visible decimal, grouped as described under [digit
 grouping](#digit-grouping), then written in the numbering system's digits.
 Localized dates and times are written in the same digits: the platform formats
 them with Latin digits, and each ASCII digit is then replaced. Lists insert
@@ -358,7 +370,10 @@ Localized dates and times come from platform globalization by these rules:
 - A locale the JavaScript engine has no data for (Intl data covers fewer locales
   than CLDR) formats in ESM with the nearest locale of its CLDR parent chain that
   the engine has (`ht` → `fr-HT`), else `en-US`, never the host's default
-  locale, so server and browser agree.
+  locale, so server and browser agree. This applies where the engine lacks the
+  whole language: `Intl` tries the truncations of the first tag before the
+  next entry, so a missing region such as `pt-AO` would fall back to `pt`
+  (Brazil) rather than `pt-PT`.
 - Without platform locale data (.NET `InvariantGlobalization`), the invariant
   culture's patterns apply instead of an error, as for numbers.
 - .NET must run in ICU mode, the default on every platform, for these rules.
@@ -388,7 +403,18 @@ reports them): every difference must be within the tolerance above or be listed,
 with its reason, in
 [`corpus/localized-format-divergences.json`](corpus/localized-format-divergences.json)
 (`shn-TH`'s Buddhist era name and `haw`'s Roman month numerals, which .NET
-cannot write). Locales the engine has no data for are reported, not compared.
+cannot write). Locales the engine has no data for are reported, not compared;
+the comparison records them per engine and ICU version in
+[`corpus/localized-format-engine-coverage.json`](corpus/localized-format-engine-coverage.json)
+and fails when an engine with the recorded ICU version covers a different set
+(`--test-parameter update-engine-coverage=true` regenerates it). The locked
+development shell sets `RUNIC_EXPECT_STRICT_DATES=1`, so there the comparison
+fails instead of reporting when .NET and an engine load different ICU majors.
+On every engine that carries the pinned CLDR version, CI's Node step included,
+it also checks that the pinned digits of each covered locale's dates and times
+equal `Intl.DateTimeFormat`'s own output in its default numbering system, and
+that a negative value displaying as zero differs from `Intl.NumberFormat` only
+by Intl's sign (see [Numbers and digits](#numbers-and-digits)).
 Platform data can also differ for
 non-Gregorian default calendars and, in ESM, for dates before the Gregorian
 reform of 1582, where `Intl` uses the Julian calendar.
@@ -573,8 +599,8 @@ argument exceptions. Authored numeric spelling and canonical fields are checked
 exactly before parsing into decimal; no binary floating point is involved.
 Number display and numeric selection use the same halfExpand visible decimal and
 the finite precision table. Pinned CLDR data controls number symbols and digits;
-platform globalization controls date and time patterns and names. Ungrouped (`useGrouping=never`)
-integer output is invariant, matching the pinned exact formatter capability;
+platform globalization controls date and time patterns and names. Integer output, ungrouped
+(`useGrouping=never`) included, uses the pinned number formats, matching the exact formatter capability;
 the grouping threshold is pinned (see [Digit grouping](#digit-grouping)).
 V5 uses the closed formatter table directly; a snapshot's optional legacy
 `ITextValueFormatter` does not override v5 function semantics.

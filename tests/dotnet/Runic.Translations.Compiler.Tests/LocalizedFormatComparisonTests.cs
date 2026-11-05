@@ -19,7 +19,11 @@ namespace Runic.Translations.Compiler.Tests;
 // exactly everywhere, and with Intl.NumberFormat where the JavaScript engine's ICU carries the pinned CLDR version.
 // Dates and times come from platform data, so they are compared only when .NET and the JavaScript engine load the same
 // ICU major version (the locked development shell); every difference must then be within the corpus tolerance or be
-// listed, with its reason, in specs/translations/corpus/localized-format-divergences.json.
+// listed, with its reason, in specs/translations/corpus/localized-format-divergences.json. The locked shell expects that
+// (RUNIC_EXPECT_STRICT_DATES=1 from flake.nix), so there the comparison fails rather than reporting when the versions
+// differ. Two checks run on every engine whose ICU carries the pinned CLDR version, CI's Node step included: the
+// pinned digits of each covered locale's dates and times equal Intl.DateTimeFormat's own default-numbering output, and
+// the locales the engine has no data for equal specs/translations/corpus/localized-format-engine-coverage.json.
 [Category("rmf2-semantic-v5")]
 internal sealed class LocalizedFormatComparisonTests
 {
@@ -36,6 +40,11 @@ internal sealed class LocalizedFormatComparisonTests
     private static readonly string[] DateStyles = ["short", "medium", "long", "full"];
     private static readonly string[] Times = ["13:05:09", "00:00:00", "06:15:00", "12:30:00", "19:45:00"];
     private static readonly string[] TimeStyles = ["short", "medium"];
+    // The known difference from Intl.NumberFormat: a negative value that displays as zero has no sign in RMF2 (spec
+    // "Numbers and digits"), where Intl writes -0 and -0%. Each pair is the negative value and zero: RMF2 must write
+    // both alike, and Intl must still write the first differently.
+    private static readonly (string Kind, string Value, string Grouping)[] NegativeZeroProbes =
+        [("number", "-0.0000001", "auto"), ("number", "0", "auto"), ("percent", "-0.0000001", "auto"), ("percent", "0", "auto")];
 
     // Engines lists the JavaScript engines that show the divergence; without it, every engine does.
     private sealed record Divergence(string Locale, string Probe, string DotNet, string Esm, string Reason, string[]? Engines);
@@ -96,6 +105,7 @@ internal sealed class LocalizedFormatComparisonTests
                 ["dates"] = new JsonArray(dateProbes.Select(probe => (JsonNode)DotNetDate(probe, locale)).ToArray()),
             };
 
+        string[] baseLocales = locales.Where(locale => !locale.Contains("-u-", StringComparison.Ordinal)).ToArray();
         Rmf2ProjectV5 project = Rmf2EsmV5Tests.CompileProject("formats", "en", ["en"], false, ("en", "x = {{x}}\n"));
         string directory = Rmf2EsmV5Tests.Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(project));
         try
@@ -104,11 +114,11 @@ internal sealed class LocalizedFormatComparisonTests
             string ownData = TranslationCapabilityRegistry.EsmLocaleSource(["en"]);
             string all = TranslationCapabilityRegistry.EsmLocaleSource(locales.Select(locale => locale.Split('-')[0]).Distinct(StringComparer.Ordinal));
             File.WriteAllText(Path.Combine(directory, "formats.esm-v5", "harness.js"), runtime.Replace(ownData, all, StringComparison.Ordinal) +
-                "\nexport { formatDecimal as comparisonDecimal, formatInteger as comparisonInteger, formatTemporal as comparisonTemporal };\n", new UTF8Encoding(false));
+                "\nexport { formatDecimal as comparisonDecimal, formatInteger as comparisonInteger, formatTemporal as comparisonTemporal, localizeDigits as comparisonDigits, numberFormat as comparisonNumberFormat };\n", new UTF8Encoding(false));
             File.WriteAllText(Path.Combine(directory, "input.json"), new JsonObject
             {
                 ["locales"] = new JsonArray(locales.Select(value => (JsonNode)value).ToArray()),
-                ["numbers"] = new JsonArray(NumberProbes.Select(probe => (JsonNode)new JsonArray(probe.Kind, probe.Value, probe.Grouping)).ToArray()),
+                ["numbers"] = new JsonArray(NumberProbes.Concat(NegativeZeroProbes).Select(probe => (JsonNode)new JsonArray(probe.Kind, probe.Value, probe.Grouping)).ToArray()),
                 ["dates"] = new JsonArray(dateProbes.Select(value => (JsonNode)value).ToArray()),
             }.ToJsonString(), new UTF8Encoding(false));
             string script = Path.Combine(directory, "comparison.mjs");
@@ -116,17 +126,18 @@ internal sealed class LocalizedFormatComparisonTests
                 import { readFile, writeFile } from "node:fs/promises";
                 import * as runtime from "./formats.esm-v5/harness.js";
                 const input = JSON.parse(await readFile(new URL("./input.json", import.meta.url), "utf8"));
-                const output = { icu: process.versions.icu ?? "", cldr: process.versions.cldr ?? "", locales: {} };
+                const output = { icu: process.versions.icu ?? "", cldr: process.versions.cldr ?? "", locales: {}, nativeDigitsChecked: 0 };
                 for (const locale of input.locales) {
                   const numbers = [], intl = [];
                   for (const [kind, value, grouping] of input.numbers) {
                     numbers.push(kind === "integer" ? runtime.comparisonInteger(BigInt(value), locale, grouping)
                       : runtime.comparisonDecimal(runtime.decimal(value), locale, kind === "percent" ? { style: "percent", useGrouping: grouping } : { useGrouping: grouping }));
-                    // Intl.NumberFormat with the same options; useGrouping=never is the invariant integer by design.
+                    // Intl.NumberFormat with the same options (useGrouping=never is false there).
                     let expected = null;
                     try {
-                      if (grouping !== "never") expected = new Intl.NumberFormat(locale, kind === "percent" ? { style: "percent", maximumFractionDigits: 4, useGrouping: grouping }
-                        : { maximumFractionDigits: kind === "integer" ? 0 : 6, useGrouping: grouping }).format(kind === "integer" ? BigInt(value) : Number(value));
+                      const useGrouping = grouping === "never" ? false : grouping;
+                      expected = new Intl.NumberFormat(locale, kind === "percent" ? { style: "percent", maximumFractionDigits: 4, useGrouping }
+                        : { maximumFractionDigits: kind === "integer" ? 0 : 6, useGrouping }).format(kind === "integer" ? BigInt(value) : Number(value));
                     } catch { expected = null; }
                     intl.push(expected);
                   }
@@ -138,7 +149,22 @@ internal sealed class LocalizedFormatComparisonTests
                   const maximal = tag => { const value = new Intl.Locale(tag.replace(/-u-.*$/, "")).maximize(); return `${value.language}-${value.script}-${value.region}`; };
                   let covered = false;
                   try { covered = maximal(new Intl.DateTimeFormat(locale).resolvedOptions().locale) === maximal(locale); } catch { covered = false; }
-                  output.locales[locale] = { numbers, intl: covered ? intl : intl.map(() => null), dates, covered };
+                  // The pinned digits of dates and times equal the engine's own default-numbering output: the Latin-digit
+                  // Intl text the runtime starts from, with its digits replaced, against Intl without numberingSystem.
+                  const digits = [];
+                  if (covered && !locale.includes("-u-")) {
+                    const format = runtime.comparisonNumberFormat(locale);
+                    if (format.system !== "latn") output.nativeDigitsChecked++;
+                    for (const probe of input.dates) {
+                      const [type, value, style] = probe.split(" ");
+                      const date = type === "date" ? new Date(`${value}T00:00:00Z`) : new Date(`1970-01-01T${value}Z`);
+                      const options = type === "date" ? { dateStyle: style, timeZone: "UTC" } : { timeStyle: style, timeZone: "UTC" };
+                      const latin = runtime.comparisonDigits(new Intl.DateTimeFormat(locale, { ...options, numberingSystem: "latn" }).format(date), format);
+                      const native = new Intl.DateTimeFormat(locale, options).format(date);
+                      if (latin !== native) digits.push(`${probe}: pinned ${JSON.stringify(latin)}, Intl ${JSON.stringify(native)}`);
+                    }
+                  }
+                  output.locales[locale] = { numbers, intl: covered ? intl : intl.map(() => null), dates, covered, digits };
                 }
                 await writeFile(new URL("./output.json", import.meta.url), JSON.stringify(output));
                 """, new UTF8Encoding(false));
@@ -147,6 +173,10 @@ internal sealed class LocalizedFormatComparisonTests
             var report = new List<string>();
             List<Divergence> divergences = Divergences();
             int? dotnetIcu = DotNetIcuMajor();
+            // The locked development shell loads one ICU in .NET, Node and Bun, so its dates must compare strictly.
+            bool expectStrict = Environment.GetEnvironmentVariable("RUNIC_EXPECT_STRICT_DATES") == "1";
+            EngineCoverage coverage = EngineCoverage.Load();
+            bool updateCoverage = TestContext.Parameters.TryGetValue("update-engine-coverage", out var update) && update.Contains("true");
             // A listed divergence must still occur in at least one strictly compared engine.
             var seen = new HashSet<Divergence>();
             var strictHosts = new List<string>();
@@ -160,9 +190,38 @@ internal sealed class LocalizedFormatComparisonTests
                 // Node reports its CLDR version; Bun only its ICU version, whose data is its own on Linux.
                 string engineCldr = output["cldr"]!.GetValue<string>();
                 bool strictIntl = engineCldr.Length > 0 ? engineCldr.StartsWith(PinnedCldrMajor + ".", StringComparison.Ordinal) : esmIcu == PinnedIcuMajor && OperatingSystem.IsLinux();
+                if (expectStrict && !strictDates)
+                    failures.Add(host + ": RUNIC_EXPECT_STRICT_DATES=1, but .NET loads ICU " + (dotnetIcu?.ToString(CultureInfo.InvariantCulture) ?? "unknown") +
+                        " and the engine ICU " + engineIcu + ", so dates would only be reported. Load the same ICU major in both (the locked shell does).");
+                // The digit check compares the covered locales with native default digits (bn, fa, ar-EG, …).
+                int nativeDigitsChecked = output["nativeDigitsChecked"]!.GetValue<int>();
+                if (strictIntl && nativeDigitsChecked < 30) failures.Add(host + ": the date digit check covered only " + nativeDigitsChecked + " locales with native digits.");
+                string[] uncovered = baseLocales.Where(locale => !output["locales"]![locale]!["covered"]!.GetValue<bool>()).ToArray();
+                if (updateCoverage) coverage.Engines[host] = (engineIcu, uncovered);
+                else if (coverage.Engines.TryGetValue(host, out var recorded))
+                {
+                    // The recorded list is exact for the ICU version it was generated with (Node's bundled ICU on every
+                    // platform, Bun's own only on Linux, as for strictIntl); other versions only report.
+                    var missing = recorded.Uncovered.Except(uncovered, StringComparer.Ordinal).ToArray();
+                    var added = uncovered.Except(recorded.Uncovered, StringComparer.Ordinal).ToArray();
+                    if (missing.Length + added.Length > 0)
+                        (recorded.Icu == engineIcu && (host == "node" || OperatingSystem.IsLinux()) ? failures : report).Add(host + " (ICU " + engineIcu + ", recorded " + recorded.Icu + "): the locales the engine has no data for changed; now covered: " +
+                            string.Join(' ', missing) + "; now uncovered: " + string.Join(' ', added) + ". Regenerate with --test-parameter update-engine-coverage=true.");
+                }
+                else report.Add(host + ": no recorded engine coverage; generate it with --test-parameter update-engine-coverage=true.");
                 foreach (string locale in locales)
                 {
                     JsonNode esm = output["locales"]![locale]!;
+                    foreach (JsonNode? item in esm["digits"]!.AsArray())
+                        (strictIntl ? failures : report).Add(host + " " + locale + " digits " + item!.GetValue<string>());
+                    for (int index = NumberProbes.Length; index < NumberProbes.Length + NegativeZeroProbes.Length; index += 2)
+                    {
+                        string negative = esm["numbers"]![index]!.GetValue<string>(), zero = esm["numbers"]![index + 1]!.GetValue<string>();
+                        if (negative != zero) failures.Add(host + " " + locale + " " + NegativeZeroProbes[index].Kind + " negative zero: pinned " + JsonSerializer.Serialize(negative) + ", zero " + JsonSerializer.Serialize(zero));
+                        if (strictIntl && esm["intl"]![index]?.GetValue<string>() is { } intl && esm["intl"]![index + 1]?.GetValue<string>() is { } intlZero && (intl == intlZero || intlZero != zero))
+                            failures.Add(host + " " + locale + " " + NegativeZeroProbes[index].Kind + " negative zero: Intl.NumberFormat " + JsonSerializer.Serialize(intl) + " and " +
+                                JsonSerializer.Serialize(intlZero) + ", pinned " + JsonSerializer.Serialize(zero) + "; the known difference changed (spec \"Numbers and digits\").");
+                    }
                     for (int index = 0; index < NumberProbes.Length; index++)
                     {
                         string probe = string.Join(' ', NumberProbes[index].Kind, NumberProbes[index].Value, NumberProbes[index].Grouping);
@@ -187,6 +246,7 @@ internal sealed class LocalizedFormatComparisonTests
                 Console.WriteLine(host + ": .NET ICU " + (dotnetIcu?.ToString(CultureInfo.InvariantCulture) ?? "unknown") + ", engine ICU " + engineIcu +
                     (strictDates ? "; dates compared strictly" : "; dates reported only") + (strictIntl ? "; numbers compared with Intl" : ""));
             }
+            if (updateCoverage) coverage.Save();
             foreach (Divergence item in divergences.Where(item => !seen.Contains(item) && strictHosts.Any(host => item.Engines is null || item.Engines.Contains(host))))
                 failures.Add("The listed divergence " + item.Locale + " " + item.Probe + " no longer occurs as listed.");
             // --test-parameter comparison-report=<file> writes every difference, for reviewing a CLDR or ICU update.
@@ -196,6 +256,36 @@ internal sealed class LocalizedFormatComparisonTests
             Assert.True(failures.Count == 0, failures.Count + " differences:\n" + string.Join("\n", failures.Take(200)));
         }
         finally { Directory.Delete(directory, true); }
+    }
+
+    // specs/translations/corpus/localized-format-engine-coverage.json: for each JavaScript engine, the ICU version it was
+    // generated with and the CLDR locales its Intl has no data for (Intl falls back to another locale, so .NET and ESM
+    // can format their dates differently). --test-parameter update-engine-coverage=true rewrites it.
+    private sealed class EngineCoverage
+    {
+        private const string Description = "The CLDR locales whose dates and times LocalizedFormatComparisonTests does not compare, because the JavaScript engine's Intl has no data for them and falls back to another locale (ESM: the nearest CLDR parent the engine has, else en-US; .NET: its ICU's own fallback, so the runtimes can differ). Numbers and percentages are pinned and compared for these locales too. Generated by the comparison test with --test-parameter update-engine-coverage=true; the test fails when an engine with the recorded ICU version (Node on every platform, Bun on Linux) covers a different set.";
+        private static string FilePath => RepositoryPaths.Resolve("specs", "translations", "corpus", "localized-format-engine-coverage.json");
+        internal Dictionary<string, (string Icu, string[] Uncovered)> Engines { get; } = new(StringComparer.Ordinal);
+
+        internal static EngineCoverage Load()
+        {
+            var coverage = new EngineCoverage();
+            if (!File.Exists(FilePath)) return coverage;
+            JsonNode root = JsonNode.Parse(File.ReadAllBytes(FilePath))!;
+            Assert.Equal("48.2", root["cldrVersion"]!.GetValue<string>(), "Engine coverage CLDR pin");
+            foreach (var (engine, value) in root["engines"]!.AsObject())
+                coverage.Engines[engine] = (value!["icu"]!.GetValue<string>(), value["uncovered"]!.AsArray().Select(item => item!.GetValue<string>()).ToArray());
+            return coverage;
+        }
+
+        internal void Save()
+        {
+            var engines = new JsonObject();
+            foreach (var (engine, (icu, uncovered)) in Engines.OrderBy(item => item.Key, StringComparer.Ordinal))
+                engines[engine] = new JsonObject { ["icu"] = icu, ["count"] = uncovered.Length, ["uncovered"] = new JsonArray(uncovered.Order(StringComparer.Ordinal).Select(item => (JsonNode)item).ToArray()) };
+            var root = new JsonObject { ["cldrVersion"] = "48.2", ["description"] = Description, ["engines"] = engines };
+            File.WriteAllText(FilePath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }) + "\n", new UTF8Encoding(false));
+        }
     }
 
     // The ICU major version .NET loaded, where the library file names it (Linux libicuuc.so.NN); null elsewhere.

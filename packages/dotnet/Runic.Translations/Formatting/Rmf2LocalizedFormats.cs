@@ -59,14 +59,17 @@ internal static partial class Rmf2LocalizedFormats
             ? (parts with { Script = null }).ToString()
             : tag;
 
-    // The languages whose CLDR likely subtags name more than one script (sr, zh, pa, uz, …).
+    // The languages whose CLDR likely subtags for the language and its regions name more than one script (sr, zh, pa,
+    // uz, …): the values of the language-only and language-region keys. A language-script key names its own script
+    // (en-Shaw → en-Shaw-GB), so it does not make the language multi-script, and en-Latn-US formats as en-US.
     private static readonly Lazy<System.Collections.Generic.HashSet<string>> s_multiScript = new(() =>
     {
         var scripts = new System.Collections.Generic.Dictionary<string, string>(StringComparer.Ordinal);
         var result = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
-        foreach (string value in GeneratedLocaleTables.LikelyValues)
+        for (int index = 0; index < GeneratedLocaleTables.LikelyKeys.Length; index++)
         {
-            CldrLocales.Parts parts = CldrLocales.Parse(value);
+            CldrLocales.Parts key = CldrLocales.Parse(GeneratedLocaleTables.LikelyKeys[index]), parts = CldrLocales.Parse(GeneratedLocaleTables.LikelyValues[index]);
+            if (key.Script is not null || key.Language != parts.Language) continue;
             if (scripts.TryGetValue(parts.Language, out string? known)) { if (known != parts.Script) result.Add(parts.Language); }
             else scripts.Add(parts.Language, parts.Script ?? "");
         }

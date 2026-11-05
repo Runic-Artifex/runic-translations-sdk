@@ -238,9 +238,10 @@ internal sealed class Rmf2V1CorpusTests
     // Re-pinned for the TJ Hot Reload review: Registration reads the markup contract through static () => Rmf2MarkupContract,
     // so overlays follow a Hot Reload update of it, in both digests (C# only).
     // Re-pinned for merging the TJ Hot Reload review with TB (#131), in both digests.
-    // Re-pinned for merging the formatting follow-ups (#148) with main (TJ, TI), in both digests.
-    private const string EncodedOutputDigest = "4f14e58d36415a0a33af819db5e55d8d916d5b263218d286e19bcfdb141c8508";
-    private const string HiddenEncodedOutputDigest = "8714c2424a25f1cc235bb4c335c2599a941bb1232010b48fe12c0079d451a6d5";
+    // Re-pinned for merging the formatting follow-ups (#148) with main (TJ, TI), and for their review (ESM caches by CLDR
+    // data ID, relative time in the formatting locale, ungrouped integers in the locale's digits), in both digests.
+    private const string EncodedOutputDigest = "bc5220c7cc2787e5182c30836ee79e18d4e2156cb11a4ad312465eab580996d8";
+    private const string HiddenEncodedOutputDigest = "661b93615c055b0420174b0db3a248dbacf01fa0a5c6ae87f960a12e90cd5d85";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

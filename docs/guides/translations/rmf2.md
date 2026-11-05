@@ -142,8 +142,9 @@ in India Extended Arabic-Indic digits, and Arabic in Egypt, Saudi Arabia and the
 other regions CLDR gives Arabic-Indic digits `١٬٢٣٤٫٥`. `ar` itself, `ar-MA` and
 `hi` keep Latin digits, as CLDR 48 does. A requested tag with `-u-nu-latn`
 (`ar-EG-u-nu-latn`, `fa-u-nu-latn`) switches to Latin digits and the locale's
-Latin-digit symbols. `{$n :integer useGrouping=never}` stays invariant
-(`-1234`), for codes and identifiers. Symbols, group sizes and digits come from
+Latin-digit symbols. `useGrouping=never` drops only the group separators, so
+`{$n :integer useGrouping=never}` writes Persian `‎−۱۲۳۴`, as `:number` does;
+format a code that must stay ASCII with `:string`. Symbols, group sizes and digits come from
 the pinned CLDR data in both runtimes, not from the platform.
 
 `:date`, `:time` and `:datetime` write `iso` by default (`2026-11-04`,
@@ -199,10 +200,11 @@ text sees `04/11/2026`. The script is the tag's own or the language's likely one
 for the region (from CLDR's likely subtags), so an `sr-Latn` user reading
 Cyrillic `sr` text, or a `zh-TW` user reading Simplified `zh` text, sees the
 text's dates rather than ones in another script, while a `de-Latn-CH` user
-reading `de` text sees Swiss formats (as `de-CH`). Unicode extensions of the
+reading `de` text sees Swiss formats (as `de-CH`, and `en-Latn-US` as `en-US`). Unicode extensions of the
 requested tag (`-u-ca-buddhist`, `-u-nu-arab`) are ignored, except
-`-u-nu-latn`. Plural and ordinal rules, lists and relative time
-stay on the text's locale. Content objects report both locales: .NET
+`-u-nu-latn`. Plural and ordinal rules, lists and relative-time patterns
+stay on the text's locale; the number in relative time uses the formatting
+locale's digits, as `:number` does. Content objects report both locales: .NET
 `LocalizedTextContent.Locale` and `FormattingLocale`, ESM `locale` and
 `formatLocale`. A string message's text locale (for `lang`) comes from .NET
 `ITranslationSnapshot.TryGetContentLocale` or ESM `getMessageLocale(key)`.

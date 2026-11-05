@@ -80,8 +80,8 @@ internal sealed class LocalizedFormattingTests
     public void FormattingLocale()
     {
         var number = Single(TextArgumentType.Number, "number", "de");
-        string swiss = 1234567.5m.ToString("#,0.######", CultureInfo.GetCultureInfo("de-CH"));
-        Assert.Equal(swiss, number.Format([new("value", 1234567.5m)], "de-CH"));
+        // The pinned CLDR 48.2 de-CH group separator is U+0027 on every platform (older ICU writes U+2019).
+        Assert.Equal("1'234'567.5", number.Format([new("value", 1234567.5m)], "de-CH"));
         Assert.Equal("1.234.567,5", number.Format([new("value", 1234567.5m)], "fr"));
         LocalizedTextContent content = number.FormatContent([new("value", 1m)], "de-ch");
         Assert.Equal("de", content.Locale);
@@ -115,6 +115,12 @@ internal sealed class LocalizedFormattingTests
     [Arguments("de", "de-Latn-CH", "de-CH")]
     [Arguments("de", "de-Latn", "de")]
     [Arguments("de", "de-Cyrl-CH", "de")]
+    // en has one script in the likely subtags of the language and its regions; en-Shaw is a language-script key.
+    [Arguments("en", "en-Latn-US", "en-US")]
+    [Arguments("en", "en-Latn", "en")]
+    [Arguments("en", "en-Shaw-GB", "en")]
+    [Arguments("ff", "ff-Latn-SN", "ff-SN")]
+    [Arguments("sr", "sr-Cyrl-RS", "sr-Cyrl-RS")]
     [Arguments("ar", "ar-EG-u-nu-latn", "ar-EG-u-nu-latn")]
     [Arguments("ar", "ar-u-nu-latn", "ar")]
     [Arguments("ar", "ar-EG-u-nu-arab", "ar-EG")]
@@ -221,7 +227,7 @@ internal sealed class LocalizedFormattingTests
         Assert.Equal("de", swiss.Locale);
         Assert.Equal("de-CH", swiss.RequestedLocale);
         Assert.Same(swiss, await provider.GetSnapshotAsync("DE-ch"));
-        Assert.Equal("Betrag " + 1234.5m.ToString("#,0.######", CultureInfo.GetCultureInfo("de-CH")), swiss.Format(amount, [new TextArgument("n", 1234.5m)]));
+        Assert.Equal("Betrag 1'234.5", swiss.Format(amount, [new TextArgument("n", 1234.5m)]));
         Assert.Equal("de-CH", swiss.FormatContent(amount, [new TextArgument("n", 1m)]).FormattingLocale);
         ITranslationSnapshot german = await provider.GetSnapshotAsync("de");
         Assert.Equal("de", german.RequestedLocale);

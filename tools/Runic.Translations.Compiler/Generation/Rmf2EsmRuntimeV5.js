@@ -77,13 +77,16 @@ function withoutDefaultScript(tag, parts) {
   if (parts.script === undefined || multiScript(parts.language)) return tag;
   return parts.script.toLowerCase() === (cldrMaximize({ ...parts, script: undefined }).script ?? "").toLowerCase() ? cldrFormat({ ...parts, script: undefined }) : tag;
 }
-// Whether the CLDR likely subtags of a language name more than one script (sr, zh, pa, uz, …).
+// Whether the CLDR likely subtags for a language and its regions name more than one script (sr, zh, pa, uz, …): the
+// values of the language-only and language-region keys. A language-script key names its own script (en-Shaw), so en is
+// written in one script and en-Latn-US formats as en-US.
 let multiScriptLanguages;
 function multiScript(language) {
   if (multiScriptLanguages === undefined) {
     const scripts = new Map(); multiScriptLanguages = new Set();
-    for (const value of Object.values(generatedLocaleData.likely)) {
-      const parts = cldrParse(value);
+    for (const [key, value] of Object.entries(generatedLocaleData.likely)) {
+      const keyParts = cldrParse(key), parts = cldrParse(value);
+      if (keyParts.script !== undefined || keyParts.language !== parts.language) continue;
       if (!scripts.has(parts.language)) scripts.set(parts.language, parts.script); else if (scripts.get(parts.language) !== parts.script) multiScriptLanguages.add(parts.language);
     }
   }
@@ -365,7 +368,8 @@ function validateResolvedOptions(fn, options) {
   }
 }
 
-// locale is the formatting locale of numbers, percentages, dates and times; contentLocale gives lists and relative time.
+// locale is the formatting locale of numbers (the number in relative time included), percentages, dates and times;
+// contentLocale gives lists and the relative-time patterns.
 function formatResolved(value, locale, contentLocale = locale) {
   const fn = value.format.function, options = value.format.options;
   switch (fn) {
@@ -377,7 +381,7 @@ function formatResolved(value, locale, contentLocale = locale) {
     case "time": return formatTemporal(value.carrier, fn, options.style ?? "iso", locale, "local");
     case "datetime": return formatTemporal(value.carrier, fn, options.style ?? "iso", locale, options.timeZone ?? "local");
     case "runic:uuid": { const canonical = value.carrier; const style = options.style ?? "d"; if (style === "d") return canonical; if (style === "n") return canonical.replaceAll("-", ""); if (style === "b") return `{${canonical}}`; return `(${canonical})`; }
-    case "runic:relative-time": return formatRelative(value.type === "int64" ? decimalFromInteger(value.carrier) : value.carrier, options.unit ?? "day", options.numeric ?? "always", contentLocale);
+    case "runic:relative-time": return formatRelative(value.type === "int64" ? decimalFromInteger(value.carrier) : value.carrier, options.unit ?? "day", options.numeric ?? "always", contentLocale, locale);
     case "runic:list": return formatList(value.carrier, options.type ?? "conjunction", options.style ?? "long", contentLocale);
     default: throw new TypeError("Unknown formatter.");
   }
@@ -409,10 +413,9 @@ function formatDecimal(value, locale, options) {
   return visible.negative ? format.negativePercentPrefix + digitText + format.negativePercentSuffix : format.percentPrefix + digitText + format.percentSuffix;
 }
 
-// Ungrouped integers keep the invariant integer output (Latin digits, ASCII minus); the grouping strategies use the
-// locale's symbols, group sizes and digits.
+// An integer as :number writes it without fraction digits, for every useGrouping value (useGrouping=never included):
+// the locale's minus sign, symbols, group sizes and digits.
 function formatInteger(value, locale, grouping) {
-  if (grouping === "never") return value.toString();
   const format = numberFormat(locale), visible = decimalFromInteger(value);
   return `${visible.negative ? format.minus : ""}${numberDigits(visible, grouping, locale, format, false)}`;
 }
@@ -429,21 +432,31 @@ function numberDigits(visible, grouping, locale, format, percent) {
 // -u-nu-latn; CLDR root formats without data. Each record holds the default system, its 12 fields and, when it is not
 // latn, latn's 12 (see eng/generate-cldr.mjs numberFields).
 const rootNumberFormat = Object.freeze({ system: "latn", digits: null, decimal: ".", group: ",", minus: "-", primary: 3, secondary: 3, percentPrimary: 3, percentSecondary: 3, percentPrefix: "", percentSuffix: "%", negativePercentPrefix: "-", negativePercentSuffix: "%" });
-const numberFormatCache = new Map();
+// Cached by CLDR data ID, in the default system and in latn, so the caches are bounded by the embedded data whatever
+// tags callers request; the requested tags seen last map to them, emptied when full.
+const numberFormatCache = new Map(), latinNumberFormatCache = new Map(), localeNumberFormatCache = new Map();
 function numberFormat(locale) {
-  let format = numberFormatCache.get(locale);
+  let format = localeNumberFormatCache.get(locale);
   if (format) return format;
-  const id = cldrLocale(locale).numbers, record = id === undefined ? undefined : generatedLocaleData.numbers[id];
-  if (record === undefined) format = rootNumberFormat;
-  else {
-    const offset = record.length > 13 && latinDigits(locale) ? 13 : 1, system = offset === 1 ? record[0] : "latn", field = index => record[offset + index];
-    format = Object.freeze({
-      system, digits: system === "latn" ? null : Array.from(field(0)), decimal: field(1), group: field(2), minus: field(3),
-      primary: Number(field(4)), secondary: Number(field(5)), percentPrimary: Number(field(6)), percentSecondary: Number(field(7)),
-      percentPrefix: field(8), percentSuffix: field(9), negativePercentPrefix: field(10), negativePercentSuffix: field(11),
-    });
-  }
-  if (numberFormatCache.size < 64) numberFormatCache.set(locale, format);
+  if (localeNumberFormatCache.size >= 256) localeNumberFormatCache.clear();
+  format = dataNumberFormat(locale);
+  localeNumberFormatCache.set(locale, format);
+  return format;
+}
+function dataNumberFormat(locale) {
+  const id = cldrLocale(locale).numbers;
+  if (id === undefined) return rootNumberFormat;
+  const latin = latinDigits(locale), cache = latin ? latinNumberFormatCache : numberFormatCache;
+  let format = cache.get(id);
+  if (format) return format;
+  const record = generatedLocaleData.numbers[id];
+  const offset = record.length > 13 && latin ? 13 : 1, system = offset === 1 ? record[0] : "latn", field = index => record[offset + index];
+  format = Object.freeze({
+    system, digits: system === "latn" ? null : Array.from(field(0)), decimal: field(1), group: field(2), minus: field(3),
+    primary: Number(field(4)), secondary: Number(field(5)), percentPrimary: Number(field(6)), percentSecondary: Number(field(7)),
+    percentPrefix: field(8), percentSuffix: field(9), negativePercentPrefix: field(10), negativePercentSuffix: field(11),
+  });
+  cache.set(id, format);
   return format;
 }
 // Writes the ASCII digits of a text in the numbering system's digits.
@@ -484,12 +497,13 @@ function selectPlural(value, locale, ordinal) {
   return generatedPluralRules[rule](Object.freeze({ i: value.coefficient / divisor, v: BigInt(value.scale), w, f, t, e: 0n }));
 }
 
-// CLDR relative time: the number is formatted as :number formats it by default and picks the past or future
-// pattern of its plural category; numeric=auto uses the relative-type text for whole values from -2 to 2.
+// CLDR relative time: the number is formatted as :number formats it by default, in numberLocale's digits and symbols
+// (the formatting locale), and picks locale's past or future pattern of its plural category; numeric=auto uses the
+// relative-type text for whole values from -2 to 2.
 // Each unit has 17 slots: past patterns (zero … other), future patterns likewise, then relative-type -2 … 2.
 const relativeUnits = ["second", "minute", "hour", "day", "week", "month", "year"];
 const pluralCategoryOrder = ["zero", "one", "two", "few", "many", "other"];
-function formatRelative(value, unit, numeric, locale) {
+function formatRelative(value, unit, numeric, locale, numberLocale = locale) {
   const entry = cldrLocale(locale), data = entry.cardinal < 0 || entry.relativeTime === undefined ? undefined : generatedLocaleData.relativeTime[entry.relativeTime];
   if (!data) throw new RangeError(`Relative-time formatting is not supported for locale '${locale}'.`);
   const offset = relativeUnits.indexOf(unit) * 17, divisor = 10n ** BigInt(value.scale);
@@ -499,7 +513,7 @@ function formatRelative(value, unit, numeric, locale) {
   }
   const absolute = decimalAbsolute(value), visible = visibleNumber(absolute, {});
   const patterns = offset + (value.negative ? 0 : 6), pattern = data[patterns + pluralCategoryOrder.indexOf(selectPlural(visible, locale, false))] ?? data[patterns + 5];
-  return pattern.replace("{0}", formatDecimal(absolute, locale, {}));
+  return pattern.replace("{0}", formatDecimal(absolute, numberLocale, {}));
 }
 
 // Joins the items with the pinned CLDR list patterns, as Intl.ListFormat does: end(n-2, n-1), then
@@ -539,28 +553,38 @@ function contextualListPattern(language, two, end, pattern, last) {
 // Locale identity over the pinned CLDR tables, exactly as CldrLocales.cs does in .NET: likely subtags, the
 // CLDR data ID of a tag, its parent chains and likely-subtag matching. Only the tables of the catalog's
 // languages are embedded; matching and lookup never need others.
-const cldrLocaleCache = new Map();
+// The requested tags seen last, emptied when full so that any tags callers send leave room for the next ones; the data
+// entries are cached by their CLDR anchors (cldrAnchors), which the embedded data bounds, so a tag outside the first
+// cache costs its canonicalization and anchors, never the full lookups.
+const cldrLocaleCache = new Map(), cldrEntryCache = new Map();
+const noLocaleData = Object.freeze({ language: "", cardinal: -1, ordinal: -1, grouping: 1, numbers: undefined, list: undefined, relativeTime: undefined });
 function cldrLocale(locale) {
   let entry = cldrLocaleCache.get(locale);
   if (entry) return entry;
   const canonical = canonicalLocale(locale);
-  if (canonical === null) entry = Object.freeze({ language: "", cardinal: -1, ordinal: -1, grouping: 1, numbers: undefined, list: undefined, relativeTime: undefined });
+  if (canonical === null) entry = noLocaleData;
   else {
-    const cardinalId = cldrFind(canonical, generatedLocaleData.cardinal, true), ordinalId = cldrFind(canonical, generatedLocaleData.ordinal, true), groupingId = cldrFind(canonical, generatedLocaleData.grouping, false);
-    const list = cldrFind(canonical, generatedLocaleData.list, false), relativeTime = cldrFind(canonical, generatedLocaleData.relativeTime, false);
-    // A locale with CLDR data but no plural rules of its own (agq, rw) uses CLDR's root rule (0, other only).
-    const rootRule = list !== undefined || relativeTime !== undefined ? 0 : -1;
-    entry = Object.freeze({
-      language: cldrParse(canonical).language,
-      cardinal: cardinalId === undefined ? rootRule : generatedLocaleData.cardinal[cardinalId],
-      ordinal: cardinalId === undefined ? rootRule : ordinalId === undefined ? 0 : generatedLocaleData.ordinal[ordinalId],
-      grouping: groupingId === undefined ? 1 : generatedLocaleData.grouping[groupingId],
-      numbers: cldrFind(canonical, generatedLocaleData.numbers, false),
-      list,
-      relativeTime,
-    });
+    const [data, truncated] = cldrAnchors(canonical), key = `${data ?? ""}|${truncated ?? ""}`;
+    let found = cldrEntryCache.get(key);
+    if (found === undefined) {
+      const cardinalId = cldrFindFrom(truncated, generatedLocaleData.cardinal, true), ordinalId = cldrFindFrom(truncated, generatedLocaleData.ordinal, true), groupingId = cldrFindFrom(data, generatedLocaleData.grouping, false);
+      const list = cldrFindFrom(data, generatedLocaleData.list, false), relativeTime = cldrFindFrom(data, generatedLocaleData.relativeTime, false);
+      // A locale with CLDR data but no plural rules of its own (agq, rw) uses CLDR's root rule (0, other only).
+      const rootRule = list !== undefined || relativeTime !== undefined ? 0 : -1;
+      found = Object.freeze({
+        cardinal: cardinalId === undefined ? rootRule : generatedLocaleData.cardinal[cardinalId],
+        ordinal: cardinalId === undefined ? rootRule : ordinalId === undefined ? 0 : generatedLocaleData.ordinal[ordinalId],
+        grouping: groupingId === undefined ? 1 : generatedLocaleData.grouping[groupingId],
+        numbers: cldrFindFrom(data, generatedLocaleData.numbers, false),
+        list,
+        relativeTime,
+      });
+      cldrEntryCache.set(key, found);
+    }
+    entry = Object.freeze({ language: cldrParse(canonical).language, ...found });
   }
-  if (cldrLocaleCache.size < 64) cldrLocaleCache.set(locale, entry);
+  if (cldrLocaleCache.size >= 256) cldrLocaleCache.clear();
+  cldrLocaleCache.set(locale, entry);
   return entry;
 }
 function cldrParse(canonical) {
@@ -608,10 +632,21 @@ function cldrParent(id, truncate) {
   if (tag.script !== undefined && truncate) return tag.language;
   return undefined;
 }
-function cldrFind(canonical, table, truncate) {
-  let depth = 0;
-  for (let id = cldrDataId(canonical); id !== undefined && depth < 16; id = cldrParent(id, truncate), depth++) if (Object.hasOwn(table, id)) return id;
+function cldrFindFrom(id, table, truncate) {
+  for (let depth = 0; id !== undefined && depth < 16; id = cldrParent(id, truncate), depth++) if (Object.hasOwn(table, id)) return id;
   return undefined;
+}
+// Where the data lookups of a tag start, as CldrLocales.Anchors in .NET: the first ID of its data ID's parent chain, and
+// of its truncation chain, that an embedded table or the parent table has. de-AA, de-AB, … and de share de's.
+let cldrKnownIds;
+function cldrAnchors(canonical) {
+  if (cldrKnownIds === undefined) {
+    cldrKnownIds = {};
+    for (const table of [generatedLocaleData.parents, generatedLocaleData.cardinal, generatedLocaleData.ordinal, generatedLocaleData.grouping, generatedLocaleData.numbers, generatedLocaleData.list, generatedLocaleData.relativeTime])
+      for (const id of Object.keys(table)) cldrKnownIds[id] = true;
+  }
+  const id = cldrDataId(canonical);
+  return [cldrFindFrom(id, cldrKnownIds, false), cldrFindFrom(id, cldrKnownIds, true)];
 }
 function cldrChain(id) { const result = []; for (let current = id; current !== undefined && result.length < 16; current = cldrParent(current, false)) result.push(current); return result; }
 // A language and its bare-language CLDR parent (nb, nn → no) match after every same-language candidate (1000); two
@@ -682,7 +717,9 @@ function temporalFormat(locale, kind, style, timeZone) {
     : kind === "time" ? { timeStyle: style, timeZone: "UTC", numberingSystem: "latn" }
     : { calendar: "gregory", numberingSystem: "latn", hourCycle: "h23", year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric", ...(timeZone === undefined ? {} : { timeZone }) };
   format = new Intl.DateTimeFormat(kind === "zone" ? "en-US" : intlLocales(locale), options);
-  if (temporalFormatCache.size < 256) temporalFormatCache.set(cacheKey, format);
+  // Emptied when full, so that the tags callers send never leave the cache full of others.
+  if (temporalFormatCache.size >= 256) temporalFormatCache.clear();
+  temporalFormatCache.set(cacheKey, format);
   return format;
 }
 

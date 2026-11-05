@@ -71,6 +71,9 @@ internal sealed class Rmf2EsmLocalizedFormattingTests
                   check(JSON.stringify(getMessageLocale("farewell")) === '{"key":"farewell","locale":"en","formatLocale":"en"}', JSON.stringify(getMessageLocale("farewell")));
                 } finally { restore(); }
                 check(getMessageLocale("amount", { locale: "en-GB" }).formatLocale === "en-GB", "en-GB format locale");
+                // An explicit script that is the likely one of a language written in one script is dropped, as in .NET.
+                for (const [requested, expected] of [["en-Latn-US", "en-US"], ["en-Shaw-GB", "en"], ["de-Latn-CH", "de-CH"]])
+                  check(getMessageLocale("amount", { locale: requested }).formatLocale === expected, `${requested}: ${getMessageLocale("amount", { locale: requested }).formatLocale}`);
                 throwsType(() => getMessageLocale("missing"), RangeError, "unknown message");
                 throwsType(() => getMessageLocale("amount", { locale: "en-" }), RangeError, "invalid tag");
                 // A message that shows fallback text calls the listeners; a throwing listener does not break formatting.

@@ -49,8 +49,9 @@ internal sealed class Rmf2ResolvedFormat
         if (!valid) throw new ArgumentException("Invalid option '" + name + "' for '" + function + "'.", nameof(value));
     }
     /// <summary>
-    /// Formats in <paramref name="locale"/>, the formatting locale for numbers, percentages, dates and times; lists and
-    /// relative time use the plural and list data of <paramref name="contentLocale"/>.
+    /// Formats in <paramref name="locale"/>, the formatting locale for numbers (the number in relative time included),
+    /// percentages, dates and times; lists and relative-time patterns use the plural, list and relative-time data of
+    /// <paramref name="contentLocale"/>.
     /// </summary>
     internal string Format(TextArgument value, string locale, string contentLocale)
     {
@@ -78,7 +79,7 @@ internal sealed class Rmf2ResolvedFormat
                     : Rmf2LocalizedFormats.DateTime(Get<DateTimeOffset>(value), style, String("timeZone", "local"), locale);
             case "runic:uuid": return Get<Guid>(value).ToString(String("style", "d"), CultureInfo.InvariantCulture);
             case "runic:list": return TextListFormatter.Format(Get<IReadOnlyList<string>>(value), String("type", "conjunction"), String("style", "long"), contentLocale);
-            case "runic:relative-time": return TextRelativeTimeFormatter.Format(Rmf2RuntimeDecimal.Parse(Rmf2RuntimeDecimal.Canonical(Number(value))), String("unit", "day"), String("numeric", "always"), contentLocale);
+            case "runic:relative-time": return TextRelativeTimeFormatter.Format(Rmf2RuntimeDecimal.Parse(Rmf2RuntimeDecimal.Canonical(Number(value))), String("unit", "day"), String("numeric", "always"), contentLocale, locale);
             default: throw new TranslationFormatException("Unknown v5 formatter.");
         }
     }

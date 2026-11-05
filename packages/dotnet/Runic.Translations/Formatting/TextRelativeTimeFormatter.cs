@@ -12,12 +12,14 @@ internal static class TextRelativeTimeFormatter
 
     /// <summary>Formats a relative duration with the pinned CLDR patterns of a locale.</summary>
     /// <remarks>
-    /// The number is formatted as <c>:number</c> formats it by default (the locale's pinned digits, separators and grouping,
-    /// at most six fraction digits), and the pattern is chosen by the plural category of that displayed number.
-    /// <c>numeric=auto</c> uses CLDR's relative-type text ("yesterday", "now", "next month") for whole values from
-    /// -2 to 2 where the locale has one.
+    /// The number is formatted as <c>:number</c> formats it by default (the pinned digits, separators and grouping of
+    /// <paramref name="numberLocale"/>, else of <paramref name="locale"/>, at most six fraction digits), and the pattern
+    /// of <paramref name="locale"/> is chosen by the plural category of that displayed number. <c>numeric=auto</c> uses
+    /// CLDR's relative-type text ("yesterday", "now", "next month") for whole values from -2 to 2 where the locale has one.
+    /// RMF2 passes the content locale and the formatting locale, so the number is written as <c>:number</c> writes it in
+    /// the same message (<c>fa-u-nu-latn</c>: Latin digits; <c>ar-EG</c> over <c>ar</c>: Arabic-Indic digits).
     /// </remarks>
-    public static string Format(decimal value, string unit, string numeric, string locale)
+    public static string Format(decimal value, string unit, string numeric, string locale, string? numberLocale = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(unit);
         ArgumentException.ThrowIfNullOrWhiteSpace(numeric);
@@ -39,7 +41,7 @@ internal static class TextRelativeTimeFormatter
         int patterns = offset + (value < 0 ? 0 : 6);
         string pattern = data[patterns + Array.IndexOf(Categories, category)] ?? data[patterns + 5]!;
         // As :number with its default options: grouping auto, zero to six fraction digits, halfExpand.
-        return pattern.Replace("{0}", Rmf2NumberFormats.Decimal(visible, "auto", locale), StringComparison.Ordinal);
+        return pattern.Replace("{0}", Rmf2NumberFormats.Decimal(visible, "auto", numberLocale ?? locale), StringComparison.Ordinal);
     }
 
     private static TranslationFormatException Unsupported(string locale) =>
