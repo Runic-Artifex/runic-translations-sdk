@@ -39,7 +39,8 @@ internal sealed record ToolInvocation(
     bool DryRun = false,
     bool OmitSourceDiagnostics = false,
     TextImportRequest? TextImport = null,
-    bool PseudoLocales = false);
+    bool PseudoLocales = false,
+    string? ContractPath = null);
 
 internal sealed class ToolUsageException : Exception
 {

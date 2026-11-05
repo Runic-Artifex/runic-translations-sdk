@@ -205,6 +205,10 @@ does. They apply only to locales that overlays add, at their content locale and 
 The web's `installOverlay` follows the same rules, with each install as one overlay
 (see [ESM overlays](esm.md#overlays)).
 
+Overlay packs are also how an application ships translation updates without a release; see
+[Ship translation updates without a release](ota.md). The web runtime has the same overlays (`installOverlay`,
+`installLocalePack`; see [ESM overlays](esm.md#overlays)).
+
 A malformed pack, or one that names another catalog or locale, fails the switch with a `TranslationPackException`,
 like an external pack. `RefreshAsync` reloads overlay packs; other contexts of the same builder get the reloaded text on
 their next switch or refresh.

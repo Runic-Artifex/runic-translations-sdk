@@ -107,6 +107,13 @@ fail with `RTR0009` until the effective default locale defines a canonical key.
 `runic.json` declares in `pseudoLocales` (`en-XA`, `ar-XB`); without it they are left out, as release builds should.
 See [Pseudo-locales](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md#pseudo-locales).
 
+`--contract <file>` with `--emit-json` (and no other `--emit-*` option) builds
+translation packs for a release that has already shipped. `<file>` is a locale
+artifact of that release, such as its `<catalog>.en.locale-v5.json`. Each pack
+then holds only the messages that release accepts and carries its contract
+fingerprint, and the command prints each message it leaves out with the reason.
+See [Ship translation updates without a release](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/ota.md).
+
 Use `Runic.Translations.Build` for generated C# or when MSBuild should invoke this local tool. Use this CLI directly when Vite, CI, or a custom script owns artifact generation.
 
 ## Import a text-keyed catalog
