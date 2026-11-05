@@ -599,6 +599,60 @@ internal sealed class CompositionTests
             "final state");
     }
 
+    // #143/TK: an overlay pack's formatData carries the number records of its languages and the currency data of its
+    // messages; .NET has every locale's number data but checks the pack's first, as the ESM runtime must
+    // (Rmf2CurrencyUnitCompilerTests.OverlayFormatData runs the same packs there). A pack without formatData borrows the
+    // catalog's currency data.
+    [Test, DisplayName("overlays format with their own CLDR data, and an overlay without any borrows the catalog's")]
+    public async Task OverlayFormatData()
+    {
+        const string shopProject = """
+            {
+              "schemaVersion": 1,
+              "catalog": "shop",
+              "code": { "namespace": "Acme.Shop", "className": "ShopText", "visibility": "public" },
+              "baseLocale": "en",
+              "locales": [ "en", "fr" ],
+              "runtime": { "bidiIsolation": "off" }
+            }
+            """;
+        Catalog shop = Catalog.Compile(shopProject,
+            ("en", "total = {{Total: {$n :currency currency=EUR}}}\ncount = {{{$n :number} items}}\n"),
+            ("fr", "total = {{Total : {$n :currency currency=EUR}}}\ncount = {{{$n :number} articles}}\n"));
+        string Overrides(string locales) => shopProject.Replace("Acme.Shop", "Example.ShopOverrides", StringComparison.Ordinal)
+            .Replace("\"baseLocale\": \"en\"", "\"baseLocale\": " + locales.Split(',')[0], StringComparison.Ordinal).Replace("[ \"en\", \"fr\" ]", "[" + locales + "]", StringComparison.Ordinal);
+        Dictionary<string, byte[]> added = Packs(Overrides("\"de\",\"ar-EG\""),
+            ("de", "total = {{Summe: {$n :currency currency=EUR}}}\ncount = {{{$n :number} Artikel}}\n"),
+            ("ar-EG", "total = {{المجموع {$n :currency currency=EUR}}}\ncount = {{{$n :number} عناصر}}\n"));
+        // An English overlay and a French one with a currency the catalog does not embed, both stripped of formatData.
+        Dictionary<string, byte[]> bare = Packs(Overrides("\"en\",\"fr\""),
+            ("en", "total = {{Sum: {$n :currency currency=EUR}}}\ncount = {{{$n :number} things}}\n"),
+            ("fr", "total = {{Total : {$n :currency currency=CHF}}}\ncount = {{{$n :number} choses}}\n"));
+        foreach (string locale in bare.Keys.ToArray())
+        {
+            var node = System.Text.Json.Nodes.JsonNode.Parse(bare[locale])!.AsObject();
+            Assert.True(node.Remove("formatData"), "the overlay pack has formatData");
+            bare[locale] = Encoding.UTF8.GetBytes(node.ToJsonString());
+        }
+
+        TranslationContext context = await TranslationContext.CreateBuilder()
+            .Add(shop.Registration)
+            .AddOverlay(TranslationOverlay.FromPacks("shop", new MemoryPackSource(added), [new TranslationOverlayLocale("de"), new TranslationOverlayLocale("ar-EG")]))
+            .AddOverlay(TranslationOverlay.FromPacks("shop", new MemoryPackSource(bare)))
+            .BuildAsync("de");
+        var amount = new TextArgument("n", 1234.5m);
+        Assert.Equal("Summe: 1.234,50\u00a0€|1.234,5 Artikel", Text(context, "shop", "total", amount) + "|" + Text(context, "shop", "count", amount), "German overlay");
+        await context.SetLocaleAsync("ar-EG");
+        Assert.Equal("١٬٢٣٤٫٥ عناصر", Text(context, "shop", "count", amount), "Egyptian Arabic digits");
+        await context.SetLocaleAsync("en");
+        Assert.Equal("Sum: €1,234.50|1,234.5 things", Text(context, "shop", "total", amount) + "|" + Text(context, "shop", "count", amount), "borrowed currency data");
+        await context.SetLocaleAsync("fr");
+        string missing;
+        try { missing = Text(context, "shop", "total", amount); }
+        catch (TranslationFormatException exception) { missing = exception.Message; }
+        Assert.Equal("The catalog does not embed currency 'CHF'.", missing, "a currency neither the overlay nor the catalog embeds");
+    }
+
     [Test, DisplayName("an added regional locale falls back to the parent the library declares before the default locale")]
     public async Task AddedLocaleFallsBackToLibraryParent()
     {

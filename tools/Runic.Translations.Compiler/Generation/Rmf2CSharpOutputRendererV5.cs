@@ -578,11 +578,13 @@ internal static class Rmf2CSharpOutputRendererV5
     {
         writer.Line("new global::Runic.Translations.CompiledTranslationLocale[]"); writer.Line("{"); writer.Indent();
         int index = 0;
+        // A catalog whose messages use :currency, :unit or compact notation reads its embedded CLDR data with them.
+        string formats = CatalogFormatData(project) is null ? "" : ", Formats";
         foreach (Rmf2LocaleV5 locale in project.Locales.OrderBy(item => item.Tag, StringComparer.Ordinal))
         {
             writer.Line("global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateDeferredLocale(" + GenerationSupport.CSharpString(locale.Tag) + ", " +
                 (locale.FallbackTag is null ? "null" : GenerationSupport.CSharpString(locale.FallbackTag)) +
-                ", static () => global::Runic.Translations.Generated.GeneratedCatalogSupport.ReadValues(Locale" + index++ + "Data)),");
+                ", static () => global::Runic.Translations.Generated.GeneratedCatalogSupport.ReadValues(Locale" + index++ + "Data" + formats + ")),");
         }
         writer.Unindent(); writer.Line("},");
     }
@@ -615,6 +617,11 @@ internal static class Rmf2CSharpOutputRendererV5
     // JIT out of catalog creation, and a process builds only the locales it formats.
     private static void WriteLocaleData(GenerationWriter writer, Rmf2ProjectV5 project, Rmf2V5DefinitionTable table)
     {
+        if (CatalogFormatData(project) is { } formats)
+        {
+            writer.Line("private static global::System.ReadOnlySpan<byte> Formats => " + GenerationSupport.CSharpString(formats) + "u8;");
+            writer.Blank();
+        }
         int index = 0;
         foreach (Rmf2LocaleV5 locale in project.Locales.OrderBy(item => item.Tag, StringComparer.Ordinal))
         {
@@ -638,11 +645,17 @@ internal static class Rmf2CSharpOutputRendererV5
                 json.WriteEndArray();
             }
             // Text stays readable UTF-8; the C# literal escapes what a string literal cannot hold.
-            writer.Line("private static global::System.ReadOnlySpan<byte> Locale" + index++ + "Data => " +
+            writer.Line("private static global::System.ReadOnlySpan<byte> Locale" + index + "Data => " +
                 GenerationSupport.CSharpString(System.Text.Encoding.UTF8.GetString(stream.ToArray())) + "u8;");
             writer.Blank();
+            index++;
         }
     }
+
+    // The CLDR currency, unit and compact data of the catalog's messages for its languages (D055.4), as the ESM runtime
+    // embeds it: one selection for every locale, which a pack or overlay without its own borrows.
+    private static string? CatalogFormatData(Rmf2ProjectV5 project) =>
+        project.FormatData(project.Locales.Select(item => item.Tag), project.Locales.SelectMany(item => item.DirectResources).Select(resource => resource.Message));
 
     private static void WriteMessage(GenerationWriter writer, Rmf2MessageV5 message, string contentLocale, string suffix)
     {

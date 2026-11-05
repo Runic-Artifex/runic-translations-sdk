@@ -267,6 +267,17 @@ public sealed class CompiledTranslationCatalog
         }
     }
 
+    /// <summary>
+    /// The CLDR currency, unit and compact data the compiler embedded for the catalog (every message of a generated catalog
+    /// carries the same), which a pack or overlay message without its own borrows; null when the catalog has none.
+    /// </summary>
+    internal static Rmf2FormatData? FormatData(LocaleValues values)
+    {
+        foreach (CompiledTextMessage? message in values.Messages)
+            if (message?.Rmf2V5?.FormatData is { } data) return data;
+        return null;
+    }
+
     /// <summary>The values of a declared locale with its fallback chain applied, both arrays from the same data.</summary>
     internal LocaleValues GetResolved(string canonicalLocale) => Resolve(canonicalLocale);
 

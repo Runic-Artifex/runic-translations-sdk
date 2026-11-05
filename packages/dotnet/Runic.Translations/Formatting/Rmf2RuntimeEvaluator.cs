@@ -11,24 +11,33 @@ namespace Runic.Translations;
 internal sealed class Rmf2ResolvedFormat
 {
     private readonly Dictionary<string, TextArgument> _options;
-    internal Rmf2ResolvedFormat(string function, Dictionary<string, TextArgument> options)
+    // dynamicCode: the currency or unit option came from a variable, so it must be in the catalog's declared set.
+    internal Rmf2ResolvedFormat(string function, Dictionary<string, TextArgument> options, bool dynamicCode = false)
     {
-        Function = function; _options = options;
+        Function = function; _options = options; DynamicCode = dynamicCode;
         foreach (var option in options) ValidateOption(function, option.Key, option.Value);
-        if (function == "number" && (MinimumDigits > MaximumDigits || MaximumDigits > (String("style", "decimal") == "percent" ? 4 : 6)))
+        if (function is "number" or "unit" && (MinimumDigits > MaximumDigits || MaximumDigits > (String("style", "decimal") == "percent" ? 4 : 6)))
             throw new ArgumentException("Number precision must satisfy 0 <= minimum <= maximum <= 6 (decimal) or 4 (percent).", nameof(options));
+        if (function == "number" && Compact && String("style", "decimal") == "percent")
+            throw new ArgumentException("Compact notation does not apply to percentages.", nameof(options));
+        if (function is "currency" or "unit" && !options.ContainsKey(function))
+            throw new ArgumentException("':" + function + "' requires the '" + function + "' option.", nameof(options));
     }
     internal string Function { get; }
+    internal bool DynamicCode { get; }
+    private static readonly System.Buffers.SearchValues<char> UnitCharacters = System.Buffers.SearchValues.Create("abcdefghijklmnopqrstuvwxyz0123456789-");
+    private bool Compact => String("runic:notation", "standard") == "compact";
     /// <summary>The <c>u:dir</c> option (<c>ltr</c>, <c>rtl</c>, <c>auto</c> or <c>inherit</c>), or null.</summary>
     internal string? Direction => _options.TryGetValue("u:dir", out var value) ? Get<string>(value) : null;
     private int MinimumDigits => Integer("minimumFractionDigits", 0);
     private int MaximumDigits => Integer("maximumFractionDigits", String("style", "decimal") == "percent" ? 4 : 6);
     private string String(string name, string fallback) => _options.TryGetValue(name, out var value) ? Get<string>(value) : fallback;
     private int Integer(string name, int fallback) => _options.TryGetValue(name, out var value) ? checked((int)Get<long>(value)) : fallback;
+    private int? Optional(string name) => _options.TryGetValue(name, out var value) ? checked((int)Get<long>(value)) : null;
     internal static void ValidateOption(string function, string name, TextArgument value)
     {
         if (value.Type != Rmf2RuntimeValidation.OptionType(function, name)) throw new ArgumentException("Option has the wrong carrier.", nameof(value));
-        if (name is "minimumFractionDigits" or "maximumFractionDigits")
+        if (name is "minimumFractionDigits" or "maximumFractionDigits" or "fractionDigits")
         {
             if (Get<long>(value) is < 0 or > 6) throw new ArgumentException("Fraction digit option is outside 0..6.", nameof(value));
             return;
@@ -39,8 +48,16 @@ internal sealed class Rmf2ResolvedFormat
             (_, "u:dir") => text is "ltr" or "rtl" or "auto" or "inherit",
             ("string" or "runic:boolean", "select") => text == "exact",
             ("integer" or "number", "select") => text is "exact" or "plural" or "ordinal",
-            ("integer" or "number", "useGrouping") => text is "auto" or "always" or "never" or "min2",
+            ("integer" or "number" or "currency" or "unit", "useGrouping") => text is "auto" or "always" or "never" or "min2",
             ("number", "style") => text is "decimal" or "percent",
+            ("number", "runic:notation") => text is "standard" or "compact",
+            ("number", "runic:compactDisplay") => text is "short" or "long",
+            // Well-formed here; whether the catalog embeds the currency or unit is checked when formatting.
+            ("currency", "currency") => text.Length == 3 && text.AsSpan().IndexOfAnyExceptInRange('A', 'Z') < 0,
+            ("currency", "currencyDisplay") => text is "symbol" or "narrowSymbol" or "code" or "name",
+            ("currency", "currencySign") => text is "standard" or "accounting",
+            ("unit", "unit") => text.Length is > 0 and <= 64 && text.AsSpan().IndexOfAnyExcept(UnitCharacters) < 0,
+            ("unit", "unitDisplay") => text is "short" or "long" or "narrow",
             ("date" or "time" or "datetime", "style") => text is "iso" or "short" or "medium" or "long" or "full",
             ("datetime", "timeZone") => Rmf2LocalizedFormats.IsTimeZone(text),
             ("runic:uuid", "style") => text is "d" or "n" or "b" or "p",
@@ -57,44 +74,60 @@ internal sealed class Rmf2ResolvedFormat
     /// percentages, dates and times; lists and relative-time patterns use the plural, list and relative-time data of
     /// <paramref name="contentLocale"/>.
     /// </summary>
-    internal string Format(TextArgument value, string locale, string contentLocale, bool isolateItems = false)
+    internal string Format(TextArgument value, string locale, string contentLocale, bool isolateItems = false, Rmf2FormatData? formatData = null)
     {
         string style = String("style", "iso");
         switch (Function)
         {
             case "string": return Get<string>(value);
             case "runic:boolean": return Get<bool>(value) ? "true" : "false";
-            case "integer": return Rmf2NumberFormats.Integer(Get<long>(value), String("useGrouping", "auto"), locale);
+            case "integer": return Rmf2NumberFormats.Integer(Get<long>(value), String("useGrouping", "auto"), locale, formatData);
             case "number":
             {
                 // The visible decimal (percent multiplied by 100, rounded halfExpand), then the pinned number formats.
                 bool percent = String("style", "decimal") == "percent";
                 VisibleDecimal visible = VisibleDecimal.FromNumber(Number(value), percent, MinimumDigits, MaximumDigits);
                 string grouping = String("useGrouping", "auto");
-                return percent ? Rmf2NumberFormats.Percent(visible, grouping, locale) : Rmf2NumberFormats.Decimal(visible, grouping, locale);
+                if (Compact)
+                    return Rmf2CldrFormats.Compact(Number(value), String("runic:compactDisplay", "short"), grouping, Optional("minimumFractionDigits"), Optional("maximumFractionDigits"), locale, formatData);
+                return percent ? Rmf2NumberFormats.Percent(visible, grouping, locale, formatData) : Rmf2NumberFormats.Decimal(visible, grouping, locale, formatData);
             }
+            case "currency":
+                return Rmf2CldrFormats.Currency(Number(value), String("currency", ""), String("currencyDisplay", "symbol"), String("currencySign", "standard"),
+                    String("useGrouping", "auto"), Optional("fractionDigits"), locale, formatData, DynamicCode);
+            case "unit":
+                return Rmf2CldrFormats.Unit(Number(value), String("unit", ""), String("unitDisplay", "short"), String("useGrouping", "auto"), MinimumDigits, MaximumDigits, locale, formatData, DynamicCode);
             case "date": return style == "iso" ? Get<DateOnly>(value).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
-                : Rmf2LocalizedFormats.Date(Get<DateOnly>(value), style, locale);
+                : Rmf2LocalizedFormats.Date(Get<DateOnly>(value), style, locale, formatData);
             case "time": return style == "iso" ? Get<TimeOnly>(value).ToString("HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture)
-                : Rmf2LocalizedFormats.Time(Get<TimeOnly>(value), style, locale);
+                : Rmf2LocalizedFormats.Time(Get<TimeOnly>(value), style, locale, formatData);
             case "datetime":
                 // iso is always UTC; the localized styles use the timeZone option, the host's local zone by default.
                 return style == "iso" ? Get<DateTimeOffset>(value).ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'", CultureInfo.InvariantCulture)
-                    : Rmf2LocalizedFormats.DateTime(Get<DateTimeOffset>(value), style, String("timeZone", "local"), locale);
+                    : Rmf2LocalizedFormats.DateTime(Get<DateTimeOffset>(value), style, String("timeZone", "local"), locale, formatData);
             case "runic:uuid": return Get<Guid>(value).ToString(String("style", "d"), CultureInfo.InvariantCulture);
             case "runic:list": return TextListFormatter.Format(Get<IReadOnlyList<string>>(value), String("type", "conjunction"), String("style", "long"), contentLocale, isolateItems);
-            case "runic:relative-time": return TextRelativeTimeFormatter.Format(Rmf2RuntimeDecimal.Parse(Rmf2RuntimeDecimal.Canonical(Number(value))), String("unit", "day"), String("numeric", "always"), contentLocale, locale);
+            case "runic:relative-time": return TextRelativeTimeFormatter.Format(Rmf2RuntimeDecimal.Parse(Rmf2RuntimeDecimal.Canonical(Number(value))), String("unit", "day"), String("numeric", "always"), contentLocale, locale, formatData);
             default: throw new TranslationFormatException("Unknown v5 formatter.");
         }
     }
     /// <summary>
     /// The number that plural, ordinal and exact selection compare. <c>:number</c>
-    /// selects on its displayed digits; <c>:integer</c> and relative time display
-    /// the canonical typed value. The typed value itself is never changed.
+    /// selects on its displayed digits; <c>:integer</c> and relative time use
+    /// the canonical typed value. The typed value itself is never changed. A compact
+    /// <c>:number</c> selects on its compact-rounded value at full scale, with the compact
+    /// exponent as <paramref name="exponent"/> (CLDR's <c>e</c>), rounded as it displays in
+    /// <paramref name="formattingLocale"/>.
     /// </summary>
-    internal VisibleDecimal SelectionOperand(TextArgument value) => Function == "number"
-        ? VisibleDecimal.FromNumber(Number(value), String("style", "decimal") == "percent", MinimumDigits, MaximumDigits)
-        : value.Type == TextArgumentType.Int ? VisibleDecimal.FromInteger(Get<long>(value)) : VisibleDecimal.Canonical(Get<decimal>(value));
+    internal VisibleDecimal SelectionOperand(TextArgument value, string formattingLocale, Rmf2FormatData? formatData, out int exponent)
+    {
+        exponent = 0;
+        if (Function == "number" && Compact)
+            return Rmf2CldrFormats.CompactOperand(Number(value), String("runic:compactDisplay", "short"), Optional("minimumFractionDigits"), Optional("maximumFractionDigits"), formattingLocale, formatData, out exponent);
+        return Function == "number"
+            ? VisibleDecimal.FromNumber(Number(value), String("style", "decimal") == "percent", MinimumDigits, MaximumDigits)
+            : value.Type == TextArgumentType.Int ? VisibleDecimal.FromInteger(Get<long>(value)) : VisibleDecimal.Canonical(Get<decimal>(value));
+    }
     internal static T Get<T>(TextArgument value) => value.TryGetValue(out T? result) ? result! : throw new TranslationFormatException("Argument does not contain its declared carrier.");
     internal static decimal Number(TextArgument value) => value.Type == TextArgumentType.Int ? Get<long>(value) : Get<decimal>(value);
     internal static string Canonical(TextArgument value) => value.Type switch
@@ -144,8 +177,13 @@ internal static class Rmf2RuntimeEvaluator
             Value underlying = Resolve(expression.Operand, expression.ValueType);
             if (expression.Function is null) return underlying;
             var options = new Dictionary<string, TextArgument>(StringComparer.Ordinal);
-            foreach (var option in expression.OptionArray) options.Add(option.Name, Resolve(option.Value, Rmf2RuntimeValidation.OptionType(expression.Function, option.Name)).Carrier);
-            return new(underlying.Carrier, new(expression.Function, options));
+            bool dynamicCode = false;
+            foreach (var option in expression.OptionArray)
+            {
+                options.Add(option.Name, Resolve(option.Value, Rmf2RuntimeValidation.OptionType(expression.Function, option.Name)).Carrier);
+                dynamicCode |= option.Name == expression.Function && option.Value.Kind is "input" or "local";
+            }
+            return new(underlying.Carrier, new(expression.Function, options, dynamicCode));
         }
         internal string MarkupOption(CompiledRmf2Option option) => Rmf2ResolvedFormat.Canonical(Resolve(option.Value, option.Value.Kind == "number-literal" ? TextArgumentType.Number : TextArgumentType.String).Carrier);
     }
@@ -183,7 +221,7 @@ internal static class Rmf2RuntimeEvaluator
         try
         {
             var context = new Context(message, arguments);
-            CompiledRmf2Variant variant = Select(message, context, locale);
+            CompiledRmf2Variant variant = Select(message, context, locale, formatting);
             var nodes = new List<LocalizedTextContentNode>(); int length = 0;
             foreach (var node in variant.NodeArray)
             {
@@ -203,7 +241,7 @@ internal static class Rmf2RuntimeEvaluator
                 {
                     Value? expression = node.Expression is null ? null : context.Expression(node.Expression);
                     string text = expression is null ? node.Value
-                        : Rmf2Bidi.Isolate(expression.Format.Format(expression.Carrier, formatting, locale, isolation), expression.Format, messageRightToLeft, formatting, isolation);
+                        : Rmf2Bidi.Isolate(expression.Format.Format(expression.Carrier, formatting, locale, isolation, message.EffectiveFormatData), expression.Format, messageRightToLeft, formatting, isolation);
                     AddLength(text.Length);
                     nodes.Add(new(LocalizedTextContentNodeKind.Text, text, null, node.Expression?.AnnotationArray));
                 }
@@ -219,7 +257,7 @@ internal static class Rmf2RuntimeEvaluator
         catch (TimeZoneNotFoundException exception) { throw new TranslationFormatException(exception.Message, exception); }
         catch (InvalidTimeZoneException exception) { throw new TranslationFormatException("The time zone of a v5 date-time is invalid.", exception); }
     }
-    private static CompiledRmf2Variant Select(CompiledRmf2Message message, Context context, string locale)
+    private static CompiledRmf2Variant Select(CompiledRmf2Message message, Context context, string locale, string formatting)
     {
         var values = new TextArgument[message.SelectorArray.Length];
         // Numeric selectors compare exact keys and CLDR categories with the same
@@ -230,11 +268,11 @@ internal static class Rmf2RuntimeEvaluator
         {
             var selector = message.SelectorArray[index]; Value value = context.Resolve(selector.Value, selector.Type); values[index] = value.Carrier;
             if (values[index].Type is not (TextArgumentType.Int or TextArgumentType.Number)) { canonical[index] = Rmf2ResolvedFormat.Canonical(values[index]).Normalize(NormalizationForm.FormC); continue; }
-            VisibleDecimal operand = value.Format.SelectionOperand(value.Carrier);
+            VisibleDecimal operand = value.Format.SelectionOperand(value.Carrier, formatting, message.EffectiveFormatData, out int exponent);
             canonical[index] = operand.ToCanonicalString();
             if (selector.Function != "exact")
             {
-                PluralOperands operands = operand.Operands;
+                PluralOperands operands = PluralOperands.FromVisible(operand.Coefficient, operand.Scale, exponent);
                 categories[index] = GeneratedLocaleData.SelectPlural(locale, selector.Function == "ordinal", in operands)
                     ?? throw new TranslationFormatException("V5 plural selection is not supported for locale '" + locale + "'.");
             }
@@ -321,7 +359,7 @@ internal static class Rmf2Bidi
     // booleans are ASCII; text from the caller has no known direction.
     private static Direction Of(string function, bool messageRightToLeft, string formattingLocale) => function switch
     {
-        "integer" or "number" or "date" or "time" or "datetime" => IsRightToLeft(formattingLocale) ? Direction.RightToLeft : Direction.LeftToRight,
+        "integer" or "number" or "currency" or "unit" or "date" or "time" or "datetime" => IsRightToLeft(formattingLocale) ? Direction.RightToLeft : Direction.LeftToRight,
         "runic:relative-time" or "runic:list" => messageRightToLeft ? Direction.RightToLeft : Direction.LeftToRight,
         "runic:uuid" or "runic:boolean" => Direction.LeftToRight,
         _ => Direction.Unknown,

@@ -88,6 +88,7 @@ const lines = [
   "Plural selection, relative-time and list patterns are generated from the pinned CLDR subset; the ESM backend does not delegate them to host `Intl` data.",
   "Relative time formats its number as `:number` does by default, in the formatting locale and from the pinned CLDR number formats (symbols, grouping and digits), so it is exact too.",
   "Numbers and percentages use the pinned CLDR number formats of the formatting locale in both backends; localized dates and times use platform data, so they stay semantic.",
+  "`:currency`, `:unit` and compact notation (`:number runic:notation=compact`) use pinned CLDR currency, unit and compact data for every locale in the table, so they are exact too; the compiler embeds only the currencies, units and compact styles a catalog uses, for the catalog's languages (see [currencies, units and compact numbers](rmf2.md#currencies-units-and-compact-numbers)).",
   "For the CLDR locales the JavaScript engines have no date data for, listed in `specs/translations/corpus/localized-format-engine-coverage.json`, ESM dates use the nearest CLDR parent the engine has (else `en-US`) and .NET its ICU's fallback, so their dates can differ between the backends.",
   "Cardinal and ordinal rules use all CLDR operands of the displayed number, after percent scaling, rounding and minimum fraction digits.",
   "",

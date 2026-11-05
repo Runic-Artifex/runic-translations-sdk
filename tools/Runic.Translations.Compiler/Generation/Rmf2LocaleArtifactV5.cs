@@ -13,6 +13,13 @@ internal static class Rmf2LocaleArtifactV5
 {
     internal const int ArtifactVersion = 5;
 
+    /// <summary>The <c>formatData</c> of a locale's artifact (<see cref="Rmf2ProjectV5.FormatData"/> with number records), or null.</summary>
+    internal static string? FormatData(Rmf2ProjectV5 project, Rmf2LocaleV5 locale, IEnumerable<Rmf2TranslationV5>? resources = null)
+    {
+        IReadOnlyList<Rmf2TranslationV5> items = (resources ?? locale.ResolvedResources).ToList();
+        return project.FormatData(items.Select(item => item.ContentLocale).Append(locale.Tag), items.Select(item => item.Message), numbers: true);
+    }
+
     internal static TranslationGeneratedOutput Render(Rmf2ProjectV5 project, string localeTag) => Render(project, localeTag, null);
 
     /// <summary>
@@ -68,6 +75,16 @@ internal static class Rmf2LocaleArtifactV5
             writer.WriteEndObject();
             writer.WritePropertyName("markupContract");
             using (JsonDocument markup = JsonDocument.Parse(project.MarkupContract)) markup.RootElement.WriteTo(writer);
+            // The CLDR data the messages need (D055.4): number records when they format numbers, dates or times, so an
+            // overlay that adds a language formats correctly on a catalog without it, and currency, unit and compact data
+            // when they use those functions.
+            // An overlay pack carries only the data of its own messages.
+            if (FormatData(project, locale, only is null ? null : locale.ResolvedResources.Where(item => only.Contains(item.Key))) is { } formats)
+            {
+                writer.WritePropertyName("formatData");
+                using JsonDocument data = JsonDocument.Parse(formats);
+                data.RootElement.WriteTo(writer);
+            }
             writer.WriteEndObject();
         }
         return new TranslationGeneratedOutput(TranslationGeneratedOutputKind.LocaleJson,
