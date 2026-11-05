@@ -2,12 +2,12 @@ import { test, expect } from "bun:test";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, symlinkSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { nearestProjectManifest, projectManifest, serverLaunch, sourceWatchRoots, toolLaunch, xliffExportArguments, xliffImportDryRunArguments } from "../src/server.js";
+import { importArguments, nearestProjectManifest, projectManifest, serverLaunch, sourceWatchRoots, statusArguments, toolLaunch, xliffExportArguments, xliffImportDryRunArguments } from "../src/server.js";
 import { previewDescription, renderedPreviewHtml, resolvePreviewHtml } from "../src/preview.js";
 import type { Preview } from "../src/preview.js";
 import { PreviewSession, sampleChoices, type PreviewHost, type PreviewState, type Samples } from "../src/preview-session.js";
 import { ForwardedWatchers, type DisposableLike, type WatcherLike } from "../src/watchers.js";
-import { OneTimeNotice, errorSummary, statusPresentation, type DocumentInfo } from "../src/status.js";
+import { OneTimeNotice, coverageLine, errorSummary, localeStatus, parseStatus, statusHtml, statusPresentation, type DocumentInfo } from "../src/status.js";
 
 class MockWatcher implements WatcherLike<string> {
   readonly created: ((uri: string) => void)[] = [];
@@ -304,4 +304,30 @@ test("the VSIX validates runic.json against the schema copied from the specifica
   const readme = readFileSync(join(here, "README.md"), "utf8");
   for (const command of manifest.contributes.commands as { title: string }[])
     expect(readme).toContain(command.title.replace(/^Runic: /, ""));
+});
+
+test("coverage for the file's locale comes from runic-translations status, with its threshold and completeness policy", () => {
+  const stdout = JSON.stringify({ protocol: "runic.commandline/1", command: "status", success: true, exitCode: 0, payloadType: "runic.translations.status/1",
+    payload: { belowThreshold: false, projects: [{ project: "runic.json", catalog: "app", baseLocale: "en", messages: 40, reviewFile: "app.review.json", locales: [
+      { locale: "en", translated: 40, fallback: 0, missing: 0, coverage: 100, belowThreshold: false },
+      { locale: "de-CH", fallbackLocale: "de", translated: 30, fallback: 5, missing: 5, coverage: 87.5, stale: 1, minimumCoverage: 90, belowThreshold: true, completeness: "warning" },
+    ] }] }, fault: null, diagnostics: [] });
+  const result = parseStatus(stdout);
+  const swiss = localeStatus(result, "DE-ch")!;
+  expect(coverageLine(swiss)).toBe("Coverage de-CH: 87.5% (30 translated, 5 from de, 5 missing, 1 stale), below its minimum 90%; missing translations are warnings");
+  const info: DocumentInfo = { project: "file:///w/runic.json", catalog: "app", baseLocale: "en", locale: "de-CH" };
+  const presentation = statusPresentation("running", info, undefined, swiss);
+  expect(presentation.text).toBe("$(globe) Runic: app · de-CH 87.5%");
+  expect(presentation.tooltip).toContain("Coverage de-CH: 87.5%");
+  const html = statusHtml(result);
+  expect(html).toContain("<th scope=\"col\">Stale</th>"); expect(html).toContain('class="below"'); expect(html).toContain("warning"); expect(html).not.toContain("<script");
+  expect(() => parseStatus(JSON.stringify({ success: false, payloadType: null, payload: null, fault: { message: "The catalog does not compile." } }))).toThrow("The catalog does not compile.");
+  expect(statusArguments("/w/runic.json")).toEqual(["status", "--project", "/w/runic.json", "--format", "json"]);
+});
+
+test("catalog import runs the tool's importer: a dry run first, then the import, optionally overwriting", () => {
+  expect(importArguments("/w/runic.json", "resx", "/w/Strings resx/Strings.resx", { dryRun: true }))
+    .toEqual(["import", "--from", "resx", "/w/Strings resx/Strings.resx", "--project", "/w/runic.json", "--dry-run"]);
+  expect(importArguments("/w/runic.json", "i18next", "/w/locales", { dryRun: false, overwrite: true }))
+    .toEqual(["import", "--from", "i18next", "/w/locales", "--project", "/w/runic.json", "--overwrite"]);
 });

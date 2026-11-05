@@ -106,7 +106,17 @@ export function xliffImportDryRunArguments(project: string, source: string): str
   return ["xliff", "import", "--project", project, "--source", source, "--dry-run"];
 }
 
-/** Runs the same local tool as the language server with other arguments (the `xliff` commands). */
+/** `runic-translations status --format json` for one project: coverage per locale. */
+export function statusArguments(project: string): string[] {
+  return ["status", "--project", project, "--format", "json"];
+}
+
+/** `runic-translations import --from resx|i18next <source>`, first with `--dry-run`; `--overwrite` replaces existing text. */
+export function importArguments(project: string, from: "resx" | "i18next", source: string, options: { dryRun: boolean; overwrite?: boolean }): string[] {
+  return ["import", "--from", from, source, "--project", project, ...(options.overwrite ? ["--overwrite"] : []), ...(options.dryRun ? ["--dry-run"] : [])];
+}
+
+/** Runs the same local tool as the language server with other arguments (the `xliff`, `status` and `import` commands). */
 export function toolLaunch(root: string, dotnet: string, assembly: string, toolArguments: readonly string[]): ServerLaunch {
   if (assembly) {
     const path = resolve(root, assembly);
