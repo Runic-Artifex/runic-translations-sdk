@@ -52,13 +52,16 @@ let snapshot: WorkspaceSnapshot = {
     mf2Document("fr/dashboard_welcome.mf2", "fr", ".input {$name :string}\nBienvenue, {$name}"),
     mf2Document("fr/files_selected.mf2", "fr", ".input {$count :integer select=plural}\n.match $count\none {{Un fichier sélectionné}}\n* {{{$count} fichiers sélectionnés}}"),
   ],
-  diagnostics: [],
+  // The SDK's per-message diagnostics carry their row: a stale review state (RTR0090).
+  diagnostics: [
+    { id: "RTR0090", severity: "warning", message: "The 'de' translation of 'common_save' (approved) predates a change to its source; review it, then record it with runic-translations review mark --key common_save --locale de --state <state>.", path: "de/common_save.mf2", line: 1, column: 1, endLine: 1, endColumn: 10, key: "common_save", locale: "de" },
+  ],
   success: true,
   review: {
-    path: ".runic-translations/customer-product.editor-state.json",
+    path: "customer-product.review.json",
     revision: "mock-review-1",
     entries: [
-      { key: "common_save", locale: "de", state: "approved", sourceFingerprint: "outdated", samples: {} },
+      { key: "common_save", locale: "de", state: "approved", sourceFingerprint: "sha256:outdated", samples: {}, stale: true },
       { key: "dashboard_welcome", locale: "en", state: "needs-review", note: "Check the tone.", samples: { name: "Ada" } },
     ],
     terminology: [{ source: "Save", preferred: "Speichern", locale: "de", note: "Use for action buttons." }],

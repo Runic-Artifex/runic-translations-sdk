@@ -29,10 +29,14 @@ internal sealed class ManifestModel
 
     private Dictionary<string, Dictionary<string, TranslationPolicy>>? _localePolicies;
 
+    /// <summary>Every <c>validation</c> policy reads as <c>allow</c> (<see cref="TranslationCompilerOptions.BaseLocaleOnly"/>).</summary>
+    internal bool Relaxed { get; set; }
+
     /// <summary>The policy of a <c>validation</c> member for a locale: the locale entry's own value, else the project's.</summary>
     /// <remarks>Called per message and locale, so the locale overrides are indexed once, on first use after the manifest is read.</remarks>
     internal TranslationPolicy Policy(string locale, string member)
     {
+        if (Relaxed) return TranslationPolicy.Allow;
         if (_localePolicies is null)
         {
             var policies = new Dictionary<string, Dictionary<string, TranslationPolicy>>(System.StringComparer.OrdinalIgnoreCase);
