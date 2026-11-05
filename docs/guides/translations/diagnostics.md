@@ -131,8 +131,13 @@ an older runtime runs it.
 ## RTR0031
 
 Built-in formatter does not support the content locale. A plural, ordinal,
-relative-time or list formatter is used for a locale the built-in data does not cover.
-Use a supported locale or avoid the formatter for that locale.
+relative-time or list formatter is used for a locale that the pinned CLDR data
+does not cover. Every CLDR locale is covered, including regional and script
+variants such as `pt-PT`, `sr-Latn` and `zh-TW`; a locale with CLDR data but no
+plural rules of its own (`agq`, `rw`, `mi`) uses CLDR's root rule, which selects
+`other`. So the diagnostic only reports languages without CLDR data, such as
+`tlh`; see [capabilities](capabilities.md). Use a supported locale or avoid the
+formatter for that locale.
 
 ## RTR0041
 

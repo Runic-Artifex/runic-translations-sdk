@@ -8,7 +8,11 @@ public enum UnsupportedLocalePolicy
 {
     /// <summary>Accept only a declared locale.</summary>
     Exact,
-    /// <summary>Strip BCP 47 subtags before using the declared graph and default.</summary>
+    /// <summary>
+    /// Match an undeclared locale with CLDR likely subtags and parent locales, as <see cref="LocaleNegotiation"/> does
+    /// (<c>zh-TW</c> to <c>zh-Hant</c>, <c>de-CH</c> to <c>de-DE</c>), else strip BCP 47 subtags while the likely script
+    /// agrees, then use the default locale.
+    /// </summary>
     ParentsThenDefault,
     /// <summary>Map unsupported tags directly to the default locale.</summary>
     Default,

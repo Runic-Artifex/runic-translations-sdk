@@ -223,12 +223,19 @@ internal sealed class Rmf2V1CorpusTests
     // new XText(null) still compiles, in both digests. Every other output is unchanged.
     // Re-pinned for merging T1a/T1b with main (TE, TC, TD): the context constructor sits before the base-text
     // accessor summaries and the References factories, in both digests.
+    // Re-pinned for merging TB (#131) with TC and TE: runtime.js embeds the catalog's CLDR tables (likely subtags,
+    // parents, aliases, plural selectors, lists, relative time) and negotiates locales, and the C# registration adds
+    // SupportedLocales, ResolveLocale and CreateManagerFromPreferences[Async], in both digests.
+    // Re-pinned for merging TB with T1a/T1b: the registration has both SupportedLocales/ResolveLocale and Registration,
+    // and runtime.js prefers, among equal maximized locales, the one nearest in the preference's CLDR chain
+    // (en-US-posix to en-US before en), in both digests.
     // Re-pinned for T1g (0.9): the generated base ABI check is a call, TranslationsCompatibility.EnsureRuntimeAbi(1),
     // in both digests.
     // Re-pinned for merging T1g with main (TE, TC, TD) through T1a/T1b, in both digests.
+    // Re-pinned for merging TB (#131) with T1g (#132), in both digests.
     // Re-pinned for T1c (0.9): the shared locale channel in runtime.js, server.js and transport.js, in both digests.
-    private const string EncodedOutputDigest = "00a1b3aab47fa4d06bdafd69840be91b99c84bb688b6e1aff342b32aedb8326a";
-    private const string HiddenEncodedOutputDigest = "e1ce1576e6a145f5cbf0d4fce59c2746a6d2d8c354ff76b3c8ea34b1bf8a0dba";
+    private const string EncodedOutputDigest = "a3546eed56e08d586a1797a0f091b107cbd29d9af377a87844bbf68b150702ab";
+    private const string HiddenEncodedOutputDigest = "b9c69c821f485298819188a77269bde8adf083f87fc428246fa4d4e7b3f9a3eb";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

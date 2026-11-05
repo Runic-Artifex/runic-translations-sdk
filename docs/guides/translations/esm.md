@@ -162,6 +162,41 @@ unless `unsupportedLocale` is `exact`). Framework adapters consume this
 structural contract and create one source per browser root. SSR uses the
 generated server entrypoint rather than a mutable global source.
 
+An undeclared tag resolves with the pinned CLDR likely subtags and parent
+locales, as ICU's `LocaleMatcher` does: both tags are maximized and must share
+the language and script. So `zh-TW` and `zh-HK` resolve to a declared `zh-Hant`,
+`sr-Latn-RS` to `sr-Latn`, `de-CH` to a declared `de-DE`, `es-MX` to `es-419`
+before `es`, `en-AU` to `en-GB` before `en-US`, and `nb`, `nn` and `no` to each
+other (`nn` prefers `no` to `nb`). Deprecated and legacy codes resolve to their
+replacements: `iw` to `he`, `tl` to `fil`, `mo` to `ro`, `sh` to `sr-Latn`.
+Among locales that maximize alike, the one nearest in the tag's CLDR parent
+chain wins, so `en-US-posix` resolves to `en-US` before `en`. Removing subtags still applies, but only within the same likely script
+(`tlh-x-klingon` resolves to `tlh`): a locale of another script never matches,
+so `zh-TW` falls to `baseLocale` when only `zh` (Simplified) is declared, and
+`sr-Latn-RS` when only Cyrillic `sr` is. A tag of the undetermined language
+(`und`, `und-DE`) matches nothing unless it is declared. POSIX names such as
+`de_DE` are accepted wherever a tag is.
+
+`negotiateLocale(preferences)` takes an ordered preference list, such as
+`navigator.languages`, a parsed `Accept-Language` header or the `LANGUAGE`
+environment variable split on `:`, and returns the declared locale for the first
+preference that matches, else `baseLocale`. Because a locale of another script
+never matches, `['sr-Latn-RS', 'en']` chooses `en` from `en` and `sr`. Invalid
+and `und` entries are skipped, and `de_DE.UTF-8` or `de_DE@euro` names `de-DE`.
+The unsupported-locale policy does not apply to it. .NET has the same rules in
+`LocaleNegotiation.Negotiate` and the generated
+`ResolveLocale(IEnumerable<string>)`:
+
+```ts
+import { createLocaleSource, negotiateLocale } from 'virtual:runic-translations/app/runtime';
+
+const source = createLocaleSource({ initialLocale: negotiateLocale(navigator.languages) });
+```
+
+Plural rules, list patterns and relative-time data come from the pinned CLDR
+data. `runtime.js` embeds only the data of the catalog's languages and of the
+languages their CLDR parents link to (`nb` and `nn` with `no`).
+
 A message formats its numbers, percentages, dates and times in the requested
 tag, before it resolves to a catalog locale, when the tag shares the language of
 the message's text: `m.total({ amount }, { locale: 'de-CH' })` shows the `de`

@@ -15,11 +15,11 @@ internal sealed class PluralRuleTests
         string path = Path.Combine(RepositoryRoot(), "specs", "translations", "cldr", "runic-subset-48.2.json");
         using JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(path));
         int checkedSamples = 0;
-        foreach (JsonElement locale in document.RootElement.GetProperty("locales").EnumerateArray())
-        {
-            string tag = locale.GetProperty("tag").GetString()!;
-            foreach (bool ordinal in new[] { false, true })
-                foreach (JsonProperty rule in locale.GetProperty(ordinal ? "ordinal" : "cardinal").EnumerateObject())
+        foreach (bool ordinal in new[] { false, true })
+            foreach (JsonProperty locale in document.RootElement.GetProperty("plurals").GetProperty(ordinal ? "ordinal" : "cardinal").EnumerateObject())
+            {
+                string tag = locale.Name;
+                foreach (JsonProperty rule in locale.Value.EnumerateObject())
                 {
                     string text = rule.Value.GetString()!;
                     int at = text.IndexOf('@', StringComparison.Ordinal);
@@ -36,10 +36,17 @@ internal sealed class PluralRuleTests
                         }
                     }
                 }
-        }
-        Assert.True(checkedSamples > 500, "Too few CLDR samples were checked: " + checkedSamples);
-        PluralOperands one = Operands("1");
-        Assert.Equal(null, GeneratedLocaleData.SelectPlural("pl", false, in one));
+            }
+        Assert.True(checkedSamples > 10000, "Too few CLDR samples were checked: " + checkedSamples);
+        PluralOperands one = Operands("1"), two = Operands("2"), zero = Operands("0");
+        Assert.Equal(null, GeneratedLocaleData.SelectPlural("tlh", false, in one));
+        // CLDR looks plural rules up by truncation: pt-PT has its own rules, pt-AO and pt-BR use pt's.
+        Assert.Equal("other", GeneratedLocaleData.SelectPlural("pt-PT", false, in zero));
+        Assert.Equal("one", GeneratedLocaleData.SelectPlural("pt-AO", false, in zero));
+        Assert.Equal("one", GeneratedLocaleData.SelectPlural("pt_BR", false, in zero));
+        Assert.Equal("few", GeneratedLocaleData.SelectPlural("sr-Latn-RS", false, in two));
+        Assert.Equal("other", GeneratedLocaleData.SelectPlural("zh-TW", false, in one));
+        Assert.Equal("other", GeneratedLocaleData.SelectPlural("nn", true, in one));
     }
 
     [Test, DisplayName("visible decimal applies percent halfExpand rounding and fraction padding")]
@@ -81,7 +88,11 @@ internal sealed class PluralRuleTests
         Assert.Equal("one", TextMessageSelector.SelectPlural(0.5m, "da", false));
         // Relative time agrees with the digits it displays.
         Assert.Equal("in 1 day", TextRelativeTimeFormatter.Format(1m, "day", "always", "en"));
-        Assert.Equal("in 1.0 days", TextRelativeTimeFormatter.Format(1.0m, "day", "always", "en"));
+        // As :number displays it by default: trailing zeros are dropped, separators are the locale's.
+        Assert.Equal("in 1 day", TextRelativeTimeFormatter.Format(1.0m, "day", "always", "en"));
+        Assert.Equal("in 1.5 days", TextRelativeTimeFormatter.Format(1.50m, "day", "always", "en"));
+        Assert.Equal("in 1,000 days", TextRelativeTimeFormatter.Format(1000m, "day", "always", "en"));
+        Assert.Equal("vor 1,5 Tagen", TextRelativeTimeFormatter.Format(-1.5m, "day", "always", "de"));
     }
 
     private static string Visible(decimal value, bool percent, int minimum, int maximum)
