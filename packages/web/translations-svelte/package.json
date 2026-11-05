@@ -52,6 +52,9 @@
     "test:inline-browser": "node test/verify-inline-ssr.mjs && node test/verify-inline-hydration.mjs && node test/verify-document-hydration.mjs",
     "test:document-example": "node test/verify-document-example.mjs"
   },
+  "dependencies": {
+    "esm-env": "^1.2.2"
+  },
   "peerDependencies": {
     "svelte": ">=5.57.1 <6"
   },

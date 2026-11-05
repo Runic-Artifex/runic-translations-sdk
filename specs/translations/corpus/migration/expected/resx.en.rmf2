@@ -1,0 +1,20 @@
+# The application name.
+title = Shop
+
+settings {
+  # The page heading.
+  heading = Settings
+}
+# Shown on the start page. {0} is the user's name.
+Greeting = Hello, {$arg0}!
+ItemsInFolder = {$arg0 :number minimumFractionDigits=0 maximumFractionDigits=0} items in {$arg1}
+Progress = {$arg0 :number style=percent minimumFractionDigits=0 maximumFractionDigits=0} done
+DueDate = Due {$arg0}
+Errors_NotFound = The file '{$arg0}' was not found.
+Braces = Use \{ and \} around a placeholder, as in \{0\}.
+Padded = {{  Indented}}
+TwoLines =
+  {{First line
+  Second line}}
+Welcome = Welcome, {$userName}.
+Save = Save

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <data name="Greeting" xml:space="preserve">
+    <value>Hallo, {0}!</value>
+    <comment>Translator comments are not descriptions.</comment>
+  </data>
+  <data name="ItemsInFolder" xml:space="preserve">
+    <value>{0:N0} Elemente in {1}</value>
+  </data>
+  <data name="Errors.NotFound" xml:space="preserve">
+    <value>Die Datei „{0}“ wurde nicht gefunden.</value>
+  </data>
+  <data name="Save" xml:space="preserve">
+    <value>{2} speichern</value>
+  </data>
+  <data name="OnlyGerman" xml:space="preserve">
+    <value>Nur auf Deutsch</value>
+  </data>
+</root>

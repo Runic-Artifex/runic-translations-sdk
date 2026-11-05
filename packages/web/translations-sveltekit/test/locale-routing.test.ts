@@ -8,6 +8,7 @@ import {
   localeFromLocals,
   parseAcceptLanguage,
   requestedLocaleFromLocals,
+  textDirection,
 } from "../src/translations/index.js";
 
 const routing = createLocaleRouting({
@@ -123,6 +124,30 @@ describe("Runic SvelteKit request integration", () => {
       httpOnly: true,
       sameSite: "lax",
     }));
+  });
+
+  test("replaces %runic.dir% with the locale's writing direction", async () => {
+    const page = '<html lang="%runic.locale%" dir="%runic.dir%"><body>Setup</body></html>';
+    const render = async (handle: Handle, pathname: string) => {
+      const { event } = requestEvent(pathname);
+      const response = await handle({ event, resolve: async (_event, options) => new Response(await options?.transformPageChunk?.({ html: page, done: true })) });
+      return response.text();
+    };
+    const rtl = createLocaleRouting({ locales: ["en", "ar"] as const, baseLocale: "en", baseLocalePath: "unprefixed" });
+    expect(await render(createLocaleHandle(rtl), "/ar/setup")).toContain('<html lang="ar" dir="rtl">');
+    expect(await render(createLocaleHandle(rtl), "/setup")).toContain('<html lang="en" dir="ltr">');
+    expect(await render(createLocaleHandle(rtl, { direction: () => "rtl" }), "/setup")).toContain('dir="rtl"');
+    expect(await render(createLocaleHandle(rtl, { htmlDirectionToken: false }), "/ar/setup")).toContain('<html lang="ar" dir="%runic.dir%">');
+    expect(await render(createLocaleHandle(rtl, { htmlLanguageToken: false }), "/ar/setup")).toContain('<html lang="%runic.locale%" dir="rtl">');
+    expect(textDirection("he-IL")).toBe("rtl");
+    expect(textDirection("en")).toBe("ltr");
+    // Extension and private-use subtags are never the script (the same rule as translations-svelte and the runtime).
+    for (const [tag, direction] of Object.entries({ "ar-u-nu-latn": "rtl", "en-u-nu-arab": "ltr", "de-x-hebr": "ltr", "x-hebr": "ltr", "und-Hebr": "rtl" }))
+      expect(textDirection(tag), tag).toBe(direction);
+    // The SvelteKit and Svelte copies of the helper stay identical below their header comment.
+    const { readFileSync } = await import("node:fs");
+    const body = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8").split("\n").slice(3).join("\n");
+    expect(body("../src/translations/direction.ts")).toBe(body("../../translations-svelte/src/translations/direction.ts"));
   });
 
   test("redirects non-canonical locale URLs", async () => {

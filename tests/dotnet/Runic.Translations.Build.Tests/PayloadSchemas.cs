@@ -14,6 +14,7 @@ internal static class PayloadSchemas
 {
     internal const string Tool = "translations-tool-v1.schema.json";
     internal const string Support = "translations-support-v1.schema.json";
+    internal const string Status = "translations-status-v1.schema.json";
     internal const string Serve = "translations-serve-v1.schema.json";
 
     internal static void Validate(string schemaFile, JsonElement value)

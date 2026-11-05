@@ -96,6 +96,33 @@ building the service provider. See the [Hosting README](https://github.com/Runic
 `translations.Resolve(reference)` resolves a stored `TranslationReference` of any registered catalog, so validation
 text from a library ViewModel is translated like the application's own.
 
+### WPF control libraries
+
+A control library's `Generic.xaml` names its catalog, and the application shares its context with XAML once at startup:
+
+```csharp
+TranslationSource.UseContext(translations, registration => new WpfInlineRenderer(registration.Rmf2MarkupContract, Navigate));
+TranslationSource.Default = TranslationSource.ForCatalog(AppTextCatalog.CatalogId);
+```
+
+```xml
+<ControlTemplate TargetType="local:DataGridHeader">
+  <TextBlock Text="{rt:Message grid_title, Catalog=acme-grid}"/>
+</ControlTemplate>
+```
+
+`TranslationSource.ForCatalog(id)` returns one source per catalog over the context's manager and the catalog's generated
+readable surface (`XCatalog.Registration` creates it), so library text follows the application's locale switches. Set
+`rt:TranslationProperties.Source="{rt:CatalogSource acme-grid}"` on a template root to use the catalog for every message
+and rich message below it. The library's build checks the keys against its own catalog. See the
+[WPF README](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/packages/dotnet/Runic.Translations.Wpf/README.md#control-libraries).
+
+### Runic.CommandLine apps
+
+`TranslationCommandTextResolver` treats the application's catalog as an overlay of the `runic-command-line` catalog,
+locale-first, and takes a context or a `TranslationContextBuilder` to apply overlays of the framework text, such as French
+packs. See [Translate a Runic.CommandLine app](command-line.md).
+
 ## Requested and resolved locales
 
 Each catalog resolves the requested locale under its own unsupported-locale policy. `translations.Catalogs` reports, per
@@ -158,8 +185,8 @@ the chain. Overlays are checked key by key, not with the library's whole-catalog
 
 So an overlay written for one library release keeps working with the next.
 
-**Precedence is locale-first.** For each locale of the requested locale's chain, the overlays are tried, then the
-library, and only then the next locale. A German user therefore sees the library's German text even where the
+**Precedence is locale-first.** For each locale of the requested locale's chain, the overlays are tried in the order
+they were added (the first that has the key wins), then the library, and only then the next locale. A German user therefore sees the library's German text even where the
 application overrides the English one.
 
 **Added locales.** `addedLocales` declares locales the library lacks. An added locale falls back to `fallbackLocale`
@@ -174,7 +201,13 @@ library's chain. Two overlays that add one locale with different fallbacks are a
 **Fallback copies.** A pack built with relaxed completeness (`"translationCompleteness": "allow"`) contains copies of
 base-locale text for the keys it does not translate. These copies are not application text for a locale the library
 declares: a French user sees the library's English (or the application's own `en` pack), exactly as an English user
-does. They apply only to locales that overlays add.
+does. They apply only to locales that overlays add, at their content locale and only from packs of the chain's locales.
+The web's `installOverlay` follows the same rules, with each install as one overlay
+(see [ESM overlays](esm.md#overlays)).
+
+Overlay packs are also how an application ships translation updates without a release; see
+[Ship translation updates without a release](ota.md). The web runtime has the same overlays (`installOverlay`,
+`installLocalePack`; see [ESM overlays](esm.md#overlays)).
 
 A malformed pack, or one that names another catalog or locale, fails the switch with a `TranslationPackException`,
 like an external pack. `RefreshAsync` reloads overlay packs; other contexts of the same builder get the reloaded text on

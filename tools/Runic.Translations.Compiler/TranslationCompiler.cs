@@ -10,7 +10,7 @@ public static partial class TranslationCompiler
     private static readonly string[] Mf2ProjectMembers = { "$schema", "schemaVersion", "catalog", "code", "baseLocale", "locales", "validation", "runtime", "sourceRoots", "markup", "pseudoLocales" };
     private static readonly string[] CodeMembers = { "namespace", "className", "visibility", "referenceFallbackText" };
     private static readonly string[] LocaleMembers = { "tag", "fallback", "validation" };
-    private static readonly string[] RuntimeMembers = { "unsupportedLocale", "missingKey" };
+    private static readonly string[] RuntimeMembers = { "unsupportedLocale", "missingKey", "bidiIsolation" };
 
     /// <summary>Compiles a convention-based Runic project whose messages are standard MF2 files.</summary>
     /// <remarks>
@@ -340,6 +340,18 @@ public static partial class TranslationCompiler
             }
         }
         else if (missing is not null) diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "missingKey must be a string.", source, missing.Value.Span);
+        JsonProperty? bidi = property.Value.Property("bidiIsolation");
+        if (bidi is not null && bidi.Value.Kind == JsonKind.String)
+        {
+            switch (bidi.Value.Text)
+            {
+                case "default": model.BidiIsolation = TranslationBidiIsolation.Default; break;
+                case "on": model.BidiIsolation = TranslationBidiIsolation.On; break;
+                case "off": model.BidiIsolation = TranslationBidiIsolation.Off; break;
+                default: diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Unknown bidiIsolation value; use \"default\", \"on\" or \"off\".", source, bidi.Value.Span); break;
+            }
+        }
+        else if (bidi is not null) diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "bidiIsolation must be a string.", source, bidi.Value.Span);
     }
 
     private static void ValidateFallbackGraph(ManifestModel model, DiagnosticBag diagnostics)

@@ -51,7 +51,14 @@ internal sealed class ToolOperationResult
     internal void AddTranslationDiagnostic(TranslationsToolDiagnostic diagnostic)
     {
         if (_translationDiagnostics.Count < MaximumDiagnostics) _translationDiagnostics.Add(diagnostic);
+        if (_allTranslationDiagnostics.Count < MaximumReportedDiagnostics) _allTranslationDiagnostics.Add(diagnostic);
     }
+
+    private const int MaximumReportedDiagnostics = 100_000;
+    private readonly List<TranslationsToolDiagnostic> _allTranslationDiagnostics = new();
+
+    /// <summary>Every translation diagnostic, not only the first ones the payload carries; for <c>validate --sarif</c>.</summary>
+    internal IReadOnlyList<TranslationsToolDiagnostic> AllTranslationDiagnostics => _allTranslationDiagnostics;
 
     /// <summary>One <c>path(line,column,endLine,endColumn): severity RTRnnnn: message</c> line per diagnostic.</summary>
     internal static string FormatHuman(IReadOnlyList<TranslationsToolDiagnostic> diagnostics)

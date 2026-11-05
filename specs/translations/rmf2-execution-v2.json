@@ -30,6 +30,18 @@
           "values": [
             "exact"
           ]
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
+          ]
         }
       }
     },
@@ -58,6 +70,18 @@
             "always",
             "never",
             "min2"
+          ]
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
           ]
         }
       }
@@ -116,6 +140,18 @@
           "values": [],
           "minimum": 0,
           "maximum": 6
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
+          ]
         }
       }
     },
@@ -135,6 +171,18 @@
             "long",
             "full"
           ]
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
+          ]
         }
       }
     },
@@ -153,6 +201,18 @@
             "medium",
             "long",
             "full"
+          ]
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
           ]
         }
       }
@@ -185,6 +245,18 @@
           ],
           "pattern": "^[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z0-9_+-]+)*$",
           "maximumLength": 64
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
+          ]
         }
       }
     },
@@ -203,6 +275,18 @@
             "b",
             "p"
           ]
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
+          ]
         }
       }
     },
@@ -217,6 +301,18 @@
           "default": "exact",
           "values": [
             "exact"
+          ]
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
           ]
         }
       }
@@ -249,6 +345,18 @@
             "always",
             "auto"
           ]
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
+          ]
         }
       }
     },
@@ -276,6 +384,18 @@
             "long",
             "short",
             "narrow"
+          ]
+        },
+        "u:dir": {
+          "inputType": "string",
+          "literal": true,
+          "dynamic": false,
+          "default": "the function's",
+          "values": [
+            "ltr",
+            "rtl",
+            "auto",
+            "inherit"
           ]
         }
       }
@@ -313,7 +433,7 @@
     "always": "separators whenever the integer part is longer than the primary group",
     "auto": "separators once the integer part has at least the content locale family's CLDR minimumGroupingDigits digits above the primary group (1 unless pinned)",
     "min2": "as auto with at least 2 digits above the primary group",
-    "platform": "group and minus symbols and group sizes come from platform globalization",
+    "symbols": "decimal, group and minus symbols, group sizes and digits come from the formatting locale's pinned CLDR number formats",
     "conformance": "corpus/rmf2-grouping-conformance.json"
   },
   "listFormat": {
@@ -327,13 +447,29 @@
     "conformance": "corpus/rmf2-list-conformance.json"
   },
   "formattingLocale": {
-    "rule": "numbers, percentages, dates and times format in the requested locale, without extensions and private-use subtags, when its language subtag equals the content locale's and both have the same implied script (the explicit script, else the CLDR likely script of the language and region); otherwise in the content locale",
-    "contentLocale": "plural, ordinal, list and relative-time data, and the locale reported on content, stay on the message's effective content locale",
+    "rule": "numbers, percentages, dates and times format in the requested locale, without extensions and private-use subtags, when its language subtag equals the content locale's and both have the same implied script (the explicit script, else the pinned CLDR likely script of the language and region); otherwise in the content locale",
+    "script": "an explicit script that is the likely script of the language and region is dropped for a language whose CLDR likely subtags for the language and its regions (the language-only and language-region keys) name one script only (de-Latn-CH formats as de-CH, en-Latn-US as en-US; sr-Cyrl-BA and zh-Hans-HK stay)",
+    "numberingExtension": "-u-nu-latn is kept where the formatting locale's default numbering system is not latn; every other extension is dropped",
+    "contentLocale": "plural, ordinal, list and relative-time patterns, and the locale reported on content, stay on the message's effective content locale; the number in relative time formats in the formatting locale, as :number does",
     "requested": "the canonical tag the caller asked for, before it was resolved to a catalog locale"
   },
+  "bidi": {
+    "strategy": "Unicode MessageFormat 2's default bidi strategy (LDML 48 Handling Bidirectional Text): with msgdir the direction of the message's content locale and dir the direction of a placeholder, a left-to-right placeholder stays bare when msgdir is left to right and its u:dir is absent or inherit, else it is wrapped in U+2066 LRI and U+2069 PDI; a right-to-left placeholder is wrapped in U+2067 RLI and PDI; one of unknown direction in U+2068 FSI and PDI",
+    "isolation": "runtime.bidiIsolation in runic.json: on always, off never, and default per format call, when the requested locale, the catalog locale it resolved to or the message's content locale is right to left (default is not resolved at compile time, so right-to-left overlays and packs of left-to-right catalogs are isolated); an explicit u:dir of ltr, rtl or auto isolates its placeholder in every mode",
+    "placeholderDirection": "u:dir ltr, rtl, auto (unknown) or inherit (msgdir), a literal only; without it, integer, number, date, time and datetime have the formatting locale's direction, runic:relative-time and runic:list the content locale's, runic:uuid and runic:boolean are left to right, and string is unknown; a functionless local alias keeps its u:dir and an explicit function replaces it",
+    "listItems": "when isolation applies, each runic:list item is wrapped in U+2068 FSI and U+2069 PDI before the CLDR list pattern joins the items; contextual conjunction rules read the raw item",
+    "localeDirection": "right to left when the explicit script, else the CLDR likely script of the tag, is one of CLDR's right-to-left scripts"
+  },
+  "numberFormat": {
+    "source": "pinned CLDR 48.2 numbers of the formatting locale, along its CLDR parent chain; CLDR root without data",
+    "numberingSystem": "defaultNumberingSystem, or latn with -u-nu-latn",
+    "never": "useGrouping=never writes the locale's minus sign and digits without group separators, for :integer and :number alike",
+    "zero": "a visible decimal of zero has no sign: -0.0001 with maximumFractionDigits=2 is 0 and -0.00001 as a percent is 0%, where Intl.NumberFormat writes -0 and -0%",
+    "comparison": "corpus/localized-format-divergences.json"
+  },
   "percent": {
-    "pattern": "the formatting locale's positive and negative percent patterns from platform globalization: prefix, digits and suffix",
-    "symbols": "the locale's percent sign and minus sign; a space in the pattern is U+00A0",
+    "pattern": "the formatting locale's pinned CLDR percent pattern in its numbering system, verbatim: prefix, digits and suffix; without a negative subpattern the minus sign precedes the positive prefix",
+    "symbols": "the locale's pinned percent sign, minus sign and digits",
     "conformance": "corpus/rmf2-date-percent-conformance.json"
   },
   "dateTimeFormat": {
@@ -343,7 +479,9 @@
     "timeStyles": "short is the CLDR short time; medium, long and full are the CLDR medium time, because a wall-clock time has no zone name",
     "datetime": "the date in the style, a space, and the time in the style, both in the timeZone",
     "timeZone": "local (default) is the host's current time zone, or the zone a request-scoped resolver supplies (ESM); utc is UTC; any other value is an IANA time zone ID; a zone the platform cannot resolve (unknown, or missing from its zone data) is an evaluation error naming the zone, never a silent UTC",
-    "digits": "Latin digits, as for numbers",
+    "digits": "the digits of the formatting locale's default numbering system (Latin with -u-nu-latn), as for numbers",
+    "pinnedNames": ".NET writes the pinned CLDR format-context weekday for an EEEE pattern and the pinned flexible day period for a B time pattern",
+    "engineCoverage": "ESM formats a locale its engine has no data for with the nearest CLDR parent the engine has, else en-US",
     "spaces": "U+202F is written as U+0020; a run of one bidirectional mark (U+200E, U+200F, U+061C) is written once",
     "conformance": "corpus/rmf2-date-percent-conformance.json"
   },

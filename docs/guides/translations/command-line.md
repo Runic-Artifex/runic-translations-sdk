@@ -60,13 +60,21 @@ capitalizing the letter after it (`TranslationCommandTextResolver.GetMessageName
 | `hints.RCLI5000` | `hints.RCLI5000` |
 | `commands.greet` (a `DescriptionKey`) | `commands.greet` |
 
-It then tries, in order:
+Framework text comes from the adapter's `runic-command-line` catalog, which
+ships English and German. Your catalog overlays it: a message in your catalog,
+found through `ITranslationSnapshot.TryGetKey`, overrides the framework text,
+such as `help { usage = Synopsis }`. Precedence is locale-first. For each locale
+of the requested locale's fallback chain (`de-CH`, then `de`, then the default
+locale), your message is tried before the framework's, and only then the next
+locale. So when German is requested, the built-in German `Aufruf` beats an
+English-only `help.usage` override that your catalog reaches only by falling
+back to English (possible when `translationCompleteness` is relaxed), while a
+German override in your catalog beats the built-in German. A key that neither
+catalog has in any locale returns nothing, and Runic.CommandLine writes its
+English text.
 
-1. Your catalog, through `ITranslationSnapshot.TryGetKey`. A message here
-   overrides the framework text, such as `help { usage = Synopsis }`.
-2. The built-in English and German framework text, in the locale of your
-   current snapshot. Other locales use English.
-3. Nothing: Runic.CommandLine writes its English text.
+Before 0.9.0 your catalog always came first, so an English override could hide
+the built-in German text.
 
 The built-in catalogs have no `faults.RCLI4001` message. Runic.CommandLine shows
 the more specific `diagnostics.prompt-*` text for that fault, and would show a
@@ -88,9 +96,54 @@ diagnostics {
 }
 ```
 
-Create the resolver from an `ITranslationManager` to follow locale switches,
-from an `ITranslationSnapshot` for a fixed locale, or with no arguments to use
-only the built-in text in the invocation culture.
+## Choosing the locale
+
+| Constructor | Locale |
+| --- | --- |
+| `new TranslationCommandTextResolver()` | The invocation culture; built-in text only. |
+| `new TranslationCommandTextResolver(snapshot)` | The snapshot's requested locale. |
+| `new TranslationCommandTextResolver(manager)` | The manager's current locale; follows switches. |
+| `new TranslationCommandTextResolver(context, CliTextCatalog.CatalogId)` | The `ITranslationContext`'s requested locale; follows switches. |
+| `new TranslationCommandTextResolver(builder, CliTextCatalog.CatalogId)` | The invocation culture: one context per culture is built from the `TranslationContextBuilder`. |
+
+Runic.CommandLine formats values in `CommandApp.Culture`. With a snapshot,
+manager or context, the text uses that object's locale instead. When the
+invocation culture names another language, such as a manager created with the
+default `en` and `Culture = de`, the resolver keeps the translation locale, so
+the text stays in one language, and reports it once for that resolver: a
+`warning:` line on standard error, which reaches the user of a shipped console
+app without a trace listener, and a `Trace.TraceWarning`. Create the manager from the invocation
+culture, as above, or pass a `TranslationContextBuilder` so the text always follows
+the culture:
+
+```csharp
+TextResolver = new TranslationCommandTextResolver(
+    TranslationContext.CreateBuilder().Add(CliTextCatalog.Registration),
+    CliTextCatalog.CatalogId),
+```
+
+## Other languages
+
+The built-in catalog has English and German. To add French, or to replace
+framework text with packs that ship outside the app, register the framework
+catalog in a context and attach an overlay to it. The overlay is checked key by
+key (see [catalog composition](composition.md)), and only the keys it has are used;
+every other key falls back along the framework catalog's chain:
+
+```csharp
+TranslationContextBuilder catalogs = TranslationContext.CreateBuilder()
+    .Add(CliTextCatalog.Registration)
+    .Add(TranslationCommandTextResolver.CatalogRegistration)
+    .AddOverlay(TranslationOverlay.FromPacks(TranslationCommandTextResolver.CatalogId, packs, [new TranslationOverlayLocale("fr")]));
+TextResolver = new TranslationCommandTextResolver(catalogs, CliTextCatalog.CatalogId),
+```
+
+The packs are the `runic-command-line.fr.locale-v5.json` artifacts that
+`runic-translations generate --emit-json` writes for a project whose catalog is
+`runic-command-line`; their messages use the framework message names
+(`help.usage`, `diagnostics.unknownOption`) and the inputs of the built-in messages. Your own catalog can still
+translate framework keys too, as above. A French message in your catalog and one
+in the overlay are both French, so your catalog wins.
 
 ## Packages and versions
 
