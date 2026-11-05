@@ -159,7 +159,7 @@ internal sealed class Rmf2DatePercentConformanceTests
 
     // The documented tolerance: platform ICU versions may write U+0020, U+00A0 or U+202F for the same space, and U+0027
     // or U+2019 for the same apostrophe (the de-CH group separator). Everything else must match exactly.
-    private static bool Matches(string expected, string actual) =>
+    internal static bool Matches(string expected, string actual) =>
         string.Equals(expected, actual, StringComparison.Ordinal) || string.Equals(Tolerant(expected), Tolerant(actual), StringComparison.Ordinal);
     private static string Tolerant(string value) => value.Replace('\u00A0', ' ').Replace('\u202F', ' ').Replace('\u2019', '\'');
 }

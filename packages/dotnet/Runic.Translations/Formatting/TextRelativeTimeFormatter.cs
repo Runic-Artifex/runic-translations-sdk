@@ -1,6 +1,5 @@
 using System;
 using System.ComponentModel;
-using System.Globalization;
 
 namespace Runic.Translations;
 
@@ -13,7 +12,7 @@ internal static class TextRelativeTimeFormatter
 
     /// <summary>Formats a relative duration with the pinned CLDR patterns of a locale.</summary>
     /// <remarks>
-    /// The number is formatted as <c>:number</c> formats it by default (the locale's digits, separators and grouping,
+    /// The number is formatted as <c>:number</c> formats it by default (the locale's pinned digits, separators and grouping,
     /// at most six fraction digits), and the pattern is chosen by the plural category of that displayed number.
     /// <c>numeric=auto</c> uses CLDR's relative-type text ("yesterday", "now", "next month") for whole values from
     /// -2 to 2 where the locale has one.
@@ -39,18 +38,8 @@ internal static class TextRelativeTimeFormatter
         string category = TextMessageSelector.Select(visible, locale, false);
         int patterns = offset + (value < 0 ? 0 : 6);
         string pattern = data[patterns + Array.IndexOf(Categories, category)] ?? data[patterns + 5]!;
-        return pattern.Replace("{0}", FormatNumber(absolute, visible, locale), StringComparison.Ordinal);
-    }
-
-    // As :number with its default options: grouping auto, zero to six fraction digits, halfExpand.
-    private static string FormatNumber(decimal absolute, VisibleDecimal visible, string locale)
-    {
-        CultureInfo culture;
-        try { culture = CultureInfo.GetCultureInfo(locale); }
-        catch (CultureNotFoundException) { culture = CultureInfo.InvariantCulture; }
-        int digits = Math.Max(1, visible.Coefficient.ToString(CultureInfo.InvariantCulture).Length - visible.Scale);
-        string pattern = (Rmf2ResolvedFormat.Groups("auto", digits, locale, culture.NumberFormat) ? "#,0" : "0") + ".######";
-        return decimal.Round(absolute, 6, MidpointRounding.AwayFromZero).ToString(pattern, culture);
+        // As :number with its default options: grouping auto, zero to six fraction digits, halfExpand.
+        return pattern.Replace("{0}", Rmf2NumberFormats.Decimal(visible, "auto", locale), StringComparison.Ordinal);
     }
 
     private static TranslationFormatException Unsupported(string locale) =>

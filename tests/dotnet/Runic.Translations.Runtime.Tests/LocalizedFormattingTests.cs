@@ -112,7 +112,15 @@ internal sealed class LocalizedFormattingTests
     [Arguments("zh-Hant", "zh", "zh-Hant")]
     [Arguments("pa", "pa-PK", "pa")]
     [Arguments("uz", "uz-Cyrl", "uz")]
-    [Arguments("de", "de-Latn-CH", "de")]
+    [Arguments("de", "de-Latn-CH", "de-CH")]
+    [Arguments("de", "de-Latn", "de")]
+    [Arguments("de", "de-Cyrl-CH", "de")]
+    [Arguments("ar", "ar-EG-u-nu-latn", "ar-EG-u-nu-latn")]
+    [Arguments("ar", "ar-u-nu-latn", "ar")]
+    [Arguments("ar", "ar-EG-u-nu-arab", "ar-EG")]
+    [Arguments("ar-EG", "ar-EG-u-ca-islamic-nu-latn", "ar-EG-u-nu-latn")]
+    [Arguments("fa", "fa-u-nu-latn", "fa-u-nu-latn")]
+    [Arguments("fa", "fa-IR-x-nu-latn", "fa-IR")]
     [Arguments("en", "en-US-u-ca-buddhist", "en-US")]
     [Arguments("ja", "ja-JP-u-ca-japanese-nu-jpan", "ja-JP")]
     [Arguments("en", "en-GB-x-private", "en-GB")]
@@ -124,7 +132,7 @@ internal sealed class LocalizedFormattingTests
         Assert.Equal(expected, number.FormatContent([new("value", 1m)], requested).FormattingLocale);
     }
 
-    [Test, DisplayName("localized dates, times and percentages fall back to invariant data under InvariantGlobalization")]
+    [Test, DisplayName("localized dates and times fall back to invariant data under InvariantGlobalization; numbers use pinned CLDR data")]
     public void InvariantGlobalization()
     {
         // The mode is fixed at startup, so the probe below runs in a child process of this test application.
@@ -179,8 +187,11 @@ internal sealed class LocalizedFormattingTests
         var instant = Single(TextArgumentType.DateTime, "datetime", "de", new CompiledRmf2Option("style", Text("short")), new CompiledRmf2Option("timeZone", Text("utc")));
         Assert.Equal("11/04/2026 20:30", instant.Format([new("value", Instant)], "de"));
         var percent = Single(TextArgumentType.Number, "number", "de", new CompiledRmf2Option("style", Text("percent")));
-        Assert.Equal(Rmf2Percent(invariant), percent.Format([new("value", 0.5m)], "de-CH"));
-        static string Rmf2Percent(CultureInfo culture) => culture.NumberFormat.PercentPositivePattern switch { 0 => "50\u00A0%", 1 => "50%", 2 => "%50", _ => "%\u00A050" };
+        // Numbers and percentages come from pinned CLDR data, which needs no platform locale data.
+        Assert.Equal("50%", percent.Format([new("value", 0.5m)], "de-CH"));
+        Assert.Equal("50\u00A0%", percent.Format([new("value", 0.5m)], "de"));
+        var number = Single(TextArgumentType.Number, "number", "fa");
+        Assert.Equal("\u06F1\u066C\u06F2\u06F3\u06F4\u066B\u06F5", number.Format([new("value", 1234.5m)], "fa"));
     }
 
     private const string English = """

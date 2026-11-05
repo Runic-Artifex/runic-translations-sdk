@@ -233,8 +233,8 @@ internal sealed class Rmf2V1CorpusTests
     // in both digests.
     // Re-pinned for merging T1g with main (TE, TC, TD) through T1a/T1b, in both digests.
     // Re-pinned for merging TB (#131) with T1g (#132), in both digests.
-    private const string EncodedOutputDigest = "a3546eed56e08d586a1797a0f091b107cbd29d9af377a87844bbf68b150702ab";
-    private const string HiddenEncodedOutputDigest = "b9c69c821f485298819188a77269bde8adf083f87fc428246fa4d4e7b3f9a3eb";
+    private const string EncodedOutputDigest = "58d1503dd02a3f5bfe8ab9f60c4be90b88f9b305178dd5d0bcc9ce60cc73963e";
+    private const string HiddenEncodedOutputDigest = "c5fedcf9805c245e3fc55c75b8ed8e67bb658b0c05883c47f67855df57a0a245";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]
