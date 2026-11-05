@@ -10,6 +10,7 @@ using Runic.CommandLine.Spectre;
 using Runic.Translations.Tooling;
 using Runic.Translations.Authoring;
 using Runic.Translations.Compiler;
+using Runic.Translations.Compiler.Generation;
 using Runic.Translations.Internal;
 
 namespace Runic.Translations.Tool;
@@ -488,7 +489,31 @@ internal static class Program
         IReadOnlyList<ToolArtifact> artifacts;
         try
         {
-            artifacts = CompilerOutputAdapter.Render(compilation.Project, invocation.Emission);
+            if (invocation.ContractPath is null) artifacts = CompilerOutputAdapter.Render(compilation.Project, invocation.Emission);
+            else
+            {
+                Rmf2ShippedContractV5 shipped;
+                try { shipped = Rmf2ShippedContractV5.Parse(File.ReadAllBytes(invocation.ContractPath)); }
+                catch (Exception exception) when (exception is FormatException or IOException or UnauthorizedAccessException)
+                {
+                    result.AddDiagnostic(ToolCodes.UnsupportedOutput, "unsupported-output", "--contract " + invocation.ContractPath + ": " + exception.Message, CommandDiagnosticSeverity.Error);
+                    return Failed;
+                }
+                if (!string.Equals(shipped.Catalog, compilation.Project.Id, StringComparison.Ordinal))
+                {
+                    result.AddDiagnostic(ToolCodes.UnsupportedOutput, "unsupported-output", $"--contract {invocation.ContractPath} is of catalog '{shipped.Catalog}', not '{compilation.Project.Id}'.", CommandDiagnosticSeverity.Error);
+                    return Failed;
+                }
+                var skipped = new List<Rmf2ContractPackSkipV5>();
+                artifacts = CompilerOutputAdapter.RenderForContract(compilation.Project, shipped, skipped, out IReadOnlyList<string> omittedLocales,
+                    out IReadOnlyList<string> droppedLocales);
+                // What the shipped release keeps showing its own text for.
+                result.WriteOutputLine($"contract: the shipped release is taken to accept the message features of {Rmf2ReleaseFeaturesV5.Release(shipped.FeatureLevel)}, the newest its artifact uses; messages that need a later release are left out.");
+                foreach (string locale in omittedLocales) result.WriteOutputLine($"contract: {locale}: the shipped release does not declare this locale; no pack written.");
+                foreach (string locale in droppedLocales) result.WriteOutputLine($"contract: {locale}: the current sources no longer declare this locale; the shipped release keeps its own text for it.");
+                foreach (Rmf2ContractPackSkipV5 skip in skipped)
+                    result.WriteOutputLine($"contract: {skip.Locale} {skip.Key}: {skip.Reason}" + (skip.Detail is null ? "." : $" ({skip.Detail})."));
+            }
         }
         catch (ToolDiagnosticException exception)
         {
@@ -625,6 +650,8 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
         {
             "init" => Program.ExecuteInit(request.Directory!, request.Catalog!, request.DefaultLocale!, request.Namespace!, request.ClassName!, request.Locales ?? [], request.NoStarter),
             "validate" => ExecuteValidate(request),
+            "generate" or "verify" when request.Contract is not null && request.EmitCSharp | request.EmitEsm | !request.EmitJson =>
+                Program.Usage("--contract builds locale-v5 JSON for a shipped release; pass --emit-json and no other --emit-* option.", request.Command == "generate" ? ToolCommand.Generate : ToolCommand.Verify),
             "generate" => ExecuteCompilation(request, ToolCommand.Generate, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitEsm), OmitSourceDiagnostics()),
             "verify" => ExecuteCompilation(request, ToolCommand.Verify, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitEsm), OmitSourceDiagnostics()),
             "schema" => Program.Execute(new ToolInvocation(ToolCommand.Schema, request.Output, ToolEmission.None, null)),
@@ -742,7 +769,7 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
         string? project = string.IsNullOrWhiteSpace(request.Project) ? DefaultProject() : request.Project;
         if (project is null)
             return Program.Usage("no runic.json in the current directory or in ./translations; pass --project <directory>.", command);
-        return Program.Execute(new ToolInvocation(command, output, emission, null, project, OmitSourceDiagnostics: omitSourceDiagnostics, PseudoLocales: request.PseudoLocales));
+        return Program.Execute(new ToolInvocation(command, output, emission, null, project, OmitSourceDiagnostics: omitSourceDiagnostics, PseudoLocales: request.PseudoLocales, ContractPath: request.Contract));
     }
 
     // Runic.Translations.Build sets this when its source generator reports the same compilation

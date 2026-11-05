@@ -313,7 +313,8 @@ locale the library lacks, and for translation updates downloaded at run time
 (`installLocalePack`, which reads downloaded pack bytes with the same limits
 and integrity callback as `decodeLocalePack`; its `locale` option, the locale
 the pack was requested for, is required, so a pack from a misrouted URL can
-neither replace another locale's text nor add a locale). The artifact is the `<catalog>.<locale>.locale-v5.json` that
+neither replace another locale's text nor add a locale; see [Ship translation
+updates without a release](ota.md)). The artifact is the `<catalog>.<locale>.locale-v5.json` that
 `runic-translations generate --emit-json` writes for a project with the
 catalog's ID, such as the application's own overlay project. Its contract
 fingerprint is not compared: each message is checked by key against this
