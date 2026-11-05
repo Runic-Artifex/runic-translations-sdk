@@ -1,0 +1,7 @@
+# The application name.
+title = Shop
+
+settings {
+  # The page heading.
+  heading = Settings
+}

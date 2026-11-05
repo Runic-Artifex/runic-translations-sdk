@@ -212,6 +212,24 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.lang), "de", "The interface language did not survive a reload.");
   if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "interface-language-de.png"), fullPage: true });
   assert.deepEqual(pageErrors, [], "The production editor reported uncaught browser errors.");
+
+  // A reload straight after a switch, without waiting for its native save, as a user pressing F5 would. The reload
+  // ends the Bridge connection while the save may still be in flight: that must not surface as an uncaught
+  // `BridgeError: The Bridge is disconnected.`, and the switch must still survive the reload.
+  stage = "interface-language-immediate-reload";
+  const settingsButton = /^(Editor settings|Editoreinstellungen), /;
+  for (const [name, lang, summary] of [
+    ["English", "en", /^Editor settings, .*interface language English$/],
+    ["Deutsch", "de", /^Editoreinstellungen, .*Oberflächensprache Deutsch$/],
+    ["English", "en", /^Editor settings, .*interface language English$/],
+  ]) {
+    await page.getByRole("button", { name: settingsButton }).click();
+    await page.getByRole("menuitemradio", { name, exact: true }).click();
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: summary }).waitFor();
+    assert.equal(await page.evaluate(() => document.documentElement.lang), lang, `The switch to ${name} did not survive an immediate reload.`);
+  }
+  assert.deepEqual(pageErrors, [], "The production editor reported uncaught browser errors after an immediate reload.");
   console.log("hosted-rmf2-ui-ok (real packaged frontend + Views host + editor session)");
 } catch (error) {
   console.error(`hosted-rmf2-ui failed at ${stage}: ${error.stack ?? error}`);

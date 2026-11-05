@@ -115,6 +115,20 @@ public sealed class TranslationContext : ITranslationContext
     }
 
     /// <inheritdoc />
+    public bool TryGetRegistration(string catalogId, [NotNullWhen(true)] out TranslationCatalogRegistration? registration)
+    {
+        ArgumentNullException.ThrowIfNull(catalogId);
+        if (_indexById.TryGetValue(catalogId, out int index))
+        {
+            registration = _entries[index].Registration;
+            return true;
+        }
+
+        registration = null;
+        return false;
+    }
+
+    /// <inheritdoc />
     public ValueTask SetLocaleFromPreferencesAsync(IEnumerable<string> preferredLocales, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(preferredLocales);

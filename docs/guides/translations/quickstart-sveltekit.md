@@ -159,7 +159,7 @@ export const handle = createLocaleHandle(routing, { runWithLocale });
 ```
 
 The handle resolves the locale and stores it in `event.locals.locale`. It
-redirects non-canonical URLs and replaces `%runic.locale%` in `app.html`.
+redirects non-canonical URLs and replaces `%runic.locale%` and `%runic.dir%` in `app.html`.
 Passing the generated `runWithLocale` gives each request its own locale for
 message calls in the rest of the request. It also stores the tag the visitor
 asked for in `event.locals.requestedLocale`, such as `de-CH` when a
@@ -201,8 +201,11 @@ export {};
 In `src/app.html`, change `<html lang="en">` to:
 
 ```html
-<html lang="%runic.locale%">
+<html lang="%runic.locale%" dir="%runic.dir%">
 ```
+
+`%runic.dir%` is `rtl` for a right-to-left locale such as `ar` and `ltr` otherwise;
+see [right-to-left text](bidi.md).
 
 ## 6. Provide the locale to components
 

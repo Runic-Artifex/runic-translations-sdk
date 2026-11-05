@@ -36,7 +36,8 @@ internal static class Rmf2ResourceWriter
     }
 
     /// <summary>Adds an explicit segment path without inferring hierarchy from underscore IDs.</summary>
-    public static byte[] AddMessage(TranslationSource source, IReadOnlyList<string> path, string message)
+    /// <param name="comments">Comment lines written as <c># line</c> directly above the entry, so they document it.</param>
+    public static byte[] AddMessage(TranslationSource source, IReadOnlyList<string> path, string message, IReadOnlyList<string>? comments = null)
     {
         ArgumentNullException.ThrowIfNull(path); ArgumentNullException.ThrowIfNull(message);
         if (path.Count == 0 || path.Any(segment => !Identifier.IsMatch(segment))) throw new TranslationAuthoringException("A message path requires identifier segments.");
@@ -47,6 +48,7 @@ internal static class Rmf2ResourceWriter
         string newline = output.ToString().Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
         if (output.Length > 0 && output[^1] != '\n') output.Append(newline);
         for (int i = 0; i < path.Count - 1; i++) output.Append(' ', i * 2).Append(path[i]).Append(" {").Append(newline);
+        output.Append(Comments(comments, (path.Count - 1) * 2, newline));
         output.Append(Entry(path[^1], message, (path.Count - 1) * 2, newline));
         for (int i = path.Count - 2; i >= 0; i--) output.Append(' ', i * 2).Append('}').Append(newline);
         byte[] result = Utf8.GetBytes(output.ToString()); Require(new TranslationSource(source.Path, result)); return result;
@@ -56,23 +58,24 @@ internal static class Rmf2ResourceWriter
     /// Adds a message inside the last existing group that holds the longest prefix of its path, before that group's
     /// closing brace, creating only the missing inner groups. Without such a group it appends like <see cref="AddMessage"/>.
     /// </summary>
-    public static byte[] InsertMessage(TranslationSource source, IReadOnlyList<string> path, string message)
+    /// <param name="comments">Comment lines written as <c># line</c> directly above the entry, so they document it.</param>
+    public static byte[] InsertMessage(TranslationSource source, IReadOnlyList<string> path, string message, IReadOnlyList<string>? comments = null)
     {
         ArgumentNullException.ThrowIfNull(path); ArgumentNullException.ThrowIfNull(message);
         if (path.Count == 0 || path.Any(segment => !Identifier.IsMatch(segment))) throw new TranslationAuthoringException("A message path requires identifier segments.");
         if (IsDirect(source)) throw new TranslationAuthoringException("A direct MF2 file contains exactly one filename-addressed message.");
         byte[] raw = source.GetUtf8Bytes();
-        if (raw.Length == 0) return AddMessage(source, path, message);
+        if (raw.Length == 0) return AddMessage(source, path, message, comments);
         var document = Require(source);
         if (document.Nodes.Any(node => node.Path.SequenceEqual(path, StringComparer.Ordinal))) throw new TranslationAuthoringException("The resource path already exists.");
         Rmf2ResourceNode? group = document.Nodes
             .Where(node => node.IsGroup && node.Path.Count < path.Count && node.Path.SequenceEqual(path.Take(node.Path.Count), StringComparer.Ordinal))
             .OrderByDescending(static node => node.Path.Count).ThenByDescending(static node => node.Location.StartByte)
             .FirstOrDefault();
-        if (group is null) return AddMessage(source, path, message);
+        if (group is null) return AddMessage(source, path, message, comments);
         int end = Math.Min(group.Location.StartByte + group.Location.LengthBytes, raw.Length);
         int brace = Array.LastIndexOf(raw, (byte)'}', Math.Max(end - 1, 0));
-        if (brace < 0) return AddMessage(source, path, message);
+        if (brace < 0) return AddMessage(source, path, message, comments);
         int lineStart = brace == 0 ? 0 : Array.LastIndexOf(raw, (byte)'\n', brace - 1) + 1;
         string newline = Utf8.GetString(raw).Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
         // The new lines copy the indentation of the group's existing children (siblings must share it), and use the
@@ -86,6 +89,7 @@ internal static class Rmf2ResourceWriter
         int step = Math.Max(depth - groupColumn, 1);
         var output = new StringBuilder();
         for (int i = group.Path.Count; i < path.Count - 1; i++) { output.Append(' ', depth).Append(path[i]).Append(" {").Append(newline); depth += step; }
+        output.Append(Comments(comments, depth, newline));
         output.Append(Entry(path[^1], message, depth, newline));
         for (int i = path.Count - 2; i >= group.Path.Count; i--) { depth -= step; output.Append(' ', depth).Append('}').Append(newline); }
         byte[] result = Replace(raw, [(lineStart, 0, Utf8.GetBytes(output.ToString()))]);
@@ -237,6 +241,17 @@ internal static class Rmf2ResourceWriter
              Rmf2DocumentSyntax.Signature(pair.First.MessageSyntax) != Rmf2DocumentSyntax.Signature(pair.Second.MessageSyntax))))
             throw new TranslationAuthoringException("Formatting would change message content.");
         return result;
+    }
+
+    // Comment lines that document the entry written after them; a line break in a comment starts another line.
+    private static string Comments(IReadOnlyList<string>? comments, int indent, string newline)
+    {
+        if (comments is null || comments.Count == 0) return string.Empty;
+        var output = new StringBuilder();
+        foreach (string comment in comments)
+        foreach (string line in comment.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
+            output.Append(' ', indent).Append(line.Trim().Length == 0 ? "#" : "# " + line.TrimEnd()).Append(newline);
+        return output.ToString();
     }
 
     internal static string Entry(string name, string message, int indent, string newline = "\n")

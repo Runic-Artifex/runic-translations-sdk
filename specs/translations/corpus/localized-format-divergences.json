@@ -1,0 +1,82 @@
+{
+  "cldrVersion": "48.2",
+  "description": "Localized dates and times that .NET and ESM write differently for a CLDR locale both runtimes' ICU has data for, compared with ICU 78 (CLDR 48) on Linux by LocalizedFormatComparisonTests. Every other difference in that comparison is within the corpus tolerance (U+0020/U+00A0/U+202F, U+0027/U+2019). Locales the JavaScript engine has no data for are not compared: Intl falls back to another locale there.",
+  "divergences": [
+    {
+      "locale": "haw",
+      "probe": "date 2026-11-04 short",
+      "dotnet": "4/11/2026",
+      "esm": "4/xi/2026",
+      "reason": "CLDR writes the month of haw's short date in lowercase Roman numerals (d/M/yy with M=romanlow); .NET has no Roman numbering and writes Arabic digits. Node writes the numerals; Bun 1.4 writes Arabic digits, as .NET does.",
+      "engines": [
+        "node"
+      ]
+    },
+    {
+      "locale": "haw",
+      "probe": "date 2026-02-01 short",
+      "dotnet": "1/2/2026",
+      "esm": "1/ii/2026",
+      "reason": "CLDR writes the month of haw's short date in lowercase Roman numerals (d/M/yy with M=romanlow); .NET has no Roman numbering and writes Arabic digits. Node writes the numerals; Bun 1.4 writes Arabic digits, as .NET does.",
+      "engines": [
+        "node"
+      ]
+    },
+    {
+      "locale": "shn-TH",
+      "probe": "date 2026-11-04 short",
+      "dotnet": "พ.ศ. 2569-11-04",
+      "esm": "ပ.သ. 2569-11-04",
+      "reason": "shn-TH's default calendar is the Buddhist one. .NET writes its era with the Thai era name (พ.ศ.), ICU with the Shan one (ပ.သ.); .NET has no per-locale era names for that calendar."
+    },
+    {
+      "locale": "shn-TH",
+      "probe": "date 2026-11-04 medium",
+      "dotnet": "พ.ศ. 2569 ၼူဝ်ႇ 4",
+      "esm": "ပ.သ. 2569 ၼူဝ်ႇ 4",
+      "reason": "shn-TH's default calendar is the Buddhist one. .NET writes its era with the Thai era name (พ.ศ.), ICU with the Shan one (ပ.သ.); .NET has no per-locale era names for that calendar."
+    },
+    {
+      "locale": "shn-TH",
+      "probe": "date 2026-11-04 long",
+      "dotnet": "พ.ศ. 2569 ၼူဝ်ႇဝႅမ်ႇပႃႇ 4",
+      "esm": "ပ.သ. 2569 ၼူဝ်ႇဝႅမ်ႇပႃႇ 4",
+      "reason": "shn-TH's default calendar is the Buddhist one. .NET writes its era with the Thai era name (พ.ศ.), ICU with the Shan one (ပ.သ.); .NET has no per-locale era names for that calendar."
+    },
+    {
+      "locale": "shn-TH",
+      "probe": "date 2026-11-04 full",
+      "dotnet": "พ.ศ. 2569 ၼူဝ်ႇဝႅမ်ႇပႃႇ 4 - ဝၼ်းပုတ်ႉ",
+      "esm": "ပ.သ. 2569 ၼူဝ်ႇဝႅမ်ႇပႃႇ 4 - ဝၼ်းပုတ်ႉ",
+      "reason": "shn-TH's default calendar is the Buddhist one. .NET writes its era with the Thai era name (พ.ศ.), ICU with the Shan one (ပ.သ.); .NET has no per-locale era names for that calendar."
+    },
+    {
+      "locale": "shn-TH",
+      "probe": "date 2026-02-01 short",
+      "dotnet": "พ.ศ. 2569-02-01",
+      "esm": "ပ.သ. 2569-02-01",
+      "reason": "shn-TH's default calendar is the Buddhist one. .NET writes its era with the Thai era name (พ.ศ.), ICU with the Shan one (ပ.သ.); .NET has no per-locale era names for that calendar."
+    },
+    {
+      "locale": "shn-TH",
+      "probe": "date 2026-02-01 medium",
+      "dotnet": "พ.ศ. 2569 ၾႅပ်ႇ 1",
+      "esm": "ပ.သ. 2569 ၾႅပ်ႇ 1",
+      "reason": "shn-TH's default calendar is the Buddhist one. .NET writes its era with the Thai era name (พ.ศ.), ICU with the Shan one (ပ.သ.); .NET has no per-locale era names for that calendar."
+    },
+    {
+      "locale": "shn-TH",
+      "probe": "date 2026-02-01 long",
+      "dotnet": "พ.ศ. 2569 ၾႅပ်ႇဝႃႇရီႇ 1",
+      "esm": "ပ.သ. 2569 ၾႅပ်ႇဝႃႇရီႇ 1",
+      "reason": "shn-TH's default calendar is the Buddhist one. .NET writes its era with the Thai era name (พ.ศ.), ICU with the Shan one (ပ.သ.); .NET has no per-locale era names for that calendar."
+    },
+    {
+      "locale": "shn-TH",
+      "probe": "date 2026-02-01 full",
+      "dotnet": "พ.ศ. 2569 ၾႅပ်ႇဝႃႇရီႇ 1 - ဝၼ်းဢႃးတိတ်ႉ",
+      "esm": "ပ.သ. 2569 ၾႅပ်ႇဝႃႇရီႇ 1 - ဝၼ်းဢႃးတိတ်ႉ",
+      "reason": "shn-TH's default calendar is the Buddhist one. .NET writes its era with the Thai era name (พ.ศ.), ICU with the Shan one (ပ.သ.); .NET has no per-locale era names for that calendar."
+    }
+  ]
+}

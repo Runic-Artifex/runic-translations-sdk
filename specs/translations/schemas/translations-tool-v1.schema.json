@@ -27,7 +27,7 @@
     },
     "interchange": {
       "$ref": "#/$defs/interchange",
-      "description": "The outcome of xliff export, xliff import and review mark; absent for the other commands."
+      "description": "The outcome of xliff export, xliff import, import and review mark; absent for the other commands."
     }
   },
   "$defs": {
@@ -106,15 +106,24 @@
             "export",
             "import",
             "review-mark"
-          ]
+          ],
+          "description": "export (xliff export), import (xliff import and import --from), or review-mark."
         },
         "catalog": {
           "type": "string",
           "description": "The catalog identifier."
         },
+        "format": {
+          "enum": [
+            "xliff",
+            "resx",
+            "i18next"
+          ],
+          "description": "The source format of an import: xliff for xliff import, resx or i18next for import --from."
+        },
         "locale": {
           "type": "string",
-          "description": "The target locale of an import or a review mark."
+          "description": "The target locale of an xliff import or a review mark, or the only locale an import --from read."
         },
         "dryRun": {
           "type": "boolean",
@@ -125,7 +134,7 @@
           "items": {
             "$ref": "#/$defs/interchangeDocument"
           },
-          "description": "The XLIFF documents that export wrote."
+          "description": "The XLIFF documents that export wrote, or the source files that import --from read (units: the entries each file holds, including skipped ones)."
         },
         "units": {
           "$ref": "#/$defs/interchangeCounts"
@@ -216,6 +225,11 @@
           "type": "integer",
           "minimum": 0
         },
+        "kept": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Existing messages whose text differs from the source and that import --from kept (no --overwrite)."
+        },
         "skipped": {
           "type": "integer",
           "minimum": 0
@@ -242,13 +256,19 @@
       ],
       "properties": {
         "key": {
-          "type": "string"
+          "type": "string",
+          "description": "The message key; for a message import --from could not map, the key as the source names it."
+        },
+        "locale": {
+          "type": "string",
+          "description": "The locale of the message, set by import --from, which reads several locales."
         },
         "outcome": {
           "enum": [
             "added",
             "changed",
             "unchanged",
+            "kept",
             "skipped",
             "refused",
             "marked",
@@ -257,7 +277,7 @@
         },
         "code": {
           "type": "string",
-          "description": "The reason, such as XLIFF21-UNTRANSLATED or XLIFF21-SOURCE-CHANGED."
+          "description": "The reason, such as XLIFF21-UNTRANSLATED or XLIFF21-SOURCE-CHANGED; for import --from, codes such as IMPORT-INVALID, IMPORT-NO-BASE, IMPORT-KEY-COLLISION, RESX-NON-STRING or I18NEXT-NESTING."
         },
         "message": {
           "type": "string"

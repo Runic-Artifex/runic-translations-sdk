@@ -206,16 +206,37 @@
         "farewell": "applied:needs-review",
         "greeting": "applied:approved",
         "help_hint": "skipped:XLIFF21-STRUCTURED-SKIPPED",
-        "order_status": "skipped:XLIFF21-STRUCTURED-SKIPPED",
+        "notifications": "skipped:XLIFF21-UNTRANSLATED",
+        "order_status": "skipped:XLIFF21-UNTRANSLATED",
         "search_placeholder": "skipped:XLIFF21-UNTRANSLATED"
       },
       "notices": [],
       "result": null,
       "exportNotices": [
         "REVIEW-STALE /farewell",
-        "XLIFF21-STRUCTURED-MESSAGE /help_hint",
-        "XLIFF21-STRUCTURED-MESSAGE /order_status"
+        "XLIFF21-STRUCTURED-MESSAGE /help_hint"
       ]
+    },
+    {
+      "id": "selectors",
+      "file": "files/selectors.de.xliff",
+      "modeledOn": "Runic export",
+      "description": "Selector units (D055.3): the export with order_status (a select) translated in place with every code kept, and notifications (a plural with an exact 0 and @maxLength) translated by a tool that keeps only the ids of the header <ph> and variant <pc> codes, approved as final.",
+      "units": {
+        "cart_checkout_title": "skipped:XLIFF21-UNTRANSLATED",
+        "cart_checkout_total": "skipped:XLIFF21-UNTRANSLATED",
+        "cart_empty": "applied:translated",
+        "cart_items": "skipped:XLIFF21-UNTRANSLATED",
+        "checkout_note": "skipped:XLIFF21-UNTRANSLATED",
+        "farewell": "applied:needs-review",
+        "greeting": "applied:approved",
+        "help_hint": "skipped:XLIFF21-STRUCTURED-SKIPPED",
+        "notifications": "applied:approved",
+        "order_status": "applied:translated",
+        "search_placeholder": "skipped:XLIFF21-UNTRANSLATED"
+      },
+      "notices": [],
+      "result": "expected/selectors.de.rmf2"
     }
   ]
 }

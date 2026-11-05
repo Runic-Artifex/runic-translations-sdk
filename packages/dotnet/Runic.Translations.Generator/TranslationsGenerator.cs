@@ -341,7 +341,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             TranslationOutputRenderer.RenderRmf2V5CSharpKeys(linked, readableSurface),
             TranslationOutputRenderer.RenderRmf2V5CSharpAccessors(linked, readableSurface, composition),
             TranslationOutputRenderer.RenderRmf2V5CSharpCatalogData(linked),
-            TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(linked, composition, runtimeAbiCall),
+            TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(linked, composition, runtimeAbiCall, readableSurface),
         };
         // The readable surface needs the typed slot types of a runtime that declares
         // TypedSlotBindingsVersion. Without it, keep the encoded files and explain the gap.

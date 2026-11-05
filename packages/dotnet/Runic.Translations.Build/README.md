@@ -75,7 +75,11 @@ so the keys it applies to are not checked against the project default: a
 templates, styles and resources (which may be instantiated under it), and a
 Setter using its static dependency property excludes the whole file. Each such
 source is reported once as the informational `RTR0085` with its line. The rest of
-the file is still checked. `Binding.Source` selects binding data and does not
+the file is still checked. A source that names its catalog is certain: a
+`{rt:Message key, Catalog=id}` and the content under an attached
+`rt:TranslationProperties.Source="{rt:CatalogSource id}"` are checked against
+that catalog when it is the local or a referenced project's catalog, and
+reported once as `RTR0085` otherwise. `Binding.Source` selects binding data and does not
 affect catalog checks. To assert a known local catalog for such a file, or to check
 an explicitly selected file outside WPF, use:
 
@@ -158,6 +162,17 @@ retired `TranslationsEmitTypeScript`, `TranslationsEmitTemplateManifest` and
 which names the replacement.
 
 Choose this package for generated C# and whenever MSBuild owns input classification or non-C# artifact generation. Use the CLI directly when generation is owned by Vite, CI, or another host.
+
+## Report unused messages
+
+Set `<RunicTranslationsReportUnusedMessages>true</RunicTranslationsReportUnusedMessages>` to report, as the
+information `RTR0100`, every message that no C# code of the project references through its readable member,
+encoded member, `References` factory or key property, including generated code such as the `.g.cs` files of XAML
+or other source generators (only the catalog's own generated types are skipped). The analyzer runs at the end of a
+full compilation: `dotnet build -v:n` (or a binary log) and full-solution analysis in the IDE show it. Messages used
+only by a key string, from XAML markup that no generated code reads, from another assembly or from the web are
+reported too, so read the list as candidates. The web side
+has `reportUnused` in `@runic-artifex/vite-plugin-runic-translations`.
 
 ## Important build behavior
 
