@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Runic.CommandLine;
 using Runic.Translations.Internal;
+using Runic.Translations.Tooling;
 
 namespace Runic.Translations.Tool;
 

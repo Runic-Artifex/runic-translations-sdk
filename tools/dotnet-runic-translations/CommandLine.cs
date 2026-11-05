@@ -49,3 +49,13 @@ internal sealed class ToolUsageException : Exception
     {
     }
 }
+
+/// <summary>Runs a shared tooling operation, reporting its invalid-request exception as a usage error.</summary>
+internal static class ToolingUsage
+{
+    internal static T Run<T>(Func<T> operation)
+    {
+        try { return operation(); }
+        catch (Runic.Translations.Tooling.TranslationToolingUsageException exception) { throw new ToolUsageException(exception.Message); }
+    }
+}
