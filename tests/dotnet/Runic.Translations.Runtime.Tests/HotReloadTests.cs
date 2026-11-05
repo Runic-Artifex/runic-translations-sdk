@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -175,18 +176,24 @@ internal sealed class HotReloadTests
                 return [new CompiledTranslationValue(0, text)];
             })]);
 
-        using var stop = new CancellationTokenSource(TimeSpan.FromMilliseconds(750));
-        Task reset = Task.Run(() =>
+        // The loops spin on dedicated threads until a Stopwatch deadline. On thread-pool threads they would take every
+        // worker of a small CI runner, and a timer-based stop needs a pool thread to fire, so the stop and the other
+        // cases' continuations waited for thread injection for seconds (the manager timing cases then timed out).
+        long deadline = Stopwatch.GetTimestamp() + Stopwatch.Frequency * 3 / 4;
+        bool Running() => Stopwatch.GetTimestamp() < deadline;
+        static Task Spin(Action loop) =>
+            Task.Factory.StartNew(loop, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        Task reset = Spin(() =>
         {
-            while (!stop.IsCancellationRequested) catalog.ResetDeferredData();
+            while (Running()) catalog.ResetDeferredData();
         });
         Task[] readers = new Task[Math.Max(2, Environment.ProcessorCount - 1)];
         int snapshots = 0;
         for (int i = 0; i < readers.Length; i++)
         {
-            readers[i] = Task.Run(() =>
+            readers[i] = Spin(() =>
             {
-                while (!stop.IsCancellationRequested)
+                while (Running())
                 {
                     var snapshot = new CompiledTranslationSnapshot(catalog, "en");
                     Assert.True(snapshot.TryGet(Greeting, out string pattern), "A snapshot has no pattern.");
