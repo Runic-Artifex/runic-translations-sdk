@@ -21,16 +21,33 @@ return await new CommandApp(GeneratedCommandCatalog.Create())
 }.RunAsync(args);
 ```
 
-`TranslationCommandTextResolver` resolves each key in this order:
+Framework text comes from the built-in `runic-command-line` catalog (English
+and German). Your catalog overlays it: it translates your `DescriptionKey`
+values and can override any framework text. Precedence is locale-first: for
+each locale of the requested locale's fallback chain, your message is tried
+before the built-in one, and only then the next locale, so the built-in German
+beats an override your catalog has only in English. A key that neither has
+returns `null`, so Runic.CommandLine writes its English text.
 
-1. Your catalog, which can translate your `DescriptionKey` values and override
-   any framework text.
-2. The built-in English and German framework text, in the locale of your
-   snapshot (or of the invocation culture for the parameterless constructor).
-   Other locales use English.
-3. `null`, so Runic.CommandLine writes its English text.
+Pass an `ITranslationManager` instead of a snapshot to follow locale switches,
+or an `ITranslationContext` with your catalog's ID. To resolve in the invocation
+culture (`CommandApp.Culture`) itself, pass a `TranslationContextBuilder`; the
+resolver builds one context per culture. With a snapshot, manager or context
+whose locale names another language than the culture, the text keeps that
+locale and the resolver reports it once: a `warning:` line on standard error,
+so a shipped console app shows it, and a trace warning.
 
-Pass an `ITranslationManager` instead of a snapshot to follow locale switches.
+For other languages, register `TranslationCommandTextResolver.CatalogRegistration`
+in the builder and attach a `TranslationOverlay` for
+`TranslationCommandTextResolver.CatalogId`, such as French packs:
+
+```csharp
+TranslationContextBuilder catalogs = TranslationContext.CreateBuilder()
+    .Add(AppTextCatalog.Registration)
+    .Add(TranslationCommandTextResolver.CatalogRegistration)
+    .AddOverlay(TranslationOverlay.FromPacks(TranslationCommandTextResolver.CatalogId, packs, [new TranslationOverlayLocale("fr")]));
+var resolver = new TranslationCommandTextResolver(catalogs, AppTextCatalog.CatalogId);
+```
 
 ## Message names
 

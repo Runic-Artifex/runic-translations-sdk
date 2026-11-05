@@ -56,10 +56,21 @@ internal static class ReviewFile
             return [new TranslationDiagnostic(InvalidCode, TranslationDiagnosticSeverity.Warning,
                 $"The review file cannot be read ({exception.Code}): {exception.Message}", new TextSourceLocation(display, 0, 0, 1, 1, 1, 1))];
         }
+        var baseResources = project.Locales.Single(locale => locale.Tag == project.DefaultLocale).DirectResources.ToDictionary(static resource => resource.Key, StringComparer.Ordinal);
+        return Stale(project, compilation, review).Select(stale => new TranslationDiagnostic(StaleCode, TranslationDiagnosticSeverity.Warning,
+            $"The '{stale.Entry.Locale}' translation of '{stale.Entry.Key}' ({TranslationReviewStatesText(stale.Entry.State)}) predates a change to its source; review it, then record it with runic-translations review mark --key {stale.Entry.Key} --locale {stale.Entry.Locale} --state <state>.",
+            stale.Translation?.SourceLocation ?? baseResources[stale.Entry.Key].SourceLocation)).ToArray();
+    }
+
+    /// <summary>
+    /// The review entries whose source changed since they were recorded: <c>validate</c> warns about each (RTR0090) and
+    /// <c>status</c> counts them per locale. A removed translation still counts unless its entry is a draft.
+    /// </summary>
+    internal static IReadOnlyList<(TranslationInterchangeReviewEntry Entry, Rmf2TranslationV5? Translation)> Stale(Rmf2ProjectV5 project, Rmf2ProjectCompilation compilation, TranslationInterchangeReview review)
+    {
         IReadOnlyDictionary<string, string> fingerprints = TranslationInterchange.ComputeSourceFingerprints(compilation);
         var locales = project.Locales.ToDictionary(static locale => locale.Tag, StringComparer.Ordinal);
-        var baseResources = locales[project.DefaultLocale].DirectResources.ToDictionary(static resource => resource.Key, StringComparer.Ordinal);
-        var diagnostics = new List<TranslationDiagnostic>();
+        var stale = new List<(TranslationInterchangeReviewEntry, Rmf2TranslationV5?)>();
         foreach (TranslationInterchangeReviewEntry entry in review.Entries.OrderBy(static entry => entry.Key, StringComparer.Ordinal).ThenBy(static entry => entry.Locale, StringComparer.Ordinal))
         {
             if (entry.SourceFingerprint is null || !fingerprints.TryGetValue(entry.Key, out string? current) ||
@@ -67,12 +78,9 @@ internal static class ReviewFile
                 !locales.TryGetValue(entry.Locale, out Rmf2LocaleV5? locale) || entry.Locale == project.DefaultLocale) continue;
             Rmf2TranslationV5? translation = locale.DirectResources.FirstOrDefault(resource => resource.Key == entry.Key);
             if (translation is null && entry.State == TranslationReviewState.Draft) continue;
-            TextSourceLocation location = translation?.SourceLocation ?? baseResources[entry.Key].SourceLocation;
-            diagnostics.Add(new TranslationDiagnostic(StaleCode, TranslationDiagnosticSeverity.Warning,
-                $"The '{entry.Locale}' translation of '{entry.Key}' ({TranslationReviewStatesText(entry.State)}) predates a change to its source; review it, then record it with runic-translations review mark --key {entry.Key} --locale {entry.Locale} --state <state>.",
-                location));
+            stale.Add((entry, translation));
         }
-        return diagnostics;
+        return stale;
     }
 
     internal static string TranslationReviewStatesText(TranslationReviewState state) => state switch
@@ -137,7 +145,7 @@ internal static class InterchangeOperations
         int structured = notices.Where(static loss => loss.Code == "XLIFF21-STRUCTURED-MESSAGE").Select(static loss => loss.Location).Distinct(StringComparer.Ordinal).Count();
         foreach (TranslationsToolInterchangeDocument document in documents)
             result.WriteOutputLine($"wrote {document.Path} ({document.Units} unit(s)).");
-        if (structured != 0) result.WriteOutputLine($"{structured} message(s) with selectors, declarations or markup are exported as translate=\"no\"; translate them in the sources.");
+        if (structured != 0) result.WriteOutputLine($"{structured} message(s) with markup are exported as translate=\"no\"; translate them in the sources.");
         if (demoted != 0) result.WriteOutputLine($"{demoted} stale approval(s) were exported as needs-review.");
         result.Interchange = new TranslationsToolInterchange("export", catalog)
         {
@@ -216,7 +224,7 @@ internal static class InterchangeOperations
             string pattern = messages[unit.Key];
             string state = ReviewFile.TranslationReviewStatesText(unit.State ?? TranslationReviewState.Translated);
             if (!existingTargets.TryGetValue(unit.Key, out string? before)) { added++; values[unit.Key] = pattern; entries.Add(new(unit.Key, "added", unit.SourceChanged ? "XLIFF21-SOURCE-CHANGED" : null, null) { State = state }); }
-            else if (TranslationInterchangePattern.Canonical(before) != TranslationInterchangePattern.Canonical(pattern)) { changed++; values[unit.Key] = pattern; entries.Add(new(unit.Key, "changed", unit.SourceChanged ? "XLIFF21-SOURCE-CHANGED" : null, null) { State = state }); }
+            else if (TranslationInterchangePattern.CanonicalMessage(before) != TranslationInterchangePattern.CanonicalMessage(pattern)) { changed++; values[unit.Key] = pattern; entries.Add(new(unit.Key, "changed", unit.SourceChanged ? "XLIFF21-SOURCE-CHANGED" : null, null) { State = state }); }
             else
             {
                 unchanged++;
@@ -293,6 +301,7 @@ internal static class InterchangeOperations
             result.WriteOutputLine($"{verb} {Display(reviewPath)}.");
         result.Interchange = new TranslationsToolInterchange("import", catalog)
         {
+            Format = "xliff",
             Locale = import.TargetLocale,
             DryRun = dryRun,
             Units = new TranslationsToolInterchangeCounts

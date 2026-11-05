@@ -1,0 +1,23 @@
+{
+  "welcome": "Welcome, {{name}}!",
+  "cart": {
+    "items_zero": "Your cart is empty",
+    "items_one": "{{count}} item",
+    "items_other": "{{count}} items",
+    "total": "Total: {{amount, number}}",
+    "updated": "Updated {{when, datetime}}"
+  },
+  "place_ordinal_one": "{{count}}st place",
+  "place_ordinal_two": "{{count}}nd place",
+  "place_ordinal_few": "{{count}}rd place",
+  "place_ordinal_other": "{{count}}th place",
+  "invited": "Invited: {{names, list}}",
+  "price": "Price: {{value, currency(EUR)}}",
+  "seeWelcome": "See $t(welcome)",
+  "terms": "Read the <1>terms</1>.",
+  "sign-in": "Sign in",
+  "profile": "{{user.name}}'s profile",
+  "lonely_one": "One lonely form",
+  "colors": ["red", "green"],
+  "limit": 5
+}

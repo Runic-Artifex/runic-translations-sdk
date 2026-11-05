@@ -124,6 +124,7 @@ Conforming backends: **dotnet, esm**
 | `hnj`      |      yes |     yes |           yes |  yes |
 | `hr`       |      yes |     yes |           yes |  yes |
 | `hsb`      |      yes |     yes |           yes |  yes |
+| `ht`       |      yes |     yes |           yes |  yes |
 | `hu`       |      yes |     yes |           yes |  yes |
 | `hy`       |      yes |     yes |           yes |  yes |
 | `ia`       |      yes |     yes |           yes |  yes |
@@ -383,10 +384,12 @@ A language without CLDR ordinal rules selects `other` for every ordinal, and a l
 Only languages without CLDR data, such as `tlh`, fail compilation with `RTR0031` when a message selects on plurals or formats a list or relative time.
 Cardinal selector equivalence: **exact**.
 Ordinal selector equivalence: **exact**.
-Relative-time equivalence: **semantic**.
+Relative-time equivalence: **exact**.
 List equivalence: **exact**.
 Plural selection, relative-time and list patterns are generated from the pinned CLDR subset; the ESM backend does not delegate them to host `Intl` data.
-Relative time formats its number as `:number` does by default, with the platform's separators, so its equivalence is semantic.
+Relative time formats its number as `:number` does by default, in the formatting locale and from the pinned CLDR number formats (symbols, grouping and digits), so it is exact too.
+Numbers and percentages use the pinned CLDR number formats of the formatting locale in both backends; localized dates and times use platform data, so they stay semantic.
+For the CLDR locales the JavaScript engines have no date data for, listed in `specs/translations/corpus/localized-format-engine-coverage.json`, ESM dates use the nearest CLDR parent the engine has (else `en-US`) and .NET its ICU's fallback, so their dates can differ between the backends.
 Cardinal and ordinal rules use all CLDR operands of the displayed number, after percent scaling, rounding and minimum fraction digits.
 
 ## Formatter equivalence
@@ -395,9 +398,8 @@ Cardinal and ordinal rules use all CLDR operands of the displayed number, after 
 | ---------- | -------------------------------------- | ----------- |
 | `string`   | `default`                              | exact       |
 | `boolean`  | `default`                              | exact       |
-| `integer`  | `plain`                                | exact       |
-| `integer`  | `grouped`                              | semantic    |
-| `number`   | `plain`, `grouped`, `fixed`, `percent` | semantic    |
+| `integer`  | `plain`, `grouped`                     | exact       |
+| `number`   | `plain`, `grouped`, `fixed`, `percent` | exact       |
 | `date`     | `iso`                                  | exact       |
 | `date`     | `localized`                            | semantic    |
 | `time`     | `iso`                                  | exact       |

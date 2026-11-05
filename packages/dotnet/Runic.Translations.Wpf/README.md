@@ -33,7 +33,8 @@ contract once and pass the `Rmf2MarkupContract`; custom factories and the theme
 go in an options object:
 
 ```csharp
-Rmf2MarkupContract contract = Rmf2MarkupContract.Link(AppTextCatalog.Rmf2MarkupContract);
+// Linked through a function, the contract follows a .NET Hot Reload edit of the catalog.
+Rmf2MarkupContract contract = Rmf2MarkupContract.Link(() => AppTextCatalog.Rmf2MarkupContract);
 var renderer = new WpfInlineRenderer(contract, Navigate,
     new WpfInlineRendererOptions { Custom = factories, Theme = ApplyTheme });
 var documents = new WpfDocumentRenderer(contract, Navigate) { HeadingBase = 2 };
@@ -41,7 +42,9 @@ var documents = new WpfDocumentRenderer(contract, Navigate) { HeadingBase = 2 };
 
 `WpfDocumentRendererOptions` carries the document renderer's factories and
 `TextElement` theme. A linked contract is immutable and can be shared by any
-number of renderers.
+number of renderers; one linked through a function is replaced as a whole when
+a Hot Reload update changes the generated contract, and a contract linked from
+the JSON string keeps the startup contract.
 
 Icons use `InlineIconBinding` with a `Func<FrameworkElement>` that creates a fresh
 asset for every render. Meaningful icons require a localized accessible name;
@@ -246,8 +249,9 @@ new snapshot, from any thread: the source marshals to the dispatcher it was
 created on, and each rich element renders on its own dispatcher. Several changes
 in a row render once. The source follows `ITranslationManager.SnapshotPublished`,
 which a manager raises for a locale switch and for `RefreshAsync` (for example
-after external pack bytes change), although a refresh never raises
-`LocaleChanged`.
+after external pack bytes change, or after a text-only `.rmf2` edit under
+`dotnet watch`; see [Edit text while the app runs](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/quickstart-dotnet.md#edit-text-while-the-app-runs)),
+although a refresh never raises `LocaleChanged`.
 
 Nothing leaks when windows close: the manager holds only a weak reference to the
 source, the source holds rich elements weakly, and WPF's own bindings do the
@@ -266,9 +270,10 @@ catalog has the same key; elsewhere `TranslationSource.Default` applies. A singl
 `{rt:Message Source=...}` overrides both. Style setters follow the styled element,
 like any other element. Locale and culture
 are separate: the source follows the manager's locale only, so set `CultureInfo` and
-`FrameworkElement.Language` yourself where existing resources need them. There is
-no `.resx` importer and no `FlowDocument` conversion; use `WpfDocumentRenderer`
-for document messages.
+`FrameworkElement.Language` yourself where existing resources need them. Existing
+`.resx` strings move over with `runic-translations import --from resx`
+([Migrate from .resx](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/migrate-resx.md)).
+There is no `FlowDocument` conversion; use `WpfDocumentRenderer` for document messages.
 
 Create every `TranslationSource` before loading the views that use it (in
 `OnStartup`, before `InitializeComponent`). A message that only a source created
@@ -276,9 +281,66 @@ later has fails the load with "No live TranslationSource has a message ...",
 because the load check cannot know about a source that does not exist yet; create
 the source earlier or pass `Source=` explicitly.
 
+### Control libraries
+
+A control library's `Generic.xaml` cannot rely on `TranslationSource.Default`,
+which is the application's catalog, and should not create a manager of its own,
+which would miss the application's locale switches. It names its catalog
+instead:
+
+```xml
+<ControlTemplate TargetType="local:GridHeader">
+  <StackPanel>
+    <TextBlock Text="{rt:Message grid_title, Catalog=acme-grid}"/>
+    <TextBlock Text="{rt:Message grid_rows, Catalog=acme-grid, Arg0={Binding RowCount, RelativeSource={RelativeSource TemplatedParent}}}"/>
+  </StackPanel>
+</ControlTemplate>
+```
+
+To use the catalog for every message and rich message in a template, set it once
+on the template's root: `rt:TranslationProperties.Source="{rt:CatalogSource acme-grid}"`.
+
+The application registers the library's catalog in its translation context (see
+[catalogs from libraries](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/composition.md))
+and shares the context with XAML once at startup, before views load:
+
+```csharp
+TranslationContext translations = TranslationContext.CreateBuilder()
+    .Add(AppTextCatalog.Registration)
+    .Add(GridTextCatalog.Registration)
+    .Build("en");
+TranslationSource.UseContext(translations, registration => new WpfInlineRenderer(registration.Rmf2MarkupContract, Navigate));
+TranslationSource.Default = TranslationSource.ForCatalog(AppTextCatalog.CatalogId);
+```
+
+`TranslationSource.ForCatalog(id)` returns one source per catalog. Its manager
+is the context's (`translations.GetManager(id)`), so the library's text switches
+with `translations.SetLocaleAsync`, and its messages are the catalog's generated
+readable surface, which the generated `XCatalog.Registration` creates. The
+renderer factory is needed only for rich messages; without it, catalog sources
+render plain messages only; it runs once per catalog, when its source is
+created. Catalog sources are application-wide: each is created on
+`Application.Current`'s dispatcher (else on the dispatcher of the thread that
+called `UseContext`), whichever window asks first, so windows on other UI
+threads share it and it keeps refreshing after such a thread ends. Share one
+context for the application's life: calling `UseContext` again with the same
+context keeps the existing sources (a new renderer factory applies to catalogs
+created later), replacing it after a binding used a catalog source throws, and
+`UseContext(null)` disposes the catalog sources. A catalog generated before
+0.9.0 has no readable surface in its registration; create a `TranslationSource`
+for it yourself. A custom `ITranslationContext` must implement
+`TryGetRegistration` for `ForCatalog`; otherwise it reports what to implement.
+
+`{rt:Message key, Catalog=id}` checks the key when the XAML loads, as with an
+explicit `Source`; setting both is an error. The library's build checks its
+`Generic.xaml` against the library's own catalog, so set
+`RunicTranslationsXamlCatalog` (or a per-file `Catalog`) in the library; in an
+application, a key of a catalog the build does not load is reported once as the
+informational `RTR0085` and checked when the XAML loads.
+
 ### Designer
 
-Visual Studio and Blend do not run `OnStartup`, so no default source exists.
+Visual Studio and Blend do not run `OnStartup`, so no default source and no shared context exist.
 `{rt:Message key}` then shows `[key]` and rich elements stay empty instead of
 failing every view. At run time an element without any source traces a binding error and shows `[key]`.
 

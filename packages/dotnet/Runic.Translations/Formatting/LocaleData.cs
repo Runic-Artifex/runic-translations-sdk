@@ -4,14 +4,22 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Text.Json;
+using System.Threading;
 
 namespace Runic.Translations;
 
-/// <summary>Runtime access to the pinned CLDR data: plural rules, grouping, list patterns and relative time.</summary>
+/// <summary>Runtime access to the pinned CLDR data: plural rules, grouping, number formats, list patterns and relative time.</summary>
 internal static partial class GeneratedLocaleData
 {
-    private const int MaximumCachedLocales = 64;
-    private static readonly ConcurrentDictionary<string, LocaleEntry> s_locales = new(StringComparer.Ordinal);
+    // The requested tags seen last, emptied when full so that any tags callers send leave room for the next ones. The
+    // entries themselves are cached by their CLDR anchors (CldrLocales.Anchors), which the pinned data bounds, so a
+    // tag that is not in s_locales costs its canonicalization and anchors, never the full lookups.
+    private const int MaximumCachedLocales = 256;
+    // Sized for the whole cache with a fixed lock count: a ConcurrentDictionary that grows adds locks, and Count and Clear
+    // take every lock. s_localeCount counts the additions since the last clear, approximately under concurrency.
+    private static readonly ConcurrentDictionary<string, LocaleEntry> s_locales = new(Environment.ProcessorCount, MaximumCachedLocales * 2, StringComparer.Ordinal);
+    private static int s_localeCount;
+    private static readonly ConcurrentDictionary<(string? Data, string? Truncated), LocaleEntry> s_entries = new();
     private static readonly ConcurrentDictionary<string, string?[]> s_records = new(StringComparer.Ordinal);
     private static ResourceIndex? s_resource;
 
@@ -25,6 +33,33 @@ internal static partial class GeneratedLocaleData
 
     /// <summary>CLDR <c>minimumGroupingDigits</c> of a locale: 1 for every locale without pinned data.</summary>
     internal static int MinimumGroupingDigits(string locale) => Entry(locale)?.Grouping ?? 1;
+
+    /// <summary>
+    /// The number formats of a locale, or null without CLDR data: the default numbering system, then 12 fields for it
+    /// and, when it is not <c>latn</c>, 12 for <c>latn</c> (see <see cref="Rmf2NumberFormat"/>).
+    /// </summary>
+    internal static string?[]? FindNumbers(string locale) =>
+        NumbersId(locale) is { } id ? FindNumbersById(id) : null;
+
+    /// <summary>The CLDR data ID whose number formats a locale uses, or null without CLDR data.</summary>
+    internal static string? NumbersId(string locale) => Entry(locale)?.NumbersId;
+
+    /// <summary>The number formats of a CLDR data ID from <see cref="NumbersId"/>.</summary>
+    internal static string?[] FindNumbersById(string id) => Record("numbers:" + id);
+
+    /// <summary>
+    /// The CLDR format-context weekday names of a locale (Sunday first) where .NET's <c>dddd</c> writes the stand-alone
+    /// names instead, or null.
+    /// </summary>
+    internal static string?[]? FindWeekdays(string locale) =>
+        Entry(locale)?.WeekdaysId is { } id && Record("weekdays:" + id) is { Length: 7 } names ? names : null;
+
+    /// <summary>
+    /// The CLDR flexible day periods of a locale whose time patterns use them (<c>B</c>, as <c>zh-Hant</c>'s), as pairs
+    /// of the first minute of the day and the name, or null.
+    /// </summary>
+    internal static string?[]? FindDayPeriods(string locale) =>
+        Entry(locale)?.DayPeriodsId is { } id && Record("dayPeriods:" + id) is { Length: > 0 } periods ? periods : null;
 
     /// <summary>The 36 CLDR list patterns of a locale (type × style × start, middle, end, 2), or null.</summary>
     internal static string?[]? FindList(string locale) =>
@@ -46,13 +81,21 @@ internal static partial class GeneratedLocaleData
         if (s_locales.TryGetValue(locale, out LocaleEntry? cached)) return cached;
         string? canonical = Canonical(locale);
         if (canonical is null) return null;
-        var entry = new LocaleEntry(
-            CldrLocales.PluralRule(canonical, ordinal: false),
-            CldrLocales.PluralRule(canonical, ordinal: true),
-            CldrLocales.MinimumGroupingDigits(canonical),
-            CldrLocales.Find(canonical, GeneratedLocaleTables.ListIds, truncate: false),
-            CldrLocales.Find(canonical, GeneratedLocaleTables.RelativeTimeIds, truncate: false));
-        if (s_locales.Count < MaximumCachedLocales) s_locales.TryAdd(locale, entry);
+        LocaleEntry entry = s_entries.GetOrAdd(CldrLocales.Anchors(canonical), static anchors => new LocaleEntry(
+            CldrLocales.PluralRuleFrom(anchors, ordinal: false),
+            CldrLocales.PluralRuleFrom(anchors, ordinal: true),
+            CldrLocales.MinimumGroupingDigitsFrom(anchors.Data),
+            CldrLocales.FindFrom(anchors.Data, GeneratedLocaleTables.NumberIds, truncate: false),
+            CldrLocales.FindFrom(anchors.Data, GeneratedLocaleTables.WeekdayIds, truncate: false),
+            CldrLocales.FindFrom(anchors.Data, GeneratedLocaleTables.DayPeriodIds, truncate: false),
+            CldrLocales.FindFrom(anchors.Data, GeneratedLocaleTables.ListIds, truncate: false),
+            CldrLocales.FindFrom(anchors.Data, GeneratedLocaleTables.RelativeTimeIds, truncate: false)));
+        if (Interlocked.Increment(ref s_localeCount) > MaximumCachedLocales)
+        {
+            s_locales.Clear();
+            Volatile.Write(ref s_localeCount, 1);
+        }
+        s_locales.TryAdd(locale, entry);
         return entry;
     }
 
@@ -71,7 +114,7 @@ internal static partial class GeneratedLocaleData
         return record;
     }
 
-    private sealed record LocaleEntry(int Cardinal, int Ordinal, int Grouping, string? ListId, string? RelativeTimeId);
+    private sealed record LocaleEntry(int Cardinal, int Ordinal, int Grouping, string? NumbersId, string? WeekdaysId, string? DayPeriodsId, string? ListId, string? RelativeTimeId);
 
     /// <summary>The decompressed <c>GeneratedLocaleData.bin</c> and the position of each locale's array in it.</summary>
     private sealed class ResourceIndex(byte[] bytes, Dictionary<string, (int Start, int Length)> offsets)

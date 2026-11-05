@@ -231,7 +231,8 @@ text with Swiss separators. `getRequestedLocale()` returns that tag for the
 current resolver (`de-CH` where `getLocale()` returns `de`), and
 `getMessageLocale(key, options?)` returns `{ key, locale, formatLocale }`: the
 locale of the message's text, for the `lang` of a string message after a
-fallback, and the locale its values format in. Structured content carries the
+fallback, and the locale its values format in (`ar-EG-u-nu-latn` when the
+requested tag asks for Latin digits). Structured content carries the
 same `locale` and `formatLocale`. `onFallback((key, locale, contentLocale) => …)`
 adds a listener, called when a message shows the text of a fallback locale
 because `locale` has no translation of it; it returns a function that removes
@@ -268,18 +269,22 @@ document.documentElement.lang = locale;
 document.documentElement.dir = localeDirection(locale);
 ```
 
-The script decides: an explicit script subtag, otherwise the likely script
-that `Intl.Locale.prototype.maximize()` finds in CLDR's likely-subtags data. A
+The script decides: an explicit script subtag, otherwise the likely script from
+CLDR's likely subtags, which the catalog pins for its own languages (as .NET's
+`LocaleDirection` does for every language) and which
+`Intl.Locale.prototype.maximize()` gives for other languages. A
 script is right-to-left when CLDR's script metadata marks it so (Arabic,
 Hebrew, Syriac, Thaana, N'Ko, Adlam and others; the list is pinned in
 `specs/translations/cldr/runic-subset-48.2.json`). So `ar`, `he`, `fa`, `ur`,
 `pa-PK` and `ku-Arab` are right-to-left, and `ku`, `he-Latn` and `sd-Deva` are
 left-to-right. `Intl.Locale.prototype.getTextInfo()` is not used: it is missing
 in older engines, and JavaScriptCore answers `ltr` for tags such as `en-Arab`
-and `az-IR`. Without `Intl.Locale`, only an explicit script subtag counts. An
-invalid tag throws a `RangeError`, as in `resolveLocale`. In .NET, use
-`CultureInfo.TextInfo.IsRightToLeft`; it is always `false` with
-`InvariantGlobalization`.
+and `az-IR`. Without `Intl.Locale`, a language outside the catalog counts only
+with an explicit script subtag. An invalid tag throws a `RangeError`, as in
+`resolveLocale`. In .NET, use `LocaleDirection.Get(locale)`, which gives the same
+answer from the same pinned data, also with `InvariantGlobalization`. The runtime
+also isolates placeholders in right-to-left locales, and `removeBidiIsolates(text)`
+removes the isolates for plain-text output; see [right-to-left text](bidi.md).
 
 Dynamic loading consumes locale artifact 5 and validates the
 closed artifact envelope, profile and grammar 5, catalog, caller fingerprint,

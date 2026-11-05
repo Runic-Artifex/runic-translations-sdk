@@ -52,6 +52,15 @@ render them update in place. Values computed once on the server, such as data
 returned from a SvelteKit `load` function, are not re-run by HMR; they update
 when the page is reloaded.
 
+In project mode the plugin also generates the development pseudo-locales that
+`runic.json` declares in `pseudoLocales` (`en-XA`, `ar-XB`) when Vite's mode is
+`development`, so `vite dev` shows them and `vite build` leaves them out. Set
+`pseudoLocales: true` or `false` to override. In manifest mode another build
+generates the directory, and a Debug `dotnet build` includes the pseudo-locales;
+unless they are on, the plugin takes them out of the bundle (the runtime's
+`locales` and their messages), so a production `vite build` never ships them. See
+[Pseudo-locales](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md#pseudo-locales).
+
 Manifest mode treats the supplied generated directory as externally owned.
 Changes to `sourceFiles` trigger a Vite refresh, but the plugin cannot recompile
 the project or recompute `sourceHash` without a compiler command. The owning
@@ -94,6 +103,17 @@ const greeting = m.greeting({ name: "Ada" }, { locale: "de" });
 
 RMF2 resource names become identifier-safe message properties. Static ESM
 re-exports let Vite remove message modules that are not referenced.
+
+`reportUnused: true` logs, after a production build, the messages that no chunk
+of the build contains, so they are candidates for removal:
+
+```text
+[runic-translations] 2 of 120 messages of catalog "app" are not used by this build: legacy_banner, settings_old_title.
+```
+
+It reports each build environment that includes the catalog. A message read only
+through the `/dynamic` entry, by a key computed at run time or by another build
+(such as the .NET side, see `RTR0100`) is reported too.
 
 Additional entry points are available for generated locale configuration (`/runtime`), request-local SSR (`/server`), cross-process text references (`/transport`), and validated runtime-loaded locale artifacts (`/dynamic`). Wrap SSR rendering with `/server`'s `runWithLocale`; explicit per-call locale options are only needed for intentional overrides.
 

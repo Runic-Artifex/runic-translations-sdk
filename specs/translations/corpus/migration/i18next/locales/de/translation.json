@@ -1,0 +1,11 @@
+{
+  "welcome": "Willkommen, {{name}}!",
+  "cart": {
+    "items_one": "{{count}} Artikel",
+    "items_few": "{{count}} Artikel (wenige)",
+    "items_other": "{{count}} Artikel",
+    "total": "Summe: {{amount, number}}"
+  },
+  "sign-in": "Anmelden",
+  "unknown": "Nur auf Deutsch"
+}

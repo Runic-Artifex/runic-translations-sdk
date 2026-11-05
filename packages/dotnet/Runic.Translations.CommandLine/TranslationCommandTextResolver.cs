@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Runic.CommandLine;
 using Runic.Translations.CommandLine.Translations;
@@ -18,20 +21,42 @@ namespace Runic.Translations.CommandLine;
 /// table (<c>{$option}</c>, <c>{$parameter}</c>) or after their position (<c>{$arg0}</c>, <c>{$arg1}</c>).
 /// </para>
 /// <para>
-/// The application's catalog is tried first, so it can override any framework text and translate its own
-/// description keys. Framework keys it does not define use the built-in English and German text in the locale of
-/// the application's snapshot, or of the invocation culture when there is no application catalog. Anything else
-/// returns <see langword="null"/>, and Runic.CommandLine writes its English text. A message whose inputs do not fit
+/// Framework text comes from the <c>runic-command-line</c> catalog (<see cref="CatalogRegistration"/>), which ships English
+/// and German. The application's catalog overlays it, so it can override any framework text and translate its own
+/// description keys. Precedence is locale-first: for each locale of the requested locale's fallback chain, the
+/// application's message is tried before the framework's, and only then the next locale. The built-in German text
+/// therefore beats an English application override when German is requested. Other locales come from overlays of
+/// <c>runic-command-line</c> in a <see cref="TranslationContext"/>, or from the application's catalog. A key that neither
+/// has returns <see langword="null"/>, and Runic.CommandLine writes its English text. A message whose inputs do not fit
 /// the supplied arguments, or that fails to format, is skipped the same way.
+/// </para>
+/// <para>
+/// The locale is the invocation culture for the parameterless constructor and for a
+/// <see cref="TranslationContextBuilder"/>. A snapshot, manager or context brings its own locale; when the invocation
+/// culture names another language, the resolver keeps the translation locale, so text and formatting stay consistent,
+/// and reports it once: a warning line on standard error, so it reaches the user of a shipped console app, and a trace
+/// warning. Create the manager or context from the invocation culture, or pass a <see cref="TranslationContextBuilder"/>,
+/// to avoid it.
 /// </para>
 /// </remarks>
 public sealed class TranslationCommandTextResolver : ICommandTextResolver
 {
+    /// <summary>The ID of the built-in framework text catalog, which overlays and contexts name.</summary>
+    public const string CatalogId = CommandLineTextCatalog.CatalogId;
+
     private static readonly ConcurrentDictionary<string, ITranslationSnapshot> BuiltInSnapshots = new(StringComparer.Ordinal);
     private static ITranslationProvider? s_builtInProvider;
 
     private readonly ITranslationManager? _manager;
     private readonly ITranslationSnapshot? _snapshot;
+    private readonly ITranslationContext? _context;
+    private readonly TranslationContextBuilder? _catalogs;
+    private readonly string? _applicationCatalogId;
+    private readonly ConcurrentDictionary<string, TranslationContext>? _contexts;
+    private int _reportedCulture;
+
+    /// <summary>Where the culture-mismatch warning goes besides the trace; <see langword="null"/> for standard error. Tests set it.</summary>
+    internal TextWriter? WarningOutput { get; init; }
 
     /// <summary>Creates a resolver with only the built-in framework text, in the invocation culture.</summary>
     public TranslationCommandTextResolver()
@@ -46,6 +71,42 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
     public TranslationCommandTextResolver(ITranslationManager manager) =>
         _manager = manager ?? throw new ArgumentNullException(nameof(manager));
 
+    /// <summary>Creates a resolver that follows a translation context's locale.</summary>
+    /// <param name="context">
+    /// The context. When it registers <see cref="CatalogRegistration"/>, framework text comes from that catalog with the
+    /// context's overlays applied (for example a French overlay); otherwise from the built-in catalog in the context's locale.
+    /// </param>
+    /// <param name="applicationCatalogId">The catalog of the application's own text, which overlays the framework text, or <see langword="null"/> for none.</param>
+    /// <exception cref="ArgumentException">The context does not register <paramref name="applicationCatalogId"/>.</exception>
+    public TranslationCommandTextResolver(ITranslationContext context, string? applicationCatalogId)
+    {
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+        if (applicationCatalogId is not null && !context.TryGetManager(applicationCatalogId, out _))
+            throw new ArgumentException($"Catalog '{applicationCatalogId}' is not registered with the translation context.", nameof(applicationCatalogId));
+        _applicationCatalogId = applicationCatalogId;
+    }
+
+    /// <summary>Creates a resolver that resolves every key in the invocation culture, with contexts built from <paramref name="catalogs"/>.</summary>
+    /// <param name="catalogs">
+    /// The catalogs and overlays. Register <see cref="CatalogRegistration"/> to attach overlays to the framework text, such
+    /// as <c>TranslationOverlay.FromPacks(TranslationCommandTextResolver.CatalogId, packs, [new("fr")])</c>; without it,
+    /// framework text comes from the built-in catalog. The resolver builds one context per invocation culture; do not change
+    /// the builder afterwards.
+    /// </param>
+    /// <param name="applicationCatalogId">The catalog of the application's own text, which overlays the framework text, or <see langword="null"/> for none.</param>
+    public TranslationCommandTextResolver(TranslationContextBuilder catalogs, string? applicationCatalogId)
+    {
+        _catalogs = catalogs ?? throw new ArgumentNullException(nameof(catalogs));
+        _applicationCatalogId = applicationCatalogId;
+        _contexts = new ConcurrentDictionary<string, TranslationContext>(StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// The registration of the built-in framework text catalog (<see cref="CatalogId"/>), for a
+    /// <see cref="TranslationContextBuilder"/> that attaches overlays to it.
+    /// </summary>
+    public static TranslationCatalogRegistration CatalogRegistration => CommandLineTextCatalog.Registration;
+
     /// <inheritdoc />
     public string? Resolve(string key, CultureInfo culture, IReadOnlyList<string> arguments)
     {
@@ -55,10 +116,25 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
 
         string name = GetMessageName(key);
         string[] names = FrameworkTextArguments.For(key);
-        ITranslationSnapshot? application = _manager?.Current ?? _snapshot;
-        if (application is not null && TryFormat(application, name, names, arguments, out string? text)) return text;
-        if (!FrameworkTextArguments.ByKey.ContainsKey(key)) return null;
-        return TryFormat(BuiltIn(application?.Locale ?? culture.Name), name, names, arguments, out text) ? text : null;
+        (ITranslationSnapshot? application, ITranslationSnapshot? framework, string requested) = Layers(culture);
+        bool frameworkKey = FrameworkTextArguments.ByKey.ContainsKey(key);
+
+        string? text = null;
+        int rank = int.MaxValue;
+        if (application is not null && TryFormat(application, name, names, arguments, out string? applicationText, out string? content))
+        {
+            text = applicationText;
+            rank = Rank(requested, content!);
+            // The application's text in the requested locale itself cannot be beaten.
+            if (rank == 0) return text;
+        }
+
+        // The framework catalog wins only with a locale strictly closer to the request: at equal distance, the
+        // application's text overlays it.
+        if (frameworkKey && framework is not null && TryFormat(framework, name, names, arguments, out string? frameworkText, out content) &&
+            (text is null || Rank(requested, content!) < rank))
+            return frameworkText;
+        return text;
     }
 
     /// <summary>Gets the message name for a text key: each hyphen is removed and the letter after it capitalized.</summary>
@@ -84,9 +160,132 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
         return builder.ToString();
     }
 
-    private static bool TryFormat(ITranslationSnapshot snapshot, string name, string[] names, IReadOnlyList<string> arguments, out string? text)
+    // The application layer, the framework layer, and the requested locale both resolve.
+    private (ITranslationSnapshot? Application, ITranslationSnapshot? Framework, string Requested) Layers(CultureInfo culture)
+    {
+        if (_catalogs is not null) return FromContext(ContextFor(culture.Name), _applicationCatalogId);
+        if (_context is not null)
+        {
+            ReportCulture(culture, _context.RequestedLocale);
+            return FromContext(_context, _applicationCatalogId);
+        }
+
+        ITranslationSnapshot? application = _manager?.Current ?? _snapshot;
+        if (application is null) return (null, BuiltIn(culture.Name), culture.Name);
+        string requested = application.RequestedLocale;
+        ReportCulture(culture, requested);
+        return (application, BuiltIn(requested), requested);
+    }
+
+    private static (ITranslationSnapshot?, ITranslationSnapshot?, string) FromContext(ITranslationContext context, string? applicationCatalogId)
+    {
+        string requested = context.RequestedLocale;
+        ITranslationSnapshot? application = applicationCatalogId is not null && context.TryGetManager(applicationCatalogId, out ITranslationManager? manager)
+            ? manager.Current
+            : null;
+        ITranslationSnapshot framework = context.TryGetManager(CatalogId, out ITranslationManager? frameworkManager)
+            ? frameworkManager.Current
+            : BuiltIn(requested);
+        return (application, framework, requested);
+    }
+
+    private TranslationContext ContextFor(string locale)
+    {
+        if (_contexts!.TryGetValue(locale, out TranslationContext? context)) return context;
+        try
+        {
+            context = _catalogs!.Build(locale);
+        }
+        catch (Exception exception) when (exception is ArgumentException or TranslationNotFoundException)
+        {
+            // A culture that is not a valid tag, or that a catalog with the exact-locale policy does not declare, uses the
+            // default locale, as the built-in catalog does.
+            Trace.TraceWarning($"Runic.Translations.CommandLine: cannot resolve text in culture '{locale}' ({exception.Message}); using the default locale.");
+            context = _catalogs!.Build();
+        }
+
+        return _contexts.GetOrAdd(locale, context);
+    }
+
+    // Reports once when the invocation culture names another language than the translation locale, as when the manager
+    // was created with the default locale and CommandApp.Culture is German (values would format in German, text in English).
+    private void ReportCulture(CultureInfo culture, string requested)
+    {
+        if (culture.Name.Length == 0 || requested.Length == 0 || SameLanguage(culture.Name, requested)) return;
+        if (Interlocked.Exchange(ref _reportedCulture, 1) != 0) return;
+        string message = $"Runic.Translations.CommandLine: the invocation culture '{culture.Name}' differs from the translation locale '{requested}'; " +
+            "command-line text uses the translation locale. Create the manager or context from the invocation culture, or pass a TranslationContextBuilder to resolve in the culture.";
+        Trace.TraceWarning(message);
+        try
+        {
+            // The default trace listener writes only to an attached debugger, so a shipped console app also gets the line on
+            // standard error, which machine-readable standard output does not include.
+            (WarningOutput ?? Console.Error).WriteLine("warning: " + message);
+        }
+        catch (Exception exception) when (exception is IOException or ObjectDisposedException)
+        {
+            // A closed standard error must not fail text resolution.
+        }
+    }
+
+    private static bool SameLanguage(string left, string right) =>
+        Language(left).Equals(Language(right), StringComparison.OrdinalIgnoreCase);
+
+    private static ReadOnlySpan<char> Language(string tag)
+    {
+        int end = tag.AsSpan().IndexOfAny('-', '_');
+        return end < 0 ? tag : tag.AsSpan(0, end);
+    }
+
+    // How far a message's content locale is from the requested locale in its fallback chain: 0 for the locale itself, an
+    // even step per removed subtag for a truncation parent (de for de-CH), an odd step in between for another locale of the
+    // same language (a CLDR parent such as en-001 for en-AU, or zh-Hant for zh-TW), and int.MaxValue for another language,
+    // such as a catalog's default locale.
+    //
+    // It is a lexical estimate, not the provider's fallback chain: providers do not expose their chain through
+    // ITranslationSnapshot (the compiled catalog's is internal, and an application may bring its own snapshot), so content
+    // locales are assumed to lie on the request's chain, which negotiation and CLDR parents ensure today. The one
+    // same-language case that cannot be on the chain, another explicit script (sr-Cyrl content for an sr-Latn request),
+    // ranks as another language.
+    internal static int Rank(string requested, string content)
+    {
+        if (string.Equals(requested, content, StringComparison.OrdinalIgnoreCase)) return 0;
+        if (requested.Length == 0 || content.Length == 0 || !SameLanguage(requested, content)) return int.MaxValue;
+        if (Script(requested) is { Length: > 0 } requestedScript && Script(content) is { Length: > 0 } contentScript &&
+            !requestedScript.Equals(contentScript, StringComparison.OrdinalIgnoreCase))
+            return int.MaxValue;
+        int distance = 2 * (Subtags(requested) - Subtags(content));
+        if (requested.Length > content.Length && requested[content.Length] == '-' &&
+            requested.StartsWith(content, StringComparison.OrdinalIgnoreCase))
+            return distance;
+        return Math.Max(1, distance - 1);
+    }
+
+    // The explicit script subtag (the 4-letter second subtag), or empty.
+    private static ReadOnlySpan<char> Script(string tag)
+    {
+        int start = tag.AsSpan().IndexOfAny('-', '_');
+        if (start < 0) return [];
+        ReadOnlySpan<char> rest = tag.AsSpan(start + 1);
+        int end = rest.IndexOfAny('-', '_');
+        ReadOnlySpan<char> subtag = end < 0 ? rest : rest[..end];
+        if (subtag.Length != 4) return [];
+        foreach (char character in subtag) if (!char.IsAsciiLetter(character)) return [];
+        return subtag;
+    }
+
+    private static int Subtags(string tag)
+    {
+        int count = 1;
+        foreach (char character in tag) if (character == '-') count++;
+        return count;
+    }
+
+    private static bool TryFormat(ITranslationSnapshot snapshot, string name, string[] names, IReadOnlyList<string> arguments, out string? text,
+        out string? contentLocale)
     {
         text = null;
+        contentLocale = null;
         if (!snapshot.TryGetKey(name, out TranslationKey key) ||
             !snapshot.TryGetPlaceholders(key, out ReadOnlyMemory<TranslationPlaceholderDescriptor> placeholders))
             return false;
@@ -102,11 +301,14 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
             }
 
             text = snapshot.Format(key, values);
+            if (!snapshot.TryGetContentLocale(key, out string? content)) content = snapshot.Locale;
+            contentLocale = content;
             return true;
         }
         catch (Exception exception) when (exception is TranslationFormatException or TranslationNotFoundException or ArgumentException)
         {
             // A message that does not fit the framework's arguments falls back to the next source of text.
+            text = null;
             return false;
         }
     }
