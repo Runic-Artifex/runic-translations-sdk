@@ -410,7 +410,7 @@ Translation XAML keys under an explicit source are not checked. Static keys are 
 <Page Update="Views/Checkout.xaml" Catalog="app" />
 ```
 
-A message that names its catalog (`{rt:Message key, Catalog=acme-grid}`), and content under `rt:TranslationProperties.Source="{rt:CatalogSource acme-grid}"`, is checked against that catalog when it is the local or a referenced project's catalog. Otherwise the build cannot load it, and this diagnostic names the catalog and its first key once per file.
+A message that names its catalog (`{rt:Message key, Catalog=acme.grid}`), and content under `rt:TranslationProperties.Source="{rt:CatalogSource acme.grid}"`, is checked against that catalog when it is the local or a referenced project's catalog. Otherwise the build cannot load it, and this diagnostic names the catalog and its first key once per file.
 
 Keys of another catalog cannot be checked by the build; the WPF adapter still checks them when the XAML loads. Informational diagnostics appear in the IDE's error list but not in command-line build output; to see them there, raise the severity with `dotnet_diagnostic.RTR0085.severity = warning` in `.editorconfig` or a global analyzer config.
 

@@ -1,0 +1,12 @@
+<Project>
+  <!-- The example builds against published or packed Runic Translations packages, like an application outside this
+       repository, so it does not import the repository's Directory.Build.props or central package versions.
+       eng/verify-component-library-example.mjs passes the candidate's version as RunicTranslationsVersion. -->
+  <PropertyGroup>
+    <RunicTranslationsVersion Condition="'$(RunicTranslationsVersion)' == ''">0.9.0</RunicTranslationsVersion>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+</Project>

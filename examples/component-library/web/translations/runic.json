@@ -1,0 +1,9 @@
+{
+  "$schema": "https://runic-artifex.eu/schemas/translations/project-v1.schema.json",
+  "schemaVersion": 1,
+  "catalog": "shop",
+  "code": { "namespace": "Shop", "className": "ShopText" },
+  "baseLocale": "en",
+  "locales": ["en", "de", "fr"],
+  "overrides": [{ "catalog": "acme.widgets", "from": "@acme/widgets" }]
+}

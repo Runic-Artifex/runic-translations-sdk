@@ -70,6 +70,10 @@ that authoring sources are newer than them.
 
 ## Library catalogs from dependencies
 
+The [Ship translations in a library](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/libraries.md)
+guide and the [component-library example](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/examples/component-library)
+show a library and an application end to end.
+
 A library package ships its catalog for applications with three things in its `package.json` and files:
 
 ```json
@@ -100,7 +104,8 @@ warning. Each catalog is regenerated into `<output>/dependencies/` with the same
   locales the library lacks. As in a .NET build, an override of a catalog that no discovered dependency ships, or from
   another package than `from`, fails the build (`RTR0104`), and a directory under `translations/overrides/` that
   runic.json does not list is ignored with a warning. A locale the overrides add falls back as on .NET: to its nearest
-  CLDR parent among the library's and the added locales (`de-CH` to an added `de`), else to the library's base locale;
+  CLDR parent among the library's and the added locales (`de-CH` to an added `de`), else to the library locale that CLDR
+  likely subtags match, else to the library's base locale;
 - filtered to `locales` (default: the locales of the project's runic.json): only the library locales the runtimes resolve
   these to (the locale itself, else by CLDR likely subtags and parent locales, so `zh-TW` keeps a library's `zh-Hant` and
   `en-GB` its `en-001`), their fallbacks and the library's base locale are bundled. An invalid tag is an error;

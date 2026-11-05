@@ -1,0 +1,2 @@
+title = Cloud-Speicher
+price = {$amount :currency currency=EUR} pro Monat

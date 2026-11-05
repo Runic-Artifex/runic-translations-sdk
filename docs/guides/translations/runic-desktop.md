@@ -1,25 +1,33 @@
 # Runic Desktop integration
 
-Runic Translations does not need or provide a presentation-host adapter.
-Localization remains owned by the generated C# runtime, generated ESM modules,
-locale-pack artifacts, and their existing Vite integration.
+Runic Translations and the Runic application packages connect without an adapter
+package: neither references the other, and each side uses the other's public,
+typed seams. [Translate a Runic Views app](runic-views.md) walks through all of
+them; in short:
 
-For a Runic Desktop application:
+- **Locale.** Since runic-sdk 0.17, the application sets one locale on
+  `IRunicApplicationLocale`; the C# catalogs follow it with
+  `locale.Follow(translations.SetLocaleAsync)` (a `TranslationContext`, or an
+  `ITranslationManager`), and every window and its pages follow it, unless a
+  window sets a locale of its own (`IRunicWindowLocale`).
+- **Text from ViewModels.** A `TranslationReference`, created by the catalog's
+  generated `References` factories, crosses the Bridge as its transport JSON;
+  the page formats it in the window's language through `configureTranslatedText`
+  (`@runic-artifex/views`). The Views generator recognizes the type by name and
+  calls `TranslationReference.Parse` and
+  `TranslationReferenceJsonContext.Default.TranslationReference`, which Runic
+  Translations keeps stable.
+- **Native text.** Menus, standard menu titles, `DesktopPlatformTexts` and tray
+  text come from the catalog and are set again when the locale changes.
+- **Delivery.** Compiled production locale artifacts are ordinary Runic Assets
+  entries and use the same `Runic.Assets.Desktop` streaming, cache, and
+  cancellation path as the rest of the frontend. Development ESM modules and
+  locale HMR remain owned by the Runic Translations Vite plugin while the Runic
+  Vite plugin injects the Desktop bootstrap.
 
-- compiled production locale artifacts are ordinary Runic Assets entries and
-  use the same `Runic.Assets.Desktop` streaming, cache, and cancellation path as
-  the rest of the frontend;
-- development ESM modules and locale HMR remain owned by the Runic Translations
-  Vite plugin while the Runic Vite plugin injects the Desktop bootstrap;
-- runtime locale changes remain `ITranslationManager` or generated-ESM state;
-  an application can connect them to its typed application model through its
-  chosen application API;
-- Runic Desktop does not interpret catalogs, locales, fallbacks, messages, or
-  translation diagnostics.
-
-This absence of a `Runic.Translations.Desktop` package is intentional: adding
-one would duplicate either Assets delivery, Vite/HMR, or translation-domain
-ownership.
+Runic Desktop does not interpret catalogs, fallbacks, messages or translation
+diagnostics; locale negotiation, formatting and fallback stay in the generated
+runtimes.
 
 ## Strings outside the Views
 
@@ -47,8 +55,11 @@ The class and namespace come from `code` in `runic.json`. A translation is
 written once, in one place, and both builds check it. The path may point
 outside the C# project's directory, for example `../Frontend/translations/runic.json`.
 
-When the user picks another language, call `manager.SetLocaleAsync(locale)` with
-the locale the ViewModel owns; later calls format in that locale. The generated
+When the user picks another language, the application's locale switches the
+manager: `IRunicApplicationLocale.Follow(manager.SetLocaleAsync)`, or
+`Follow(translations.SetLocaleAsync)` for a `TranslationContext` with several
+catalogs (see [The application's language](runic-views.md#4-the-applications-language)).
+Later calls format in that locale. The generated
 catalog reads each locale's messages from data in the assembly on first use, so a
 process that shows a few messages pays for the locales it uses and compiles no
 per-message code. The API uses no reflection and is safe for trimming and

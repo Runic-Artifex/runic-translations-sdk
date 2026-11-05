@@ -137,7 +137,7 @@ the `interchange` member of the payload (`format: "i18next"`, schema
 | `IMPORT-INVALID` | refused | The message does not compile; the reason names the RTR code, for example a translation that uses `{{user}}` while its base text does not (`RTR0016`). |
 | `IMPORT-KEY-COLLISION` | refused | Two keys map to the same RMF2 name, `items` exists both as a message and as plural forms, or a dotted key (`"a.b"`) repeats a nested one (`"a": { "b": ... }`); the first is imported. |
 | `IMPORT-EXISTS` | kept | The message already exists with other text and was not changed; `--overwrite` replaces it. |
-| `I18NEXT-FORMAT` | notice | A format without an RMF2 equivalent (`currency`, `relativetime`, a custom formatter) or format options were dropped. |
+| `I18NEXT-FORMAT` | notice | A format the importer does not convert, or format options, were dropped: `currency` (write `:currency currency=EUR` with the ISO code, which RMF2 needs in the message), `relativetime` (`:runic:relative-time unit=day`), a custom formatter. |
 | `I18NEXT-INTERPOLATION` | notice | `{{user.name}}` became the input `$user_name`; pass it as its own value. |
 | `I18NEXT-MARKUP` | notice | HTML or `<Trans>` tags (`<1>terms</1>`) were kept as text. Rewrite them as RMF2 markup (`{#link}terms{/link}`) with a slot ([RMF2 guide](rmf2.md)). |
 | `IMPORT-LOCALE` | notice | A file of a locale that `runic.json` does not declare. |
