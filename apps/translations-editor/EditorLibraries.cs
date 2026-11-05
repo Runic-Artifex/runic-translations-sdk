@@ -80,7 +80,7 @@ internal sealed partial class EditorSession
             context.RequireRevision(context.Target.SourcePath(locale), request.ExpectedRevision);
             string? text = request.Text?.Replace("\r\n", "\n", StringComparison.Ordinal);
             TranslationOverridePlan plan = TranslationOverrideChanges.Override(context.Catalog, [request.Key], locale, text);
-            if (text is not null) context.RequireParses(plan, token);
+            if (text is not null) LibraryContext.RequireParses(plan, token);
             bool declared = context.Apply(plan);
             return Task.FromResult(context.Reload(token).Result() with { ProjectChanged = declared, Locale = locale });
         }, cancellationToken);
@@ -93,7 +93,7 @@ internal sealed partial class EditorSession
             TranslationSource source = context.Catalog.OverrideSources.Single(candidate => candidate.Path == item.Path);
             string text = (request.Text ?? throw new ArgumentException("Text is required.")).Replace("\r\n", "\n", StringComparison.Ordinal);
             var plan = new TranslationOverridePlan(Path.GetFullPath(item.Path), Rmf2ResourceWriter.SetMessage(source, request.Key, text), source.GetUtf8Bytes());
-            context.RequireParses(plan, token);
+            LibraryContext.RequireParses(plan, token);
             context.Apply(plan);
             return Task.FromResult(context.Reload(token).Result() with { Locale = item.Locale });
         }, cancellationToken);
@@ -197,7 +197,7 @@ internal sealed partial class EditorSession
         }
 
         // A text the user typed must leave the override source parseable.
-        internal void RequireParses(TranslationOverridePlan plan, CancellationToken cancellationToken)
+        internal static void RequireParses(TranslationOverridePlan plan, CancellationToken cancellationToken)
         {
             Rmf2ResourceDocument check = Rmf2ResourceReader.Analyze(new TranslationSource(plan.Path, plan.Bytes ?? []), null, cancellationToken);
             if (!check.Success) throw new EditorUserException(EditorNotice.Create("ui_backend_library_invalid_text", ("detail", check.Diagnostics[0].Message)));
