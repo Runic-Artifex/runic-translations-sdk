@@ -1,4 +1,4 @@
-// Transport versions 1 and 2. The generator prepends the imports and the catalog, contractFingerprint and contracts constants.
+// Transport versions 1 and 2. The generator prepends the imports, the exported catalog and contractFingerprint, and the contracts.
 // The rules are shared with the .NET TranslationReference, its JSON converter and TranslationReferenceResolver.
 const limits = Object.freeze({ arguments: 32, keyLength: 512, argumentLength: 16384, fallbackLength: 65536, listItems: 256, depth: 8, references: 32, totalText: 65536, encoded: 262144, jsonDepth: 64 });
 const scalarTypes = new Set(["string", "int64", "decimal", "boolean", "date", "time", "datetime", "guid"]);
@@ -128,6 +128,34 @@ export function resolveTextReference(value, handlers, options) {
   }
   const text = translate(tree, "$", handlers, options, diagnostics);
   return text === undefined ? fallback() : resolution("translated", text, diagnostics);
+}
+
+// References of several catalogs, such as an application's and its libraries': each reference goes to the resolveTextReference
+// of its catalog's transport module with that catalog's messages, so a library ViewModel's validation text is translated like
+// the application's own. Any catalog's transport module provides this; the copies behave alike.
+export function createReferenceResolver(catalogs) {
+  if (!Array.isArray(catalogs) || catalogs.length === 0) throw new TypeError("createReferenceResolver needs a list of { transport, messages }.");
+  const byCatalog = new Map();
+  for (const entry of catalogs) {
+    const transport = entry?.transport, messages = entry?.messages;
+    if (typeof transport?.catalog !== "string" || typeof transport.resolveTextReference !== "function" || messages === null || typeof messages !== "object")
+      throw new TypeError("Each catalog needs { transport, messages }: its generated transport module and its message namespace m.");
+    if (byCatalog.has(transport.catalog)) throw new TypeError(`Catalog '${transport.catalog}' is listed more than once.`);
+    byCatalog.set(transport.catalog, Object.freeze({ resolve: transport.resolveTextReference, messages }));
+  }
+  const first = byCatalog.values().next().value;
+  return function resolveReference(value, options) {
+    if (typeof value === "string") {
+      const json = parseTextReference(value);
+      if (!json.ok) return resolution("failed", undefined, [{ path: "$", reason: json.reason }]);
+      value = json.value;
+    }
+    // An own data member only: a getter of an untrusted object is never run here.
+    const member = value !== null && typeof value === "object" && !Array.isArray(value) ? Object.getOwnPropertyDescriptor(value, "catalog") : undefined;
+    const target = typeof member?.value === "string" ? byCatalog.get(member.value) : undefined;
+    // An unlisted catalog or a malformed value: the first catalog reports catalog-mismatch with the fallback text, or the failure.
+    return (target ?? first).resolve(value, (target ?? first).messages, options);
+  };
 }
 
 // Reads a version 1 or 2 wire value into a detached tree without consulting the receiver's contracts. Structural errors reject
