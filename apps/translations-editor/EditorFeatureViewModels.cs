@@ -217,6 +217,8 @@ public sealed class EditorInterchangeViewModel : EditorFeatureViewModel
     private EditorReviewImportPlan? _lastPreviewReviewJsonImport;
     private string _applyReviewJsonImportResultJson = "null";
     private EditorReviewOperationResult? _lastApplyReviewJsonImport;
+    private string _previewCatalogImportResultJson = "null";
+    private string _applyCatalogImportResultJson = "null";
 
     internal EditorInterchangeViewModel(EditorSession session, EditorViewModel owner, ISequencer scheduler) : base(session, owner, scheduler)
     {
@@ -226,7 +228,16 @@ public sealed class EditorInterchangeViewModel : EditorFeatureViewModel
         ExportReviewJsonCommand = CreateCommand(async argument => await Session.ExportReviewJsonAsync(Optional(argument, "path")), (result, value) => { LastExportReviewJson = result; ExportReviewJsonResultJson = value; });
         PreviewReviewJsonImportCommand = CreateCommand(async argument => await Session.PreviewReviewJsonImportAsync(Required(argument, "path")), (result, value) => { LastPreviewReviewJsonImport = result; PreviewReviewJsonImportResultJson = value; });
         ApplyReviewJsonImportCommand = CreateCommand(async argument => await Session.ApplyReviewJsonImportAsync(Required(argument, "confirmationToken")), (result, value) => { LastApplyReviewJsonImport = result; ApplyReviewJsonImportResultJson = value; });
+        PreviewCatalogImportCommand = CreateCommand(async argument => await Session.PreviewCatalogImportAsync(Parse<EditorCatalogImportRequest>(argument)), (_, value) => PreviewCatalogImportResultJson = value);
+        ApplyCatalogImportCommand = CreateCommand(async argument => await Session.ApplyCatalogImportAsync(Required(argument, "confirmationToken")), (_, value) => ApplyCatalogImportResultJson = value);
     }
+
+    public string PreviewCatalogImportResultJson { get => _previewCatalogImportResultJson; private set => this.RaiseAndSetIfChanged(ref _previewCatalogImportResultJson, value); }
+    public string ApplyCatalogImportResultJson { get => _applyCatalogImportResultJson; private set => this.RaiseAndSetIfChanged(ref _applyCatalogImportResultJson, value); }
+    /// <summary>The dry run of importing a .resx or i18next catalog (runic-translations import).</summary>
+    public ReactiveCommand<string, RxVoid> PreviewCatalogImportCommand { get; }
+    /// <summary>Applies the previewed catalog import once, by its confirmation token.</summary>
+    public ReactiveCommand<string, RxVoid> ApplyCatalogImportCommand { get; }
 
     public string ExportXliffResultJson { get => _exportXliffResultJson; private set => this.RaiseAndSetIfChanged(ref _exportXliffResultJson, value); }
     internal EditorXliffExportResult? LastExportXliff { get => _lastExportXliff; private set => this.RaiseAndSetIfChanged(ref _lastExportXliff, value); }

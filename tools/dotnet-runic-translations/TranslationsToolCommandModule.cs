@@ -350,7 +350,16 @@ internal sealed record TranslationsToolInterchange(string Operation, string Cata
     /// <summary>The review file that was read or written, if any.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? ReviewFile { get; init; }
+
+    /// <summary><c>import</c>: the base messages each declared locale leaves untranslated; null for other operations or when none.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<TranslationsToolInterchangeUntranslated>? Untranslated { get; init; }
 }
+
+/// <param name="Locale">A declared locale other than the base locale.</param>
+/// <param name="Count">How many base messages it does not translate.</param>
+/// <param name="Keys">Their keys in ordinal order, at most 1000.</param>
+internal sealed record TranslationsToolInterchangeUntranslated(string Locale, int Count, IReadOnlyList<string> Keys);
 
 /// <param name="Locale">The document's target locale.</param>
 /// <param name="Path">The written file.</param>

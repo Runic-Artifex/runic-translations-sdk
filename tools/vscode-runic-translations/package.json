@@ -114,6 +114,14 @@
       {
         "command": "runicTranslations.importXliffDryRun",
         "title": "Runic: Import XLIFF (dry run)"
+      },
+      {
+        "command": "runicTranslations.showStatus",
+        "title": "Runic: Show Translation Status"
+      },
+      {
+        "command": "runicTranslations.importCatalog",
+        "title": "Runic: Import .resx or i18next Catalog"
       }
     ],
     "configuration": {

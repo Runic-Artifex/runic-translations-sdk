@@ -215,6 +215,70 @@ internal sealed class TranslationProjectOperationsTests
         Throws<TranslationToolingUsageException>(() => TranslationCatalogImport.Plan(directory.Sources(), new("po", "i18next/locales", [], null)), "An unknown format was accepted.");
     }
 
+    [Test, DisplayName("an import into a catalog under the default completeness policy writes every locale and counts it in status")]
+    public void ImportIntoIncompleteCatalog()
+    {
+        using TemporaryProject directory = MigrationCorpus();
+        // The default translationCompleteness (error): the corpus's de.resx lacks most messages, so the imported catalog
+        // has untranslated messages (RTR0010) that neither refuse a message nor drop the translations it has.
+        directory.Write("translations/runic.json", "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Migrated\",\"className\":\"AppText\"},\"baseLocale\":\"en\",\"locales\":[\"en\",{\"tag\":\"de\",\"fallback\":\"en\"}]}");
+        TranslationProjectSources sources = directory.Sources();
+        TranslationCatalogImportPlan plan = TranslationCatalogImport.Plan(sources, new("resx", "resx/Strings.resx", [], null));
+        Require(plan is { Failure: TranslationCatalogImportFailure.None, Added: 13 }, $"The plan differs: {plan.Failure} {plan.Added} {Messages(plan.Diagnostics)}");
+        RequireWrites(directory, plan, "resx");
+
+        var after = sources.Messages.ToDictionary(static source => source.Path, StringComparer.Ordinal);
+        foreach (TranslationImportSourceWrite write in plan.Writes) after[write.DisplayPath] = new TranslationSource(write.DisplayPath, write.Bytes);
+        Rmf2ProjectCompilation strict = TranslationCompiler.CompileRmf2ProjectV5(sources.Project, after.Values.ToArray());
+        Require(!strict.Success && strict.Diagnostics.Any(static diagnostic => diagnostic.Id == "RTR0010"), "The fixture must leave untranslated messages.");
+        Rmf2ProjectCompilation counted = TranslationStatus.ForStatus(strict, sources.Project, after.Values.ToArray())
+            ?? throw new InvalidOperationException("status refused a catalog whose only errors are untranslated messages.");
+        TranslationsStatusLocale german = TranslationStatus.Report("translations/runic.json", counted, null, null, new Dictionary<string, double>()).Locales.Single(static locale => locale.Locale == "de");
+        Require(german is { Completeness: "error" } && german.Translated > 0 && german.Missing > 0, $"status: {german}");
+    }
+
+    [Test, DisplayName("an import lists what it leaves untranslated and reports errors the catalog already had as pre-existing, not as the import's")]
+    public void ImportWithPreexistingErrors()
+    {
+        using TemporaryProject directory = MigrationCorpus();
+        // extraLocaleKeys is an error by default: de's obsolete message (RTR0011) is the catalog's own error.
+        directory.Write("translations/de.rmf2", "title = Laden\nobsolete = Alt\n");
+        TranslationProjectSources sources = directory.Sources();
+        TranslationCatalogImportPlan plan = TranslationCatalogImport.Plan(sources, new("resx", "resx/Strings.resx", [], null));
+        Require(plan is { Failure: TranslationCatalogImportFailure.None, Added: 13 }, $"A pre-existing error failed the import: {plan.Failure} {Messages(plan.Diagnostics)}");
+        Require(plan.Preexisting.Single() is { Id: "RTR0011" } && plan.Notices.Any(static notice => notice is { Code: "IMPORT-PREEXISTING", Location: "translations/de.rmf2" } && notice.Message.Contains("RTR0011", StringComparison.Ordinal)),
+            "The pre-existing error wasn't reported: " + string.Join("; ", plan.Notices.Select(static notice => notice.Code + " " + notice.Message)));
+        // The corpus's de.resx translates only part of the base messages; the rest is listed per locale.
+        TranslationImportUntranslated german = plan.Untranslated.Single();
+        Require(german.Locale == "de" && german.Keys.Count > 0 && german.Keys.SequenceEqual(german.Keys.Order(StringComparer.Ordinal)) && !german.Keys.Contains("title"),
+            "The untranslated messages differ: " + string.Join(", ", german.Keys));
+    }
+
+    [Test, DisplayName("status counts a translation the review file marks draft (an editor starter copy) as missing")]
+    public void StatusDrafts()
+    {
+        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(Source("translations/runic.json", Project),
+        [
+            Source("translations/en.rmf2", "a = A\nb = B\nc = C\n"),
+            Source("translations/de.rmf2", "a = A\nb = B\nc = C de\n"),
+            Source("translations/de-CH.rmf2", "a = A\n"),
+            Source("translations/fr.rmf2", "a = A fr\nb = B fr\nc = C fr\n"),
+        ]);
+        Require(compilation.Success, Messages(compilation.Diagnostics));
+        var review = new TranslationInterchangeReview("app",
+        [
+            new TranslationInterchangeReviewEntry("a", "de", TranslationReviewState.Draft),
+            new TranslationInterchangeReviewEntry("b", "de", TranslationReviewState.Draft),
+            new TranslationInterchangeReviewEntry("a", "de-CH", TranslationReviewState.Draft),
+            new TranslationInterchangeReviewEntry("a", "fr", TranslationReviewState.Approved),
+        ]);
+        TranslationsStatusProject report = TranslationStatus.Report("translations/runic.json", compilation, review, "translations/app.review.json", new Dictionary<string, double>());
+        Require(report.Locales.Single(static locale => locale.Locale == "de") is { Translated: 1, Missing: 2, Coverage: 33.33 }, "de's drafts counted as translated.");
+        // de-CH's draft a and de's draft a: neither serves it; c comes from de.
+        Require(report.Locales.Single(static locale => locale.Locale == "de-CH") is { Translated: 0, Fallback: 1, Missing: 2 }, "de-CH's draft counted.");
+        Require(report.Locales.Single(static locale => locale.Locale == "fr") is { Translated: 3, Missing: 0 }, "An approved entry changed fr's count.");
+    }
+
     // The writes are the corpus's expected sources, at paths below the base directory.
     private static void RequireWrites(TemporaryProject directory, TranslationCatalogImportPlan plan, string expected)
     {

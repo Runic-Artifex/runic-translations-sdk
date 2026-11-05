@@ -81,7 +81,7 @@
         "translated": {
           "type": "integer",
           "minimum": 0,
-          "description": "Messages the locale translates itself."
+          "description": "Messages the locale translates itself, except those the review file marks draft."
         },
         "fallback": {
           "type": "integer",
@@ -91,7 +91,7 @@
         "missing": {
           "type": "integer",
           "minimum": 0,
-          "description": "Messages shown in the base locale."
+          "description": "Messages shown in the base locale, and translations the review file marks draft (starter copies of the base text)."
         },
         "coverage": {
           "type": "number",

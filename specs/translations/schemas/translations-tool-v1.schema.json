@@ -167,6 +167,13 @@
         "reviewFile": {
           "type": "string",
           "description": "The review file that was read or written."
+        },
+        "untranslated": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/interchangeUntranslated"
+          },
+          "description": "import: per declared locale, the base messages it does not translate after the import (validate reports RTR0010 for them); absent for other operations and when every locale is complete."
         }
       }
     },
@@ -309,6 +316,30 @@
         },
         "message": {
           "type": "string"
+        }
+      }
+    },
+    "interchangeUntranslated": {
+      "type": "object",
+      "required": [
+        "locale",
+        "count",
+        "keys"
+      ],
+      "properties": {
+        "locale": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "keys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The message keys in ordinal order; at most 1000 per locale."
         }
       }
     },

@@ -4081,6 +4081,16 @@ ui {
   }
 }
 ui {
+  backend {
+    locale_drafts_not_recorded = {$locale} was added, but its starter copies could not be recorded as drafts in {$path}, so its coverage counts them as translated.
+  }
+}
+ui {
+  backend {
+    review_drafts_not_updated = Saved, but the edited starter messages could not be recorded as translated in {$path}; status still counts them as missing.
+  }
+}
+ui {
   preview_formatting = Preview formatting
 }
 ui {
@@ -4153,6 +4163,113 @@ ui {
   locale_categories_seeded = Copied starter values get a variant for each plural category the language needs, as a copy of the * variant.
 }
 ui {
+  locale_status_translated = {$count} translated
+}
+ui {
+  locale_status_fallback = {$count} from {$locale}
+}
+ui {
+  locale_status_missing = {$count} missing
+}
+ui {
+  locale_status_stale = {$count} stale
+}
+ui {
+  locale_status_policy_error = missing translations are errors
+}
+ui {
+  locale_status_policy_warning = missing translations are warnings
+}
+ui {
+  locale_status_policy_allow = missing translations are allowed
+}
+ui {
+  backend {
+    import_source_required = Choose the .resx file or the i18next file or directory to import.
+  }
+}
+ui {
+  backend {
+    import_project_errors = Fix the errors in runic.json or the base locale before importing; nothing was written.
+  }
+}
+ui {
+  backend {
+    import_source_unreadable = The source could not be imported ({$code}): {$message}
+  }
+}
+ui {
+  backend {
+    import_messages_invalid = The imported messages do not compile; nothing was written.
+  }
+}
+ui {
+  catalog_import_title = Import from .resx or i18next
+}
+ui {
+  catalog_import_preexisting = The catalog already has these errors. The import neither causes nor fixes them; validate reports them until they are fixed.
+}
+ui {
+  catalog_import_description = Migrates an existing catalog into this project's .rmf2 sources with the runic-translations importer. Check the import first; nothing is written until you apply it.
+}
+ui {
+  catalog_import_format = Format
+}
+ui {
+  catalog_import_format_resx = A .resx file with its Strings.<locale>.resx satellites
+}
+ui {
+  catalog_import_format_i18next = i18next: <lng>.json, or a directory of <lng>.json or <lng>/<namespace>.json files
+}
+ui {
+  catalog_import_source = File or directory
+}
+ui {
+  catalog_import_overwrite = Replace the text of messages that already exist
+}
+ui {
+  catalog_import_check = Check import
+}
+ui {
+  catalog_import_apply = Import once
+}
+ui {
+  catalog_import_locale_summary = {$locale}: {$added} added, {$changed} changed, {$unchanged} unchanged, {$kept} kept
+}
+ui {
+  catalog_import_totals = {$skipped} skipped, {$refused} refused
+}
+ui {
+  catalog_import_files = Files to write
+}
+ui {
+  catalog_import_outcome = Outcome
+}
+ui {
+  catalog_import_reason = Reason
+}
+ui {
+  catalog_import_nothing = Nothing to import: every message is already there.
+}
+ui {
+  catalog_import_first_entries = Only the first 500 messages are listed.
+}
+ui {
+  page_project_wizard_step_import = Import
+}
+ui {
+  page_project_wizard_import_description = Optional: import an existing .resx or i18next catalog after the project is created. You check the import before anything is written.
+}
+ui {
+  page_project_wizard_import_none = Start empty
+}
+ui {
+  feedback_catalog_imported = Imported the catalog into this project's sources.
+}
+ui {
+  confirm {
+    apply_catalog_import = Discard unsaved document drafts, repair text, and workflow/terminology changes to apply this import?
+  }
   locale_script_suggestion = {$locale} is the script-level locale: runtime negotiation resolves {$typed} and the other regions that write this script to it. Keep {$typed} if you want this region only.
 }
 ui {

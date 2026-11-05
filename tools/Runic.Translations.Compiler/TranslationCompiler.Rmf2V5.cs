@@ -450,9 +450,10 @@ public static partial class TranslationCompiler
                 ReferenceFallbackText = manifest.ReferenceFallbackText,
                 BidiIsolation = manifest.BidiIsolation,
                 PluralCategoryPolicies = locales.ToDictionary(locale => locale.Tag, locale => manifest.Policy(locale.Tag, ValidationMembers.PluralCategories), StringComparer.Ordinal),
-                CompletenessPolicies = locales.ToDictionary(locale => locale.Tag, locale => manifest.Policy(locale.Tag, ValidationMembers.TranslationCompleteness), StringComparer.Ordinal),
                 FormatCurrencies = manifest.FormatCurrencies.Order(StringComparer.Ordinal).ToArray(),
                 FormatUnits = manifest.FormatUnits.Order(StringComparer.Ordinal).ToArray(),
+                // As declared, also in a relaxed compilation: status reports it for catalogs whose translations are incomplete.
+                CompletenessPolicies = locales.ToDictionary(locale => locale.Tag, locale => manifest.DeclaredPolicy(locale.Tag, ValidationMembers.TranslationCompleteness), StringComparer.Ordinal),
             });
 
         Rmf2ProjectEntryV5? Compile(Rmf2ProjectSourceV5 source, IReadOnlyList<Rmf2InputV5>? callerInputs)

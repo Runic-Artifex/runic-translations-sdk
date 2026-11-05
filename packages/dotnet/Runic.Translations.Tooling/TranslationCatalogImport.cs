@@ -22,7 +22,10 @@ internal enum TranslationCatalogImportFailure
     ProjectDoesNotCompile,
     /// <summary>The source cannot be read at all; see <see cref="TranslationCatalogImportPlan.FailureCode"/>.</summary>
     SourceUnreadable,
-    /// <summary>The imported messages do not compile; <see cref="TranslationCatalogImportPlan.Diagnostics"/> lists the errors.</summary>
+    /// <summary>
+    /// The imported messages do not compile; <see cref="TranslationCatalogImportPlan.Diagnostics"/> lists the errors the
+    /// import introduces (not those the catalog already had).
+    /// </summary>
     MessagesDoNotCompile,
 }
 
@@ -40,6 +43,12 @@ internal sealed record TranslationImportDocument(string Locale, string Path, int
 
 /// <summary>One file an import replaces: its full and displayed path, the bytes it was read with (none for a new file) and the new bytes.</summary>
 internal sealed record TranslationImportSourceWrite(string FullPath, string DisplayPath, byte[]? OriginalBytes, byte[] Bytes);
+
+/// <summary>
+/// The base messages a declared locale does not translate after the import, whether or not it was imported (validate
+/// reports RTR0010 for them under the default <c>translationCompleteness</c>).
+/// </summary>
+internal sealed record TranslationImportUntranslated(string Locale, IReadOnlyList<string> Keys);
 
 /// <summary>The messages of one locale against the sources before the import.</summary>
 internal sealed record TranslationImportLocaleCounts(string Locale, int Added, int Changed, int Unchanged, int Kept);
@@ -76,6 +85,15 @@ internal sealed record TranslationCatalogImportPlan(string From, TranslationCata
 
     /// <summary>The counts per imported locale, base locale first.</summary>
     internal IReadOnlyList<TranslationImportLocaleCounts> Locales { get; init; } = [];
+
+    /// <summary>
+    /// The errors the catalog had before the import (other than RTR0010): they do not refuse a message or fail the
+    /// import, and each is also a notice with code <c>IMPORT-PREEXISTING</c>.
+    /// </summary>
+    internal IReadOnlyList<TranslationDiagnostic> Preexisting { get; init; } = [];
+
+    /// <summary>The base messages each declared locale leaves untranslated after the import, by locale.</summary>
+    internal IReadOnlyList<TranslationImportUntranslated> Untranslated { get; init; } = [];
 
     internal int Skipped { get; init; }
 
@@ -114,10 +132,17 @@ internal static class TranslationCatalogImport
 
         if (sources.Messages.Any(static source => source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)))
             throw new TranslationToolingUsageException("import writes grouped .rmf2 resources; this project uses direct .mf2 files.");
-        Rmf2ProjectCompilation current = Compile(sources.Project, sources.Messages);
-        if (withProjectErrors is not null) current = withProjectErrors(current);
-        if (!current.Success || current.Project is null)
-            return new TranslationCatalogImportPlan(request.From, TranslationCatalogImportFailure.ProjectDoesNotCompile) { Diagnostics = current.Diagnostics };
+        Rmf2ProjectCompilation strict = Compile(sources.Project, sources.Messages);
+        if (withProjectErrors is not null) strict = withProjectErrors(strict);
+        // A catalog being translated (RTR0010 and the other validation policies) imports like a complete one; only
+        // runic.json, base-locale or syntax errors stop the import, as they stop status.
+        if (TranslationStatus.ForStatus(strict, sources.Project, sources.Messages) is not { Project: not null } current)
+            return new TranslationCatalogImportPlan(request.From, TranslationCatalogImportFailure.ProjectDoesNotCompile) { Diagnostics = strict.Diagnostics };
+        // The errors the catalog already has, such as an obsolete translation (RTR0011): the import neither refuses a
+        // message for them nor fails on them, and reports them as pre-existing. By id, file and message, which names
+        // the key; the import moves lines.
+        TranslationDiagnostic[] preexisting = strict.Diagnostics.Where(IsBlocking).ToArray();
+        var preexistingIdentities = preexisting.Select(Identity).ToHashSet();
         Rmf2ProjectV5 project = current.Project;
         string catalog = current.CatalogId!;
         string currentDirectory = Path.GetFullPath(sources.BaseDirectory);
@@ -181,18 +206,27 @@ internal static class TranslationCatalogImport
 
         // Plan, compile, and refuse the messages a compiler error points at; repeat until the project compiles.
         var refused = new HashSet<(string Locale, string Key)>();
+        IReadOnlyList<TranslationImportUntranslated> untranslated = [];
         IReadOnlyList<TranslationSource> planned = sources.Messages;
         for (int round = 0; ; round++)
         {
             var noBase = new List<(string Locale, string Key)>();
             planned = PlanAll(sources, current, messages, refused, directory, noBase, out Rmf2ProjectCompilation proposed);
-            if (proposed.Success && proposed.Project is not null)
+            // Imported base messages that a locale does not translate yet (RTR0010) are what a migration leaves to
+            // translate, as runic-translations locale add leaves them; they do not refuse a message.
+            var errors = proposed.Diagnostics.Where(diagnostic => IsBlocking(diagnostic) && !preexistingIdentities.Contains(Identity(diagnostic))).ToArray();
+            if (errors.Length == 0)
             {
                 foreach ((string locale, string key) in noBase)
                     report.Refuse(locale, key, "IMPORT-NO-BASE", $"There is no {project.DefaultLocale} message '{key}' to translate; import the base locale first.");
+                foreach (TranslationDiagnostic diagnostic in preexisting)
+                    report.Notice(diagnostic.Location.Path, "IMPORT-PREEXISTING",
+                        $"error {diagnostic.Id}: {diagnostic.Message} The catalog had this error before the import; runic-translations validate reports it.");
+                untranslated = TranslationStatus.ForStatus(proposed, sources.Project, planned) is { Project: { } after }
+                    ? TranslationStatus.MissingKeys(after).Select(static item => new TranslationImportUntranslated(item.Locale, item.Keys)).ToArray()
+                    : [];
                 break;
             }
-            var errors = proposed.Diagnostics.Where(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error).ToArray();
             var attributed = Attribute(currentDirectory, sources.Project, planned, errors, messages, refused);
             if (attributed.Count == 0 || round == MaximumRounds)
                 return new TranslationCatalogImportPlan(request.From, TranslationCatalogImportFailure.MessagesDoNotCompile) { Catalog = catalog, Diagnostics = errors };
@@ -244,10 +278,19 @@ internal static class TranslationCatalogImport
             Entries = report.Entries,
             Notices = report.Notices,
             Locales = counts,
+            Untranslated = untranslated,
+            Preexisting = preexisting,
             Skipped = report.Skipped,
             Refused = report.Refused,
         };
     }
+
+    // An error that blocks a build: every error but a missing translation (RTR0010), which an import leaves to translate.
+    private static bool IsBlocking(TranslationDiagnostic diagnostic) =>
+        diagnostic.Severity == TranslationDiagnosticSeverity.Error && diagnostic.Id != "RTR0010";
+
+    private static (string Id, string Path, string Message) Identity(TranslationDiagnostic diagnostic) =>
+        (diagnostic.Id, diagnostic.Location.Path, diagnostic.Message);
 
     /// <summary>Checks the format and the group of a request before the project is read.</summary>
     /// <exception cref="TranslationToolingUsageException">The format or the group is invalid.</exception>
@@ -304,7 +347,10 @@ internal static class TranslationCatalogImport
             {
                 sources = TranslationInterchangeSourceWriter.Apply(sources, edits);
                 compilation = Compile(inputs.Project, sources);
-                if (!compilation.Success || compilation.Project is null) return sources;
+                // New base messages are untranslated in the other locales (RTR0010) until their translations are
+                // planned below; only other errors stop here, and the caller attributes them.
+                if (TranslationStatus.ForStatus(compilation, inputs.Project, sources) is not { Project: not null } relaxed) return sources;
+                compilation = relaxed;
             }
         }
 

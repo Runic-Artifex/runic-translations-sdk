@@ -422,6 +422,8 @@ internal sealed class EditorWorkspace : IDisposable
             {
                 return Failure("encoding", EditorNotice.Create("ui_backend_encoding"));
             }
+            // Starter copies (draft review entries) this save edits become translated once it commits.
+            var drafts = creatingMf2 ? null : DraftsBeforeSave(state, path);
 
             string temporaryPath = Path.Combine(
                 Path.GetDirectoryName(fullPath)!,
@@ -450,7 +452,16 @@ internal sealed class EditorWorkspace : IDisposable
 
             // The atomic replace is the point of no return.  The session records the
             // known output revision before it chooses to reload; do not reread here.
-            return new EditorOperationResult(true, "saved", null, null, null);
+            EditorNotice? warning = null;
+            if (drafts is { } edited)
+            {
+                try { PromoteEditedDrafts(state, edited.Locale, edited.Before); }
+                catch (Exception exception) when (exception is TranslationInterchangeException or IOException or UnauthorizedAccessException)
+                {
+                    warning = EditorNotice.Create("ui_backend_review_drafts_not_updated", ("path", ReviewDisplayPath() ?? "review.json")) with { Detail = exception.Message };
+                }
+            }
+            return new EditorOperationResult(true, "saved", warning, null, null);
         }
         catch (ArgumentException exception)
         {
@@ -1401,7 +1412,23 @@ internal sealed class EditorWorkspace : IDisposable
                 review = new EditorReviewSnapshot(store.DisplayPath, null, exception.Message, [], []);
             }
         }
-        return new WorkspaceSnapshot(_root, catalog, state.Catalogs, documents, Diagnostics(state), state.Compilation.Success, null, review, null);
+        return new WorkspaceSnapshot(_root, catalog, state.Catalogs, documents, Diagnostics(state), state.Compilation.Success, null, review, null, Status(state));
+    }
+
+    // The status report of runic-translations status, from the same compilation (relaxed while translations are
+    // incomplete) and review file. The editor has no --min-coverage thresholds.
+    private TranslationsStatusProject? Status(WorkspaceState state)
+    {
+        WorkspaceFile? manifest = state.Files.Find(static file => file.Kind == DocumentKind.Manifest);
+        if (manifest is null || _catalogId is null) return null;
+        Rmf2ProjectCompilation? counted = TranslationStatus.ForStatus(state.Compilation, Source(manifest.Path, manifest.Content),
+            state.Files.Where(static file => file.Kind == DocumentKind.Resource).Select(static file => Source(file.Path, file.Content)).ToArray());
+        if (counted is null) return null;
+        string reviewPath = TranslationReviewFile.PathFor(ContainedPath(manifest.Path), _catalogId);
+        TranslationInterchangeReview? review = null;
+        try { review = TranslationReviewFile.Read(reviewPath, _catalogId); }
+        catch (Exception exception) when (exception is TranslationInterchangeException or IOException or UnauthorizedAccessException) { /* The review snapshot reports it. */ }
+        return TranslationStatus.Report(manifest.Path, counted, review, review is null ? null : ReportedOutputPath(reviewPath), new Dictionary<string, double>());
     }
 
     // The compiler's diagnostics and, with a review file, RTR0090 for stale review entries (or RTR0091 when the file
@@ -1884,7 +1911,75 @@ internal sealed class EditorWorkspace : IDisposable
         return seeded;
     }
 
-    /// <summary>After a locale's removal: its entries leave the review file, as runic-translations locale remove drops them.</summary>
+    private const int MaximumImportEntries = 500;
+
+    /// <summary>
+    /// Plans importing a .resx or i18next catalog with Tooling's importer (runic-translations import) against the saved
+    /// files: the outcome of each message and the files it writes, as a workspace transaction that commits only when
+    /// none of them changed since. A relative source is resolved against the workspace root.
+    /// </summary>
+    internal async Task<(EditorCatalogImportPlan Plan, TranslationWorkspaceTransactionPlan? Transaction)> PreviewCatalogImportAsync(
+        EditorCatalogImportRequest request, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ThrowIfDisposed();
+            EditorCatalogImportPlan Refused(EditorNotice message, IReadOnlyList<EditorDiagnostic>? diagnostics = null) =>
+                new(false, message, null, request.From, request.Source, [], [], false, [], 0, 0, diagnostics ?? []);
+            string? config = FindMf2ProjectConfig();
+            if (config is null || string.IsNullOrWhiteSpace(request.Source)) return (Refused(EditorNotice.Create("ui_backend_import_source_required")), null);
+            TranslationManifestLayout layout = TranslationManifestReader.Read(File.ReadAllBytes(config), Path.GetDirectoryName(config)!);
+            if (!layout.IsValid) return (Refused(EditorNotice.FromException(new TranslationAuthoringException(layout.Error!))), null);
+            WorkspaceState state = await ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
+            var project = new TranslationSource(NormalizeRelativePath(Path.GetRelativePath(_root, config)), File.ReadAllBytes(config));
+            TranslationSource[] sources = state.Files.Where(file => file.Kind == DocumentKind.Resource && IsSourcePath(file.Path)).Select(file => Source(file.Path, file.Content)).ToArray();
+            var inputs = new TranslationProjectSources(_root, project, sources, layout.SourceRoots);
+            string sourcePath = Path.GetFullPath(request.Source.Trim(), _root);
+            TranslationCatalogImportPlan plan;
+            try { plan = TranslationCatalogImport.Plan(inputs, new TranslationCatalogImportRequest(request.From, sourcePath, [], null, request.Overwrite)); }
+            catch (TranslationToolingUsageException exception) { return (Refused(EditorNotice.FromException(new TranslationAuthoringException(exception.Message, exception))), null); }
+            EditorDiagnostic[] diagnostics = plan.Diagnostics.Where(static item => item.Severity == TranslationDiagnosticSeverity.Error)
+                .Select(static item => new EditorDiagnostic(item.Id, "error", item.Message, item.Location.Path, item.Location.Line, item.Location.Column, item.Location.EndLine, item.Location.EndColumn)).ToArray();
+            switch (plan.Failure)
+            {
+                case TranslationCatalogImportFailure.ProjectDoesNotCompile: return (Refused(EditorNotice.Create("ui_backend_import_project_errors"), diagnostics), null);
+                case TranslationCatalogImportFailure.SourceUnreadable: return (Refused(EditorNotice.Create("ui_backend_import_source_unreadable", ("code", plan.FailureCode ?? ""), ("message", plan.FailureMessage ?? ""))), null);
+                case TranslationCatalogImportFailure.MessagesDoNotCompile: return (Refused(EditorNotice.Create("ui_backend_import_messages_invalid"), diagnostics), null);
+            }
+
+            var entries = plan.Applied.Concat(plan.Entries).Select(static entry => new EditorCatalogImportEntry(entry.Locale, entry.Key, entry.Outcome, entry.Code, entry.Message)).ToArray();
+            var result = new EditorCatalogImportPlan(true, null, null, request.From, request.Source,
+                plan.Locales.Select(static locale => new EditorCatalogImportLocale(locale.Locale, locale.Added, locale.Changed, locale.Unchanged, locale.Kept)).ToArray(),
+                entries.Take(MaximumImportEntries).ToArray(), entries.Length > MaximumImportEntries,
+                plan.Writes.Select(write => NormalizeRelativePath(Path.GetRelativePath(_root, write.FullPath))).ToArray(), plan.Skipped, plan.Refused,
+                // The catalog's own errors from before the import, which it neither causes nor fixes.
+                plan.Preexisting.Select(static item => new EditorDiagnostic(item.Id, "warning", item.Message, item.Location.Path, item.Location.Line, item.Location.Column, item.Location.EndLine, item.Location.EndColumn)).ToArray());
+            if (plan.Writes.Count == 0) return (result, null);
+
+            // The writes as one transaction: each replaced file must still have the bytes the import read.
+            var edits = new List<TranslationWorkspaceEdit>();
+            var after = sources.ToDictionary(static source => source.Path, StringComparer.Ordinal);
+            foreach (TranslationImportSourceWrite write in plan.Writes)
+            {
+                string relative = NormalizeRelativePath(Path.GetRelativePath(_root, write.FullPath));
+                if (relative == ".." || relative.StartsWith("../", StringComparison.Ordinal) || Path.IsPathRooted(relative))
+                    return (Refused(EditorNotice.Create("ui_backend_source_outside_project", ("path", write.DisplayPath))), null);
+                edits.Add(write.OriginalBytes is null
+                    ? new TranslationWorkspaceEdit(relative, TranslationWorkspaceEditKind.Create, null, write.Bytes)
+                    : new TranslationWorkspaceEdit(relative, TranslationWorkspaceEditKind.Replace, WorkspaceRevision(write.OriginalBytes), write.Bytes));
+                after[relative] = new TranslationSource(relative, write.Bytes);
+            }
+            Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(project, after.Values.ToArray(), null, cancellationToken);
+            Rmf2ProjectCompilation counted = TranslationStatus.ForStatus(compilation, project, after.Values.ToArray(), cancellationToken) ?? compilation;
+            return (result, new TranslationWorkspaceTransactionPlan(_root, counted.Project?.Id ?? _catalogId ?? "", edits, counted));
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     /// <summary>The open catalog's review file relative to the workspace, or null without a catalog.</summary>
     internal string? ReviewDisplayPath() =>
         _catalogId is null || FindMf2ProjectConfig() is not { } config || !TranslationReviewFile.IsFileName(_catalogId) ? null
@@ -1914,6 +2009,70 @@ internal sealed class EditorWorkspace : IDisposable
         }
     }
 
+    /// <summary>
+    /// After a locale's addition: its starter messages, copies of another locale's text, are recorded as <c>draft</c> in
+    /// the review file (XLIFF's <c>initial</c>), so status and the language list count them as missing, not as 100 %
+    /// translated, until they are translated: saving an edited one records it <c>translated</c>, as
+    /// <c>runic-translations review mark</c> does. An existing entry of the locale's messages (left by an earlier
+    /// removal) is replaced.
+    /// </summary>
+    internal void RecordStarterDrafts(string locale, IReadOnlyCollection<string> createdFiles)
+    {
+        if (FindMf2ProjectConfig() is not { } config) return;
+        WorkspaceState state = ReadStateAsync(null, null, CancellationToken.None, resetBaseline: false).GetAwaiter().GetResult();
+        Rmf2ProjectCompilation review = ReviewCompilation(state);
+        if (_catalogId is null || review.Project is not { } project ||
+            project.Locales.FirstOrDefault(item => string.Equals(item.Tag, locale, StringComparison.OrdinalIgnoreCase)) is not { } added || added.Tag == project.DefaultLocale) return;
+        // Only the messages of the files the addition created: a file that was already there is the locale's own text.
+        string[] keys = added.DirectResources.Where(resource => createdFiles.Contains(resource.SourceLocation.Path))
+            .Select(static resource => resource.Key).Distinct(StringComparer.Ordinal).ToArray();
+        if (keys.Length == 0) return;
+        IReadOnlyDictionary<string, string> fingerprints = TranslationInterchange.ComputeSourceFingerprints(review);
+        string catalog = _catalogId;
+        TranslationReviewFile.Update(TranslationReviewFile.PathFor(config, catalog), catalog,
+            existing => TranslationReviewFile.Mark(existing, catalog, keys.Where(fingerprints.ContainsKey), added.Tag, TranslationReviewState.Draft, null, fingerprints));
+    }
+
+    // The draft review entries of a translated locale's messages that one saved file contains, and their text before the
+    // save; null when there are none (the usual case, which needs no extra compilation).
+    private (string Locale, Dictionary<string, string> Before)? DraftsBeforeSave(WorkspaceState saved, string path)
+    {
+        if (_catalogId is null || FindMf2ProjectConfig() is not { } config || saved.Compilation.Project is not { } project ||
+            saved.Files.Find(file => file.Path == path)?.Locale is not { } locale || locale == project.DefaultLocale) return null;
+        TranslationInterchangeReview? review;
+        try { review = TranslationReviewFile.Read(TranslationReviewFile.PathFor(config, _catalogId), _catalogId); }
+        catch (Exception exception) when (exception is TranslationInterchangeException or IOException or UnauthorizedAccessException) { return null; }
+        var drafts = (review?.Entries ?? []).Where(entry => entry.State == TranslationReviewState.Draft && entry.Locale == locale).Select(static entry => entry.Key).ToHashSet(StringComparer.Ordinal);
+        if (drafts.Count == 0) return null;
+        // The sources on disk, before this save.
+        WorkspaceState before = ReadStateAsync(null, null, CancellationToken.None, resetBaseline: false).GetAwaiter().GetResult();
+        Rmf2ProjectCompilation compiled = ReviewCompilation(before);
+        if (compiled.Project?.Locales.FirstOrDefault(item => item.Tag == locale) is not { } previous) return null;
+        var texts = previous.DirectResources.Where(resource => drafts.Contains(resource.Key) && resource.SourceLocation.Path == path)
+            .ToDictionary(static resource => resource.Key, static resource => Encoding.UTF8.GetString(resource.Message.Syntax.Source.GetUtf8Bytes()), StringComparer.Ordinal);
+        return texts.Count == 0 ? null : (locale, texts);
+    }
+
+    // After a save: each draft message of the file whose text changed is recorded translated, for its current source.
+    private void PromoteEditedDrafts(WorkspaceState saved, string locale, Dictionary<string, string> before)
+    {
+        if (_catalogId is null || FindMf2ProjectConfig() is not { } config) return;
+        Rmf2ProjectCompilation review = ReviewCompilation(saved);
+        if (review.Project?.Locales.FirstOrDefault(item => item.Tag == locale) is not { } current) return;
+        string[] edited = current.DirectResources.Where(resource => before.TryGetValue(resource.Key, out string? text) &&
+            !string.Equals(text, Encoding.UTF8.GetString(resource.Message.Syntax.Source.GetUtf8Bytes()), StringComparison.Ordinal)).Select(static resource => resource.Key).ToArray();
+        if (edited.Length == 0) return;
+        IReadOnlyDictionary<string, string> fingerprints = TranslationInterchange.ComputeSourceFingerprints(review);
+        string catalog = _catalogId;
+        // Compare-and-swap; only entries that are still drafts change.
+        TranslationReviewFile.Update(TranslationReviewFile.PathFor(config, catalog), catalog, existing =>
+        {
+            string[] drafts = edited.Where(key => fingerprints.ContainsKey(key) && existing?.Entries.Any(entry => entry.Key == key && entry.Locale == locale && entry.State == TranslationReviewState.Draft) == true).ToArray();
+            return drafts.Length == 0 ? existing : TranslationReviewFile.Mark(existing, catalog, drafts, locale, TranslationReviewState.Translated, null, fingerprints);
+        });
+    }
+
+    /// <summary>After a locale's removal: its entries leave the review file, as runic-translations locale remove drops them.</summary>
     internal void CompleteLocaleRemoval(string locale)
     {
         if (_catalogId is null || FindMf2ProjectConfig() is not { } config) return;

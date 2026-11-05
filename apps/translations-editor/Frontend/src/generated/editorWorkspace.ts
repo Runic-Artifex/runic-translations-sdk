@@ -166,7 +166,7 @@ const members: BridgeMemberDecoders<EditorWorkspaceState> = {
   isListLocalesExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isDescribeLocaleExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorWorkspaceViewModel:DED79562058A5F044218FF7D157CE7BB9075A685D7090FE94A9EDEB655F30D46";
+const bridgeContract = "Runic.Translations.Editor.EditorWorkspaceViewModel:65CB9514BADD2A468BEE5C0905089A11636FF7E3BA9F1133DE5231364EDD720E";
 const loadOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const checkExternalChangesOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const pickWorkspaceOperation: BridgeOperationCodec<void> = { decode: value => undefined };

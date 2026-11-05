@@ -1,5 +1,5 @@
 import type { UiText } from "./ui-text";
-import type { EditorDocument, EditorMessageEntry, WorkspaceSnapshot } from "./contracts";
+import type { EditorDocument, EditorMessageEntry, EditorStatusProject, WorkspaceSnapshot } from "./contracts";
 
 export type ResourceValue = string | Record<string, unknown>;
 
@@ -162,6 +162,26 @@ export function coverage(rows: TranslationRow[], locale: string): { translated: 
   return {
     translated: rows.filter((row) => row.cells[locale]?.entry !== undefined).length,
     total: rows.length,
+  };
+}
+
+/**
+ * A locale's coverage as `runic-translations status` reports it (`status`), the same numbers as the command line, or
+ * counted from the rows while the catalog has errors that stop the report.
+ */
+export function localeCoverage(status: EditorStatusProject | undefined, rows: TranslationRow[], locale: string):
+  { translated: number; fallback: number; missing: number; total: number; percent: number; stale?: number; completeness?: string; fromStatus: boolean } {
+  const reported = status?.locales.find((item) => item.locale === locale);
+  if (status !== undefined && reported !== undefined) {
+    return {
+      translated: reported.translated, fallback: reported.fallback, missing: reported.missing, total: status.messages,
+      percent: reported.coverage, stale: reported.stale, completeness: reported.completeness, fromStatus: true,
+    };
+  }
+  const counted = coverage(rows, locale);
+  return {
+    translated: counted.translated, fallback: 0, missing: counted.total - counted.translated, total: counted.total,
+    percent: counted.total === 0 ? 100 : Math.floor((counted.translated / counted.total) * 10000) / 100, fromStatus: false,
   };
 }
 

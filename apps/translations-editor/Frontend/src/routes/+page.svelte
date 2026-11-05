@@ -19,6 +19,7 @@
     EditorDiagnosticQuickFix,
     EditorDocument,
     EditorExternalFileChange,
+    EditorCatalogImportPlan,
     EditorLocaleCatalog,
     EditorLocaleDescription,
     EditorLocaleMatches,
@@ -107,7 +108,7 @@
   } from "#lib/local-state.js";
   import {
     buildRows,
-    coverage,
+    localeCoverage,
     formatJson,
     preview,
     type ResourceValue,
@@ -183,6 +184,9 @@
   let validationEpoch = 0;
   let projectDialogOpen = $state(false);
   let projectStep = $state(1);
+  // The wizard's optional import step: after creating the project, the import's dry run opens for confirmation.
+  let wizardImportFrom = $state<"" | "resx" | "i18next">("");
+  let wizardImportSource = $state("");
   let projectDirectory = $state("");
   let projectCatalog = $state("product");
   let projectDefaultLocale = $state("en");
@@ -292,6 +296,15 @@
   let xliffPreview = $state.raw<EditorXliffImportPreview>();
   let reviewExport = $state.raw<EditorReviewFileResult>();
   let reviewPreview = $state.raw<EditorReviewImportPreview>();
+  // Import from .resx or i18next (runic-translations import): a dry run, then once by its confirmation token.
+  let catalogImportFrom = $state<"resx" | "i18next">("resx");
+  let catalogImportSource = $state("");
+  let catalogImportOverwrite = $state(false);
+  let catalogImportPlanned = $state.raw<{ inputs: string; plan: EditorCatalogImportPlan }>();
+  // The dry run of the current inputs only: changing the format, the source or "overwrite" invalidates it, so "Import once"
+  // never applies a plan made for other inputs (its token stays unused and expires with the next dry run).
+  const catalogImportInputs = $derived(JSON.stringify([catalogImportFrom, catalogImportSource.trim(), catalogImportOverwrite]));
+  const catalogImportPlan = $derived(catalogImportPlanned?.inputs === catalogImportInputs ? catalogImportPlanned.plan : undefined);
 
   let labels = $derived(labelsFor(uiLocale));
   $effect(() => {
@@ -311,15 +324,20 @@
   let reviewMutationBlocked = $derived(editorMutationBlocked || reviewSaving || snapshot?.review?.migrationPending === true);
   let rows = $derived(buildRows(snapshot, drafts, parsedDrafts));
   let messageSearch = $derived(createMessageSearchIndex(rows));
+  // Coverage from runic-translations status (Tooling), the numbers of the command line, for the saved files.
   let localeSummaries = $derived.by(() => (snapshot?.catalog?.locales ?? []).map((locale) => {
-    const state = coverage(rows, locale.tag);
+    const state = localeCoverage(snapshot?.status, rows, locale.tag);
     return {
       tag: locale.tag,
       name: localeName(locale.tag),
       fallback: locale.fallback,
       translated: state.translated,
+      fallbackCount: state.fallback,
+      missing: state.missing,
+      stale: state.stale,
+      completeness: state.completeness,
       total: state.total,
-      percent: state.total === 0 ? 100 : Math.round((state.translated / state.total) * 100),
+      percent: state.percent,
       isSource: locale.tag === snapshot?.catalog?.defaultLocale,
     };
   }));
@@ -1282,6 +1300,37 @@
     }
   }
 
+  async function previewCatalogImport(): Promise<void> {
+    if (interchangeBusy || catalogImportSource.trim() === "") return;
+    interchangeBusy = true;
+    try {
+      const inputs = catalogImportInputs;
+      const plan = await bridge.previewCatalogImport({ from: catalogImportFrom, source: catalogImportSource.trim(), overwrite: catalogImportOverwrite });
+      catalogImportPlanned = { inputs, plan };
+    } catch (error) {
+      operationMessage = errorNotice(error);
+    } finally {
+      interchangeBusy = false;
+    }
+  }
+
+  async function applyCatalogImport(): Promise<void> {
+    if (interchangeBusy || catalogImportPlan?.confirmationToken === undefined || !confirmDiscardUnsavedWork("ui_confirm_apply_catalog_import")) return;
+    interchangeBusy = true;
+    try {
+      const token = catalogImportPlan.confirmationToken;
+      // The token is one-use on the host whether or not the import commits: a failed apply needs a fresh dry run.
+      catalogImportPlanned = undefined;
+      const result = await bridge.applyCatalogImport(token);
+      operationMessage = result.message ?? (result.ok ? notice("ui_feedback_catalog_imported") : notice("ui_backend_import_messages_invalid"));
+      if (result.snapshot !== undefined) installSnapshot(result.snapshot, true);
+    } catch (error) {
+      operationMessage = errorNotice(error);
+    } finally {
+      interchangeBusy = false;
+    }
+  }
+
   async function exportReviewJson(): Promise<void> {
     if (interchangeBusy) return;
     interchangeBusy = true;
@@ -1629,6 +1678,8 @@
   function openProjectWizard(): void {
     if (historyBusy) return;
     projectStep = 1;
+    wizardImportFrom = "";
+    wizardImportSource = "";
     projectDirectory = "";
     projectCatalog = "product";
     projectDefaultLocale = "en";
@@ -1689,6 +1740,10 @@
       projectError = notice("ui_feedback_namespace_required");
       return false;
     }
+    if (projectStep === 4 && wizardImportFrom !== "" && wizardImportSource.trim() === "") {
+      projectError = notice("ui_backend_import_source_required");
+      return false;
+    }
     projectError = undefined;
     return true;
   }
@@ -1696,7 +1751,7 @@
   async function advanceProjectWizard(): Promise<void> {
     if (historyBusy) return;
     if (!validateProjectStep()) return;
-    if (projectStep < 3) {
+    if (projectStep < 4) {
       projectStep += 1;
       return;
     }
@@ -1708,7 +1763,7 @@
         projectError = plan.message ?? notice("ui_feedback_project_invalid");
         return;
       }
-      projectStep = 4;
+      projectStep = 5;
     } catch (error) {
       projectError = errorNotice(error);
     } finally {
@@ -1731,6 +1786,16 @@
       installSnapshot(result.snapshot, true);
       operationMessage = notice("ui_feedback_project_created");
       projectDialogOpen = false;
+      if (wizardImportFrom !== "" && wizardImportSource.trim() !== "") {
+        // The import step: its dry run opens in the interchange dialog, applied only after confirmation.
+        catalogImportFrom = wizardImportFrom;
+        catalogImportSource = wizardImportSource.trim();
+        catalogImportOverwrite = false;
+        catalogImportPlanned = undefined;
+        interchangeOpen = true;
+        projectBusy = false;
+        await previewCatalogImport();
+      }
     } catch (error) {
       projectError = errorNotice(error);
     } finally {
@@ -2742,6 +2807,12 @@
   onexportreview={() => void exportReviewJson()}
   onpreviewreview={() => void previewReviewJsonImport()}
   onapplyreview={() => void applyReviewJsonImport()}
+  bind:catalogImportFrom
+  bind:catalogImportSource
+  bind:catalogImportOverwrite
+  {catalogImportPlan}
+  onpreviewcatalog={() => void previewCatalogImport()}
+  onapplycatalog={() => void applyCatalogImport()}
 />
 
 {#if repairDocument !== undefined}
@@ -2940,8 +3011,8 @@
     showCloseButton={!projectBusy}
     onopenchange={(open) => { if (!open && !projectBusy) closeProjectWizard(); }}
   >
-    <ol class="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label={ui.text("ui_page_project_wizard_steps_aria_label")}>
-      {#each [ui.text("ui_page_project_wizard_step_project"), ui.text("ui_page_project_wizard_step_languages"), ui.text("ui_page_project_wizard_step_settings"), ui.text("ui_page_project_wizard_step_review")] as title, index (title)}
+    <ol class="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-5" aria-label={ui.text("ui_page_project_wizard_steps_aria_label")}>
+      {#each [ui.text("ui_page_project_wizard_step_project"), ui.text("ui_page_project_wizard_step_languages"), ui.text("ui_page_project_wizard_step_settings"), ui.text("ui_page_project_wizard_step_import"), ui.text("ui_page_project_wizard_step_review")] as title, index (title)}
         <li class="flex items-center gap-2 text-sm" aria-current={projectStep === index + 1 ? "step" : undefined}>
           <Badge variant={projectStep === index + 1 ? "default" : projectStep > index + 1 ? "secondary" : "outline"}>{projectStep > index + 1 ? "✓" : index + 1}</Badge>
           <span class={projectStep === index + 1 ? "font-medium" : "text-muted-foreground"}>{title}</span>
@@ -2986,9 +3057,27 @@
         </div>
         <Field.Field orientation="horizontal"><Checkbox id="project-starter" bind:checked={projectIncludeStarter} /><Field.Content><Field.Label for="project-starter">{ui.text("ui_page_project_wizard_add_starter")}</Field.Label><Field.Description>{ui.text("ui_page_project_wizard_add_starter_description")}</Field.Description></Field.Content></Field.Field>
       </Field.FieldGroup>
-    {:else if projectStep === 4 && projectPlan !== undefined}
+    {:else if projectStep === 4}
+      <div class="mb-5"><h3 class="font-medium">{ui.text("ui_catalog_import_title")}</h3><p class="text-sm text-muted-foreground">{ui.text("ui_page_project_wizard_import_description")}</p></div>
+      <Field.FieldGroup>
+        <Field.Field><Field.Label for="wizard-import-format">{ui.text("ui_catalog_import_format")}</Field.Label>
+          <select id="wizard-import-format" class="h-9 rounded-md border bg-background px-2 text-sm" bind:value={wizardImportFrom}>
+            <option value="">{ui.text("ui_page_project_wizard_import_none")}</option>
+            <option value="resx">.resx</option>
+            <option value="i18next">i18next</option>
+          </select>
+        </Field.Field>
+        {#if wizardImportFrom !== ""}
+          <Field.Field><Field.Label for="wizard-import-source">{ui.text("ui_catalog_import_source")}</Field.Label>
+            <Input id="wizard-import-source" bind:value={wizardImportSource} placeholder={wizardImportFrom === "resx" ? "/projects/customer-app/Properties/Strings.resx" : "/projects/customer-web/public/locales"} autocomplete="off" />
+            <Field.Description>{wizardImportFrom === "resx" ? ui.text("ui_catalog_import_format_resx") : ui.text("ui_catalog_import_format_i18next")}</Field.Description>
+          </Field.Field>
+        {/if}
+      </Field.FieldGroup>
+    {:else if projectStep === 5 && projectPlan !== undefined}
       <Alert.Root><Alert.Title>{ui.text("ui_page_project_wizard_ready_create")} {projectPlan.catalogId}</Alert.Title><Alert.Description>{ui.text("ui_count_project_summary", { languages: projectPlan.locales.length, files: projectPlan.files.length })}</Alert.Description></Alert.Root>
       <dl class="mt-4 grid gap-3 rounded-xl border p-4"><div class="grid gap-1 sm:grid-cols-[7rem_1fr]"><dt class="text-muted-foreground">{ui.text("ui_page_project_wizard_directory")}</dt><dd class="m-0 truncate font-mono text-xs">{projectPlan.directory}</dd></div><div class="grid gap-1 sm:grid-cols-[7rem_1fr]"><dt class="text-muted-foreground">{ui.text("ui_page_project_wizard_languages")}</dt><dd class="m-0 font-medium">{projectPlan.locales.map((locale) => locale.tag).join(", ")}</dd></div></dl>
+      {#if wizardImportFrom !== ""}<p class="mt-4 text-sm">{ui.text("ui_catalog_import_title")}: <code>{wizardImportSource}</code></p>{/if}
       <section class="mt-4 overflow-hidden rounded-xl border" aria-label={ui.text("ui_page_project_wizard_files_to_create")}><h4 class="border-b px-4 py-3 font-medium">{ui.text("ui_page_project_wizard_files_to_create")}</h4>{#each projectPlan.files as file (file)}<div class="border-b px-4 py-3 last:border-b-0"><code class="text-xs">{file}</code></div>{/each}</section>
     {/if}
 
@@ -2996,7 +3085,7 @@
     {#snippet footer()}
       <Button variant="outline" disabled={projectBusy} onclick={closeProjectWizard}>{ui.text("ui_page_cancel")}</Button>
       {#if projectStep > 1}<Button variant="ghost" disabled={projectBusy} onclick={() => { projectStep -= 1; projectError = undefined; }}>{ui.text("ui_page_back")}</Button>{/if}
-      {#if projectStep < 4}
+      {#if projectStep < 5}
         <Button disabled={projectBusy} onclick={() => void advanceProjectWizard()}>{#if projectBusy}<Spinner data-icon="inline-start" />{/if}{projectBusy ? ui.text("ui_page_validating") : ui.text("ui_page_continue")}</Button>
       {:else}
         <Button disabled={projectBusy || projectPlan?.ok !== true} onclick={() => void createProject()}>{#if projectBusy}<Spinner data-icon="inline-start" />{/if}{projectBusy ? ui.text("ui_page_creating") : ui.text("ui_page_project_wizard_create_project")}</Button>

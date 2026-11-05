@@ -13,6 +13,7 @@ internal sealed class EditorSession : IDisposable
     private PreparedDestructiveMutation? _preparedDestructiveMutation;
     private (string Token, PreparedInterchangeImport Prepared)? _preparedXliffImport;
     private (string Token, PreparedInterchangeImport Prepared)? _preparedReviewImport;
+    private (string Token, TranslationWorkspaceTransactionPlan Plan)? _preparedCatalogImport;
     private bool _disposed;
 
     public EditorSession(string workspacePath)
@@ -107,6 +108,17 @@ internal sealed class EditorSession : IDisposable
             // Commit is the point of no return.  Reconcile state from this exact plan
             // before any filesystem read can observe an external writer.
             _history.Record(null);
+            if (request.Kind == "add-locale" && request.Locale is { } added)
+            {
+                // The starter copies are recorded as drafts, so the new language's coverage starts at what it really
+                // translates (0 %), not 100 %. The language is added whether or not this succeeds.
+                string[] created = plan.Edits.Where(static edit => edit.Kind == TranslationWorkspaceEditKind.Create).Select(static edit => edit.RelativePath.Replace('\\', '/')).ToArray();
+                try { _workspace.RecordStarterDrafts(added.Trim(), created); }
+                catch (Exception exception) when (exception is Runic.Translations.Tooling.TranslationInterchangeException or IOException or UnauthorizedAccessException or EditorUserException)
+                {
+                    warning = EditorNotice.Create("ui_backend_locale_drafts_not_recorded", ("locale", added.Trim()), ("path", _workspace.ReviewDisplayPath() ?? "review.json")) with { Detail = exception.Message };
+                }
+            }
             if (request.Kind == "remove-locale" && request.Locale is { } removed)
             {
                 // The review entries of a removed locale go too. The locale is gone whether or not this succeeds, so a
@@ -399,6 +411,54 @@ internal sealed class EditorSession : IDisposable
     {
         _preparedXliffImport = null;
         _preparedReviewImport = null;
+        _preparedCatalogImport = null;
+    }
+
+    /// <summary>The dry run of importing a .resx or i18next catalog; its confirmation token applies it once.</summary>
+    public async Task<EditorCatalogImportPlan> PreviewCatalogImportAsync(EditorCatalogImportRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ThrowIfDisposed();
+            (EditorCatalogImportPlan plan, TranslationWorkspaceTransactionPlan? transaction) = await _workspace.PreviewCatalogImportAsync(request, cancellationToken).ConfigureAwait(false);
+            _preparedCatalogImport = plan.Ok && transaction is not null ? (Guid.NewGuid().ToString("N"), transaction) : null;
+            return plan with { ConfirmationToken = _preparedCatalogImport?.Token };
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<EditorOperationResult> ApplyCatalogImportAsync(string confirmationToken, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ThrowIfDisposed();
+            if (_preparedCatalogImport is not { } prepared || !string.Equals(prepared.Token, confirmationToken, StringComparison.Ordinal))
+                return Failure("irreversible-confirmation", EditorNotice.Create("ui_backend_confirm_import"));
+            // One-use even when the commit fails.
+            _preparedCatalogImport = null;
+            WorkspaceSnapshot current = await _workspace.LoadAsync(cancellationToken).ConfigureAwait(false);
+            if (current.PendingTransaction is not null)
+                return Failure("recovery-required", EditorNotice.Create("ui_backend_recovery_change"));
+            // The transaction refuses when a file changed since the dry run.
+            TranslationWorkspaceTransaction.Commit(prepared.Plan);
+            _history.Record(null);
+            WorkspaceSnapshot snapshot = await _workspace.LoadAsync(CancellationToken.None).ConfigureAwait(false);
+            return Success("imported", Decorate(snapshot));
+        }
+        catch (Exception exception) when (exception is TranslationAuthoringException or ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            return new EditorOperationResult(false, "catalog-import", EditorNotice.FromException(exception), null, null);
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     public EditorHistoryState ClearHistory()

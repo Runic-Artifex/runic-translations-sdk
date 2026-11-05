@@ -2,11 +2,11 @@ import * as vscode from "vscode";
 import { execFile } from "node:child_process";
 import { dirname, join } from "node:path";
 import { LanguageClient, State, type LanguageClientOptions, type WorkspaceEdit as ProtocolEdit } from "vscode-languageclient/node";
-import { nearestProjectManifest, projectManifest, serverLaunch, sourceWatchRoots, toolLaunch, xliffExportArguments, xliffImportDryRunArguments } from "./server.js";
+import { importArguments, nearestProjectManifest, projectManifest, serverLaunch, sourceWatchRoots, statusArguments, toolLaunch, xliffExportArguments, xliffImportDryRunArguments } from "./server.js";
 import { escapeHtml, resolvePreviewHtml, type Preview, type RenderedPreview } from "./preview.js";
 import { PreviewSession, exampleSamples, sampleChoices, type Samples } from "./preview-session.js";
 import { ForwardedWatchers } from "./watchers.js";
-import { OneTimeNotice, errorSummary, statusPresentation, type DocumentInfo, type ServerState } from "./status.js";
+import { OneTimeNotice, errorSummary, localeStatus, parseStatus, statusHtml, statusPresentation, type DocumentInfo, type ServerState, type StatusResult } from "./status.js";
 
 const extensionId = "runic-artifex.runic-translations";
 /**
@@ -38,6 +38,45 @@ let statusTimer: ReturnType<typeof setTimeout> | undefined;
 const serverStates = new Map<string, { state: ServerState; failure?: string }>();
 const documentInfo = new Map<string, DocumentInfo>();
 const startupNotice = new OneTimeNotice();
+// runic-translations status per project (its runic.json path); refreshed after saves and watched file changes, since
+// the command reads the files on disk. A catalog that does not compile has no report until it compiles again.
+const projectStatus = new Map<string, { result?: StatusResult; pending?: Promise<void>; stale: boolean }>();
+let statusPanel: vscode.WebviewPanel | undefined;
+
+/** Runs the workspace's local runic-translations tool (the language server's) with other arguments. */
+function runLocalTool(folder: vscode.WorkspaceFolder, toolArguments: string[], quiet = false): Promise<string> {
+  return new Promise<string>((resolveRun, rejectRun) => {
+    const config = vscode.workspace.getConfiguration("runicTranslations", folder.uri);
+    const launch = toolLaunch(folder.uri.fsPath, config.get<string>("dotnetPath", "dotnet"), config.get<string>("serverAssembly", ""), toolArguments);
+    if (!quiet) output.appendLine(`> runic-translations ${toolArguments.join(" ")}`);
+    execFile(launch.command, launch.args, { cwd: launch.cwd, maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) => {
+      if (!quiet && stdout) output.appendLine(stdout.trimEnd());
+      if (!quiet && stderr) output.appendLine(stderr.trimEnd());
+      if (error) rejectRun(Object.assign(new Error(`runic-translations ${toolArguments.slice(0, 2).join(" ")} failed (${(stderr || stdout).trim().split("\n").at(-1) ?? error.message}). See Runic: Show Output.`), { stdout }));
+      else resolveRun(stdout);
+    });
+  });
+}
+
+/** Marks every project's status stale; the next status refresh reruns the command. */
+function invalidateProjectStatus() {
+  for (const entry of projectStatus.values()) entry.stale = true;
+  scheduleStatusRefresh();
+}
+
+/** The project's status, running the command when there is none or it is stale. */
+function projectStatusFor(folder: vscode.WorkspaceFolder, project: string): Promise<StatusResult | undefined> {
+  let entry = projectStatus.get(project);
+  if (!entry) projectStatus.set(project, entry = { stale: true });
+  const current = entry;
+  if (current.stale && !current.pending) {
+    current.stale = false;
+    current.pending = runLocalTool(folder, statusArguments(project), true)
+      .then(stdout => { current.result = parseStatus(stdout); }, () => { current.result = undefined; })
+      .finally(() => { current.pending = undefined; });
+  }
+  return (current.pending ?? Promise.resolve()).then(() => current.result);
+}
 
 function isRunicDocument(document: vscode.TextDocument): boolean {
   return document.uri.scheme === "file" && (document.languageId === "rmf2" || /(^|\/)runic\.json$/.test(document.uri.path));
@@ -59,7 +98,9 @@ function refreshStatus() {
   const uri = document.uri.toString();
   const show = (info?: DocumentInfo) => {
     if (revision !== statusRevision) return;
-    const presentation = statusPresentation(entry.state, info, entry.failure);
+    const project = info?.project ? vscode.Uri.parse(info.project).fsPath : undefined;
+    const coverage = project ? localeStatus(projectStatus.get(project)?.result, info?.locale) : undefined;
+    const presentation = statusPresentation(entry.state, info, entry.failure, coverage);
     item.text = presentation.text;
     item.tooltip = presentation.tooltip;
     item.backgroundColor = presentation.error ? new vscode.ThemeColor("statusBarItem.errorBackground") : undefined;
@@ -68,7 +109,11 @@ function refreshStatus() {
   show(documentInfo.get(uri));
   if (entry.state !== "running") return;
   void clients.get(key)?.then(client => client.sendRequest<DocumentInfo>("runic/documentInfo", { textDocument: { uri } }))
-    .then(info => { documentInfo.set(uri, info); show(info); }, () => { /* The document is not open on the server yet; the next change refreshes. */ });
+    .then(info => {
+      documentInfo.set(uri, info); show(info);
+      // Coverage for the file's locale, from the same status report as the command line.
+      if (info.project && info.locale && folder) void projectStatusFor(folder, vscode.Uri.parse(info.project).fsPath).then(() => show(info));
+    }, () => { /* The document is not open on the server yet; the next change refreshes. */ });
 }
 function scheduleStatusRefresh() {
   if (statusTimer) clearTimeout(statusTimer);
@@ -138,6 +183,7 @@ async function clientFor(uri: vscode.Uri): Promise<LanguageClient> {
           if (started) {
             client?.sendNotification("workspace/didChangeWatchedFiles", { changes: [{ uri: uri.toString(), type }] });
             refreshPreviewSource?.(uri);
+            invalidateProjectStatus();
           }
         };
         const watcher = new ForwardedWatchers(
@@ -220,7 +266,9 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(item, { dispose: () => { if (statusTimer) clearTimeout(statusTimer); statusItem = undefined; } },
     vscode.commands.registerCommand("runicTranslations.showOutput", () => output.show(true)),
     vscode.window.onDidChangeActiveTextEditor(() => refreshStatus()),
-    vscode.workspace.onDidChangeTextDocument(event => { if (isRunicDocument(event.document)) scheduleStatusRefresh(); }));
+    vscode.workspace.onDidChangeTextDocument(event => { if (isRunicDocument(event.document)) scheduleStatusRefresh(); }),
+    // status reads the files on disk, so coverage follows saves (watched changes from other tools also invalidate it).
+    vscode.workspace.onDidSaveTextDocument(document => { if (isRunicDocument(document) || document.uri.path.endsWith(".review.json")) invalidateProjectStatus(); }));
   const register = (name: string, action: (options?: PreviewOptions) => Promise<unknown>) => context.subscriptions.push(vscode.commands.registerCommand(`runicTranslations.${name}`, async (options?: PreviewOptions) => { try { return await action(options); } catch (error) { output.appendLine(String(error)); await vscode.window.showErrorMessage(String(error)); } }));
   const session = previewSession = new PreviewSession({
     revision: () => previewRevision,
@@ -358,17 +406,7 @@ export function activate(context: vscode.ExtensionContext) {
     if (!folder) throw new Error("The runic.json project is outside the workspace folders.");
     return { folder, project };
   };
-  const runTool = (folder: vscode.WorkspaceFolder, toolArguments: string[]) => new Promise<string>((resolveRun, rejectRun) => {
-    const config = vscode.workspace.getConfiguration("runicTranslations", folder.uri);
-    const launch = toolLaunch(folder.uri.fsPath, config.get<string>("dotnetPath", "dotnet"), config.get<string>("serverAssembly", ""), toolArguments);
-    output.appendLine(`> runic-translations ${toolArguments.join(" ")}`);
-    execFile(launch.command, launch.args, { cwd: launch.cwd, maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) => {
-      if (stdout) output.appendLine(stdout.trimEnd());
-      if (stderr) output.appendLine(stderr.trimEnd());
-      if (error) rejectRun(new Error(`runic-translations ${toolArguments.slice(0, 2).join(" ")} failed (${(stderr || stdout).trim().split("\n").at(-1) ?? error.message}). See Runic: Show Output.`));
-      else resolveRun(stdout);
-    });
-  });
+  const runTool = (folder: vscode.WorkspaceFolder, toolArguments: string[]) => runLocalTool(folder, toolArguments);
   register("exportXliff", async () => {
     const chosen = await interchangeFolder();
     if (!chosen) return;
@@ -392,13 +430,56 @@ export function activate(context: vscode.ExtensionContext) {
     output.show(true);
     void vscode.window.showInformationMessage(`${summary} Nothing was written; run runic-translations xliff import or the Translations Editor to apply it.`);
   });
+  // Translation status: the same report as runic-translations status and the Translations Editor's language list.
+  register("showStatus", async () => {
+    const chosen = await interchangeFolder();
+    if (!chosen) return;
+    const result = parseStatus(await runTool(chosen.folder, statusArguments(chosen.project)));
+    projectStatus.set(chosen.project, { result, stale: false });
+    refreshStatus();
+    if (!statusPanel) {
+      const panel = statusPanel = vscode.window.createWebviewPanel("runic.status", "Translation Status", vscode.ViewColumn.Beside, { enableScripts: false, localResourceRoots: [] });
+      panel.onDidDispose(() => { if (statusPanel === panel) statusPanel = undefined; }, undefined, context.subscriptions);
+    }
+    statusPanel.title = `Translation Status · ${result.projects[0]?.catalog ?? ""}`;
+    statusPanel.webview.html = statusHtml(result);
+    statusPanel.reveal(undefined, true);
+    return result;
+  });
+  // Migration from .resx or i18next through the project-local tool's importer (the Translations Editor's too): a dry
+  // run first, whose outcome is shown, then the import after confirmation.
+  register("importCatalog", async () => {
+    const chosen = await interchangeFolder();
+    if (!chosen) return;
+    const { folder, project } = chosen;
+    const format = await vscode.window.showQuickPick([
+      { label: ".resx", description: "Strings.resx with its Strings.<locale>.resx satellites", from: "resx" as const },
+      { label: "i18next", description: "<lng>.json, or a directory of <lng>.json or <lng>/<namespace>.json files", from: "i18next" as const },
+    ], { placeHolder: "Import from" });
+    if (!format) return;
+    const picked = await vscode.window.showOpenDialog({ canSelectMany: false, canSelectFiles: true, canSelectFolders: format.from === "i18next",
+      defaultUri: folder.uri, filters: format.from === "resx" ? { ".resx": ["resx"] } : { "i18next JSON": ["json"] }, openLabel: "Check import" });
+    if (!picked?.[0]) return;
+    const source = picked[0].fsPath;
+    const dryRun = await runTool(folder, importArguments(project, format.from, source, { dryRun: true }));
+    output.show(true);
+    const summary = dryRun.split("\n").find(line => line.startsWith("dry run: ")) ?? "Dry run finished.";
+    const kept = dryRun.split("\n").some(line => line.includes("were kept; --overwrite replaces them"));
+    const choices = kept ? ["Import", "Import and overwrite existing"] : ["Import"];
+    const choice = await vscode.window.showInformationMessage(`${summary} Nothing was written yet; the output lists each message.`, { modal: true }, ...choices);
+    if (!choice) return;
+    const result = await runTool(folder, importArguments(project, format.from, source, { dryRun: false, overwrite: choice === "Import and overwrite existing" }));
+    const written = result.split("\n").filter(line => line.startsWith("wrote ")).length;
+    invalidateProjectStatus();
+    void vscode.window.showInformationMessage(`Imported ${format.label}: wrote ${written} file(s). See Runic: Show Output for each message.`);
+  });
   register("preview", openPreview);
   register("previewSamples", options => openPreview(options, true));
   register("previewLocale", options => openPreview(options, false, true));
   register("previewRequestedLocale", options => openPreview(options, false, false, "requestedLocale"));
   register("previewTimeZone", options => openPreview(options, false, false, "timeZone"));
   refreshStatus();
-  return { ready: (uri: vscode.Uri) => clientFor(uri), previewState: () => session.state,
+  return { ready: (uri: vscode.Uri) => clientFor(uri), previewState: () => session.state, statusHtml: () => statusPanel?.webview.html,
     status: () => statusItem?.text, serverState: (uri: vscode.Uri) => { const folder = vscode.workspace.getWorkspaceFolder(uri); return folder && serverStates.get(folder.uri.toString())?.state; } };
 }
 export async function deactivate() {
@@ -407,7 +488,7 @@ export async function deactivate() {
   previewTimer = undefined;
   previewSession?.close(); previewPanel?.dispose(); previewPanel = undefined;
   const active = [...clients.values()]; clients.clear();
-  serverStates.clear(); documentInfo.clear(); refreshStatus();
+  serverStates.clear(); documentInfo.clear(); projectStatus.clear(); statusPanel?.dispose(); statusPanel = undefined; refreshStatus();
   for (const watcher of watchers.values()) watcher.dispose(); watchers.clear();
   for (const watcher of reviewWatchers.values()) watcher.dispose(); reviewWatchers.clear();
   await Promise.all(active.map(async pending => { try { await (await pending).stop(); } catch { /* Startup failure is already reported. */ } }));

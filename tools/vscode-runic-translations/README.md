@@ -88,6 +88,19 @@ active and the workspace has several. Both run the workspace's local
 `runic-translations xliff` tool, the same code as the Translations Editor; apply
 an import with `runic-translations xliff import` or the editor.
 
+**Show Translation Status** shows `runic-translations status` for the project:
+per locale the messages translated, served by a fallback locale, missing and
+stale, the coverage, and whether missing translations are errors or warnings
+(the locale's `validation.translationCompleteness`), the same report as the
+command line and the Translations Editor. The status bar adds the coverage of
+the active file's locale (`Runic: app · de 87.5%`, details in the tooltip); it
+follows saved changes.
+
+**Import .resx or i18next Catalog** migrates an existing catalog into the
+project's `.rmf2` sources with `runic-translations import`: it runs a dry run
+first, shows its outcome per message in **Runic: Show Output**, and imports
+after you confirm, optionally replacing the text of messages that already exist.
+
 The Runic commands in the Command Palette provide inert example previews,
 group extraction/inlining for `.rmf2`, and explicitly source-only
 input/slot/resource renames. Preview asks the server to execute the selected
@@ -153,11 +166,13 @@ command set until the production language server (2.0).
 | Inline Resource into Ancestor | Command | No (2.0) |
 | Export XLIFF | Command | No (2.0) |
 | Import XLIFF (dry run) | Command | No (2.0) |
+| Show Translation Status | Command, coverage in the status bar | No (2.0) |
+| Import .resx or i18next Catalog | Command (dry run first) | No (2.0) |
 | Review state in hover | Yes | Yes |
 | Mark reviewed quick fix (`RTR0090`) | Yes | Where the IDE runs code-action commands |
 | Restart Language Server | Command | Tools menu |
 | Show Output | Command and status bar | Server stderr in the diagnostic trace |
-| Server state, catalog and locale | Status bar | No |
+| Server state, catalog, locale and coverage | Status bar | No |
 | Start failure | One notification per folder, with install help | IDE notification on initialization failure |
 
 ## Build and test

@@ -19,6 +19,8 @@ import type {
   EditorMessagePreview,
   EditorLocaleCatalog,
   EditorLocaleDescription,
+  EditorCatalogImportPlan,
+  EditorCatalogImportRequest,
   EditorMutationPreview,
   EditorMutationRequest,
   EditorNotice,
@@ -189,6 +191,9 @@ export interface EditorBridge {
   /** `requestedLocale` (`de-CH` for `de` text) and `timeZone` (`utc`, an IANA zone; empty: the host's) format the preview. */
   previewMessage(path: string, content: string, locale: string, key: string, samplesJson?: string, requestedLocale?: string, timeZone?: string): Promise<EditorMessagePreview>;
   listLocales(): Promise<EditorLocaleCatalog>;
+  /** The dry run of importing a .resx or i18next catalog; its confirmation token applies it once. */
+  previewCatalogImport(request: EditorCatalogImportRequest): Promise<EditorCatalogImportPlan>;
+  applyCatalogImport(confirmationToken: string): Promise<EditorOperationResult>;
   describeLocale(tag: string): Promise<EditorLocaleDescription>;
   saveReview(request: EditorReviewSaveRequest): Promise<EditorReviewOperationResult>;
   about(): Promise<EditorAbout>;
@@ -242,6 +247,8 @@ export function createEditorBridge(): EditorBridge {
     applyDiagnosticFix: (path, content, fix) => invokeRouted("ApplyDiagnosticFix", root => root.snapshot.documentTools, (view, request) => view.applyDiagnosticFix(request), state => state.applyDiagnosticFixResultJson, { path, content, fix }) as Promise<EditorDocumentDraft>,
     transformDocument: (path, content, key, value) => invokeRouted("TransformDocument", root => root.snapshot.documentTools, (view, request) => view.transformDocument(request), state => state.transformDocumentResultJson, { path, content, key, value }) as Promise<EditorDocumentDraft>,
     previewMessage: (path, content, locale, key, samplesJson, requestedLocale, timeZone) => invokeRouted("PreviewMessage", root => root.snapshot.documentTools, (view, request) => view.previewMessage(request), state => state.previewMessageResultJson, { path, content, locale, key, samplesJson, requestedLocale, timeZone }) as Promise<EditorMessagePreview>,
+    previewCatalogImport: (request) => invokeRouted("PreviewCatalogImport", root => root.snapshot.interchange, (view, argument) => view.previewCatalogImport(argument), state => state.previewCatalogImportResultJson, request) as Promise<EditorCatalogImportPlan>,
+    applyCatalogImport: (confirmationToken) => invokeRouted("ApplyCatalogImport", root => root.snapshot.interchange, (view, argument) => view.applyCatalogImport(argument), state => state.applyCatalogImportResultJson, { confirmationToken }) as Promise<EditorOperationResult>,
     listLocales: () => invokeRouted("ListLocales", root => root.snapshot.workspace, (view, request) => view.listLocales(request), state => state.listLocalesResultJson, {}) as Promise<EditorLocaleCatalog>,
     describeLocale: (tag) => invokeRouted("DescribeLocale", root => root.snapshot.workspace, (view, request) => view.describeLocale(request), state => state.describeLocaleResultJson, { tag }) as Promise<EditorLocaleDescription>,
     saveReview: (request) => invokeRouted("SaveReview", root => root.snapshot.review, (view, request) => view.saveReview(request), state => state.saveReviewResultJson, request) as Promise<EditorReviewOperationResult>,
