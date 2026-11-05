@@ -44,6 +44,10 @@ only that group is rendered. V5 supports `--emit-csharp`, `--emit-json`, and
 Validation permits an empty v5 project as a scaffold, but `generate` and `verify`
 fail with `RTR0009` until the effective default locale defines a canonical key.
 
+`--pseudo-locales` on `validate`, `generate` and `verify` also generates the development pseudo-locales that
+`runic.json` declares in `pseudoLocales` (`en-XA`, `ar-XB`); without it they are left out, as release builds should.
+See [Pseudo-locales](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md#pseudo-locales).
+
 Use `Runic.Translations.Build` for generated C# or when MSBuild should invoke this local tool. Use this CLI directly when Vite, CI, or a custom script owns artifact generation.
 
 ## Import a text-keyed catalog
@@ -123,6 +127,9 @@ locale, or only for the `--locale` ones (repeatable). Each message is one unit w
   expression, so a placeholder round-trips losslessly.
 - The message's comment and its `@param` lines are a readable `<note category="description">`. The
   `runic:unit` and `runic:review` notes beside it are machine data (Base64 JSON) for the import.
+- A message with `@maxLength N` has `slr:sizeRestriction="N"` (the XLIFF Size and Length Restriction module,
+  profile `xliff:codepoints` with NFC), so a TMS can stop a longer translation; placeholders are not counted.
+  Import ignores the attribute, and `validate` checks the length (`RTR0098`).
 - A message with selectors, declarations or markup is exported as `translate="no"` with its MF2 source and
   reported as loss (`XLIFF21-STRUCTURED-MESSAGE`); translate it in the `.rmf2` sources or the editor.
 - An existing translation is in state `translated`, a missing one has no target. With a review file (below),

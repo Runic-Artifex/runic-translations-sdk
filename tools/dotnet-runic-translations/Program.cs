@@ -448,8 +448,8 @@ internal static class Program
     private static int RunSemanticV5(ToolInvocation invocation, CompilerInputs inputs, ToolOperationResult result, SourceUnitCache? units)
     {
         Rmf2ProjectCompilation compilation = units is null
-            ? TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, inputs.Messages)
-            : TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, units.Resolve(inputs.Messages), units.Options);
+            ? TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, inputs.Messages, null, invocation.PseudoLocales)
+            : TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, units.Resolve(inputs.Messages), units.Options, invocation.PseudoLocales);
         compilation = TranslationManifestReader.WithManifestErrors(compilation, inputs.Project.Path, inputs.ManifestError);
         // In a build whose source generator reports the same compilation diagnostics, they are
         // omitted here so each appears once, with its help link, from the generator.
@@ -684,7 +684,7 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
         string? project = string.IsNullOrWhiteSpace(request.Project) ? DefaultProject() : request.Project;
         if (project is null)
             return Program.Usage("no runic.json in the current directory or in ./translations; pass --project <directory>.", command);
-        return Program.Execute(new ToolInvocation(command, output, emission, null, project, OmitSourceDiagnostics: omitSourceDiagnostics));
+        return Program.Execute(new ToolInvocation(command, output, emission, null, project, OmitSourceDiagnostics: omitSourceDiagnostics, PseudoLocales: request.PseudoLocales));
     }
 
     // Runic.Translations.Build sets this when its source generator reports the same compilation

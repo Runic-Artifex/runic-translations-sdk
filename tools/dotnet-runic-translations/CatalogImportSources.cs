@@ -534,7 +534,7 @@ internal static class I18nextImport
     // i18next uses for a count of 0 in every language. Forms the locale does not use are dropped and reported.
     private static string? Plural(Dictionary<string, string> forms, bool ordinal, string locale, string location, ImportReport report)
     {
-        string[] used = Rmf2AuthoringService.PluralCategories(locale, ordinal);
+        IReadOnlyList<string> used = Rmf2AuthoringService.PluralCategories(locale, ordinal);
         var variants = new List<(string Key, string Pattern)>();
         foreach (string category in Categories)
         {
@@ -543,7 +543,7 @@ internal static class I18nextImport
             if (pattern is null) return null;
             if (category == "other") continue;
             if (category == "zero" && !ordinal && !used.Contains("zero")) { variants.Insert(0, ("0", pattern)); continue; }
-            if (used.Length != 0 && !used.Contains(category))
+            if (used.Count != 0 && !used.Contains(category))
             {
                 report.Notice(location, "I18NEXT-PLURAL-CATEGORY", $"{locale} has no {(ordinal ? "ordinal" : "plural")} category '{category}'; that form was dropped.");
                 continue;

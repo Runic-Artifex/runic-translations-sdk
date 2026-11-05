@@ -105,6 +105,7 @@ internal sealed class CompileServer
         string method;
         string? project = null, output = null;
         ToolEmission emission = ToolEmission.None;
+        bool pseudoLocales = false;
         try
         {
             using JsonDocument document = JsonDocument.Parse(line);
@@ -121,6 +122,13 @@ internal sealed class CompileServer
                 : throw new FormatException("A request requires a string method.");
             project = OptionalString(root, "project");
             output = OptionalString(root, "output");
+            if (root.TryGetProperty("pseudoLocales", out JsonElement pseudo))
+                pseudoLocales = pseudo.ValueKind switch
+                {
+                    JsonValueKind.True => true,
+                    JsonValueKind.False => false,
+                    _ => throw new FormatException("pseudoLocales must be a boolean."),
+                };
             if (root.TryGetProperty("emit", out JsonElement emit))
             {
                 if (emit.ValueKind != JsonValueKind.Array) throw new FormatException("emit must be an array of output groups.");
@@ -144,9 +152,9 @@ internal sealed class CompileServer
         ToolOperationResult result = method switch
         {
             "generate" when project is null || output is null => Usage("generate requires project and output."),
-            "generate" => Program.Execute(new ToolInvocation(ToolCommand.Generate, output, emission, null, project), _units),
+            "generate" => Program.Execute(new ToolInvocation(ToolCommand.Generate, output, emission, null, project, PseudoLocales: pseudoLocales), _units),
             "validate" when project is null => Usage("validate requires project."),
-            "validate" => Program.Execute(new ToolInvocation(ToolCommand.Validate, null, ToolEmission.None, null, project), _units),
+            "validate" => Program.Execute(new ToolInvocation(ToolCommand.Validate, null, ToolEmission.None, null, project, PseudoLocales: pseudoLocales), _units),
             _ => Usage($"unknown method '{method}'."),
         };
         Respond(hasId, id, result, (long)Stopwatch.GetElapsedTime(started).TotalMilliseconds);

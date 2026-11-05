@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Threading;
 
 namespace Runic.Translations;
@@ -20,6 +21,11 @@ public sealed class CompiledTranslationCatalog
     private readonly Dictionary<string, int> _idByName;
     private readonly Dictionary<string, LocaleState> _localeByTag;
     private readonly object _stateGate;
+    // Shared with the WithOptions views: the number of times Hot Reload replaced the generated data.
+    private readonly StrongBox<int> _generation;
+    // The generated types whose code creates the deferred locale data; Hot Reload resets the catalog only when one of
+    // them changed. Null when not tracked.
+    private readonly Type[]? _generatedTypes;
     private string[]? _localeTags;
 
     /// <summary>Creates a validated compiled catalog from generated closed data.</summary>
@@ -69,6 +75,7 @@ public sealed class CompiledTranslationCatalog
         _locales = CopyLocales(locales);
         _localeByTag = CreateLocaleStates(_locales);
         _stateGate = new object();
+        _generation = new StrongBox<int>();
 
         if (!_localeByTag.TryGetValue(defaultLocale, out LocaleState? defaultState))
         {
@@ -94,6 +101,12 @@ public sealed class CompiledTranslationCatalog
             }
 
             BuildDirect(_localeByTag[locale.Locale], _definitions, nameof(locales));
+        }
+
+        if (deferred && TranslationHotReload.IsSupported)
+        {
+            _generatedTypes = GeneratedTypes(_locales);
+            TranslationHotReload.Track(this);
         }
 
         if (!deferred)
@@ -130,6 +143,8 @@ public sealed class CompiledTranslationCatalog
         _idByName = source._idByName;
         _localeByTag = source._localeByTag;
         _stateGate = source._stateGate;
+        _generation = source._generation;
+        _generatedTypes = source._generatedTypes;
         Catalog = source.Catalog;
         DefaultLocale = source.DefaultLocale;
         UnsupportedLocale = unsupportedLocale;
@@ -211,34 +226,43 @@ public sealed class CompiledTranslationCatalog
         return tags;
     }
 
+    /// <summary>
+    /// How many times Hot Reload replaced the generated data (<see cref="ResetDeferredData"/>). A provider that caches
+    /// snapshots records it and builds a snapshot again once it changed.
+    /// </summary>
+    internal int Generation => Volatile.Read(ref _generation.Value);
+
     /// <summary>The values a declared locale defines itself, without its fallback chain.</summary>
-    internal (string?[] Patterns, CompiledTextMessage?[] Messages) GetDirect(string canonicalLocale)
+    internal LocaleValues GetDirect(string canonicalLocale)
     {
-        // Resolving the locale builds the direct values of every locale in its chain.
-        _ = Resolve(canonicalLocale);
         LocaleState state = _localeByTag[canonicalLocale];
-        return (state.DirectPatterns!, state.DirectMessages!);
+        // Resolving the locale builds the direct values of every locale in its chain; a reset in between clears them
+        // again, so read until both come from the same data.
+        while (true)
+        {
+            _ = Resolve(canonicalLocale);
+            if (Volatile.Read(ref state.Direct) is { } direct) return direct;
+        }
     }
 
-    internal string?[] GetResolvedPatterns(string canonicalLocale) =>
-        Resolve(canonicalLocale).ResolvedPatterns!;
+    /// <summary>The values of a declared locale with its fallback chain applied, both arrays from the same data.</summary>
+    internal LocaleValues GetResolved(string canonicalLocale) => Resolve(canonicalLocale);
 
-    internal CompiledTextMessage?[] GetResolvedMessages(string canonicalLocale) =>
-        Resolve(canonicalLocale).ResolvedMessages!;
-
-    private LocaleState Resolve(string canonicalLocale)
+    // The patterns and messages are published together as one immutable pair, so a reader never combines arrays of two
+    // generations, or one array with a pair that Hot Reload reset (null).
+    private LocaleValues Resolve(string canonicalLocale)
     {
         LocaleState state = _localeByTag[canonicalLocale];
-        if (Volatile.Read(ref state.ResolvedMessages) is not null)
+        if (Volatile.Read(ref state.Resolved) is { } resolvedValues)
         {
-            return state;
+            return resolvedValues;
         }
 
         lock (_stateGate)
         {
-            if (state.ResolvedMessages is not null)
+            if (state.Resolved is { } existing)
             {
-                return state;
+                return existing;
             }
 
             try
@@ -248,7 +272,7 @@ public sealed class CompiledTranslationCatalog
                 for (LocaleState? current = state; current is not null;
                      current = current.FallbackLocale is null ? null : _localeByTag[current.FallbackLocale])
                 {
-                    if (current.DirectMessages is null)
+                    if (current.Direct is null)
                     {
                         BuildDirect(current, _definitions, "locales");
                     }
@@ -259,12 +283,12 @@ public sealed class CompiledTranslationCatalog
                 int keyCount = _definitions.Length;
                 var resolved = new string?[keyCount];
                 var resolvedMessages = new CompiledTextMessage?[keyCount];
-                Array.Copy(state.DirectPatterns!, resolved, keyCount);
-                Array.Copy(state.DirectMessages!, resolvedMessages, keyCount);
+                Array.Copy(state.Direct!.Patterns, resolved, keyCount);
+                Array.Copy(state.Direct.Messages, resolvedMessages, keyCount);
                 for (int link = 1; link < chain.Count; link++)
                 {
-                    string?[] fallbackPatterns = chain[link].DirectPatterns!;
-                    CompiledTextMessage?[] fallbackMessages = chain[link].DirectMessages!;
+                    string?[] fallbackPatterns = chain[link].Direct!.Patterns;
+                    CompiledTextMessage?[] fallbackMessages = chain[link].Direct!.Messages;
                     for (int i = 0; i < keyCount; i++)
                     {
                         resolved[i] ??= fallbackPatterns[i];
@@ -272,9 +296,9 @@ public sealed class CompiledTranslationCatalog
                     }
                 }
 
-                state.ResolvedPatterns = resolved;
-                Volatile.Write(ref state.ResolvedMessages, resolvedMessages);
-                return state;
+                var values = new LocaleValues(resolved, resolvedMessages);
+                Volatile.Write(ref state.Resolved, values);
+                return values;
             }
             catch (Exception exception) when (exception is ArgumentException or TranslationPackException && HasDeferredData(state))
             {
@@ -283,6 +307,73 @@ public sealed class CompiledTranslationCatalog
                     exception);
             }
         }
+    }
+
+    /// <summary>
+    /// Drops the values built from deferred (generated) locale data and every resolved locale, so the next snapshot
+    /// reads the generated data again. Snapshots created before keep their text. Called by <see cref="TranslationHotReload"/>.
+    /// </summary>
+    internal void ResetDeferredData()
+    {
+        lock (_stateGate)
+        {
+            foreach (LocaleState state in _localeByTag.Values)
+            {
+                if (state.Deferred)
+                {
+                    state.Locale.ResetDeferredValues();
+                    Volatile.Write(ref state.Direct, null);
+                }
+
+                Volatile.Write(ref state.Resolved, null);
+            }
+
+            Interlocked.Increment(ref _generation.Value);
+        }
+    }
+
+    /// <summary>
+    /// Whether Hot Reload changed the code that creates this catalog's generated data: one of
+    /// <paramref name="updatedTypes"/> is, or is nested in, a type whose code creates a deferred locale. A null list
+    /// (the runtime did not say which types changed) or a catalog whose types are unknown counts as changed.
+    /// </summary>
+    internal bool IsAffectedBy(Type[]? updatedTypes)
+    {
+        if (updatedTypes is null || _generatedTypes is null || _generatedTypes.Length == 0) return true;
+        foreach (Type updated in updatedTypes)
+        {
+            Type outermost = Outermost(updated);
+            foreach (Type generated in _generatedTypes)
+            {
+                if (outermost == generated) return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static Type[] GeneratedTypes(CompiledTranslationLocale[] locales)
+    {
+        var types = new List<Type>();
+        foreach (CompiledTranslationLocale locale in locales)
+        {
+            // A locale whose factory is unknown makes the catalog count as changed by every update.
+            if (locale.IsDeferred && locale.FactoryType is not { } type) return [];
+            if (locale.FactoryType is { } factoryType)
+            {
+                Type outermost = Outermost(factoryType);
+                if (!types.Contains(outermost)) types.Add(outermost);
+            }
+        }
+
+        return types.ToArray();
+    }
+
+    // Generated lambdas compile into nested closure types (<>c); the generated class is the outermost declaring type.
+    private static Type Outermost(Type type)
+    {
+        while (type.DeclaringType is { } declaring) type = declaring;
+        return type;
     }
 
     // A locale whose chain includes deferred data reports invalid data when it is first used, not as a constructor
@@ -407,7 +498,7 @@ public sealed class CompiledTranslationCatalog
     {
         foreach (KeyValuePair<string, LocaleState> pair in localeByTag)
         {
-            if (pair.Value.DirectPatterns![id] is not null)
+            if (pair.Value.Direct!.Patterns[id] is not null)
             {
                 return true;
             }
@@ -515,8 +606,7 @@ public sealed class CompiledTranslationCatalog
             ValidateDefaultLocale(directPatterns, definitions, parameterName);
         }
 
-        state.DirectPatterns = directPatterns;
-        state.DirectMessages = directMessages;
+        Volatile.Write(ref state.Direct, new LocaleValues(directPatterns, directMessages));
     }
 
     private static void ValidateDefaultLocale(string?[] directPatterns, CompiledTranslationDefinition[] definitions, string parameterName)
@@ -595,12 +685,13 @@ public sealed class CompiledTranslationCatalog
 
         internal string? FallbackLocale => Locale.FallbackLocale;
 
-        internal string?[]? DirectPatterns;
+        // The locale's own values; null until built, and again after a Hot Reload reset.
+        internal LocaleValues? Direct;
 
-        internal CompiledTextMessage?[]? DirectMessages;
-
-        internal string?[]? ResolvedPatterns;
-
-        internal CompiledTextMessage?[]? ResolvedMessages;
+        // The values with the fallback chain applied; null until resolved, and again after a Hot Reload reset.
+        internal LocaleValues? Resolved;
     }
 }
+
+/// <summary>The patterns and messages of one locale by key ID, built from the same data.</summary>
+internal sealed record LocaleValues(string?[] Patterns, CompiledTextMessage?[] Messages);
