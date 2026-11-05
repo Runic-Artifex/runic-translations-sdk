@@ -19,13 +19,16 @@ public static class SnapshotTextCatalog
     public const int GeneratedNameVersion = 1;
     public const int GeneratorVersion = 1;
 
+    /// <summary>Describes this catalog to a translation context: its ID, contract and provider factory.</summary>
+    public static global::Runic.Translations.TranslationCatalogRegistration Registration { get; } = new global::Runic.Translations.TranslationCatalogRegistration(
+        CatalogId, DefaultLocale, ContractFingerprint, Rmf2MarkupContract, CreateProvider);
+
     public static global::Runic.Translations.ITranslationProvider CreateProvider(
         global::Runic.Translations.ITextValueFormatter? valueFormatter = null,
         global::Runic.Translations.ITranslationSnapshotFactory? snapshotFactory = null,
         global::Runic.Translations.TranslationOptions? options = null)
     {
-        if (global::Runic.Translations.Generated.TranslationsCompatibility.RuntimeAbiVersion != 1)
-            throw new global::System.InvalidOperationException("RTR0024: Generated translation code is incompatible with the referenced runtime ABI.");
+        global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRuntimeAbi(1);
         global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(3);
         return new global::Runic.Translations.CompiledTranslationProvider(SnapshotTextCatalogData.CreateDefinition().WithOptions(options), valueFormatter, snapshotFactory);
     }

@@ -17,6 +17,7 @@ const exactKeys = new Set([
   "runic-translations.theme-palette",
   "runic-translations.pseudo-localization",
   "runic-translations.ui-direction",
+  "runic-translations.ui-locale",
   "runic-translations:recent:1",
   "runic.sidebar.languages",
   "runic.sidebar.messages",
