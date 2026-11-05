@@ -31,8 +31,6 @@ internal static class ReviewFile
 
     internal static TranslationInterchangeReview Parse(byte[] bytes, string catalog) => TranslationReviewFile.Parse(bytes, catalog);
 
-    internal static void Write(string path, TranslationInterchangeReview review) => TranslationReviewFile.Write(path, review);
-
     /// <summary>The <c>validate</c> warnings of a project with a review file: stale translations and an unreadable file.</summary>
     internal static IReadOnlyList<TranslationDiagnostic> Check(CompilerInputs inputs, Rmf2ProjectCompilation compilation)
     {
@@ -139,9 +137,10 @@ internal static class InterchangeOperations
 
         TranslationXliffImportResult import;
         TranslationInterchangeReview? existingReview;
-        byte[]? existingReviewBytes = File.Exists(reviewPath) ? File.ReadAllBytes(reviewPath) : null;
+        byte[]? existingReviewBytes;
         try
         {
+            existingReviewBytes = TranslationReviewFile.ReadBytes(reviewPath);
             import = TranslationInterchange.ImportXliff21(File.ReadAllBytes(sourcePath), project.compilation, new TranslationXliffImportOptions { SourceChangePolicy = policy });
             existingReview = existingReviewBytes is null ? null : ReviewFile.Parse(existingReviewBytes, catalog);
         }
@@ -255,10 +254,10 @@ internal static class InterchangeOperations
         foreach (string key in keys)
             if (!fingerprints.ContainsKey(key)) throw new ToolUsageException($"--key {key} is not a message of catalog '{catalog}'.");
         string path = ReviewFile.PathFor(project.inputs, catalog);
-        TranslationInterchangeReview? existing;
-        try { existing = ReviewFile.Read(path, catalog); }
+        // Compare-and-swap: another writer's change since the read is re-read and the marks applied to it.
+        try { TranslationReviewFile.Update(path, catalog, existing => TranslationReviewFile.Mark(existing, catalog, keys, locale, state, note, fingerprints)); }
+        catch (TranslationInterchangeException exception) when (exception.Code == TranslationReviewFile.ChangedCode) { return Refuse(result, exception, "The review file kept changing; nothing was written."); }
         catch (TranslationInterchangeException exception) { return Refuse(result, exception, "The review file cannot be read; nothing was written."); }
-        ReviewFile.Write(path, TranslationReviewFile.Mark(existing, catalog, keys, locale, state, note, fingerprints));
         string display = Display(path);
         result.WriteOutputLine($"marked {keys.Distinct(StringComparer.Ordinal).Count()} translation(s) in {locale} as {stateName}; wrote {display}.");
         result.Interchange = new TranslationsToolInterchange("review-mark", catalog)

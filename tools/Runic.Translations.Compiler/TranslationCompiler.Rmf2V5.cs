@@ -131,7 +131,10 @@ public static partial class TranslationCompiler
                     manifest.Locales.Add(new(pseudo.Tag, manifest.DefaultLocale, pseudo.Span, pseudo.Span));
         }
         var discovered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var extracted = ReadRmf2ProjectSourcesV5(project, sources, units, config, discovered, diagnostics, options, cancellationToken);
+        // A relaxed compile (review fingerprints) applies no validation policy; a base-locale-only one also reads no translation.
+        if (options.RelaxedValidation || options.BaseLocaleOnly) manifest.Relaxed = true;
+        var extracted = ReadRmf2ProjectSourcesV5(project, sources, units, config, discovered, diagnostics, options, cancellationToken,
+            options.BaseLocaleOnly ? manifest.DefaultLocale : null);
         if (discovered.Count > options.MaximumLocalesPerCatalog)
             diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "Locale count exceeds the configured limit.", project, manifest.DefaultLocaleSpan);
         if (manifest.Locales.Count == 0)
@@ -518,7 +521,8 @@ public static partial class TranslationCompiler
     }
 
     private static List<Rmf2ProjectSourceV5> ReadRmf2ProjectSourcesV5(TranslationSource project, TranslationSource[] sources,
-        IReadOnlyDictionary<TranslationSource, Rmf2SourceUnitV5>? units, JsonValue config, HashSet<string> locales, DiagnosticBag diagnostics, TranslationCompilerOptions options, CancellationToken cancellationToken)
+        IReadOnlyDictionary<TranslationSource, Rmf2SourceUnitV5>? units, JsonValue config, HashSet<string> locales, DiagnosticBag diagnostics, TranslationCompilerOptions options, CancellationToken cancellationToken,
+        string? onlyLocale = null)
     {
         string directory = ProjectDirectory(project.Path);
         var mounts = new List<(string Root, string[] Prefix)>();
@@ -582,6 +586,7 @@ public static partial class TranslationCompiler
                 directPath = new[] { messageId };
             }
             if (!TryCanonicalizeLocale(spelling, out string locale) || namespaceParts.Any(segment => !IsIdentifier(segment)) || directPath.Any(segment => !IsIdentifier(segment))) { Error("Invalid translation locale filename or directory segment.", source, new(0, 0)); continue; }
+            if (onlyLocale is not null && !string.Equals(locale, onlyLocale, StringComparison.OrdinalIgnoreCase)) continue;
             if (spellings.TryGetValue(locale, out string? existing) && existing != spelling) Error("Duplicate canonical locale spelling.", source, new(0, 0));
             spellings[locale] = spelling; locales.Add(locale);
             string[] mount = matches[0].Prefix.Concat(namespaceParts).ToArray();

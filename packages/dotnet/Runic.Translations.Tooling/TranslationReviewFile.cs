@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using Runic.Translations.Compiler;
 
 namespace Runic.Translations.Tooling;
@@ -22,6 +23,9 @@ internal static class TranslationReviewFile
     internal const string InvalidCode = "RTR0091";
     internal const int MaximumBytes = 8 * 1024 * 1024;
 
+    /// <summary>The <see cref="TranslationInterchangeException.Code"/> of a write refused because the file changed since it was read.</summary>
+    internal const string ChangedCode = "REVIEW-CHANGED";
+
     /// <summary>The review file of <paramref name="catalog"/> in the directory of the project file <paramref name="projectPath"/>.</summary>
     internal static string PathFor(string projectPath, string catalog)
     {
@@ -35,18 +39,38 @@ internal static class TranslationReviewFile
         !string.IsNullOrEmpty(catalog) && catalog.IndexOfAny(['/', '\\']) < 0 && catalog is not ("." or "..") && catalog.IndexOfAny(Path.GetInvalidFileNameChars()) < 0;
 
     /// <summary>Reads the review file, or returns null when it does not exist.</summary>
-    /// <exception cref="TranslationInterchangeException">The file is invalid or belongs to another catalog.</exception>
-    internal static TranslationInterchangeReview? Read(string path, string catalog)
+    /// <exception cref="TranslationInterchangeException">The file is invalid, larger than 8 MiB or belongs to another catalog.</exception>
+    internal static TranslationInterchangeReview? Read(string path, string catalog) => ReadSnapshot(path, catalog).Review;
+
+    /// <summary>
+    /// Reads the review file with the bytes it was read from (both null when it does not exist), for a later
+    /// <see cref="Write(string, TranslationInterchangeReview, byte[])"/> that refuses to replace a file changed since.
+    /// </summary>
+    /// <exception cref="TranslationInterchangeException">The file is invalid, larger than 8 MiB or belongs to another catalog.</exception>
+    internal static (TranslationInterchangeReview? Review, byte[]? Bytes) ReadSnapshot(string path, string catalog)
+    {
+        byte[]? bytes = ReadBytes(path);
+        return bytes is null ? (null, null) : (Parse(bytes, catalog), bytes);
+    }
+
+    /// <summary>The bytes of the review file, or null when it does not exist.</summary>
+    /// <exception cref="TranslationInterchangeException">The file is larger than 8 MiB.</exception>
+    internal static byte[]? ReadBytes(string path)
     {
         if (!File.Exists(path)) return null;
         if (new FileInfo(path).Length > MaximumBytes)
             throw new TranslationInterchangeException("REVIEW-SIZE", "The review file exceeds 8 MiB.");
-        return Parse(File.ReadAllBytes(path), catalog);
+        byte[] bytes = File.ReadAllBytes(path);
+        if (bytes.Length > MaximumBytes)
+            throw new TranslationInterchangeException("REVIEW-SIZE", "The review file exceeds 8 MiB.");
+        return bytes;
     }
 
     /// <exception cref="TranslationInterchangeException">The bytes are not a review file of <paramref name="catalog"/>.</exception>
     internal static TranslationInterchangeReview Parse(ReadOnlyMemory<byte> bytes, string catalog)
     {
+        if (bytes.Length > MaximumBytes)
+            throw new TranslationInterchangeException("REVIEW-SIZE", "The review file exceeds 8 MiB.");
         TranslationInterchangeReview review = TranslationInterchange.ImportReviewJson(bytes);
         if (!string.Equals(review.CatalogId, catalog, StringComparison.Ordinal))
             throw new TranslationInterchangeException("REVIEW-CATALOG", $"The review file is for catalog '{review.CatalogId}', not '{catalog}'.");
@@ -55,22 +79,106 @@ internal static class TranslationReviewFile
 
     internal static byte[] Render(TranslationInterchangeReview review) => TranslationInterchange.ExportReviewJson(review);
 
-    /// <summary>Replaces the review file atomically through a temporary file in the same directory.</summary>
-    internal static void Write(string path, TranslationInterchangeReview review)
+    /// <summary>Replaces the review file atomically through a temporary file in the same directory, whatever it contains.</summary>
+    internal static void Write(string path, TranslationInterchangeReview review) => Replace(path, Render(review), expected: null, compare: false);
+
+    /// <summary>
+    /// Replaces the review file atomically, only while it still holds <paramref name="expected"/> (null: while it does
+    /// not exist). The command line, the Translations Editor and the language server all write the file, so each write
+    /// compares the file it read with the one it replaces and refuses to overwrite another writer's change.
+    /// </summary>
+    /// <exception cref="TranslationInterchangeException"><see cref="ChangedCode"/>: the file changed since <paramref name="expected"/> was read.</exception>
+    internal static void Write(string path, TranslationInterchangeReview review, byte[]? expected) => Replace(path, Render(review), expected, compare: true);
+
+    /// <summary>
+    /// Reads the review file, applies <paramref name="change"/> to it and writes the result with
+    /// <see cref="Write(string, TranslationInterchangeReview, byte[])"/>; when another writer replaced the file in between,
+    /// reads it again and re-applies <paramref name="change"/> to the new content (entries are independent per key and
+    /// locale, so this merges per entry). <paramref name="change"/> returns null to write nothing. Returns the review written,
+    /// or the current one when nothing was written.
+    /// </summary>
+    /// <exception cref="TranslationInterchangeException">The file cannot be read, or (<see cref="ChangedCode"/>) it kept changing while it was being written.</exception>
+    internal static TranslationInterchangeReview? Update(string path, string catalog, Func<TranslationInterchangeReview?, TranslationInterchangeReview?> change)
     {
-        byte[] bytes = Render(review);
+        ArgumentNullException.ThrowIfNull(change);
+        for (int attempt = 1; ; attempt++)
+        {
+            (TranslationInterchangeReview? current, byte[]? bytes) = ReadSnapshot(path, catalog);
+            if (change(current) is not { } next) return current;
+            try
+            {
+                Write(path, next, bytes);
+                return next;
+            }
+            catch (TranslationInterchangeException exception) when (exception.Code == ChangedCode && attempt < 5) { }
+        }
+    }
+
+    private static void Replace(string path, byte[] bytes, byte[]? expected, bool compare)
+    {
         string directory = Path.GetDirectoryName(path)!;
         Directory.CreateDirectory(directory);
         string temporary = Path.Combine(directory, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
         try
         {
             File.WriteAllBytes(temporary, bytes);
+            if (compare)
+            {
+                byte[]? current = File.Exists(path) ? File.ReadAllBytes(path) : null;
+                bool unchanged = current is null ? expected is null : expected is not null && current.AsSpan().SequenceEqual(expected);
+                if (!unchanged)
+                    throw new TranslationInterchangeException(ChangedCode, $"The review file '{Path.GetFileName(path)}' changed on disk after it was read (the command line, the Translations Editor and the language server all write it); nothing was written. Try again.");
+            }
             File.Move(temporary, path, overwrite: true);
         }
         finally
         {
             if (File.Exists(temporary)) File.Delete(temporary);
         }
+    }
+
+    /// <summary>
+    /// The compilation review data is computed from while <paramref name="compilation"/> has errors: the same sources
+    /// compiled without <c>validation</c> policies, else the base locale's sources alone. Source fingerprints depend only
+    /// on the base messages and their caller contracts, so they are the same as a successful compilation's; an incomplete
+    /// or invalid translation (the normal state of a catalog being translated) does not block review data. Returns
+    /// <paramref name="compilation"/> when it succeeded, and a failed compilation only when runic.json or the base
+    /// locale has errors. A base-locale-only result has no translations, so <see cref="Stale"/> locates its entries at
+    /// the base message.
+    /// </summary>
+    internal static Rmf2ProjectCompilation ForReview(Rmf2ProjectCompilation compilation, TranslationSource project,
+        IEnumerable<TranslationSource> sources, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(compilation);
+        if (compilation.Success && compilation.Project is not null) return compilation;
+        TranslationSource[] all = sources.ToArray();
+        TranslationCompilerOptions basis = options ?? new TranslationCompilerOptions();
+        Rmf2ProjectCompilation relaxed = TranslationCompiler.CompileRmf2ProjectV5(project, all, With(basis, baseLocaleOnly: false), cancellationToken);
+        if (relaxed.Success && relaxed.Project is not null) return relaxed;
+        return TranslationCompiler.CompileRmf2ProjectV5(project, all, With(basis, baseLocaleOnly: true), cancellationToken);
+
+        static TranslationCompilerOptions With(TranslationCompilerOptions options, bool baseLocaleOnly) => new()
+        {
+            MaximumDocumentBytes = options.MaximumDocumentBytes,
+            MaximumDepth = options.MaximumDepth,
+            MaximumKeysPerCatalog = options.MaximumKeysPerCatalog,
+            MaximumValueBytes = options.MaximumValueBytes,
+            MaximumPlaceholdersPerValue = options.MaximumPlaceholdersPerValue,
+            MaximumLocalesPerCatalog = options.MaximumLocalesPerCatalog,
+            RelaxedValidation = true,
+            BaseLocaleOnly = baseLocaleOnly,
+        };
+    }
+
+    /// <summary>
+    /// The per-unit source fingerprints of the catalog of <paramref name="compilation"/> (see <see cref="ForReview"/>),
+    /// or null when runic.json or the base locale has errors.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, string>? Fingerprints(Rmf2ProjectCompilation compilation, TranslationSource project,
+        IEnumerable<TranslationSource> sources, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        Rmf2ProjectCompilation review = ForReview(compilation, project, sources, options, cancellationToken);
+        return review.Success && review.Project is not null ? TranslationInterchange.ComputeSourceFingerprints(review) : null;
     }
 
     /// <summary>Whether <paramref name="entry"/> was recorded for a source other than the current one.</summary>
