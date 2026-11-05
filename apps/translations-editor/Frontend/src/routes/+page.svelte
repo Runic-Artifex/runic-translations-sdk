@@ -106,7 +106,7 @@
   } from "#lib/local-state.js";
   import {
     buildRows,
-    coverage,
+    localeCoverage,
     formatJson,
     preview,
     type ResourceValue,
@@ -304,15 +304,20 @@
   let reviewMutationBlocked = $derived(editorMutationBlocked || reviewSaving || snapshot?.review?.migrationPending === true);
   let rows = $derived(buildRows(snapshot, drafts, parsedDrafts));
   let messageSearch = $derived(createMessageSearchIndex(rows));
+  // Coverage from runic-translations status (Tooling), the numbers of the command line, for the saved files.
   let localeSummaries = $derived.by(() => (snapshot?.catalog?.locales ?? []).map((locale) => {
-    const state = coverage(rows, locale.tag);
+    const state = localeCoverage(snapshot?.status, rows, locale.tag);
     return {
       tag: locale.tag,
       name: localeName(locale.tag),
       fallback: locale.fallback,
       translated: state.translated,
+      fallbackCount: state.fallback,
+      missing: state.missing,
+      stale: state.stale,
+      completeness: state.completeness,
       total: state.total,
-      percent: state.total === 0 ? 100 : Math.round((state.translated / state.total) * 100),
+      percent: state.percent,
       isSource: locale.tag === snapshot?.catalog?.defaultLocale,
     };
   }));

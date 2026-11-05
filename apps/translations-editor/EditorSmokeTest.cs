@@ -163,6 +163,13 @@ internal static class EditorSmokeTest
         Require(await File.ReadAllTextAsync(Path.Combine(project, "runic.json")).ConfigureAwait(false) == manifest, "Removing ru didn't restore runic.json byte for byte.");
         string review = await File.ReadAllTextAsync(Path.Combine(project, "locales.review.json")).ConfigureAwait(false);
         Require(!review.Contains("\"ru\"", StringComparison.Ordinal) && review.Contains("\"de\"", StringComparison.Ordinal), "The removed locale's review entries stayed: " + review);
+
+        // L5-22: the snapshot carries runic-translations status, also while a translation is missing (RTR0010 errors).
+        await File.WriteAllTextAsync(Path.Combine(project, "de.rmf2"), "").ConfigureAwait(false);
+        WorkspaceSnapshot incomplete = await session.LoadAsync().ConfigureAwait(false);
+        TranslationsStatusLocale? german = incomplete.Status?.Locales.SingleOrDefault(locale => locale.Locale == "de");
+        Require(!incomplete.Success && german is { Missing: 1, Coverage: 0, Completeness: "error" } && incomplete.Status!.Messages == 1,
+            "The editor's status model doesn't match runic-translations status for an incomplete catalog.");
     }
 
     private static async Task MalformedManifestJourneyAsync(string root)

@@ -4142,3 +4142,24 @@ ui {
 ui {
   locale_categories_seeded = Copied starter values get a variant for each plural category the language needs, as a copy of the * variant.
 }
+ui {
+  locale_status_translated = {$count} translated
+}
+ui {
+  locale_status_fallback = {$count} from {$locale}
+}
+ui {
+  locale_status_missing = {$count} missing
+}
+ui {
+  locale_status_stale = {$count} stale
+}
+ui {
+  locale_status_policy_error = missing translations are errors
+}
+ui {
+  locale_status_policy_warning = missing translations are warnings
+}
+ui {
+  locale_status_policy_allow = missing translations are allowed
+}

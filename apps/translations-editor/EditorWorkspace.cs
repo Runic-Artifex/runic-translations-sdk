@@ -1362,7 +1362,23 @@ internal sealed class EditorWorkspace : IDisposable
                 review = new EditorReviewSnapshot(store.DisplayPath, null, exception.Message, [], []);
             }
         }
-        return new WorkspaceSnapshot(_root, catalog, state.Catalogs, documents, Diagnostics(state), state.Compilation.Success, null, review, null);
+        return new WorkspaceSnapshot(_root, catalog, state.Catalogs, documents, Diagnostics(state), state.Compilation.Success, null, review, null, Status(state));
+    }
+
+    // The status report of runic-translations status, from the same compilation (relaxed while translations are
+    // incomplete) and review file. The editor has no --min-coverage thresholds.
+    private TranslationsStatusProject? Status(WorkspaceState state)
+    {
+        WorkspaceFile? manifest = state.Files.Find(static file => file.Kind == DocumentKind.Manifest);
+        if (manifest is null || _catalogId is null) return null;
+        Rmf2ProjectCompilation? counted = TranslationStatus.ForStatus(state.Compilation, Source(manifest.Path, manifest.Content),
+            state.Files.Where(static file => file.Kind == DocumentKind.Resource).Select(static file => Source(file.Path, file.Content)).ToArray());
+        if (counted is null) return null;
+        string reviewPath = TranslationReviewFile.PathFor(ContainedPath(manifest.Path), _catalogId);
+        TranslationInterchangeReview? review = null;
+        try { review = TranslationReviewFile.Read(reviewPath, _catalogId); }
+        catch (Exception exception) when (exception is TranslationInterchangeException or IOException or UnauthorizedAccessException) { /* The review snapshot reports it. */ }
+        return TranslationStatus.Report(manifest.Path, counted, review, review is null ? null : ReportedOutputPath(reviewPath), new Dictionary<string, double>());
     }
 
     // The compiler's diagnostics and, with a review file, RTR0090 for stale review entries (or RTR0091 when the file

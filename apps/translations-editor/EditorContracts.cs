@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Runic.Translations.Authoring;
 using Runic.Translations.Compiler;
+using Runic.Translations.Tooling;
 
 namespace Runic.Translations.Editor;
 
@@ -87,7 +88,10 @@ internal sealed record WorkspaceSnapshot(
     bool Success,
     EditorPendingTransaction? PendingTransaction,
     EditorReviewSnapshot? Review,
-    EditorHistoryState? History);
+    EditorHistoryState? History,
+    // runic-translations status for the saved files (TranslationStatus): the same numbers and per-locale completeness
+    // policy as the command line. Null when runic.json, the base locale or a translation's syntax has errors.
+    TranslationsStatusProject? Status = null);
 
 internal sealed record EditorPendingTransaction(string CatalogId, IReadOnlyList<string> Paths);
 

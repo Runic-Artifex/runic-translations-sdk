@@ -120,4 +120,14 @@ assert.deepEqual(parsedRow.cells.en.entry.semantic.text, ["Edited"]);
 const groupedMetadata = structuredClone(uppercaseGrouped);
 Object.assign(groupedMetadata.documents[1].entries[0], compilerMetadata);
 assert.deepEqual(model.buildRows(groupedMetadata, {})[0].cells.en.entry.context, compilerMetadata.context);
-console.log("PASS: compiler authoring, semantic and translator context survive direct/grouped rows and reject stale drafts.");
+
+// Locale coverage comes from runic-translations status when the snapshot has it (L5-22), else from the rows.
+const statusRows = [{ key: "a", cells: { en: { entry: {} }, de: { entry: {} } } }, { key: "b", cells: { en: { entry: {} } } }, { key: "c", cells: { en: { entry: {} } } }];
+const reported = model.localeCoverage({ project: "runic.json", catalog: "app", baseLocale: "en", messages: 3, locales: [
+  { locale: "en", translated: 3, fallback: 0, missing: 0, coverage: 100, belowThreshold: false },
+  { locale: "de", fallbackLocale: "en", translated: 1, fallback: 1, missing: 1, coverage: 66.66, stale: 1, belowThreshold: false, completeness: "warning" },
+] }, statusRows, "de");
+assert.deepEqual(reported, { translated: 1, fallback: 1, missing: 1, total: 3, percent: 66.66, stale: 1, completeness: "warning", fromStatus: true });
+assert.deepEqual(model.localeCoverage(undefined, statusRows, "de"), { translated: 1, fallback: 0, missing: 2, total: 3, percent: 33.33, fromStatus: false },
+  "Without a status report the rows are counted, rounded down like status.");
+console.log("PASS: compiler authoring, semantic and translator context survive direct/grouped rows and reject stale drafts; locale coverage follows runic-translations status.");

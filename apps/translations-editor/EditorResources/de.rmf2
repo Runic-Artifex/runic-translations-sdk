@@ -4142,3 +4142,24 @@ ui {
 ui {
   locale_categories_seeded = Kopierte Startwerte erhalten für jede Pluralkategorie, die die Sprache braucht, eine Variante als Kopie der *-Variante.
 }
+ui {
+  locale_status_translated = {$count} übersetzt
+}
+ui {
+  locale_status_fallback = {$count} aus {$locale}
+}
+ui {
+  locale_status_missing = {$count} fehlen
+}
+ui {
+  locale_status_stale = {$count} veraltet
+}
+ui {
+  locale_status_policy_error = fehlende Übersetzungen sind Fehler
+}
+ui {
+  locale_status_policy_warning = fehlende Übersetzungen sind Warnungen
+}
+ui {
+  locale_status_policy_allow = fehlende Übersetzungen sind erlaubt
+}

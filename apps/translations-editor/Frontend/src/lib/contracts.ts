@@ -112,6 +112,37 @@ export interface WorkspaceSnapshot {
   pendingTransaction?: EditorPendingTransaction;
   review?: EditorReviewSnapshot;
   history?: EditorHistoryState;
+  /** `runic-translations status` for the saved files; absent while runic.json, the base locale or a translation's syntax has errors. */
+  status?: EditorStatusProject;
+}
+
+/** One project of `runic-translations status` (`runic.translations.status/1`). */
+export interface EditorStatusProject {
+  project: string;
+  catalog: string;
+  baseLocale: string;
+  messages: number;
+  locales: EditorStatusLocale[];
+  reviewFile?: string;
+}
+
+export interface EditorStatusLocale {
+  locale: string;
+  fallbackLocale?: string;
+  /** Messages the locale translates itself. */
+  translated: number;
+  /** Messages a fallback locale other than the base locale serves. */
+  fallback: number;
+  /** Messages shown in the base locale. */
+  missing: number;
+  /** Translated plus fallback, as a percentage of the base locale's messages, rounded down to two decimals. */
+  coverage: number;
+  /** Translations whose source changed since the review file recorded them; absent without a review file. */
+  stale?: number;
+  minimumCoverage?: number;
+  belowThreshold: boolean;
+  /** The locale's `validation.translationCompleteness`: how validate reports its missing messages. Absent for the base locale. */
+  completeness?: "allow" | "warning" | "error";
 }
 
 export interface EditorPendingTransaction {
