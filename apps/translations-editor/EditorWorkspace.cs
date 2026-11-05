@@ -1852,6 +1852,73 @@ internal sealed class EditorWorkspace : IDisposable
         return seeded;
     }
 
+    private const int MaximumImportEntries = 500;
+
+    /// <summary>
+    /// Plans importing a .resx or i18next catalog with Tooling's importer (runic-translations import) against the saved
+    /// files: the outcome of each message and the files it writes, as a workspace transaction that commits only when
+    /// none of them changed since. A relative source is resolved against the workspace root.
+    /// </summary>
+    internal async Task<(EditorCatalogImportPlan Plan, TranslationWorkspaceTransactionPlan? Transaction)> PreviewCatalogImportAsync(
+        EditorCatalogImportRequest request, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ThrowIfDisposed();
+            EditorCatalogImportPlan Refused(EditorNotice message, IReadOnlyList<EditorDiagnostic>? diagnostics = null) =>
+                new(false, message, null, request.From, request.Source, [], [], false, [], 0, 0, diagnostics ?? []);
+            string? config = FindMf2ProjectConfig();
+            if (config is null || string.IsNullOrWhiteSpace(request.Source)) return (Refused(EditorNotice.Create("ui_backend_import_source_required")), null);
+            TranslationManifestLayout layout = TranslationManifestReader.Read(File.ReadAllBytes(config), Path.GetDirectoryName(config)!);
+            if (!layout.IsValid) return (Refused(EditorNotice.FromException(new TranslationAuthoringException(layout.Error!))), null);
+            WorkspaceState state = await ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
+            var project = new TranslationSource(NormalizeRelativePath(Path.GetRelativePath(_root, config)), File.ReadAllBytes(config));
+            TranslationSource[] sources = state.Files.Where(file => file.Kind == DocumentKind.Resource && IsSourcePath(file.Path)).Select(file => Source(file.Path, file.Content)).ToArray();
+            var inputs = new TranslationProjectSources(_root, project, sources, layout.SourceRoots);
+            string sourcePath = Path.GetFullPath(request.Source.Trim(), _root);
+            TranslationCatalogImportPlan plan;
+            try { plan = TranslationCatalogImport.Plan(inputs, new TranslationCatalogImportRequest(request.From, sourcePath, [], null, request.Overwrite)); }
+            catch (TranslationToolingUsageException exception) { return (Refused(EditorNotice.FromException(new TranslationAuthoringException(exception.Message, exception))), null); }
+            EditorDiagnostic[] diagnostics = plan.Diagnostics.Where(static item => item.Severity == TranslationDiagnosticSeverity.Error)
+                .Select(static item => new EditorDiagnostic(item.Id, "error", item.Message, item.Location.Path, item.Location.Line, item.Location.Column, item.Location.EndLine, item.Location.EndColumn)).ToArray();
+            switch (plan.Failure)
+            {
+                case TranslationCatalogImportFailure.ProjectDoesNotCompile: return (Refused(EditorNotice.Create("ui_backend_import_project_errors"), diagnostics), null);
+                case TranslationCatalogImportFailure.SourceUnreadable: return (Refused(EditorNotice.Create("ui_backend_import_source_unreadable", ("code", plan.FailureCode ?? ""), ("message", plan.FailureMessage ?? ""))), null);
+                case TranslationCatalogImportFailure.MessagesDoNotCompile: return (Refused(EditorNotice.Create("ui_backend_import_messages_invalid"), diagnostics), null);
+            }
+
+            var entries = plan.Applied.Concat(plan.Entries).Select(static entry => new EditorCatalogImportEntry(entry.Locale, entry.Key, entry.Outcome, entry.Code, entry.Message)).ToArray();
+            var result = new EditorCatalogImportPlan(true, null, null, request.From, request.Source,
+                plan.Locales.Select(static locale => new EditorCatalogImportLocale(locale.Locale, locale.Added, locale.Changed, locale.Unchanged, locale.Kept)).ToArray(),
+                entries.Take(MaximumImportEntries).ToArray(), entries.Length > MaximumImportEntries,
+                plan.Writes.Select(write => NormalizeRelativePath(Path.GetRelativePath(_root, write.FullPath))).ToArray(), plan.Skipped, plan.Refused, []);
+            if (plan.Writes.Count == 0) return (result, null);
+
+            // The writes as one transaction: each replaced file must still have the bytes the import read.
+            var edits = new List<TranslationWorkspaceEdit>();
+            var after = sources.ToDictionary(static source => source.Path, StringComparer.Ordinal);
+            foreach (TranslationImportSourceWrite write in plan.Writes)
+            {
+                string relative = NormalizeRelativePath(Path.GetRelativePath(_root, write.FullPath));
+                if (relative == ".." || relative.StartsWith("../", StringComparison.Ordinal) || Path.IsPathRooted(relative))
+                    return (Refused(EditorNotice.Create("ui_backend_source_outside_project", ("path", write.DisplayPath))), null);
+                edits.Add(write.OriginalBytes is null
+                    ? new TranslationWorkspaceEdit(relative, TranslationWorkspaceEditKind.Create, null, write.Bytes)
+                    : new TranslationWorkspaceEdit(relative, TranslationWorkspaceEditKind.Replace, WorkspaceRevision(write.OriginalBytes), write.Bytes));
+                after[relative] = new TranslationSource(relative, write.Bytes);
+            }
+            Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(project, after.Values.ToArray(), null, cancellationToken);
+            Rmf2ProjectCompilation counted = TranslationStatus.ForStatus(compilation, project, after.Values.ToArray(), cancellationToken) ?? compilation;
+            return (result, new TranslationWorkspaceTransactionPlan(_root, counted.Project?.Id ?? _catalogId ?? "", edits, counted));
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     /// <summary>After a locale's removal: its entries leave the review file, as runic-translations locale remove drops them.</summary>
     internal void CompleteLocaleRemoval(string locale)
     {

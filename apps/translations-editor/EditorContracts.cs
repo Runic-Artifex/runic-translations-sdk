@@ -308,6 +308,28 @@ internal sealed record EditorXliffImportPlan(
     bool ChangesOverflowed,
     IReadOnlyList<EditorInterchangeRefusal> Refusals);
 
+// Import from .resx or i18next through Tooling's importer (runic-translations import): a dry run first.
+internal sealed record EditorCatalogImportRequest(string From, string Source, bool Overwrite = false);
+
+internal sealed record EditorCatalogImportLocale(string Locale, int Added, int Changed, int Unchanged, int Kept);
+
+// One message the import adds, changes, keeps (it exists with other text), skips or refuses, with the reason.
+internal sealed record EditorCatalogImportEntry(string Locale, string Key, string Outcome, string? Code, string? Message);
+
+internal sealed record EditorCatalogImportPlan(
+    bool Ok,
+    EditorNotice? Message,
+    string? ConfirmationToken,
+    string From,
+    string Source,
+    IReadOnlyList<EditorCatalogImportLocale> Locales,
+    IReadOnlyList<EditorCatalogImportEntry> Entries,
+    bool EntriesOverflowed,
+    IReadOnlyList<string> Files,
+    int Skipped,
+    int Refused,
+    IReadOnlyList<EditorDiagnostic> Diagnostics);
+
 internal sealed record EditorReviewChange(string Key, string Locale, string Kind, string? StateBefore, string? StateAfter);
 
 internal sealed record EditorReviewImportPlan(
@@ -375,6 +397,8 @@ internal sealed record PreparedInterchangeDocument(
 [JsonSerializable(typeof(EditorInterchangeRefusal))]
 [JsonSerializable(typeof(EditorReviewImportPlan))]
 [JsonSerializable(typeof(EditorReviewChange))]
+[JsonSerializable(typeof(EditorCatalogImportRequest))]
+[JsonSerializable(typeof(EditorCatalogImportPlan))]
 [JsonSerializable(typeof(EditorLocalStateEntry[]))]
 [JsonSerializable(typeof(EditorDocumentDraft))]
 [JsonSerializable(typeof(EditorMessageOperation))]

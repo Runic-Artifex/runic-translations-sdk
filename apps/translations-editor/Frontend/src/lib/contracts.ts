@@ -35,6 +35,30 @@ export interface EditorCatalog {
   pseudoLocales?: string[];
 }
 
+/** Import from .resx or i18next through the runic-translations importer: a dry run first. */
+export interface EditorCatalogImportRequest {
+  from: "resx" | "i18next";
+  /** The .resx file, or the i18next JSON file or locales directory; relative to the workspace root, or absolute. */
+  source: string;
+  overwrite?: boolean;
+}
+
+export interface EditorCatalogImportPlan {
+  ok: boolean;
+  message?: EditorNotice;
+  confirmationToken?: string;
+  from: string;
+  source: string;
+  locales: Array<{ locale: string; added: number; changed: number; unchanged: number; kept: number }>;
+  /** Added, changed and kept messages, then the skipped and refused ones with their reason. */
+  entries: Array<{ locale: string; key: string; outcome: "added" | "changed" | "kept" | "skipped" | "refused"; code?: string; message?: string }>;
+  entriesOverflowed: boolean;
+  files: string[];
+  skipped: number;
+  refused: number;
+  diagnostics: EditorDiagnostic[];
+}
+
 /** The add-language picker's suggestions: the SDK's pinned CLDR locales, by CLDR data ID. */
 export interface EditorLocaleCatalog {
   cldrVersion: string;

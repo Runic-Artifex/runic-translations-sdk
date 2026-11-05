@@ -185,6 +185,28 @@ internal sealed class TranslationProjectOperationsTests
         Throws<TranslationToolingUsageException>(() => TranslationCatalogImport.Plan(directory.Sources(), new("po", "i18next/locales", [], null)), "An unknown format was accepted.");
     }
 
+    [Test, DisplayName("an import into a catalog under the default completeness policy writes every locale and counts it in status")]
+    public void ImportIntoIncompleteCatalog()
+    {
+        using TemporaryProject directory = MigrationCorpus();
+        // The default translationCompleteness (error): the corpus's de.resx lacks most messages, so the imported catalog
+        // has untranslated messages (RTR0010) that neither refuse a message nor drop the translations it has.
+        directory.Write("translations/runic.json", "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Migrated\",\"className\":\"AppText\"},\"baseLocale\":\"en\",\"locales\":[\"en\",{\"tag\":\"de\",\"fallback\":\"en\"}]}");
+        TranslationProjectSources sources = directory.Sources();
+        TranslationCatalogImportPlan plan = TranslationCatalogImport.Plan(sources, new("resx", "resx/Strings.resx", [], null));
+        Require(plan is { Failure: TranslationCatalogImportFailure.None, Added: 13 }, $"The plan differs: {plan.Failure} {plan.Added} {Messages(plan.Diagnostics)}");
+        RequireWrites(directory, plan, "resx");
+
+        var after = sources.Messages.ToDictionary(static source => source.Path, StringComparer.Ordinal);
+        foreach (TranslationImportSourceWrite write in plan.Writes) after[write.DisplayPath] = new TranslationSource(write.DisplayPath, write.Bytes);
+        Rmf2ProjectCompilation strict = TranslationCompiler.CompileRmf2ProjectV5(sources.Project, after.Values.ToArray());
+        Require(!strict.Success && strict.Diagnostics.Any(static diagnostic => diagnostic.Id == "RTR0010"), "The fixture must leave untranslated messages.");
+        Rmf2ProjectCompilation counted = TranslationStatus.ForStatus(strict, sources.Project, after.Values.ToArray())
+            ?? throw new InvalidOperationException("status refused a catalog whose only errors are untranslated messages.");
+        TranslationsStatusLocale german = TranslationStatus.Report("translations/runic.json", counted, null, null, new Dictionary<string, double>()).Locales.Single(static locale => locale.Locale == "de");
+        Require(german is { Completeness: "error" } && german.Translated > 0 && german.Missing > 0, $"status: {german}");
+    }
+
     // The writes are the corpus's expected sources, at paths below the base directory.
     private static void RequireWrites(TemporaryProject directory, TranslationCatalogImportPlan plan, string expected)
     {

@@ -4163,3 +4163,88 @@ ui {
 ui {
   locale_status_policy_allow = missing translations are allowed
 }
+ui {
+  backend {
+    import_source_required = Choose the .resx file or the i18next file or directory to import.
+  }
+}
+ui {
+  backend {
+    import_project_errors = Fix the errors in runic.json or the base locale before importing; nothing was written.
+  }
+}
+ui {
+  backend {
+    import_source_unreadable = The source could not be imported ({$code}): {$message}
+  }
+}
+ui {
+  backend {
+    import_messages_invalid = The imported messages do not compile; nothing was written.
+  }
+}
+ui {
+  catalog_import_title = Import from .resx or i18next
+}
+ui {
+  catalog_import_description = Migrates an existing catalog into this project's .rmf2 sources with the runic-translations importer. Check the import first; nothing is written until you apply it.
+}
+ui {
+  catalog_import_format = Format
+}
+ui {
+  catalog_import_format_resx = A .resx file with its Strings.<locale>.resx satellites
+}
+ui {
+  catalog_import_format_i18next = i18next: <lng>.json, or a directory of <lng>.json or <lng>/<namespace>.json files
+}
+ui {
+  catalog_import_source = File or directory
+}
+ui {
+  catalog_import_overwrite = Replace the text of messages that already exist
+}
+ui {
+  catalog_import_check = Check import
+}
+ui {
+  catalog_import_apply = Import once
+}
+ui {
+  catalog_import_locale_summary = {$locale}: {$added} added, {$changed} changed, {$unchanged} unchanged, {$kept} kept
+}
+ui {
+  catalog_import_totals = {$skipped} skipped, {$refused} refused
+}
+ui {
+  catalog_import_files = Files to write
+}
+ui {
+  catalog_import_outcome = Outcome
+}
+ui {
+  catalog_import_reason = Reason
+}
+ui {
+  catalog_import_nothing = Nothing to import: every message is already there.
+}
+ui {
+  catalog_import_first_entries = Only the first 500 messages are listed.
+}
+ui {
+  page_project_wizard_step_import = Import
+}
+ui {
+  page_project_wizard_import_description = Optional: import an existing .resx or i18next catalog after the project is created. You check the import before anything is written.
+}
+ui {
+  page_project_wizard_import_none = Start empty
+}
+ui {
+  feedback_catalog_imported = Imported the catalog into this project's sources.
+}
+ui {
+  confirm {
+    apply_catalog_import = Discard unsaved document drafts, repair text, and workflow/terminology changes to apply this import?
+  }
+}

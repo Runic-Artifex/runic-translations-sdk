@@ -4,12 +4,16 @@ import { connectView, disposable, viewReferences, type BridgeMemberDecoders, typ
 import * as bridgeWire from "@runic-artifex/views/generated/wire";
 
 export interface EditorInterchangeState {
+  readonly previewCatalogImportResultJson: string;
+  readonly applyCatalogImportResultJson: string;
   readonly exportXliffResultJson: string;
   readonly previewXliffImportResultJson: string;
   readonly applyXliffImportResultJson: string;
   readonly exportReviewJsonResultJson: string;
   readonly previewReviewJsonImportResultJson: string;
   readonly applyReviewJsonImportResultJson: string;
+  readonly isPreviewCatalogImportExecuting: boolean;
+  readonly isApplyCatalogImportExecuting: boolean;
   readonly isExportXliffExecuting: boolean;
   readonly isPreviewXliffImportExecuting: boolean;
   readonly isApplyXliffImportExecuting: boolean;
@@ -18,6 +22,8 @@ export interface EditorInterchangeState {
   readonly isApplyReviewJsonImportExecuting: boolean;
 }
 
+export interface EditorInterchangePreviewCatalogImportOperation extends BridgeOperation<void> {}
+export interface EditorInterchangeApplyCatalogImportOperation extends BridgeOperation<void> {}
 export interface EditorInterchangeExportXliffOperation extends BridgeOperation<void> {}
 export interface EditorInterchangePreviewXliffImportOperation extends BridgeOperation<void> {}
 export interface EditorInterchangeApplyXliffImportOperation extends BridgeOperation<void> {}
@@ -31,6 +37,12 @@ export interface EditorInterchangeApplyReviewJsonImportOperation extends BridgeO
  * Interchange operations exposed as individual generated View commands.
  */
 export interface EditorInterchangeClient extends ViewClient<EditorInterchangeState> {
+  /** The dry run of importing a .resx or i18next catalog (runic-translations import). */
+  previewCatalogImport(input: string): Promise<EditorInterchangeState>;
+  canPreviewCatalogImport(input: string): Promise<boolean>;
+  /** Applies the previewed catalog import once, by its confirmation token. */
+  applyCatalogImport(input: string): Promise<EditorInterchangeState>;
+  canApplyCatalogImport(input: string): Promise<boolean>;
   exportXliff(input: string): Promise<EditorInterchangeState>;
   canExportXliff(input: string): Promise<boolean>;
   previewXliffImport(input: string): Promise<EditorInterchangeState>;
@@ -43,6 +55,20 @@ export interface EditorInterchangeClient extends ViewClient<EditorInterchangeSta
   canPreviewReviewJsonImport(input: string): Promise<boolean>;
   applyReviewJsonImport(input: string): Promise<EditorInterchangeState>;
   canApplyReviewJsonImport(input: string): Promise<boolean>;
+  /**
+   * Starts `PreviewCatalogImport` as an operation that the page can observe, cancel and recover. `options.requestId` names it;
+   * the default is a random id. A start with a request id that .NET already admitted returns that operation.
+   */
+  startPreviewCatalogImport(input: string, options?: BridgeOperationStartOptions): Promise<EditorInterchangePreviewCatalogImportOperation>;
+  /** Returns the `PreviewCatalogImport` operation started with `requestId`, for example after the page reloaded. */
+  recoverPreviewCatalogImport(requestId: string): Promise<EditorInterchangePreviewCatalogImportOperation>;
+  /**
+   * Starts `ApplyCatalogImport` as an operation that the page can observe, cancel and recover. `options.requestId` names it;
+   * the default is a random id. A start with a request id that .NET already admitted returns that operation.
+   */
+  startApplyCatalogImport(input: string, options?: BridgeOperationStartOptions): Promise<EditorInterchangeApplyCatalogImportOperation>;
+  /** Returns the `ApplyCatalogImport` operation started with `requestId`, for example after the page reloaded. */
+  recoverApplyCatalogImport(requestId: string): Promise<EditorInterchangeApplyCatalogImportOperation>;
   /**
    * Starts `ExportXliff` as an operation that the page can observe, cancel and recover. `options.requestId` names it;
    * the default is a random id. A start with a request id that .NET already admitted returns that operation.
@@ -95,12 +121,16 @@ const pageEditorInterchangeReferences = viewReferences<EditorInterchangePageRefe
 export function pageEditorInterchange(id: string): EditorInterchangePageReference { return pageEditorInterchangeReferences(id); }
 
 const members: BridgeMemberDecoders<EditorInterchangeState> = {
+  previewCatalogImportResultJson: (wire: unknown) => bridgeWire.string(wire),
+  applyCatalogImportResultJson: (wire: unknown) => bridgeWire.string(wire),
   exportXliffResultJson: (wire: unknown) => bridgeWire.string(wire),
   previewXliffImportResultJson: (wire: unknown) => bridgeWire.string(wire),
   applyXliffImportResultJson: (wire: unknown) => bridgeWire.string(wire),
   exportReviewJsonResultJson: (wire: unknown) => bridgeWire.string(wire),
   previewReviewJsonImportResultJson: (wire: unknown) => bridgeWire.string(wire),
   applyReviewJsonImportResultJson: (wire: unknown) => bridgeWire.string(wire),
+  isPreviewCatalogImportExecuting: (wire: unknown) => bridgeWire.boolean(wire),
+  isApplyCatalogImportExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isExportXliffExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isPreviewXliffImportExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isApplyXliffImportExecuting: (wire: unknown) => bridgeWire.boolean(wire),
@@ -108,7 +138,9 @@ const members: BridgeMemberDecoders<EditorInterchangeState> = {
   isPreviewReviewJsonImportExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isApplyReviewJsonImportExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorInterchangeViewModel:DED79562058A5F044218FF7D157CE7BB9075A685D7090FE94A9EDEB655F30D46";
+const bridgeContract = "Runic.Translations.Editor.EditorInterchangeViewModel:65CB9514BADD2A468BEE5C0905089A11636FF7E3BA9F1133DE5231364EDD720E";
+const previewCatalogImportOperation: BridgeOperationCodec<void> = { decode: value => undefined };
+const applyCatalogImportOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const exportXliffOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const previewXliffImportOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const applyXliffImportOperation: BridgeOperationCodec<void> = { decode: value => undefined };
@@ -123,11 +155,15 @@ const applyReviewJsonImportOperation: BridgeOperationCodec<void> = { decode: val
  */
 export function connectEditorInterchange(options?: BridgeConnectOptions): Promise<EditorInterchangeClient & globalThis.Disposable> { return connectEditorInterchangeAt("editorInterchange", options); }
 async function connectEditorInterchangeAt(route: string, options?: BridgeConnectOptions): Promise<EditorInterchangeClient & globalThis.Disposable> {
-  const view = await connectView<EditorInterchangeState>({ contract: bridgeContract, route, members, texts: ["exportXliffResultJson", "previewXliffImportResultJson", "applyXliffImportResultJson", "exportReviewJsonResultJson", "previewReviewJsonImportResultJson", "applyReviewJsonImportResultJson"], operations: bridgeOperations, timeout: options?.timeout, signal: options?.signal });
+  const view = await connectView<EditorInterchangeState>({ contract: bridgeContract, route, members, texts: ["previewCatalogImportResultJson", "applyCatalogImportResultJson", "exportXliffResultJson", "previewXliffImportResultJson", "applyXliffImportResultJson", "exportReviewJsonResultJson", "previewReviewJsonImportResultJson", "applyReviewJsonImportResultJson"], operations: bridgeOperations, timeout: options?.timeout, signal: options?.signal });
   return disposable<EditorInterchangeClient>({
     get snapshot() { return view.snapshot; },
     subscribe: view.subscribe,
     dispose: view.dispose,
+    async previewCatalogImport(input) { return view.command("previewCatalogImport", input); },
+    async canPreviewCatalogImport(input) { return view.can("previewCatalogImport", input); },
+    async applyCatalogImport(input) { return view.command("applyCatalogImport", input); },
+    async canApplyCatalogImport(input) { return view.can("applyCatalogImport", input); },
     async exportXliff(input) { return view.command("exportXliff", input); },
     async canExportXliff(input) { return view.can("exportXliff", input); },
     async previewXliffImport(input) { return view.command("previewXliffImport", input); },
@@ -140,6 +176,10 @@ async function connectEditorInterchangeAt(route: string, options?: BridgeConnect
     async canPreviewReviewJsonImport(input) { return view.can("previewReviewJsonImport", input); },
     async applyReviewJsonImport(input) { return view.command("applyReviewJsonImport", input); },
     async canApplyReviewJsonImport(input) { return view.can("applyReviewJsonImport", input); },
+    startPreviewCatalogImport(input: string, options?: BridgeOperationStartOptions) { return view.start("previewCatalogImport", options?.requestId ?? globalThis.crypto.randomUUID(), input, previewCatalogImportOperation); },
+    recoverPreviewCatalogImport(requestId: string) { return view.recover("previewCatalogImport", requestId, previewCatalogImportOperation); },
+    startApplyCatalogImport(input: string, options?: BridgeOperationStartOptions) { return view.start("applyCatalogImport", options?.requestId ?? globalThis.crypto.randomUUID(), input, applyCatalogImportOperation); },
+    recoverApplyCatalogImport(requestId: string) { return view.recover("applyCatalogImport", requestId, applyCatalogImportOperation); },
     startExportXliff(input: string, options?: BridgeOperationStartOptions) { return view.start("exportXliff", options?.requestId ?? globalThis.crypto.randomUUID(), input, exportXliffOperation); },
     recoverExportXliff(requestId: string) { return view.recover("exportXliff", requestId, exportXliffOperation); },
     startPreviewXliffImport(input: string, options?: BridgeOperationStartOptions) { return view.start("previewXliffImport", options?.requestId ?? globalThis.crypto.randomUUID(), input, previewXliffImportOperation); },

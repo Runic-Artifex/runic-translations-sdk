@@ -114,10 +114,12 @@ internal static class TranslationCatalogImport
 
         if (sources.Messages.Any(static source => source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)))
             throw new TranslationToolingUsageException("import writes grouped .rmf2 resources; this project uses direct .mf2 files.");
-        Rmf2ProjectCompilation current = Compile(sources.Project, sources.Messages);
-        if (withProjectErrors is not null) current = withProjectErrors(current);
-        if (!current.Success || current.Project is null)
-            return new TranslationCatalogImportPlan(request.From, TranslationCatalogImportFailure.ProjectDoesNotCompile) { Diagnostics = current.Diagnostics };
+        Rmf2ProjectCompilation strict = Compile(sources.Project, sources.Messages);
+        if (withProjectErrors is not null) strict = withProjectErrors(strict);
+        // A catalog being translated (RTR0010 and the other validation policies) imports like a complete one; only
+        // runic.json, base-locale or syntax errors stop the import, as they stop status.
+        if (TranslationStatus.ForStatus(strict, sources.Project, sources.Messages) is not { Project: not null } current)
+            return new TranslationCatalogImportPlan(request.From, TranslationCatalogImportFailure.ProjectDoesNotCompile) { Diagnostics = strict.Diagnostics };
         Rmf2ProjectV5 project = current.Project;
         string catalog = current.CatalogId!;
         string currentDirectory = Path.GetFullPath(sources.BaseDirectory);
@@ -186,13 +188,15 @@ internal static class TranslationCatalogImport
         {
             var noBase = new List<(string Locale, string Key)>();
             planned = PlanAll(sources, current, messages, refused, directory, noBase, out Rmf2ProjectCompilation proposed);
-            if (proposed.Success && proposed.Project is not null)
+            // Imported base messages that a locale does not translate yet (RTR0010) are what a migration leaves to
+            // translate, as runic-translations locale add leaves them; they do not refuse a message.
+            var errors = proposed.Diagnostics.Where(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error && diagnostic.Id != "RTR0010").ToArray();
+            if (errors.Length == 0)
             {
                 foreach ((string locale, string key) in noBase)
                     report.Refuse(locale, key, "IMPORT-NO-BASE", $"There is no {project.DefaultLocale} message '{key}' to translate; import the base locale first.");
                 break;
             }
-            var errors = proposed.Diagnostics.Where(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error).ToArray();
             var attributed = Attribute(currentDirectory, sources.Project, planned, errors, messages, refused);
             if (attributed.Count == 0 || round == MaximumRounds)
                 return new TranslationCatalogImportPlan(request.From, TranslationCatalogImportFailure.MessagesDoNotCompile) { Catalog = catalog, Diagnostics = errors };
@@ -304,7 +308,10 @@ internal static class TranslationCatalogImport
             {
                 sources = TranslationInterchangeSourceWriter.Apply(sources, edits);
                 compilation = Compile(inputs.Project, sources);
-                if (!compilation.Success || compilation.Project is null) return sources;
+                // New base messages are untranslated in the other locales (RTR0010) until their translations are
+                // planned below; only other errors stop here, and the caller attributes them.
+                if (TranslationStatus.ForStatus(compilation, inputs.Project, sources) is not { Project: not null } relaxed) return sources;
+                compilation = relaxed;
             }
         }
 

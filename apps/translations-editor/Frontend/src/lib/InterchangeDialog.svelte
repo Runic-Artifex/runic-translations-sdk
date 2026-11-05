@@ -1,11 +1,13 @@
 <script lang="ts">
   import type {
+    EditorCatalogImportPlan,
     EditorReviewFileResult,
     EditorReviewImportPreview,
     EditorXliffExportResult,
     EditorXliffImportPreview,
   } from "#lib/contracts.js";
   import AppDialog from "#lib/AppDialog.svelte";
+  import CatalogImportPanel from "#lib/CatalogImportPanel.svelte";
   import * as Alert from "#lib/components/ui/alert/index.js";
   import { Badge } from "#lib/components/ui/badge/index.js";
   import { Button } from "#lib/components/ui/button/index.js";
@@ -31,6 +33,12 @@
     onexportreview,
     onpreviewreview,
     onapplyreview,
+    catalogImportFrom = $bindable<"resx" | "i18next">("resx"),
+    catalogImportSource = $bindable(""),
+    catalogImportOverwrite = $bindable(false),
+    catalogImportPlan,
+    onpreviewcatalog,
+    onapplycatalog,
   }: {
     open?: boolean;
     busy?: boolean;
@@ -48,6 +56,12 @@
     onexportreview(): void;
     onpreviewreview(): void;
     onapplyreview(): void;
+    catalogImportFrom?: "resx" | "i18next";
+    catalogImportSource?: string;
+    catalogImportOverwrite?: boolean;
+    catalogImportPlan?: EditorCatalogImportPlan;
+    onpreviewcatalog(): void;
+    onapplycatalog(): void;
   } = $props();
 
   const ui = getUiText();
@@ -138,6 +152,10 @@
         </section>
       {/if}
     </section>
+  </div>
+  <div class="mt-6">
+    <CatalogImportPanel {busy} bind:from={catalogImportFrom} bind:source={catalogImportSource} bind:overwrite={catalogImportOverwrite}
+      plan={catalogImportPlan} oncheck={onpreviewcatalog} onapply={onapplycatalog} />
   </div>
   {#snippet footer()}<Button variant="outline" disabled={busy} onclick={() => open = false}>{ui.text("ui_common_close")}</Button>{/snippet}
 </AppDialog>

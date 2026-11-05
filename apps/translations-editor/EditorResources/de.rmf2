@@ -4163,3 +4163,88 @@ ui {
 ui {
   locale_status_policy_allow = fehlende Übersetzungen sind erlaubt
 }
+ui {
+  backend {
+    import_source_required = Wähle die .resx-Datei oder die i18next-Datei bzw. das Verzeichnis zum Importieren.
+  }
+}
+ui {
+  backend {
+    import_project_errors = Behebe die Fehler in runic.json oder der Basissprache vor dem Import; nichts wurde geschrieben.
+  }
+}
+ui {
+  backend {
+    import_source_unreadable = Die Quelle konnte nicht importiert werden ({$code}): {$message}
+  }
+}
+ui {
+  backend {
+    import_messages_invalid = Die importierten Nachrichten kompilieren nicht; nichts wurde geschrieben.
+  }
+}
+ui {
+  catalog_import_title = Aus .resx oder i18next importieren
+}
+ui {
+  catalog_import_description = Übernimmt einen bestehenden Katalog mit dem Importer von runic-translations in die .rmf2-Quellen dieses Projekts. Prüfe den Import zuerst; geschrieben wird erst, wenn du ihn anwendest.
+}
+ui {
+  catalog_import_format = Format
+}
+ui {
+  catalog_import_format_resx = Eine .resx-Datei mit ihren Strings.<locale>.resx-Satelliten
+}
+ui {
+  catalog_import_format_i18next = i18next: <lng>.json oder ein Verzeichnis mit <lng>.json- oder <lng>/<namespace>.json-Dateien
+}
+ui {
+  catalog_import_source = Datei oder Verzeichnis
+}
+ui {
+  catalog_import_overwrite = Text bereits vorhandener Nachrichten ersetzen
+}
+ui {
+  catalog_import_check = Import prüfen
+}
+ui {
+  catalog_import_apply = Einmal importieren
+}
+ui {
+  catalog_import_locale_summary = {$locale}: {$added} hinzugefügt, {$changed} geändert, {$unchanged} unverändert, {$kept} beibehalten
+}
+ui {
+  catalog_import_totals = {$skipped} übersprungen, {$refused} abgelehnt
+}
+ui {
+  catalog_import_files = Zu schreibende Dateien
+}
+ui {
+  catalog_import_outcome = Ergebnis
+}
+ui {
+  catalog_import_reason = Grund
+}
+ui {
+  catalog_import_nothing = Nichts zu importieren: alle Nachrichten sind schon vorhanden.
+}
+ui {
+  catalog_import_first_entries = Nur die ersten 500 Nachrichten werden aufgeführt.
+}
+ui {
+  page_project_wizard_step_import = Import
+}
+ui {
+  page_project_wizard_import_description = Optional: einen bestehenden .resx- oder i18next-Katalog nach dem Anlegen importieren. Du prüfst den Import, bevor etwas geschrieben wird.
+}
+ui {
+  page_project_wizard_import_none = Leer beginnen
+}
+ui {
+  feedback_catalog_imported = Katalog in die Quellen dieses Projekts importiert.
+}
+ui {
+  confirm {
+    apply_catalog_import = Nicht gespeicherte Entwürfe, Reparaturtext und Workflow-/Terminologieänderungen verwerfen, um diesen Import anzuwenden?
+  }
+}

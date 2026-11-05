@@ -172,6 +172,46 @@ internal static class EditorSmokeTest
             "The editor's status model doesn't match runic-translations status for an incomplete catalog.");
     }
 
+    // L5-26: migration from .resx and i18next through Tooling's importer: a dry run lists every message and the files
+    // it writes; applying it is a one-use confirmation, refused once a file changed.
+    private static async Task CatalogImportJourneyAsync(string root)
+    {
+        string project = Path.Combine(root, "translations"), resx = Path.Combine(root, "resx"), i18next = Path.Combine(root, "locales");
+        Directory.CreateDirectory(project); Directory.CreateDirectory(resx); Directory.CreateDirectory(Path.Combine(i18next, "en")); Directory.CreateDirectory(Path.Combine(i18next, "de"));
+        await File.WriteAllTextAsync(Path.Combine(project, "runic.json"),
+            "{\"schemaVersion\":1,\"catalog\":\"migrated\",\"code\":{\"namespace\":\"Smoke.Translations\",\"className\":\"SmokeText\"},\"baseLocale\":\"en\",\"locales\":[\"en\",\"de\"]}\n").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), "existing = Existing\n").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "de.rmf2"), "existing = Vorhanden\n").ConfigureAwait(false);
+        static string Resx(params (string Name, string Value)[] items) => "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<root>\n" +
+            string.Concat(items.Select(item => $"  <data name=\"{item.Name}\" xml:space=\"preserve\">\n    <value>{item.Value}</value>\n  </data>\n")) + "</root>\n";
+        await File.WriteAllTextAsync(Path.Combine(resx, "Strings.resx"), Resx(("Greeting", "Hello, {0}!"), ("Existing", "Different"))).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(resx, "Strings.de.resx"), Resx(("Greeting", "Hallo, {0}!"))).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(i18next, "en", "common.json"), "{\"ok\":\"OK\",\"cancel\":\"Cancel\"}").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(i18next, "de", "common.json"), "{\"ok\":\"OK\",\"cancel\":\"Abbrechen\"}").ConfigureAwait(false);
+
+        using var session = new EditorSession(project);
+        Require((await session.LoadAsync().ConfigureAwait(false)).Success, "The import fixture did not load.");
+        EditorCatalogImportPlan plan = await session.PreviewCatalogImportAsync(new EditorCatalogImportRequest("resx", "../resx/Strings.resx")).ConfigureAwait(false);
+        Require(plan.Ok && plan.ConfirmationToken is not null && plan.Files.Contains("en.rmf2") &&
+            plan.Locales.Single(locale => locale.Locale == "en") is { Added: 2 } && plan.Locales.Single(locale => locale.Locale == "de") is { Added: 1 } &&
+            plan.Entries.Any(entry => entry is { Key: "Greeting", Locale: "de", Outcome: "added" }),
+            "The resx dry run isn't the importer's plan: " + JsonSerializer.Serialize(plan, EditorJsonContext.Default.EditorCatalogImportPlan));
+        Require(!File.ReadAllText(Path.Combine(project, "en.rmf2")).Contains("greeting", StringComparison.Ordinal), "The dry run wrote a file.");
+        EditorOperationResult applied = await session.ApplyCatalogImportAsync(plan.ConfirmationToken!).ConfigureAwait(false);
+        string importedGerman = string.Concat(Directory.GetFiles(project, "de.rmf2", SearchOption.AllDirectories).Select(File.ReadAllText));
+        Require(applied.Ok && importedGerman.Contains("Hallo, ", StringComparison.Ordinal) &&
+            File.ReadAllText(Path.Combine(project, "en.rmf2")).Contains("existing = Existing", StringComparison.Ordinal),
+            "The resx import wasn't applied as planned: " + applied.Message?.Code + " " + string.Join(", ", plan.Files) + " " + importedGerman);
+        Require(!(await session.ApplyCatalogImportAsync(plan.ConfirmationToken!).ConfigureAwait(false)).Ok, "A confirmation token applied twice.");
+
+        EditorCatalogImportPlan i18n = await session.PreviewCatalogImportAsync(new EditorCatalogImportRequest("i18next", i18next)).ConfigureAwait(false);
+        Require(i18n.Ok && i18n.ConfirmationToken is not null, "The i18next dry run failed: " + i18n.Message?.Code);
+        await File.AppendAllTextAsync(Path.Combine(project, "en.rmf2"), "late = Changed after the dry run\n").ConfigureAwait(false);
+        Require(!(await session.ApplyCatalogImportAsync(i18n.ConfirmationToken!).ConfigureAwait(false)).Ok, "An import applied over a file that changed since its dry run.");
+        EditorCatalogImportPlan missing = await session.PreviewCatalogImportAsync(new EditorCatalogImportRequest("resx", "../resx/Missing.resx")).ConfigureAwait(false);
+        Require(!missing.Ok && missing.ConfirmationToken is null, "A missing source was planned.");
+    }
+
     private static async Task MalformedManifestJourneyAsync(string root)
     {
         // A hand-edited or half-saved runic.json must produce diagnostics, not
@@ -527,6 +567,7 @@ internal static class EditorSmokeTest
             await MountedContextJourneyAsync(Path.Combine(container, "mounted-context")).ConfigureAwait(false);
             await PreviewFormattingJourneyAsync(Path.Combine(container, "preview-formatting")).ConfigureAwait(false);
             await LocaleChangeJourneyAsync(Path.Combine(container, "locale-change")).ConfigureAwait(false);
+            await CatalogImportJourneyAsync(Path.Combine(container, "catalog-import")).ConfigureAwait(false);
             await MalformedManifestJourneyAsync(Path.Combine(container, "malformed-manifest")).ConfigureAwait(false);
             await InterchangeOutputJourneyAsync(Path.Combine(container, "interchange-output"), commandLine).ConfigureAwait(false);
             await ReviewStampJourneyAsync(Path.Combine(container, "review-stamp")).ConfigureAwait(false);

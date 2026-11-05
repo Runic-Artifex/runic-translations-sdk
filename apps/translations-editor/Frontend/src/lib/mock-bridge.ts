@@ -745,6 +745,14 @@ export async function mockExecute(operation: string, argument: unknown): Promise
     }
     case "PreviewMessage": return previewMessage(value.path as string, value.content as string, value.locale as string, value.key as string, value.samplesJson as string | undefined, value.requestedLocale as string | undefined, value.timeZone as string | undefined);
     case "ListLocales": return { cldrVersion: "48.2", locales: mockLocales };
+    // The mock has no importer: it reports a two-message dry run and applies nothing.
+    case "PreviewCatalogImport": return {
+      ok: true, confirmationToken: "mock-catalog-import", from: value.from, source: value.source,
+      locales: [{ locale: "en", added: 2, changed: 0, unchanged: 0, kept: 0 }],
+      entries: [{ locale: "en", key: "greeting", outcome: "added" }, { locale: "en", key: "farewell", outcome: "added" }],
+      entriesOverflowed: false, files: ["en.rmf2"], skipped: 0, refused: 0, diagnostics: [],
+    };
+    case "ApplyCatalogImport": return { ok: false, kind: "catalog-import", message: { code: "ui_backend_import_messages_invalid", args: [] } };
     case "DescribeLocale": return describeMockLocale(value.tag as string | undefined);
     case "SaveDocument": return save(value.path as string, value.content as string, value.revision as string);
     case "SaveReview": return saveReview(argument as EditorReviewSaveRequest);
