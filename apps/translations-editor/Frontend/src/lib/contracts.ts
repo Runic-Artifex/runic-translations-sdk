@@ -89,6 +89,86 @@ export interface WorkspaceSnapshot {
   pendingTransaction?: EditorPendingTransaction;
   review?: EditorReviewSnapshot;
   history?: EditorHistoryState;
+  /** The library catalogs the open project can override (T5d). */
+  libraries?: EditorLibrarySummary[];
+}
+
+/** A library catalog an installed package packs; `overridden` when runic.json "overrides" lists it. */
+export interface EditorLibrarySummary {
+  catalog: string;
+  package?: string;
+  version?: string;
+  origin?: "nuget" | "npm";
+  overridden: boolean;
+  problem?: string;
+  overrideSources: number;
+}
+
+export interface EditorLibraryLocale {
+  tag: string;
+  fallback?: string;
+  /** "library": the library declares it; "application": an override source adds it. */
+  origin: "library" | "application";
+  messages: number;
+  libraryTranslated: number;
+  overridden: number;
+  covered: number;
+  pending: boolean;
+}
+
+/** An override (layer 1) of a library message in one locale. */
+export interface EditorLibraryOverride {
+  locale: string;
+  text: string;
+  path: string;
+  revision: string;
+  /** The library's base text changed since the override was written; undefined when unknown. */
+  changed?: boolean;
+  known: boolean;
+}
+
+export interface EditorLibraryMessage {
+  key: string;
+  path: string;
+  inputs: string[];
+  content: string;
+  structured: boolean;
+  baseText: string;
+  description?: string;
+  /** The library's own text per locale (layer 0, read-only). */
+  texts: Record<string, string>;
+  overrides: EditorLibraryOverride[];
+}
+
+export interface EditorLibraryView {
+  catalog: string;
+  package?: string;
+  version?: string;
+  origin?: "nuget" | "npm";
+  listed: boolean;
+  problem?: string;
+  baseLocale: string;
+  layers: EditorLayer[];
+  locales: EditorLibraryLocale[];
+  messages: EditorLibraryMessage[];
+  diagnostics: EditorDiagnostic[];
+  libraryError?: string;
+}
+
+export interface EditorLibraryResult {
+  ok: boolean;
+  message?: EditorNotice;
+  library?: EditorLibraryView;
+  /** runic.json changed (the catalog joined "overrides"); reload the workspace. */
+  projectChanged?: boolean;
+}
+
+export interface EditorLibraryOverrideRequest {
+  catalog: string;
+  key: string;
+  locale: string;
+  text?: string;
+  expectedRevision?: string;
 }
 
 export interface EditorPendingTransaction {

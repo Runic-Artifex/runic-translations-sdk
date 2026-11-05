@@ -77,7 +77,11 @@ internal sealed record WorkspaceSnapshot(
     bool Success,
     EditorPendingTransaction? PendingTransaction,
     EditorReviewSnapshot? Review,
-    EditorHistoryState? History);
+    EditorHistoryState? History)
+{
+    /// <summary>The library catalogs the open project can override (T5d).</summary>
+    public IReadOnlyList<EditorLibrarySummary> Libraries { get; init; } = [];
+}
 
 internal sealed record EditorPendingTransaction(string CatalogId, IReadOnlyList<string> Paths);
 
@@ -365,5 +369,9 @@ internal sealed record PreparedInterchangeDocument(
 [JsonSerializable(typeof(Rmf2DiagnosticQuickFix))]
 [JsonSerializable(typeof(EditorLocalStateSnapshot))]
 [JsonSerializable(typeof(EditorLocalStateClearResult))]
+[JsonSerializable(typeof(EditorLibraryResult))]
+[JsonSerializable(typeof(EditorLibraryRequest))]
+[JsonSerializable(typeof(EditorLibraryOverrideRequest))]
+[JsonSerializable(typeof(EditorLibraryLocaleRequest))]
 [JsonSerializable(typeof(string))]
 internal sealed partial class EditorJsonContext : JsonSerializerContext;

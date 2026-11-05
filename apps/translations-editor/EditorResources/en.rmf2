@@ -4060,3 +4060,194 @@ ui {
 ui {
   preview_example = Example {$number}
 }
+ui {
+  library {
+    title = Library catalogs
+  }
+}
+ui {
+  library {
+    description = Text of installed packages. The library's text (layer 0) is read-only; your overrides (layer 1) live in translations/overrides/<catalog>/.
+  }
+}
+ui {
+  library {
+    choose = Library catalog
+  }
+}
+ui {
+  library {
+    layers = Layers
+  }
+}
+ui {
+  library {
+    layer_library = library, read-only
+  }
+}
+ui {
+  library {
+    layer_override = your overrides
+  }
+}
+ui {
+  library {
+    locales = Library locales
+  }
+}
+ui {
+  library {
+    locale_library = provided by the library
+  }
+}
+ui {
+  library {
+    locale_added =
+      .input {$fallback :string}
+      {{Added by you, falls back to {$fallback}}}
+  }
+}
+ui {
+  library {
+    locale_pending = no overrides yet
+  }
+}
+ui {
+  library {
+    coverage =
+      .input {$covered :integer}
+      .input {$messages :integer}
+      {{{$covered} of {$messages} in its own text}}
+  }
+}
+ui {
+  library {
+    add_locale = Add locale
+  }
+}
+ui {
+  library {
+    messages = Library messages
+  }
+}
+ui {
+  library {
+    column_message = Message
+  }
+}
+ui {
+  library {
+    column_library = Library text
+  }
+}
+ui {
+  library {
+    column_override = Your override
+  }
+}
+ui {
+  library {
+    falls_back =
+      .input {$locale :string}
+      {{Shown from {$locale}}}
+  }
+}
+ui {
+  library {
+    base_text =
+      .input {$locale :string}
+      {{Base text ({$locale})}}
+  }
+}
+ui {
+  library {
+    override = Override
+  }
+}
+ui {
+  library {
+    revert = Revert to library
+  }
+}
+ui {
+  library {
+    keep = Keep override
+  }
+}
+ui {
+  library {
+    save = Save
+  }
+}
+ui {
+  library {
+    overridden = Overridden
+  }
+}
+ui {
+  library {
+    changed = Library text changed since override
+  }
+}
+ui {
+  library {
+    not_listed = runic.json does not override this catalog yet; your first override adds it to "overrides".
+  }
+}
+ui {
+  library {
+    empty = No installed package packs a library catalog. Restore the project (dotnet restore, npm install) first.
+  }
+}
+ui {
+  library {
+    open = Libraries
+  }
+}
+ui {
+  library {
+    diagnostics = Build diagnostics of your overrides
+  }
+}
+ui {
+  workspace {
+    catalogs = Catalogs
+  }
+}
+ui {
+  backend {
+    library_missing =
+      .input {$catalog :string}
+      {{No installed package packs catalog {$catalog}.}}
+  }
+}
+ui {
+  backend {
+    library_unavailable =
+      .input {$catalog :string}
+      .input {$detail :string}
+      {{Library catalog {$catalog} is not available: {$detail}}}
+  }
+}
+ui {
+  backend {
+    library_not_overridden =
+      .input {$key :string}
+      .input {$locale :string}
+      {{{$key} is not overridden in {$locale}.}}
+  }
+}
+ui {
+  backend {
+    library_invalid_text =
+      .input {$detail :string}
+      {{The override is not valid RMF2: {$detail}}}
+  }
+}
+ui {
+  backend {
+    library_locale_exists =
+      .input {$locale :string}
+      {{The library catalog already has the locale {$locale}.}}
+  }
+}

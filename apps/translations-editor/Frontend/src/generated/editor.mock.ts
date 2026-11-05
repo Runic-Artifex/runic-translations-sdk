@@ -5,7 +5,7 @@ import type { MockBridge, MockTypedView, MockCommandHandler, MockTypedOperation,
 import type { EditorClient, EditorState } from "./editor.js";
 
 /** The state of a mock Editor: the client state, with content as `{ kind, id }` and command state optional. */
-export type EditorMockState = Omit<EditorState, "isSetUiLocaleExecuting" | "workspace" | "documentTools" | "review" | "interchange" | "diagnostics" | "localState" | "project" | "documents"> & Partial<Pick<EditorState, "isSetUiLocaleExecuting">> & {
+export type EditorMockState = Omit<EditorState, "isSetUiLocaleExecuting" | "workspace" | "documentTools" | "review" | "interchange" | "diagnostics" | "localState" | "project" | "libraries" | "documents"> & Partial<Pick<EditorState, "isSetUiLocaleExecuting">> & {
   readonly workspace: MockReference<"editorWorkspace">;
   readonly documentTools: MockReference<"editorDocumentTools">;
   readonly review: MockReference<"editorReview">;
@@ -13,6 +13,7 @@ export type EditorMockState = Omit<EditorState, "isSetUiLocaleExecuting" | "work
   readonly diagnostics: MockReference<"editorDiagnostics">;
   readonly localState: MockReference<"editorLocalState">;
   readonly project: MockReference<"editorProject">;
+  readonly libraries: MockReference<"editorLibraries">;
   readonly documents: readonly (MockReference<"editorDocument">)[];
 };
 
@@ -40,7 +41,7 @@ export interface EditorMock extends MockTypedView<EditorMockState, EditorClient,
 const spec: MockTypedViewSpec = {
   kind: "editor",
   route: "editor",
-  contract: "Runic.Translations.Editor.EditorViewModel:AD00A5B4BE47AA9A45169F855E1B9CE367A214E3C59A59057362787C22ABD400",
+  contract: "Runic.Translations.Editor.EditorViewModel:83945A3DE56E0BAD4D52C6CD17A2DE35ED7D15629509AFB9A236CA3543CD8A5E",
   fields: {},
   defaults: { isSetUiLocaleExecuting: false },
   commands: {

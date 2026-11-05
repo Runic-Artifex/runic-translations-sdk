@@ -53,6 +53,7 @@
   import { editorShortcut } from "#lib/editor-keyboard.js";
   import EditorModeSwitcher, { type EditorMode } from "#lib/EditorModeSwitcher.svelte";
   import InterchangeDialog from "#lib/InterchangeDialog.svelte";
+  import LibraryCatalogDialog from "#lib/LibraryCatalogDialog.svelte";
   import EditorSettingsFooter from "#lib/EditorSettingsFooter.svelte";
   import EditorSidebarHeader from "#lib/EditorSidebarHeader.svelte";
   import EditorToolbar from "#lib/EditorToolbar.svelte";
@@ -259,6 +260,14 @@
   let uiDirection = $state<UiDirection>("ltr");
   let artifactPreviewOpen = $state(false);
   let interchangeOpen = $state(false);
+  // Library catalogs (T5d): the library is layer 0, read-only; the application's overrides layer 1.
+  let libraryOpen = $state(false);
+  let libraryBusy = $state(false);
+  let libraryView = $state.raw<import("#lib/contracts.js").EditorLibraryView>();
+  let libraryNotice = $state<import("#lib/ui-text.js").UiNotice>();
+  let libraryLocale = $state("");
+  // The selection of each catalog of a workspace, restored when the user switches back to it (L5-4).
+  const catalogViews = new Map<string, { key: string; locale: string; filter: MessageFilter; query: string; mode: EditorMode }>();
   let interchangeBusy = $state(false);
   let xliffDirectory = $state("");
   let xliffImportPath = $state("");
@@ -601,6 +610,14 @@
     }
     if (resetSelection || !next.catalog?.locales.some((locale) => locale.tag === selectedLocale)) {
       selectedLocale = next.catalog?.defaultLocale ?? next.catalog?.locales[0]?.tag ?? "";
+    }
+    const remembered = resetSelection && next.catalog ? catalogViews.get(`${next.root}\n${next.catalog.id}`) : undefined;
+    if (remembered) {
+      if (nextRows.some((row) => row.key === remembered.key)) selectedKey = remembered.key;
+      if (next.catalog?.locales.some((locale) => locale.tag === remembered.locale)) selectedLocale = remembered.locale;
+      filter = remembered.filter;
+      query = remembered.query;
+      mode = remembered.mode;
     }
     configureEditor();
     rememberProject(next);
@@ -1635,9 +1652,40 @@
     }
   }
 
+  function rememberCatalogView(): void {
+    if (snapshot?.catalog)
+      catalogViews.set(`${snapshot.root}\n${snapshot.catalog.id}`, { key: selectedKey, locale: selectedLocale, filter, query, mode });
+  }
+
+  async function openLibrary(catalog: string): Promise<void> {
+    libraryOpen = true;
+    await runLibrary(() => bridge.loadLibrary(catalog));
+  }
+
+  async function runLibrary(operation: () => Promise<import("#lib/contracts.js").EditorLibraryResult>): Promise<void> {
+    if (libraryBusy) return;
+    libraryBusy = true;
+    libraryNotice = undefined;
+    try {
+      const result = await operation();
+      if (!result.ok) libraryNotice = result.message ?? notice("ui_backend_external_error");
+      if (result.library) {
+        libraryView = result.library;
+        if (!result.library.locales.some((locale) => locale.tag === libraryLocale)) libraryLocale = result.library.locales[0]?.tag ?? "";
+      }
+      // The catalog joined runic.json "overrides": the project changed on disk.
+      if (result.projectChanged) await loadWorkspace(false);
+    } catch (error) {
+      libraryNotice = errorNotice(error) as import("#lib/ui-text.js").UiNotice;
+    } finally {
+      libraryBusy = false;
+    }
+  }
+
   async function openWorkspace(catalogId?: string, directoryOverride?: string): Promise<void> {
     if (openingWorkspace || historyBusy) return;
     if (!confirmDiscardUnsavedWork("ui_confirm_open_workspace")) return;
+    rememberCatalogView();
     if (hasUnsavedWork) discardUnsavedWork();
     const directory = directoryOverride ?? (catalogId === undefined ? openDirectory.trim() : snapshot?.root ?? "");
     if (directory === "") {
@@ -2235,6 +2283,11 @@
         {malformedDocuments}
         reviewError={snapshot.review?.error}
         onrepair={beginRepair}
+        catalogId={snapshot.catalog.id}
+        catalogs={snapshot.catalogs}
+        libraries={snapshot.libraries ?? []}
+        onswitchcatalog={(catalog) => void openWorkspace(catalog.manifestPaths[0] ?? catalog.id)}
+        onopenlibrary={(catalog) => void openLibrary(catalog)}
       />
 
       <SidebarSectionPanels bind:languagesOpen bind:messagesOpen>
@@ -2333,6 +2386,9 @@
       />
 
       <div class="flex justify-end border-b px-4 py-2">
+        {#if (snapshot.libraries?.length ?? 0) > 0}
+          <Button variant="outline" size="sm" class="mr-2" disabled={loading || libraryBusy} onclick={() => void openLibrary(libraryView?.catalog ?? snapshot!.libraries![0].catalog)}>{ui.text("ui_library_open")}…</Button>
+        {/if}
         <Button variant="outline" size="sm" disabled={loading || interchangeBusy} onclick={() => interchangeOpen = true}>{ui.text("ui_page_interchange")}…</Button>
       </div>
 
@@ -2594,6 +2650,21 @@
     {#snippet footer()}<Button variant="outline" onclick={() => reportDialogOpen = false}>{ui.text("ui_page_close")}</Button>{/snippet}
   </AppDialog>
 {/if}
+
+<LibraryCatalogDialog
+  bind:open={libraryOpen}
+  bind:locale={libraryLocale}
+  busy={libraryBusy}
+  libraries={snapshot?.libraries ?? []}
+  library={libraryView}
+  notice={libraryNotice}
+  onselect={(catalog) => void runLibrary(() => bridge.loadLibrary(catalog))}
+  onoverride={(key, locale) => void runLibrary(() => bridge.overrideLibraryMessage({ catalog: libraryView!.catalog, key, locale }))}
+  onsave={(key, locale, text, expectedRevision) => void runLibrary(() => bridge.saveLibraryOverride({ catalog: libraryView!.catalog, key, locale, text, expectedRevision }))}
+  onrevert={(key, locale) => void runLibrary(() => bridge.revertLibraryOverride({ catalog: libraryView!.catalog, key, locale }))}
+  onkeep={(key, locale) => void runLibrary(() => bridge.keepLibraryOverride({ catalog: libraryView!.catalog, key, locale }))}
+  onaddlocale={(locale) => void runLibrary(async () => { const result = await bridge.addLibraryLocale(libraryView!.catalog, locale); if (result.ok) libraryLocale = locale; return result; })}
+/>
 
 <InterchangeDialog
   bind:open={interchangeOpen}

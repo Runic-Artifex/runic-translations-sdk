@@ -25,14 +25,19 @@ internal sealed class EditorWorkspace : IDisposable
     private readonly ConcurrentDictionary<string, byte> _pendingChanges = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _knownRevisions = new(StringComparer.Ordinal);
     private string? _catalogId;
+    // The catalog the workspace was opened for (L5-4): a catalog ID or the runic.json path relative to the root, or null for
+    // the conventional project (root/runic.json, root/translations/runic.json) or the workspace's only project.
+    private readonly string? _requestedCatalog;
+    private string? _selectedConfig;
     private int _watcherOverflowed;
     private string? _knownReviewRevision;
     private int _reconcileRequested;
     private bool _disposed;
 
-    public EditorWorkspace(string root)
+    public EditorWorkspace(string root, string? catalog = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
+        _requestedCatalog = string.IsNullOrWhiteSpace(catalog) ? null : catalog;
         _root = Path.GetFullPath(root);
         if (!Directory.Exists(_root))
             throw new EditorUserException(EditorNotice.Create("ui_backend_workspace_missing", ("path", _root)));
@@ -52,6 +57,9 @@ internal sealed class EditorWorkspace : IDisposable
 
     public string Root => _root;
     public string? CatalogId => _catalogId;
+
+    /// <summary>The absolute path of the selected project's runic.json, or null when the workspace has none selected.</summary>
+    internal string? ProjectConfigPath => FindMf2ProjectConfig();
 
     public async Task<EditorExternalChanges> CheckExternalChangesAsync(CancellationToken cancellationToken = default)
     {
@@ -162,6 +170,12 @@ internal sealed class EditorWorkspace : IDisposable
                 new EditorPendingTransaction(pending.CatalogId, pending.Paths),
                 null,
                 null);
+        }
+        if (FindMf2ProjectConfig() is null && DiscoverProjects() is { Count: > 0 } projects)
+        {
+            // Several catalogs and none chosen: the welcome screen lists them (L5-4).
+            EditorCatalogSummary[] summaries = projects.Select(project => SummarizeProject(project, cancellationToken)).ToArray();
+            return new WorkspaceSnapshot(_root, null, summaries, [], [], true, null, null, null);
         }
         WorkspaceState state = await ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
         return CreateSnapshot(state);
@@ -1277,7 +1291,7 @@ internal sealed class EditorWorkspace : IDisposable
             Interlocked.Exchange(ref _watcherOverflowed, 0);
         }
         int errors = compilation.Diagnostics.Count(item => item.Severity == TranslationDiagnosticSeverity.Error);
-        var summaries = new[]
+        var summaries = new List<EditorCatalogSummary>
         {
             new EditorCatalogSummary(
                 _catalogId ?? string.Empty,
@@ -1289,6 +1303,10 @@ internal sealed class EditorWorkspace : IDisposable
                 compilation.Diagnostics.Count - errors,
                 compilation.Success),
         };
+        // The workspace's other catalogs, for switching (L5-4); only on full loads, not per keystroke.
+        if (replacementPath is null && resetBaseline)
+            foreach (string other in DiscoverProjects().Where(path => !string.Equals(path, configPath, StringComparison.Ordinal)))
+                summaries.Add(SummarizeProject(other, cancellationToken));
         return Task.FromResult(new WorkspaceState(files, compilation, summaries));
     }
 
@@ -1336,7 +1354,7 @@ internal sealed class EditorWorkspace : IDisposable
                 review = new EditorReviewSnapshot(store.DisplayPath, null, exception.Message, [], []);
             }
         }
-        return new WorkspaceSnapshot(_root, catalog, state.Catalogs, documents, Diagnostics(state), state.Compilation.Success, null, review, null);
+        return new WorkspaceSnapshot(_root, catalog, state.Catalogs, documents, Diagnostics(state), state.Compilation.Success, null, review, null) { Libraries = Libraries() };
     }
 
     // The compiler's diagnostics and, with a review file, RTR0090 for stale review entries (or RTR0091 when the file
@@ -1486,6 +1504,9 @@ internal sealed class EditorWorkspace : IDisposable
     // recording its inverse or invalidating redo.
     internal string NormalizeDocumentPath(string path) => NormalizeKnownPath(path);
 
+    /// <summary>Checks that an absolute path is inside the workspace and crosses no link, as every editor write is (library overrides).</summary>
+    internal void EnsureWritable(string fullPath) => ContainedPath(NormalizeRelativePath(Path.GetRelativePath(_root, Path.GetFullPath(fullPath))));
+
     private string ContainedPath(string relativePath)
     {
         if (Path.IsPathRooted(relativePath)) throw new EditorUserException(EditorNotice.Create("ui_backend_path_relative"));
@@ -1511,10 +1532,90 @@ internal sealed class EditorWorkspace : IDisposable
 
     private string? FindMf2ProjectConfig()
     {
-        string direct = Path.Combine(_root, "runic.json");
-        if (File.Exists(direct)) return direct;
-        string conventional = Path.Combine(_root, "translations", "runic.json");
-        return File.Exists(conventional) ? conventional : null;
+        if (_selectedConfig is not null && File.Exists(_selectedConfig)) return _selectedConfig;
+        if (_requestedCatalog is null)
+        {
+            string direct = Path.Combine(_root, "runic.json");
+            if (File.Exists(direct)) return direct;
+            string conventional = Path.Combine(_root, "translations", "runic.json");
+            if (File.Exists(conventional)) return conventional;
+            // A workspace with exactly one project elsewhere opens it; with several, the user chooses.
+            IReadOnlyList<string> projects = DiscoverProjects();
+            return projects.Count == 1 ? _selectedConfig = projects[0] : null;
+        }
+        // The requested catalog by its runic.json path, then by its catalog ID (the first in path order).
+        foreach (string project in DiscoverProjects())
+        {
+            string relative = NormalizeRelativePath(Path.GetRelativePath(_root, project));
+            if (relative == _requestedCatalog || NormalizeRelativePath(Path.GetDirectoryName(relative) ?? "") == _requestedCatalog) return _selectedConfig = project;
+        }
+        foreach (string project in DiscoverProjects())
+        {
+            try
+            {
+                if (ReadCatalogId(StrictUtf8.GetString(ReadSourceBytes(project))) == _requestedCatalog) return _selectedConfig = project;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or DecoderFallbackException or EditorUserException) { }
+        }
+        return null;
+    }
+
+    // Every runic.json below the root, by the language server's project-index rules (Tooling).
+    private IReadOnlyList<string> DiscoverProjects()
+    {
+        try { return TranslationProjectDiscovery.Discover(_root); }
+        catch (Exception exception) when (exception is InvalidOperationException or IOException or UnauthorizedAccessException) { return []; }
+    }
+
+    // A catalog summary of a project that is not open: its ID and counts from a compilation of its sources on disk.
+    private EditorCatalogSummary SummarizeProject(string configPath, CancellationToken cancellationToken)
+    {
+        string relative = NormalizeRelativePath(Path.GetRelativePath(_root, configPath));
+        try
+        {
+            byte[] bytes = ReadSourceBytes(configPath);
+            string? id = ReadCatalogId(StrictUtf8.GetString(bytes));
+            TranslationManifestLayout layout = TranslationManifestReader.Read(bytes, Path.GetDirectoryName(configPath)!);
+            var sources = new List<TranslationSource>();
+            foreach (string sourceRoot in UsableSourceRoots(layout.SourceRoots, null))
+                foreach (string path in EnumerateSourceFiles(sourceRoot, ".mf2").Concat(EnumerateSourceFiles(sourceRoot, ".rmf2")).Where(path => !layout.IsOverrideSource(path)).Order(StringComparer.Ordinal))
+                    sources.Add(new TranslationSource(NormalizeRelativePath(Path.GetRelativePath(_root, path)), ReadSourceBytes(path)));
+            Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource(relative, bytes), sources, null, cancellationToken);
+            int errors = compilation.Diagnostics.Count(item => item.Severity == TranslationDiagnosticSeverity.Error);
+            return new EditorCatalogSummary(compilation.Project?.Id ?? id ?? relative, [relative], sources.Count, compilation.Project?.Locales.Count ?? 0,
+                compilation.Project?.CanonicalMessages.Count ?? 0, errors, compilation.Diagnostics.Count - errors, compilation.Success);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or DecoderFallbackException or EditorUserException or TranslationAuthoringException)
+        {
+            return new EditorCatalogSummary(relative, [relative], 0, 0, 0, 1, 0, false);
+        }
+    }
+
+    // The library catalogs the selected project can override (T5d): installed packages that pack a catalog, and the
+    // catalogs its runic.json "overrides" lists, resolved through Tooling as the build resolves them.
+    private List<EditorLibrarySummary> Libraries()
+    {
+        if (FindMf2ProjectConfig() is not { } config) return new List<EditorLibrarySummary>();
+        try
+        {
+            TranslationDependencyResolution resolution = TranslationDependencyCatalogs.Resolve(config);
+            var result = new List<EditorLibrarySummary>();
+            foreach (string id in resolution.Catalogs.Select(static item => item.Catalog).Concat(resolution.Overrides.Select(static item => item.Catalog)).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+            {
+                TranslationOverrideTarget? listed = resolution.Override(id);
+                TranslationDependencyCatalog? dependency = listed?.Dependency ?? resolution.Catalogs.FirstOrDefault(item => item.Catalog == id);
+                int overrides = listed is null || !Directory.Exists(listed.Directory) ? 0
+                    : Directory.EnumerateFiles(listed.Directory, "*.rmf2", SearchOption.AllDirectories).Count();
+                result.Add(new EditorLibrarySummary(id, dependency?.Package, dependency?.Version,
+                    dependency is null ? null : dependency.Origin == TranslationDependencyOrigin.NuGet ? "nuget" : "npm",
+                    listed is { Listed: true }, listed?.Problem, overrides));
+            }
+            return result;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            return new List<EditorLibrarySummary>();
+        }
     }
 
     private Dictionary<string, byte[]> ReadCurrentTranslationFiles(CancellationToken cancellationToken)

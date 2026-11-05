@@ -29,6 +29,8 @@ import type {
   EditorXliffExportResult,
   EditorXliffImportPreview,
   EditorWorkspacePickerResult,
+  EditorLibraryOverrideRequest,
+  EditorLibraryResult,
   ValidationResult,
   WorkspaceSnapshot,
 } from "./contracts";
@@ -202,6 +204,13 @@ export interface EditorBridge {
   exportReviewJson(path?: string): Promise<EditorReviewFileResult>;
   previewReviewJsonImport(path: string): Promise<EditorReviewImportPreview>;
   applyReviewJsonImport(confirmationToken: string): Promise<EditorReviewOperationResult>;
+  /** Library catalogs and overrides (T5d): the library is layer 0 (read-only), the application's overrides layer 1. */
+  loadLibrary(catalog: string): Promise<EditorLibraryResult>;
+  overrideLibraryMessage(request: EditorLibraryOverrideRequest): Promise<EditorLibraryResult>;
+  saveLibraryOverride(request: EditorLibraryOverrideRequest): Promise<EditorLibraryResult>;
+  revertLibraryOverride(request: EditorLibraryOverrideRequest): Promise<EditorLibraryResult>;
+  keepLibraryOverride(request: EditorLibraryOverrideRequest): Promise<EditorLibraryResult>;
+  addLibraryLocale(catalog: string, locale: string): Promise<EditorLibraryResult>;
   openDocument(path: string): Promise<EditorDocumentState | undefined>;
   validate(path: string, content: string): Promise<ValidationResult>;
   save(path: string, content: string, revision: string): Promise<EditorDocumentSaveResult>;
@@ -254,6 +263,12 @@ export function createEditorBridge(): EditorBridge {
     exportReviewJson: (path) => invokeRouted("ExportReviewJson", root => root.snapshot.interchange, (view, request) => view.exportReviewJson(request), state => state.exportReviewJsonResultJson, { path }) as Promise<EditorReviewFileResult>,
     previewReviewJsonImport: (path) => invokeRouted("PreviewReviewJsonImport", root => root.snapshot.interchange, (view, request) => view.previewReviewJsonImport(request), state => state.previewReviewJsonImportResultJson, { path }) as Promise<EditorReviewImportPreview>,
     applyReviewJsonImport: (confirmationToken) => invokeRouted("ApplyReviewJsonImport", root => root.snapshot.interchange, (view, request) => view.applyReviewJsonImport(request), state => state.applyReviewJsonImportResultJson, { confirmationToken }) as Promise<EditorReviewOperationResult>,
+    loadLibrary: (catalog) => invokeRouted("LoadLibrary", root => root.snapshot.libraries, (view, request) => view.loadLibrary(request), state => state.loadLibraryResultJson, { catalog }) as Promise<EditorLibraryResult>,
+    overrideLibraryMessage: (request) => invokeRouted("OverrideLibraryMessage", root => root.snapshot.libraries, (view, request) => view.overrideMessage(request), state => state.overrideMessageResultJson, request) as Promise<EditorLibraryResult>,
+    saveLibraryOverride: (request) => invokeRouted("SaveLibraryOverride", root => root.snapshot.libraries, (view, request) => view.saveOverride(request), state => state.saveOverrideResultJson, request) as Promise<EditorLibraryResult>,
+    revertLibraryOverride: (request) => invokeRouted("RevertLibraryOverride", root => root.snapshot.libraries, (view, request) => view.revertOverride(request), state => state.revertOverrideResultJson, request) as Promise<EditorLibraryResult>,
+    keepLibraryOverride: (request) => invokeRouted("KeepLibraryOverride", root => root.snapshot.libraries, (view, request) => view.keepOverride(request), state => state.keepOverrideResultJson, request) as Promise<EditorLibraryResult>,
+    addLibraryLocale: (catalog, locale) => invokeRouted("AddLibraryLocale", root => root.snapshot.libraries, (view, request) => view.addLocale(request), state => state.addLocaleResultJson, { catalog, locale }) as Promise<EditorLibraryResult>,
     openDocument: async (path) => {
       if (import.meta.env.MODE === "mock") return undefined;
       const reference = await documentReference(path);
