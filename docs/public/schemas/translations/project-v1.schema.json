@@ -75,6 +75,30 @@
       },
       "description": "Development pseudo-locales generated from the base locale in Debug builds (MSBuild), in Vite modes other than production, and with --pseudo-locales: en-XA has accented, about 35% longer, bracketed text; ar-XB is right-to-left with mirrored text. Release builds leave them out. Do not also list them in locales."
     },
+    "formats": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The currencies and units that a :currency currency or :unit unit option may take from a variable at run time (RTR0102 without them). The compiler embeds their pinned CLDR data; a run-time value outside the set is a formatting error. Literal codes and units need no entry.",
+      "properties": {
+        "currencies": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["AED", "AFN", "ALL", "AMD", "AOA", "ARS", "AUD", "AWG", "AZN", "BAM", "BBD", "BDT", "BHD", "BIF", "BMD", "BND", "BOB", "BRL", "BSD", "BTN", "BWP", "BYN", "BZD", "CAD", "CDF", "CHF", "CLP", "CNY", "COP", "CRC", "CUP", "CVE", "CZK", "DJF", "DKK", "DOP", "DZD", "EGP", "ERN", "ETB", "EUR", "FJD", "FKP", "GBP", "GEL", "GHS", "GIP", "GMD", "GNF", "GTQ", "GYD", "HKD", "HNL", "HTG", "HUF", "IDR", "ILS", "INR", "IQD", "IRR", "ISK", "JMD", "JOD", "JPY", "KES", "KGS", "KHR", "KMF", "KPW", "KRW", "KWD", "KYD", "KZT", "LAK", "LBP", "LKR", "LRD", "LSL", "LYD", "MAD", "MDL", "MGA", "MKD", "MMK", "MNT", "MOP", "MRU", "MUR", "MVR", "MWK", "MXN", "MYR", "MZN", "NAD", "NGN", "NIO", "NOK", "NPR", "NZD", "OMR", "PAB", "PEN", "PGK", "PHP", "PKR", "PLN", "PYG", "QAR", "RON", "RSD", "RUB", "RWF", "SAR", "SBD", "SCR", "SDG", "SEK", "SGD", "SHP", "SLE", "SOS", "SRD", "SSP", "STN", "SYP", "SZL", "THB", "TJS", "TMT", "TND", "TOP", "TRY", "TTD", "TWD", "TZS", "UAH", "UGX", "USD", "UYU", "UZS", "VES", "VND", "VUV", "WST", "XAF", "XCD", "XCG", "XOF", "XPF", "YER", "ZAR", "ZMW", "ZWG"]
+          },
+          "description": "ISO 4217 codes that CLDR lists as current tender."
+        },
+        "units": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]+(?:-[a-z0-9]+)*$"
+          },
+          "description": "Simple units that Intl.NumberFormat accepts (kilometer, hour, megabyte, …) or X-per-Y of two of them; RTR0101 reports others."
+        }
+      }
+    },
     "validation": {
       "$ref": "#/$defs/validation"
     },

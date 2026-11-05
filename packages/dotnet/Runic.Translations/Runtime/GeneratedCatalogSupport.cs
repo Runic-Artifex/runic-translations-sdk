@@ -25,6 +25,14 @@ public static class GeneratedCatalogSupport
     public static IReadOnlyList<CompiledTranslationValue> ReadValues(ReadOnlySpan<byte> utf8Json) =>
         CompiledTranslationLocale.ReadRmf2Values(utf8Json);
 
+    /// <summary>
+    /// Reads the direct values that a generated catalog embeds for one locale, with the pinned CLDR currency, unit and
+    /// compact-notation data the compiler selected for them (only what the locale's messages use).
+    /// </summary>
+    /// <exception cref="TranslationPackException">The data is not in the compiler's form.</exception>
+    public static IReadOnlyList<CompiledTranslationValue> ReadValues(ReadOnlySpan<byte> utf8Json, ReadOnlySpan<byte> formatData) =>
+        CompiledTranslationLocale.ReadRmf2Values(utf8Json, Rmf2FormatData.Parse(formatData));
+
     /// <summary>Copies a closed argument carrier under an NFC RMF2 input name.</summary>
     public static TextArgument CreateArgument(string name, TextArgument value) => TextArgument.CreateRmf2(name, value);
 

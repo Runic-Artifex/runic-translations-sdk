@@ -174,6 +174,60 @@ internal sealed class GeneratorTests
         Assert.True(errors.Any(static error => error.Id == "CS1503"), "A string was accepted for a list input: " + string.Join("; ", errors.Select(static error => error.ToString())));
     }
 
+    // D055.4: a generated catalog embeds the CLDR data of its messages once (Formats), as the ESM runtime does, and every
+    // locale reads it; a catalog that uses no :currency, :unit or compact notation carries none.
+    [Test, DisplayName("generated C# formats currencies, units and compact numbers from the CLDR data each locale embeds")]
+    public void GeneratedCurrencyUnitCompact()
+    {
+        const string english = """
+            total = {{Total: {$amount :currency currency=EUR}}}
+            price =
+              .input {$code :string}
+              {{{$amount :currency currency=$code currencyDisplay=name}}}
+            speed = {{{$v :unit unit=kilometer-per-hour unitDisplay=long}}}
+            reach = {{{$n :number runic:notation=compact runic:compactDisplay=long}}}
+            """;
+        const string german = """
+            total = {{Summe: {$amount :currency currency=EUR}}}
+            price =
+              .input {$code :string}
+              {{{$amount :currency currency=$code currencyDisplay=name}}}
+            speed = {{{$v :unit unit=kilometer-per-hour unitDisplay=long}}}
+            reach = {{{$n :number runic:notation=compact runic:compactDisplay=long}}}
+            """;
+        string total = PathMember("total"), price = PathMember("price"), speed = PathMember("speed"), reach = PathMember("reach");
+        string source = $$"""
+            namespace Example.Localization;
+            public static class FormatsProbe
+            {
+                public static string Run()
+                {
+                    var en = new AppText(AppTextCatalog.CreateManager("en"));
+                    var ch = new AppText(AppTextCatalog.CreateManager("de-CH"));
+                    string undeclared;
+                    try { undeclared = en.{{price}}(1m, "CHF"); }
+                    catch (global::Runic.Translations.TranslationFormatException exception) { undeclared = exception.Message; }
+                    return string.Join("|", en.{{total}}(1234.5m), ch.{{total}}(1234.5m), en.{{price}}(2m, "GBP"), ch.{{price}}(2m, "GBP"),
+                        ch.{{speed}}(120m), ch.{{reach}}(1234567m), undeclared);
+                }
+            }
+            """;
+        string project = Project.Replace("\"locales\": [ \"en\" ]", "\"locales\": [ \"en\", \"de\" ], \"formats\": { \"currencies\": [ \"GBP\", \"USD\" ] }", StringComparison.Ordinal);
+        GeneratorRun run = GeneratorTestHost.RunWithConsumer(source, ProjectInput(project),
+            new TestInput("C:/repo/translations/en.rmf2", "Rmf2", english), new TestInput("C:/repo/translations/de.rmf2", "Rmf2", german));
+        Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
+        Assert.Equal("Total: €1,234.50|Summe: EUR\u00a01'234.50|2.00 British pounds|2.00 Britische Pfund|120 Kilometer pro Stunde|1.2 Millionen|" +
+            "Currency 'CHF' is not in the catalog's runic.json formats.currencies.", Execute(run, "Example.Localization.FormatsProbe", "Run"), "generated currency, unit and compact execution");
+        string generated = Serialize(run);
+        Assert.True(generated.Contains("Formats => ", StringComparison.Ordinal) && !generated.Contains("Locale0Formats", StringComparison.Ordinal) &&
+            generated.Contains("ReadValues(Locale0Data, Formats)", StringComparison.Ordinal) && generated.Contains("ReadValues(Locale1Data, Formats)", StringComparison.Ordinal), "The catalog embeds its format data once.");
+        Assert.True(!generated.Contains("\\\"ja\\\"", StringComparison.Ordinal), "A language the catalog does not declare was embedded.");
+
+        GeneratorRun plain = GeneratorTestHost.RunWithConsumer("namespace Example.Localization; public static class Plain { }", ProjectInput(),
+            new TestInput("C:/repo/translations/en.rmf2", "Rmf2", "title = Title\n"));
+        Assert.True(!Serialize(plain).Contains("Formats =>", StringComparison.Ordinal), "A catalog without currencies, units or compact numbers embeds format data.");
+    }
+
     // For startup code that cannot await, such as a WPF StartupUri application: no continuation is posted.
     [Test, DisplayName("generated CreateManager returns a ready manager without awaiting")]
     public void SynchronousManager()

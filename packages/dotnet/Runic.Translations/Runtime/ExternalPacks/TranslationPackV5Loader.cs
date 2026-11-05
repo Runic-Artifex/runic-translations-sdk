@@ -26,8 +26,7 @@ internal static class TranslationPackV5Loader
                 CommentHandling = JsonCommentHandling.Disallow,
                 MaxDepth = limits.MaximumDepth,
             });
-            Dictionary<string, JsonElement> root = Members(document.RootElement,
-                ["artifactVersion", "messageGrammarVersion", "profile", "catalog", "locale", "contractFingerprint", "messages", "markupContract"]);
+            Dictionary<string, JsonElement> root = ArtifactMembers(document.RootElement);
             if (Integer(root["artifactVersion"]) != 5)
                 throw Error("The external pack artifact version is unsupported.", TranslationPackFailureReason.ArtifactVersionMismatch);
             if (Integer(root["messageGrammarVersion"]) != 5 || contract.MessageGrammarVersion != 5)
@@ -62,6 +61,7 @@ internal static class TranslationPackV5Loader
                 throw Error("The trusted RMF2 markup contract is not a valid markup contract v2: " + exception.Message, TranslationPackFailureReason.ArgumentContractMismatch);
             }
             if (root["messages"].ValueKind != JsonValueKind.Object) throw Error("The external pack messages value must be an object.");
+            Rmf2FormatData? formatData = FormatData(root);
             var messages = new List<VerifiedTranslationPackMessage>();
             var keys = new HashSet<string>(StringComparer.Ordinal);
             foreach (JsonProperty property in root["messages"].EnumerateObject())
@@ -72,7 +72,7 @@ internal static class TranslationPackV5Loader
                 if (!TranslationPackValidation.IsResourceKey(property.Name)) throw Error("The external pack contains an invalid message key.");
                 if (!contract.TryGetMessage(property.Name, out TranslationPackMessageContract messageContract))
                     throw Error("The external pack contains unknown message key '" + property.Name + "'.", TranslationPackFailureReason.UnknownKey);
-                messages.Add(ReadMessage(property.Value, messageContract, limits, markup, locale));
+                messages.Add(ReadMessage(property.Value, messageContract, limits, markup, locale, formatData));
             }
             messages.Sort(static (left, right) => string.CompareOrdinal(left.Key.Name, right.Key.Name));
             return new VerifiedExternalTranslationPack(catalog, locale, fingerprint, messages.ToArray());
@@ -102,8 +102,7 @@ internal static class TranslationPackV5Loader
                 CommentHandling = JsonCommentHandling.Disallow,
                 MaxDepth = limits.MaximumDepth,
             });
-            Dictionary<string, JsonElement> root = Members(document.RootElement,
-                ["artifactVersion", "messageGrammarVersion", "profile", "catalog", "locale", "contractFingerprint", "messages", "markupContract"]);
+            Dictionary<string, JsonElement> root = ArtifactMembers(document.RootElement);
             if (Integer(root["artifactVersion"]) != 5)
                 throw Error("The overlay pack artifact version is unsupported.", TranslationPackFailureReason.ArtifactVersionMismatch);
             if (Integer(root["messageGrammarVersion"]) != 5)
@@ -128,6 +127,7 @@ internal static class TranslationPackV5Loader
                 throw Error("The overlay pack markup contract is not a valid markup contract v2: " + exception.Message, TranslationPackFailureReason.Malformed);
             }
             if (root["messages"].ValueKind != JsonValueKind.Object) throw Error("The overlay pack messages value must be an object.");
+            Rmf2FormatData? formatData = FormatData(root);
             var messages = new List<OverlayPackMessage>();
             var keys = new HashSet<string>(StringComparer.Ordinal);
             foreach (JsonProperty property in root["messages"].EnumerateObject())
@@ -142,7 +142,9 @@ internal static class TranslationPackV5Loader
                     !markup.Messages.TryGetValue(property.Name, out Rmf2MarkupContract.Message? linked) ||
                     !linked.ContentLocales.TryGetValue(locale, out string? declared) || declared != contentLocale)
                     throw Error("RMF2 effective content locale mismatch.", TranslationPackFailureReason.ArgumentContractMismatch);
-                messages.Add(new OverlayPackMessage(property.Name, contentLocale, linked.Document, ReadAst(wrapper["ast"], null, limits, contentLocale)));
+                CompiledRmf2Message overlayMessage = ReadAst(wrapper["ast"], null, limits, contentLocale);
+                overlayMessage.FormatData = formatData;
+                messages.Add(new OverlayPackMessage(property.Name, contentLocale, linked.Document, overlayMessage));
             }
             return new OverlayPack(catalog, locale, fingerprint, messages.ToArray());
         }
@@ -156,16 +158,17 @@ internal static class TranslationPackV5Loader
     // Generated catalogs embed each locale's direct values as [[id, {"contentLocale", "ast"}], ...] and read them when the
     // locale is first used. The data comes from the same compiler as the generated code, so only the shape is checked
     // (Rmf2GeneratedLocaleReader); the catalog checks every message against its definition's inputs.
-    internal static CompiledTranslationValue[] ReadGeneratedValues(ReadOnlySpan<byte> content) => Rmf2GeneratedLocaleReader.Read(content);
+    internal static CompiledTranslationValue[] ReadGeneratedValues(ReadOnlySpan<byte> content, Rmf2FormatData? formatData = null) => Rmf2GeneratedLocaleReader.Read(content, formatData);
 
     private static VerifiedTranslationPackMessage ReadMessage(JsonElement value, TranslationPackMessageContract contract,
-        TranslationPackLimits limits, Rmf2MarkupContract markup, string locale)
+        TranslationPackLimits limits, Rmf2MarkupContract markup, string locale, Rmf2FormatData? formatData)
     {
         Dictionary<string, JsonElement> wrapper = Members(value, ["contentLocale", "ast"]);
         string contentLocale = String(wrapper["contentLocale"]);
         if (!TranslationPackValidation.IsCanonicalLocale(contentLocale) || contentLocale != markup.Get(contract.Key.Name).ContentLocales[locale])
             throw Error("RMF2 effective content locale mismatch.", TranslationPackFailureReason.ArgumentContractMismatch);
         CompiledRmf2Message message = ReadAst(wrapper["ast"], contract, limits, contentLocale);
+        message.FormatData = formatData;
         try { markup.ValidatePlanV5(contract, message); }
         catch (TranslationFormatException exception) { throw Error(exception.Message, TranslationPackFailureReason.ArgumentContractMismatch); }
         catch (Rmf2DocumentPlanException exception)
@@ -338,6 +341,14 @@ internal static class TranslationPackV5Loader
         foreach (JsonElement item in value.EnumerateArray()) result[index++] = read(item);
         return result;
     }
+
+    // A locale artifact v5: formatData, the CLDR currency, unit and compact data of its messages, is present only when
+    // they use :currency, :unit or compact notation.
+    private static readonly string[] ArtifactRequired = ["artifactVersion", "messageGrammarVersion", "profile", "catalog", "locale", "contractFingerprint", "messages", "markupContract"];
+    private static readonly HashSet<string> ArtifactAllowed = new([.. ArtifactRequired, "formatData"], StringComparer.Ordinal);
+    private static Dictionary<string, JsonElement> ArtifactMembers(JsonElement value) => MembersSubset(value, ArtifactAllowed, ArtifactRequired);
+    private static Rmf2FormatData? FormatData(Dictionary<string, JsonElement> root) =>
+        !root.TryGetValue("formatData", out JsonElement value) ? null : value.ValueKind == JsonValueKind.Object ? Rmf2FormatData.Parse(value) : throw Error("The formatData value must be an object.");
 
     private static Dictionary<string, JsonElement> Members(JsonElement value, string[] expected) =>
         MembersSubset(value, new HashSet<string>(expected, StringComparer.Ordinal), expected);

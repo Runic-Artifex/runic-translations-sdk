@@ -94,6 +94,9 @@ internal readonly struct VisibleDecimal
         return FromNumber(value, false, scale, scale);
     }
 
+    /// <summary>A visible decimal from its parts, as compact notation rounds a scaled value.</summary>
+    internal static VisibleDecimal Create(bool negative, UInt128 coefficient, int scale) => new(negative, coefficient, scale);
+
     internal static VisibleDecimal FromInteger(long value) =>
         new(value < 0, value < 0 ? (UInt128)(-(Int128)value) : (ulong)value, 0);
 

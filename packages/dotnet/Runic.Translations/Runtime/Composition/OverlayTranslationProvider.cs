@@ -205,6 +205,9 @@ internal sealed class OverlayTranslationProvider : ITranslationProvider, ITransl
         }
         while (generation != _catalog.Generation);
 
+        // An overlay message without its own currency, unit or compact data formats with the catalog's.
+        Rmf2FormatData? catalogData = null;
+        foreach (LocaleValues? values in library) if (catalogData is null && values is not null) catalogData = CompiledTranslationCatalog.FormatData(values);
         var patterns = new string?[definitions.Length];
         var messages = new CompiledTextMessage?[definitions.Length];
         for (int id = 0; id < definitions.Length; id++)
@@ -215,6 +218,7 @@ internal sealed class OverlayTranslationProvider : ITranslationProvider, ITransl
                 {
                     if (overlayValues[overlay][index]?[id] is { } value)
                     {
+                        value.Rmf2V5?.BindCatalogFormatData(catalogData);
                         messages[id] = value;
                         patterns[id] = string.Empty;
                         break;

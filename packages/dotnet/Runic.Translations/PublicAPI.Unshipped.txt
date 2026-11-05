@@ -145,3 +145,4 @@ Runic.Translations.TranslationOverlay.IsCompiled.get -> bool
 Runic.Translations.TranslationOverlayData
 static Runic.Translations.TranslationOverlay.FromCompiled(string! catalog, System.Collections.Generic.IEnumerable<Runic.Translations.TranslationOverlayLocale!>? addedLocales, Runic.Translations.TranslationOverlayData! data) -> Runic.Translations.TranslationOverlay!
 virtual Runic.Translations.TranslationOverlayData.Invoke(string! locale) -> System.ReadOnlySpan<byte>
+static Runic.Translations.Generated.GeneratedCatalogSupport.ReadValues(System.ReadOnlySpan<byte> utf8Json, System.ReadOnlySpan<byte> formatData) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTranslationValue>!
