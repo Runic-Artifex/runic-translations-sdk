@@ -64,6 +64,17 @@
         ]
       }
     },
+    "pseudoLocales": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "en-XA",
+          "ar-XB"
+        ]
+      },
+      "description": "Development pseudo-locales generated from the base locale in Debug builds (MSBuild), in Vite modes other than production, and with --pseudo-locales: en-XA has accented, about 35% longer, bracketed text; ar-XB is right-to-left with mirrored text. Release builds leave them out. Do not also list them in locales."
+    },
     "validation": {
       "$ref": "#/$defs/validation"
     },

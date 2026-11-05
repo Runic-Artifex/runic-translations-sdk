@@ -71,6 +71,7 @@ public sealed class TranslationContext : ITranslationContext
         _commonLocales = IntersectSupportedLocales(entries);
         _supportedLocales = Array.AsReadOnly(_commonLocales);
         _state = initial;
+        TranslationHotReload.Track(this);
         _notifiedVersion = initial.Version;
         _notifiedRequestedLocale = initial.RequestedLocale;
     }
@@ -201,6 +202,17 @@ public sealed class TranslationContext : ITranslationContext
 
     /// <inheritdoc />
     public ValueTask RefreshAsync(CancellationToken cancellationToken = default) => RefreshAsync(null, cancellationToken);
+
+    /// <summary>Whether the context has a catalog with one of these IDs (Hot Reload).</summary>
+    internal bool ContainsAnyCatalog(IReadOnlyCollection<string> catalogIds)
+    {
+        foreach (string id in catalogIds)
+        {
+            if (_indexById.ContainsKey(id)) return true;
+        }
+
+        return false;
+    }
 
     /// <inheritdoc />
     public TranslationReferenceResolution Resolve(TranslationReference reference)
