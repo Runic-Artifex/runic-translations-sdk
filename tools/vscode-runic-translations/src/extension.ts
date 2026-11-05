@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
+import { execFile } from "node:child_process";
+import { dirname, join } from "node:path";
 import { LanguageClient, State, type LanguageClientOptions, type WorkspaceEdit as ProtocolEdit } from "vscode-languageclient/node";
-import { serverLaunch, sourceWatchRoots } from "./server.js";
+import { nearestProjectManifest, projectManifest, serverLaunch, sourceWatchRoots, toolLaunch, xliffExportArguments, xliffImportDryRunArguments } from "./server.js";
 import { escapeHtml, resolvePreviewHtml, type Preview, type RenderedPreview } from "./preview.js";
 import { PreviewSession, exampleSamples, sampleChoices, type Samples } from "./preview-session.js";
 import { ForwardedWatchers } from "./watchers.js";
@@ -22,6 +24,7 @@ class RunicLanguageClient extends LanguageClient {
 interface MessageInfo { key: string; localKey: string; isGroup: boolean; path: string[]; logicalPath: string[]; locale: string; locales: string[]; inputs: string[]; slots: string[] }
 const clients = new Map<string, Promise<LanguageClient>>();
 const watchers = new Map<string, ForwardedWatchers<vscode.Uri>>();
+const reviewWatchers = new Map<string, vscode.Disposable>();
 let output: vscode.LogOutputChannel;
 let previewPanel: vscode.WebviewPanel | undefined;
 let previewSession: PreviewSession | undefined;
@@ -126,6 +129,10 @@ async function clientFor(uri: vscode.Uri): Promise<LanguageClient> {
           forward,
         );
         watchers.set(key, watcher);
+        // The review file changes the server's RTR0090 warnings and hover review state.
+        const reviewWatcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, "**/*.review.json"));
+        reviewWatcher.onDidCreate(uri => forward(uri, 1)); reviewWatcher.onDidChange(uri => forward(uri, 2)); reviewWatcher.onDidDelete(uri => forward(uri, 3));
+        reviewWatchers.set(key, reviewWatcher);
         const openingDocuments: Promise<void>[] = [];
         const options: LanguageClientOptions = {
           documentSelector: [{ scheme: "file", language: "rmf2", pattern: `${folder.uri.fsPath.replaceAll("\\", "/")}/**/*.{mf2,rmf2}` }, { scheme: "file", language: "json", pattern: `${folder.uri.fsPath.replaceAll("\\", "/")}/**/runic.json` }],
@@ -163,7 +170,7 @@ async function clientFor(uri: vscode.Uri): Promise<LanguageClient> {
       }
     })();
     clients.set(key, pending);
-    pending.catch(() => { if (clients.get(key) === pending) { clients.delete(key); watchers.get(key)?.dispose(); watchers.delete(key); } });
+    pending.catch(() => { if (clients.get(key) === pending) { clients.delete(key); watchers.get(key)?.dispose(); watchers.delete(key); reviewWatchers.get(key)?.dispose(); reviewWatchers.delete(key); } });
   }
   return pending;
 }
@@ -280,6 +287,71 @@ export function activate(context: vscode.ExtensionContext) {
       return await session.open(target, select);
     } finally { if (selection === previewSelection) await session.endSelection(); }
   };
+  // XLIFF interchange through the project-local tool (runic-translations xliff), the same code as the Translations
+  // Editor and the command line. Import is a dry run: it reports each unit's outcome and writes nothing.
+  // The project of the active file (the nearest runic.json above it, as the language server resolves it); without one,
+  // the workspace's only project, or the one the user picks among them.
+  const interchangeFolder = async (): Promise<{ folder: vscode.WorkspaceFolder; project: string } | undefined> => {
+    if (!vscode.workspace.isTrusted) throw new Error("Trust this workspace before running its local Runic tool.");
+    const active = vscode.window.activeTextEditor?.document.uri;
+    const activeFolder = active?.scheme === "file" ? vscode.workspace.getWorkspaceFolder(active) : undefined;
+    if (active && activeFolder) {
+      const project = nearestProjectManifest(active.fsPath, activeFolder.uri.fsPath);
+      if (project) return { folder: activeFolder, project };
+    }
+    const found = new Set<string>();
+    for (const folder of vscode.workspace.workspaceFolders ?? []) {
+      const conventional = projectManifest(folder.uri.fsPath);
+      if (conventional) found.add(conventional);
+    }
+    for (const uri of await vscode.workspace.findFiles("**/runic.json", "**/{node_modules,bin,obj,.git}/**", 200)) found.add(uri.fsPath);
+    const projects = [...found].sort();
+    if (projects.length === 0) throw new Error("No runic.json project in the workspace.");
+    let project = projects[0];
+    if (projects.length > 1) {
+      const picked = await vscode.window.showQuickPick(projects.map(path => ({ label: vscode.workspace.asRelativePath(path), path })),
+        { placeHolder: "Choose the Runic translation project" });
+      if (!picked) return undefined;
+      project = picked.path;
+    }
+    const folder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(project));
+    if (!folder) throw new Error("The runic.json project is outside the workspace folders.");
+    return { folder, project };
+  };
+  const runTool = (folder: vscode.WorkspaceFolder, toolArguments: string[]) => new Promise<string>((resolveRun, rejectRun) => {
+    const config = vscode.workspace.getConfiguration("runicTranslations", folder.uri);
+    const launch = toolLaunch(folder.uri.fsPath, config.get<string>("dotnetPath", "dotnet"), config.get<string>("serverAssembly", ""), toolArguments);
+    output.appendLine(`> runic-translations ${toolArguments.join(" ")}`);
+    execFile(launch.command, launch.args, { cwd: launch.cwd, maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) => {
+      if (stdout) output.appendLine(stdout.trimEnd());
+      if (stderr) output.appendLine(stderr.trimEnd());
+      if (error) rejectRun(new Error(`runic-translations ${toolArguments.slice(0, 2).join(" ")} failed (${(stderr || stdout).trim().split("\n").at(-1) ?? error.message}). See Runic: Show Output.`));
+      else resolveRun(stdout);
+    });
+  });
+  register("exportXliff", async () => {
+    const chosen = await interchangeFolder();
+    if (!chosen) return;
+    const { folder, project } = chosen;
+    const target = await vscode.window.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, canSelectMany: false,
+      defaultUri: vscode.Uri.file(dirname(project)), openLabel: "Export XLIFF here" });
+    if (!target?.[0]) return;
+    const result = await runTool(folder, xliffExportArguments(project, target[0].fsPath));
+    const written = result.split("\n").filter(line => line.startsWith("wrote ")).length;
+    void vscode.window.showInformationMessage(`Exported ${written} XLIFF document(s) to ${target[0].fsPath}.`);
+  });
+  register("importXliffDryRun", async () => {
+    const chosen = await interchangeFolder();
+    if (!chosen) return;
+    const { folder, project } = chosen;
+    const source = await vscode.window.showOpenDialog({ canSelectMany: false, defaultUri: vscode.Uri.file(join(dirname(project))),
+      filters: { "XLIFF 2.1": ["xliff", "xlf"] }, openLabel: "Check import" });
+    if (!source?.[0]) return;
+    const result = await runTool(folder, xliffImportDryRunArguments(project, source[0].fsPath));
+    const summary = result.split("\n").find(line => line.startsWith("dry run: ")) ?? "Dry run finished.";
+    output.show(true);
+    void vscode.window.showInformationMessage(`${summary} Nothing was written; run runic-translations xliff import or the Translations Editor to apply it.`);
+  });
   register("preview", openPreview);
   register("previewSamples", options => openPreview(options, true));
   register("previewLocale", options => openPreview(options, false, true));
@@ -295,5 +367,6 @@ export async function deactivate() {
   const active = [...clients.values()]; clients.clear();
   serverStates.clear(); documentInfo.clear(); refreshStatus();
   for (const watcher of watchers.values()) watcher.dispose(); watchers.clear();
+  for (const watcher of reviewWatchers.values()) watcher.dispose(); reviewWatchers.clear();
   await Promise.all(active.map(async pending => { try { await (await pending).stop(); } catch { /* Startup failure is already reported. */ } }));
 }

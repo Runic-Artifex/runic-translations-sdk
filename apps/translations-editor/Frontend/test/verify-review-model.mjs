@@ -18,24 +18,58 @@ const transpiled = ts.transpileModule(source, {
 });
 const model = await import(`data:text/javascript;base64,${Buffer.from(transpiled.outputText).toString("base64")}`);
 
-const ordered = model.sourceFingerprint({ second: "b", first: "a" });
-const reversed = model.sourceFingerprint({ first: "a", second: "b" });
-assert(ordered === reversed, "Source fingerprints depend on object property order.");
-
+// "Missing" and "stale" are the SDK's diagnostics now (RTR0010, RTR0090), attached to rows by key and locale.
 const fixture = [
   row("Action.Save", "Save", " Save "),
   row("Action.Cancel", "Cancel", "Cancel"),
   row("Action.Missing", "Missing", undefined),
 ];
-const reviews = [{
-  key: "Action.Save", locale: "de", state: "approved",
-  sourceFingerprint: "outdated", samples: {},
-}];
+const diagnostics = [
+  diagnostic("RTR0090", "Action.Save", "de"),
+  diagnostic("RTR0010", "Action.Missing", "de"),
+  diagnostic("RTR0095", "Action.Save", "fr"),
+  diagnostic("RTR0062", undefined, undefined),
+];
 const terms = [{ source: "Save", preferred: "Speichern", locale: "de" }];
-const issues = model.qualityIssues(fixture, "en", "de", reviews, terms);
-assert(issues.map((issue) => `${issue.key}:${issue.kind}`).join("|") ===
-  "Action.Cancel:identical|Action.Missing:missing|Action.Save:stale|Action.Save:terminology|Action.Save:whitespace",
-  "Quality findings were incomplete or non-deterministically ordered.");
+const issues = model.qualityIssues(fixture, "en", "de", diagnostics, terms);
+const found = issues.map((issue) => `${issue.key}:${issue.code ?? issue.kind}`).join("|");
+assert(found === "Action.Cancel:identical|Action.Missing:RTR0010|Action.Save:RTR0090|Action.Save:terminology|Action.Save:whitespace",
+  "Quality findings were incomplete, kept editor-only missing/stale checks, or were non-deterministically ordered: " + found);
+assert(issues.find((issue) => issue.code === "RTR0090")?.diagnostic === diagnostics[0], "A diagnostic issue does not carry its diagnostic for quick fixes.");
+assert(model.rowDiagnostics(diagnostics, "Action.Save", "fr").map((item) => item.id).join() === "RTR0095", "Row diagnostics ignored the locale.");
+assert(model.isStale({ key: "Action.Save", locale: "de", state: "approved", samples: {}, stale: true }) &&
+  !model.isStale({ key: "Action.Save", locale: "de", state: "approved", sourceFingerprint: "sha256:old", samples: {} }),
+  "Staleness is not the backend's SDK flag.");
+const reviewed = model.reviewMap([{ key: "Action.Save", locale: "de", state: "approved", samples: {}, stale: false }]);
+assert(model.withCurrentReview(diagnostics, reviewed).every((item) => item.id !== "RTR0090"),
+  "An RTR0090 warning stayed after the stale state was set again.");
+assert(model.withCurrentReview(diagnostics, model.reviewMap([{ key: "Action.Save", locale: "de", state: "approved", samples: {}, stale: true }])).length === diagnostics.length,
+  "An RTR0090 warning was dropped for a still stale state.");
+// A row with only a note has no recorded state; the translation's presence decides it.
+assert(model.effectiveReviewState({ key: "k", locale: "de", state: "draft", samples: {}, implicit: true }, true) === "translated" &&
+  model.effectiveReviewState({ key: "k", locale: "de", state: "approved", samples: {} }, false) === "approved",
+  "An implicit (note-only) entry's inferred state was treated as recorded.");
+
+// Unsaved review edits on top of a review file another writer changed: untouched entries take the file's value, the
+// user's changes are kept, and an entry changed on both sides is reported and keeps its old starting point.
+{
+  const entry = (key, state, note) => ({ key, locale: "de", state, note, sourceFingerprint: "sha256:" + key, samples: {} });
+  const base = [entry("a", "translated"), entry("b", "translated"), entry("c", "translated")];
+  const local = [entry("a", "approved"), entry("b", "translated"), entry("c", "needs-review"), entry("d", "approved")];
+  const incoming = [entry("a", "translated"), entry("b", "approved", "CLI"), entry("c", "approved"), entry("e", "draft")];
+  const terms = [{ source: "Save", preferred: "Speichern" }];
+  const rebased = model.rebaseReview(local, base, incoming, terms, [], terms);
+  const states = rebased.entries.map((item) => `${item.key}=${item.state}${item.note ? "/" + item.note : ""}`).join(",");
+  assert(states === "a=approved,b=approved/CLI,c=needs-review,d=approved,e=draft", "The rebase lost a change: " + states);
+  assert(rebased.conflicts.join() === "c (de)", "The rebase did not report the entry changed on both sides: " + rebased.conflicts.join());
+  assert(rebased.baseEntries.find((item) => item.key === "c")?.state === "translated" && rebased.baseEntries.find((item) => item.key === "b")?.note === "CLI",
+    "The new starting point is not the incoming data except for the conflicting entry.");
+  assert(rebased.terminology.length === 1 && rebased.conflicts.length === 1, "Terminology added alike on both sides was a conflict.");
+  assert(model.sameReviewEntry({ ...entry("x", "draft"), implicit: true }, { ...entry("x", "translated"), implicit: true }) &&
+    !model.sameReviewEntry(entry("x", "draft"), entry("x", "translated")),
+    "The inferred state of note-only entries was compared, or a recorded state was not.");
+}
+
 assert(model.qualityReportCsv(issues).startsWith('"key","locale","kind","message"\n'),
   "The quality report is not a deterministic quoted CSV document.");
 
@@ -109,15 +143,9 @@ globalThis.gc();
 const heapBefore = process.memoryUsage().heapUsed;
 const scaleRows = Array.from({ length: 50_000 }, (_, index) =>
   row(`Group.Message${String(index).padStart(5, "0")}`, `Source message ${index}`, `Zieltext ${index}`));
-const scaleReviews = scaleRows.map((item, index) => ({
-  key: item.key,
-  locale: `x-${String(index % 100).padStart(3, "0")}`,
-  state: "translated",
-  sourceFingerprint: model.sourceFingerprint(item.cells.en.entry.value),
-  samples: {},
-}));
+const scaleDiagnostics = scaleRows.map((item, index) => diagnostic("RTR0090", item.key, `x-${String(index % 100).padStart(3, "0")}`));
 const started = performance.now();
-const scaleIssues = model.qualityIssues(scaleRows, "en", "de", scaleReviews, []);
+const scaleIssues = model.qualityIssues(scaleRows, "en", "de", scaleDiagnostics, []);
 const matches = scaleRows.filter((item) => item.key.includes("Message499"));
 const suggestions = model.translationSuggestions(scaleRows, "en", "de", "Group.Message49999");
 const elapsed = performance.now() - started;
@@ -131,6 +159,10 @@ assert(heapGrowth < 256 * 1024 * 1024,
 
 console.log(`PASS: review quality is deterministic; 50,000 messages across 100 review locales completed with ${Math.ceil(heapGrowth / 1024 / 1024)} MiB retained heap growth.`);
 console.log(`OBSERVATION: this machine completed the fixed quality/search work in ${elapsed.toFixed(0)} ms; timing is not a product limit.`);
+
+function diagnostic(id, key, locale) {
+  return { id, severity: "warning", message: id, path: "de.rmf2", line: 1, column: 1, endLine: 1, endColumn: 1, key, locale };
+}
 
 function row(key, source, target) {
   return {

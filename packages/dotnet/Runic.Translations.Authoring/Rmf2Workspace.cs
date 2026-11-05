@@ -99,6 +99,12 @@ internal sealed class Rmf2Workspace
     }
     internal Rmf2ProjectCompilation Validate() => TranslationCompiler.CompileRmf2ProjectV5(_project, _sources.Values, null, _cancellationToken);
 
+    /// <summary>The runic.json source this workspace compiles.</summary>
+    internal TranslationSource ProjectSource => _project;
+
+    /// <summary>The message sources this workspace compiles (open buffers included).</summary>
+    internal IReadOnlyCollection<TranslationSource> Sources => _sources.Values;
+
     /// <summary>Finds locals in one message, or caller inputs across translations of the same logical resource.</summary>
     public IReadOnlyList<Rmf2VariableReference> VariableReferences(string path, string key, string name)
     {

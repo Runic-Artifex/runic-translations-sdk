@@ -2,25 +2,31 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.IO;
+using Runic.Translations.Compiler;
+using Runic.Translations.Tooling;
 
 namespace Runic.Translations.Tool;
 
 /// <summary>
-/// Supplies a message's review state for hover. The language server has no source yet: the SDK
-/// review file (<c>&lt;catalog&gt;.review.json</c>, T3c) is read through Tooling once it exists, and
-/// its per-unit fingerprint decides whether an approval is stale. Until then
-/// <see cref="Rmf2LanguageServer"/> uses <see cref="None"/> and hover shows no review line.
+/// A message's review state for hover, from the SDK review file (<c>&lt;catalog&gt;.review.json</c> beside runic.json)
+/// through Tooling: the recorded state, and whether the source changed since it was recorded (the per-unit fingerprint,
+/// RTR0090). The fingerprints come from the review compilation (<see cref="TranslationReviewFile.ForReview"/>), so the
+/// state shows while translations are incomplete.
 /// </summary>
-internal interface IRmf2ReviewStateSource
+internal static class Rmf2ReviewFileState
 {
-    /// <summary>A short state such as <c>approved</c>, <c>needs-review</c> or <c>stale</c>, or null when unknown.</summary>
-    string? Describe(string projectDirectory, string key, string locale);
-
-    internal static IRmf2ReviewStateSource None { get; } = new NoReviewState();
-
-    private sealed class NoReviewState : IRmf2ReviewStateSource
+    /// <summary>A short state such as <c>approved</c> or <c>needs-review, stale …</c>, or null when unknown.</summary>
+    internal static string? Describe(string? baseLocale, IReadOnlyDictionary<string, string>? fingerprints, TranslationInterchangeReview? file, string? error,
+        string key, string locale)
     {
-        public string? Describe(string projectDirectory, string key, string locale) => null;
+        if (fingerprints is null || baseLocale is null || locale == baseLocale) return null;
+        if (error is not null) return "unknown (the review file cannot be read: " + error + ")";
+        TranslationInterchangeReviewEntry? entry = file?.Entries.FirstOrDefault(item => item.Key == key && item.Locale == locale);
+        if (entry is null) return null;
+        string state = TranslationReviewFile.StateText(entry.State);
+        return TranslationReviewFile.IsStale(entry, fingerprints)
+            ? state + ", stale: the source changed since it was recorded (RTR0090)" : state;
     }
 }
 

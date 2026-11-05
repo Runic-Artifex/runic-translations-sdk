@@ -13,7 +13,7 @@
   import * as Field from "#lib/components/ui/field/index.js";
   import * as Select from "#lib/components/ui/select/index.js";
   import { Textarea } from "#lib/components/ui/textarea/index.js";
-  import type { EditorReviewState } from "#lib/contracts.js";
+  import type { EditorDiagnostic, EditorDiagnosticQuickFix, EditorReviewState } from "#lib/contracts.js";
   import type { QualityIssue, TranslationSuggestion } from "#lib/review-model.js";
   import { getUiText } from "#lib/ui-text.js";
 
@@ -43,6 +43,7 @@
     onreport,
     onqualityfilter,
     onsuggestion,
+    onfix,
   }: {
     state: EditorReviewState;
     dirty: boolean;
@@ -60,6 +61,7 @@
     onreport: () => void;
     onqualityfilter: () => void;
     onsuggestion: (translation: string) => void;
+    onfix?: (diagnostic: EditorDiagnostic, fix: EditorDiagnosticQuickFix) => void;
   } = $props();
 
   let stateLabel = $derived(states.find((option) => option.value === reviewState)?.label ?? reviewState);
@@ -138,11 +140,18 @@
               {ui.text("ui_workflow_no_issues")}
             </div>
           {:else}
-            {#each qualityIssues as issue (`${issue.kind}:${issue.message}`)}
+            {#each qualityIssues as issue (`${issue.kind}:${issue.code ?? ""}:${issue.message}`)}
               <Button variant="outline" size="xs" class="h-auto justify-start whitespace-normal" {disabled} onclick={() => { if (!disabled) onqualityfilter(); }}>
                 <TriangleAlertIcon class="text-primary" data-icon="inline-start" />
-                <span class="text-left">{issue.message}</span>
+                <span class="text-left">{#if issue.code !== undefined}<strong class="mr-1 font-mono">{issue.code}</strong>{/if}{issue.message}</span>
               </Button>
+              {#if onfix !== undefined && issue.diagnostic?.quickFixes !== undefined && issue.diagnostic.quickFixes.length > 0}
+                <div class="flex flex-wrap gap-2 pl-6">
+                  {#each issue.diagnostic.quickFixes as fix (fix.id)}
+                    <Button variant="secondary" size="xs" {disabled} data-quick-fix={fix.id} onclick={() => { if (!disabled && issue.diagnostic !== undefined) onfix?.(issue.diagnostic, fix); }}>{fix.title}</Button>
+                  {/each}
+                </div>
+              {/if}
             {/each}
           {/if}
         </section>

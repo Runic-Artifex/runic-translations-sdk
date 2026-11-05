@@ -26,8 +26,12 @@ internal sealed class EditorStateTests
             [new("Save", "Speichern", "de", "Product terminology")]);
         TranslationEditorStateLoadResult saved = TranslationEditorStateStore.Save(directory.Path, state, null);
         TranslationEditorStateLoadResult loaded = TranslationEditorStateStore.Load(directory.Path, "product");
-        Assert.True(loaded.Error is null && loaded.Revision == saved.Revision, loaded.Error ?? "Sidecar revision changed.");
-        Assert.Equal(2, loaded.State.Entries.Count);
+        Assert.True(loaded.Error is null && loaded.Revision == saved.Revision && loaded.SchemaVersion == 2, loaded.Error ?? "Sidecar revision changed.");
+        // Version 2 keeps notes and samples only; review states and fingerprints belong to the SDK review file.
+        Assert.Equal(1, loaded.State.Entries.Count);
+        Assert.True(loaded.State.Entries[0] is { State: null, SourceFingerprint: null, Note: "Reviewed" } && loaded.State.Entries[0].Samples["count"] == "2",
+            "The version 2 entry kept a review state or lost its note or samples.");
+        Assert.True(!File.ReadAllText(System.IO.Path.Combine(directory.Path, saved.Path)).Contains("\"state\"", StringComparison.Ordinal), "Version 2 wrote a review state.");
         Assert.Equal("Speichern", loaded.State.Terminology[0].Preferred);
         byte[] first = File.ReadAllBytes(System.IO.Path.Combine(directory.Path, saved.Path));
         TranslationEditorStateStore.Save(directory.Path, loaded.State, loaded.Revision);
@@ -35,6 +39,25 @@ internal sealed class EditorStateTests
             "Equivalent editor state did not render byte-identically.");
         Assert.Throws<TranslationEditorStateException>(
             () => TranslationEditorStateStore.Save(directory.Path, state, null), "changed on disk");
+    }
+
+    [Test, DisplayName("A version 1 editor state is still read, with its review states, for the move to the review file")]
+    public void ReadsVersionOne()
+    {
+        using TemporaryDirectory directory = new();
+        string sidecar = System.IO.Path.Combine(directory.Path, ".runic-translations", "product.editor-state.json");
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(sidecar)!);
+        File.WriteAllText(sidecar,
+            """{"$schema":"runic.translations.editor-state/1","catalog":"product","messages":{"Save":{"de":{"state":"approved","sourceFingerprint":"fnv1a64:1","note":"Ok"}}},"terminology":[]}""",
+            new UTF8Encoding(false));
+        TranslationEditorStateLoadResult loaded = TranslationEditorStateStore.Load(directory.Path, "product");
+        Assert.True(loaded.Error is null && loaded.SchemaVersion == 1 && loaded.State.Entries.Single() is { State: "approved", SourceFingerprint: "fnv1a64:1", Note: "Ok" },
+            loaded.Error ?? "The version 1 entry was not read.");
+        File.WriteAllText(sidecar,
+            """{"$schema":"runic.translations.editor-state/2","catalog":"product","messages":{"Save":{"de":{"state":"approved"}}},"terminology":[]}""",
+            new UTF8Encoding(false));
+        Assert.True(TranslationEditorStateStore.Load(directory.Path, "product").Error?.Contains("Unknown editor-state member", StringComparison.Ordinal) == true,
+            "Version 2 accepted a review state.");
     }
 
     [Test, DisplayName("Malformed editor state is isolated from compiler inputs")]
@@ -86,7 +109,7 @@ internal sealed class EditorStateTests
         for (int key = 0; key < 500; key++)
             for (int locale = 0; locale < 100; locale++)
                 entries.Add(new TranslationEditorStateEntry(
-                    $"Group.Message{key:D4}", $"x-{locale:D3}", "translated", null, "source:1",
+                    $"Group.Message{key:D4}", $"x-{locale:D3}", null, "Checked", null,
                     new Dictionary<string, string>()));
         var state = new TranslationEditorState("scale", entries, []);
         Stopwatch timer = Stopwatch.StartNew();

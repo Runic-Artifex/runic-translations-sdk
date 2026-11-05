@@ -37,8 +37,9 @@ empty starter-free locales.
 The workspace mutation, transaction and recovery operations, the RMF2 resource
 writer and the workspace language service are internal: they serve the
 `runic-translations` tool and the Translations Editor, which are built from the
-same release. The editor's review state (`runic.translations.editor-state/1`)
-belongs to the editor product.
+same release. The editor's own state (`runic.translations.editor-state/2`:
+notes, preview samples and terminology) belongs to the editor product; review
+states are in the SDK review file `<catalog>.review.json`.
 
 ## Compatibility and status
 

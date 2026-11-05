@@ -26,6 +26,8 @@ or when validation cannot start, and `3` for an internal failure.
 
 Use `export` to write XLIFF or portable review JSON. Use `report` to inspect an import's reviewable diff and refusals without changing the workspace. An XLIFF import updates only the target project's declared translation resources. An import is applied only when `--apply` is explicit; it previews and consumes the confirmation within one process, so no confirmation token is persisted or reusable.
 
+These commands are thin wrappers over the same Tooling code as `runic-translations xliff export`, `xliff import` and `review mark` (the `dotnet-runic-translations` tool): the same XLIFF profile, the same per-unit import rules and the same review file. Use either; the editor's commands add the preview/confirm step.
+
 ```bash
 ./runic-translations-editor export /path/to/workspace --interchange xliff --output .runic-translations/export
 ./runic-translations-editor report /path/to/workspace --interchange xliff --source .runic-translations/export/catalog.en.xliff
@@ -56,12 +58,47 @@ do not rewrite application call sites.
 The closed XLIFF 2.1 profile (version 3, shared with `runic-translations xliff`)
 deterministically round-trips plain RMF2 messages, with placeholders as `<ph>`,
 reports structured messages as semantic loss and skips them on import instead of
-flattening them. Untranslated units are skipped; a refused unit or a unit whose
-source changed since export (`EDITOR-SOURCE-MISMATCH`) blocks the import preview.
-Export stamps review state with per-unit source fingerprints: an approval made
-before its source changed is exported as needs-review. This includes approvals
-that came in through an XLIFF or review-JSON import, which record the base text
-they were made for.
+flattening them. Imports are judged per unit, as `runic-translations xliff import`
+judges them: untranslated units are skipped, an invalid unit is refused and listed
+while the other units are imported, and a unit whose source changed since export
+is imported as needs-review. Only document-level problems (another catalog, an
+undeclared or the base locale, an unreadable file) refuse the whole import.
+
+Review states live in the SDK review file `<catalog>.review.json` beside
+`runic.json`, the file `runic-translations review mark`, `xliff import`,
+`validate` and the language server use. Each state records the per-unit
+fingerprint of the base text the editor loaded when you set it; when that source
+changes, the row is marked **Source changed** and its quality checks show
+`RTR0090`. If the base text changed on disk after the editor loaded it, saving
+records your state for the text you saw, so it shows as stale instead of
+approving text nobody reviewed. Review data works while the catalog has errors
+elsewhere, such as a locale that misses keys: only errors in `runic.json` or the
+base locale stop review states from being recorded. A row's note is stored on its
+review entry, so an edited or cleared note (also one from XLIFF) is what export
+writes; a note or preview samples alone create no review entry. Preview samples,
+terminology and the notes of rows without a review entry stay in the editor's own
+`.runic-translations/<catalog>.editor-state.json` (`runic.translations.editor-state/2`).
+
+The editor checks the review file for changes by other writers while it is open:
+without unsaved review changes it reloads the review data; with them, your
+changes are kept on top of the file's, and saving refuses only an entry that
+changed both in the editor and on disk.
+
+When the editor opens a project with a version 1 editor state, it moves the
+review states into the review file once: an approval whose base text is
+unchanged stays approved, every other recorded state whose base text changed
+becomes needs-review, and states of removed or renamed messages are dropped. The
+version 1 file is kept as `.runic-translations/<catalog>.editor-state.v1.json`,
+and a notice counts the states that moved, need review, were dropped or were
+already in the review file. Until `runic.json` and the base locale have no
+errors, the version 1 states are shown read-only.
+
+The quality filter and each row's quality checks show the compiler's
+per-message diagnostics (`RTR0010` untranslated, `RTR0094`–`RTR0098`, and
+`RTR0090` stale review state) beside the editor's own checks (identical to the
+source, boundary whitespace, terminology, bidirectional text). `RTR0095` offers
+a quick fix that adds the missing plural or ordinal variants as copies of the
+`*` variant.
 
 Machine-translation providers and signed stable distribution are not available yet.
 

@@ -59,7 +59,18 @@ project is open, catalog errors and warnings in its closed translations and in
 file of the project closes. Each `RTR` code links to its entry in the
 [diagnostics reference](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/diagnostics.md)
 at the release tag of the tool. Hover over a message in a translation shows the
-base-locale text with its comments and `@param` descriptions.
+base-locale text with its comments and `@param` descriptions, and its review
+state from the project's review file (`<catalog>.review.json` beside
+`runic.json`, the file `runic-translations review mark` and the Translations
+Editor write), marked stale when the source changed since it was recorded.
+
+A stale review entry is reported as `RTR0090`; its quick fix **Mark … reviewed**
+records the entry's state again for the source on disk in the review file. It is
+offered, and runs, only while the files with the base message and the translation
+have no unsaved changes. Review warnings, hover and quick fixes also work while
+the catalog has errors elsewhere, such as a locale that misses keys.
+`RTR0095` (plural categories that fall to `*`) has a quick fix that adds the
+missing variants as copies of the `*` variant.
 
 `runic.json` files are validated and completed against the project schema
 bundled with the extension, copied from the specification on every build. A
@@ -67,6 +78,15 @@ file that declares `$schema` uses that schema instead (VS Code downloads the
 published URL); templates write the published `project-v1.schema.json` URI.
 
 ## Commands and preview
+
+**Export XLIFF** writes one XLIFF 2.1 document per translated locale into a
+folder you choose, and **Import XLIFF (dry run)** reports what importing a
+translated document would do, unit by unit, without writing anything (the
+output goes to **Runic: Show Output**). Both use the project of the active file (the
+nearest `runic.json` above it), or ask which project when no file of one is
+active and the workspace has several. Both run the workspace's local
+`runic-translations xliff` tool, the same code as the Translations Editor; apply
+an import with `runic-translations xliff import` or the editor.
 
 The Runic commands in the Command Palette provide inert example previews,
 group extraction/inlining for `.rmf2`, and explicitly source-only
@@ -118,6 +138,10 @@ command set until the production language server (2.0).
 | Rename Resource in Resource Sources | Command | No (2.0) |
 | Extract Group to Directory | Command | No (2.0) |
 | Inline Resource into Ancestor | Command | No (2.0) |
+| Export XLIFF | Command | No (2.0) |
+| Import XLIFF (dry run) | Command | No (2.0) |
+| Review state in hover | Yes | Yes |
+| Mark reviewed quick fix (`RTR0090`) | Yes | Where the IDE runs code-action commands |
 | Restart Language Server | Command | Tools menu |
 | Show Output | Command and status bar | Server stderr in the diagnostic trace |
 | Server state, catalog and locale | Status bar | No |
