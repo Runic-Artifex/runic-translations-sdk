@@ -72,7 +72,15 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         IncrementalValueProvider<LinkResult> link = units.Collect().Combine(projects).WithTrackingName("TranslationCompilation").Combine(runtimeAbi).Combine(pseudoLocales)
             .Select(static (pair, cancellationToken) => Link(pair.Left.Left.Left, pair.Left.Left.Right, pair.Left.Right, pair.Right, cancellationToken))
             .WithTrackingName("TranslationLink");
-        context.RegisterSourceOutput(link, static (productionContext, result) => Emit(productionContext, result));
+        // runic.json "overrides": each library catalog its package packs (runic/<catalog>/) is compiled with the project's
+        // override sources in a step of its own, so editing the application's messages never recompiles library catalogs.
+        IncrementalValueProvider<OverlayResult> overlays = projects
+            .Combine(inputs.Where(static input => input.Kind is InputKind.PackedProject or InputKind.PackedMf2 or InputKind.OverrideMf2).Collect())
+            .Combine(runtimeAbi)
+            .Select(static (pair, cancellationToken) => LinkOverlays(pair.Left.Left, pair.Left.Right, pair.Right, cancellationToken))
+            .WithTrackingName("TranslationOverlays");
+        context.RegisterSourceOutput(link.Combine(overlays).WithTrackingName("TranslationEmit"),
+            static (productionContext, pair) => Emit(productionContext, pair.Left, pair.Right));
 
         // Catalogs of referenced projects, linked only to check XAML against: their own build emits and reports them.
         IncrementalValuesProvider<SourceUnit> referencedUnits = inputs
@@ -209,13 +217,23 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         else if (string.Equals(kindValue, "Xaml", StringComparison.Ordinal)) kind = InputKind.Xaml;
         else if (string.Equals(kindValue, "XamlCatalogProject", StringComparison.Ordinal)) kind = InputKind.ReferencedProject;
         else if (string.Equals(kindValue, "XamlCatalogSource", StringComparison.Ordinal)) kind = InputKind.ReferencedMf2;
+        else if (string.Equals(kindValue, "PackedCatalogProject", StringComparison.Ordinal)) kind = InputKind.PackedProject;
+        else if (string.Equals(kindValue, "PackedCatalogSource", StringComparison.Ordinal)) kind = InputKind.PackedMf2;
+        else if (string.Equals(kindValue, "OverrideSource", StringComparison.Ordinal)) kind = InputKind.OverrideMf2;
         else return default;
 
-        options.TryGetValue("build_metadata.AdditionalFiles.RunicTranslationCatalog", out string? catalog);
+        string? catalog = null;
+        // The catalog an override source or a packed project belongs to; other inputs name a XAML catalog.
+        if (kind == InputKind.OverrideMf2) options.TryGetValue("build_metadata.AdditionalFiles.RunicTranslationOverrideCatalog", out catalog);
+        else if (kind == InputKind.PackedProject) options.TryGetValue("build_metadata.AdditionalFiles.RunicTranslationPackedCatalog", out catalog);
+        else options.TryGetValue("build_metadata.AdditionalFiles.RunicTranslationCatalog", out catalog);
         options.TryGetValue("build_metadata.AdditionalFiles.RunicTranslationDefaultCatalog", out string? defaultCatalog);
         // A referenced catalog source names its project declaration, so several referenced catalogs link separately.
-        string? owner = kind == InputKind.ReferencedMf2 && options.TryGetValue("build_metadata.AdditionalFiles.RunicTranslationProject", out string? ownerPath) &&
+        string? owner = kind is InputKind.ReferencedMf2 or InputKind.PackedMf2 && options.TryGetValue("build_metadata.AdditionalFiles.RunicTranslationProject", out string? ownerPath) &&
             !string.IsNullOrWhiteSpace(ownerPath) ? NormalizePath(ownerPath, optionsProvider.GlobalOptions) : null;
+        // A packed catalog names the package that ships it (runic.json "overrides" from).
+        if (kind == InputKind.PackedProject && options.TryGetValue("build_metadata.AdditionalFiles.RunicTranslationPackage", out string? package))
+            defaultCatalog = package;
         SourceText? sourceText = additionalText.GetText(cancellationToken);
         string path = NormalizePath(additionalText.Path, optionsProvider.GlobalOptions);
         return sourceText is null
@@ -330,9 +348,86 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         return catalogs.ToImmutable();
     }
 
-    private static void Emit(SourceProductionContext context, LinkResult result)
+    // Compiles each library catalog of runic.json "overrides" with the project's override sources. Diagnostics in the
+    // override sources are reported as they are; a packed catalog that does not compile is one RTR0104 error, since its
+    // own build reports its diagnostics.
+    private static OverlayResult LinkOverlays(ImmutableArray<GeneratorInput> projectInputs, ImmutableArray<GeneratorInput> inputs,
+        RuntimeAbiState runtimeAbi, CancellationToken cancellationToken)
+    {
+        if (projectInputs.Length != 1 || projectInputs[0].Text is null) return OverlayResult.Empty;
+        var project = new TranslationSource(projectInputs[0].Path, StrictUtf8.GetBytes(projectInputs[0].Text!));
+        IReadOnlyList<Rmf2OverrideV5> overrides = TranslationCompiler.ReadOverridesV5(project, CompilerOptions);
+        var diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
+        var overrideSources = inputs.Where(static input => input.Kind == InputKind.OverrideMf2 && input.Text is not null)
+            .OrderBy(static input => input.Path, StringComparer.Ordinal).ToArray();
+        // Override sources of a catalog runic.json does not override are not compiled.
+        foreach (string catalog in overrideSources.Select(OverrideCatalog).Distinct(StringComparer.Ordinal))
+            if (!overrides.Any(item => string.Equals(item.Catalog, catalog, StringComparison.Ordinal)))
+                diagnostics.Add(Diagnostic.Create(TranslationsDiagnostics.Get("RTR0104"), Location.Create(overrideSources.First(source => OverrideCatalog(source) == catalog).Path, default, default),
+                    DiagnosticSeverity.Warning, null, null, "translations/overrides/" + catalog + " is not listed in runic.json \"overrides\"; its sources are ignored."));
+        if (overrides.Count == 0) return new OverlayResult(diagnostics.ToImmutable(), ImmutableArray<Rmf2ProjectV5>.Empty, false);
+        if (runtimeAbi.IsCompatible && !runtimeAbi.SupportsCompiledOverlays)
+        {
+            diagnostics.Add(Diagnostic.Create(TranslationsDiagnostics.Get("RTR0104"), Location.None, DiagnosticSeverity.Error, null, null,
+                "runic.json \"overrides\" needs Runic.Translations 0.9.0 or later, whose TranslationOverlay.FromCompiled loads the compiled overrides; update the Runic.Translations reference."));
+            return new OverlayResult(diagnostics.ToImmutable(), ImmutableArray<Rmf2ProjectV5>.Empty, false);
+        }
+        var compiled = ImmutableArray.CreateBuilder<Rmf2ProjectV5>();
+        foreach (Rmf2OverrideV5 item in overrides)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            GeneratorInput[] packed = inputs.Where(input => input.Kind == InputKind.PackedProject && input.Text is not null &&
+                string.Equals(input.Catalog, item.Catalog, StringComparison.Ordinal)).ToArray();
+            GeneratorInput[] fromPackage = packed.Where(input => string.Equals(input.DefaultCatalog, item.From, StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (fromPackage.Length != 1)
+            {
+                string message = packed.Length == 0
+                    ? "Catalog '" + item.Catalog + "' to override is not packed by any referenced package; reference '" + item.From +
+                      "', and pack it with RunicTranslationsPackCatalog=true (Runic.Translations.Build 0.9.0 or later)."
+                    : fromPackage.Length == 0
+                        ? "Catalog '" + item.Catalog + "' comes from package '" + string.Join("', '", packed.Select(input => input.DefaultCatalog)) + "', not '" + item.From + "'; correct \"from\" in runic.json."
+                        : "Catalog '" + item.Catalog + "' is packed more than once by '" + item.From + "'.";
+                diagnostics.Add(Diagnostic.Create(TranslationsDiagnostics.Get("RTR0104"), Location.None, DiagnosticSeverity.Error, null, null, message));
+                continue;
+            }
+            GeneratorInput library = fromPackage[0];
+            TranslationSource[] librarySources = inputs.Where(input => input.Kind == InputKind.PackedMf2 && input.Text is not null &&
+                    string.Equals(input.Owner, library.Path, StringComparison.Ordinal))
+                .OrderBy(static input => input.Path, StringComparer.Ordinal)
+                .Select(static input => new TranslationSource(input.Path, StrictUtf8.GetBytes(input.Text!))).ToArray();
+            GeneratorInput[] sources = overrideSources.Where(source => OverrideCatalog(source) == item.Catalog).ToArray();
+            var sourceTexts = sources.ToDictionary(static source => source.Path, static source => SourceText.From(source.Text!, StrictUtf8), StringComparer.Ordinal);
+            Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2OverlayV5(
+                new TranslationSource(library.Path, StrictUtf8.GetBytes(library.Text!)), librarySources,
+                sources.Select(static source => new TranslationSource(source.Path, StrictUtf8.GetBytes(source.Text!))), CompilerOptions, cancellationToken);
+            bool failed = false;
+            TranslationDiagnostic? libraryError = null;
+            foreach (TranslationDiagnostic diagnostic in compilation.Diagnostics)
+            {
+                if (sourceTexts.ContainsKey(diagnostic.Location.Path)) diagnostics.Add(CreateDiagnostic(diagnostic, sourceTexts));
+                else if (diagnostic.Severity == TranslationDiagnosticSeverity.Error) libraryError ??= diagnostic;
+                if (diagnostic.Severity == TranslationDiagnosticSeverity.Error) failed = true;
+            }
+            if (libraryError is not null)
+                diagnostics.Add(Diagnostic.Create(TranslationsDiagnostics.Get("RTR0104"), Location.None, DiagnosticSeverity.Error, null, null,
+                    "The packed catalog '" + item.Catalog + "' of package '" + item.From + "' does not compile with this Runic.Translations.Build: " +
+                    libraryError.Id + " " + libraryError.Message + " Use a Runic.Translations.Build at least as new as the library's."));
+            if (!failed && compilation.Project is { } overlay && overlay.OverlayKeys.Count != 0) compiled.Add(overlay);
+        }
+        return new OverlayResult(diagnostics.ToImmutable(), compiled.ToImmutable(), true);
+
+        static string OverrideCatalog(GeneratorInput input)
+        {
+            if (!string.IsNullOrEmpty(input.Catalog)) return input.Catalog!;
+            string[] segments = input.Path.Split('/');
+            return segments.Length >= 2 ? segments[segments.Length - 2] : "";
+        }
+    }
+
+    private static void Emit(SourceProductionContext context, LinkResult result, OverlayResult overlays)
     {
         foreach (Diagnostic diagnostic in result.Diagnostics) context.ReportDiagnostic(diagnostic);
+        foreach (Diagnostic diagnostic in overlays.Diagnostics) context.ReportDiagnostic(diagnostic);
         if (result.Project is not { } linked) return;
         bool readableSurface = result.ReadableSurface, composition = result.Composition, runtimeAbiCall = result.RuntimeAbiCall;
 
@@ -341,7 +436,8 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             TranslationOutputRenderer.RenderRmf2V5CSharpKeys(linked, readableSurface),
             TranslationOutputRenderer.RenderRmf2V5CSharpAccessors(linked, readableSurface, composition),
             TranslationOutputRenderer.RenderRmf2V5CSharpCatalogData(linked),
-            TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(linked, composition, runtimeAbiCall, readableSurface),
+            TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(linked, composition, runtimeAbiCall, readableSurface,
+                composition && overlays.Declared ? overlays.Overlays : null),
         };
         // The readable surface needs the typed slot types of a runtime that declares
         // TypedSlotBindingsVersion. Without it, keep the encoded files and explain the gap.
@@ -412,6 +508,32 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         Xaml,
         ReferencedProject,
         ReferencedMf2,
+        // runic.json "overrides": a library catalog's packed runic.json and sources, and the application's override sources.
+        PackedProject,
+        PackedMf2,
+        OverrideMf2,
+    }
+
+    // The library catalogs of runic.json "overrides", each compiled with the project's override sources. Reference equality,
+    // as for LinkResult.
+    internal sealed class OverlayResult
+    {
+        internal static readonly OverlayResult Empty = new(ImmutableArray<Diagnostic>.Empty, ImmutableArray<Rmf2ProjectV5>.Empty, false);
+
+        internal OverlayResult(ImmutableArray<Diagnostic> diagnostics, ImmutableArray<Rmf2ProjectV5> overlays, bool declared)
+        {
+            Diagnostics = diagnostics;
+            Overlays = overlays;
+            Declared = declared;
+        }
+
+        internal ImmutableArray<Diagnostic> Diagnostics { get; }
+        internal ImmutableArray<Rmf2ProjectV5> Overlays { get; }
+        /// <summary>
+        /// Whether runic.json declares overrides and the runtime loads compiled overlays: XCatalog.Overlays is generated then,
+        /// with the overlays that compiled, so a failed override reports only its own diagnostics.
+        /// </summary>
+        internal bool Declared { get; }
     }
 
     internal readonly struct GeneratorInput : IEquatable<GeneratorInput>
@@ -569,6 +691,8 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         internal bool IsCompatible => SupportsBase && Rmf2Version >= 0 && MinimumRmf2Version <= RequiredRmf2Version && Rmf2Version >= RequiredRmf2Version;
         internal bool SupportsReadableSurface => TypedSlotBindingsVersion >= 1;
         internal bool SupportsComposition => CompositionVersion >= 1;
+        // TranslationOverlay.FromCompiled, which XCatalog.Overlays (runic.json "overrides") calls.
+        internal bool SupportsCompiledOverlays => CompositionVersion >= 2;
         internal bool DeclaresMinimumVersion { get; }
         // The runtime that declares MinimumRuntimeAbiVersion also declares EnsureRuntimeAbi, which generated code calls.
         internal bool SupportsRuntimeAbiCall => DeclaresMinimumVersion;

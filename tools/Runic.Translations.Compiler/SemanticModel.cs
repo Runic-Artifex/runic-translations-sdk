@@ -66,6 +66,17 @@ internal sealed class ManifestModel
     internal TranslationMissingKeyPolicy MissingKey { get; set; } = TranslationMissingKeyPolicy.Throw;
     internal TranslationBidiIsolation BidiIsolation { get; set; } = TranslationBidiIsolation.Default;
     internal ByteSpan DefaultLocaleSpan { get; set; }
+    /// <summary>The library catalogs the application overrides (<c>overrides</c>), in declaration order.</summary>
+    internal List<OverrideModel> Overrides { get; } = new();
+}
+
+/// <summary>An <c>overrides</c> entry: a library catalog and the package that ships it.</summary>
+internal sealed class OverrideModel
+{
+    internal OverrideModel(string catalog, string from, ByteSpan span) { Catalog = catalog; From = from; Span = span; }
+    internal string Catalog { get; }
+    internal string From { get; }
+    internal ByteSpan Span { get; }
 }
 
 internal sealed class LocaleModel

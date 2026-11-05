@@ -123,6 +123,10 @@ internal static class TranslationsDiagnostics
         "RTR0101", "Currency or unit is not in the pinned CLDR data", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0101");
     internal static readonly DiagnosticDescriptor UndeclaredRuntimeCurrencyOrUnit = new(
         "RTR0102", "Run-time currency or unit has no declared set", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0102");
+    internal static readonly DiagnosticDescriptor OverrideKeyUnknown = new(
+        "RTR0103", "Override does not match the library catalog", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0103");
+    internal static readonly DiagnosticDescriptor OverrideSetup = new(
+        "RTR0104", "Library catalog to override is not available", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0104");
     internal static readonly DiagnosticDescriptor MessageNotReferenced = new(
         "RTR0100", "Message is not referenced from C# code", "{0}", Category, DiagnosticSeverity.Info, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0100", customTags: WellKnownDiagnosticTags.CompilationEnd);
 
@@ -135,7 +139,7 @@ internal static class TranslationsDiagnostics
         ReadableSurfaceUnsupported, ReadableNameReserved, DocumentContentKind, DocumentVariantStructure, DocumentChildInvalid,
         DocumentLimitExceeded, DocumentStructureMismatch, DocumentBlockEmpty, DocumentHeadingLevel, DocumentLineBreakSpace, XamlDeclaration, XamlKey, XamlInputs, XamlKind,
         XamlPositionalInputs, XamlSourceNotChecked, PluralCategoryUnreachable, PluralCategoryMissing, InputNotDisplayed, BooleanFormatted, MaxLengthExceeded, MessageNotReferenced,
-        UnknownCurrencyOrUnit, UndeclaredRuntimeCurrencyOrUnit);
+        UnknownCurrencyOrUnit, UndeclaredRuntimeCurrencyOrUnit, OverrideKeyUnknown, OverrideSetup);
 
     private static readonly object UnknownGate = new();
     private static readonly Dictionary<string, DiagnosticDescriptor> Unknown = new(System.StringComparer.Ordinal);

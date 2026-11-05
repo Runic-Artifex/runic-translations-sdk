@@ -115,6 +115,123 @@ internal sealed class CompositionTests
               {{{$count} lignes}}
             """));
 
+    // runic.json "overrides" (T1d): the application's translations/overrides/acme-grid/ is validated against the catalog its
+    // package packs (runic/acme-grid/) and compiled into AppTextCatalog.Overlays, which needs no runtime packs.
+    private static TestInput[] OverrideInputs(string english, string french) =>
+    [
+        new("C:/repo/translations/runic.json", "Project", """
+            {
+              "schemaVersion": 1,
+              "catalog": "app",
+              "code": { "namespace": "Example.App", "className": "AppText", "visibility": "public" },
+              "baseLocale": "en",
+              "locales": [ "en", "fr" ],
+              "overrides": [ { "catalog": "acme-grid", "from": "Acme.Grid" } ]
+            }
+            """),
+        new("C:/repo/translations/en.rmf2", "Rmf2", "greeting = Hello\n"),
+        new("C:/repo/translations/fr.rmf2", "Rmf2", "greeting = Bonjour\n"),
+        new("C:/nuget/acme.grid/1.0.0/runic/acme-grid/runic.json", "PackedCatalogProject", GridProject, "acme-grid", "Acme.Grid"),
+        .. GridV1.Inputs.Where(static input => input.Kind == "Rmf2").Select(static input =>
+            new TestInput(input.Path.Replace("C:/repo/translations/", "C:/nuget/acme.grid/1.0.0/runic/acme-grid/"), "PackedCatalogSource", input.Text,
+                Owner: "C:/nuget/acme.grid/1.0.0/runic/acme-grid/runic.json")),
+        new("C:/repo/translations/overrides/acme-grid/en.rmf2", "OverrideSource", english, "acme-grid"),
+        new("C:/repo/translations/overrides/acme-grid/fr.rmf2", "OverrideSource", french, "acme-grid"),
+    ];
+
+    [Test, DisplayName("runic.json overrides compile into XCatalog.Overlays, validated against the packed library catalog")]
+    public async Task CompiledOverrides()
+    {
+        GeneratorRun run = GeneratorTestHost.Run(OverrideInputs("title = Data grid\n",
+            "title = Grille\nrows =\n  .input {$count :integer}\n  .match $count\n  one {{Une ligne}}\n  many {{{$count} de lignes}}\n  * {{{$count} lignes}}\n"));
+        Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
+        using var stream = new MemoryStream();
+        Microsoft.CodeAnalysis.Emit.EmitResult emitted = run.Compilation.Emit(stream);
+        Assert.True(emitted.Success, string.Join("\n", emitted.Diagnostics));
+        Type catalog = Assembly.Load(stream.ToArray()).GetTypes().Single(static type => type.Name == "AppTextCatalog");
+        var overlays = (IReadOnlyList<TranslationOverlay>)catalog.GetProperty("Overlays")!.GetValue(null)!;
+        Assert.Equal("acme-grid:fr:True", string.Join("|", overlays.Select(overlay =>
+            overlay.Catalog + ":" + string.Join(",", overlay.AddedLocales.Select(locale => locale.Locale)) + ":" + overlay.IsCompiled)), "overlays");
+
+        // No InitializeAsync and no packs: a compiled overlay composes synchronously.
+        TranslationContext context = TranslationContext.CreateBuilder().Add(GridV1.Registration).AddOverlays(overlays).Build("en");
+        Assert.Equal("Data grid|No rows", Text(context, GridId, "title") + "|" + Text(context, GridId, "empty"), "English override");
+        await context.SetLocaleAsync("de");
+        Assert.Equal("Raster", Text(context, GridId, "title"), "the library's German beats the English override (locale-first)");
+        await context.SetLocaleAsync("fr");
+        Assert.Equal("Grille|3 lignes|No rows", Text(context, GridId, "title") + "|" + Text(context, GridId, "rows", new TextArgument("count", 3L)) + "|" +
+            Text(context, GridId, "empty"), "added French, falling back to English");
+        Assert.Equal("acme-grid:fr>fr:Exact", Describe(context.Catalogs[0]), "fr is a locale of the catalog");
+
+        // Validated against release 1, the overlay still applies key by key to release 2.
+        TranslationContext later = TranslationContext.CreateBuilder().Add(GridV2.Registration).AddOverlays(overlays).Build("fr");
+        Assert.Equal("Grille", Text(later, GridId, "title"), "release 2");
+        Assert.Equal(0, later.Catalogs[0].OverlayDiagnostics.Count, "nothing skipped");
+    }
+
+    [Test, DisplayName("an added regional override falls back to an added parent, as the compiler validated it")]
+    public async Task CompiledOverrideFallbacks()
+    {
+        // The library declares en and de; the application adds fr and fr-CH (fr-CH.rmf2 sorts before fr.rmf2). fr-CH falls back
+        // to the added fr, at compile time and at run time.
+        GeneratorRun run = GeneratorTestHost.Run([.. OverrideInputs("title = Data grid\n", "title = Grille\nrows =\n  .input {$count :integer}\n  .match $count\n  one {{Une ligne}}\n  many {{{$count} de lignes}}\n  * {{{$count} lignes}}\n"),
+            new TestInput("C:/repo/translations/overrides/acme-grid/fr-CH.rmf2", "OverrideSource", "title = Grille suisse\n", "acme-grid")]);
+        Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
+        using var stream = new MemoryStream();
+        Microsoft.CodeAnalysis.Emit.EmitResult emitted = run.Compilation.Emit(stream);
+        Assert.True(emitted.Success, string.Join("\n", emitted.Diagnostics));
+        Type catalog = Assembly.Load(stream.ToArray()).GetTypes().Single(static type => type.Name == "AppTextCatalog");
+        var overlays = (IReadOnlyList<TranslationOverlay>)catalog.GetProperty("Overlays")!.GetValue(null)!;
+        Assert.Equal("fr>en,fr-CH>fr", string.Join(",", overlays.Single().AddedLocales.Select(static locale => locale.Locale + ">" + locale.FallbackLocale)), "explicit fallbacks");
+
+        TranslationContext context = TranslationContext.CreateBuilder().Add(GridV1.Registration).AddOverlays(overlays).Build("fr-CH");
+        Assert.Equal("Grille suisse|3 lignes|No rows", Text(context, GridId, "title") + "|" + Text(context, GridId, "rows", new TextArgument("count", 3L)) + "|" +
+            Text(context, GridId, "empty"), "fr-CH, then the French override, then the library's English");
+    }
+
+    [Test, DisplayName("an explicit fallback may name a locale another overlay adds, but not in a cycle")]
+    public async Task ExplicitFallbackToAddedLocale()
+    {
+        Dictionary<string, byte[]> packs = Packs(OverlayProject.Replace("[ \"en\", \"fr\" ]", "[ \"en\", \"fr\", \"fr-CH\" ]", StringComparison.Ordinal),
+            ("en", "title = Data grid\nempty = Nothing here\n"), ("fr", "title = Grille\nempty = Aucune ligne\n"), ("fr-CH", "title = Grille suisse\n"));
+        TranslationContext context = await TranslationContext.CreateBuilder().Add(GridV1.Registration)
+            .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(packs), [new TranslationOverlayLocale("fr-CH", "fr")]))
+            .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(packs), [new TranslationOverlayLocale("fr", "de")]))
+            .BuildAsync("fr-CH");
+        Assert.Equal("Grille suisse|Aucune ligne|3 Zeilen", Text(context, GridId, "title") + "|" + Text(context, GridId, "empty") + "|" +
+            Text(context, GridId, "rows", new TextArgument("count", 3L)), "fr-CH, the added fr, then the library's de");
+        ArgumentException cycle = await Throws<ArgumentException>(() => TranslationContext.CreateBuilder().Add(GridV1.Registration)
+            .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(packs), [new TranslationOverlayLocale("fr-CH", "fr"), new TranslationOverlayLocale("fr", "fr-CH")]))
+            .BuildAsync().AsTask());
+        Assert.True(cycle.Message.Contains("cycle", StringComparison.Ordinal), cycle.Message);
+    }
+
+    [Test, DisplayName("an override the packed library catalog does not accept is a build error in the override source")]
+    public void RejectedOverrides()
+    {
+        GeneratorRun run = GeneratorTestHost.Run(OverrideInputs("titel = Data grid\nrows =\n  .input {$count :number}\n  {{{$count}}}\n", "title = Grille\n"));
+        string all = string.Join("\n", run.SingleResult.Diagnostics);
+        string[] reported = run.SingleResult.Diagnostics.Select(diagnostic => diagnostic.Id + " " + diagnostic.Location.GetLineSpan().Path).ToArray();
+        Assert.True(reported.Contains("RTR0103 translations/overrides/acme-grid/en.rmf2"), all);
+        Assert.True(reported.Contains("RTR0065 translations/overrides/acme-grid/en.rmf2"), all);
+        Assert.True(run.SingleResult.Diagnostics.First(diagnostic => diagnostic.Id == "RTR0103").Descriptor.HelpLinkUri.EndsWith("#rtr0103", StringComparison.Ordinal), "help link");
+        // The property stays, without the failed catalog, so code that attaches it still compiles.
+        Assert.True(run.SingleResult.GeneratedSources.Any(source => source.SourceText.ToString().Contains("TranslationOverlay> Overlays", StringComparison.Ordinal)), "Overlays");
+
+        // A package that does not pack the catalog, or another "from".
+        TestInput[] inputs = OverrideInputs("title = Data grid\n", "title = Grille\n");
+        GeneratorRun missing = GeneratorTestHost.Run(inputs.Where(static input => input.Kind is not ("PackedCatalogProject" or "PackedCatalogSource")).ToArray());
+        Assert.True(missing.SingleResult.Diagnostics.Any(diagnostic => diagnostic.Id == "RTR0104" && diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture).Contains("RunicTranslationsPackCatalog", StringComparison.Ordinal)),
+            string.Join("\n", missing.SingleResult.Diagnostics));
+        GeneratorRun wrong = GeneratorTestHost.Run(inputs.Select(static input => input.Kind == "PackedCatalogProject" ? input with { DefaultCatalog = "Other.Grid" } : input).ToArray());
+        Assert.True(wrong.SingleResult.Diagnostics.Any(diagnostic => diagnostic.Id == "RTR0104" && diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture).Contains("'Other.Grid', not 'Acme.Grid'", StringComparison.Ordinal)),
+            string.Join("\n", wrong.SingleResult.Diagnostics));
+        // Override sources of a catalog that runic.json does not list are ignored with a warning.
+        GeneratorRun stray = GeneratorTestHost.Run([.. inputs, new TestInput("C:/repo/translations/overrides/acme-chart/en.rmf2", "OverrideSource", "title = Chart\n", "acme-chart")]);
+        Assert.True(stray.SingleResult.Diagnostics.Any(diagnostic => diagnostic.Id == "RTR0104" && diagnostic.Severity == DiagnosticSeverity.Warning),
+            string.Join("\n", stray.SingleResult.Diagnostics));
+    }
+
     [Test, DisplayName("a context switches every catalog to one requested locale and reports how each resolved it")]
     public async Task SharedLocale()
     {
@@ -733,7 +850,7 @@ internal sealed class CompositionTests
         await Throws<InvalidOperationException>(() => TranslationContext.CreateBuilder().Add(App.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(Overlay))).BuildAsync().AsTask());
         await Throws<InvalidOperationException>(() => TranslationContext.CreateBuilder().BuildAsync().AsTask());
-        // An added locale must fall back to a locale the library declares.
+        // An added locale must fall back to a locale the library declares or an overlay adds.
         await Throws<ArgumentException>(() => TranslationContext.CreateBuilder().Add(GridV1.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(Overlay), [new TranslationOverlayLocale("fr", "it")])).BuildAsync().AsTask());
     }

@@ -105,7 +105,14 @@ internal static class Program
             "Runic.Translations.CommandLine.nuspec",
             "README.md",
             "lib/net10.0/Runic.Translations.CommandLine.dll",
-            "lib/net10.0/Runic.Translations.CommandLine.xml");
+            "lib/net10.0/Runic.Translations.CommandLine.xml",
+            // RunicTranslationsPackCatalog: applications override runic-command-line at build time.
+            "buildTransitive/Runic.Translations.CommandLine.props",
+            "runic/runic-command-line/catalog.props",
+            "runic/runic-command-line/contract.json",
+            "runic/runic-command-line/de.rmf2",
+            "runic/runic-command-line/en.rmf2",
+            "runic/runic-command-line/runic.json");
         AssertPackageShape(hosting,
             "Runic.Translations.Hosting.nuspec",
             "README.md",
@@ -121,6 +128,7 @@ internal static class Program
             "buildMultiTargeting/Runic.Translations.Build.targets",
             "analyzers/dotnet/cs/Runic.Translations.Generator.dll",
             "analyzers/dotnet/cs/Runic.Translations.Compiler.dll",
+            // The packing task (RunicTranslationsPackCatalog) loads the compiler from analyzers/dotnet/cs.
             "tools/net10.0/Runic.Translations.Build.dll");
         AssertPackageShape(wpf,
             "Runic.Translations.Wpf.nuspec",

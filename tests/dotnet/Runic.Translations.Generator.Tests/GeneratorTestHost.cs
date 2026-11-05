@@ -183,6 +183,10 @@ internal static class GeneratorTestHost
                     ["build_metadata.AdditionalFiles.RunicTranslationCatalog"] = input.Catalog ?? string.Empty,
                     ["build_metadata.AdditionalFiles.RunicTranslationDefaultCatalog"] = input.DefaultCatalog ?? string.Empty,
                     ["build_metadata.AdditionalFiles.RunicTranslationProject"] = input.Owner ?? string.Empty,
+                    // runic.json "overrides": an override source's catalog, a packed catalog's ID and package.
+                    ["build_metadata.AdditionalFiles.RunicTranslationOverrideCatalog"] = input.Kind == "OverrideSource" ? input.Catalog ?? string.Empty : string.Empty,
+                    ["build_metadata.AdditionalFiles.RunicTranslationPackedCatalog"] = input.Kind == "PackedCatalogProject" ? input.Catalog ?? string.Empty : string.Empty,
+                    ["build_metadata.AdditionalFiles.RunicTranslationPackage"] = input.Kind == "PackedCatalogProject" ? input.DefaultCatalog ?? string.Empty : string.Empty,
                 });
             }
         }

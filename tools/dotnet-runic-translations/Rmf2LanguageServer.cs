@@ -890,6 +890,10 @@ internal sealed class Rmf2LanguageServer
         return Workspace(directory, group);
     }
 
+    // An unsaved buffer under translations/overrides belongs to a library catalog's overrides, not to the project.
+    private static bool OverridesDeclared(CompilerInputs inputs) =>
+        TranslationManifestReader.Read(inputs.Project.GetUtf8Bytes(), Path.GetDirectoryName(Path.GetFullPath(inputs.Project.Path))!).OverridesRoot is not null;
+
     private Rmf2Workspace Workspace(string directory, IReadOnlyCollection<string> group)
     {
         _requestCancellation.ThrowIfCancellationRequested();
@@ -922,7 +926,8 @@ internal sealed class Rmf2LanguageServer
             // no roots only for a malformed configuration.
             if (sources.ContainsKey(file) || ((Path.GetExtension(file).Equals(".rmf2", StringComparison.OrdinalIgnoreCase) ||
                 Path.GetExtension(file).Equals(".mf2", StringComparison.OrdinalIgnoreCase)) &&
-                (inputs.SourceRoots is { } sourceRoots ? sourceRoots.Any(sourceRoot => IsWithin(sourceRoot, file)) : IsWithin(directory, file))))
+                (inputs.SourceRoots is { } sourceRoots ? sourceRoots.Any(sourceRoot => IsWithin(sourceRoot, file)) : IsWithin(directory, file)) &&
+                !(inputs.OverrideSources is not null && IsWithin(Path.Combine(directory, "overrides"), file) && OverridesDeclared(inputs))))
                 sources[file] = new TranslationSource(file, Utf8.GetBytes(buffer.Text));
         }
         string root = directory;

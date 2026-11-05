@@ -36,9 +36,10 @@ public static class TranslationsCompatibility
     /// <summary>
     /// The additive catalog composition surface (<see cref="ITranslationContext"/>, <see cref="TranslationCatalogRegistration"/>).
     /// The source generator emits <c>XCatalog.Registration</c> and the <c>XText(ITranslationContext)</c> constructor only when
-    /// the referenced runtime declares this constant. The value only grows additively.
+    /// the referenced runtime declares this constant. From version 2 it also emits <c>XCatalog.Overlays</c>, the overlays
+    /// compiled from runic.json <c>overrides</c> (<see cref="TranslationOverlay.FromCompiled"/>). The value only grows additively.
     /// </summary>
-    public const int CompositionVersion = 1;
+    public const int CompositionVersion = 2;
 
     /// <summary>Checks a generated base ABI requirement against the executing runtime, without const inlining.</summary>
     public static bool SupportsRuntimeAbi(int requiredVersion) =>

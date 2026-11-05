@@ -27,16 +27,25 @@ namespace Runic.Translations.Build;
 /// <c>.snupkg</c> and a written <c>.nuspec</c> file. A dependency that already names a range is left as it is; a version
 /// in another format is left open with warning RTR0093.
 /// </para>
+/// <para>
+/// A dependency on <c>Runic.Translations.Build</c> itself is removed: it is a development dependency that generates code at
+/// build time, and NuGet applies <c>developmentDependency</c> only when a tool adds the reference with <c>PrivateAssets</c>.
+/// This runs even when <see cref="StampRange"/> is false.
+/// </para>
 /// </remarks>
 public sealed class RuntimeDependencyRange : ITask
 {
     private const string RuntimePackageId = "Runic.Translations";
+    private const string BuildPackageId = "Runic.Translations.Build";
     private static readonly Regex PlainVersion = new(
         @"^(?<major>[0-9]+)\.(?<minor>[0-9]+)\.[0-9]+(?:\.[0-9]+)?(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$", RegexOptions.CultureInvariant);
 
     /// <summary>The pack outputs (<c>@(NuGetPackOutput)</c>); <c>.nupkg</c>, <c>.snupkg</c> and <c>.nuspec</c> files are updated.</summary>
     [Required]
     public ITaskItem[] Packages { get; set; } = Array.Empty<ITaskItem>();
+
+    /// <summary>Whether to write the version rule's range (<c>RunicTranslationsStampRuntimeRange</c>); the Build dependency is removed either way.</summary>
+    public bool StampRange { get; set; } = true;
 
     public IBuildEngine BuildEngine { get; set; } = null!;
     public ITaskHost HostObject { get; set; } = null!;
@@ -92,12 +101,12 @@ public sealed class RuntimeDependencyRange : ITask
     private readonly System.Collections.Generic.HashSet<string> _reported = new(StringComparer.Ordinal);
 
     private string? Stamp(string nuspec, string path) =>
-        Stamp(nuspec, version =>
+        Stamp(nuspec, !StampRange ? null : version =>
         {
             if (_reported.Add(version)) BuildEngine.LogWarningEvent(new BuildWarningEventArgs("translations", "RTR0093", path, 0, 0, 0, 0,
             $"The Runic.Translations dependency version '{version}' has a format the version rule does not handle, so the package keeps it as an open " +
             "minimum version. Use a plain version such as 0.9.0, or set RunicTranslationsStampRuntimeRange to false.", "", nameof(RuntimeDependencyRange)));
-        });
+        }, StampRange);
 
     /// <summary>The range for a runtime version: <c>[N, next minor-0)</c> before 1.0, <c>[N, next major-0)</c> from 1.0.</summary>
     /// <returns>The range, or <see langword="null"/> when the version has another format.</returns>
@@ -115,12 +124,20 @@ public sealed class RuntimeDependencyRange : ITask
         return "[" + version + ", " + upper + ")";
     }
 
-    // Returns the updated nuspec, or null when no dependency needed a range.
-    internal static string? Stamp(string nuspec, Action<string>? unhandled = null)
+    // Returns the updated nuspec, or null when nothing changed. stampRange false only removes the Build dependency.
+    internal static string? Stamp(string nuspec, Action<string>? unhandled = null, bool stampRange = true)
     {
         XDocument document = XDocument.Parse(nuspec, LoadOptions.PreserveWhitespace);
         bool changed = false;
-        foreach (XElement dependency in document.Descendants().Where(static element => element.Name.LocalName == "dependency"))
+        foreach (XElement dependency in document.Descendants().Where(static element => element.Name.LocalName == "dependency" &&
+            string.Equals((string?)element.Attribute("id"), BuildPackageId, StringComparison.OrdinalIgnoreCase)).ToList())
+        {
+            if (dependency.PreviousNode is XText indentation && string.IsNullOrWhiteSpace(indentation.Value)) indentation.Remove();
+            dependency.Remove();
+            changed = true;
+        }
+
+        foreach (XElement dependency in document.Descendants().Where(element => stampRange && element.Name.LocalName == "dependency"))
         {
             if (!string.Equals((string?)dependency.Attribute("id"), RuntimePackageId, StringComparison.OrdinalIgnoreCase)) continue;
             XAttribute? version = dependency.Attribute("version");

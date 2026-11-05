@@ -125,6 +125,22 @@ function packageNuspec(path) {
   assert.fail(`${path} has no .nuspec`);
 }
 
+// The entry names of a .nupkg (a zip archive), from its central directory.
+function packageEntries(path) {
+  const zip = readFileSync(path);
+  let end = zip.length - 22;
+  while (end >= 0 && zip.readUInt32LE(end) !== 0x06054b50) end--;
+  assert.ok(end >= 0, `${path} is not a zip archive`);
+  const names = [];
+  let offset = zip.readUInt32LE(end + 16);
+  for (let index = zip.readUInt16LE(end + 10); index > 0; index--) {
+    const nameLength = zip.readUInt16LE(offset + 28), extraLength = zip.readUInt16LE(offset + 30), commentLength = zip.readUInt16LE(offset + 32);
+    names.push(zip.toString("utf8", offset + 46, offset + 46 + nameLength));
+    offset += 46 + nameLength + extraLength + commentLength;
+  }
+  return names.sort();
+}
+
 // Version rule (T1g): a library packed with the candidate Build package depends on Runic.Translations [N, next minor-0)
 // before 1.0 ([N, next major-0) from 1.0). A multi-targeted library generates its .nuspec in the outer build, which
 // imports the Build package's buildMultiTargeting targets; the symbol package carries the same range.
@@ -132,9 +148,9 @@ function verifyMultiTargetedLibrary(directory, version, environment) {
   const library = join(directory, "multi-targeted-library");
   const output = join(library, "packages");
   mkdirSync(join(library, "translations"), { recursive: true });
-  writeFileSync(join(library, "Library.csproj"), `<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFrameworks>net10.0;net10.0-windows</TargetFrameworks><EnableWindowsTargeting>true</EnableWindowsTargeting><PackageId>Acme.Toolbar</PackageId><Version>1.0.0</Version><TreatWarningsAsErrors>true</TreatWarningsAsErrors><IncludeSymbols>true</IncludeSymbols><SymbolPackageFormat>snupkg</SymbolPackageFormat></PropertyGroup><ItemGroup><PackageReference Include="Runic.Translations" Version="${version}"/><PackageReference Include="Runic.Translations.Build" Version="${version}" PrivateAssets="all"/></ItemGroup></Project>`);
+  writeFileSync(join(library, "Library.csproj"), `<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFrameworks>net10.0;net10.0-windows</TargetFrameworks><EnableWindowsTargeting>true</EnableWindowsTargeting><PackageId>Acme.Toolbar</PackageId><Version>1.0.0</Version><TreatWarningsAsErrors>true</TreatWarningsAsErrors><IncludeSymbols>true</IncludeSymbols><SymbolPackageFormat>snupkg</SymbolPackageFormat><RunicTranslationsPackCatalog>true</RunicTranslationsPackCatalog></PropertyGroup><ItemGroup><PackageReference Include="Runic.Translations" Version="${version}"/><PackageReference Include="Runic.Translations.Build" Version="${version}" PrivateAssets="all"/></ItemGroup></Project>`);
   writeFileSync(join(library, "translations", "runic.json"), JSON.stringify({
-    schemaVersion: 1, catalog: "acme-toolbar", code: { namespace: "Acme.Toolbar", className: "ToolbarText", visibility: "public" }, baseLocale: "en", locales: ["en"],
+    schemaVersion: 1, catalog: "acme.toolbar", code: { namespace: "Acme.Toolbar", className: "ToolbarText", visibility: "public" }, baseLocale: "en", locales: ["en"],
   }));
   writeFileSync(join(library, "translations", "en.rmf2"), "save = Save\n");
   run("dotnet", ["pack", "Library.csproj", "--configuration", "Release", "--output", output], library, environment);
@@ -144,6 +160,99 @@ function verifyMultiTargetedLibrary(directory, version, environment) {
     const ranges = [...packageNuspec(join(output, file)).matchAll(/<dependency id="Runic\.Translations" version="([^"]*)"/g)].map(match => match[1]);
     assert.deepEqual(ranges, [range, range], `${file} requires Runic.Translations ${range} for both target frameworks`);
   }
+  // The outer build packs the catalog once (RunicTranslationsPackCatalog), from translations/runic.json.
+  const listing = packageEntries(join(output, "Acme.Toolbar.1.0.0.nupkg"));
+  for (const entry of ["buildTransitive/Acme.Toolbar.props", "runic/acme.toolbar/catalog.props", "runic/acme.toolbar/contract.json", "runic/acme.toolbar/en.rmf2", "runic/acme.toolbar/runic.json"])
+    assert.ok(listing.includes(entry), `Acme.Toolbar packs ${entry}: ${listing.join(", ")}`);
+}
+
+// Build-time overrides (T1d): a component library packs its catalog (RunicTranslationsPackCatalog) and an application
+// overrides one of its keys and adds French in translations/overrides/<catalog>/, validated against the packed catalog at
+// build time and compiled into AppTextCatalog.Overlays. The library package does not depend on Runic.Translations.Build,
+// and its own build/<id>.props still reaches the application through the generated buildTransitive/<id>.props. The
+// application also overrides runic-command-line, which Runic.Translations.CommandLine packs.
+function verifyLibraryOverrides(directory, nuget, version, environment) {
+  const library = join(directory, "override-library");
+  const feed = join(library, "packages");
+  mkdirSync(join(library, "translations"), { recursive: true });
+  mkdirSync(join(library, "build"), { recursive: true });
+  writeFileSync(join(library, "Library.csproj"), `<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework><PackageId>Acme.Table</PackageId><Version>1.0.0</Version><TreatWarningsAsErrors>true</TreatWarningsAsErrors><RunicTranslationsPackCatalog>true</RunicTranslationsPackCatalog></PropertyGroup><ItemGroup><PackageReference Include="Runic.Translations" Version="${version}"/><PackageReference Include="Runic.Translations.Build" Version="${version}"/><None Include="build/Acme.Table.props" Pack="true" PackagePath="build/"/></ItemGroup></Project>`);
+  writeFileSync(join(library, "build", "Acme.Table.props"), "<Project><PropertyGroup><AcmeTableBuildProps>true</AcmeTableBuildProps></PropertyGroup></Project>\n");
+  writeFileSync(join(library, "translations", "runic.json"), JSON.stringify({
+    schemaVersion: 1, catalog: "acme.table", code: { namespace: "Acme.Table", className: "TableText", visibility: "public" }, baseLocale: "en", locales: ["en", "de"],
+  }));
+  writeFileSync(join(library, "translations", "en.rmf2"), "empty = No rows\nrows =\n  .input {$count :integer}\n  .match $count\n  one {{One row}}\n  * {{{$count} rows}}\n");
+  writeFileSync(join(library, "translations", "de.rmf2"), "empty = Keine Zeilen\nrows =\n  .input {$count :integer}\n  .match $count\n  one {{Eine Zeile}}\n  * {{{$count} Zeilen}}\n");
+  run("dotnet", ["pack", "Library.csproj", "--configuration", "Release", "--output", feed], library, environment);
+  const nuspec = packageNuspec(join(feed, "Acme.Table.1.0.0.nupkg"));
+  assert.ok(!nuspec.includes("Runic.Translations.Build"), "a library must not depend on the development dependency Runic.Translations.Build");
+  const listing = packageEntries(join(feed, "Acme.Table.1.0.0.nupkg"));
+  for (const entry of ["build/Acme.Table.props", "buildTransitive/Acme.Table.props", "runic/acme.table/catalog.props", "runic/acme.table/contract.json", "runic/acme.table/de.rmf2", "runic/acme.table/en.rmf2", "runic/acme.table/runic.json"])
+    assert.ok(listing.includes(entry), `Acme.Table packs ${entry}: ${listing.join(", ")}`);
+
+  // A library that packs its own buildTransitive/<id>.props must import the catalog props itself.
+  const own = join(directory, "override-library-own-props");
+  mkdirSync(join(own, "translations"), { recursive: true });
+  writeFileSync(join(own, "Library.csproj"), `<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework><PackageId>Acme.Chart</PackageId><Version>1.0.0</Version><RunicTranslationsPackCatalog>true</RunicTranslationsPackCatalog></PropertyGroup><ItemGroup><PackageReference Include="Runic.Translations" Version="${version}"/><PackageReference Include="Runic.Translations.Build" Version="${version}"/><None Include="Acme.Chart.props" Pack="true" PackagePath="buildTransitive/"/></ItemGroup></Project>`);
+  writeFileSync(join(own, "Acme.Chart.props"), "<Project />\n");
+  writeFileSync(join(own, "translations", "runic.json"), JSON.stringify({
+    schemaVersion: 1, catalog: "acme.chart", code: { namespace: "Acme.Chart", className: "ChartText", visibility: "public" }, baseLocale: "en", locales: ["en"],
+  }));
+  writeFileSync(join(own, "translations", "en.rmf2"), "title = Chart\n");
+  const collided = spawnSync("dotnet", ["pack", "Library.csproj", "--configuration", "Release", "--output", join(own, "packages")], { cwd: own, env: { ...process.env, ...environment }, encoding: "utf8" });
+  assert.notEqual(collided.status, 0, "packing a library's own buildTransitive props with the generated ones must fail");
+  assert.match(collided.stdout, /error RTR0104: The project packs its own buildTransitive\/Acme\.Chart\.props.*RunicTranslationsPackCatalogProps/);
+
+  const app = join(directory, "override-app");
+  mkdirSync(join(app, "translations", "overrides", "acme.table"), { recursive: true });
+  const config = join(directory, "override-app.config");
+  writeFileSync(config, `<?xml version="1.0" encoding="utf-8"?>
+<configuration><packageSources><clear/><add key="candidate" value="${quoted(nuget)}"/><add key="library" value="${quoted(feed)}"/><add key="nuget.org" value="https://api.nuget.org/v3/index.json"/></packageSources><packageSourceMapping><clear/><packageSource key="candidate"><package pattern="Runic.Translations*"/></packageSource><packageSource key="library"><package pattern="Acme.*"/></packageSource><packageSource key="nuget.org"><package pattern="*"/></packageSource></packageSourceMapping></configuration>`);
+  writeFileSync(join(app, "App.csproj"), `<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework><OutputType>Exe</OutputType><ImplicitUsings>enable</ImplicitUsings><TreatWarningsAsErrors>true</TreatWarningsAsErrors></PropertyGroup><ItemGroup><PackageReference Include="Runic.Translations" Version="[${version}]"/><PackageReference Include="Runic.Translations.Build" Version="[${version}]" PrivateAssets="all"/><PackageReference Include="Runic.Translations.CommandLine" Version="[${version}]"/><PackageReference Include="Acme.Table" Version="1.0.0"/></ItemGroup><Target Name="CheckLibraryProps" BeforeTargets="Build"><Error Condition="'$(AcmeTableBuildProps)' != 'true'" Text="build/Acme.Table.props was not imported"/></Target></Project>`);
+  writeFileSync(join(app, "translations", "runic.json"), JSON.stringify({
+    schemaVersion: 1, catalog: "shop", code: { namespace: "Shop", className: "ShopText" }, baseLocale: "en", locales: ["en", "fr"],
+    overrides: [{ catalog: "acme.table", from: "Acme.Table" }, { catalog: "runic-command-line", from: "Runic.Translations.CommandLine" }],
+  }));
+  mkdirSync(join(app, "translations", "overrides", "runic-command-line"), { recursive: true });
+  writeFileSync(join(app, "translations", "overrides", "runic-command-line", "en.rmf2"), "help {\n  usage = How to use\n}\n");
+  writeFileSync(join(app, "translations", "en.rmf2"), "title = Shop\n");
+  writeFileSync(join(app, "translations", "fr.rmf2"), "title = Boutique\n");
+  writeFileSync(join(app, "translations", "overrides", "acme.table", "en.rmf2"), "empty = Nothing to show\n");
+  writeFileSync(join(app, "translations", "overrides", "acme.table", "fr.rmf2"),
+    "empty = Aucune ligne\nrows =\n  .input {$count :integer}\n  .match $count\n  one {{Une ligne}}\n  many {{{$count} de lignes}}\n  * {{{$count} lignes}}\n");
+  writeFileSync(join(app, "Program.cs"), `using Acme.Table;
+using Runic.Translations;
+using Runic.Translations.CommandLine;
+using Shop;
+
+// The overrides are compiled into the application: no packs, and Build composes synchronously.
+TranslationContext context = TranslationContext.CreateBuilder()
+    .Add(ShopTextCatalog.Registration)
+    .Add(TableTextCatalog.Registration)
+    .Add(TranslationCommandTextResolver.CatalogRegistration)
+    .AddOverlays(ShopTextCatalog.Overlays)
+    .Build("en");
+Check(string.Join(",", ShopTextCatalog.Overlays.Select(overlay => overlay.Catalog)), "acme.table,runic-command-line");
+Check(new TranslationCommandTextResolver(context, "shop").Resolve("help.usage", System.Globalization.CultureInfo.GetCultureInfo("en"), []) ?? "(none)", "How to use");
+var table = new TableText(context);
+var shop = new ShopText(context);
+string Line() => shop.Messages.title + "|" + table.Messages.empty + "|" + table.Messages.rows(3);
+Check(Line(), "Shop|Nothing to show|3 rows");
+await context.SetLocaleAsync("de");
+Check(Line(), "Shop|Keine Zeilen|3 Zeilen"); // the library's German beats the English override
+await context.SetLocaleAsync("fr-CA");
+Check(Line(), "Boutique|Aucune ligne|3 lignes");
+Console.WriteLine("Library overrides: " + Line());
+static void Check(string actual, string expected) { if (actual != expected) throw new InvalidOperationException(actual + " != " + expected); }
+`);
+  run("dotnet", ["restore", "App.csproj", "--configfile", config], app, environment);
+  run("dotnet", ["run", "--project", "App.csproj", "--configuration", "Release", "--no-restore"], app, environment);
+
+  // An override of a key the library does not have fails the build in the override source.
+  writeFileSync(join(app, "translations", "overrides", "acme.table", "en.rmf2"), "emtpy = Nothing to show\n");
+  const rejected = spawnSync("dotnet", ["build", "App.csproj", "--configuration", "Release", "--no-restore"], { cwd: app, env: { ...process.env, ...environment }, encoding: "utf8" });
+  assert.notEqual(rejected.status, 0, "an unknown override key must fail the build");
+  assert.match(rejected.stdout, /overrides[\\/]acme\.table[\\/]en\.rmf2\(1,1\): error RTR0103: Catalog 'acme\.table' has no message 'emtpy'/);
 }
 
 export async function verifyPackages(version = workspace.version) {
@@ -199,6 +308,7 @@ export async function verifyPackages(version = workspace.version) {
       "using Runic.Translations.Wpf; _ = typeof(WpfInlineRenderer); _ = typeof(WpfDocumentRenderer);", environment);
     verifyPreviousReleaseLibrary(directory, nuget, version, environment);
     verifyMultiTargetedLibrary(directory, version, environment);
+    verifyLibraryOverrides(directory, nuget, version, environment);
     for (const consumer of readdirSync(directory, { withFileTypes: true }).filter(entry => entry.isDirectory())) {
       const path = join(directory, consumer.name);
       if (existsSync(join(path, "obj", "project.assets.json"))) assertNoSourceReferences(path);

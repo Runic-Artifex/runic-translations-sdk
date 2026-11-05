@@ -43,7 +43,8 @@ overload. Since 0.9 the generated text class has two one-parameter constructors,
 "ambiguous constructors" when the container can supply both. `new GridText(null)` still compiles and picks the manager
 constructor.
 
-`AddOverlay(TranslationOverlay)` attaches application overrides to a library catalog.
+`AddOverlay(TranslationOverlay)` attaches application overrides to a library catalog, and `AddOverlays` several, such as
+the overlays a build compiles from runic.json `overrides` (`AddOverlays(AppTextCatalog.Overlays)`).
 
 ## Singleton or scoped
 
@@ -79,7 +80,9 @@ await app.Services.InitializeRunicTranslationsAsync();   // loads and checks ove
 app.Run();
 ```
 
-Resolving the context before that throws instead of blocking on I/O, which could deadlock a UI thread. In scoped mode,
+Resolving the context before that throws instead of blocking on I/O, which could deadlock a UI thread. Compiled
+overlays, the build-time overrides of runic.json `overrides` (`AddOverlays(AppTextCatalog.Overlays)`), load without I/O
+and need no initialization. In scoped mode,
 initialization composes the shared snapshots that every scope's context starts from. Do not build a
 `TranslationContext` yourself and register the instance: it would bypass the catalogs that libraries add, and resolving
 `ITranslationContext` throws when a catalog added through `AddCatalog` is missing.

@@ -20,7 +20,22 @@ internal static class Rmf2LocaleArtifactV5
         return project.FormatData(items.Select(item => item.ContentLocale).Append(locale.Tag), items.Select(item => item.Message), numbers: true);
     }
 
-    internal static TranslationGeneratedOutput Render(Rmf2ProjectV5 project, string localeTag)
+    internal static TranslationGeneratedOutput Render(Rmf2ProjectV5 project, string localeTag) => Render(project, localeTag, null);
+
+    /// <summary>
+    /// Renders the overlay pack of one locale of a library catalog compiled with override sources
+    /// (<c>TranslationCompiler.CompileRmf2OverlayV5</c>): a locale artifact v5 with only the overridden messages, which the
+    /// runtimes load as an overlay (.NET <c>TranslationOverlay</c>, ESM <c>installOverlay</c>) and check key by key.
+    /// </summary>
+    internal static TranslationGeneratedOutput RenderOverlay(Rmf2ProjectV5 project, string localeTag)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        if (!project.OverlayKeys.TryGetValue(localeTag, out IReadOnlyList<string>? keys))
+            throw new ArgumentException("Locale '" + localeTag + "' has no override messages in catalog '" + project.Id + "'.", nameof(localeTag));
+        return Render(project, localeTag, new HashSet<string>(keys, StringComparer.Ordinal));
+    }
+
+    private static TranslationGeneratedOutput Render(Rmf2ProjectV5 project, string localeTag, HashSet<string>? only)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(localeTag);
@@ -44,6 +59,7 @@ internal static class Rmf2LocaleArtifactV5
             writer.WriteStartObject("messages");
             foreach (Rmf2TranslationV5 resource in locale.ResolvedResources.OrderBy(item => item.Key, StringComparer.Ordinal))
             {
+                if (only is not null && !only.Contains(resource.Key)) continue;
                 if (!contracts.TryGetValue(resource.Key, out Rmf2MessageContractV5? contract))
                     throw new InvalidOperationException("Resolved v5 resource '" + resource.Key + "' has no message contract.");
                 writer.WriteStartObject(resource.Key);
@@ -62,7 +78,8 @@ internal static class Rmf2LocaleArtifactV5
             // The CLDR data the messages need (D055.4): number records when they format numbers, dates or times, so an
             // overlay that adds a language formats correctly on a catalog without it, and currency, unit and compact data
             // when they use those functions.
-            if (FormatData(project, locale) is { } formats)
+            // An overlay pack carries only the data of its own messages.
+            if (FormatData(project, locale, only is null ? null : locale.ResolvedResources.Where(item => only.Contains(item.Key))) is { } formats)
             {
                 writer.WritePropertyName("formatData");
                 using JsonDocument data = JsonDocument.Parse(formats);
