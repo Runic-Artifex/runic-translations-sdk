@@ -90,6 +90,13 @@ internal static class TranslationReviewFile
     /// <exception cref="TranslationInterchangeException"><see cref="ChangedCode"/>: the file changed since <paramref name="expected"/> was read.</exception>
     internal static void Write(string path, TranslationInterchangeReview review, byte[]? expected) => Replace(path, Render(review), expected, compare: true);
 
+    /// <summary>As <see cref="Write(string, TranslationInterchangeReview, byte[])"/>, with the bytes <see cref="Render"/> made.</summary>
+    internal static void WriteRendered(string path, byte[] bytes, byte[]? expected)
+    {
+        ArgumentNullException.ThrowIfNull(bytes);
+        Replace(path, bytes, expected, compare: true);
+    }
+
     /// <summary>
     /// Reads the review file, applies <paramref name="change"/> to it and writes the result with
     /// <see cref="Write(string, TranslationInterchangeReview, byte[])"/>; when another writer replaced the file in between,

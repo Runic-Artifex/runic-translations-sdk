@@ -64,7 +64,9 @@ internal sealed record EditorDiagnostic(
     int EndLine,
     int EndColumn,
     EditorNotice? Notice = null,
-    Rmf2DiagnosticSpan? Span = null, string? SourceRevision = null, IReadOnlyList<Rmf2DiagnosticQuickFix>? QuickFixes = null);
+    Rmf2DiagnosticSpan? Span = null, string? SourceRevision = null, IReadOnlyList<Rmf2DiagnosticQuickFix>? QuickFixes = null,
+    // The message row a per-message check is about (RTR0010, RTR0090, RTR0094-RTR0098, or a diagnostic at a message name).
+    string? Key = null, string? Locale = null);
 
 internal sealed record WorkspaceSnapshot(
     string Root,
@@ -85,7 +87,14 @@ internal sealed record EditorReviewEntry(
     string State,
     string? Note,
     string? SourceFingerprint,
-    IReadOnlyDictionary<string, string> Samples);
+    IReadOnlyDictionary<string, string> Samples,
+    // The SDK per-unit fingerprint (SourceFingerprint) no longer matches the current source (RTR0090). Ignored on save.
+    // A state the user sets carries the fingerprint of the source the editor loaded (EditorReviewSnapshot.Fingerprints),
+    // so an approval is recorded for the text the reviewer saw, never stamped with the source on disk at save time.
+    bool Stale = false,
+    // A row with a note or preview samples but no review-file entry: its state is inferred (translated or draft), and
+    // saving it writes no review-file entry until the user sets a state.
+    bool Implicit = false);
 
 internal sealed record EditorTerminologyEntry(string Source, string Preferred, string? Locale, string? Note);
 
@@ -94,12 +103,25 @@ internal sealed record EditorReviewSnapshot(
     string? Revision,
     string? Error,
     IReadOnlyList<EditorReviewEntry> Entries,
-    IReadOnlyList<EditorTerminologyEntry> Terminology);
+    IReadOnlyList<EditorTerminologyEntry> Terminology,
+    // A one-time notice, such as the move of version 1 editor approvals into the review file.
+    EditorNotice? Notice = null,
+    // The SDK per-unit fingerprint of each base message as loaded (null: runic.json or the base locale has errors, so
+    // no review state can be recorded). Computed while translations are incomplete or invalid.
+    IReadOnlyDictionary<string, string>? Fingerprints = null,
+    // Version 1 editor approvals wait to move into the review file (the base locale has errors): Entries shows them
+    // read-only, and review data cannot be saved until they have moved.
+    bool MigrationPending = false);
 
 internal sealed record EditorReviewSaveRequest(
     string? ExpectedRevision,
     IReadOnlyList<EditorReviewEntry> Entries,
-    IReadOnlyList<EditorTerminologyEntry> Terminology);
+    IReadOnlyList<EditorTerminologyEntry> Terminology,
+    // The review entries and terminology the edits started from. When the review data changed on disk since (the
+    // command line, the language server), the save re-applies only the entries and terminology the user changed onto
+    // the current files and refuses only an entry changed on both sides. Without them a changed revision refuses.
+    IReadOnlyList<EditorReviewEntry>? Original = null,
+    IReadOnlyList<EditorTerminologyEntry>? OriginalTerminology = null);
 
 internal sealed record EditorReviewOperationResult(bool Ok, EditorNotice? Message, EditorReviewSnapshot? Review, EditorHistoryState? History);
 
@@ -199,7 +221,10 @@ internal sealed record EditorExternalFileChange(
 internal sealed record EditorExternalChanges(
     bool Overflowed,
     IReadOnlyList<string> Paths,
-    IReadOnlyList<EditorExternalFileChange> Changes);
+    IReadOnlyList<EditorExternalFileChange> Changes,
+    // The review data after another writer (the command line, the language server) changed the review file; the
+    // frontend installs it, or rebases its unsaved review edits onto it.
+    EditorReviewSnapshot? Review = null);
 
 internal sealed record EditorWorkspacePickerResult(bool Ok, bool Cancelled, string? Directory, EditorNotice? Message);
 
@@ -291,8 +316,9 @@ internal sealed record PreparedInterchangeImport(
     string CatalogId,
     string ExpectedSourceFreshness,
     IReadOnlyList<PreparedInterchangeDocument> Documents,
-    IReadOnlyList<TranslationEditorStateEntry> MergedEntries,
-    string? ExpectedSidecarRevision);
+    // The review file after the import (null: unchanged) and the review revision it was computed from.
+    byte[]? ReviewBytes,
+    string? ExpectedReviewRevision);
 
 internal sealed record PreparedInterchangeDocument(
     string Path,
