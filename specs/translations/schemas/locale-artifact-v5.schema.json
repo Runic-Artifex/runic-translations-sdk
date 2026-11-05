@@ -241,12 +241,8 @@
       "additionalProperties": false
     },
     "formatData": {
-      "description": "Present only when the messages use :currency, :unit or compact notation: the pinned CLDR data they need (the compiler's selection of specs/translations/cldr/runic-formats-48.2.json for the content locales' languages).",
+      "description": "The pinned CLDR data the messages need: number records when they format numbers, dates or times (numbers), and currency, unit and compact data when they use :currency, :unit or compact notation (the compiler's selection of specs/translations/cldr/runic-formats-48.2.json for the content locales' languages). Both runtimes check it with the rules of rmf2-execution-v2.md, Embedded format data, which are stricter than this schema.",
       "type": "object",
-      "required": [
-        "currencies",
-        "locales"
-      ],
       "properties": {
         "currencies": {
           "type": "object",
@@ -295,9 +291,96 @@
             },
             "additionalProperties": false
           }
+        },
+        "numbers": {
+          "description": "The number records of the artifact's languages, which both runtimes check before their own, and the CLDR likely subtags, parents and aliases that resolve their tags.",
+          "type": "object",
+          "properties": {
+            "locales": {
+              "type": "object",
+              "propertyNames": {
+                "pattern": "^[a-z]{2,3}(?:-[A-Z][a-z]{3})?(?:-(?:[A-Z]{2}|[0-9]{3}))?(?:-[a-z0-9]{4,8})*$"
+              },
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 13,
+                "maxItems": 25
+              }
+            },
+            "grouping": {
+              "type": "object",
+              "propertyNames": {
+                "pattern": "^[a-z]{2,3}(?:-[A-Z][a-z]{3})?(?:-(?:[A-Z]{2}|[0-9]{3}))?(?:-[a-z0-9]{4,8})*$"
+              },
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4
+              }
+            },
+            "likely": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*$",
+                "maxLength": 64
+              },
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*$",
+                "maxLength": 64
+              }
+            },
+            "parents": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*$",
+                "maxLength": 64
+              },
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*$",
+                "maxLength": 64
+              }
+            },
+            "aliases": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*$",
+                "maxLength": 64
+              },
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9]{1,8}(?:-[A-Za-z0-9]{1,8})*$",
+                "maxLength": 64
+              }
+            }
+          },
+          "additionalProperties": false
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "dependentRequired": {
+        "currencies": [
+          "locales"
+        ],
+        "locales": [
+          "currencies"
+        ],
+        "dynamicCurrencies": [
+          "currencies",
+          "locales"
+        ],
+        "dynamicUnits": [
+          "currencies",
+          "locales"
+        ]
+      }
     }
   },
   "additionalProperties": false

@@ -155,7 +155,7 @@ option permits a typed dynamic value.
 | `currency` | `currencyDisplay` | string: `symbol`, `narrowSymbol`, `code`, `name` | `symbol` |
 | `currency` | `currencySign` | string: `standard`, `accounting` | `standard` |
 | `currency`, `unit` | `useGrouping` | string: `auto`, `always`, `never`, `min2` | `auto` |
-| `currency` | `fractionDigits` | int64: 0..6 | the currency's CLDR digits |
+| `currency` | `fractionDigits` | int64: 0..6, or the literal `auto` (MF2), which the compiler leaves out of the AST | `auto`: the currency's CLDR digits |
 | `unit` | `unit` | string: a pinned unit or `X-per-Y` of two pinned simple units (required) | — |
 | `unit` | `unitDisplay` | string: `short`, `long`, `narrow` | `short` |
 | `unit` | `minimumFractionDigits`, `maximumFractionDigits` | int64: 0..6 | 0 and 6 |
@@ -324,7 +324,13 @@ every platform, with or without platform locale data:
   `۵۰٪` in Persian, `50 %` in Occitan with U+202F). Without a negative
   subpattern, the minus sign precedes the positive prefix (`-%12,5`).
 
-A locale without CLDR data uses CLDR root's (`1,234.5`, `-1`, `50%`). A
+A message from a locale artifact whose `formatData` has number records
+(`numbers`, see [Embedded format data](#embedded-format-data)) looks the
+formatting locale up in those first, with their `minimumGroupingDigits` (1
+where they have none), and only then in the runtime's data: an overlay that adds
+a language formats with that language's symbols and digits on an ESM catalog
+that does not embed it (`1.234,50 €` for a `de` overlay of an `en` catalog,
+`١٬٢٣٤٫٥` for `ar-EG`). Dates and times write their digits the same way. A locale without CLDR data uses CLDR root's (`1,234.5`, `-1`, `50%`). A
 visible decimal of zero has no sign: `-0.0001` with `maximumFractionDigits=2`
 is `0`, and `-0.00001` as a percent is `0%`, in both runtimes. This is the
 value plural and exact selection compare (key `0` matches), and the one
@@ -441,9 +447,18 @@ stays `yyyy-MM-ddTHH:mm:ssZ`.
 pinned CLDR data of `specs/translations/cldr/runic-formats-48.2.json` that the
 compiler embeds with the messages (D055.4): the currencies and units they use
 or `runic.json` `formats` declares, and the compact styles they use, for every
-CLDR data ID of the catalog's languages. A .NET catalog locale embeds the data of
-its own messages, a locale artifact (`formatData`) that of its messages, and the
-ESM runtime that of the catalog. `:currency` and `:unit` are formatters only:
+CLDR data ID of the catalog's languages. A generated catalog, .NET or ESM, embeds
+one selection for all its messages and locales, and a locale artifact
+(`formatData`) that of its messages. A message of a pack or overlay whose
+`formatData` has no currency, unit and compact data (`locales`) uses the
+catalog's, in both runtimes, and fails like any other lookup where the catalog
+lacks the entry (`The catalog does not embed currency 'CHF'.`); the compiler
+writes that data into every artifact whose messages need it. A catalog whose
+messages use none of these functions carries neither their formatters nor
+their function and option table entries: the ESM runtime rejects an exact
+artifact that uses them as `RTR0023/unsupported-function` and skips such a
+message of an overlay with the diagnostic `unsupported-function`; it does not
+read the currency, unit and compact members of `formatData`. `:currency` and `:unit` are formatters only:
 their selection is `none`. An unknown code or unit is `RTR0101`; a `currency`
 or `unit` option from a variable requires the `runic.json` set (`RTR0102`), and a
 value outside it is an evaluation error. Every lookup walks CLDR's parent chain
@@ -477,17 +492,80 @@ of the visible number.
   largest) gives the divisor 10^(m − zeros + 1) (none for a `0` pattern or below
   10³). The scaled value is rounded halfExpand to the fraction digit options when
   given, else to whole numbers with at least two significant digits, without
-  trailing zeros; when rounding reaches the next magnitude and its divisor
+  trailing zeros. With only `minimumFractionDigits`, the maximum is
+  max(3, minimum), as `Intl.NumberFormat` rounds a decimal (`1234` →
+  `1.234K` for 0 and 2, `1.2340K` for 4); with only `maximumFractionDigits`, the
+  minimum is 0. When rounding reaches the next magnitude and its divisor
   differs, the value is scaled and rounded again with it (999999 → 1M). The
   pattern of the rounded magnitude is chosen by the plural category of the
   scaled number (an explicit `1` pattern for exactly 1); its run of zeros is
   replaced by the number, grouped as `min2` under `useGrouping=auto`, and the
-  minus sign goes first unless the pattern has a negative subpattern. Plural
-  selection on a compact `:number` uses the visible number without compact
-  notation. Compact notation does not apply to `style=percent`.
+  minus sign goes first unless the pattern has a negative subpattern. Selection
+  on a compact `:number` uses the displayed number (see [Numeric selection
+  operand](#numeric-selection-operand)). Compact notation does not apply to
+  `style=percent`.
 
 Placeholders of `:currency` and `:unit` have the direction of their formatting
 locale for bidi isolation, as numbers do.
+
+### Embedded format data
+
+The data the compiler embeds (`generatedLocaleData.formats` in ESM, a generated
+.NET catalog's `Formats`, an artifact's `formatData`) has the members below, all
+optional and no others. Both runtimes check an artifact's `formatData` with
+these rules when they load it, in exact packs and overlays alike, and reject
+data that breaks one as `RTR0023/malformed`, so a crafted pack never reaches a
+formatter (`specs/translations/corpus/rmf2-format-data-invalid.json`). A text is
+a string of 1 to 128 UTF-16 code units; a record is an array whose first and
+last values are texts and whose others are texts or `null`; a data ID is a CLDR
+locale ID (`language[-Script][-REGION][-variant…]`, at most 64 characters).
+
+- `currencies` (code → CLDR fraction digits 0..6, at most 256 three-letter
+  uppercase codes), `dynamicCurrencies` (distinct codes of `currencies`),
+  `dynamicUnits` (distinct unit identifiers: lowercase letters and digits in
+  hyphen-separated parts, at most 64 characters), each list at most 256 long,
+  and `locales` (at most 2,048 data IDs). `currencies` and `locales` come
+  together, and with either of the lists.
+- Each `locales` entry has at most the sections `currencyFormats`, `currencies`,
+  `units`, `per` and `compact`, keyed by numbering system (4 to 8 lowercase
+  letters, at most 16), code, unit identifier or width (at most 256 each):
+  - `currencyFormats`: a record of 3 to 10: the standard and accounting
+    currency patterns, the currency unit pattern of `other` and those of the
+    other categories (`null` or each with one `{0}` and one `{1}`), and the
+    currency decimal and group separators (`null` or at most 8 code units). A
+    currency pattern has one or two subpatterns at an unquoted `;`, balanced
+    quotes, one unquoted `¤` per subpattern, and one unquoted run of `#`, `0`,
+    `,` and `.` whose integer groups are non-empty runs of `#` and `0`, the
+    last ending in `0`, with at most one `.`.
+  - `currencies`: a record of 3 to 11: symbol, narrow symbol, the display names
+    of `other` (required) and the other categories, the currency's own pattern
+    (`null` or a currency pattern), and its separators.
+  - `units`: one to three widths (long, then short and narrow, which may be
+    `null`), each a record of 1 to 7: the patterns of the plural categories (at
+    most one `{0}` and no `{1}`) and the per-unit pattern (one `{0}`).
+  - `per`: `long`, `short` or `narrow` → a text with one `{0}` and one `{1}`.
+  - `compact`: numbering system → `short` and/or `long` → a table of 1 to 32
+    records of 1 to 7, the patterns of 10³ onwards. A pattern of 10^m is `0`,
+    or one or two subpatterns with balanced quotes and at most one unquoted run
+    of zeros, of at most m − 2 zeros.
+- `numbers`, in a locale artifact whose messages format numbers, dates or times:
+  `locales` (data ID → number record), `grouping` (data ID → 1..4), and the
+  CLDR `likely` subtags, `parents` and `aliases` of the artifact's languages
+  (tag → tag, ASCII letters and digits in hyphen-separated parts of 1 to 8, at
+  most 64 characters, at most 4,096 each), with which the ESM runtime resolves
+  a tag of a language its catalog does not embed. A number record has 13 or 25
+  strings: the numbering system (4 to 8 lowercase letters) and its 12 fields,
+  then, when it is not `latn`, `latn`'s 12. The fields are the ten digits (all in
+  the Basic Multilingual Plane or all surrogate pairs; `0123456789` for
+  `latn`), the decimal, group and minus symbols (1 to 8 code units), the
+  decimal and percent group sizes (`1` to `9`), and the four percent affixes (at
+  most 16 code units).
+
+The ESM runtime of a catalog without the currency, unit and compact formatters
+checks the members and `numbers` but does not read `currencies`, the lists and
+`locales`. Parsed patterns and number formats are cached per data object, so
+the caches of a long-running process are bounded by the data it loaded and go
+away with an artifact.
 
 ## Bidirectional text
 
@@ -584,6 +662,13 @@ a functionless alias, determines it:
   `maximumFractionDigits`, then remove trailing fraction zeros down to
   `minimumFractionDigits` or pad with zeros up to it. Omitted options use the
   table defaults, so a plain `:number` rounds to six fraction digits.
+- `number` with `runic:notation=compact`: the displayed number at full scale,
+  rounded as it displays in the formatting locale (1.04 displays `1` and is 1,
+  1234 displays `1.2K` and is 1200), with the compact exponent as `e`, as TR35
+  and ICU select a compact number. In English 1.04 selects `one` (`1
+  follower`); in French 1.5 million (`1,5 M`) selects `many` (`e = 6`), as
+  `million de` requires. An exact key compares the same value, so 1040
+  (`1K`) matches key `1000`.
 - `integer`: the int64 value.
 - `runic:relative-time`: the canonical decimal value.
 
@@ -591,8 +676,8 @@ The `select` option and the selection mode do not change this operand. The CLDR
 plural (`select=plural`) or ordinal (`select=ordinal`) category applies the pinned
 locale rules to the CLDR operands of the visible decimal: `n` is its absolute
 value, `i` its integer digits, `v` and `f` its visible fraction digit count and
-value, `w` and `t` the same without trailing zeros, and `e` is always 0 because no
-supported formatter uses compact notation. The caller's decimal scale is never
+value, `w` and `t` the same without trailing zeros, and `e` (`c`) the compact
+exponent, 0 except for compact notation. The caller's decimal scale is never
 significant: caller values `1` and `1.0` have the same visible decimal. Only the
 formatter options add visible fraction digits. For example, in English:
 

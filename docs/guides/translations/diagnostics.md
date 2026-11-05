@@ -363,6 +363,15 @@ rebuild the pack from the same sources as the application. A document message
 that breaks the block rules themselves (text outside a block, a misplaced
 element, or a leaf that starts or ends with whitespace) is
 `RTR0023/malformed-pattern`.
+`RTR0023/malformed` also covers a `formatData` member (the CLDR data a pack
+carries for its numbers, currencies, units and compact numbers) that breaks
+the [embedded format data rules](../../../specs/translations/rmf2-execution-v2.md#embedded-format-data),
+in both runtimes and in overlays as in exact packs.
+`RTR0023/unsupported-function` (ESM) means an exact pack uses `:currency`,
+`:unit` or compact notation, which the catalog was built without because none
+of its messages uses them; an overlay skips such a message with the diagnostic
+`unsupported-function`. Rebuild the catalog with a message that uses the
+function.
 
 ## RTR0080
 

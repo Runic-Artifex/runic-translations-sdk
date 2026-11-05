@@ -1,6 +1,6 @@
 # Runic Translations conformance corpora
 
-The current release contract is exercised by eleven complementary fixtures:
+The current release contract is exercised by sixteen complementary fixtures:
 
 - [`rmf2-v1/index.json`](rmf2-v1/index.json) is the cross-backend release oracle
   for resource syntax `rmf2-v1` executed as `rmf2-execution-v2`, grammar/AST and
@@ -85,15 +85,21 @@ The current release contract is exercised by eleven complementary fixtures:
   ICU version;
 - [`rmf2-currency-unit-conformance.json`](rmf2-currency-unit-conformance.json)
   is the cross-backend oracle for `:currency`, `:unit` and `:number
-  runic:notation=compact` (D055.4): 3,772 cases over 41 requested locales
+  runic:notation=compact` (D055.4): 3,794 cases over 41 requested locales
   (regional ones such as `de-CH` and `en-IN`, native digits in `ar-EG`, `bn`,
   `fa`, `my` and `mr`, right-to-left `ar`, `fa`, `he` and `ur`, and rich plurals
   in `ru`, `pl`, `cs`, `ga` and `cy`), with every currency display, accounting,
   fraction digits, run-time codes from `formats`, every unit width, CLDR and
-  composed `-per-` units, and compact patterns around each magnitude. Expected
+  composed `-per-` units, compact patterns around each magnitude, selection on
+  a compact number, compact fraction digits and `fractionDigits=auto`. Expected
   values are `Intl.NumberFormat` output on ICU 78 except where a `note` records
   ICU departing from CLDR; all four routes must match exactly, with isolation off
   (the bidi corpus covers it);
+- [`rmf2-format-data-invalid.json`](rmf2-format-data-invalid.json) holds crafted
+  `formatData` members of a locale artifact that both runtimes reject as
+  `RTR0023/malformed` in exact packs and overlays
+  (`Rmf2FormatDataValidationTests`, the
+  [embedded format data rules](../rmf2-execution-v2.md#embedded-format-data));
 - [`currency-unit-divergences.json`](currency-unit-divergences.json) lists, by
   locale and kind, where `CurrencyUnitComparisonTests` (every CLDR locale, .NET
   and ESM agreeing exactly) differs from `Intl.NumberFormat` on ICU 78, with the

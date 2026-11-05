@@ -266,7 +266,7 @@ they cannot select a variant.
 | `:currency` | `currency` (required) | An ISO 4217 code that CLDR lists as current tender (`EUR`, `USD`, `JPY`, … 153 codes) |
 | | `currencyDisplay` | `symbol` (default, `€`, `US$` outside the US), `narrowSymbol` (`$`), `code` (`USD 1.00`), `name` (`1.00 US dollars`, the plural form of the number) |
 | | `currencySign` | `standard` (default) or `accounting` (`($1.00)` where the locale writes negative amounts so) |
-| | `fractionDigits` | 0–6; by default the currency's CLDR digits (`JPY` 0, `BHD` 3, most 2) |
+| | `fractionDigits` | 0–6, or `auto` (the default, as in MF2): the currency's CLDR digits (`JPY` 0, `BHD` 3, most 2) |
 | | `useGrouping` | as `:number` |
 | `:unit` | `unit` (required) | One of the 45 simple units `Intl.NumberFormat` accepts (`kilometer`, `hour`, `liter`, `megabyte`, `percent`, …), or `X-per-Y` of two of them (`kilometer-per-hour`, `megabyte-per-second`) |
 | | `unitDisplay` | `short` (default, `2 km`), `long` (`2 kilometers`), `narrow` (`2km`) |
@@ -277,10 +277,23 @@ they cannot select a variant.
 MF2 defines no notation option, and its options outside the specification need
 a namespace, so compact notation uses `runic:`. Compact numbers round to whole
 numbers with at least two significant digits (`1.2K`, `12K`, `123K`) unless the
-message sets fraction digits, and `999999` becomes `1M`, as in ICU. Compact
-notation applies to decimals, not to `style=percent`. Plural selection on a
-compact `:number` uses the number as `:number` would show it without compact
-notation. `X-per-Y` uses CLDR's own compound unit where it has one
+message sets fraction digits, and `999999` becomes `1M`, as in ICU. With only
+`minimumFractionDigits`, at most max(3, minimum) fraction digits show, as in
+`Intl.NumberFormat` (`1234` is `1.234K`). Compact notation applies to decimals,
+not to `style=percent`. Selection on a compact `:number` uses the number it
+shows, as MF2 selects on the formatted value:
+
+```rmf2
+followers =
+  .input {$count :number runic:notation=compact}
+  .match $count
+  one {{{$count} follower}}
+  * {{{$count} followers}}
+```
+
+`1.04` shows `1` and selects `one` (`1 follower`); `1234` shows `1.2K` and
+selects as 1200. As in CLDR, the compact exponent counts too: French `1,5 M`
+selects `many` (`1,5 M d’abonnés`). `X-per-Y` uses CLDR's own compound unit where it has one
 (`kilometer-per-hour` is `km/h`), else the denominator's per pattern
 (`12.5 MB/s`, `12.5 megabytes per second`).
 
@@ -313,17 +326,36 @@ in messages need no declaration. An unknown code or unit, in a message or in
 symbols, names, patterns and plural forms of the currencies and units the
 messages use or `formats` declares, and the compact patterns of the styles they
 use, for the CLDR locales of the catalog's languages (`en` brings `en-GB`,
-`en-IN`, … for requested regional locales). The generated ESM runtime carries
-the catalog's selection, each .NET locale the selection of its own messages, and
-each locale artifact (`locale-v5.json`, overlays and packs) the selection of the
-messages it contains, in its `formatData` member. A catalog that uses none of the
-three functions carries neither their data nor the ESM formatters. The ESM
-formatters add about 2 KB to a minified, gzipped `runtime.js`; the data of one
-currency in an English catalog (every `en` region) is 1.8 KB of JSON (0.3 KB
-gzipped), and of one unit 0.8 KB. A .NET locale embeds its own selection in the
-generated assembly (2.1 KB for that currency). An ESM catalog built without the
-functions rejects a dynamic locale artifact that brings `formatData`
-(`RTR0023/malformed`); rebuild the catalog with a message that uses them.
+`en-IN`, … for requested regional locales). A generated catalog, ESM or .NET,
+carries one selection for all its messages, and each locale artifact
+(`locale-v5.json`, overlays and packs) the selection of the messages it
+contains, in its `formatData` member. A catalog that uses none of the three
+functions carries neither their data nor the ESM formatters and their option
+tables. The ESM formatters add about 2 KB to a minified, gzipped `runtime.js`;
+the data of one currency in an English catalog (every `en` region) is 1.8 KB of
+JSON (0.3 KB gzipped), and of one unit 0.8 KB.
+
+An ESM catalog built without the functions skips an overlay message that uses
+them (diagnostic `unsupported-function`) and rejects an exact artifact that
+does (`RTR0023/unsupported-function`); rebuild the catalog with a message that
+uses them. A pack or overlay whose `formatData` lacks currency, unit and compact
+data, such as a hand-made artifact, uses the catalog's in both runtimes; where
+the catalog lacks the entry too, formatting fails (`The catalog does not embed
+currency 'CHF'.`). Both runtimes check an artifact's `formatData` when they load
+it and reject one that breaks the
+[rules](../../../specs/translations/rmf2-execution-v2.md#embedded-format-data)
+as `RTR0023/malformed`.
+
+**Overlays that add a language bring its number records.** A locale artifact
+whose messages format numbers, dates or times carries the CLDR number records of
+its languages (digits, symbols, group sizes and percent pattern) in
+`formatData.numbers`, and both runtimes use them first. So a German overlay on
+an English ESM catalog writes `1.234,50 €`, and an `ar-EG` overlay Arabic-Indic
+digits. An overlay message whose language neither the catalog nor the overlay
+has number data for, such as one from an artifact without `formatData`, is
+skipped as `unsupported-locale-data` rather than formatted with the wrong
+symbols. The records of a language take 0.4 KB (`de`) to 4 KB (`ar` and `en`,
+with their many regions) of JSON per artifact, at most 0.6 KB gzipped.
 
 Not supported: unit conversion and MF2's `usage` option, `currencyDisplay=never`,
 significant-digit and rounding options, `trailingZeroDisplay`, compact currency

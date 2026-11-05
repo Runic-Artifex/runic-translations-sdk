@@ -574,7 +574,7 @@
     "fractionDigits": "0 <= minimum <= maximum <= 6 (decimal) or 4 (percent)",
     "rounding": "halfExpand",
     "selectionUses": "visible-decimal",
-    "visibleDecimal": "number functions multiply percent by 100, round halfExpand to maximumFractionDigits, then keep or pad trailing zeros to minimumFractionDigits; integer and relative-time use the canonical value"
+    "visibleDecimal": "number functions multiply percent by 100, round halfExpand to maximumFractionDigits, then keep or pad trailing zeros to minimumFractionDigits; a compact number uses its displayed value at full scale with the compact exponent as the e operand; integer and relative-time use the canonical value"
   },
   "decimal": {
     "coefficientMaximum": "79228162514264337593543950335",

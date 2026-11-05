@@ -72,7 +72,10 @@ accept the message features of the newest release its own messages use (at
 least 0.8.0) and prints that assumption first. A release that never used a
 later feature, such as a 0.9 release without a `medium` date, is therefore
 treated as the earlier one, and messages with that feature wait for the next
-release.
+release. `:currency`, `:unit` and compact notation (`runic:notation`) need 0.9.0,
+and so does the artifact's `formatData` member, which a 0.8 loader rejects as
+`RTR0023/unknown-member`: a pack for a 0.8 release leaves those messages out and
+has no `formatData`, so it formats numbers with that release's own data.
 
 A locale the release declares but the current sources no longer do gets no
 pack, and the command says so: the release keeps its own text for it.
