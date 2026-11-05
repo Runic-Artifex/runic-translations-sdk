@@ -249,6 +249,10 @@ internal sealed class Rmf2V1CorpusTests
     // removeBidiIsolates, adds localeDirection to createLocaleSource and defaults pageDirection to <html dir> or the active
     // locale; runtime.d.ts declares them; the C# output of this corpus (default) is unchanged, in both digests.
     // Re-pinned for merging T2f (#146) with main (TJ, TI, #148), in both digests.
+    // Re-pinned for T1f (0.9): Registration also creates the readable surface, beside the readable surface only.
+    // Re-pinned for merging T1f (#145) with main (TJ Hot Reload), beside the readable surface only.
+    // Re-pinned for merging T1f (#145) with the formatting follow-ups (#148), beside the readable surface only.
+    // Re-pinned for merging T2f (#146) with T1f (#145), in both digests.
     private const string EncodedOutputDigest = "f42f706f506fd6c76273b95b757ed69cee9cf53345770172d81f5469696e8e73";
     private const string HiddenEncodedOutputDigest = "9a9996267a33ff6183c4f7edeba97a50076c236c9385f0a0bc09addf3934a8aa";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
@@ -271,7 +275,7 @@ internal sealed class Rmf2V1CorpusTests
             TranslationOutputRenderer.RenderRmf2V5CSharpKeys(project, readableSurface),
             TranslationOutputRenderer.RenderRmf2V5CSharpAccessors(project, readableSurface),
             TranslationOutputRenderer.RenderRmf2V5CSharpCatalogData(project),
-            TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(project),
+            TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(project, readableSurface: readableSurface),
             .. TranslationOutputRenderer.RenderRmf2V5EsmModules(project),
         ];
         return Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(
