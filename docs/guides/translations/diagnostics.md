@@ -15,7 +15,7 @@ policies (`allow`, `warning` or `error`), which a locale entry in `locales` can
 override for that locale (`{ "tag": "fr", "fallback": "en", "validation": {
 "translationCompleteness": "warning" } }`). The quality checks are warnings by
 default, so a project that treats warnings as errors sees them as errors; and some `RTR0051` reports are warnings, as are `RTR0068`, `RTR0069`, `RTR0071`,
-`RTR0076`, `RTR0077`, `RTR0078`, `RTR0084`, `RTR0090`, `RTR0091` and `RTR0093`. `RTR0085` is informational.
+`RTR0076`, `RTR0077`, `RTR0078`, `RTR0084`, `RTR0090`, `RTR0091`, `RTR0093` and `RTR0105`. `RTR0085` is informational.
 
 ## RTR0001
 
@@ -649,6 +649,70 @@ List the values the variable may take:
 
 At run time a value outside the declared set is a formatting error in both
 runtimes.
+
+## RTR0103
+
+Override does not match the library catalog. A message in
+`translations/overrides/<catalog>/<locale>.rmf2` (runic.json `overrides`) names
+a key the library's packed catalog does not have, for example `Catalog
+'acme.grid' has no message 'grid.emtpy' to override. Did you mean
+'grid.empty'?`, or adds markup to a message the library formats as plain text.
+Override files use the library's full logical keys, as its catalog shows them,
+whatever source roots the library itself uses. Correct the key or remove the
+message. The other checks of a translation apply to an override too and keep
+their own IDs: a changed or new input is `RTR0016` or `RTR0065`, a changed
+document structure `RTR0074`, the quality checks `RTR0094`–`RTR0098`.
+
+The build validates overrides against the library version it compiles with, so
+updating to a library release that removed an overridden key fails the
+application's build with this error until you delete the override. Only the
+run-time checks skip such keys: a compiled overlay is checked key by key again
+when a snapshot is composed, so when the application runs with a library
+assembly other than the one it was built against, a message whose key that
+assembly lacks is skipped and reported in
+`TranslationCatalogStatus.OverlayDiagnostics` (`UnknownKey`) instead of
+failing, as for overlay packs.
+
+## RTR0104
+
+Library catalog to override is not available. runic.json `overrides` lists a
+catalog that no referenced package packs (`Catalog 'acme.grid' to override is
+not packed by any referenced package`), a catalog that another package ships
+than `from` names, or an entry that names the project's own catalog, a catalog
+twice or an invalid package ID. Reference the package, and pack the library
+with `<RunicTranslationsPackCatalog>true</RunicTranslationsPackCatalog>`
+(Runic.Translations.Build 0.9.0 or later), which ships its `runic.json`,
+sources and contract under `runic/<catalog>/`. It is also the error when the
+packed catalog does not compile with the application's
+Runic.Translations.Build (use one at least as new as the library's), when
+overrides need a newer `Runic.Translations` runtime, and when packing a catalog
+fails, for example because the library packs its own
+`buildTransitive/<PackageId>.props` (set `RunicTranslationsPackCatalogProps` to
+`false` and import `runic/<catalog>/catalog.props` from it). A library that a
+project references with `ProjectReference` cannot be overridden yet: reference
+its package. Override sources under `translations/overrides/<catalog>/` for a catalog
+that `overrides` does not list are ignored with this ID as a warning.
+
+## RTR0105
+
+Catalog ID is not the package ID. A warning when a library packs its catalog
+(`RunicTranslationsPackCatalog`) under an ID other than its package ID in lower
+case, for example catalog `grid` in package `Acme.Grid`. Catalog IDs are
+global: two libraries with one catalog ID cannot be loaded into one translation
+context, and an application overrides a catalog by its ID. Rename the catalog
+to `acme.grid`.
+
+## RTR0106
+
+Catalog ID is reserved. Catalog IDs that start with `runic-` belong to the
+first-party Runic packages (`Runic.*` on NuGet, `@runic-artifex/*` on npm), such
+as `runic-command-line`; packing another package's catalog with such an ID
+fails. Name the catalog after the package.
+
+On NuGet the check runs when the library is packed and compares the package ID
+prefix, so it relies on nuget.org reserving the `Runic.` ID prefix for the
+Runic organization. On npm the Vite plugin checks the `@runic-artifex` scope,
+which only its owners can publish to.
 
 ## RCLI8201
 

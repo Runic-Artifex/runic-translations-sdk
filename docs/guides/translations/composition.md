@@ -35,6 +35,23 @@ for a type registration such as `services.AddSingleton<GridText>()` and throws "
 classes with a factory instead, for example `AddCatalog<GridText>(..., context => new GridText(context))` from
 `Runic.Translations.Hosting`, or `services.AddSingleton(sp => new GridText(sp.GetRequiredService<ITranslationContext>()))`.
 
+**Pack the catalog for application tooling.** Set `<RunicTranslationsPackCatalog>true</RunicTranslationsPackCatalog>` in
+the library project, and name the catalog after the package in lower case (`acme.grid` for `Acme.Grid`; `RTR0105`
+warns otherwise, and `runic-` IDs are reserved for the Runic packages, `RTR0106`). `dotnet pack` then adds
+`runic/acme.grid/` with the catalog's `runic.json`, its sources and `contract.json` (the base locale's locale artifact
+v5, which describes every key's inputs and markup), and `buildTransitive/Acme.Grid.props`, which declares the packed
+catalog to a project that references the package. An application then overrides the library's text at build time
+([below](#build-time-overrides)). A multi-targeted library packs its catalog once.
+
+NuGet imports `buildTransitive/<PackageId>.props` instead of `build/<PackageId>.props`, so when the library packs its
+own `build/<PackageId>.props`, the generated file imports it; its settings then also reach projects that reference the
+library transitively. A library that packs its own `buildTransitive/<PackageId>.props` sets
+`RunicTranslationsPackCatalogProps` to `false` and imports `../runic/<catalog>/catalog.props` from its file; without
+the property, packing fails with `RTR0104` rather than packing two files at one path.
+
+The library's package does not depend on `Runic.Translations.Build`: it is a development dependency, and packing
+removes it from the package's dependencies even when the reference has no `PrivateAssets="all"`.
+
 ## The application
 
 Register every catalog once, the application's own first, and build the context:
@@ -159,11 +176,76 @@ During development, a non-exact resolution is reported when a context publishes:
 `Runic-Translations` event source (for `dotnet-trace` or an `EventListener`), and in the output window of an attached
 debugger.
 
+## Build-time overrides
+
+An application overrides a packed library catalog (see [The library](#the-library)) without packs: it lists the catalog
+in its own `runic.json` and writes the overrides beside its sources.
+
+```json
+{
+  "catalog": "shop",
+  "overrides": [{ "catalog": "acme.grid", "from": "Acme.Grid" }]
+}
+```
+
+```text
+translations/
+  runic.json
+  en.rmf2                      the application's own catalog
+  overrides/acme.grid/en.rmf2  empty = Nothing to show
+  overrides/acme.grid/fr.rmf2  French, a locale the library lacks
+```
+
+Override files use the library's full logical keys, as its catalog shows them. `from` names the NuGet package (or npm
+package) that packs the catalog. The build validates every override message against that packed catalog, as a
+translation of the library's base locale: a key the library does not have is `RTR0103` (with a suggestion for a typo),
+changed inputs are `RTR0016`/`RTR0065`, markup in a plain-text message `RTR0103`, and the quality checks
+`RTR0094`–`RTR0098` apply. A catalog that no referenced package packs, or another `from`, is `RTR0104`. Files under
+`translations/overrides/` are never part of the application's own catalog.
+
+- **Library updates.** The build validates against the library release it compiles with, so a release that removes an
+  overridden key fails the application's build (`RTR0103`) until you delete that override. Only the run-time checks
+  skip such a key and report it (see below).
+- **Added locales.** A locale the overrides add (`fr`, `de-CH`) falls back to its nearest CLDR parent among the
+  library's locales and the added ones (`de-CH` to an added `de`, `zh-TW` to `zh-Hant`, never `sr-Latn-RS` to a
+  Cyrillic `sr`), else to the library locale that CLDR likely subtags match, else to the library's base locale. The
+  build validates each added locale against that chain, and the generated overlay names the fallback, so the .NET runtime
+  and the web (Vite `dependencies: "auto"`) follow the same chain.
+- **Packages only.** A library that the application references with `ProjectReference`, for example in the same
+  solution, cannot be overridden yet (`RTR0104`): reference its package.
+- **Built-in catalogs.** `Runic.Translations.CommandLine` packs `runic-command-line`, so
+  `"overrides": [{ "catalog": "runic-command-line", "from": "Runic.Translations.CommandLine" }]` replaces its built-in
+  help and error text.
+
+The overrides compile into the application's assembly as `AppTextCatalog.Overlays`, one compiled overlay per library
+catalog. Attach them where the library catalogs are registered:
+
+```csharp
+TranslationContext translations = TranslationContext.CreateBuilder()
+    .Add(ShopTextCatalog.Registration)
+    .Add(GridTextCatalog.Registration)
+    .AddOverlays(ShopTextCatalog.Overlays)
+    .Build("fr");
+```
+
+A compiled overlay (`TranslationOverlay.IsCompiled`) loads without I/O, so `Build` composes synchronously and
+`Runic.Translations.Hosting` needs no `InitializeRunicTranslationsAsync` for it (`AddOverlays(ShopTextCatalog.Overlays)`).
+It follows every rule of the next section: it is checked key by key again at run time, so a library assembly other than
+the one the build compiled against skips a message whose key it no longer has instead of failing, and it resolves
+locale-first.
+
+On the web, the same `overrides` and `translations/overrides/` apply to npm library catalogs through the Vite plugin's
+`dependencies: "auto"`, which regenerates each library catalog with them, filtered to the application's locales. The
+rules match the .NET build: an override of a catalog no dependency ships is `RTR0104`, added locales fall back by the same
+chain, and libraries are discovered transitively through the libraries that ship catalogs (see
+[the plugin's README](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/packages/web/vite-plugin-runic-translations#library-catalogs-from-dependencies)).
+
 ## Overriding library text
 
-An overlay holds the application's messages for a library catalog. Today it comes from locale artifacts v5, the
+An overlay holds the application's messages for a library catalog. Besides the compiled overlays of
+[build-time overrides](#build-time-overrides), it comes from locale artifacts v5, the
 `acme-grid.<locale>.locale-v5.json` files that `runic-translations generate` writes for a project with the library's
-catalog ID:
+catalog ID, for example downloaded ones:
 
 ```csharp
 TranslationContext translations = await TranslationContext.CreateBuilder()

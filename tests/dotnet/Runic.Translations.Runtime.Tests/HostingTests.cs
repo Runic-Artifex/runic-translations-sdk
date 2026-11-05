@@ -133,6 +133,30 @@ internal sealed class HostingTests
         Assert.Equal("Grid", scope.ServiceProvider.GetRequiredService<LibText>().Value);
     }
 
+    [Test, DisplayName("compiled overlays (runic.json overrides) need no InitializeRunicTranslationsAsync")]
+    public async Task CompiledOverlay()
+    {
+        var services = new ServiceCollection();
+        services.AddRunicTranslations(options => options.InitialLocale = "fr").AddCatalog(Registration("lib", "Grid", "Raster"), static context => new LibText(context))
+            .AddOverlays([TranslationOverlay.FromCompiled("lib", [new TranslationOverlayLocale("fr")], static locale => locale == "fr" ? FrenchTitle : default)]);
+        await using ServiceProvider provider = services.BuildServiceProvider();
+        // Resolved without initialization: the overlay is parsed from the compiled data, synchronously.
+        ITranslationContext context = provider.GetRequiredService<ITranslationContext>();
+        ITranslationSnapshot snapshot = context.GetManager("lib").Current;
+        Assert.True(snapshot.TryGetKey("title", out TranslationKey title), "title");
+        Assert.Equal("fr|Grille", snapshot.Locale + "|" + snapshot.Format(title, []));
+        await context.SetLocaleAsync("de");
+        Assert.Equal("Raster", provider.GetRequiredService<LibText>().Value);
+        Assert.Throws<ArgumentException>(() => services.AddRunicTranslations().AddOverlays([null!]));
+    }
+
+    // The overlay pack a build compiles for translations/overrides/lib/fr.rmf2 ("title = Grille").
+    private static ReadOnlySpan<byte> FrenchTitle => """
+        {"artifactVersion":5,"messageGrammarVersion":5,"profile":"rmf2-execution-v2","catalog":"lib","locale":"fr","contractFingerprint":"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+         "messages":{"title":{"contentLocale":"fr","ast":{"astVersion":5,"profile":"rmf2-execution-v2","inputs":[],"declarations":[],"selectors":[],"variants":[{"keys":[],"nodes":[{"kind":"text","value":"Grille"}]}]}}},
+         "markupContract":{"version":2,"contracts":{},"messages":{"title":{"slots":{},"structured":false,"contentLocales":{"de":"de","en":"en","fr":"fr"},"content":"inline","skeletons":[]}}}}
+        """u8;
+
     [Test, DisplayName("a context registered by the application must contain the catalogs added through AddCatalog")]
     public async Task PreRegisteredContextIsChecked()
     {

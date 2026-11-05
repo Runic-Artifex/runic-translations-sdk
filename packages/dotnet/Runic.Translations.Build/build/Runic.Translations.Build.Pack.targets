@@ -13,9 +13,41 @@
   </PropertyGroup>
   <UsingTask TaskName="Runic.Translations.Build.RuntimeDependencyRange" AssemblyFile="$(_RunicTranslationsPackTaskAssembly)" Condition="Exists('$(_RunicTranslationsPackTaskAssembly)')" />
 
+  <!-- RunicTranslationsPackCatalog=true packs runic/<catalog>/ (runic.json, sources, contract.json) and
+       buildTransitive/<PackageId>.props, which declares the catalog to an application's runic.json "overrides".
+       NuGet prefers buildTransitive/<PackageId>.props over build/<PackageId>.props, so the generated file imports the
+       library's own build/<PackageId>.props when it packs one. RunicTranslationsPackCatalogProps=false leaves out the props
+       file for a library that packs its own buildTransitive/<PackageId>.props (RTR0104 otherwise); that file then imports
+       runic/<catalog>/catalog.props. -->
+  <UsingTask TaskName="Runic.Translations.Build.Rmf2PackCatalog" AssemblyFile="$(_RunicTranslationsPackTaskAssembly)" Condition="Exists('$(_RunicTranslationsPackTaskAssembly)')" />
+  <Target Name="_RunicTranslationsPackCatalog"
+          BeforeTargets="_GetPackageFiles"
+          Condition="'$(RunicTranslationsPackCatalog)' == 'true'">
+    <ItemGroup>
+      <_RunicTranslationsPackProject Include="@(RunicTranslationProject->'%(FullPath)')" />
+      <_RunicTranslationsPackProject Include="$(MSBuildProjectDirectory)/translations/runic.json"
+                                     Condition="'@(RunicTranslationProject)' == '' and Exists('$(MSBuildProjectDirectory)/translations/runic.json')" />
+    </ItemGroup>
+    <Error Condition="'@(_RunicTranslationsPackProject)' == ''" Code="RTR0104" HelpKeyword="RTR0104"
+           Text="RunicTranslationsPackCatalog is true, but the project has no translations/runic.json or RunicTranslationProject." />
+    <Error Condition="!Exists('$(_RunicTranslationsPackTaskAssembly)')" Code="RTR0104" HelpKeyword="RTR0104"
+           Text="RunicTranslationsPackCatalog needs the Runic.Translations.Build task assembly, which was not found at '$(_RunicTranslationsPackTaskAssembly)'." />
+    <Runic.Translations.Build.Rmf2PackCatalog Project="@(_RunicTranslationsPackProject)"
+                                              PackageId="$(PackageId)"
+                                              OutputDirectory="$(BaseIntermediateOutputPath)runic-pack"
+                                              EmitPackageProps="$([MSBuild]::ValueOrDefault('$(RunicTranslationsPackCatalogProps)', 'true'))"
+                                              PackItems="@(None);@(Content)">
+      <Output TaskParameter="PackageFiles" ItemName="_RunicTranslationsPackFile" />
+    </Runic.Translations.Build.Rmf2PackCatalog>
+    <ItemGroup>
+      <None Include="@(_RunicTranslationsPackFile)" Pack="true" PackagePath="%(_RunicTranslationsPackFile.PackagePath)" Visible="false" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Also removes the package's dependency on Runic.Translations.Build, a development dependency. -->
   <Target Name="_RunicTranslationsStampRuntimeRange"
           AfterTargets="GenerateNuspec"
-          Condition="'$(RunicTranslationsStampRuntimeRange)' != 'false' and Exists('$(_RunicTranslationsPackTaskAssembly)')">
-    <Runic.Translations.Build.RuntimeDependencyRange Packages="@(NuGetPackOutput)" />
+          Condition="Exists('$(_RunicTranslationsPackTaskAssembly)')">
+    <Runic.Translations.Build.RuntimeDependencyRange Packages="@(NuGetPackOutput)" StampRange="$([MSBuild]::ValueOrDefault('$(RunicTranslationsStampRuntimeRange)', 'true'))" />
   </Target>
 </Project>

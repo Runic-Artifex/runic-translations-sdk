@@ -20,14 +20,14 @@ internal static class TranslationOutputRenderer
         Rmf2CSharpOutputRendererV5.RenderCatalogData(RequireProject(project));
 
     internal static TranslationGeneratedOutput RenderRmf2V5CSharpRegistration(Rmf2ProjectV5 project, bool composition = true, bool runtimeAbiCall = true,
-        bool readableSurface = true) =>
-        Rmf2CSharpOutputRendererV5.RenderRegistration(RequireProject(project), composition, runtimeAbiCall, readableSurface);
+        bool readableSurface = true, IReadOnlyList<Rmf2ProjectV5>? overlays = null) =>
+        Rmf2CSharpOutputRendererV5.RenderRegistration(RequireProject(project), composition, runtimeAbiCall, readableSurface, overlays);
 
     internal static TranslationGeneratedOutput RenderRmf2V5CSharpReadable(Rmf2ProjectV5 project) =>
         Rmf2CSharpOutputRendererV5.RenderReadable(RequireProject(project));
 
-    internal static IReadOnlyList<TranslationGeneratedOutput> RenderRmf2V5EsmModules(Rmf2ProjectV5 project) =>
-        Rmf2EsmOutputRendererV5.Render(RequireProject(project));
+    internal static IReadOnlyList<TranslationGeneratedOutput> RenderRmf2V5EsmModules(Rmf2ProjectV5 project, bool sharedRuntime = false) =>
+        Rmf2EsmOutputRendererV5.Render(RequireProject(project), sharedRuntime);
 
     internal static TranslationGeneratedOutput RenderRmf2V5AssetManifestJson(
         Rmf2ProjectV5 project,

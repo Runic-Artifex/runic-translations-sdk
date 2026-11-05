@@ -10,3 +10,4 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("Runic.Translations.Authoring.Tests")]
 [assembly: InternalsVisibleTo("Runic.Translations.Tooling.Tests")]
 [assembly: InternalsVisibleTo("Runic.Translations.Build.Tests")]
+[assembly: InternalsVisibleTo("Runic.Translations.Build")]

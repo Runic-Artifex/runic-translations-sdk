@@ -31,6 +31,11 @@ internal sealed class OverlayTranslationProvider : ITranslationProvider, ITransl
         _overlays = new TranslationOverlay[overlays.Count];
         // Explicit fallbacks per added locale; null when no overlay names one.
         var explicitFallbacks = new Dictionary<string, string?>(StringComparer.Ordinal);
+        // The locales the overlays add, which an explicit fallback may name as well as a catalog locale (de-CH to an added de).
+        var addedTags = new HashSet<string>(StringComparer.Ordinal);
+        foreach (TranslationOverlay overlay in overlays)
+            foreach (TranslationOverlayLocale added in overlay.AddedLocales)
+                if (!catalog.DeclaresLocale(added.Locale)) addedTags.Add(added.Locale);
         for (int index = 0; index < overlays.Count; index++)
         {
             TranslationOverlay overlay = overlays[index];
@@ -41,9 +46,9 @@ internal sealed class OverlayTranslationProvider : ITranslationProvider, ITransl
                 // A locale the catalog declares keeps the catalog's chain, so a library release that adds the locale
                 // does not break the application's overlay.
                 if (catalog.DeclaresLocale(added.Locale)) continue;
-                if (added.FallbackLocale is { } fallback && !catalog.DeclaresLocale(fallback))
+                if (added.FallbackLocale is { } fallback && !catalog.DeclaresLocale(fallback) && !addedTags.Contains(fallback))
                     throw new ArgumentException(
-                        $"Overlay locale '{added.Locale}' of catalog '{catalog.Catalog}' falls back to '{fallback}', which the catalog does not declare.",
+                        $"Overlay locale '{added.Locale}' of catalog '{catalog.Catalog}' falls back to '{fallback}', which neither the catalog declares nor an overlay adds.",
                         nameof(overlays));
                 if (!explicitFallbacks.TryGetValue(added.Locale, out string? existing) || existing is null)
                     explicitFallbacks[added.Locale] = added.FallbackLocale;
@@ -70,6 +75,15 @@ internal sealed class OverlayTranslationProvider : ITranslationProvider, ITransl
                 LocaleRequestResolver.NearestParent(locale, SupportedLocales) ??
                 LocaleNegotiation.Match(locale, catalog.LocaleTags()) ??
                 catalog.DefaultLocale);
+        }
+
+        // Explicit fallbacks between added locales must reach a catalog locale.
+        foreach (string locale in _addedLocales.Keys)
+        {
+            var visited = new HashSet<string>(StringComparer.Ordinal) { locale };
+            for (string current = _addedLocales[locale]; _addedLocales.TryGetValue(current, out string? next); current = next)
+                if (!visited.Add(current))
+                    throw new ArgumentException($"The added locales of catalog '{catalog.Catalog}' fall back in a cycle through '{locale}'.", nameof(overlays));
         }
     }
 
@@ -110,8 +124,8 @@ internal sealed class OverlayTranslationProvider : ITranslationProvider, ITransl
     void ITranslationSnapshotCacheInvalidator.InvalidateSnapshot(string canonicalLocale) => _snapshots.TryRemove(canonicalLocale, out _);
 
     // The requested locale, then (for an added locale) its added parents and the library locale they fall back to, then the
-    // library chain. Every added step without an explicit fallback is a strict CLDR ancestor or a shorter tag, and an
-    // explicit fallback is a library locale, so the chain is finite; the visited check only guards that invariant.
+    // library chain. Every added step without an explicit fallback is a strict CLDR ancestor or a shorter tag, and the
+    // constructor rejects a cycle of explicit fallbacks, so the chain is finite; the visited check only guards that invariant.
     private List<string> Chain(string locale)
     {
         var chain = new List<string>();

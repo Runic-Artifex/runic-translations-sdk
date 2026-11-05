@@ -89,7 +89,11 @@ internal static class Rmf2CSharpOutputRendererV5
     // and with it EnsureRuntimeAbi, so the base ABI is checked with a call.
     // readableSurface: the readable file is generated beside it, so Registration also creates the readable surface
     // (TranslationCatalogRegistration.CreateReadableMessages, used by the WPF TranslationSource.ForCatalog).
-    internal static TranslationGeneratedOutput RenderRegistration(Rmf2ProjectV5 project, bool composition = true, bool runtimeAbiCall = true, bool readableSurface = true)
+    // overlays: the library catalogs of runic.json "overrides", each compiled with this project's override sources
+    // (TranslationCompiler.CompileRmf2OverlayV5); rendered as Overlays, which needs a runtime with CompositionVersion 2.
+    // An empty list still renders the property: runic.json declares overrides whose catalogs did not compile.
+    internal static TranslationGeneratedOutput RenderRegistration(Rmf2ProjectV5 project, bool composition = true, bool runtimeAbiCall = true, bool readableSurface = true,
+        IReadOnlyList<Rmf2ProjectV5>? overlays = null)
     {
         GenerationWriter writer = StartFile(project);
         string visibility = Visibility(project), className = GenerationSupport.CSharpIdentifier(project.ClassName);
@@ -130,6 +134,7 @@ internal static class Rmf2CSharpOutputRendererV5
             else writer.Line("CatalogId, DefaultLocale, ContractFingerprint, static () => Rmf2MarkupContract, CreateProvider);");
             writer.Unindent();
             writer.Blank();
+            if (overlays is not null) RenderOverlays(writer, overlays);
         }
         writer.Line("public static global::Runic.Translations.ITranslationProvider CreateProvider("); writer.Indent();
         writer.Line("global::Runic.Translations.ITextValueFormatter? valueFormatter = null,");
@@ -228,6 +233,35 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Unindent(); writer.Line("}");
         writer.Unindent(); writer.Line("}");
         return Output(TranslationGeneratedOutputKind.CSharpRegistration, project.ClassName + ".Registration.g.cs", writer);
+    }
+
+    // runic.json "overrides": one compiled overlay per library catalog. Each locale's overlay pack (a locale artifact v5 with
+    // only the overridden messages) is a UTF-8 literal, so loading it is a parse without I/O or allocation of the data.
+    private static void RenderOverlays(GenerationWriter writer, IReadOnlyList<Rmf2ProjectV5> overlays)
+    {
+        writer.Line("/// <summary>");
+        writer.Line("/// The overrides of library catalogs that runic.json declares in <c>overrides</c>, compiled from translations/overrides:");
+        if (overlays.Count != 0)
+            writer.Line("/// one overlay per catalog (" + string.Join(", ", overlays.Select(overlay => "<c>" + GenerationSupport.XmlDocumentation(overlay.Id) + "</c>")) + ").");
+        writer.Line("/// Attach them to the context that registers those catalogs, with <c>TranslationContextBuilder.AddOverlays</c> or Hosting's <c>AddOverlays</c>.");
+        writer.Line("/// </summary>");
+        writer.Line("public static global::System.Collections.Generic.IReadOnlyList<global::Runic.Translations.TranslationOverlay> Overlays { get; } = global::System.Array.AsReadOnly(new global::Runic.Translations.TranslationOverlay[]");
+        writer.Line("{"); writer.Indent();
+        foreach (Rmf2ProjectV5 overlay in overlays)
+        {
+            // Each added locale names the fallback the compiler validated it against, so the runtime follows the same chain.
+            string added = overlay.OverlayAddedLocales.Count == 0 ? "null" : "new global::Runic.Translations.TranslationOverlayLocale[] { " +
+                string.Join(", ", overlay.OverlayAddedLocales.Select(locale => "new global::Runic.Translations.TranslationOverlayLocale(" + GenerationSupport.CSharpString(locale) +
+                    ", " + GenerationSupport.CSharpString(overlay.Locales.First(item => string.Equals(item.Tag, locale, StringComparison.Ordinal)).FallbackTag ?? overlay.DefaultLocale) + ")")) + " }";
+            writer.Line("global::Runic.Translations.TranslationOverlay.FromCompiled(" + GenerationSupport.CSharpString(overlay.Id) + ", " + added + ", static locale => locale switch");
+            writer.Line("{"); writer.Indent();
+            foreach (string locale in overlay.OverlayKeys.Keys.OrderBy(locale => locale, StringComparer.Ordinal))
+                writer.Line(GenerationSupport.CSharpString(locale) + " => " + GenerationSupport.CSharpString(Rmf2LocaleArtifactV5.RenderOverlay(overlay, locale).Text) + "u8,");
+            writer.Line("_ => default,");
+            writer.Unindent(); writer.Line("}),");
+        }
+        writer.Unindent(); writer.Line("});");
+        writer.Blank();
     }
 
     // The readable surface (readable-name policy 1) forwards to the encoded accessors, so there is

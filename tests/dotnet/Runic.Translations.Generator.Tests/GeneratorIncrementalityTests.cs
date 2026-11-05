@@ -50,9 +50,9 @@ internal sealed class GeneratorIncrementalityTests
         string before = Generated(run);
 
         GeneratorRun edited = GeneratorTestHost.Edit(run, MainXamlPath, Xaml("titel"));
-        foreach (string step in new[] { "TranslationSourceUnits", "TranslationProjects", "TranslationRuntimeAbi", "TranslationCompilation", "TranslationLink", "TranslationXamlCatalog" })
+        foreach (string step in new[] { "TranslationSourceUnits", "TranslationProjects", "TranslationRuntimeAbi", "TranslationCompilation", "TranslationLink", "TranslationOverlays", "TranslationXamlCatalog" })
             AssertAll(edited, step, IncrementalStepRunReason.Cached);
-        IncrementalStepRunReason[] emit = OutputReasons(edited, "TranslationLink");
+        IncrementalStepRunReason[] emit = OutputReasons(edited, "TranslationEmit");
         Assert.True(emit.Length > 0 && emit.All(static reason => reason == IncrementalStepRunReason.Cached), "source rendering reran: " + string.Join(", ", emit));
         IncrementalStepRunReason[] validated = OutputReasons(edited, "TranslationXamlValidation");
         Assert.Equal(1, validated.Count(static reason => reason == IncrementalStepRunReason.Modified), "XAML validation outputs: " + string.Join(", ", validated));
@@ -71,7 +71,7 @@ internal sealed class GeneratorIncrementalityTests
         Assert.Equal("RTR0081", relinked.SingleResult.Diagnostics.Single().Id, "relinked diagnostics");
     }
 
-    // Source output steps fed by the named step (the source rendering output reads TranslationLink).
+    // Source output steps fed by the named step (the source rendering output reads TranslationEmit: the link and the overlays).
     private static IncrementalStepRunReason[] OutputReasons(GeneratorRun run, string input) =>
         run.SingleResult.TrackedOutputSteps.SelectMany(pair => pair.Value)
             .Where(step => step.Inputs.Any(source => source.Source.Name == input))
