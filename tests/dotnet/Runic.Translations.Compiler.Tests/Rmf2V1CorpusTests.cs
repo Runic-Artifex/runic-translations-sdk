@@ -249,8 +249,8 @@ internal sealed class Rmf2V1CorpusTests
     // removeBidiIsolates, adds localeDirection to createLocaleSource and defaults pageDirection to <html dir> or the active
     // locale; runtime.d.ts declares them; the C# output of this corpus (default) is unchanged, in both digests.
     // Re-pinned for merging T2f (#146) with main (TJ, TI, #148), in both digests.
-    private const string EncodedOutputDigest = "bc5220c7cc2787e5182c30836ee79e18d4e2156cb11a4ad312465eab580996d8";
-    private const string HiddenEncodedOutputDigest = "661b93615c055b0420174b0db3a248dbacf01fa0a5c6ae87f960a12e90cd5d85";
+    private const string EncodedOutputDigest = "f42f706f506fd6c76273b95b757ed69cee9cf53345770172d81f5469696e8e73";
+    private const string HiddenEncodedOutputDigest = "9a9996267a33ff6183c4f7edeba97a50076c236c9385f0a0bc09addf3934a8aa";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

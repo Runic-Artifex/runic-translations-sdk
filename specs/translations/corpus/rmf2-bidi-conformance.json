@@ -45,5 +45,7 @@
     {"id": "ar-percent-on", "locale": "ar", "bidiIsolation": "on", "message": "تم: {$p :number style=percent}", "arguments": {"p": {"type": "decimal", "value": "0.45"}}, "expected": "تم: \u206745\u200e%\u200e\u2069"},
     {"id": "he-percent-default", "locale": "he", "bidiIsolation": "default", "message": "הושלם: {$p :number style=percent}", "arguments": {"p": {"type": "decimal", "value": "0.45"}}, "expected": "הושלם: \u206745%\u2069"},
     {"id": "ar-date-medium-on", "locale": "ar", "bidiIsolation": "on", "message": "الموعد {$d :date style=medium}", "arguments": {"d": {"type": "date", "value": "2026-11-05"}}, "expected": "الموعد \u206705\u200f/11\u200f/2026\u2069"},
-    {"id": "ar-date-short-default", "locale": "ar", "bidiIsolation": "default", "message": "التاريخ {$d :date style=short}", "arguments": {"d": {"type": "date", "value": "2026-11-05"}}, "expected": "التاريخ \u20675\u200f/11\u200f/2026\u2069"}
+    {"id": "ar-date-short-default", "locale": "ar", "bidiIsolation": "default", "message": "التاريخ {$d :date style=short}", "arguments": {"d": {"type": "date", "value": "2026-11-05"}}, "expected": "التاريخ \u20675\u200f/11\u200f/2026\u2069"},
+    {"id": "ar-EG-negative-number-default", "locale": "ar", "requestedLocale": "ar-EG", "bidiIsolation": "default", "message": "الرصيد: {$n :number}", "arguments": {"n": {"type": "decimal", "value": "-1234.5"}}, "expected": "الرصيد: \u2067\u061c-١٬٢٣٤٫٥\u2069"},
+    {"id": "fa-negative-number-u-dir-auto-default", "locale": "fa", "bidiIsolation": "default", "message": "مانده: {$n :number u:dir=auto}", "arguments": {"n": {"type": "decimal", "value": "-1234.5"}}, "expected": "مانده: \u2068\u200e\u2212۱٬۲۳۴٫۵\u2069"}
 ]}
