@@ -108,7 +108,24 @@ internal static class TranslationXliffReader
 
     // ---- Parsing ----
 
-    private sealed record Inline(string? Text, string? Id, string? Equiv, string? DataRef, string? CopyOf);
+    private enum InlineKind { Text, Placeholder, VariantStart, VariantEnd }
+
+    // A text run, a <ph>, or the start or end of a <pc> (a selector variant: Equiv is its equivStart).
+    private sealed record Inline(string? Text, string? Id, string? Equiv, string? DataRef, string? CopyOf)
+    {
+        internal InlineKind Kind { get; init; } = Text is not null ? InlineKind.Text : InlineKind.Placeholder;
+        internal string? EquivEnd { get; init; }
+        internal bool IsWhitespace => Kind == InlineKind.Text && string.IsNullOrWhiteSpace(Text);
+    }
+
+    // The resolved content of a source or target: plain pieces, or a selector view.
+    private sealed record Content(IReadOnlyList<TranslationInterchangePiece>? Pieces, TranslationInterchangeSelector? Selector)
+    {
+        internal string Compose() => Selector is { } selector ? TranslationInterchangePattern.Compose(selector) : TranslationInterchangePattern.Compose(Pieces!);
+        internal IEnumerable<IReadOnlyList<TranslationInterchangePiece>> Patterns => Selector?.Variants.Select(static variant => variant.Pieces) ?? [Pieces!];
+        internal IReadOnlyList<TranslationInterchangePiece> AllPieces => Patterns.SelectMany(static pattern => pattern).ToArray();
+        internal bool IsEmpty => Patterns.All(TranslationInterchangePattern.IsEmpty);
+    }
 
     private sealed class ParsedUnit
     {
@@ -209,15 +226,21 @@ internal static class TranslationXliffReader
         }
     }
 
-    // Inline content in document order; <mrk> is unwrapped iteratively, so its nesting never reaches the call stack.
+    // Inline content in document order; <mrk> is unwrapped and <pc> is read as a variant start and end, iteratively,
+    // so their nesting never reaches the call stack.
     private static void ReadInline(XElement container, List<Inline> output, ParsedUnit unit)
     {
-        var pending = new Stack<IEnumerator<XNode>>();
-        pending.Push(container.Nodes().GetEnumerator());
+        var pending = new Stack<(IEnumerator<XNode> Nodes, string? VariantId)>();
+        pending.Push((container.Nodes().GetEnumerator(), null));
         while (pending.Count != 0)
         {
-            IEnumerator<XNode> current = pending.Peek();
-            if (!current.MoveNext()) { pending.Pop().Dispose(); continue; }
+            (IEnumerator<XNode> current, string? variant) = pending.Peek();
+            if (!current.MoveNext())
+            {
+                pending.Pop().Nodes.Dispose();
+                if (variant is not null) output.Add(new Inline(null, variant, null, null, null) { Kind = InlineKind.VariantEnd });
+                continue;
+            }
             XNode node = current.Current;
             switch (node)
             {
@@ -226,6 +249,13 @@ internal static class TranslationXliffReader
                     break;
                 case XElement element when element.Name == Xliff + "ph":
                     output.Add(new Inline(null, (string?)element.Attribute("id"), (string?)element.Attribute("equiv"), (string?)element.Attribute("dataRef"), (string?)element.Attribute("copyOf")));
+                    break;
+                case XElement element when element.Name == Xliff + "pc":
+                    // A selector variant: its start and end codes are the keys and the pattern quotes.
+                    string id = (string?)element.Attribute("id") ?? string.Empty;
+                    output.Add(new Inline(null, id, (string?)element.Attribute("equivStart"), (string?)element.Attribute("dataRefStart"), (string?)element.Attribute("copyOf"))
+                    { Kind = InlineKind.VariantStart, EquivEnd = (string?)element.Attribute("equivEnd") });
+                    pending.Push((element.Nodes().GetEnumerator(), id));
                     break;
                 case XElement element when element.Name == Xliff + "cp":
                     string hex = (string?)element.Attribute("hex") ?? throw new UnitProblem("XLIFF21-INLINE", "A <cp> element has no hex value.");
@@ -236,10 +266,10 @@ internal static class TranslationXliffReader
                 case XElement element when element.Name == Xliff + "mrk":
                     // An annotation (a term, a comment, a translate="no" span): its content is kept, the annotation is not.
                     unit.HasMarkers = true;
-                    pending.Push(element.Nodes().GetEnumerator());
+                    pending.Push((element.Nodes().GetEnumerator(), null));
                     break;
                 case XElement element:
-                    throw new UnitProblem("XLIFF21-INLINE", "The inline element <" + element.Name.LocalName + "> is not supported; only <ph>, <mrk> and <cp> are.");
+                    throw new UnitProblem("XLIFF21-INLINE", "The inline element <" + element.Name.LocalName + "> is not supported; only <ph>, <pc> (selector variants), <mrk> and <cp> are.");
             }
         }
     }
@@ -273,6 +303,8 @@ internal static class TranslationXliffReader
         internal string? FormerTextProfileFingerprint { get; set; }
         internal Dictionary<string, TranslationInterchangeSourceUnit> LiveUnits { get; } =
             live?.CanonicalUnits.ToDictionary(static unit => unit.Key, StringComparer.Ordinal) ?? new(StringComparer.Ordinal);
+        internal TranslationPolicy PluralCategories { get; } =
+            live?.Locales.FirstOrDefault(locale => string.Equals(locale.Tag, targetLocale, StringComparison.Ordinal))?.PluralCategories ?? TranslationPolicy.Warning;
         internal Dictionary<string, TranslationInterchangeTargetUnit> LiveTargets { get; } =
             live?.Locales.FirstOrDefault(locale => string.Equals(locale.Tag, targetLocale, StringComparison.Ordinal))?.DirectResources
                 .ToDictionary(static unit => unit.Key, StringComparer.Ordinal) ?? new(StringComparer.Ordinal);
@@ -314,7 +346,7 @@ internal static class TranslationXliffReader
         if (context.Live is not null && !context.LiveUnits.TryGetValue(key, out live))
             return UnitDecision.Refuse(key, "XLIFF21-UNKNOWN-KEY", "The catalog has no message '" + key + "'.");
         if (unit.Metadata?.Structured == true || live?.Structured == true)
-            return UnitDecision.Skip(key, "XLIFF21-STRUCTURED-SKIPPED", "Messages with selectors, declarations or markup are not exchanged through XLIFF; translate them in the .rmf2 sources or the editor.");
+            return UnitDecision.Skip(key, "XLIFF21-STRUCTURED-SKIPPED", "Messages with markup are not exchanged through XLIFF; translate them in the .rmf2 sources or the editor.");
         if (unit.NotTranslatable)
             return UnitDecision.Skip(key, "XLIFF21-NOT-TRANSLATABLE", "The unit is marked translate=\"no\".");
 
@@ -336,58 +368,121 @@ internal static class TranslationXliffReader
         if (unit.Target is null) return UnitDecision.Skip(key, "XLIFF21-UNTRANSLATED", "The unit has no target.");
         if (segmentState == "initial") return UnitDecision.Skip(key, "XLIFF21-UNTRANSLATED", "The unit is in the initial state.");
 
-        // Pieces of source and target; profile 2 carried MF2 syntax as plain text.
-        IReadOnlyList<TranslationInterchangePiece> sourcePieces, targetPieces;
-        string sourcePattern, targetPattern;
+        // Content of source and target; profile 2 carried MF2 syntax as plain text.
+        Content sourceContent, targetContent;
         if (context.ProfileVersion == 2)
         {
             if (unit.Source.Any(static inline => inline.Text is null) || unit.Target.Any(static inline => inline.Text is null))
                 return UnitDecision.Refuse(key, "XLIFF21-INLINE", "Profile 2 documents carry plain text only.");
-            sourcePattern = string.Concat(unit.Source.Select(static inline => inline.Text));
-            targetPattern = string.Concat(unit.Target.Select(static inline => inline.Text));
-            IReadOnlyList<TranslationInterchangePiece>? decomposedSource = TranslationInterchangePattern.Decompose(sourcePattern);
-            IReadOnlyList<TranslationInterchangePiece>? decomposedTarget = TranslationInterchangePattern.Decompose(targetPattern);
+            IReadOnlyList<TranslationInterchangePiece>? decomposedSource = TranslationInterchangePattern.Decompose(string.Concat(unit.Source.Select(static inline => inline.Text)));
+            IReadOnlyList<TranslationInterchangePiece>? decomposedTarget = TranslationInterchangePattern.Decompose(string.Concat(unit.Target.Select(static inline => inline.Text)));
             if (decomposedSource is null || decomposedSource.Any(static piece => !piece.IsText) || decomposedTarget is null || decomposedTarget.Any(static piece => !piece.IsText))
                 return UnitDecision.Refuse(key, "XLIFF21-STRUCTURED-IMPORT", "A structured Runic message cannot be imported from the profile 2 text profile.");
-            sourcePieces = decomposedSource; targetPieces = decomposedTarget;
+            sourceContent = new(decomposedSource, null); targetContent = new(decomposedTarget, null);
         }
         else
         {
             Dictionary<string, string> sourceIds = new(StringComparer.Ordinal);
-            if (!TryResolve(unit.Source, unit, null, sourceIds, live, out IReadOnlyList<TranslationInterchangePiece>? resolvedSource, out string? sourceProblem))
-                return UnitDecision.Refuse(key, "XLIFF21-PLACEHOLDER", sourceProblem!);
-            if (!TryResolve(unit.Target, unit, sourceIds, null, null, out IReadOnlyList<TranslationInterchangePiece>? resolvedTarget, out string? targetProblem))
-                return UnitDecision.Refuse(key, "XLIFF21-PLACEHOLDER", targetProblem!);
-            sourcePieces = resolvedSource!; targetPieces = resolvedTarget!;
-            sourcePattern = TranslationInterchangePattern.Compose(sourcePieces);
-            targetPattern = TranslationInterchangePattern.Compose(targetPieces);
+            if (!TryResolveContent(unit.Source, unit, null, sourceIds, live, out Content? resolvedSource, out (string Code, string Message)? sourceProblem))
+                return UnitDecision.Refuse(key, sourceProblem!.Value.Code, sourceProblem.Value.Message);
+            if (!TryResolveContent(unit.Target, unit, sourceIds, null, null, out Content? resolvedTarget, out (string Code, string Message)? targetProblem))
+                return UnitDecision.Refuse(key, targetProblem!.Value.Code, targetProblem.Value.Message);
+            sourceContent = resolvedSource!; targetContent = resolvedTarget!;
+            // An export from before selector units carried the message as plain MF2 text; reading that text as a
+            // translation would escape its syntax, so the unit is skipped until the catalog is exported again.
+            if (live?.Selector is not null && sourceContent.Selector is null)
+                return UnitDecision.Skip(key, "XLIFF21-STRUCTURED-SKIPPED", "The unit holds a selector message as plain text, as exports before selector units wrote it; export the catalog again to translate it through XLIFF.");
+            // The keys of a variant a translator adds come from its equivStart; they must be keys and nothing else.
+            if (targetContent.Selector?.Variants.FirstOrDefault(static variant => variant.Keys is not null && !TranslationInterchangePattern.IsVariantKeyList(variant.Keys)) is { } badKeys)
+                return UnitDecision.Refuse(key, "XLIFF21-VARIANT-KEY", "The variant keys '" + badKeys.Keys + "' are not MF2 variant keys; an equivStart holds only keys (such as '*', '0', 'few' or '|text|', one per selector) and \"{{\".");
         }
+        string sourcePattern = sourceContent.Compose(), targetPattern = targetContent.Compose();
 
         bool translatedState = stateDeclared || unit.Review is not null;
-        if (TranslationInterchangePattern.IsEmpty(targetPieces) && !translatedState)
+        if (targetContent.IsEmpty && !translatedState)
             return UnitDecision.Skip(key, "XLIFF21-EMPTY-TARGET", "The target is empty and no state marks it as translated; the base text stays the fallback.");
         // Some tools fill an untranslated target with a copy of the source and write no state. Without a state that
-        // says otherwise, such a copy is imported for review instead of as a finished translation.
-        bool copiedSource = !translatedState && string.Equals(
-            TranslationInterchangePattern.Compose(TranslationInterchangePattern.Canonical(targetPieces)),
-            TranslationInterchangePattern.Compose(TranslationInterchangePattern.Canonical(sourcePieces)), StringComparison.Ordinal);
+        // says otherwise, such a copy is imported for review instead of as a finished translation. A selector target
+        // whose every variant repeats a source variant (as the prefilled variants of an export do) is such a copy.
+        bool copiedSource = !translatedState && CopiesSource(targetContent, sourceContent);
+
+        TranslationInterchangeTargetUnit? liveTarget = context.LiveTargets.GetValueOrDefault(key);
+        // A plain target for a message with variants joins the variant texts, which is what a tool that strips every
+        // code writes. It is accepted only where one pattern is right: the live translation is already plain, or the
+        // locale selects a single plural category (Japanese).
+        if (context.ProfileVersion >= 3 && targetContent.Selector is null && liveTarget is not { Selector: null }
+            && TranslationInterchangePattern.DecomposeSelector(live?.Text ?? sourcePattern) is { } sourceSelector && sourceSelector.Variants.Any(static variant => variant.Keys is not null)
+            && !(sourceSelector.PluralFunction is { } function && Rmf2AuthoringService.PluralCategories(context.TargetLocale, function == "ordinal", sourceSelector.IntegerOperand).Count == 1))
+            return UnitDecision.Refuse(key, "XLIFF21-SELECTOR-CHANGED", "The target has no variants (<pc>) although the message selects between variants in this locale; translate each variant, keeping the header <ph> and the <pc> codes.");
+        if (targetContent.Selector is { } targetSelector)
+        {
+            // Translators edit the variant texts; declarations and selectors stay those of the source or the translation.
+            var headers = new HashSet<string>(StringComparer.Ordinal);
+            foreach (TranslationInterchangeSelector? known in new[] { sourceContent.Selector, live?.Selector, liveTarget?.Selector })
+                if (known is not null) headers.Add(TranslationInterchangePattern.CanonicalHeader(known.Header));
+            if (!headers.Contains(TranslationInterchangePattern.CanonicalHeader(targetSelector.Header)))
+                return UnitDecision.Refuse(key, "XLIFF21-SELECTOR-CHANGED", "The target changes the message's declarations or .match statement; a translation through XLIFF may change only the variant texts and keys.");
+            var emptyAllowed = new HashSet<string?>(new[] { sourceContent.Selector, live?.Selector, liveTarget?.Selector }.OfType<TranslationInterchangeSelector>()
+                .SelectMany(static selector => selector.Variants).Where(static variant => TranslationInterchangePattern.IsEmpty(variant.Pieces))
+                .Select(static variant => TranslationInterchangePattern.CanonicalKeys(variant.Keys)));
+            if (targetSelector.Variants.FirstOrDefault(variant => TranslationInterchangePattern.IsEmpty(variant.Pieces) && !emptyAllowed.Contains(TranslationInterchangePattern.CanonicalKeys(variant.Keys))) is { } empty)
+                return UnitDecision.Refuse(key, "XLIFF21-EMPTY-VARIANT", "The target variant '" + (empty.Keys ?? "{{}}") + "' is empty; translate every variant, or remove the ones the language does not use.");
+        }
 
         // The contract the target is checked against: the live caller contract, else the one the file records,
-        // else the placeholders of the file's source.
-        IReadOnlyList<string> sourceVariables = TranslationInterchangePattern.Variables(sourcePieces);
+        // else the placeholders of the file's source. Locals that a selector header declares are not inputs.
+        IReadOnlyList<string> sourceVariables = TranslationInterchangePattern.Variables(sourceContent.AllPieces).Except(Locals(sourcePattern), StringComparer.Ordinal).ToArray();
         IReadOnlyList<TranslationInterchangePlaceholder> contract = live?.Metadata.Placeholders ?? unit.Metadata?.Placeholders ?? [];
         var allowed = new HashSet<string>(live is null && unit.Metadata is null ? sourceVariables : contract.Select(static placeholder => placeholder.Name), StringComparer.Ordinal);
         if (live is null && unit.Metadata is not null && sourceVariables.Any(variable => !allowed.Contains(variable)))
             return UnitDecision.Refuse(key, "XLIFF21-PLACEHOLDER", "The source placeholders do not match the contract that the unit records.");
-        foreach (string variable in TranslationInterchangePattern.Variables(targetPieces))
-            if (!allowed.Contains(variable))
+        string[] targetLocals = Locals(targetPattern);
+        foreach (string variable in TranslationInterchangePattern.Variables(targetContent.AllPieces))
+            if (!allowed.Contains(variable) && !targetLocals.Contains(variable, StringComparer.Ordinal))
                 return UnitDecision.Refuse(key, "XLIFF21-PLACEHOLDER", "The target uses the placeholder $" + variable + ", which the message's caller contract does not have.");
         if (context.ProfileVersion >= 3)
         {
-            if (!TryKeepExpressions(targetPieces, KnownExpressions(key, live, sourcePieces, context), out targetPieces, out string? changedProblem))
-                return UnitDecision.Refuse(key, "XLIFF21-PLACEHOLDER-CHANGED", changedProblem!);
-            targetPattern = TranslationInterchangePattern.Compose(targetPieces);
+            Dictionary<string, string> known = KnownExpressions(key, live, sourceContent, context);
+            if (targetContent.Selector is { } selector)
+            {
+                var variants = new List<TranslationInterchangeVariant>(selector.Variants.Count);
+                foreach (TranslationInterchangeVariant variant in selector.Variants)
+                {
+                    if (!TryKeepExpressions(variant.Pieces, known, out IReadOnlyList<TranslationInterchangePiece> kept, out string? changedProblem))
+                        return UnitDecision.Refuse(key, "XLIFF21-PLACEHOLDER-CHANGED", changedProblem!);
+                    variants.Add(variant with { Pieces = kept });
+                }
+                targetContent = targetContent with { Selector = selector with { Variants = variants } };
+            }
+            else
+            {
+                if (!TryKeepExpressions(targetContent.Pieces!, known, out IReadOnlyList<TranslationInterchangePiece> kept, out string? changedProblem))
+                    return UnitDecision.Refuse(key, "XLIFF21-PLACEHOLDER-CHANGED", changedProblem!);
+                targetContent = targetContent with { Pieces = kept };
+            }
+            targetPattern = targetContent.Compose();
         }
+        // The composed message must read back as exactly the header, keys and variant texts it was composed from, so
+        // nothing a key or code carries can add a declaration, selector, variant or placeholder.
+        if (targetContent.Selector is { } composed)
+        {
+            if (TranslationInterchangePattern.DecomposeSelector(targetPattern) is not { } reparsed)
+            {
+                var message = new TranslationSource("interchange/message.mf2", Encoding.UTF8.GetBytes(targetPattern));
+                Mf2SyntaxDocument syntax = Mf2SyntaxReader.Read(message);
+                if (!syntax.Success || (syntax.Match is { } match && syntax.Variants.Any(variant => variant.Keys.Count != match.Selectors.Count)))
+                    return UnitDecision.Refuse(key, "XLIFF21-VARIANT-KEY", "The variant keys do not form a valid message with the declarations and .match statement; each variant needs one key per selector.");
+                TranslationDiagnostic? error = Rmf2SemanticCompilerV5.Compile(message).Diagnostics.FirstOrDefault(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error);
+                return UnitDecision.Refuse(key, "XLIFF21-TARGET-INVALID", error is null ? "The target does not form a valid message." : "[" + error.Id + "] " + error.Message);
+            }
+            if (!TranslationInterchangePattern.SameSelector(reparsed, composed))
+                return UnitDecision.Refuse(key, "XLIFF21-PLACEHOLDER-CHANGED", "The variant keys change the message's declarations, selectors or placeholders; a translation through XLIFF may change only the variant texts and keys.");
+        }
+        // An unchanged translation keeps its bytes: the composed form normalizes spacing between keys and variants.
+        if (liveTarget is not null && !string.Equals(liveTarget.Text, targetPattern, StringComparison.Ordinal)
+            && TranslationInterchangePattern.CanonicalMessage(liveTarget.Text) == TranslationInterchangePattern.CanonicalMessage(targetPattern))
+            targetPattern = liveTarget.Text;
+        IReadOnlyList<TranslationInterchangePiece>? sourcePieces = sourceContent.Pieces;
 
         // The source the translator saw, and whether the live source changed since.
         IReadOnlyList<TranslationInterchangePlaceholder> recordedContract = unit.Metadata?.Placeholders ?? contract;
@@ -458,34 +553,147 @@ internal static class TranslationXliffReader
         _ => TranslationReviewState.Approved,
     };
 
-    // Resolves <ph> elements to MF2 expressions: the source placeholder with the same id (or copyOf), else the
-    // element's equiv, else its originalData. Without equiv in the source, the live export's numbering is used.
-    private static bool TryResolve(List<Inline> inlines, ParsedUnit unit, Dictionary<string, string>? sourceIds, Dictionary<string, string>? record,
-        TranslationInterchangeSourceUnit? live, out IReadOnlyList<TranslationInterchangePiece>? pieces, out string? problem)
+    // The local variables a composed message declares; they may appear in its patterns besides the caller inputs.
+    private static string[] Locals(string message)
+    {
+        Mf2SyntaxDocument syntax = Mf2SyntaxReader.Read(new TranslationSource("interchange/message.mf2", Encoding.UTF8.GetBytes(message)));
+        return syntax.Declarations.Where(static declaration => declaration.Kind == "local").Select(static declaration => declaration.Name).ToArray();
+    }
+
+    // Whether a target only repeats the source: the same plain text, or a selector whose header is the source's and
+    // whose every variant text is one of the source's variant texts.
+    private static bool CopiesSource(Content target, Content source)
+    {
+        static string Canonical(IReadOnlyList<TranslationInterchangePiece> pieces) =>
+            TranslationInterchangePattern.Compose(TranslationInterchangePattern.Canonical(pieces));
+        if (target.Selector is null) return source.Selector is null && Canonical(target.Pieces!) == Canonical(source.Pieces!);
+        if (source.Selector is null || TranslationInterchangePattern.CanonicalHeader(source.Selector.Header) != TranslationInterchangePattern.CanonicalHeader(target.Selector.Header)) return false;
+        var texts = source.Patterns.Select(Canonical).ToHashSet(StringComparer.Ordinal);
+        return target.Patterns.All(pattern => texts.Contains(Canonical(pattern)));
+    }
+
+    // The ids an export gives to the live source's codes: "h" and "v1".. for a selector, "1".. for its placeholders.
+    private static Dictionary<string, string>? LiveIds(TranslationInterchangeSourceUnit? live)
+    {
+        if (live is null || (live.Pieces is null && live.Selector is null)) return null;
+        var ids = new Dictionary<string, string>(StringComparer.Ordinal);
+        int number = 0, variants = 0;
+        if (live.Selector is { } selector)
+        {
+            ids["h"] = selector.Header;
+            foreach (TranslationInterchangeVariant variant in selector.Variants)
+            {
+                ids["v" + (++variants).ToString(CultureInfo.InvariantCulture)] = variant.Keys ?? string.Empty;
+                foreach (TranslationInterchangePiece piece in variant.Pieces)
+                    if (!piece.IsText) ids[(++number).ToString(CultureInfo.InvariantCulture)] = piece.Expression!;
+            }
+            return ids;
+        }
+        foreach (TranslationInterchangePiece piece in live.Pieces!)
+            if (!piece.IsText) ids[(++number).ToString(CultureInfo.InvariantCulture)] = piece.Expression!;
+        return ids;
+    }
+
+    // The content a <ph> or <pc> start stands for: the source code with the same id (or copyOf), else the element's
+    // equiv, else its originalData, else (for a source without equiv) the live export's numbering.
+    private static string? ResolveCode(Inline inline, ParsedUnit unit, Dictionary<string, string>? sourceIds, Dictionary<string, string>? liveIds)
+    {
+        if (sourceIds is not null && inline.Id is not null && sourceIds.TryGetValue(inline.Id, out string? byId)) return byId;
+        if (sourceIds is not null && inline.CopyOf is not null && sourceIds.TryGetValue(inline.CopyOf, out string? copied)) return copied;
+        if (inline.Equiv is not null)
+        {
+            if (inline.Kind != InlineKind.VariantStart) return inline.Equiv;
+            // A variant's start code is its keys and "{{"; its end code, when present, is "}}".
+            string start = inline.Equiv.TrimEnd();
+            return start.EndsWith("{{", StringComparison.Ordinal) && inline.EquivEnd?.Trim() is null or "}}" ? start[..^2].Trim() : null;
+        }
+        if (inline.DataRef is not null && unit.OriginalData.TryGetValue(inline.DataRef, out string? data)) return data;
+        if (sourceIds is null && inline.Id is not null && liveIds is not null && liveIds.TryGetValue(inline.Id, out string? numbered)) return numbered;
+        return null;
+    }
+
+    // Resolves inline content to plain pieces, or to a selector view when it has variants (<pc>): one header <ph>
+    // with the declarations and .match, then the variants, with only whitespace between them.
+    private static bool TryResolveContent(List<Inline> inlines, ParsedUnit unit, Dictionary<string, string>? sourceIds, Dictionary<string, string>? record,
+        TranslationInterchangeSourceUnit? live, out Content? content, out (string Code, string Message)? problem)
+    {
+        content = null;
+        problem = null;
+        Dictionary<string, string>? liveIds = LiveIds(live);
+        if (!inlines.Any(static inline => inline.Kind is InlineKind.VariantStart or InlineKind.VariantEnd))
+        {
+            if (!TryResolvePieces(inlines, 0, inlines.Count, unit, sourceIds, record, liveIds, out IReadOnlyList<TranslationInterchangePiece>? pieces, out string? message))
+            {
+                problem = ("XLIFF21-PLACEHOLDER", message!);
+                return false;
+            }
+            content = new(pieces, null);
+            return true;
+        }
+        int index = 0;
+        while (index < inlines.Count && inlines[index].IsWhitespace) index++;
+        string? header = index < inlines.Count && inlines[index].Kind == InlineKind.Placeholder ? ResolveCode(inlines[index], unit, sourceIds, liveIds) : null;
+        if (header is null || !header.TrimStart().StartsWith('.'))
+        {
+            problem = ("XLIFF21-INLINE", "A unit with variants (<pc>) starts with one <ph> that holds the message's declarations and .match statement.");
+            return false;
+        }
+        if (record is not null && inlines[index].Id is { } headerId) record[headerId] = header;
+        index++;
+        var variants = new List<TranslationInterchangeVariant>();
+        while (true)
+        {
+            while (index < inlines.Count && inlines[index].IsWhitespace) index++;
+            if (index == inlines.Count) break;
+            Inline start = inlines[index];
+            if (start.Kind != InlineKind.VariantStart)
+            {
+                problem = ("XLIFF21-INLINE", "Text and placeholders of a selector unit belong inside its variants (<pc>).");
+                return false;
+            }
+            string? keys = ResolveCode(start, unit, sourceIds, liveIds);
+            int end = index + 1;
+            while (end < inlines.Count && inlines[end].Kind is InlineKind.Text or InlineKind.Placeholder) end++;
+            if (keys is null || end == inlines.Count || inlines[end].Kind != InlineKind.VariantEnd)
+            {
+                problem = ("XLIFF21-INLINE", keys is null
+                    ? "The variant <pc id=\"" + start.Id + "\"> has no keys: it matches no source variant and has no equivStart such as \"one {{\"."
+                    : "The variant <pc id=\"" + start.Id + "\"> contains another variant.");
+                return false;
+            }
+            if (record is not null && start.Id is not null) record[start.Id] = keys;
+            if (!TryResolvePieces(inlines, index + 1, end, unit, sourceIds, record, liveIds, out IReadOnlyList<TranslationInterchangePiece>? pieces, out string? message))
+            {
+                problem = ("XLIFF21-PLACEHOLDER", message!);
+                return false;
+            }
+            variants.Add(new(keys.Length == 0 ? null : keys, pieces!));
+            index = end + 1;
+        }
+        if (variants.Count == 0)
+        {
+            problem = ("XLIFF21-INLINE", "A selector unit has no variants.");
+            return false;
+        }
+        content = new(null, new TranslationInterchangeSelector(header.TrimEnd(), header.TrimEnd().Split('\n')[^1].Trim(), variants, null));
+        return true;
+    }
+
+    // Resolves text and <ph> elements to pieces of MF2 text and placeholder expressions.
+    private static bool TryResolvePieces(List<Inline> inlines, int from, int to, ParsedUnit unit, Dictionary<string, string>? sourceIds, Dictionary<string, string>? record,
+        Dictionary<string, string>? liveIds, out IReadOnlyList<TranslationInterchangePiece>? pieces, out string? problem)
     {
         var result = new List<TranslationInterchangePiece>();
-        Dictionary<string, string>? liveIds = null;
-        if (live?.Pieces is { } livePieces)
+        for (int index = from; index < to; index++)
         {
-            liveIds = new(StringComparer.Ordinal);
-            int number = 0;
-            foreach (TranslationInterchangePiece piece in livePieces)
-                if (!piece.IsText) liveIds[(++number).ToString(CultureInfo.InvariantCulture)] = piece.Expression!;
-        }
-        foreach (Inline inline in inlines)
-        {
+            Inline inline = inlines[index];
             if (inline.Text is not null)
             {
                 if (result.Count != 0 && result[^1].IsText) result[^1] = TranslationInterchangePiece.FromText(result[^1].Text + inline.Text);
                 else result.Add(TranslationInterchangePiece.FromText(inline.Text));
                 continue;
             }
-            string? expression = null;
-            if (sourceIds is not null && inline.Id is not null && sourceIds.TryGetValue(inline.Id, out string? byId)) expression = byId;
-            else if (sourceIds is not null && inline.CopyOf is not null && sourceIds.TryGetValue(inline.CopyOf, out string? copied)) expression = copied;
-            else if (inline.Equiv is not null) expression = inline.Equiv;
-            else if (inline.DataRef is not null && unit.OriginalData.TryGetValue(inline.DataRef, out string? data)) expression = data;
-            else if (sourceIds is null && inline.Id is not null && liveIds is not null && liveIds.TryGetValue(inline.Id, out string? numbered)) expression = numbered;
+            string? expression = ResolveCode(inline, unit, sourceIds, liveIds);
             if (expression is null || !TranslationInterchangePattern.IsPlaceholderExpression(expression))
             {
                 pieces = null;
@@ -503,18 +711,19 @@ internal static class TranslationXliffReader
 
     // The placeholder expressions a target may use, by canonical spelling: those of the live source and the live
     // translation, or without a live catalog those of the file's source. The value is the spelling that is written.
-    private static Dictionary<string, string> KnownExpressions(string key, TranslationInterchangeSourceUnit? live, IReadOnlyList<TranslationInterchangePiece> fileSource, ImportContext context)
+    private static Dictionary<string, string> KnownExpressions(string key, TranslationInterchangeSourceUnit? live, Content fileSource, ImportContext context)
     {
         var known = new Dictionary<string, string>(StringComparer.Ordinal);
-        void Add(IReadOnlyList<TranslationInterchangePiece>? pieces)
+        void Add(IEnumerable<TranslationInterchangePiece>? pieces)
         {
             foreach (TranslationInterchangePiece piece in pieces ?? [])
                 if (!piece.IsText) known.TryAdd(TranslationInterchangePattern.CanonicalExpression(piece.Expression!), piece.Expression!);
         }
-        if (context.Live is null) { Add(fileSource); return known; }
+        if (context.Live is null) { Add(fileSource.AllPieces); return known; }
         Add(live?.Pieces);
+        Add(live?.Selector?.Pieces);
         if (context.LiveTargets.TryGetValue(key, out TranslationInterchangeTargetUnit? target))
-            Add(target.Pieces ?? TranslationInterchangePattern.Decompose(target.Text));
+            Add(target.Pieces ?? target.Selector?.Pieces ?? TranslationInterchangePattern.Decompose(target.Text));
         return known;
     }
 
@@ -553,23 +762,33 @@ internal static class TranslationXliffReader
             UnitDecision[] applied = decisions.Where(static decision => decision.Outcome == TranslationXliffUnitOutcome.Applied).ToArray();
             if (applied.Length == 0) return;
             Rmf2ProjectCompilation compilation = CompileUnits(applied, context);
-            if (compilation.Success) return;
-            Dictionary<string, string> failing = FailingUnits(compilation, applied);
+            if (compilation.Success)
+            {
+                // Plural categories of the target locale that its policy reports as warnings are notices.
+                string prefix = "interchange/" + context.TargetLocale + "/";
+                foreach (TranslationDiagnostic diagnostic in compilation.Diagnostics)
+                    if (diagnostic.Id is "RTR0094" or "RTR0095" && diagnostic.Location.Path.StartsWith(prefix, StringComparison.Ordinal))
+                        context.Losses.Add(new("XLIFF21-PLURAL-CATEGORIES", "/" + Path.GetFileNameWithoutExtension(diagnostic.Location.Path), "[" + diagnostic.Id + "] " + diagnostic.Message, false));
+                return;
+            }
+            Dictionary<string, (string Code, string Message)> failing = FailingUnits(compilation, applied, context);
             if (failing.Count == 0)
                 foreach (UnitDecision decision in applied)
                 {
                     Rmf2ProjectCompilation alone = CompileUnits([decision], context);
                     if (!alone.Success)
-                        failing[decision.Key] = FailingUnits(alone, [decision]).GetValueOrDefault(decision.Key) ?? "The target does not satisfy the message's caller contract.";
+                        failing[decision.Key] = FailingUnits(alone, [decision], context).TryGetValue(decision.Key, out var reason)
+                            ? reason : ("XLIFF21-TARGET-INVALID", "The target does not satisfy the message's caller contract.");
                 }
             // Units that compile alone but not together: refuse the rest deterministically rather than apply them.
             bool isolated = failing.Count != 0;
             foreach (UnitDecision decision in applied)
             {
-                if (!failing.TryGetValue(decision.Key, out string? message) && isolated) continue;
+                bool named = failing.TryGetValue(decision.Key, out var reason);
+                if (!named && isolated) continue;
                 decision.Outcome = TranslationXliffUnitOutcome.Refused;
-                decision.Code = "XLIFF21-TARGET-INVALID";
-                decision.Message = message ?? "The imported units do not compile together; none of them was applied.";
+                decision.Code = named ? reason.Code : "XLIFF21-TARGET-INVALID";
+                decision.Message = named ? reason.Message : "The imported units do not compile together; none of them was applied.";
             }
         }
     }
@@ -577,7 +796,10 @@ internal static class TranslationXliffReader
     private static Rmf2ProjectCompilation CompileUnits(IReadOnlyList<UnitDecision> applied, ImportContext context)
     {
         string project = "{\"schemaVersion\":1,\"catalog\":" + Quote(context.Catalog) + ",\"code\":{\"namespace\":\"Runic.Interchange\",\"className\":\"Text\"},\"baseLocale\":" + Quote(context.SourceLocale) +
-            ",\"locales\":[{\"tag\":" + Quote(context.SourceLocale) + "},{\"tag\":" + Quote(context.TargetLocale) + ",\"fallback\":" + Quote(context.SourceLocale) + "}]}";
+            ",\"locales\":[{\"tag\":" + Quote(context.SourceLocale) + "},{\"tag\":" + Quote(context.TargetLocale) + ",\"fallback\":" + Quote(context.SourceLocale) + "}]" +
+            // The target locale's plural policy decides whether category problems refuse a unit; the other quality
+            // checks are left to validate.
+            ",\"validation\":{\"pluralCategories\":" + Quote(PolicyName(context.PluralCategories)) + ",\"inputParity\":\"allow\",\"formattedBooleans\":\"allow\",\"maxLength\":\"allow\",\"emptyValues\":\"allow\"}}";
         var messages = new List<TranslationSource>(applied.Count * 2);
         foreach (UnitDecision decision in applied)
         {
@@ -587,17 +809,21 @@ internal static class TranslationXliffReader
         return TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("interchange/runic.json", Encoding.UTF8.GetBytes(project)), messages);
     }
 
-    // The first error of every unit that a diagnostic names.
-    private static Dictionary<string, string> FailingUnits(Rmf2ProjectCompilation compilation, IReadOnlyList<UnitDecision> applied)
+    private static string PolicyName(TranslationPolicy policy) => policy switch { TranslationPolicy.Allow => "allow", TranslationPolicy.Error => "error", _ => "warning" };
+
+    // The first error of every unit that a diagnostic names; plural categories that the policy makes errors have their own code.
+    private static Dictionary<string, (string Code, string Message)> FailingUnits(Rmf2ProjectCompilation compilation, IReadOnlyList<UnitDecision> applied, ImportContext context)
     {
         var keys = new HashSet<string>(applied.Select(static decision => decision.Key), StringComparer.Ordinal);
-        var failing = new Dictionary<string, string>(StringComparer.Ordinal);
+        var failing = new Dictionary<string, (string Code, string Message)>(StringComparer.Ordinal);
         foreach (TranslationDiagnostic diagnostic in compilation.Diagnostics.Where(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error))
         {
             string path = diagnostic.Location.Path;
             string? key = path.StartsWith("interchange/", StringComparison.Ordinal) && path.EndsWith(".mf2", StringComparison.Ordinal)
                 ? Path.GetFileNameWithoutExtension(path) : null;
-            if (key is not null && keys.Contains(key)) failing.TryAdd(key, "[" + diagnostic.Id + "] " + diagnostic.Message);
+            if (key is null || !keys.Contains(key)) continue;
+            bool plural = diagnostic.Id is "RTR0094" or "RTR0095" && path.StartsWith("interchange/" + context.TargetLocale + "/", StringComparison.Ordinal);
+            failing.TryAdd(key, (plural ? "XLIFF21-PLURAL-CATEGORIES" : "XLIFF21-TARGET-INVALID", "[" + diagnostic.Id + "] " + diagnostic.Message));
         }
         return failing;
     }

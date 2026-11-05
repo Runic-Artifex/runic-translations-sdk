@@ -137,7 +137,7 @@ internal static class InterchangeOperations
         int structured = notices.Where(static loss => loss.Code == "XLIFF21-STRUCTURED-MESSAGE").Select(static loss => loss.Location).Distinct(StringComparer.Ordinal).Count();
         foreach (TranslationsToolInterchangeDocument document in documents)
             result.WriteOutputLine($"wrote {document.Path} ({document.Units} unit(s)).");
-        if (structured != 0) result.WriteOutputLine($"{structured} message(s) with selectors, declarations or markup are exported as translate=\"no\"; translate them in the sources.");
+        if (structured != 0) result.WriteOutputLine($"{structured} message(s) with markup are exported as translate=\"no\"; translate them in the sources.");
         if (demoted != 0) result.WriteOutputLine($"{demoted} stale approval(s) were exported as needs-review.");
         result.Interchange = new TranslationsToolInterchange("export", catalog)
         {
@@ -216,7 +216,7 @@ internal static class InterchangeOperations
             string pattern = messages[unit.Key];
             string state = ReviewFile.TranslationReviewStatesText(unit.State ?? TranslationReviewState.Translated);
             if (!existingTargets.TryGetValue(unit.Key, out string? before)) { added++; values[unit.Key] = pattern; entries.Add(new(unit.Key, "added", unit.SourceChanged ? "XLIFF21-SOURCE-CHANGED" : null, null) { State = state }); }
-            else if (TranslationInterchangePattern.Canonical(before) != TranslationInterchangePattern.Canonical(pattern)) { changed++; values[unit.Key] = pattern; entries.Add(new(unit.Key, "changed", unit.SourceChanged ? "XLIFF21-SOURCE-CHANGED" : null, null) { State = state }); }
+            else if (TranslationInterchangePattern.CanonicalMessage(before) != TranslationInterchangePattern.CanonicalMessage(pattern)) { changed++; values[unit.Key] = pattern; entries.Add(new(unit.Key, "changed", unit.SourceChanged ? "XLIFF21-SOURCE-CHANGED" : null, null) { State = state }); }
             else
             {
                 unchanged++;
