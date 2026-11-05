@@ -79,6 +79,29 @@ internal sealed class Rmf2OverrideTests
         Assert.True(registration.Contains("new global::Runic.Translations.TranslationOverlayLocale(\"de-CH\", \"de\")", StringComparison.Ordinal), registration);
     }
 
+    private static readonly string[] FilterLocales = ["en", "en-001", "fr", "sr", "sr-Latn", "zh", "zh-Hant"];
+
+    [Test, DisplayName("the locale filter keeps the library locales the runtimes resolve the application's locales to")]
+    public void LocaleFilterMatchesLikeTheRuntimes()
+    {
+        // zh-TW resolves to zh-Hant (never the Simplified zh), sr-ME to sr-Latn (never the Cyrillic sr), en-GB to en-001.
+        const string project = "{ \"schemaVersion\": 1, \"catalog\": \"acme-grid\", \"code\": { \"namespace\": \"Acme.Grid\", \"className\": \"GridText\" }, \"baseLocale\": \"en\", " +
+            "\"locales\": [\"en\", \"en-001\", \"fr\", \"sr\", \"sr-Latn\", \"zh\", \"zh-Hant\"], \"validation\": { \"translationCompleteness\": \"allow\" } }";
+        TranslationSource[] sources = FilterLocales.Select(locale => new TranslationSource("runic/acme-grid/" + locale + ".rmf2", Encoding.UTF8.GetBytes("title = " + locale + "\n"))).ToArray();
+        string Kept(params string[] locales)
+        {
+            Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2OverlayV5(new TranslationSource("runic/acme-grid/runic.json", Encoding.UTF8.GetBytes(project)),
+                sources, [], locales: locales);
+            Assert.True(result.Success, Describe(result));
+            return string.Join(",", result.Project!.Locales.Select(locale => locale.Tag));
+        }
+        Assert.True(Kept("en", "zh-TW").Split(',').Contains("zh-Hant"), "zh-TW keeps zh-Hant: " + Kept("en", "zh-TW"));
+        Assert.True(Kept("en", "sr-ME").Split(',').Contains("sr-Latn"), "sr-ME keeps sr-Latn: " + Kept("en", "sr-ME"));
+        Assert.True(Kept("en-GB").Split(',').Contains("en-001"), "en-GB keeps en-001: " + Kept("en-GB"));
+        Assert.True(!Kept("en", "zh-TW", "sr-ME").Split(',').Contains("fr"), "fr is not an application locale: " + Kept("en", "zh-TW", "sr-ME"));
+        Assert.Equal("en,fr", Kept("fr-CA"), "fr-CA keeps fr and the base locale");
+    }
+
     [Test, DisplayName("overrides that do not match the library's keys are errors in the override source")]
     public void RejectsMismatches()
     {

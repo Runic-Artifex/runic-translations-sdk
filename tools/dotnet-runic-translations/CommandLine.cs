@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System;
 using Runic.Translations.Authoring;
 
@@ -40,7 +41,10 @@ internal sealed record ToolInvocation(
     bool OmitSourceDiagnostics = false,
     TextImportRequest? TextImport = null,
     bool PseudoLocales = false,
-    string? ContractPath = null);
+    string? ContractPath = null,
+    string? OverridesPath = null,
+    IReadOnlyList<string>? Locales = null,
+    bool SharedRuntime = false);
 
 internal sealed class ToolUsageException : Exception
 {

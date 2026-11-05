@@ -120,19 +120,26 @@ public static partial class TranslationCompiler
     /// locales they add (falling back to their nearest declared parent, else the library's base locale);
     /// <see cref="Rmf2ProjectV5.OverlayKeys"/> lists the overridden keys. The contract fingerprint is the library's.
     /// </remarks>
+    /// <param name="locales">
+    /// The application's locales, or <see langword="null"/> for all: the result keeps the library locales they resolve to as the
+    /// runtimes resolve a requested locale (the locale itself, else the CLDR likely-subtag and parent-locale match, such as
+    /// <c>zh-Hant</c> for <c>zh-TW</c>), their fallback chains and the base locale, and drops the others, so an application
+    /// that supports two locales does not ship a library's thirty.
+    /// </param>
     internal static Rmf2ProjectCompilation CompileRmf2OverlayV5(TranslationSource libraryProject, IEnumerable<TranslationSource> librarySources,
-        IEnumerable<TranslationSource> overrideSources, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default)
+        IEnumerable<TranslationSource> overrideSources, TranslationCompilerOptions? options = null, IReadOnlyCollection<string>? locales = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(libraryProject);
         ArgumentNullException.ThrowIfNull(librarySources);
         ArgumentNullException.ThrowIfNull(overrideSources);
         return CompileRmf2ProjectV5(libraryProject, Materialize(librarySources), null, options ?? new TranslationCompilerOptions(), cancellationToken,
-            false, Materialize(overrideSources));
+            false, Materialize(overrideSources), locales);
     }
 
     private static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project, TranslationSource[] sources,
         IReadOnlyDictionary<TranslationSource, Rmf2SourceUnitV5>? units, TranslationCompilerOptions options, CancellationToken cancellationToken,
-        bool pseudoLocales = false, TranslationSource[]? overlaySources = null)
+        bool pseudoLocales = false, TranslationSource[]? overlaySources = null, IReadOnlyCollection<string>? keepLocales = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var diagnostics = new DiagnosticBag();
@@ -351,6 +358,30 @@ public static partial class TranslationCompiler
             }
             foreach (var pair in keysByLocale) overlayKeys[pair.Key] = pair.Value.ToArray();
             locales = locales.Concat(added).OrderBy(locale => locale.Tag, StringComparer.Ordinal).ToArray();
+        }
+        if (keepLocales is not null)
+        {
+            var declared = locales.ToDictionary(locale => locale.Tag, StringComparer.OrdinalIgnoreCase);
+            string[] available = locales.Select(locale => locale.Tag).Order(StringComparer.Ordinal).ToArray();
+            var kept = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { manifest.DefaultLocale };
+            foreach (string requested in keepLocales)
+            {
+                // The CLI rejects an invalid tag before compiling.
+                if (!TryCanonicalizeLocale(requested, out string tag)) continue;
+                // The locale the runtimes resolve the application locale to (LocaleNegotiation.Match, the ESM matchLocale): the
+                // locale itself, else CLDR likely subtags and parent locales (zh-TW to zh-Hant, sr-ME to sr-Latn, en-GB to
+                // en-001), else a truncation with the same likely script. A subset that keeps it resolves to it too.
+                string? current = declared.ContainsKey(tag) ? tag : CldrLocales.Match(tag, available) ?? CldrLocales.Truncate(tag, available);
+                // The locale and its fallback chain; the graph was validated, the bound only guards against a cycle.
+                for (int hops = 0; current is not null && hops <= locales.Length && declared.TryGetValue(current, out var model); hops++)
+                {
+                    kept.Add(model.Tag);
+                    current = model.Fallback;
+                }
+            }
+            locales = locales.Where(locale => kept.Contains(locale.Tag)).ToArray();
+            foreach (string key in overlayKeys.Keys.Where(key => !kept.Contains(key)).ToArray()) overlayKeys.Remove(key);
+            overlayAdded.RemoveAll(locale => !kept.Contains(locale));
         }
         var linkedLocales = new List<Rmf2LocaleV5>();
         var byTag = locales.ToDictionary(locale => locale.Tag, StringComparer.OrdinalIgnoreCase);

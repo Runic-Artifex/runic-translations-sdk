@@ -399,7 +399,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             var sourceTexts = sources.ToDictionary(static source => source.Path, static source => SourceText.From(source.Text!, StrictUtf8), StringComparer.Ordinal);
             Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2OverlayV5(
                 new TranslationSource(library.Path, StrictUtf8.GetBytes(library.Text!)), librarySources,
-                sources.Select(static source => new TranslationSource(source.Path, StrictUtf8.GetBytes(source.Text!))), CompilerOptions, cancellationToken);
+                sources.Select(static source => new TranslationSource(source.Path, StrictUtf8.GetBytes(source.Text!))), CompilerOptions, cancellationToken: cancellationToken);
             bool failed = false;
             TranslationDiagnostic? libraryError = null;
             foreach (TranslationDiagnostic diagnostic in compilation.Diagnostics)

@@ -255,6 +255,79 @@ static void Check(string actual, string expected) { if (actual != expected) thro
   assert.match(rejected.stdout, /overrides[\\/]acme\.table[\\/]en\.rmf2\(1,1\): error RTR0103: Catalog 'acme\.table' has no message 'emtpy'/);
 }
 
+// Vite dependencies: "auto" (T1e): an npm library packs its catalog (package.json#runicTranslations, the packed runic.json and
+// exports["./runic-translations"]); an application's Vite build regenerates it with the application's override of one key
+// and its added French, filtered to the application's locales, and the library's own import of its catalog uses that.
+function verifyNpmLibraryOverrides(directory, frontend, npmArchives, environment) {
+  const library = join(directory, "npm-library");
+  mkdirSync(join(library, "runic", "acme.table"), { recursive: true });
+  writeFileSync(join(library, "package.json"), JSON.stringify({
+    name: "@acme/table", version: "1.0.0", type: "module",
+    exports: { ".": "./index.js", "./runic-translations": "./translations/acme.table.esm-v5/web-module-manifest-v3.json" },
+    runicTranslations: { catalog: "acme.table", project: "./runic/acme.table/runic.json" },
+    files: ["index.js", "runic", "translations"],
+  }, null, 2));
+  writeFileSync(join(library, "runic", "acme.table", "runic.json"), JSON.stringify({
+    schemaVersion: 1, catalog: "acme.table", code: { namespace: "Acme.Table", className: "TableText" }, baseLocale: "en", locales: ["en", "de"],
+  }));
+  writeFileSync(join(library, "runic", "acme.table", "en.rmf2"), "empty = No rows\nrows =\n  .input {$count :integer}\n  .match $count\n  one {{One row}}\n  * {{{$count} rows}}\n");
+  writeFileSync(join(library, "runic", "acme.table", "de.rmf2"), "empty = Keine Zeilen\nrows =\n  .input {$count :integer}\n  .match $count\n  one {{Eine Zeile}}\n  * {{{$count} Zeilen}}\n");
+  writeFileSync(join(library, "index.js"), 'import { m } from "./translations/acme.table.esm-v5/messages.js";\nexport const empty = () => m.empty();\nexport const rows = count => m.rows({ count });\n');
+  run("dotnet", ["tool", "run", "runic-translations", "--", "generate", "--project", join(library, "runic", "acme.table"), "--output", join(library, "translations"), "--emit-esm"], frontend, environment);
+  const archives = join(directory, "npm-library-archives");
+  mkdirSync(archives);
+  run("bun", ["pm", "pack", "--destination", archives, "--quiet"], library);
+
+  const app = join(directory, "npm-override-app");
+  mkdirSync(join(app, "translations", "overrides", "acme.table"), { recursive: true });
+  mkdirSync(join(app, ".config"));
+  writeFileSync(join(app, ".config", "dotnet-tools.json"), readFileSync(join(frontend, ".config", "dotnet-tools.json")));
+  writeFileSync(join(app, "package.json"), JSON.stringify({
+    name: "npm-override-app", private: true, type: "module",
+    dependencies: {
+      "@acme/table": `file:${join(archives, readdirSync(archives).find(name => name.endsWith(".tgz")))}`,
+      "@runic-artifex/vite-plugin-runic-translations": `file:${npmArchives.find(([name]) => name === "@runic-artifex/vite-plugin-runic-translations")[1]}`,
+      vite: "8.3.4",
+    },
+  }, null, 2));
+  run("bun", ["install", "--ignore-scripts"], app);
+  run("dotnet", ["tool", "restore", "--configfile", join(directory, "NuGet.config")], app, environment);
+  writeFileSync(join(app, "translations", "runic.json"), JSON.stringify({
+    schemaVersion: 1, catalog: "shop", code: { namespace: "Shop", className: "ShopText" }, baseLocale: "en", locales: ["en", "fr"],
+    overrides: [{ catalog: "acme.table", from: "@acme/table" }],
+  }));
+  writeFileSync(join(app, "translations", "en.rmf2"), "title = Shop\n");
+  writeFileSync(join(app, "translations", "fr.rmf2"), "title = Boutique\n");
+  writeFileSync(join(app, "translations", "overrides", "acme.table", "en.rmf2"), "empty = Nothing to show\n");
+  writeFileSync(join(app, "translations", "overrides", "acme.table", "fr.rmf2"),
+    "empty = Aucune ligne\nrows =\n  .input {$count :integer}\n  .match $count\n  one {{Une ligne}}\n  many {{{$count} de lignes}}\n  * {{{$count} lignes}}\n");
+  writeFileSync(join(app, "app.js"), `import { empty, rows } from "@acme/table";
+import { m } from "virtual:runic-translations/shop";
+import { configureSharedLocaleResolver } from "virtual:runic-translations/shop/runtime";
+let locale = "en";
+configureSharedLocaleResolver(() => locale);
+export const english = [m.title(), empty(), rows(3)].join("|");
+locale = "fr";
+export const french = [m.title(), empty(), rows(3)].join("|");
+`);
+  writeFileSync(join(app, "vite.config.js"), `import { defineConfig } from "vite";
+import { runicTranslations } from "@runic-artifex/vite-plugin-runic-translations";
+export default defineConfig({ plugins: [runicTranslations({ dependencies: "auto", persistentCompiler: false })],
+  build: { minify: false, lib: { entry: "app.js", formats: ["es"], fileName: () => "bundle.js" } } });
+`);
+  run("bun", ["x", "vite", "build"], app, environment);
+  const bundle = readFileSync(join(app, "dist", "bundle.js"), "utf8");
+  assert.ok(!bundle.includes("Keine Zeilen"), "the library's German is not an application locale");
+  writeFileSync(join(app, "check.mjs"), `import assert from "node:assert/strict";
+const { english, french } = await import("./dist/bundle.js");
+assert.equal(english, "Shop|Nothing to show|3 rows");
+assert.equal(french, "Boutique|Aucune ligne|3 lignes");
+console.log("npm library overrides: " + french);
+`);
+  run("bun", ["check.mjs"], app);
+  assert.ok(existsSync(join(app, ".runic", "translations", "dependencies", "acme.table.d.ts")), "declarations of the dependency catalog");
+}
+
 export async function verifyPackages(version = workspace.version) {
   const nuget = resolve(root, "artifacts/packages/nuget");
   const npm = resolve(root, "artifacts/packages/npm");
@@ -444,10 +517,11 @@ export default defineConfig({ plugins: [runicTranslations({
     run("dotnet", ["tool", "run", "runic-translations", "--", "verify", ...compilerArguments], frontend, environment);
     run("bun", ["run", "build"], frontend, environment);
     run("dotnet", ["tool", "run", "runic-translations", "--", "verify", ...compilerArguments], frontend, environment);
+    verifyNpmLibraryOverrides(directory, frontend, npmArchives, environment);
 
     await verifySvelteKitQuickStart({ directory, npmArchives, nugetConfig: join(directory, "NuGet.config"), version, environment });
     verifySvelteViteQuickStart({ directory, npmArchives, nugetConfig: join(directory, "NuGet.config"), version, environment });
-    console.log("All eight NuGet and three npm package consumers passed.");
+    console.log("All nine NuGet and four npm package consumers passed.");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
