@@ -45,7 +45,11 @@ public sealed class TranslationManager : ITranslationManager
         _provider = provider;
         _catalog = initialSnapshot.Catalog;
         _current = initialSnapshot;
+        TranslationHotReload.Track(this);
     }
+
+    /// <summary>The ID of the catalog this manager publishes snapshots of.</summary>
+    internal string CatalogId => _catalog;
 
     /// <inheritdoc />
     public string CurrentLocale => Current.Locale;

@@ -379,10 +379,12 @@ same policy. For Translations:
   encoded `r_<hex>` members, the typed slot types, and the `<Class>Catalog` factory
   methods (`CreateProvider`, `CreateManager`, `CreateManagerAsync` and the external
   pack methods) with `CatalogId`, `DefaultLocale` and `ContractFingerprint`. The
-  other `<Class>Catalog` constants (`SourceHash`, `GeneratorVersion`, the ABI,
-  grammar, profile and name versions, `Rmf2MarkupContract`) describe the build and
-  are diagnostics, not contract; they are `const`, so code that reads them sees the
-  value it was compiled against. For ESM the contract is the exported names of the
+  other `<Class>Catalog` members (`SourceHash`, `Rmf2MarkupContract`, `GeneratorVersion`,
+  the ABI, grammar, profile and name versions) describe the build and are
+  diagnostics, not contract. The versions are `const`, so code that reads them sees
+  the value it was compiled against; `SourceHash` and `Rmf2MarkupContract` are
+  static properties (since 0.9), because they change with a text-only catalog edit
+  and .NET Hot Reload cannot change a constant. For ESM the contract is the exported names of the
   generated modules and their declarations (for example `localeDirection`) and the
   Vite plugin's virtual module IDs. File names, private and
   `Runic.Translations.Generated` members and formatting are not part of the

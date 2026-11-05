@@ -129,6 +129,86 @@ internal sealed class TranslationReviewFileTests
         Require(!TranslationReviewFile.MergeImport(merged, "app", import, plan).Changed, "A repeated merge reported a change.");
     }
 
+    [Test, DisplayName("review fingerprints are computed while translations are incomplete or invalid, and not when the base locale has errors")]
+    public void FingerprintsOfAnIncompleteCatalog()
+    {
+        IReadOnlyDictionary<string, string> complete = TranslationInterchange.ComputeSourceFingerprints(Compile(English, German));
+        // translationCompleteness defaults to error: de misses 'later' (RTR0010), so the catalog does not compile.
+        string strict = Project.Replace(",\n  \"validation\": { \"translationCompleteness\": \"allow\" }", "", StringComparison.Ordinal);
+        TranslationSource project = Source("translations/runic.json", strict);
+        TranslationSource[] incomplete = [Source("translations/en.rmf2", English), Source("translations/de.rmf2", German)];
+        Rmf2ProjectCompilation failed = TranslationCompiler.CompileProject(project, incomplete);
+        Require(!failed.Success && failed.Diagnostics.Any(static diagnostic => diagnostic.Id == "RTR0010"), "The fixture compiled without RTR0010.");
+        Rmf2ProjectCompilation relaxed = TranslationReviewFile.ForReview(failed, project, incomplete);
+        Require(relaxed.Success && relaxed.Project!.Locales.Single(static locale => locale.Tag == "de").DirectResources.Count == 2, "The relaxed compile lost the translations.");
+        Require(Same(TranslationReviewFile.Fingerprints(failed, project, incomplete), complete), "The relaxed fingerprints differ from a complete catalog's.");
+
+        // A translation with a syntax error: the base locale alone gives the same fingerprints; stale entries sit at the base message.
+        TranslationSource[] broken = [Source("translations/en.rmf2", English), Source("translations/de.rmf2", "greet = Hallo {$name!\nplain = Schlicht\n")];
+        Rmf2ProjectCompilation brokenCompilation = TranslationCompiler.CompileProject(project, broken);
+        Rmf2ProjectCompilation baseOnly = TranslationReviewFile.ForReview(brokenCompilation, project, broken);
+        Require(baseOnly.Success && baseOnly.Project!.Locales.Single(static locale => locale.Tag == "de").DirectResources.Count == 0, "The base-locale compile read the broken translation.");
+        Require(Same(TranslationReviewFile.Fingerprints(brokenCompilation, project, broken), complete), "The base-locale fingerprints differ from a complete catalog's.");
+        var review = new TranslationInterchangeReview("app", [new TranslationInterchangeReviewEntry("plain", "de", TranslationReviewState.Approved, null, "sha256:old")]);
+        Require(TranslationReviewFile.Stale(baseOnly, review).Single().Location.Path == "translations/en.rmf2", "A stale entry of a base-locale compile is not at the base message.");
+
+        // An error in the base locale gives no fingerprints; a successful compilation is used as it is.
+        TranslationSource[] baseError = [Source("translations/en.rmf2", "greet = Hello {$name!\n"), Source("translations/de.rmf2", German)];
+        Require(TranslationReviewFile.Fingerprints(TranslationCompiler.CompileProject(project, baseError), project, baseError) is null, "A broken base locale gave fingerprints.");
+        Rmf2ProjectCompilation success = Compile(English, German);
+        Require(ReferenceEquals(TranslationReviewFile.ForReview(success, project, incomplete), success), "A successful compilation was recompiled.");
+
+        static bool Same(IReadOnlyDictionary<string, string>? left, IReadOnlyDictionary<string, string> right) =>
+            left is not null && left.Count == right.Count && right.All(pair => left.TryGetValue(pair.Key, out string? value) && value == pair.Value);
+    }
+
+    [Test, DisplayName("review file writes compare and swap: a changed file is refused, and Update re-applies the change to it")]
+    public void WritesCompareAndSwap()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "runic-review-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            string path = TranslationReviewFile.PathFor(Path.Combine(directory, "runic.json"), "app");
+            var first = new TranslationInterchangeReview("app", [new TranslationInterchangeReviewEntry("greet", "de", TranslationReviewState.Translated, null, "sha256:a")]);
+            TranslationReviewFile.Write(path, first, expected: null);
+            Require(Code(() => TranslationReviewFile.Write(path, first, expected: null)) == TranslationReviewFile.ChangedCode, "A write expecting no file replaced one.");
+            (TranslationInterchangeReview? read, byte[]? bytes) = TranslationReviewFile.ReadSnapshot(path, "app");
+            Require(read is not null && bytes is not null, "The snapshot is empty.");
+            // Another writer replaces the file after the snapshot.
+            TranslationReviewFile.Write(path, new TranslationInterchangeReview("app",
+                [.. first.Entries, new TranslationInterchangeReviewEntry("plain", "de", TranslationReviewState.Approved, null, "sha256:b")]));
+            Require(Code(() => TranslationReviewFile.Write(path, read!, bytes)) == TranslationReviewFile.ChangedCode, "A stale snapshot overwrote another writer's change.");
+            Require(TranslationReviewFile.Read(path, "app")!.Entries.Count == 2, "The refused write changed the file.");
+
+            // Update applies the change to the current file, so both writers' entries are kept.
+            int calls = 0;
+            TranslationReviewFile.Update(path, "app", current =>
+            {
+                if (calls++ == 0) TranslationReviewFile.Write(path, new TranslationInterchangeReview("app",
+                    [.. current!.Entries, new TranslationInterchangeReviewEntry("later", "de", TranslationReviewState.Draft, null, null)]));
+                return TranslationReviewFile.Mark(current, "app", ["greet"], "de", TranslationReviewState.Approved, "Checked",
+                    new Dictionary<string, string> { ["greet"] = "sha256:c" });
+            });
+            TranslationInterchangeReview updated = TranslationReviewFile.Read(path, "app")!;
+            Require(calls == 2 && updated.Entries.Count == 3 && updated.Entries.Single(static entry => entry.Key == "greet") is { State: TranslationReviewState.Approved, SourceFingerprint: "sha256:c" },
+                "Update did not merge with the concurrent change.");
+            Require(TranslationReviewFile.Update(path, "app", static _ => null) is { Entries.Count: 3 }, "Update without a change did not return the current file.");
+            Require(Directory.GetFiles(directory).Single() == path, "A write left a temporary file.");
+
+            // The 8 MiB limit applies to every read, including the bytes the import parses.
+            File.WriteAllBytes(path, new byte[TranslationReviewFile.MaximumBytes + 1]);
+            Require(Code(() => TranslationReviewFile.ReadBytes(path)) == "REVIEW-SIZE", "An oversized review file was read.");
+            Require(Code(() => TranslationReviewFile.Parse(new byte[TranslationReviewFile.MaximumBytes + 1], "app")) == "REVIEW-SIZE", "Oversized review bytes were parsed.");
+        }
+        finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
+
+        static string? Code(Action action)
+        {
+            try { action(); return null; }
+            catch (TranslationInterchangeException exception) { return exception.Code; }
+        }
+    }
+
     private static TranslationXliffImportUnitPlan Outcome(TranslationXliffImportPlan plan, string key) => plan.Units.Single(unit => unit.Key == key);
 
     private static Rmf2ProjectCompilation Compile(string english, string german)
