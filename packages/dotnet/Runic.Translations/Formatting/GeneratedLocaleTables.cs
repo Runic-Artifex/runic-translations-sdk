@@ -211,6 +211,51 @@ internal static class GeneratedLocaleTables
     [
         2, 2, 3, 2, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2
     ];
+    /// <summary>The data IDs with number formats in <c>GeneratedLocaleData.bin</c>.</summary>
+    internal static readonly string[] NumberIds =
+    [
+        "aa", "ab", "af", "agq", "ak", "am", "an", "ann", "apc", "ar", "ar-BH", "ar-DJ", "ar-DZ", "ar-EG", "ar-ER",
+        "ar-IL", "ar-IQ", "ar-JO", "ar-KM", "ar-KW", "ar-LB", "ar-LY", "ar-MA", "ar-MR", "ar-OM", "ar-PS", "ar-QA",
+        "ar-SA", "ar-SD", "ar-SO", "ar-SS", "ar-SY", "ar-TD", "ar-TN", "ar-YE", "arn", "as", "asa", "ast", "az",
+        "az-Arab", "az-Cyrl", "ba", "bal", "bal-Latn", "bas", "be", "bem", "bew", "bez", "bg", "bgc", "bgn", "bho",
+        "blo", "blt", "bm", "bm-Nkoo", "bn", "bo", "bqi", "br", "brx", "bs", "bs-Cyrl", "bss", "bua", "byn", "ca",
+        "cad", "cch", "ccp", "ce", "ceb", "cgg", "cho", "chr", "cic", "ckb", "co", "cop", "cs", "csw", "cu", "cv",
+        "cy", "da", "dav", "de", "de-AT", "de-CH", "de-LI", "dje", "doi", "dsb", "dua", "dv", "dyo", "dz", "ebu",
+        "ee", "el", "en", "en-AT", "en-BE", "en-CH", "en-CZ", "en-DE", "en-DK", "en-Dsrt", "en-EE", "en-ES",
+        "en-FI", "en-FR", "en-GE", "en-HU", "en-ID", "en-IN", "en-IT", "en-LT", "en-LV", "en-NL", "en-NO", "en-PL",
+        "en-PT", "en-RO", "en-SE", "en-SI", "en-SK", "en-Shaw", "en-UA", "en-ZA", "eo", "es", "es-419", "es-AR",
+        "es-BO", "es-CL", "es-CO", "es-CR", "es-EC", "es-PY", "es-UY", "es-VE", "et", "eu", "ewo", "fa", "ff",
+        "ff-Adlm", "fi", "fil", "fo", "fr", "fr-CA", "fr-CH", "fr-LU", "fr-MA", "frr", "fur", "fy", "ga", "gaa",
+        "gd", "gez", "gl", "gn", "gsw", "gu", "guz", "gv", "ha", "ha-Arab", "haw", "he", "hi", "hnj", "hr", "hsb",
+        "ht", "hu", "hy", "ia", "id", "ie", "ig", "ii", "io", "is", "it", "it-CH", "iu", "iu-Latn", "ja", "jbo",
+        "jgo", "jmc", "jv", "ka", "kaa", "kaa-Latn", "kab", "kaj", "kam", "kcg", "kde", "kea", "kek", "ken", "kgp",
+        "khq", "ki", "kk", "kk-Arab", "kkj", "kl", "kln", "km", "kn", "ko", "kok", "kok-Latn", "kpe", "ks",
+        "ks-Deva", "ksb", "ksf", "ksh", "ku", "ku-Arab", "kw", "kxv", "kxv-Deva", "kxv-Orya", "kxv-Telu", "ky",
+        "la", "lag", "lb", "lg", "lij", "lkt", "lld", "lmo", "ln", "lo", "lrc", "lt", "ltg", "lu", "luo", "luy",
+        "lv", "lzz", "mai", "mas", "mdf", "mer", "mfe", "mg", "mgh", "mgo", "mhn", "mi", "mic", "mk", "ml", "mn",
+        "mn-Mong", "mni", "mni-Mtei", "moh", "mr", "ms", "ms-Arab", "ms-Arab-BN", "ms-BN", "ms-ID", "mt", "mua",
+        "mus", "mww", "my", "myv", "mzn", "naq", "nd", "nds", "ne", "nl", "nmg", "nnh", "no", "nqo", "nr", "nso",
+        "nus", "nv", "ny", "nyn", "oc", "oka", "om", "or", "os", "osa", "pa", "pa-Arab", "pap", "pcm", "pi", "pis",
+        "pl", "pms", "prg", "ps", "pt", "pt-PT", "qu", "qu-BO", "quc", "raj", "rhg", "rif", "rm", "rn", "ro",
+        "rof", "ru", "rw", "rwk", "sa", "sah", "saq", "sat", "sat-Deva", "sbp", "sc", "scn", "sd", "sd-Deva",
+        "sdh", "se", "seh", "ses", "sg", "sgs", "shi", "shi-Latn", "shn", "si", "sid", "sk", "skr", "sl", "sma",
+        "smj", "smn", "sms", "sn", "so", "sq", "sr", "sr-Latn", "ss", "ssy", "st", "su", "suz", "suz-Sunu", "sv",
+        "sw", "sw-CD", "syr", "szl", "ta", "ta-MY", "ta-SG", "te", "teo", "tg", "th", "ti", "tig", "tk", "tn",
+        "to", "tok", "tpi", "tr", "trv", "trw", "ts", "tt", "twq", "tyv", "tzm", "ug", "uk", "ur", "ur-IN", "uz",
+        "uz-Arab", "uz-Cyrl", "vai", "vai-Latn", "ve", "vec", "vi", "vmw", "vo", "vun", "wa", "wae", "wal", "wbp",
+        "wo", "xh", "xnr", "xog", "yav", "yi", "yo", "yrl", "yue", "yue-Hans", "za", "zgh", "zh", "zh-Hant",
+        "zh-Latn", "zu"
+    ];
+    /// <summary>The data IDs with format-context weekday names (or an empty override) in <c>GeneratedLocaleData.bin</c>.</summary>
+    internal static readonly string[] WeekdayIds =
+    [
+        "brx", "hnj", "km", "ks-Deva", "lv", "ml", "mn", "os", "sd-Deva", "shn", "tk", "yo", "yo-BJ"
+    ];
+    /// <summary>The data IDs with flexible day periods (or an empty override) in <c>GeneratedLocaleData.bin</c>.</summary>
+    internal static readonly string[] DayPeriodIds =
+    [
+        "zh-Hant", "zh-Hant-HK", "zh-Hant-MY"
+    ];
     /// <summary>The data IDs with list patterns in <c>GeneratedLocaleData.bin</c>.</summary>
     internal static readonly string[] ListIds =
     [
@@ -268,5 +313,12 @@ internal static class GeneratedLocaleTables
         "ur-IN", "uz", "uz-Arab", "uz-Cyrl", "vai", "vai-Latn", "ve", "vec", "vi", "vmw", "vo", "vun", "wa", "wae",
         "wal", "wbp", "wo", "xh", "xnr", "xog", "yav", "yi", "yo", "yo-BJ", "yrl", "yue", "yue-Hans", "za", "zgh",
         "zh", "zh-HK", "zh-Hant", "zh-Hant-HK", "zh-Latn", "zh-MO", "zh-SG", "zu"
+    ];
+    /// <summary>CLDR's right-to-left scripts (ISO 15924), sorted: a locale is right-to-left when its script, explicit or likely, is one of them.</summary>
+    internal static readonly string[] RightToLeftScripts =
+    [
+        "Adlm", "Arab", "Armi", "Avst", "Chrs", "Cprt", "Elym", "Gara", "Hatr", "Hebr", "Hung", "Khar", "Lydi",
+        "Mand", "Mani", "Mend", "Merc", "Mero", "Narb", "Nbat", "Nkoo", "Orkh", "Ougr", "Palm", "Phli", "Phlp",
+        "Phnx", "Prti", "Rohg", "Samr", "Sarb", "Sidt", "Sogd", "Sogo", "Syrc", "Thaa", "Yezi"
     ];
 }

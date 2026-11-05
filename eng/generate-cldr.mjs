@@ -67,6 +67,10 @@ const aliases = checkTable("languageAliases", /^[a-z]{2,3}(?:-[A-Z][a-z]{3})?(?:
 for (const key of Object.keys(likely)) if (likely[parseTag(key).language] === undefined)
   throw new Error(`Likely subtags for '${key}' have no language entry.`);
 
+if (!Array.isArray(source.availableLocales) || source.availableLocales.some((id, index) => typeof id !== "string" || !tagPattern.test(id) ||
+  (index > 0 && source.availableLocales[index - 1] >= id)))
+  throw new Error("CLDR subset availableLocales must be sorted, unique data IDs.");
+
 // Plural rules by CLDR data ID. Identical rule sets share one generated selector; rule 0 is
 // CLDR's root rule (`other` only), which ordinals of a language without ordinal rules use.
 const rules = [];
@@ -98,7 +102,15 @@ const listTypes = ["conjunction", "disjunction", "unit"];
 const listStyles = ["long", "short", "narrow"];
 const locales = source.locales;
 if (!locales || typeof locales !== "object") throw new Error("CLDR subset has no locales.");
-const grouping = {}, list = {}, relativeTime = {};
+const numberingSystems = source.numberingSystems;
+if (!numberingSystems || typeof numberingSystems !== "object") throw new Error("CLDR subset has no numberingSystems.");
+for (const name of sortedKeys(numberingSystems, "numberingSystems")) {
+  const digits = [...numberingSystems[name]];
+  // Ten digits, all in the Basic Multilingual Plane or all outside it, so a runtime can split them by length.
+  if (!/^[a-z]{3,8}$/.test(name) || digits.length !== 10 || new Set(digits.map((digit) => digit.length)).size !== 1)
+    throw new Error(`Numbering system '${name}' needs ten digits of one width.`);
+}
+const grouping = {}, list = {}, relativeTime = {}, numbers = {}, weekdays = {}, dayPeriods = {};
 for (const id of sortedKeys(locales, "locales")) {
   if (!tagPattern.test(id)) throw new Error(`Invalid locale '${id}'.`);
   const data = locales[id];
@@ -111,6 +123,27 @@ for (const id of sortedKeys(locales, "locales")) {
     const inherited = chain(id, parents).slice(1).find((candidate) => locales[candidate]?.minimumGroupingDigits !== undefined);
     if (data.minimumGroupingDigits !== (inherited === undefined ? 1 : locales[inherited].minimumGroupingDigits))
       grouping[id] = data.minimumGroupingDigits;
+  }
+  // Number formats as one record: the default numbering system, then its fields and, when it is not latn, latn's
+  // (for -u-nu-latn). See numberFields.
+  if (data.numbers !== undefined) {
+    const system = data.numbers.system;
+    if (Object.keys(data.numbers).join() !== ["system", ...new Set([system, "latn"])].join())
+      throw new Error(`Numbers for '${id}' must list the system, then its formats and latn's.`);
+    numbers[id] = [system, ...numberFields(id, system, data.numbers[system]), ...(system === "latn" ? [] : numberFields(id, "latn", data.numbers.latn))];
+  }
+  // .NET only: the format-context weekday names (Sunday first) where .NET's stand-alone dddd names differ, and the
+  // flexible day periods of a B time pattern as [from minute, name] pairs. An empty array overrides an ancestor's.
+  if (data.weekdays !== undefined) {
+    if (!Array.isArray(data.weekdays) || ![0, 7].includes(data.weekdays.length) || data.weekdays.some((name) => typeof name !== "string" || name.length === 0))
+      throw new Error(`Weekdays for '${id}' must be seven names or empty.`);
+    weekdays[id] = data.weekdays;
+  }
+  if (data.dayPeriods !== undefined) {
+    if (!Array.isArray(data.dayPeriods) || data.dayPeriods.some(([from, name], index) => !Number.isInteger(from) || from < 0 || from >= 1440 ||
+      (index === 0 ? from !== 0 : from <= data.dayPeriods[index - 1][0]) || typeof name !== "string" || name.length === 0))
+      throw new Error(`Day periods for '${id}' must start at 0 and ascend.`);
+    dayPeriods[id] = data.dayPeriods.flatMap(([from, name]) => [String(from), name]);
   }
   // CLDR list patterns as [start, middle, end, 2] for each Intl.ListFormat type and style, 36
   // patterns in all. Each has {0} before {1}; some add text before, between or after (mi, ti).
@@ -154,8 +187,38 @@ for (const id of sortedKeys(locales, "locales")) {
   }
 }
 
-// The compressed resource holds the lists and relative times; .NET reads it lazily.
-const resourceJson = JSON.stringify({ list, relativeTime });
+// The 12 fields of a numbering system's formats in a locale: its digits, the decimal, group and minus symbols, the
+// primary and secondary group sizes of the standard decimal pattern and of the percent pattern, and the prefix and
+// suffix of the positive and negative percent patterns with the percent and minus signs in place. A pattern without
+// a negative subpattern puts the minus sign before the positive prefix, as ICU does.
+function numberFields(id, system, formats) {
+  const label = `${id}/${system}`;
+  if (!Object.hasOwn(numberingSystems, system)) throw new Error(`Numbers '${label}' use an unknown numbering system.`);
+  for (const name of ["decimal", "group", "minusSign", "percentSign", "decimalFormat", "percentFormat"])
+    if (typeof formats?.[name] !== "string" || formats[name].length === 0 || formats[name].length > 16) throw new Error(`Numbers '${label}' need ${name}.`);
+  const affix = (text) => {
+    if (/[#0-9,.¤‰E@*;]/.test(text.replace(/'[^']*'/g, ""))) throw new Error(`Unsupported pattern affix in '${label}': ${text}`);
+    return text.replace(/'([^']*)'|%|-/g, (match, quoted) => quoted !== undefined ? quoted : match === "%" ? formats.percentSign : formats.minusSign);
+  };
+  const subpattern = (pattern) => {
+    const first = pattern.search(/[#0,.]/), last = Math.max(...["#", "0", ",", "."].map((item) => pattern.lastIndexOf(item)));
+    const body = pattern.slice(first, last + 1);
+    if (first < 0 || !/^[#,]*0+(?:\.[0#]*)?$/.test(body)) throw new Error(`Unsupported number pattern in '${label}': ${pattern}`);
+    const groups = body.split(".")[0].split(",");
+    const primary = groups.length > 1 ? groups.at(-1).length : 0, secondary = groups.length > 2 ? groups.at(-2).length : primary;
+    return { prefix: pattern.slice(0, first), suffix: pattern.slice(last + 1), primary, secondary };
+  };
+  const decimal = subpattern(formats.decimalFormat);
+  if (formats.decimalFormat.includes(";") || decimal.prefix !== "" || decimal.suffix !== "") throw new Error(`Unsupported decimal pattern in '${label}'.`);
+  const [positiveText, negativeText] = formats.percentFormat.split(";"), positive = subpattern(positiveText);
+  if (!positiveText.includes("%")) throw new Error(`The percent pattern of '${label}' has no percent sign.`);
+  const negative = negativeText === undefined ? { prefix: "-" + positive.prefix, suffix: positive.suffix } : subpattern(negativeText);
+  return [numberingSystems[system], formats.decimal, formats.group, formats.minusSign, String(decimal.primary), String(decimal.secondary),
+    String(positive.primary), String(positive.secondary), affix(positive.prefix), affix(positive.suffix), affix(negative.prefix), affix(negative.suffix)];
+}
+
+// The compressed resource holds the number formats, lists and relative times; .NET reads it lazily.
+const resourceJson = JSON.stringify({ numbers, weekdays, dayPeriods, list, relativeTime });
 const resource = deflateRawSync(Buffer.from(resourceJson, "utf8"), { level: 9 });
 
 // No-break spaces and bidi marks stay visible as escapes.
@@ -205,10 +268,18 @@ ${keysAndValues("Cardinal", cardinal, "byte")}
 ${keysAndValues("Ordinal", ordinal, "byte")}
     /// <summary>CLDR <c>minimumGroupingDigits</c> where it differs from the parent locale's (1 at the root).</summary>
 ${keysAndValues("Grouping", grouping, "byte")}
+    /// <summary>The data IDs with number formats in <c>GeneratedLocaleData.bin</c>.</summary>
+    internal static readonly string[] NumberIds =${csArray("string", Object.keys(numbers))};
+    /// <summary>The data IDs with format-context weekday names (or an empty override) in <c>GeneratedLocaleData.bin</c>.</summary>
+    internal static readonly string[] WeekdayIds =${csArray("string", Object.keys(weekdays))};
+    /// <summary>The data IDs with flexible day periods (or an empty override) in <c>GeneratedLocaleData.bin</c>.</summary>
+    internal static readonly string[] DayPeriodIds =${csArray("string", Object.keys(dayPeriods))};
     /// <summary>The data IDs with list patterns in <c>GeneratedLocaleData.bin</c>.</summary>
     internal static readonly string[] ListIds =${csArray("string", Object.keys(list))};
     /// <summary>The data IDs with relative-time data in <c>GeneratedLocaleData.bin</c>.</summary>
     internal static readonly string[] RelativeTimeIds =${csArray("string", Object.keys(relativeTime))};
+    /// <summary>CLDR's right-to-left scripts (ISO 15924), sorted: a locale is right-to-left when its script, explicit or likely, is one of them.</summary>
+    internal static readonly string[] RightToLeftScripts =${csArray("string", rightToLeftScripts)};
 }
 `;
 
@@ -255,7 +326,7 @@ internal static partial class TranslationCapabilityRegistry
 // The capability matrix lists every CLDR language and script locale (regional variants inherit).
 const pluralLanguage = (table, id) => chain(dataId(id, likely), {}, true).some((candidate) => Object.hasOwn(table, candidate));
 const dataLocale = (table, id) => chain(dataId(id, likely), parents).some((candidate) => Object.hasOwn(table, candidate));
-const matrixTags = [...new Set([...Object.keys(cardinal), ...Object.keys(locales)])]
+const matrixTags = [...new Set([...Object.keys(cardinal), ...source.availableLocales])]
   .filter((id) => parseTag(id).region === null && parseTag(id).variants.length === 0)
   .sort(ordinalSort);
 const matrix =
@@ -278,14 +349,14 @@ const matrix =
       formatterProfile: {
         string: { default: "exact" },
         boolean: { default: "exact" },
-        integer: { plain: "exact", grouped: "semantic" },
-        number: { plain: "semantic", grouped: "semantic", fixed: "semantic", percent: "semantic" },
+        integer: { plain: "exact", grouped: "exact" },
+        number: { plain: "exact", grouped: "exact", fixed: "exact", percent: "exact" },
         date: { iso: "exact", localized: "semantic" },
         time: { iso: "exact", localized: "semantic" },
         datetime: { iso: "semantic", localized: "semantic" },
         uuid: { d: "exact", n: "exact" },
       },
-      messageProfile: { cardinal: "exact", ordinal: "exact", relativeTime: "semantic", list: "exact" },
+      messageProfile: { cardinal: "exact", ordinal: "exact", relativeTime: "exact", list: "exact" },
       locales: matrixTags.map((tag) => {
         // A locale with CLDR data but no plural rules of its own (agq, rw) uses the root rule, `other` only.
         const plural = pluralLanguage(cardinal, tag) || dataLocale(list, tag) || dataLocale(relativeTime, tag);

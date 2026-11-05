@@ -211,10 +211,11 @@ public sealed class WpfDocumentRenderer
         }
     }
 
+    // The pinned CLDR direction (LocaleDirection), as the ESM runtime's localeDirection and the web document's dir.
     private static FlowDirection Direction(string locale)
     {
-        try { return CultureInfo.GetCultureInfo(locale).TextInfo.IsRightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight; }
-        catch (CultureNotFoundException) { return FlowDirection.LeftToRight; }
+        try { return LocaleDirection.IsRightToLeft(locale) ? FlowDirection.RightToLeft : FlowDirection.LeftToRight; }
+        catch (ArgumentException) { return FlowDirection.LeftToRight; }
     }
 
     // WPF numbers lower/upper-alpha bijectively (a … z, aa) and falls back to decimal past 3999 for roman

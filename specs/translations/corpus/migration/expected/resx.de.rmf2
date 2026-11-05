@@ -1,0 +1,4 @@
+title = Laden
+Errors_NotFound = Die Datei „{$arg0}“ wurde nicht gefunden.
+Greeting = Hallo, {$arg0}!
+ItemsInFolder = {$arg0 :number minimumFractionDigits=0 maximumFractionDigits=0} Elemente in {$arg1}

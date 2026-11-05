@@ -22,7 +22,8 @@ when one is available, and keep both when they differ.
 
 The other cases: `partial` is a Runic export edited in a text editor, `stale-approval` was exported before the
 `farewell` source changed (`stale-approval-refuse` imports it with `--source-changed refuse`), `nested-groups`
-wraps the cart units in nested `<group>` elements, and `profile-v2` is the profile 2 format of Runic 0.8. Every
+wraps the cart units in nested `<group>` elements, `selectors` translates the select `order_status` and the
+plural `notifications` (header `<ph>` and variant `<pc>` codes, one tool keeping only their ids), and `profile-v2` is the profile 2 format of Runic 0.8. Every
 file validates against the pinned OASIS XLIFF 2.1 core schema
 (`tests/dotnet/Runic.Translations.Tooling.Tests/Fixtures/xliff-2.1`).
 

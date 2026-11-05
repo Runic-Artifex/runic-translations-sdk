@@ -104,6 +104,17 @@ const greeting = m.greeting({ name: "Ada" }, { locale: "de" });
 RMF2 resource names become identifier-safe message properties. Static ESM
 re-exports let Vite remove message modules that are not referenced.
 
+`reportUnused: true` logs, after a production build, the messages that no chunk
+of the build contains, so they are candidates for removal:
+
+```text
+[runic-translations] 2 of 120 messages of catalog "app" are not used by this build: legacy_banner, settings_old_title.
+```
+
+It reports each build environment that includes the catalog. A message read only
+through the `/dynamic` entry, by a key computed at run time or by another build
+(such as the .NET side, see `RTR0100`) is reported too.
+
 Additional entry points are available for generated locale configuration (`/runtime`), request-local SSR (`/server`), cross-process text references (`/transport`), and validated runtime-loaded locale artifacts (`/dynamic`). Wrap SSR rendering with `/server`'s `runWithLocale`; explicit per-call locale options are only needed for intentional overrides.
 
 ## When to choose this package

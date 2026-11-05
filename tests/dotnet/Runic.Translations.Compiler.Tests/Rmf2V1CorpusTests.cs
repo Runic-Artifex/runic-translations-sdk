@@ -233,13 +233,36 @@ internal sealed class Rmf2V1CorpusTests
     // in both digests.
     // Re-pinned for merging T1g with main (TE, TC, TD) through T1a/T1b, in both digests.
     // Re-pinned for merging TB (#131) with T1g (#132), in both digests.
+    // Re-pinned for T1c (0.9): the shared locale channel in runtime.js, server.js and transport.js, in both digests.
+    // Re-pinned for web overlays (0.9): message modules call formatMessage, dynamic.js carries the overlay API and the locale
+    // fallbacks, in both digests.
+    // Re-pinned for merging main (TB #131) into T1c, with ordered resolver removal, in both digests.
     // Re-pinned for TR 0.9 batch TJ: <Class>Catalog.SourceHash and Rmf2MarkupContract are static properties rather than
     // constants, so .NET Hot Reload applies text-only catalog edits, in both digests (C# only).
     // Re-pinned for the TJ Hot Reload review: Registration reads the markup contract through static () => Rmf2MarkupContract,
     // so overlays follow a Hot Reload update of it, in both digests (C# only).
     // Re-pinned for merging the TJ Hot Reload review with TB (#131), in both digests.
-    private const string EncodedOutputDigest = "4f14e58d36415a0a33af819db5e55d8d916d5b263218d286e19bcfdb141c8508";
-    private const string HiddenEncodedOutputDigest = "8714c2424a25f1cc235bb4c335c2599a941bb1232010b48fe12c0079d451a6d5";
+    // Re-pinned for merging the formatting follow-ups (#148) with main (TJ, TI), and for their review (ESM caches by CLDR
+    // data ID, relative time in the formatting locale, ungrouped integers in the locale's digits), in both digests.
+    // Re-pinned for T2f (0.9): runtime.js carries the catalog's bidiIsolation, isolates placeholders with MF2's default
+    // bidi strategy, accepts u:dir on every function, takes a locale's direction from the pinned likely subtags first and
+    // gives createDomDocumentRenderer a pageDirection; runtime.d.ts declares it;
+    // the C# output of this left-to-right corpus is unchanged, in both digests.
+    // Re-pinned for the T2f review: runtime.js carries bidiIsolation as "default", "on" or "off" and decides "default" per
+    // call from the requested, catalog and content locales, isolates list items, rejects a variable u:dir, exports
+    // removeBidiIsolates, adds localeDirection to createLocaleSource and defaults pageDirection to <html dir> or the active
+    // locale; runtime.d.ts declares them; the C# output of this corpus (default) is unchanged, in both digests.
+    // Re-pinned for merging T2f (#146) with main (TJ, TI, #148), in both digests.
+    // Re-pinned for T1f (0.9): Registration also creates the readable surface, beside the readable surface only.
+    // Re-pinned for merging T1f (#145) with main (TJ Hot Reload), beside the readable surface only.
+    // Re-pinned for merging T1f (#145) with the formatting follow-ups (#148), beside the readable surface only.
+    // Re-pinned for merging T2f (#146) with T1f (#145), beside the readable surface only.
+    // Re-pinned for merging T1c (#142) with main (#136-#140), in both digests.
+    // Re-pinned for merging T1c (#142) with main (#145, #146, #148), in both digests.
+    // Re-pinned for merging T1c (with main, TB #131) into the web overlays, with .NET overlay precedence, in both digests.
+    // Re-pinned for merging T1c/T4b (#143) with T1c (#142) and main (#145, #146, #148), in both digests.
+    private const string EncodedOutputDigest = "b04be97e2a35fcaa6cc98ec18398006294591235fee3034eb1f821dfc2bdcd94";
+    private const string HiddenEncodedOutputDigest = "6cec539bdb153386f9a1e0c988c705d9f6ed5edd4558ea6c403190ab825a3c96";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]
@@ -260,7 +283,7 @@ internal sealed class Rmf2V1CorpusTests
             TranslationOutputRenderer.RenderRmf2V5CSharpKeys(project, readableSurface),
             TranslationOutputRenderer.RenderRmf2V5CSharpAccessors(project, readableSurface),
             TranslationOutputRenderer.RenderRmf2V5CSharpCatalogData(project),
-            TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(project),
+            TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(project, readableSurface: readableSurface),
             .. TranslationOutputRenderer.RenderRmf2V5EsmModules(project),
         ];
         return Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(

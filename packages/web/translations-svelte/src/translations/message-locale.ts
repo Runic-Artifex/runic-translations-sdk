@@ -1,44 +1,79 @@
+import { BROWSER } from "esm-env";
 import { onDestroy } from "svelte";
 
 /** The generated runtime's `configureLocaleResolver`: installs a resolver and returns the function that removes it. */
 export type ConfigureLocaleResolver = (resolver: () => string) => () => void;
 
+/** What {@link useMessageLocale} follows: a getter over Svelte state, or a {@link SvelteLocale}-like object. */
+export type MessageLocaleInput = (() => string) | { readonly locale: string; readonly requestedLocale?: string };
+
+// The shared locale channel of the generated runtimes (Runic Translations 0.9 or later): every catalog on the page without
+// a resolver of its own reads `resolver`, the last of `resolvers` (the installed ones in installation order, each removed by
+// identity). The shape is the runtimes' protocol; members are only ever added.
+interface LocaleChannel {
+  version: number;
+  resolver: (() => string) | null;
+  storage: unknown;
+  resolvers: (() => string)[];
+}
+
+const localeChannelKey = Symbol.for("runic.translations.locale");
+
+function localeChannel(): LocaleChannel {
+  const host = globalThis as unknown as Record<symbol, LocaleChannel | undefined>;
+  let channel = host[localeChannelKey];
+  if (channel === undefined || channel === null || typeof channel !== "object")
+    host[localeChannelKey] = channel = { version: 1, resolver: null, storage: null, resolvers: [] };
+  if (!Array.isArray(channel.resolvers)) channel.resolvers = typeof channel.resolver === "function" ? [channel.resolver] : [];
+  return channel;
+}
+
 /**
- * Makes the generated message functions (`m.*()`) follow a locale that the application owns, such as a ViewModel's
- * language setting.
+ * Makes the generated message functions (`m.*()`) of every catalog on the page, the application's and its libraries',
+ * follow a locale that the application owns, such as a {@link SvelteLocale} or a ViewModel's language setting.
  *
  * `locale` must read Svelte state: a getter over `$state` or a ViewModel's reactive state, or a {@link SvelteLocale},
  * whose `requestedLocale` (such as `de-CH` for `de` text) is used so numbers and dates follow the requested region.
- * The generated functions read the locale through the resolver while they format, so a template, `$derived` or
- * `$effect` that calls `m.*()` runs again when the locale changes, without keying the page on it. A locale the
- * catalog does not declare goes through the catalog's unsupported-locale policy, as an explicit `locale` option
- * does.
+ * The generated functions read the locale while they format, so a template, `$derived` or `$effect` that calls `m.*()`
+ * runs again when the locale changes, without keying the page on it. Each catalog resolves the tag under its own locales
+ * and unsupported-locale policy, so a library that lacks the locale shows its own fallback.
  *
- * Call it while a component initialises, usually in the root component. It installs the resolver at once, so the
- * first render already uses the locale, and removes it when the component is destroyed (the previous resolver then
- * applies again). The resolver is module state of the generated runtime and serves every component in the page;
- * with server-side rendering, which formats several requests in one process, pass `{ locale }` to the message calls
- * or use the request-scoped `/server` context instead.
+ * Call it while a component initialises, usually in the root layout. It installs the resolver at once, so the first
+ * render already uses the locale, and removes it when the component is destroyed. Resolvers are kept in installation
+ * order and removed by identity, so the latest one that is still mounted applies, whatever order components are
+ * destroyed in. With one argument it sets the generated runtimes' shared locale channel, which every catalog generated
+ * by Runic Translations 0.9 or later reads when it has no resolver of its own.
+ *
+ * During server rendering the one-argument form installs nothing: a shared resolver would be process-wide, so concurrent
+ * requests would read each other's locale. The server's locale is the request's, from the generated `runWithLocale`
+ * (`createLocaleHandle` in `@runic-artifex/translations-sveltekit` sets it); a server without it renders in the base
+ * locale unless a call passes `{ locale }`.
+ *
+ * With the generated `configureLocaleResolver` as the first argument, it sets that catalog's own resolver only, as
+ * before 0.9.
  *
  * @example
  * ```svelte
  * <script lang="ts">
  *   import { m } from "virtual:runic-translations/app";
- *   import { configureLocaleResolver } from "virtual:runic-translations/app/runtime";
  *   import { useMessageLocale } from "@runic-artifex/translations-svelte";
  *
- *   const settings = useView(() => ({ connect: connectSettings }));
- *   useMessageLocale(configureLocaleResolver, () => settings.state?.locale ?? "en");
+ *   const locale = localeContext.provide(source);
+ *   useMessageLocale(locale);
  * </script>
  *
  * <h1>{m.app_title()}</h1>
  * ```
  */
+export function useMessageLocale(locale: MessageLocaleInput): void;
+export function useMessageLocale(configureLocaleResolver: ConfigureLocaleResolver, locale: MessageLocaleInput): void;
 export function useMessageLocale(
-  configureLocaleResolver: ConfigureLocaleResolver,
-  locale: (() => string) | { readonly locale: string; readonly requestedLocale?: string },
+  first: ConfigureLocaleResolver | MessageLocaleInput,
+  second?: MessageLocaleInput,
 ): void {
-  if (typeof configureLocaleResolver !== "function")
+  const configure = second === undefined ? undefined : first as ConfigureLocaleResolver;
+  const locale = second === undefined ? first as MessageLocaleInput : second;
+  if (second !== undefined && typeof configure !== "function")
     throw new TypeError("Pass the generated runtime's configureLocaleResolver.");
   if (typeof locale !== "function" && (typeof locale !== "object" || locale === null || !("locale" in locale)))
     throw new TypeError("The locale must be a function or an object with a locale property, such as a SvelteLocale.");
@@ -48,5 +83,23 @@ export function useMessageLocale(
   // onDestroy first: outside a component it throws before anything is installed.
   let remove: (() => void) | undefined;
   onDestroy(() => remove?.());
-  remove = configureLocaleResolver(read);
+  if (configure !== undefined) remove = configure(read);
+  else if (BROWSER) remove = configureShared(read);
+}
+
+function configureShared(resolver: () => string): () => void {
+  const channel = localeChannel();
+  const list = channel.resolvers;
+  // A fresh entry per call, so a resolver installed twice is removed once per call.
+  const entry = () => resolver();
+  list.push(entry);
+  channel.resolver = entry;
+  let active = true;
+  return () => {
+    if (!active) return;
+    active = false;
+    const index = list.indexOf(entry);
+    if (index >= 0) list.splice(index, 1);
+    channel.resolver = list.length === 0 ? null : list[list.length - 1]!;
+  };
 }

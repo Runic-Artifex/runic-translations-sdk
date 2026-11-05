@@ -269,7 +269,7 @@ internal static class TextCatalogImport
         return ReadsBack(quoted, text) ? quoted : null;
     }
 
-    private static bool NeedsQuotes(string text) =>
+    internal static bool NeedsQuotes(string text) =>
         text.Length == 0 || text[0] == '.' || IsFramingSpace(text[0]) || IsFramingSpace(text[^1]) ||
         text.Contains('\n') || text.Contains('\r');
 
@@ -400,7 +400,7 @@ internal static class TextCatalogImport
     private static string Display(string path) => path.Replace('\\', '/');
 
     /// <summary>The parts of runic.json the import needs: locales and source roots.</summary>
-    private sealed record Manifest(string BaseLocale, IReadOnlyList<string> Locales, IReadOnlyList<(string Path, IReadOnlyList<string> Namespace)> Roots)
+    internal sealed record Manifest(string BaseLocale, IReadOnlyList<string> Locales, IReadOnlyList<(string Path, IReadOnlyList<string> Namespace)> Roots)
     {
         internal static Manifest Read(ReadOnlyMemory<byte> utf8, string root)
         {

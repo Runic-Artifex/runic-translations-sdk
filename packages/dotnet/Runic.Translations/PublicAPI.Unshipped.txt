@@ -121,5 +121,22 @@ static Runic.Translations.TranslationOverlayDiagnostic.operator ==(Runic.Transla
 virtual Runic.Translations.TranslationProviderFactory.Invoke(Runic.Translations.ITextValueFormatter? valueFormatter, Runic.Translations.ITranslationSnapshotFactory? snapshotFactory, Runic.Translations.TranslationOptions? options) -> Runic.Translations.ITranslationProvider!
 ~override Runic.Translations.TranslationOverlayDiagnostic.Equals(object obj) -> bool
 ~override Runic.Translations.TranslationOverlayDiagnostic.ToString() -> string
+Runic.Translations.LocaleDirection
+Runic.Translations.TextDirection
+Runic.Translations.TextDirection.LeftToRight = 0 -> Runic.Translations.TextDirection
+Runic.Translations.TextDirection.RightToLeft = 1 -> Runic.Translations.TextDirection
+static Runic.Translations.LocaleDirection.Get(string! locale) -> Runic.Translations.TextDirection
+static Runic.Translations.LocaleDirection.IsRightToLeft(string! locale) -> bool
+static Runic.Translations.LocaleDirection.ToHtml(Runic.Translations.TextDirection direction) -> string!
+Runic.Translations.CompiledTranslationCatalog.BidiIsolation.get -> bool?
+Runic.Translations.CompiledTranslationCatalog.WithBidiIsolation(bool? enabled = true) -> Runic.Translations.CompiledTranslationCatalog!
+Runic.Translations.BidiText
+static Runic.Translations.BidiText.RemoveIsolates(string! text) -> string!
+Runic.Translations.ITranslationContext.TryGetRegistration(string! catalogId, out Runic.Translations.TranslationCatalogRegistration? registration) -> bool
+Runic.Translations.TranslationCatalogRegistration.CreateReadableMessages(Runic.Translations.ITranslationManager! manager) -> Runic.Translations.IReadableMessages?
+Runic.Translations.TranslationCatalogRegistration.HasReadableMessages.get -> bool
+Runic.Translations.TranslationCatalogRegistration.TranslationCatalogRegistration(string! catalogId, string! defaultLocale, string! contractFingerprint, string! rmf2MarkupContract, Runic.Translations.TranslationProviderFactory! providerFactory, System.Func<Runic.Translations.ITranslationManager!, Runic.Translations.IReadableMessages!>? readableMessagesFactory) -> void
+Runic.Translations.TranslationContext.TryGetRegistration(string! catalogId, out Runic.Translations.TranslationCatalogRegistration? registration) -> bool
 Runic.Translations.TranslationCatalogRegistration.TranslationCatalogRegistration(string! catalogId, string! defaultLocale, string! contractFingerprint, System.Func<string!>! rmf2MarkupContract, Runic.Translations.TranslationProviderFactory! providerFactory) -> void
 static Runic.Translations.Rmf2MarkupContract.Link(System.Func<string!>! contractJson) -> Runic.Translations.Rmf2MarkupContract!
+Runic.Translations.TranslationCatalogRegistration.TranslationCatalogRegistration(string! catalogId, string! defaultLocale, string! contractFingerprint, System.Func<string!>! rmf2MarkupContract, Runic.Translations.TranslationProviderFactory! providerFactory, System.Func<Runic.Translations.ITranslationManager!, Runic.Translations.IReadableMessages!>? readableMessagesFactory) -> void

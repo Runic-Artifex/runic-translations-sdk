@@ -493,12 +493,17 @@ internal sealed class GeneratorReadableTests
         Assert.Equal("AppText.Accessors.g.cs|AppText.CatalogData.g.cs|AppText.Keys.g.cs|AppText.Readable.g.cs|AppText.Registration.g.cs",
             string.Join("|", run.SingleResult.GeneratedSources.Select(static item => item.HintName).Order(StringComparer.Ordinal)), "hint files");
         // The encoded files are the same with and without the readable surface, except that encoded members with a
-        // readable counterpart leave completion lists. Without the readable surface they stay visible. The runtime
-        // differs only in the readable surface; both have the composition surface and the version rule.
+        // readable counterpart leave completion lists, and Registration also creates the readable surface. Without the
+        // readable surface they stay visible. The runtime differs only in the readable surface; both have the composition
+        // surface and the version rule.
         GeneratorRun old = GeneratorTestHost.Run(RuntimeReferenceMode.Rmf2V3CompositionVersionRule, ProjectInput(), EnglishInput(), GermanInput());
+        const string ReadableFactory = "CreateProvider,\n        static manager => new global::@Example.@Translations.@AppText(manager).Messages);";
+        Assert.True(run.SingleResult.GeneratedSources.Single(static item => item.HintName == "AppText.Registration.g.cs").SourceText.ToString()
+            .ReplaceLineEndings("\n").Contains(ReadableFactory, StringComparison.Ordinal), "Registration creates the readable surface");
         foreach (GeneratedSourceResult encoded in old.SingleResult.GeneratedSources)
             Assert.Equal(WithoutHidden(encoded.SourceText.ToString()),
-                WithoutHidden(run.SingleResult.GeneratedSources.Single(item => item.HintName == encoded.HintName).SourceText.ToString()), encoded.HintName);
+                WithoutHidden(run.SingleResult.GeneratedSources.Single(item => item.HintName == encoded.HintName).SourceText.ToString()
+                    .ReplaceLineEndings("\n").Replace(ReadableFactory, "CreateProvider);", StringComparison.Ordinal)), encoded.HintName);
         Assert.Equal(0, CountHidden(old.SingleResult.GeneratedSources.Single(static item => item.HintName == "AppText.Keys.g.cs").SourceText.ToString()),
             "hidden keys without the readable surface");
         Assert.Equal(5, CountHidden(run.SingleResult.GeneratedSources.Single(static item => item.HintName == "AppText.Keys.g.cs").SourceText.ToString()),

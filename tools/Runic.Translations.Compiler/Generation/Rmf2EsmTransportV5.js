@@ -1,4 +1,4 @@
-// Transport versions 1 and 2. The generator prepends the imports and the catalog, contractFingerprint and contracts constants.
+// Transport versions 1 and 2. The generator prepends the imports, the exported catalog and contractFingerprint, and the contracts.
 // The rules are shared with the .NET TranslationReference, its JSON converter and TranslationReferenceResolver.
 const limits = Object.freeze({ arguments: 32, keyLength: 512, argumentLength: 16384, fallbackLength: 65536, listItems: 256, depth: 8, references: 32, totalText: 65536, encoded: 262144, jsonDepth: 64 });
 const scalarTypes = new Set(["string", "int64", "decimal", "boolean", "date", "time", "datetime", "guid"]);
@@ -128,6 +128,42 @@ export function resolveTextReference(value, handlers, options) {
   }
   const text = translate(tree, "$", handlers, options, diagnostics);
   return text === undefined ? fallback() : resolution("translated", text, diagnostics);
+}
+
+// References of several catalogs, such as an application's and its libraries': each reference goes to the resolveTextReference
+// of its catalog's transport module with that catalog's messages, so a library ViewModel's validation text is translated like
+// the application's own. Any catalog's transport module provides this; the copies behave alike. A transport module generated
+// before Runic Translations 0.9 does not export its catalog ID, so its entry names it: { catalog, transport, messages }.
+export function createReferenceResolver(catalogs) {
+  if (!Array.isArray(catalogs) || catalogs.length === 0) throw new TypeError("createReferenceResolver needs a list of { transport, messages }.");
+  const byCatalog = new Map();
+  for (const entry of catalogs) {
+    const transport = entry?.transport, messages = entry?.messages, named = entry?.catalog;
+    if (typeof transport?.resolveTextReference !== "function" || messages === null || typeof messages !== "object")
+      throw new TypeError("Each catalog needs { transport, messages }: its generated transport module and its message namespace m.");
+    if (named !== undefined && (typeof named !== "string" || named === ""))
+      throw new TypeError("The catalog of an entry must be a non-empty catalog ID.");
+    if (named !== undefined && typeof transport.catalog === "string" && named !== transport.catalog)
+      throw new TypeError(`The entry names catalog '${named}', but its transport module belongs to '${transport.catalog}'.`);
+    const id = named ?? transport.catalog;
+    if (typeof id !== "string")
+      throw new TypeError("A transport module does not export its catalog ID: it was generated before Runic Translations 0.9. Regenerate it with 0.9 or later, or name its catalog: { catalog: \"<catalog ID>\", transport, messages }.");
+    if (byCatalog.has(id)) throw new TypeError(`Catalog '${id}' is listed more than once.`);
+    byCatalog.set(id, Object.freeze({ resolve: transport.resolveTextReference, messages }));
+  }
+  const first = byCatalog.values().next().value;
+  return function resolveReference(value, options) {
+    if (typeof value === "string") {
+      const json = parseTextReference(value);
+      if (!json.ok) return resolution("failed", undefined, [{ path: "$", reason: json.reason }]);
+      value = json.value;
+    }
+    // An own data member only: a getter of an untrusted object is never run here.
+    const member = value !== null && typeof value === "object" && !Array.isArray(value) ? Object.getOwnPropertyDescriptor(value, "catalog") : undefined;
+    const target = typeof member?.value === "string" ? byCatalog.get(member.value) : undefined;
+    // An unlisted catalog or a malformed value: the first catalog reports catalog-mismatch with the fallback text, or the failure.
+    return (target ?? first).resolve(value, (target ?? first).messages, options);
+  };
 }
 
 // Reads a version 1 or 2 wire value into a detached tree without consulting the receiver's contracts. Structural errors reject

@@ -119,6 +119,8 @@ internal static class TranslationsDiagnostics
         "RTR0097", "Boolean is formatted as text", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0097");
     internal static readonly DiagnosticDescriptor MaxLengthExceeded = new(
         "RTR0098", "Message is longer than its @maxLength", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0098");
+    internal static readonly DiagnosticDescriptor MessageNotReferenced = new(
+        "RTR0100", "Message is not referenced from C# code", "{0}", Category, DiagnosticSeverity.Info, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0100", customTags: WellKnownDiagnosticTags.CompilationEnd);
 
     private static readonly Dictionary<string, DiagnosticDescriptor> ById = Index(
         UnreadableSource, DuplicateInputs, UnsupportedProjectSchema, InvalidLocale, InvalidCodeName, EmptyBaseLocale,
@@ -128,7 +130,7 @@ internal static class TranslationsDiagnostics
         InvalidMarkupContract, InvalidMarkup, InvalidMarkupReference, NotExecutable, SyntaxError, InvalidDataModel,
         ReadableSurfaceUnsupported, ReadableNameReserved, DocumentContentKind, DocumentVariantStructure, DocumentChildInvalid,
         DocumentLimitExceeded, DocumentStructureMismatch, DocumentBlockEmpty, DocumentHeadingLevel, DocumentLineBreakSpace, XamlDeclaration, XamlKey, XamlInputs, XamlKind,
-        XamlPositionalInputs, XamlSourceNotChecked, PluralCategoryUnreachable, PluralCategoryMissing, InputNotDisplayed, BooleanFormatted, MaxLengthExceeded);
+        XamlPositionalInputs, XamlSourceNotChecked, PluralCategoryUnreachable, PluralCategoryMissing, InputNotDisplayed, BooleanFormatted, MaxLengthExceeded, MessageNotReferenced);
 
     private static readonly object UnknownGate = new();
     private static readonly Dictionary<string, DiagnosticDescriptor> Unknown = new(System.StringComparer.Ordinal);
