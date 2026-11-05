@@ -47,6 +47,9 @@ internal sealed class PackedLibraryFixture : IDisposable
             File.WriteAllText(Path.Combine(app, "package.json"), """{"name":"shop","private":true,"dependencies":{"@acme/table":"1.0.0"}}""");
             File.WriteAllText(Path.Combine(app, "node_modules", "@acme", "table", "package.json"),
                 """{"name":"@acme/table","version":"1.0.0","exports":{"./runic-translations":"./translations/acme.table.esm-v5/web-module-manifest-v3.json"},"runicTranslations":{"catalog":"acme.table","project":"./runic/acme.table/runic.json"}}""");
+            string manifest = Path.Combine(app, "node_modules", "@acme", "table", "translations", "acme.table.esm-v5");
+            Directory.CreateDirectory(manifest);
+            File.WriteAllText(Path.Combine(manifest, "web-module-manifest-v3.json"), """{"catalog":"acme.table","contractFingerprint":"sha256:0000000000000000000000000000000000000000000000000000000000000000"}""");
         }
         else
         {

@@ -125,6 +125,13 @@ internal static class TranslationDependencyCatalogs
     private static readonly string[] ProjectExtensions = [".csproj", ".fsproj", ".vbproj"];
     private static readonly string[] ApplicationFields = ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"];
     private static readonly string[] LibraryFields = ["dependencies", "peerDependencies", "optionalDependencies"];
+    // Missing optional and peer dependencies are normal (the Vite plugin warns about the others).
+    private static readonly string[] RequiredFields = ["dependencies", "devDependencies"];
+    // The catalog ID pattern of runic.json, which the Vite plugin and the pack task check.
+    private static readonly System.Text.RegularExpressions.Regex CatalogPattern = new("^[a-z][a-z0-9.-]*$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+    // What an install rewrites at the application's (or a workspace's) root, besides node_modules itself.
+    private static readonly string[] NpmStateFiles = [Path.Combine("node_modules", ".package-lock.json"), Path.Combine("node_modules", ".modules.yaml"),
+        Path.Combine("node_modules", ".yarn-state.yml"), "package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb"];
 
     /// <summary>Resolves the library catalogs of the project whose runic.json is <paramref name="projectPath"/>.</summary>
     /// <param name="projectBytes">The runic.json content to use instead of the file (an unsaved buffer), or null.</param>
@@ -140,14 +147,23 @@ internal static class TranslationDependencyCatalogs
         string? overridesRoot = declaresOverrides ? Path.Combine(directory, "overrides") : null;
 
         var catalogs = new List<TranslationDependencyCatalog>();
-        var inputs = new List<string>(AssetsFiles(directory));
+        // Every restore output the search would read, existing or not, so a first restore invalidates a cached resolution.
+        var inputs = new List<string>(AssetsCandidates(directory));
         if (FindApplicationRoot(directory) is { } npmRoot)
         {
             inputs.Add(Path.Combine(npmRoot, "package.json"));
-            inputs.Add(Path.Combine(npmRoot, "node_modules", ".package-lock.json"));
+            // npm workspaces, pnpm and Yarn install at a root above the application: the node_modules directories and the
+            // install state of every directory up to the repository root.
+            for (string? current = npmRoot; current is not null; current = Path.GetDirectoryName(current))
+            {
+                inputs.Add(Path.Combine(current, "node_modules"));
+                inputs.AddRange(NpmStateFiles.Select(file => Path.Combine(current, file)));
+                if (Directory.Exists(Path.Combine(current, ".git")) || File.Exists(Path.Combine(current, ".git"))) break;
+            }
         }
+        var conflicts = new Dictionary<string, string>(StringComparer.Ordinal);
         catalogs.AddRange(DiscoverNuGet(directory, warnings, cancellationToken));
-        catalogs.AddRange(DiscoverNpm(directory, warnings, cancellationToken));
+        catalogs.AddRange(DiscoverNpm(directory, warnings, cancellationToken, conflicts));
         catalogs.Sort(static (left, right) => StringComparer.Ordinal.Compare(left.Catalog, right.Catalog) is var order and not 0 ? order : left.Origin.CompareTo(right.Origin));
 
         var targets = new List<TranslationOverrideTarget>();
@@ -160,8 +176,12 @@ internal static class TranslationDependencyCatalogs
             string? problem = null;
             if (from.Length == 0)
                 problem = shipped.Length == 0
-                    ? $"Catalog '{item.Catalog}' to override is not packed by any installed package; reference '{item.From}' and restore (dotnet restore, npm install)."
+                    ? $"Catalog '{item.Catalog}' to override is not packed by any installed package; reference '{item.From}' and restore (dotnet restore, npm install). " +
+                      "Library catalogs are found in the restore output obj/project.assets.json (or artifacts/obj/<project>/ with UseArtifactsOutput) and in node_modules; " +
+                      "a custom BaseIntermediateOutputPath, MSBuildProjectExtensionsPath or ArtifactsPath, and Yarn Plug'n'Play, are not searched."
                     : $"Catalog '{item.Catalog}' comes from package '{string.Join("', '", shipped.Select(static catalog => catalog.Package))}', not '{item.From}'; correct \"from\" in runic.json.";
+            else if (conflicts.TryGetValue(item.Catalog, out string? conflict))
+                problem = conflict;
             targets.Add(new TranslationOverrideTarget(item.Catalog, item.From, Path.Combine(overridesDirectory, item.Catalog), from.FirstOrDefault(), problem));
         }
         if (overridesRoot is not null && Directory.Exists(overridesRoot))
@@ -203,6 +223,19 @@ internal static class TranslationDependencyCatalogs
                 if (root.TryGetProperty("packageFolders", out JsonElement packageFolders) && packageFolders.ValueKind == JsonValueKind.Object)
                     foreach (System.Text.Json.JsonProperty folder in packageFolders.EnumerateObject()) folders.Add(folder.Name);
                 if (!root.TryGetProperty("libraries", out JsonElement libraries) || libraries.ValueKind != JsonValueKind.Object) continue;
+                // The build sees a packed catalog only through the buildTransitive props NuGet imports, which a restore lists
+                // as "build" assets of the package in some target framework; ExcludeAssets="build" (or buildTransitive) drops them.
+                HashSet<string>? imported = null;
+                if (root.TryGetProperty("targets", out JsonElement targets) && targets.ValueKind == JsonValueKind.Object)
+                {
+                    imported = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (System.Text.Json.JsonProperty framework in targets.EnumerateObject())
+                        if (framework.Value.ValueKind == JsonValueKind.Object)
+                            foreach (System.Text.Json.JsonProperty package in framework.Value.EnumerateObject())
+                                if (package.Value.ValueKind == JsonValueKind.Object && package.Value.TryGetProperty("build", out JsonElement build) &&
+                                    build.ValueKind == JsonValueKind.Object && build.EnumerateObject().Any())
+                                    imported.Add(package.Name);
+                }
                 foreach (System.Text.Json.JsonProperty library in libraries.EnumerateObject())
                 {
                     JsonElement value = library.Value;
@@ -221,6 +254,11 @@ internal static class TranslationDependencyCatalogs
                         {
                             string candidate = Path.GetFullPath(Path.Combine(folder, path.GetString()!, "runic", segments[1], "runic.json"));
                             if (!File.Exists(candidate)) continue;
+                            if (imported is not null && !imported.Contains(library.Name))
+                            {
+                                warnings.Add($"Package '{package}' {version} packs catalog '{segments[1]}', but the restore excludes its build assets (ExcludeAssets or PrivateAssets with \"build\" or \"buildTransitive\"), so the build does not use the catalog or overrides of it.");
+                                break;
+                            }
                             if (!result.Any(item => item.Catalog == segments[1] && string.Equals(item.Package, package, StringComparison.OrdinalIgnoreCase)))
                                 result.Add(new TranslationDependencyCatalog(segments[1], package, version, TranslationDependencyOrigin.NuGet, candidate));
                             break;
@@ -234,6 +272,30 @@ internal static class TranslationDependencyCatalogs
             }
         }
         return result;
+    }
+
+    // The restore outputs AssetsFiles would read, whether they exist yet or not.
+    private static IEnumerable<string> AssetsCandidates(string directory)
+    {
+        for (string? current = Path.GetFullPath(directory); current is not null; current = Path.GetDirectoryName(current))
+        {
+            string[] projects;
+            try { projects = Directory.EnumerateFiles(current).Where(file => ProjectExtensions.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase)).Order(StringComparer.Ordinal).ToArray(); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { yield break; }
+            if (projects.Length == 0)
+            {
+                if (Directory.Exists(Path.Combine(current, ".git")) || File.Exists(Path.Combine(current, ".git"))) yield break;
+                continue;
+            }
+            yield return Path.Combine(current, "obj", "project.assets.json");
+            foreach (string project in projects)
+                for (string? above = current; above is not null; above = Path.GetDirectoryName(above))
+                {
+                    yield return Path.Combine(above, "artifacts", "obj", Path.GetFileNameWithoutExtension(project), "project.assets.json");
+                    if (Directory.Exists(Path.Combine(above, ".git")) || File.Exists(Path.Combine(above, ".git"))) break;
+                }
+            yield break;
+        }
     }
 
     // obj/project.assets.json of the nearest directory at or above the runic.json directory that holds a project file, and
@@ -267,22 +329,34 @@ internal static class TranslationDependencyCatalogs
     /// The library catalogs of the npm dependencies of the nearest package.json at or above <paramref name="directory"/>, as
     /// the Vite plugin's <c>dependencies: "auto"</c> finds them; none without a package.json.
     /// </summary>
-    internal static IReadOnlyList<TranslationDependencyCatalog> DiscoverNpm(string directory, List<string> warnings, CancellationToken cancellationToken = default)
+    /// <param name="conflicts">Receives, per catalog ID, why the Vite plugin rejects it: two versions of it, or two packages that ship it.</param>
+    internal static IReadOnlyList<TranslationDependencyCatalog> DiscoverNpm(string directory, List<string> warnings, CancellationToken cancellationToken = default,
+        Dictionary<string, string>? conflicts = null)
     {
         string? root = FindApplicationRoot(directory);
         var result = new List<TranslationDependencyCatalog>();
         if (root is null) return result;
         JsonElement? application = ReadPackage(Path.Combine(root, "package.json"), warnings);
         if (application is null) return result;
-        var queue = new List<(string Name, string From)>();
+        if (PlugAndPlay(root) is { } marker)
+        {
+            warnings.Add($"Yarn Plug'n'Play ({marker}) installs no node_modules, so npm library catalogs are not found here, and the Vite plugin's dependencies: \"auto\" rejects it. " +
+                "Set \"nodeLinker: node-modules\" in .yarnrc.yml to override library catalogs.");
+            return result;
+        }
+        var queue = new List<(string Name, string From, string DeclaredBy, bool Required)>();
         var visited = new HashSet<string>(StringComparer.Ordinal);
-        Enqueue(application.Value, root, ApplicationFields);
+        Enqueue(application.Value, root, "the application", ApplicationFields);
         for (int index = 0; index < queue.Count && visited.Count < MaximumNpmPackages; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            (string name, string from) = queue[index];
+            (string name, string from, string declaredBy, bool required) = queue[index];
             string? packageJson = FindPackage(from, name);
-            if (packageJson is null) continue;
+            if (packageJson is null)
+            {
+                if (required) warnings.Add($"Dependency '{name}' of {declaredBy} is not installed in node_modules, so its catalog (if it has one) is not found; run the package manager's install.");
+                continue;
+            }
             string packageRoot = Path.GetDirectoryName(Path.GetFullPath(packageJson))!;
             try { packageRoot = new DirectoryInfo(packageRoot).ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? packageRoot; }
             catch (IOException) { }
@@ -297,27 +371,77 @@ internal static class TranslationDependencyCatalogs
             }
             string catalog = catalogValue.GetString()!, project = projectValue.GetString()!;
             string projectPath = Path.GetFullPath(project, packageRoot);
-            if (!TranslationReviewFile.IsFileName(catalog) || Path.IsPathRooted(project) || !IsWithin(packageRoot, projectPath) || !File.Exists(projectPath))
+            // The Vite plugin's checks of a declaration; it fails the build on each, so the package is left out here with a warning.
+            if (!CatalogPattern.IsMatch(catalog) || !TranslationReviewFile.IsFileName(catalog))
+            {
+                warnings.Add($"Dependency '{name}' ({packageRoot}) declares an invalid runicTranslations catalog: '{catalog}' is not a catalog ID such as 'acme.grid'.");
+                continue;
+            }
+            if (catalog.StartsWith("runic-", StringComparison.Ordinal) && !name.StartsWith("@runic-artifex/", StringComparison.Ordinal))
+            {
+                warnings.Add($"Dependency '{name}' ({packageRoot}) declares catalog ID '{catalog}', which is reserved for the Runic packages (RTR0106).");
+                continue;
+            }
+            if (Path.IsPathRooted(project) || !IsWithin(packageRoot, projectPath) || !File.Exists(projectPath))
             {
                 warnings.Add($"Dependency '{name}' ({packageRoot}) declares runicTranslations.project '{project}', which is not a runic.json inside the package.");
                 continue;
             }
+            if (ExportedManifest(description) is not { } exported || Path.IsPathRooted(exported) || !IsWithin(packageRoot, Path.GetFullPath(exported, packageRoot)) ||
+                !File.Exists(Path.GetFullPath(exported, packageRoot)))
+            {
+                warnings.Add($"Dependency '{name}' ({packageRoot}) declares catalog '{catalog}' but does not export './runic-translations' as an existing web module manifest inside the package, which the Vite plugin requires.");
+                continue;
+            }
             string version = description.TryGetProperty("version", out JsonElement versionValue) && versionValue.ValueKind == JsonValueKind.String ? versionValue.GetString()! : "";
-            // Breadth first: the copy nearest the application is the one the plugin regenerates.
-            if (!result.Any(item => item.Catalog == catalog))
+            // Breadth first: the copy nearest the application is the one the plugin regenerates. Copies of the same package
+            // and version share it; two versions, or two packages, that ship one catalog ID fail the Vite build.
+            if (result.FirstOrDefault(item => item.Catalog == catalog) is not { } existing)
                 result.Add(new TranslationDependencyCatalog(catalog, name, version, TranslationDependencyOrigin.Npm, projectPath));
-            Enqueue(description, packageRoot, LibraryFields);
+            else if (existing.Package != name || existing.Version != version)
+            {
+                string conflict = existing.Package != name
+                    ? $"Dependencies '{existing.Package}' and '{name}' both ship catalog '{catalog}'; catalog IDs must be unique, and the Vite plugin fails the build."
+                    : $"Catalog '{catalog}' is installed in two versions, '{name}@{existing.Version}' and '{name}@{version}' ({packageRoot}); the Vite plugin fails the build. Install one version (npm dedupe, or \"overrides\"/\"resolutions\" in package.json).";
+                if (conflicts?.TryAdd(catalog, conflict) != false) warnings.Add(conflict);
+            }
+            Enqueue(description, packageRoot, $"'{name}'", LibraryFields);
         }
         return result;
 
-        void Enqueue(JsonElement manifest, string from, string[] fields)
+        void Enqueue(JsonElement manifest, string from, string declaredBy, string[] fields)
         {
-            var names = new SortedSet<string>(StringComparer.Ordinal);
+            var names = new SortedDictionary<string, bool>(StringComparer.Ordinal);
             foreach (string field in fields)
                 if (manifest.TryGetProperty(field, out JsonElement value) && value.ValueKind == JsonValueKind.Object)
-                    foreach (System.Text.Json.JsonProperty dependency in value.EnumerateObject()) names.Add(dependency.Name);
-            foreach (string name in names) queue.Add((name, from));
+                    foreach (System.Text.Json.JsonProperty dependency in value.EnumerateObject())
+                        names[dependency.Name] = names.GetValueOrDefault(dependency.Name) || RequiredFields.Contains(field);
+            foreach (var name in names) queue.Add((name.Key, from, declaredBy, name.Value));
         }
+    }
+
+    // exports["./runic-translations"]: a path, or a conditions object whose "import" or "default" is one (as the Vite plugin reads it).
+    private static string? ExportedManifest(JsonElement description)
+    {
+        if (!description.TryGetProperty("exports", out JsonElement exports) || exports.ValueKind != JsonValueKind.Object ||
+            !exports.TryGetProperty("./runic-translations", out JsonElement entry)) return null;
+        if (entry.ValueKind == JsonValueKind.String) return entry.GetString();
+        if (entry.ValueKind == JsonValueKind.Object)
+            foreach (string condition in new[] { "import", "default" })
+                if (entry.TryGetProperty(condition, out JsonElement value) && value.ValueKind == JsonValueKind.String) return value.GetString();
+        return null;
+    }
+
+    // Yarn Plug'n'Play: a .pnp.cjs (or .pnp.js) with no node_modules between the application and the directory that holds it.
+    private static string? PlugAndPlay(string root)
+    {
+        for (string? current = root; current is not null; current = Path.GetDirectoryName(current))
+        {
+            if (Directory.Exists(Path.Combine(current, "node_modules"))) return null;
+            foreach (string file in new[] { ".pnp.cjs", ".pnp.js" })
+                if (File.Exists(Path.Combine(current, file))) return Path.Combine(current, file);
+        }
+        return null;
     }
 
     // The nearest directory at or above directory with a package.json, as the Vite plugin finds the application.
@@ -373,6 +497,23 @@ internal static class TranslationDependencyCatalogs
         foreach (string file in EnumerateSources(catalog.Root, cancellationToken))
             sources.Add(new TranslationSource(file, ReadBounded(file)));
         return (project, sources);
+    }
+
+    /// <summary>
+    /// A stamp of the packed runic.json and the sources <see cref="ReadLibrary"/> reads (path, size and write time of each):
+    /// it changes when the installed catalog does, so a compilation of the library can be reused while it is the same.
+    /// </summary>
+    internal static string LibraryStamp(TranslationDependencyCatalog catalog, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        var stamp = new System.Text.StringBuilder();
+        foreach (string file in EnumerateSources(catalog.Root, cancellationToken).Prepend(catalog.ProjectPath))
+        {
+            var information = new FileInfo(file);
+            stamp.Append(file).Append('|').Append(information.Exists ? information.Length : -1).Append('|')
+                .Append(information.Exists ? information.LastWriteTimeUtc.Ticks : 0).Append('\n');
+        }
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(stamp.ToString())));
     }
 
     /// <summary>

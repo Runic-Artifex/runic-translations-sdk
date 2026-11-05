@@ -16,7 +16,7 @@ internal static class OverridesCommandModule
     private const string ProjectDescription = "The application's translations directory or its runic.json. Defaults to ./runic.json, then ./translations/runic.json.";
 
     [Command("overrides add", Description = "Scaffold overrides of a library catalog in translations/overrides/<catalog>/<locale>.rmf2.",
-        LongDescription = "Reads the library catalog from the installed package (the restore output's NuGet package folder, or node_modules), as the build and the Vite plugin find it; restore first. With --key, adds each message to <locale>.rmf2 seeded with the library's text in that locale (for a locale the library lacks, the text of the locale it falls back to), with the library's base text as comments above it, and records that base text in overrides/<catalog>/<catalog>.review.json, so the Translations Editor and the language server mark the override when a library update changes it. Without --key, creates <locale>.rmf2 with every library message as a commented-out template. A locale the library lacks is added with its first message and falls back to its nearest CLDR parent among the library's and the added locales, else to the library locale CLDR likely subtags match, else to the library's base locale. A catalog runic.json does not list in \"overrides\" yet is added there, from the package that ships it.\n\nExit codes: 0 success; 1 command failure, such as an inaccessible file; 2 invalid invocation, an unknown catalog, key or locale, or a key that is already overridden; 3 internal failure; 130 cancelled.",
+        LongDescription = "Reads the library catalog from the installed package (the restore output's NuGet package folder, or node_modules), as the build and the Vite plugin find it; restore first. With --key, adds each message to <locale>.rmf2 seeded with the library's text in that locale (for a locale the library lacks, the text of the locale it falls back to), with the library's base text as comments above it, and records the library text it was written for (the base text and the text that locale shows) in overrides/<catalog>/<catalog>.review.json, so validate, status, the Translations Editor and the language server report the override (RTR0090) when a library update changes either. Without --key, creates <locale>.rmf2 with every library message as a commented-out template. A locale the library lacks is added with its first message and falls back to its nearest CLDR parent among the library's and the added locales, else to the library locale CLDR likely subtags match, else to the library's base locale. A catalog runic.json does not list in \"overrides\" yet is added there, from the package that ships it. The request is checked first; runic.json, the override source and the review file are then written together, each only if it did not change meanwhile, or nothing is written.\n\nExit codes: 0 success; 1 command failure, such as an inaccessible file; 2 invalid invocation, an unknown catalog, key or locale, or a key that is already overridden; 3 internal failure; 130 cancelled.",
         Examples = ["runic-translations overrides add acme.grid --locale fr", "runic-translations overrides add acme.grid --locale de --key grid.title", "runic-translations overrides add acme.grid --locale de-CH --key empty --key rows --dry-run"])]
     [CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
     internal static CommandOutcome<TranslationsToolCommandResult> Add(
@@ -29,7 +29,7 @@ internal static class OverridesCommandModule
         operations.Execute(new("overrides add", Project: project, Catalog: catalog, DryRun: dryRun) { Tag = locale, Keys = keys });
 
     [Command("overrides list", Description = "List the library catalogs of installed packages and the application's overrides of them.",
-        LongDescription = "For each installed package that packs a catalog: its package, version and locales; for each catalog runic.json overrides: the locales the application adds (with their fallback), the overridden messages per locale, and overrides whose library base text changed since they were written.\n\nExit codes: 0 success; 1 command failure; 2 invalid invocation; 3 internal failure; 130 cancelled.",
+        LongDescription = "For each installed package that packs a catalog: its package, version and locales; for each catalog runic.json overrides: the locales the application adds (with their fallback), the overridden messages per locale, and overrides whose library library text (base text, or the text of the overridden locale) changed since they were written.\n\nExit codes: 0 success; 1 command failure; 2 invalid invocation; 3 internal failure; 130 cancelled.",
         Examples = ["runic-translations overrides list", "runic-translations overrides list --project src/Shop/translations"])]
     [CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
     internal static CommandOutcome<TranslationsToolCommandResult> List(
@@ -42,26 +42,39 @@ internal static class OverridesOperations
 {
     internal static int Add(string projectPath, string catalogId, string locale, IReadOnlyList<string> keys, bool dryRun, ToolOperationResult result)
     {
-        (TranslationOverrideTarget target, TranslationLibraryCatalog catalog) = Load(projectPath, catalogId, dryRun, result);
+        string manifest = Manifest(projectPath);
+        (TranslationOverrideTarget target, TranslationLibraryCatalog catalog) = Load(manifest, catalogId);
         string current = Path.GetFullPath(Environment.CurrentDirectory);
+        // The whole change is planned first (keys, locale, the library and the review file are checked); then runic.json,
+        // the override source and the review file are written together, or nothing is.
         TranslationOverridePlan plan;
         try
         {
             plan = keys.Count == 0
                 ? TranslationOverrideChanges.Scaffold(catalog, locale)
                 : TranslationOverrideChanges.Override(catalog, keys.Select(key => KeyOf(catalog, key)).ToArray(), locale);
+            plan = TranslationOverrideChanges.Declaring(plan, manifest, target);
         }
         catch (ArgumentException exception) { throw new ToolUsageException(exception.Message); }
-        if (!dryRun) TranslationOverrideChanges.Apply(plan, target);
+        catch (InvalidOperationException exception) { throw new ToolDiagnosticException(exception.Message); }
+        if (!dryRun)
+        {
+            try { TranslationOverrideChanges.Apply(plan, target with { Listed = true, Problem = null }); }
+            catch (TranslationOverrideConflictException exception) { throw new ToolDiagnosticException(exception.Message); }
+            catch (TranslationInterchangeException exception) { throw new ToolDiagnosticException($"The review file {InputFiles.DisplayPath(target.ReviewPath, current)} cannot be written ({exception.Code}): {exception.Message}"); }
+        }
+        if (plan.ProjectPath is not null)
+            result.WriteOutputLine($"{(dryRun ? "would add" : "added")} {{ \"catalog\": \"{catalogId}\", \"from\": \"{target.Dependency!.Package}\" }} to \"overrides\" in {InputFiles.DisplayPath(manifest, current)}.");
         string file = InputFiles.DisplayPath(plan.Path, current);
         string verb = dryRun ? (plan.Creates ? "would create" : "would update") : (plan.Creates ? "created" : "updated");
         result.WriteOutputLine(plan.Keys.Count == 0
             ? $"{verb} {file} with {catalog.Messages.Count} commented-out template(s) of catalog {catalog.Catalog} ({catalog.Dependency.Display})."
             : $"{verb} {file}: overrides {string.Join(", ", plan.Keys.Select(key => string.Join(".", catalog.Message(key)!.LogicalPath)))} of catalog {catalog.Catalog} ({catalog.Dependency.Display}).");
         if (plan.AddedLocaleFallback is { } fallback)
-            result.WriteOutputLine($"The library has no {Path.GetFileNameWithoutExtension(plan.Path)}; the application adds it, falling back to {fallback}.");
+            result.WriteOutputLine($"The library has no {Path.GetFileNameWithoutExtension(plan.Path)}; the application adds it, falling back to {fallback}" +
+                (plan.Keys.Count == 0 ? " once it has a message." : "."));
         if (plan.Review is not null)
-            result.WriteOutputLine($"{(dryRun ? "would record" : "recorded")} the library's base text in {InputFiles.DisplayPath(target.ReviewPath, current)}.");
+            result.WriteOutputLine($"{(dryRun ? "would record" : "recorded")} the library's text in {InputFiles.DisplayPath(target.ReviewPath, current)}.");
         return Program.Success;
     }
 
@@ -93,10 +106,10 @@ internal static class OverridesOperations
         return Program.Success;
     }
 
-    // The target of a catalog; an installed catalog runic.json does not list yet is added to "overrides" (unless dryRun).
-    private static (TranslationOverrideTarget Target, TranslationLibraryCatalog Catalog) Load(string projectPath, string catalogId, bool dryRun, ToolOperationResult result)
+    // The target of a catalog and the library with the application's overrides. Nothing is written: a catalog runic.json
+    // does not list yet is listed by the plan (TranslationOverrideChanges.Declaring).
+    private static (TranslationOverrideTarget Target, TranslationLibraryCatalog Catalog) Load(string manifest, string catalogId)
     {
-        string manifest = Manifest(projectPath);
         TranslationDependencyResolution resolution = TranslationDependencyCatalogs.Resolve(manifest);
         TranslationOverrideTarget? target = resolution.TargetFor(catalogId);
         if (target is null)
@@ -104,15 +117,6 @@ internal static class OverridesOperations
                 ? " Restore the project (dotnet restore, npm install) first."
                 : $" Installed catalogs: {string.Join(", ", resolution.Catalogs.Select(catalog => catalog.Catalog))}."));
         if (target.Dependency is null) throw new ToolUsageException(target.Problem ?? $"Catalog '{catalogId}' is not installed.");
-        if (!target.Listed)
-        {
-            byte[]? declared;
-            try { declared = TranslationOverrideChanges.Declare(new TranslationSource(manifest, File.ReadAllBytes(manifest)), catalogId, target.Dependency.Package); }
-            catch (InvalidOperationException exception) { throw new ToolUsageException(exception.Message); }
-            if (declared is not null && !dryRun) File.WriteAllBytes(manifest, declared);
-            result.WriteOutputLine($"{(dryRun ? "would add" : "added")} {{ \"catalog\": \"{catalogId}\", \"from\": \"{target.Dependency.Package}\" }} to \"overrides\" in {InputFiles.DisplayPath(manifest, Path.GetFullPath(Environment.CurrentDirectory))}.");
-            target = target with { Problem = null, Listed = true };
-        }
         TranslationLibraryCatalog catalog = TranslationLibraryCatalog.Load(target);
         if (catalog.Library.Project is null)
             throw new ToolDiagnosticException($"The library catalog '{catalogId}' ({target.Dependency.Display}) does not compile with this tool: {catalog.LibraryError?.Id} {catalog.LibraryError?.Message}");

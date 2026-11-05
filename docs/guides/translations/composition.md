@@ -224,7 +224,23 @@ The language server treats override sources as overlays on the installed library
 while you type, completes the library's keys and inputs, shows the library's base text on hover and opens the library's
 source from **Go to Definition**; the VS Code command **Override Library Message…** wraps `overrides add`. All of them
 find the library in the restore output or `node_modules`, so restore first. When a library update changes the base
-text of a message you override, they report it (`RTR0090`).
+text of a message you override, or the library's text in the overridden locale, they report it (`RTR0090`), and so
+do `validate` and `status`.
+
+**Seeding.** A new override starts from the text the locale shows now: the library's own text in that locale, or for a
+locale the library lacks, the text of the locale it falls back to (`de-CH` starts from the library's `de`). The library's
+base text is written above it as comments. Its entry in `overrides/<catalog>/<catalog>.review.json` records both the
+library's base message and that locale text, so a later library version that fixes its German text marks an override
+seeded from the old German, even when the override is still identical to it. Compare it with the library's new text, then
+keep it or revert it to the library.
+
+**Discovery limits.** Tooling reads the restore output `obj/project.assets.json` (or `artifacts/obj/<project>/` with
+`UseArtifactsOutput`) of the project that holds `runic.json`: a custom `BaseIntermediateOutputPath`,
+`MSBuildProjectExtensionsPath` or `ArtifactsPath` is not searched, and a package whose build assets the restore
+excludes (`ExcludeAssets` or `PrivateAssets` with `build`) is left out, as the build leaves it out. From `node_modules` it
+reports what the Vite plugin rejects as warnings: an invalid or reserved (`runic-*`, `RTR0106`) catalog ID, a missing
+`exports["./runic-translations"]`, two versions or two packages of one catalog, and Yarn Plug'n'Play, which installs no
+`node_modules`.
 
 The overrides compile into the application's assembly as `AppTextCatalog.Overlays`, one compiled overlay per library
 catalog. Attach them where the library catalogs are registered:

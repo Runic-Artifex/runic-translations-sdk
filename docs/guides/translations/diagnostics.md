@@ -488,11 +488,13 @@ while other locales are incomplete. See
 [review state](../../../tools/dotnet-runic-translations/README.md#track-review-state-and-stale-translations).
 
 In an override source of a library catalog (`translations/overrides/<catalog>/<locale>.rmf2`), the language
-server, the Translations Editor and `runic-translations overrides list` report it when the library's base text
-of an overridden message changed since the override was written: `overrides add` and the editor record that base
-text in `translations/overrides/<catalog>/<catalog>.review.json`, and a library update that changes it marks the
-override. Compare the override with the new base text, then keep it (**Keep override** in the editor) or write
-it again.
+server, the Translations Editor, `validate`, `status` and `runic-translations overrides list` report it when the
+library's text of an overridden message changed since the override was written: its base text, or its text in the
+overridden locale (or, for a locale the library lacks, in the locale it falls back to). `overrides add` and the editor
+record both in `translations/overrides/<catalog>/<catalog>.review.json`, and a library update that changes either marks
+the override. Compare the override with the library's new text, then keep it (**Keep override** in the editor) or
+revert it to the library. An override review file that cannot be read is `RTR0091`; overrides of that catalog are not
+written until it is fixed or deleted.
 
 ## RTR0091
 
