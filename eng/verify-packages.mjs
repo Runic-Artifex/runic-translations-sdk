@@ -19,8 +19,8 @@ function requireArchive(directory, name, version, extension) {
   return path;
 }
 
-function consumerProject(name, version, { framework = "net10.0", wpf = false, build = false } = {}) {
-  return `<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>${framework}</TargetFramework><OutputType>Exe</OutputType><ImplicitUsings>enable</ImplicitUsings><TreatWarningsAsErrors>true</TreatWarningsAsErrors>${wpf ? "<EnableWindowsTargeting>true</EnableWindowsTargeting><UseWPF>true</UseWPF>" : ""}</PropertyGroup><ItemGroup><PackageReference Include="${name}" Version="[${version}]"/>${build ? `<PackageReference Include="Runic.Translations" Version="[${version}]"/>` : ""}</ItemGroup></Project>`;
+function consumerProject(name, version, { framework = "net10.0", wpf = false, build = false, extraPackages = [] } = {}) {
+  return `<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>${framework}</TargetFramework><OutputType>Exe</OutputType><ImplicitUsings>enable</ImplicitUsings><TreatWarningsAsErrors>true</TreatWarningsAsErrors>${wpf ? "<EnableWindowsTargeting>true</EnableWindowsTargeting><UseWPF>true</UseWPF>" : ""}</PropertyGroup><ItemGroup><PackageReference Include="${name}" Version="[${version}]"/>${build ? `<PackageReference Include="Runic.Translations" Version="[${version}]"/>` : ""}${extraPackages.map(([id, extra]) => `<PackageReference Include="${id}" Version="${extra}"/>`).join("")}</ItemGroup></Project>`;
 }
 
 function dotnetConsumer(directory, name, version, options, program, environment) {
@@ -181,6 +181,18 @@ export async function verifyPackages(version = workspace.version) {
     assert.deepEqual(restoredCommandLine("runic-translations-commandline"), [`Runic.CommandLine/${commandLineFloor}`],
       "runic-translations-commandline must restore the Runic.CommandLine floor");
     assert.deepEqual(restoredCommandLine("runic-translations-tooling"), [], "runic-translations-tooling must not restore Runic.CommandLine");
+    // The shared context from dependency injection, over a catalog built from compiled data.
+    const dependencyInjection = readFileSync(join(root, "Directory.Packages.props"), "utf8")
+      .match(/<PackageVersion Include="Microsoft\.Extensions\.DependencyInjection" Version="([^"]+)"/)?.[1];
+    assert.ok(dependencyInjection, "Directory.Packages.props pins no Microsoft.Extensions.DependencyInjection");
+    dotnetConsumer(directory, "Runic.Translations.Hosting", version, { extraPackages: [["Microsoft.Extensions.DependencyInjection", dependencyInjection]] },
+      "using Microsoft.Extensions.DependencyInjection; using Runic.Translations; " +
+      "var catalog = new CompiledTranslationCatalog(\"app\", \"en\", [new CompiledTranslationDefinition(\"title\", [])], [new CompiledTranslationLocale(\"de\", \"en\", [new(0, \"Titel\")]), new CompiledTranslationLocale(\"en\", null, [new(0, \"Title\")])]); " +
+      "var registration = new TranslationCatalogRegistration(\"app\", \"en\", \"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\", \"{}\", (formatter, factory, options) => new CompiledTranslationProvider(catalog.WithOptions(options), formatter, factory)); " +
+      "var services = new ServiceCollection(); services.AddRunicTranslations(o => o.InitialLocale = \"de\").AddCatalog(registration); " +
+      "var provider = services.BuildServiceProvider(); await provider.InitializeRunicTranslationsAsync(); var context = provider.GetRequiredService<ITranslationContext>(); " +
+      "var snapshot = context.GetManager(\"app\").Current; snapshot.TryGetKey(\"title\", out TranslationKey key); var text = snapshot.Get(key); " +
+      "if (text != \"Titel\") throw new InvalidOperationException(text); Console.WriteLine(text);", environment);
     dotnetConsumer(directory, "Runic.Translations.Build", version, { build: true },
       "Console.WriteLine(\"Build package restored.\");", environment);
     dotnetConsumer(directory, "Runic.Translations.Wpf", version, { framework: "net10.0-windows", wpf: true },
@@ -325,7 +337,7 @@ export default defineConfig({ plugins: [runicTranslations({
 
     await verifySvelteKitQuickStart({ directory, npmArchives, nugetConfig: join(directory, "NuGet.config"), version, environment });
     verifySvelteViteQuickStart({ directory, npmArchives, nugetConfig: join(directory, "NuGet.config"), version, environment });
-    console.log("All seven NuGet and three npm package consumers passed.");
+    console.log("All eight NuGet and three npm package consumers passed.");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
