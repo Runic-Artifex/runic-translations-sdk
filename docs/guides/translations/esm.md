@@ -149,7 +149,8 @@ text with Swiss separators. `getRequestedLocale()` returns that tag for the
 current resolver (`de-CH` where `getLocale()` returns `de`), and
 `getMessageLocale(key, options?)` returns `{ key, locale, formatLocale }`: the
 locale of the message's text, for the `lang` of a string message after a
-fallback, and the locale its values format in. Structured content carries the
+fallback, and the locale its values format in (`ar-EG-u-nu-latn` when the
+requested tag asks for Latin digits). Structured content carries the
 same `locale` and `formatLocale`. `onFallback((key, locale, contentLocale) => …)`
 adds a listener, called when a message shows the text of a fallback locale
 because `locale` has no translation of it; it returns a function that removes

@@ -73,7 +73,7 @@ internal static partial class TranslationCapabilityRegistry
         Table("cardinal", GeneratedLocaleTables.CardinalKeys, GeneratedLocaleTables.CardinalValues.Select(Rule).ToArray());
         Table("ordinal", GeneratedLocaleTables.OrdinalKeys, GeneratedLocaleTables.OrdinalValues.Select(Rule).ToArray());
         Table("grouping", GeneratedLocaleTables.GroupingKeys, GeneratedLocaleTables.GroupingValues.Select(value => value.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToArray());
-        foreach (string section in new[] { "list", "relativeTime" })
+        foreach (string section in new[] { "numbers", "list", "relativeTime" })
         {
             json.Append(",\"").Append(section).Append("\":{");
             bool first = true;

@@ -126,8 +126,8 @@ internal sealed class CliIntegrationTests
         ProcessResult commandHelp = TestFixture.RunTool(temporary, "help", "validate");
         Assert.Equal(0, commandHelp.ExitCode, commandHelp.Combined);
         Assert.Contains("runic-translations validate", commandHelp.StandardOutput);
-        // --project is optional and described, in the same aligned help as every other command.
-        string? project = commandHelp.StandardOutput.Split('\n').FirstOrDefault(value => value.TrimStart().StartsWith("--project <directory>", StringComparison.Ordinal));
+        // --project is optional, repeatable and described, in the same aligned help as every other command.
+        string? project = commandHelp.StandardOutput.Split('\n').FirstOrDefault(value => value.TrimStart().StartsWith("--project <directory...>", StringComparison.Ordinal));
         Assert.True(project is not null && project.Contains("Translations directory or its runic.json.", StringComparison.Ordinal) && !project.Contains("[required]", StringComparison.Ordinal), commandHelp.StandardOutput);
         Assert.Contains("Defaults to ./runic.json", System.Text.RegularExpressions.Regex.Replace(commandHelp.StandardOutput, "\\s+", " "));
         // The retired --emit-typescript, --emit-template-manifest and --emit-cpp options are gone: help does not list
@@ -438,6 +438,50 @@ internal sealed class CliIntegrationTests
         Assert.Equal(0, process.ExitCode, output.Result + error.Result);
     }
 
+    [Test, DisplayName("CLI --pseudo-locales generates en-XA and ar-XB, which ESM formats as .NET does, ar-XB right to left")]
+    public void PseudoLocalesInEsm()
+    {
+        using TemporaryDirectory temporary = new();
+        Directory.CreateDirectory(temporary.Resolve("translations"));
+        File.WriteAllText(temporary.Resolve("translations", "runic.json"), """
+            { "schemaVersion": 1, "catalog": "app", "code": { "namespace": "Example", "className": "AppText" }, "baseLocale": "en", "locales": ["en"], "pseudoLocales": ["en-XA", "ar-XB"] }
+            """, new UTF8Encoding(false));
+        File.WriteAllText(temporary.Resolve("translations", "en.rmf2"), "save = Save {$name}\nhelp = Read {#link}the guide{/link}.\n" +
+            "items =\n  .input {$count :integer}\n  .match $count\n  0 {{No items}}\n  one {{One item}}\n  * {{{$count} items}}\n" +
+            "place =\n  .input {$n :integer select=ordinal}\n  .match $n\n  one {{{$n}st}}\n  two {{{$n}nd}}\n  * {{{$n}th}}\n", new UTF8Encoding(false));
+
+        ProcessResult release = TestFixture.RunTool(temporary, "generate", "--output", "release", "--emit-esm");
+        Assert.Equal(0, release.ExitCode, release.Combined);
+        Assert.False(File.ReadAllText(temporary.Resolve("release", "app.esm-v5", "runtime.js")).Contains("en-XA", StringComparison.Ordinal), "A build without --pseudo-locales contains en-XA.");
+
+        ProcessResult validate = TestFixture.RunTool(temporary, "validate", "--pseudo-locales");
+        Assert.Equal(0, validate.ExitCode, validate.Combined);
+        ProcessResult generate = TestFixture.RunTool(temporary, "generate", "--output", "generated", "--emit-esm", "--pseudo-locales");
+        Assert.Equal(0, generate.ExitCode, generate.Combined);
+        // The same strings as the .NET generator test (GeneratorTests.PseudoLocalesFollowTheBuildProperty).
+        RunBun(temporary.Path, """
+            import { m } from "./generated/app.esm-v5/messages.js";
+            import { localeDirection } from "./generated/app.esm-v5/runtime.js";
+            const checks = [
+              [m.save({ name: "Ada" }, { locale: "en-XA" }), "[Śààṽéé Ada]"],
+              [m.save({ name: "Ada" }, { locale: "ar-XB" }), "[\u202ESave \u202CAda]"],
+              [m.save({ name: "Ada" }, { locale: "en" }), "Save Ada"],
+              [localeDirection("ar-XB"), "rtl"],
+              [localeDirection("en-XA"), "ltr"],
+              // ar-XB selects with the Arabic rules: 2 is "two", which the base text does not have, and every ordinal is
+              // "other" (GeneratorTests.PseudoLocalesFollowTheBuildProperty checks the same strings in .NET).
+              [m.items({ count: 1 }, { locale: "ar-XB" }), "[\u202EOne item\u202C]"],
+              [m.items({ count: 2 }, { locale: "ar-XB" }), "[2\u202E items\u202C]"],
+              [m.items({ count: 0 }, { locale: "ar-XB" }), "[\u202ENo items\u202C]"],
+              [m.place({ n: 1 }, { locale: "ar-XB" }), "[1\u202Eth\u202C]"],
+              [m.place({ n: 2 }, { locale: "en-XA" }), "[2ńď]"],
+              [m.place({ n: 2 }, { locale: "en" }), "2nd"],
+            ];
+            for (const [actual, expected] of checks)
+              if (actual !== expected) throw new Error(`expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+            """);
+    }
+
     [Test, DisplayName("CLI import-text writes a valid group whose ESM formats placeholders, escapes and quoted patterns")]
     public void ImportTextValidatesAndGenerates()
     {
@@ -644,7 +688,7 @@ internal sealed class CliIntegrationTests
         ProcessResult result = TestFixture.RunTool(temporary, "schema", "--output", "schemas");
         Assert.Equal(0, result.ExitCode, result.Combined);
         string source = RepositoryPaths.Resolve("specs", "translations", "schemas");
-        string[] expected = ["asset-manifest-v1.schema.json", "capabilities-v1.schema.json", "external-pack-v5.schema.json", "interchange-review-v2.schema.json", "locale-artifact-v5.schema.json", "message-ast-v5.schema.json", "project-v1.schema.json", "translations-serve-v1.schema.json", "translations-support-v1.schema.json", "translations-tool-v1.schema.json", "web-module-manifest-v3.schema.json"];
+        string[] expected = ["asset-manifest-v1.schema.json", "capabilities-v1.schema.json", "external-pack-v5.schema.json", "interchange-review-v2.schema.json", "locale-artifact-v5.schema.json", "message-ast-v5.schema.json", "project-v1.schema.json", "translations-serve-v1.schema.json", "translations-status-v1.schema.json", "translations-support-v1.schema.json", "translations-tool-v1.schema.json", "web-module-manifest-v3.schema.json"];
         Array.Sort(expected, StringComparer.Ordinal);
         Assert.Equal(string.Join('|', expected), string.Join('|', TestFixture.RelativeFiles(temporary.Resolve("schemas"))));
         foreach (string schema in expected)

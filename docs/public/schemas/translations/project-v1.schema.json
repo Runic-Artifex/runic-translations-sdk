@@ -64,6 +64,17 @@
         ]
       }
     },
+    "pseudoLocales": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "en-XA",
+          "ar-XB"
+        ]
+      },
+      "description": "Development pseudo-locales generated from the base locale in Debug builds (MSBuild), in Vite modes other than production, and with --pseudo-locales: en-XA has accented, about 35% longer, bracketed text; ar-XB is right-to-left with mirrored text. Release builds leave them out. Do not also list them in locales."
+    },
     "validation": {
       "$ref": "#/$defs/validation"
     },
@@ -235,6 +246,10 @@
         },
         "fallback": {
           "$ref": "#/$defs/localeTag"
+        },
+        "validation": {
+          "$ref": "#/$defs/validation",
+          "description": "Validation policies for this locale only; each member overrides the project's validation for the locale's own translations."
         }
       },
       "additionalProperties": false
@@ -277,13 +292,39 @@
       "type": "object",
       "properties": {
         "translationCompleteness": {
-          "$ref": "#/$defs/policy"
+          "$ref": "#/$defs/policy",
+          "default": "error",
+          "description": "A base-locale message the locale does not translate (RTR0010)."
         },
         "extraLocaleKeys": {
-          "$ref": "#/$defs/policy"
+          "$ref": "#/$defs/policy",
+          "default": "error",
+          "description": "A locale defines a message the base locale does not (RTR0011)."
         },
         "emptyValues": {
-          "$ref": "#/$defs/policy"
+          "$ref": "#/$defs/policy",
+          "default": "allow",
+          "description": "A message has an empty variant (RTR0021)."
+        },
+        "pluralCategories": {
+          "$ref": "#/$defs/policy",
+          "default": "warning",
+          "description": "A plural or ordinal key the locale never selects (RTR0094), or categories the locale needs that fall to the * variant (RTR0095)."
+        },
+        "inputParity": {
+          "$ref": "#/$defs/policy",
+          "default": "warning",
+          "description": "A translation displays no input the base displays, in any variant (RTR0096)."
+        },
+        "formattedBooleans": {
+          "$ref": "#/$defs/policy",
+          "default": "warning",
+          "description": "A boolean formatted as text, which reads true or false in every locale (RTR0097)."
+        },
+        "maxLength": {
+          "$ref": "#/$defs/policy",
+          "default": "warning",
+          "description": "A message's text is longer than its @maxLength (RTR0098)."
         }
       },
       "additionalProperties": false

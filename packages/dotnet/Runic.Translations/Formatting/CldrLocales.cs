@@ -109,13 +109,43 @@ internal static class CldrLocales
     }
 
     /// <summary>The first ID in the parent chain of <paramref name="canonical"/>'s data ID that <paramref name="ids"/> contains.</summary>
-    internal static string? Find(string canonical, string[] ids, bool truncate)
+    internal static string? Find(string canonical, string[] ids, bool truncate) => FindFrom(DataId(canonical), ids, truncate);
+
+    /// <summary>The first ID in the parent chain of <paramref name="id"/>, a data ID, that <paramref name="ids"/> contains.</summary>
+    internal static string? FindFrom(string? id, string[] ids, bool truncate)
     {
-        int depth = 0;
-        for (string? id = DataId(canonical); id is not null && depth < 16; id = Parent(id, truncate), depth++)
+        for (int depth = 0; id is not null && depth < 16; id = Parent(id, truncate), depth++)
             if (Array.BinarySearch(ids, id, StringComparer.Ordinal) >= 0) return id;
         return null;
     }
+
+    /// <summary>
+    /// Where the data lookups of a tag start: the first ID of its data ID's parent chain, and of its truncation chain,
+    /// that a pinned table or the parent table contains, or null. The IDs before it have no data and no explicit
+    /// parent, so <see cref="Find"/> gives the same result from it as from the tag. Unlike the tag, it is bounded by the
+    /// pinned data: <c>de-AA</c>, <c>de-AB</c>, … and <c>de</c> share <c>de</c>, so caches keyed on it stay complete
+    /// whatever tags callers request.
+    /// </summary>
+    internal static (string? Data, string? Truncated) Anchors(string canonical)
+    {
+        string id = DataId(canonical);
+        string[] known = s_dataIds.Value;
+        return (FindFrom(id, known, truncate: false), FindFrom(id, known, truncate: true));
+    }
+
+    // Every ID of a pinned table, sorted.
+    private static readonly Lazy<string[]> s_dataIds = new(() =>
+    {
+        var ids = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (string[] table in new[]
+        {
+            GeneratedLocaleTables.ParentKeys, GeneratedLocaleTables.CardinalKeys, GeneratedLocaleTables.OrdinalKeys, GeneratedLocaleTables.GroupingKeys,
+            GeneratedLocaleTables.NumberIds, GeneratedLocaleTables.WeekdayIds, GeneratedLocaleTables.DayPeriodIds, GeneratedLocaleTables.ListIds,
+            GeneratedLocaleTables.RelativeTimeIds,
+        })
+            ids.UnionWith(table);
+        return [.. ids];
+    });
 
     /// <summary>
     /// The plural rule set of a locale, or -1 for a language without CLDR data. CLDR looks plural rules up by
@@ -123,21 +153,27 @@ internal static class CldrLocales
     /// rules selects <c>other</c> (rule 0, CLDR's root rule), and so does a locale with CLDR list or relative-time data
     /// but no plural rules of its own (<c>agq</c>, <c>rw</c>), as in ICU.
     /// </summary>
-    internal static int PluralRule(string canonical, bool ordinal)
+    internal static int PluralRule(string canonical, bool ordinal) => PluralRuleFrom(Anchors(canonical), ordinal);
+
+    /// <summary><see cref="PluralRule(string, bool)"/> from the <see cref="Anchors"/> of a tag.</summary>
+    internal static int PluralRuleFrom((string? Data, string? Truncated) anchors, bool ordinal)
     {
-        string? cardinal = Find(canonical, GeneratedLocaleTables.CardinalKeys, truncate: true);
+        string? cardinal = FindFrom(anchors.Truncated, GeneratedLocaleTables.CardinalKeys, truncate: true);
         if (cardinal is null)
-            return Find(canonical, GeneratedLocaleTables.ListIds, truncate: false) is not null ||
-                Find(canonical, GeneratedLocaleTables.RelativeTimeIds, truncate: false) is not null ? 0 : -1;
+            return FindFrom(anchors.Data, GeneratedLocaleTables.ListIds, truncate: false) is not null ||
+                FindFrom(anchors.Data, GeneratedLocaleTables.RelativeTimeIds, truncate: false) is not null ? 0 : -1;
         if (!ordinal) return GeneratedLocaleTables.CardinalValues[Array.BinarySearch(GeneratedLocaleTables.CardinalKeys, cardinal, StringComparer.Ordinal)];
-        string? id = Find(canonical, GeneratedLocaleTables.OrdinalKeys, truncate: true);
+        string? id = FindFrom(anchors.Truncated, GeneratedLocaleTables.OrdinalKeys, truncate: true);
         return id is null ? 0 : GeneratedLocaleTables.OrdinalValues[Array.BinarySearch(GeneratedLocaleTables.OrdinalKeys, id, StringComparer.Ordinal)];
     }
 
     /// <summary>CLDR <c>minimumGroupingDigits</c> of a locale: 1 without pinned data.</summary>
-    internal static int MinimumGroupingDigits(string canonical)
+    internal static int MinimumGroupingDigits(string canonical) => MinimumGroupingDigitsFrom(Anchors(canonical).Data);
+
+    /// <summary>CLDR <c>minimumGroupingDigits</c> from the first ID of a data ID's parent chain that has it: 1 without pinned data.</summary>
+    internal static int MinimumGroupingDigitsFrom(string? dataAnchor)
     {
-        string? id = Find(canonical, GeneratedLocaleTables.GroupingKeys, truncate: false);
+        string? id = FindFrom(dataAnchor, GeneratedLocaleTables.GroupingKeys, truncate: false);
         return id is null ? 1 : GeneratedLocaleTables.GroupingValues[Array.BinarySearch(GeneratedLocaleTables.GroupingKeys, id, StringComparer.Ordinal)];
     }
 

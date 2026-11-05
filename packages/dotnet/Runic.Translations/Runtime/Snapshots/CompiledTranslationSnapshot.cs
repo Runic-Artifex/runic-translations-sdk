@@ -32,8 +32,10 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
 
         _catalog = catalog;
         _definitions = catalog.DefinitionArray;
-        _patterns = catalog.GetResolvedPatterns(canonicalLocale);
-        _messages = catalog.GetResolvedMessages(canonicalLocale);
+        // One pair: under Hot Reload the catalog may replace its data between two reads.
+        LocaleValues values = catalog.GetResolved(canonicalLocale);
+        _patterns = values.Patterns;
+        _messages = values.Messages;
         _noArgumentText = BuildNoArgumentText(_messages, _definitions);
         _valueFormatter = valueFormatter ?? DefaultTextValueFormatter.Shared;
         Catalog = catalog.Catalog;

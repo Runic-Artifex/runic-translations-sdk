@@ -132,3 +132,5 @@ Runic.Translations.CompiledTranslationCatalog.BidiIsolation.get -> bool?
 Runic.Translations.CompiledTranslationCatalog.WithBidiIsolation(bool? enabled = true) -> Runic.Translations.CompiledTranslationCatalog!
 Runic.Translations.BidiText
 static Runic.Translations.BidiText.RemoveIsolates(string! text) -> string!
+Runic.Translations.TranslationCatalogRegistration.TranslationCatalogRegistration(string! catalogId, string! defaultLocale, string! contractFingerprint, System.Func<string!>! rmf2MarkupContract, Runic.Translations.TranslationProviderFactory! providerFactory) -> void
+static Runic.Translations.Rmf2MarkupContract.Link(System.Func<string!>! contractJson) -> Runic.Translations.Rmf2MarkupContract!

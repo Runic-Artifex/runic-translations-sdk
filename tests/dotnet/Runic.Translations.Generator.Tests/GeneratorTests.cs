@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.IO;
@@ -374,6 +375,48 @@ internal sealed class GeneratorTests
         {
             int statements = method.Body?.Statements.Count ?? 1;
             Assert.True(statements <= 40, $"{method.Identifier.Text} has {statements} statements.");
+        }
+    }
+
+    [Test, DisplayName("generated C# includes the runic.json pseudo-locales only when RunicTranslationsPseudoLocales is true")]
+    public void PseudoLocalesFollowTheBuildProperty()
+    {
+        const string project = """
+            {
+              "schemaVersion": 1,
+              "catalog": "app",
+              "code": { "namespace": "Example.Localization", "className": "AppText", "visibility": "public" },
+              "baseLocale": "en",
+              "locales": [ "en" ],
+              "pseudoLocales": [ "en-XA", "ar-XB" ]
+            }
+            """;
+        string save = PathMember("save");
+        string items = PathMember("items"), place = PathMember("place");
+        string source = $$"""
+            namespace Example.Localization;
+            public static class PseudoProbe
+            {
+                public static string Run() =>
+                    new AppText(AppTextCatalog.CreateManager("en-XA")).{{save}}("Ada") + "|" + new AppText(AppTextCatalog.CreateManager("ar-XB")).{{save}}("Ada") + "|" +
+                    new AppText(AppTextCatalog.CreateManager("ar-XB")).{{items}}(1) + "|" + new AppText(AppTextCatalog.CreateManager("ar-XB")).{{items}}(2) + "|" +
+                    new AppText(AppTextCatalog.CreateManager("ar-XB")).{{place}}(1) + "|" + new AppText(AppTextCatalog.CreateManager("en-XA")).{{place}}(2);
+            }
+            """;
+        foreach ((string? value, string expected) in new[]
+        {
+            // ar-XB selects with the Arabic rules: 2 is "two", which the base text does not have, and every ordinal is "other".
+            ("true", "[Śààṽéé Ada]|[\u202ESave \u202CAda]|[\u202EOne item\u202C]|[2\u202E items\u202C]|[1\u202Eth\u202C]|[2ńď]"),
+            ("false", "Save Ada|Save Ada|One item|2 items|1st|2nd"),
+            (null, "Save Ada|Save Ada|One item|2 items|1st|2nd"),
+        })
+        {
+            var properties = value is null ? new Dictionary<string, string>() : new Dictionary<string, string> { ["RunicTranslationsPseudoLocales"] = value };
+            GeneratorRun run = GeneratorTestHost.RunWithConsumer(source, properties, ProjectInput(project), MessageInput("save = Save {$name}\n" +
+                "items =\n  .input {$count :integer}\n  .match $count\n  0 {{No items}}\n  one {{One item}}\n  * {{{$count} items}}\n" +
+                "place =\n  .input {$n :integer select=ordinal}\n  .match $n\n  one {{{$n}st}}\n  two {{{$n}nd}}\n  few {{{$n}rd}}\n  * {{{$n}th}}\n"));
+            Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
+            Assert.Equal(expected, Execute(run, "Example.Localization.PseudoProbe", "Run"), $"RunicTranslationsPseudoLocales={value}");
         }
     }
 
