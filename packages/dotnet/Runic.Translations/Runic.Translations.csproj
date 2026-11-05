@@ -18,6 +18,10 @@
     <InternalsVisibleTo Include="Runic.Translations.Runtime.Tests" />
     <!-- The transport conformance corpus still writes version 1 cases. -->
     <InternalsVisibleTo Include="Runic.Translations.Compiler.Tests" />
+    <!-- The formatting preview (eng/translations/Rmf2Preview.cs, compiled into both) formats with a requested locale,
+         the catalog's bidi isolation and a preview time zone through the runtime's internal entry points. -->
+    <InternalsVisibleTo Include="Runic.Translations.Editor" />
+    <InternalsVisibleTo Include="dotnet-runic-translations" />
   </ItemGroup>
 
   <ItemGroup>

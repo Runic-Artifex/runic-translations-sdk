@@ -21,7 +21,7 @@ class RunicLanguageClient extends LanguageClient {
   }
 }
 
-interface MessageInfo { key: string; localKey: string; isGroup: boolean; path: string[]; logicalPath: string[]; locale: string; locales: string[]; inputs: string[]; slots: string[] }
+interface MessageInfo { key: string; localKey: string; isGroup: boolean; path: string[]; logicalPath: string[]; locale: string; locales: string[]; pseudoLocales?: string[]; inputs: string[]; slots: string[] }
 const clients = new Map<string, Promise<LanguageClient>>();
 const watchers = new Map<string, ForwardedWatchers<vscode.Uri>>();
 const reviewWatchers = new Map<string, vscode.Disposable>();
@@ -83,7 +83,25 @@ function reportStartFailure(key: string, error: unknown) {
   });
 }
 
-interface PreviewOptions { locale?: string; exampleIndex?: number; samples?: Samples }
+interface PreviewOptions { locale?: string; exampleIndex?: number; samples?: Samples; requestedLocale?: string; timeZone?: string }
+
+/** Catalog locales, then the configured pseudo-locales, which the server generates from the base locale. */
+function localeChoices(locales: string[], pseudoLocales: string[] = []): vscode.QuickPickItem[] {
+  return [...locales.map(label => ({ label })), ...pseudoLocales.map(label => ({ label, description: "pseudo-locale, generated from the base locale (read-only)" }))];
+}
+async function pickLocale(locales: string[], pseudoLocales?: string[]): Promise<string | undefined> {
+  return (await vscode.window.showQuickPick(localeChoices(locales, pseudoLocales), { placeHolder: "Preview locale" }))?.label;
+}
+const hostTimeZone = "Host time zone (local)";
+async function pickTimeZone(current?: string): Promise<string | undefined> {
+  const zones = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
+  const choice = await vscode.window.showQuickPick([
+    { label: hostTimeZone, description: current ? undefined : "current" },
+    { label: "utc", description: current === "utc" ? "current" : undefined },
+    ...zones.map(label => ({ label, description: label === current ? "current" : undefined })),
+  ], { placeHolder: "Time zone that timeZone=local (the default of :datetime styles) formats in" });
+  return choice === undefined ? undefined : choice.label === hostTimeZone ? "" : choice.label;
+}
 async function chooseSamples(preview: Preview, remembered?: Samples): Promise<Samples | undefined> {
   if (!preview.inputs.length) return {};
   const choice = await vscode.window.showQuickPick(sampleChoices(preview, remembered), { placeHolder: "Preview sample values" });
@@ -207,15 +225,16 @@ export function activate(context: vscode.ExtensionContext) {
   const session = previewSession = new PreviewSession({
     revision: () => previewRevision,
     load: async target => (await clientFor(vscode.Uri.parse(target.uri))).sendRequest<Preview>("workspace/executeCommand", { command: "runic.preview", arguments: [target.uri, target.key, target.locale] }),
+    // The requested locale and time zone go to the runtime formatting; null keeps the catalog locale and the host's zone.
     choose: chooseSamples,
     render: async (target, preview, samples) => resolvePreviewHtml(preview, samples, async () =>
-      (await clientFor(vscode.Uri.parse(target.uri))).sendRequest<RenderedPreview>("workspace/executeCommand", { command: "runic.renderPreview", arguments: [target.uri, target.key, target.locale, samples] })),
+      (await clientFor(vscode.Uri.parse(target.uri))).sendRequest<RenderedPreview>("workspace/executeCommand", { command: "runic.renderPreview", arguments: [target.uri, target.key, target.locale, samples, target.requestedLocale ?? null, target.timeZone ?? null] })),
     publish: state => {
       if (!previewPanel) {
         const panel = previewPanel = vscode.window.createWebviewPanel("runic.preview", "Runic Preview", vscode.ViewColumn.Beside, { enableScripts: false, localResourceRoots: [] });
         panel.onDidDispose(() => { if (previewPanel === panel) { previewPanel = undefined; session.close(); } }, undefined, context.subscriptions);
       }
-      previewPanel.title = `${state.target.key} · ${state.target.locale}`;
+      previewPanel.title = `${state.target.key} · ${state.target.requestedLocale && state.target.requestedLocale !== state.target.locale ? `${state.target.locale} (${state.target.requestedLocale})` : state.target.locale}`;
       previewPanel.webview.html = state.html;
     },
     failed: error => {
@@ -255,29 +274,50 @@ export function activate(context: vscode.ExtensionContext) {
     const destination = await vscode.window.showOpenDialog({ canSelectMany: false, filters: { "RMF2 resource": ["rmf2"] }, openLabel: "Choose ancestor resource" });
     if (destination?.[0]) await apply(client, "runic.inlineResource", [editor.document.uri.toString(), destination[0].toString()]);
   });
-  const openPreview = async (options?: PreviewOptions, changeSamples = false, changeLocale = false) => {
+  const openPreview = async (options?: PreviewOptions, changeSamples = false, changeLocale = false, changeFormatting?: "requestedLocale" | "timeZone") => {
     const selection = ++previewSelection;
     session.beginSelection();
     try {
       let target;
-      if ((changeSamples || changeLocale) && session.state) {
+      if ((changeSamples || changeLocale || changeFormatting) && session.state) {
         target = session.state.target;
         if (changeLocale) {
-          const locale = options?.locale ?? await vscode.window.showQuickPick(target.locales ?? [target.locale], { placeHolder: "Preview locale" });
+          const available = [...(target.locales ?? [target.locale]), ...(target.pseudoLocales ?? [])];
+          const locale = options?.locale ?? await pickLocale(target.locales ?? [target.locale], target.pseudoLocales);
           if (!locale || selection !== previewSelection) return;
-          if (!(target.locales ?? [target.locale]).includes(locale)) throw new Error("Choose an available preview locale.");
+          if (!available.includes(locale)) throw new Error("Choose an available preview locale.");
           target = { ...target, locale };
         }
+        if (changeFormatting === "requestedLocale") {
+          const requested = options?.requestedLocale ?? await vscode.window.showInputBox({ value: target.requestedLocale ?? "",
+            prompt: `The locale a user requests, such as de-CH for ${target.locale} content: numbers and dates format in it when it shares the language. Empty: ${target.locale}.` });
+          if (requested === undefined || selection !== previewSelection) return;
+          target = { ...target, requestedLocale: requested.trim() || undefined };
+        }
+        if (changeFormatting === "timeZone") {
+          const zone = options?.timeZone ?? await pickTimeZone(target.timeZone);
+          if (zone === undefined || selection !== previewSelection) return;
+          target = { ...target, timeZone: zone.trim() || undefined };
+        }
+        if (changeLocale && options?.requestedLocale !== undefined) target = { ...target, requestedLocale: options.requestedLocale || undefined };
+        if (changeLocale && options?.timeZone !== undefined) target = { ...target, timeZone: options.timeZone || undefined };
       } else {
         const { editor, info } = await active();
         if (selection !== previewSelection) return;
         if (info.isGroup) throw new Error("Choose a message to preview.");
         const uri = editor.document.uri.toString();
         const rememberedLocale = session.preferredLocale(uri, info.key);
-        const locale = options?.locale ?? (rememberedLocale && info.locales.includes(rememberedLocale) ? rememberedLocale : info.locales.length === 1 ? info.locales[0] : await vscode.window.showQuickPick(info.locales, { placeHolder: "Preview locale" }));
+        const pseudoLocales = info.pseudoLocales ?? [];
+        const available = [...info.locales, ...pseudoLocales];
+        const locale = options?.locale ?? (rememberedLocale && available.includes(rememberedLocale) ? rememberedLocale : available.length === 1 ? available[0] : await pickLocale(info.locales, pseudoLocales));
         if (!locale || selection !== previewSelection) return;
-        if (!info.locales.includes(locale)) throw new Error("Choose an available preview locale.");
-        target = { uri, key: info.key, locale, locales: info.locales };
+        if (!available.includes(locale)) throw new Error("Choose an available preview locale.");
+        // A regional locale and time zone chosen for the open panel carry over to the next message.
+        const formatting = session.state?.target;
+        target = { uri, key: info.key, locale, locales: info.locales, pseudoLocales,
+          requestedLocale: options?.requestedLocale ?? formatting?.requestedLocale, timeZone: options?.timeZone ?? formatting?.timeZone };
+        if (options?.requestedLocale === "") target.requestedLocale = undefined;
+        if (options?.timeZone === "") target.timeZone = undefined;
       }
       const select = options?.samples ? async () => options.samples : options?.exampleIndex !== undefined ? async (preview: Preview) => {
         const example = preview.examples[options.exampleIndex!];
@@ -355,6 +395,8 @@ export function activate(context: vscode.ExtensionContext) {
   register("preview", openPreview);
   register("previewSamples", options => openPreview(options, true));
   register("previewLocale", options => openPreview(options, false, true));
+  register("previewRequestedLocale", options => openPreview(options, false, false, "requestedLocale"));
+  register("previewTimeZone", options => openPreview(options, false, false, "timeZone"));
   refreshStatus();
   return { ready: (uri: vscode.Uri) => clientFor(uri), previewState: () => session.state,
     status: () => statusItem?.text, serverState: (uri: vscode.Uri) => { const folder = vscode.workspace.getWorkspaceFolder(uri); return folder && serverStates.get(folder.uri.toString())?.state; } };

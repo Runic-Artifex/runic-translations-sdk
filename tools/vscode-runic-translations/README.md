@@ -100,7 +100,17 @@ loaded by the extension.
 selected locale and values are remembered per message during the extension
 session; reopening a preview reuses them. **Change Preview Samples** lets you
 choose another example or edit custom values. **Change Preview Locale** switches
-the open panel's language. Samples for the
+the open panel's language; it also lists the pseudo-locales that `runic.json`
+configures (`pseudoLocales`: `en-XA`, `ar-XB`), which the server generates from
+the base locale exactly as a `--pseudo-locales` build does (read-only).
+**Change Preview Regional Locale** sets the locale a user requests, such as
+`de-CH` for `de` text: numbers and dates then format as the runtime formats a
+`de-CH` request that resolved to `de`. **Change Preview Time Zone** sets the zone
+that `timeZone=local`, the default of `:datetime` styles, formats in (`utc`, an
+IANA zone, or the host's). The panel names the requested locale, how it relates
+to the shown locale (exact, parent or related), the locale numbers and dates
+formatted in and the time zone, and lays the text out in the locale's direction.
+The regional locale and time zone stay for the next message. Samples for the
 128 most recently previewed message/locale combinations are retained. The panel refreshes from
 the latest unsaved resource/configuration buffers and watched source changes.
 Out-of-order requests and cancelled selections cannot replace a newer preview.
@@ -133,6 +143,9 @@ command set until the production language server (2.0).
 | Preview Message | Command | Tools menu |
 | Change Preview Samples | Command | Sample selector in the preview window |
 | Change Preview Locale | Command | Locale selector in the preview window |
+| Pseudo-locales (`pseudoLocales`) in the preview | Change Preview Locale | Locale selector in the preview window |
+| Change Preview Regional Locale | Command | Regional locale field in the preview window |
+| Change Preview Time Zone | Command | Time zone field in the preview window |
 | Rename Input in Resource Sources | Command | No (2.0) |
 | Rename Slot in Resource Sources | Command | No (2.0) |
 | Rename Resource in Resource Sources | Command | No (2.0) |
