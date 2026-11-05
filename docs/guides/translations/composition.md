@@ -158,6 +158,10 @@ base-locale text for the keys it does not translate. These copies are not applic
 declares: a French user sees the library's English (or the application's own `en` pack), exactly as an English user
 does. They apply only to locales that overlays add.
 
+Overlay packs are also how an application ships translation updates without a release; see
+[Ship translation updates without a release](ota.md). The web runtime has the same overlays (`installOverlay`,
+`installLocalePack`; see [ESM overlays](esm.md#overlays)).
+
 A malformed pack, or one that names another catalog or locale, fails the switch with a `TranslationPackException`,
 like an external pack. `RefreshAsync` reloads overlay packs; other contexts of the same builder get the reloaded text on
 their next switch or refresh.

@@ -76,6 +76,7 @@ Open and closed sets: the markup bindings (`InlineLinkBinding`, `InlineActionBin
 - [Runtime and generated C# example](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/tests/dotnet/Runic.Translations.PackageTests/Program.cs)
 - [NativeAOT example](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/tests/dotnet/Runic.Translations.AotTests)
 - [RMF2 project guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md)
+- [Ship translation updates without a release](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/ota.md)
 - [External translation pack contract](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/specs/translations/wave-b/external-packs.md)
 - [Issues and support](https://github.com/Runic-Artifex/runic-translations-sdk/issues)
 

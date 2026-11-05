@@ -36,4 +36,22 @@ internal static class CompilerOutputAdapter
             .Select(static output => new ToolArtifact(output.RelativePath, output.GetUtf8Bytes()))
             .ToArray());
     }
+
+    // generate --emit-json --contract: packs for a shipped release, for the locales it declares, and their asset manifest.
+    internal static IReadOnlyList<ToolArtifact> RenderForContract(Rmf2ProjectV5 project, Rmf2ShippedContractV5 shipped,
+        ICollection<Rmf2ContractPackSkipV5> skipped, out IReadOnlyList<string> omittedLocales)
+    {
+        var outputs = new List<TranslationGeneratedOutput>();
+        var omitted = new List<string>();
+        foreach (string locale in project.Locales.Select(static item => item.Tag).OrderBy(static item => item, StringComparer.Ordinal))
+        {
+            if (Rmf2ContractPackV5.Render(project, locale, shipped, skipped) is { } pack) outputs.Add(pack);
+            else omitted.Add(locale);
+        }
+        outputs.Add(TranslationOutputRenderer.RenderRmf2V5AssetManifestJson(project, outputs));
+        omittedLocales = omitted;
+        return ArtifactFiles.Normalize(outputs
+            .Select(static output => new ToolArtifact(output.RelativePath, output.GetUtf8Bytes()))
+            .ToArray());
+    }
 }

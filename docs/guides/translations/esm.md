@@ -244,7 +244,8 @@ as application text that the ordinary `m.*()` calls use before the catalog's
 own text. Use it for an application's wording of a library's messages, for a
 locale the library lacks, and for translation updates downloaded at run time
 (`installLocalePack`, which reads downloaded pack bytes with the same limits
-and integrity callback as `decodeLocalePack`). The artifact is the `<catalog>.<locale>.locale-v5.json` that
+and integrity callback as `decodeLocalePack`; see [Ship translation updates
+without a release](ota.md)). The artifact is the `<catalog>.<locale>.locale-v5.json` that
 `runic-translations generate --emit-json` writes for a project with the
 catalog's ID, such as the application's own overlay project. Its contract
 fingerprint is not compared: each message is checked by key against this
