@@ -34,6 +34,9 @@ export async function verifySvelteKitQuickStart({ directory, npmArchives, nugetC
   assert.match(prerendered("index.html"), /Hello, Ada!/);
   assertPage(prerendered("de.html"), "de", "Willkommen bei Runic", "prerendered /de");
   assert.match(prerendered("de.html"), /Hallo, Ada!/);
+  // Plain m.*() calls: runWithLocale during SSR, useMessageLocale after hydration; numbers in the request's locale.
+  assert.match(prerendered("index.html"), /Total: 1,234\.5/);
+  assert.match(prerendered("de.html"), /Summe: 1\.234,5/);
   assert.ok(!existsSync(join(app, "build", "prerendered", "about.html")), "/about must stay server-rendered");
 
   const port = await freePort();

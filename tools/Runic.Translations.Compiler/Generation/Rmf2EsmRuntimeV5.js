@@ -10,7 +10,47 @@ const contractCopies = new WeakMap();
 let structuredMessages;
 const dynamicContracts = new WeakMap();
 const decodedArtifacts = new WeakSet();
-let localeResolver = () => typeof document === "undefined" ? baseLocale : (document.documentElement.lang || baseLocale);
+// The shared locale channel: one locale for every generated catalog on a page or in a server process, and for every copy of
+// this runtime, so an application and its libraries switch together. Its shape is a protocol between runtimes of different
+// compiler releases and the Svelte adapter, so members are only ever added: { version: 1, resolver, storage, resolvers }.
+// resolver is the page's locale resolver (configureSharedLocaleResolver, useMessageLocale(locale)): the last of resolvers,
+// the installed ones in installation order, each removed by identity, so removals in any order leave the latest remaining
+// one. storage is the AsyncLocalStorage that the first server.js creates, whose store { requested, timeZone } is the
+// locale of the request runWithLocale runs.
+const localeChannelKey = Symbol.for("runic.translations.locale");
+function localeChannel() {
+  let channel = globalThis[localeChannelKey];
+  if (channel === undefined || channel === null || typeof channel !== "object") globalThis[localeChannelKey] = channel = { version: 1, resolver: null, storage: null, resolvers: [] };
+  if (!Array.isArray(channel.resolvers)) channel.resolvers = typeof channel.resolver === "function" ? [channel.resolver] : [];
+  return channel;
+}
+// Installs a resolver on top of an ordered list and returns its removal, which takes out exactly this installation
+// (a resolver installed twice is two entries) and makes the latest remaining one current.
+function installResolver(list, resolver, apply) {
+  const entry = () => resolver(); list.push(entry); apply(entry); let active = true;
+  return () => {
+    if (!active) return; active = false;
+    const index = list.indexOf(entry); if (index >= 0) list.splice(index, 1);
+    apply(list.length === 0 ? null : list[list.length - 1]);
+  };
+}
+function requestStore() {
+  const store = globalThis[localeChannelKey]?.storage?.getStore?.();
+  return store !== null && typeof store === "object" && typeof store.requested === "string" ? store : undefined;
+}
+// The resolver configureLocaleResolver installs for this catalog only (the latest of localeResolvers); null when it has
+// none and the channel applies.
+let localeResolver = null;
+const localeResolvers = [];
+// The tag the catalog formats in when a call names none: its own resolver, else the request's locale (runWithLocale of any
+// catalog), else the shared resolver, else the document's lang, else the base locale.
+function currentLocaleTag() {
+  if (localeResolver !== null) return localeResolver();
+  const store = requestStore(); if (store !== undefined) return store.requested;
+  const shared = globalThis[localeChannelKey]?.resolver;
+  if (typeof shared === "function") return shared();
+  return typeof document === "undefined" ? baseLocale : (document.documentElement.lang || baseLocale);
+}
 
 export function freezeTrusted(value) {
   if (Array.isArray(value)) return Object.freeze(value.map(freezeTrusted));
@@ -26,15 +66,27 @@ export function freezeOwnRecord(entries) {
 
 export function configureLocaleResolver(resolver) {
   if (typeof resolver !== "function") throw new TypeError("The locale resolver must be a function.");
-  const previous = localeResolver; localeResolver = resolver;
-  return () => { if (localeResolver === resolver) localeResolver = previous; };
+  return installResolver(localeResolvers, resolver, current => { localeResolver = current; });
 }
 
-export function getLocale() { return resolveLocale(localeResolver()); }
+// Sets the locale of every generated catalog on the page (or in the process) that has no resolver of its own: the shared
+// channel above. The resolver returns a tag that each catalog resolves under its own locales and policy, normally the
+// requested tag of the application's locale source (de-CH), so a library that declares de-CH shows it. The resolver is
+// process-wide: on a server, set the request's locale with runWithLocale instead, which every catalog reads first.
+export function configureSharedLocaleResolver(resolver) {
+  if (typeof resolver !== "function") throw new TypeError("The locale resolver must be a function.");
+  const channel = localeChannel();
+  return installResolver(channel.resolvers, resolver, current => { channel.resolver = current; });
+}
+
+// server.js: the process's one request-locale storage, created by the first catalog that needs it.
+export function requestLocaleStorage(create) { const channel = localeChannel(); return channel.storage ??= create(); }
+
+export function getLocale() { return resolveLocale(currentLocaleTag()); }
 
 // The canonical tag the locale resolver asks for, before it resolves to a catalog locale: "de-CH" where getLocale()
 // gives "de". Numbers, percentages, dates and times format in it when its language matches a message's content locale.
-export function getRequestedLocale() { return requestedTag(localeResolver()); }
+export function getRequestedLocale() { return requestedTag(currentLocaleTag()); }
 function requestedTag(requested) {
   if (typeof requested !== "string") throw new RangeError("A locale string is required.");
   if (requested === "") return resolveLocale(requested);
@@ -835,7 +887,8 @@ export function configureTimeZoneResolver(resolver) {
 // The zone "local" means now: the resolver's zone when it names one Intl knows, else the host's (undefined when the
 // engine does not report it).
 function localTimeZone() {
-  const resolved = timeZoneResolver === null ? undefined : timeZoneResolver();
+  // This catalog's resolver, else the zone of the request that runWithLocale (of any catalog) runs.
+  const resolved = timeZoneResolver === null ? requestStore()?.timeZone : timeZoneResolver();
   if (resolved !== undefined && resolved !== null) {
     if (resolved === "utc" || resolved === "UTC") return "UTC";
     if (validTimeZone(resolved)) { try { temporalFormat("en-US", "zone", "", resolved); return resolved; } catch { /* Unknown: use the host's zone. */ } }

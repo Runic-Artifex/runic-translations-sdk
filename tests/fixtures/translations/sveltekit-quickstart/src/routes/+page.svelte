@@ -7,8 +7,9 @@
 	const locale = localeContext.use();
 </script>
 
-<h1>{m.home_title(locale.messageOptions)}</h1>
-<p>{m.home_greeting({ name: 'Ada' }, locale.messageOptions)}</p>
+<h1>{m.home_title()}</h1>
+<p>{m.home_greeting({ name: 'Ada' })}</p>
+<p>{m.home_total({ amount: '1234.5' })}</p>
 
 <nav>
 	{#each routing.locales as next (next)}
