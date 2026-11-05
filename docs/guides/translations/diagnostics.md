@@ -591,7 +591,10 @@ messages a locale translates and those a fallback locale other than the base
 locale serves (`de-CH` from `de`), as a percentage of the base locale's
 messages. The command exits with 1 and its payload (`runic.translations.status/1`)
 is in `fault.data`. Translate the missing messages (`status` lists the counts per
-locale) or lower the threshold.
+locale) or lower the threshold. `status` reports a catalog whose translations are
+incomplete even when `validate` fails on them (`RTR0010` under the default
+`translationCompleteness`); only errors in `runic.json`, the base locale or a
+message's syntax stop it (`RTR0087`, exit 2).
 
 ## RTR0100
 
