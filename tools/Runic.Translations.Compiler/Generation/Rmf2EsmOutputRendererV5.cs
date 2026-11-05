@@ -60,7 +60,9 @@ internal static class Rmf2EsmOutputRendererV5
         writer.Line("export const locales = Object.freeze(" + JsonSerializer.Serialize(project.Locales.Select(item => item.Tag).OrderBy(item => item, StringComparer.Ordinal)) + ");");
         writer.Line("const unsupportedLocalePolicy = " + GenerationSupport.JsonString(project.UnsupportedLocale.ToString()) + ";");
         // Only the CLDR data of the catalog's languages is embedded.
-        writer.Line(TranslationCapabilityRegistry.EsmLocaleSource(project.Locales.Select(item => item.Tag), project.BidiIsolation));
+        // and only the currencies, units and compact patterns its messages use (D055.4).
+        string? formatData = project.FormatData(project.Locales.Select(item => item.Tag), project.Locales.SelectMany(item => item.DirectResources).Select(resource => resource.Message));
+        writer.Line(TranslationCapabilityRegistry.EsmLocaleSource(project.Locales.Select(item => item.Tag), project.BidiIsolation, formatData));
         // Only the markup contracts: per-message contracts live in the message modules and dynamic.js.
         writer.Line("const markupContracts = freezeTrusted(JSON.parse(" + GenerationSupport.JsonString(MarkupContractsJson(project)) + "));");
         // The renderers' table of structured messages; a function, so a bundle without a renderer drops it.
@@ -69,8 +71,46 @@ internal static class Rmf2EsmOutputRendererV5
         writer.Line("function messageLocaleTable() { return JSON.parse(" + GenerationSupport.JsonString(MessageLocalesJson(project)) + "); }");
         using Stream stream = typeof(Rmf2EsmOutputRendererV5).Assembly.GetManifestResourceStream("Runic.Translations.Compiler.Generation.Rmf2EsmRuntimeV5.js")!;
         using var reader = new StreamReader(stream);
-        writer.Line(reader.ReadToEnd());
+        string runtime = reader.ReadToEnd();
+        // A catalog without :currency, :unit or compact notation carries neither their formatters nor their function and
+        // option table entries, and rejects messages that use them as unsupported-function.
+        writer.Line(formatData is null ? WithoutFormatters(runtime) : WithFormatters(runtime));
         return writer.ToString();
+    }
+
+    private const string FormattersBegin = "// @runic-formats-begin", FormattersEnd = "// @runic-formats-end";
+    private const string FeaturesBegin = "/*@formats*/", FeaturesEnd = "/*@end-formats*/";
+    // Stubs for the formatter block: the currency, unit and compact members of an artifact's formatData are not read, and
+    // the functions and options a catalog built without them does not know are unsupported-function.
+    private const string FormatterStubs =
+        "function validFormatters() { return true; }\n" +
+        "function formatterFeature(fn, option) { return option === undefined ? fn === \"currency\" || fn === \"unit\" : fn === \"number\" && (option === \"runic:notation\" || option === \"runic:compactDisplay\"); }";
+
+    /// <summary>The runtime without the formatter block and the marked function and option entries.</summary>
+    internal static string WithoutFormatters(string runtime)
+    {
+        int start = runtime.IndexOf(FormattersBegin, StringComparison.Ordinal), end = runtime.IndexOf(FormattersEnd, StringComparison.Ordinal);
+        if (start < 0 || end < start) throw new InvalidOperationException("The ESM runtime has no formatter block markers.");
+        return Features(runtime[..start] + FormatterStubs + runtime[(end + FormattersEnd.Length)..], keep: false);
+    }
+
+    /// <summary>The runtime with its formatters, without the markers.</summary>
+    internal static string WithFormatters(string runtime) => Features(runtime, keep: true);
+
+    // The marked segments (/*@formats*/ … /*@end-formats*/) with or without their content.
+    private static string Features(string runtime, bool keep)
+    {
+        var builder = new StringBuilder(runtime.Length);
+        int position = 0;
+        for (int start = runtime.IndexOf(FeaturesBegin, StringComparison.Ordinal); start >= 0; start = runtime.IndexOf(FeaturesBegin, position, StringComparison.Ordinal))
+        {
+            int end = runtime.IndexOf(FeaturesEnd, start, StringComparison.Ordinal);
+            if (end < 0) throw new InvalidOperationException("An ESM runtime formatter segment has no end marker.");
+            builder.Append(runtime, position, start - position);
+            if (keep) builder.Append(runtime, start + FeaturesBegin.Length, end - start - FeaturesBegin.Length);
+            position = end + FeaturesEnd.Length;
+        }
+        return builder.Append(runtime, position, runtime.Length - position).ToString();
     }
 
     private static string ContractsJson(Rmf2ProjectV5 project, bool includeExtras)

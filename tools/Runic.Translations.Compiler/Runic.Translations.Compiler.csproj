@@ -21,6 +21,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Generation/Rmf2EsmRuntimeV5.js" />
     <EmbeddedResource Include="Generation/Rmf2EsmTransportV5.js" />
+    <EmbeddedResource Include="GeneratedFormatData.bin" LogicalName="Runic.Translations.Compiler.GeneratedFormatData.bin" />
     <!-- The pinned CLDR locale tables and algorithm are shared with the runtime (eng/generate-cldr.mjs). -->
     <Compile Include="../../packages/dotnet/Runic.Translations/Formatting/CldrLocales.cs" Link="Cldr/CldrLocales.cs" />
     <Compile Include="../../packages/dotnet/Runic.Translations/Formatting/GeneratedLocaleTables.cs" Link="Cldr/GeneratedLocaleTables.cs" />

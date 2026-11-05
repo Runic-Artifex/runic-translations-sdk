@@ -109,7 +109,14 @@ internal static partial class Mf2MessageParser
                     },
                     "timeZone" => Rmf2FunctionRegistryV2.IsTimeZone(option.Value),
                     "minimumFractionDigits" or "maximumFractionDigits" => int.TryParse(option.Value, out int digits) && digits >= 0 && digits <= (values.GetValueOrDefault("style") == "percent" ? 4 : 6),
-                    "unit" => option.Value is "second" or "minute" or "hour" or "day" or "week" or "month" or "year",
+                    "unit" => name == Rmf2FormatDataV1.UnitFunction ? Rmf2FormatDataV1.IsUnit(option.Value) : option.Value is "second" or "minute" or "hour" or "day" or "week" or "month" or "year",
+                    "currency" => Rmf2FormatDataV1.IsCurrency(option.Value),
+                    "currencyDisplay" => option.Value is "symbol" or "narrowSymbol" or "code" or "name",
+                    "currencySign" => option.Value is "standard" or "accounting",
+                    "fractionDigits" => option.Value == "auto" || int.TryParse(option.Value, out int fixedDigits) && fixedDigits >= 0 && fixedDigits <= 6,
+                    "unitDisplay" => option.Value is "short" or "long" or "narrow",
+                    Rmf2FormatDataV1.NotationOption => option.Value is "standard" or "compact",
+                    Rmf2FormatDataV1.CompactDisplayOption => option.Value is "short" or "long",
                     "numeric" => option.Value is "always" or "auto",
                     "type" => option.Value is "conjunction" or "disjunction" or "unit", _ => false,
                 };
@@ -122,7 +129,8 @@ internal static partial class Mf2MessageParser
         }
     }
     internal static string FunctionOptions(string name) => name switch {
-        "string" => "select", "integer" => "select useGrouping", "number" => "select style useGrouping minimumFractionDigits maximumFractionDigits",
+        "string" => "select", "integer" => "select useGrouping", "number" => "select style useGrouping minimumFractionDigits maximumFractionDigits runic:notation runic:compactDisplay",
+        "currency" => "currency currencyDisplay currencySign useGrouping fractionDigits", "unit" => "unit unitDisplay useGrouping minimumFractionDigits maximumFractionDigits",
         "date" or "time" or "runic:uuid" => "style", "datetime" => "style timeZone", "runic:boolean" => "select", "runic:relative-time" => "unit numeric", "runic:list" => "type style", _ => "",
     };
 
@@ -207,6 +215,8 @@ internal static partial class Mf2MessageParser
                 unit = OptionValue(options, "unit") ?? "day";
                 numeric = OptionValue(options, "numeric") ?? "always";
                 break;
+            // The v5 compiler types and executes :currency and :unit; this analysis model sees a number.
+            case "currency" or "unit": type = TranslationArgumentType.Number; format = "plain"; break;
             // This analysis model has no list carrier; the v5 compiler types and executes lists.
             case "runic:list": type = TranslationArgumentType.String; format = "none"; normalizedFunction = "string"; break;
             default:

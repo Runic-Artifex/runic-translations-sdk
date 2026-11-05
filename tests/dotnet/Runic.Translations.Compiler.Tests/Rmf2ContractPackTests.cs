@@ -118,7 +118,8 @@ internal sealed class Rmf2ContractPackTests
     public void ReleaseFeatureTable()
     {
         // The runtime's validateResolvedOptions table, evaluated as it is written; the fraction digits and timeZone are checked
-        // apart from its enumerations (optionType), as null (any value) in the feature table.
+        // apart from its enumerations (optionType), and the currency and unit patterns are regular expressions, all as null
+        // (any value) in the feature table.
         string runtime = File.ReadAllText(RepositoryPaths.Resolve("tools", "Runic.Translations.Compiler", "Generation", "Rmf2EsmRuntimeV5.js"));
         int start = runtime.IndexOf("const allowed = {", StringComparison.Ordinal), end = runtime.IndexOf("}[fn];", start, StringComparison.Ordinal);
         Assert.True(start > 0 && end > start, "validateResolvedOptions table not found");
@@ -129,6 +130,8 @@ internal sealed class Rmf2ContractPackTests
             string script = Path.Combine(directory, "table.mjs");
             File.WriteAllText(script, "const allowed = " + runtime[(start + "const allowed = ".Length)..(end + 1)] + ";\n" +
                 "allowed.number.minimumFractionDigits = null; allowed.number.maximumFractionDigits = null;\n" +
+                "allowed.unit.minimumFractionDigits = null; allowed.unit.maximumFractionDigits = null; allowed.currency.fractionDigits = null;\n" +
+                "for (const options of Object.values(allowed)) for (const [name, value] of Object.entries(options)) if (value instanceof RegExp) options[name] = null;\n" +
                 "console.log(JSON.stringify(allowed));\n", new UTF8Encoding(false));
             var info = new System.Diagnostics.ProcessStartInfo("bun") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false, WorkingDirectory = directory };
             info.ArgumentList.Add(script);
@@ -200,11 +203,75 @@ internal sealed class Rmf2ContractPackTests
         finally { Directory.Delete(directory, true); }
     }
 
+    [Test, DisplayName("RMF2 v5 contract packs for a 0.8.0 release leave out :currency, :unit and compact messages and formatData")]
+    public void PreviousReleaseFormatData()
+    {
+        string fixture = RepositoryPaths.Resolve("tests", "fixtures", "translations", "generated-0.8.0");
+        var shipped = Rmf2ShippedContractV5.Parse(File.ReadAllBytes(Path.Combine(fixture, "output", "acme-grid.en.locale-v5.json")));
+        // grid_total as a currency, which 0.9.0 added.
+        Rmf2ProjectV5 current = CurrentOfPreviousRelease(fixture, source => source
+            .Replace("{{Total {$amount}}}", "{{Total {$amount :currency currency=EUR}}}", StringComparison.Ordinal)
+            .Replace("{{Summe {$amount}}}", "{{Summe {$amount :currency currency=EUR}}}", StringComparison.Ordinal));
+        var skipped = new List<Rmf2ContractPackSkipV5>();
+        TranslationGeneratedOutput german = Rmf2ContractPackV5.Render(current, "de", shipped, skipped)!;
+        Assert.Equal("de grid_new content-locale-changed|de grid_total unsupported-function :currency needs 0.9.0|de grid_updated unsupported-function :date style=medium needs 0.9.0",
+            string.Join('|', skipped.Select(item => $"{item.Locale} {item.Key} {item.Reason}{(item.Detail is null ? "" : " " + item.Detail)}").Order(StringComparer.Ordinal)));
+        using (JsonDocument pack = JsonDocument.Parse(german.GetUtf8Bytes()))
+            Assert.True(!pack.RootElement.TryGetProperty("formatData", out _) && !pack.RootElement.GetProperty("messages").TryGetProperty("grid_total", out _),
+                "A pack for 0.8.0 carries formatData or a :currency message.");
+        // The current compiler's own artifact carries formatData: number records, and EUR for grid_total.
+        using (JsonDocument plain = JsonDocument.Parse(Rmf2LocaleArtifactV5.Render(current, "de").GetUtf8Bytes()))
+        {
+            JsonElement formats = plain.RootElement.GetProperty("formatData");
+            Assert.True(formats.TryGetProperty("numbers", out _) && formats.GetProperty("currencies").TryGetProperty("EUR", out _), "The current artifact's formatData.");
+        }
+
+        // A release whose own messages use :currency (0.9.0) keeps such messages and gets formatData with them.
+        var newer = Rmf2ShippedContractV5.Parse(Rmf2LocaleArtifactV5.Render(current, "en").GetUtf8Bytes());
+        Assert.Equal("0.9.0", Rmf2ReleaseFeaturesV5.Release(newer.FeatureLevel));
+        skipped.Clear();
+        using (JsonDocument pack = JsonDocument.Parse(Rmf2ContractPackV5.Render(current, "de", newer, skipped)!.GetUtf8Bytes()))
+        {
+            Assert.Equal(0, skipped.Count, string.Join('|', skipped));
+            Assert.True(pack.RootElement.GetProperty("formatData").GetProperty("currencies").TryGetProperty("EUR", out _), "A 0.9.0 pack's formatData.");
+        }
+
+        string directory = Path.Combine(Path.GetTempPath(), "runic-previous-formats-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            Rmf2EsmCompositionTests.CopyPreviousRelease(directory);
+            File.WriteAllBytes(Path.Combine(directory, "pack.de.json"), german.GetUtf8Bytes());
+            File.WriteAllBytes(Path.Combine(directory, "plain.de.json"), Rmf2LocaleArtifactV5.Render(current, "de").GetUtf8Bytes());
+            string script = Path.Combine(directory, "test.mjs");
+            File.WriteAllText(script, """
+                import { readFile } from "node:fs/promises";
+                import { decodeLocalePack, formatDynamicMessage } from "./acme-grid.esm-v5/dynamic.js";
+                const check = (condition, message) => { if (!condition) throw new Error(message); };
+                const read = async name => new Uint8Array(await readFile(new URL(name, import.meta.url)));
+                const pack = await read("pack.de.json");
+                // 0.8.0's exact-fingerprint loader accepts the contract pack without the new functions' messages.
+                const decoded = await decodeLocalePack(pack, "de");
+                check(decoded.ok, JSON.stringify(decoded));
+                check(formatDynamicMessage(decoded.value, "grid_rows", { count: 1 }) === "1 Zeile", "plural");
+                // With formatData, which 0.9.0 added, the 0.8.0 loader rejects the whole pack, so the pack leaves it out.
+                const forced = JSON.parse(new TextDecoder().decode(pack));
+                forced.formatData = JSON.parse(new TextDecoder().decode(await read("plain.de.json"))).formatData;
+                const rejected = await decodeLocalePack(new TextEncoder().encode(JSON.stringify(forced)), "de");
+                check(!rejected.ok && rejected.reason === "RTR0023/unknown-member", JSON.stringify(rejected));
+                console.log("ok");
+                """, new UTF8Encoding(false));
+            Rmf2EsmV5Tests.Run("bun", [script], directory);
+            Rmf2EsmV5Tests.Run("node", [script], directory);
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
     // The fixture's catalog one release later: German grid_empty fixed, grid_new newly translated, grid_updated in the medium
     // date style that 0.9 added.
-    internal static Rmf2ProjectV5 CurrentOfPreviousRelease(string fixture)
+    internal static Rmf2ProjectV5 CurrentOfPreviousRelease(string fixture, Func<string, string>? change = null)
     {
-        string Source(string locale) => File.ReadAllText(Path.Combine(fixture, "source", locale + ".rmf2")).ReplaceLineEndings("\n").Replace("style=long", "style=medium", StringComparison.Ordinal);
+        string Source(string locale) => (change ?? (text => text))(File.ReadAllText(Path.Combine(fixture, "source", locale + ".rmf2")).ReplaceLineEndings("\n").Replace("style=long", "style=medium", StringComparison.Ordinal));
         Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("translations/runic.json", File.ReadAllBytes(Path.Combine(fixture, "source", "runic.json"))), [
             new("translations/en.rmf2", Encoding.UTF8.GetBytes(Source("en"))),
             new("translations/de.rmf2", Encoding.UTF8.GetBytes(Source("de").Replace("grid_empty = Keine Zeilen", "grid_empty = Leer", StringComparison.Ordinal) + "grid_new = Neue Spalte\n"))]);
