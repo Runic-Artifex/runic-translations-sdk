@@ -2,15 +2,17 @@
 
 A component library ships its own catalog, in English and German, as a NuGet
 package and as an npm package. Two applications use it: a .NET console
-application and a SvelteKit application. Each one overrides one library message,
-adds French, switches the locale once for its own text and the library's, and
-formats a price (`:currency`) beside the library's storage figures (`:unit`).
+application and a SvelteKit application. They share one catalog and one set of
+overrides in `translations/`: both override one library message, add French,
+switch the locale once for their own text and the library's, and format a price
+(`:currency`) beside the library's storage figures (`:unit`).
 The [Ship translations in a library](../../docs/guides/translations/libraries.md)
 guide explains each step.
 
 | Directory | What it is |
 | --- | --- |
 | [`library/`](library) | `Acme.Widgets` (NuGet) and `@acme/widgets` (npm): one catalog, `acme.widgets`, in `library/translations/` |
+| [`translations/`](translations) | The applications' catalog, `shop`, and their overrides of `acme.widgets` |
 | [`app/`](app) | A .NET console application with build-time overrides of the library |
 | [`web/`](web) | A SvelteKit application with server rendering and Vite `dependencies: "auto"` |
 
@@ -70,18 +72,30 @@ public sealed class StorageMeter(ITranslationContext translations)
 `bun run build` (`runic-translations generate --emit-esm`) writes the prebuilt
 catalog to `dist/translations/` before the package is packed.
 
-## The .NET application
+## The shared catalog
 
-[`app/translations/runic.json`](app/translations/runic.json) lists the library's
-catalog under `overrides`, and `app/translations/overrides/acme.widgets/` holds
-the application's text for it:
+[`translations/runic.json`](translations/runic.json) lists the library's catalog
+under `overrides`, and `translations/overrides/acme.widgets/` holds the
+applications' text for it:
 
 ```text
-app/translations/
-  runic.json                       "overrides": [{ "catalog": "acme.widgets", "from": "Acme.Widgets" }]
-  en.rmf2, de.rmf2, fr.rmf2        the application's own catalog, shop
+translations/
+  runic.json                       "overrides": [{ "catalog": "acme.widgets", "from": ["Acme.Widgets", "@acme/widgets"] }]
+  en.rmf2, de.rmf2, fr.rmf2        the applications' own catalog, shop
   overrides/acme.widgets/en.rmf2   storage.empty = Your drive is empty
   overrides/acme.widgets/fr.rmf2   every library message in French
+```
+
+`from` lists both packages of the library: the .NET build matches the NuGet
+package `Acme.Widgets`, the Vite build the npm package `@acme/widgets`. A
+wording changed here changes in both applications.
+
+## The .NET application
+
+[`Shop.csproj`](app/Shop.csproj) names the shared catalog:
+
+```xml
+<RunicTranslationProject Include="../translations/runic.json" />
 ```
 
 The build checks each override against the packed catalog and compiles them into
@@ -123,13 +137,12 @@ Languages: de, en, fr
 
 ## The SvelteKit application
 
-[`web/`](web) is the same application on the web. Its
-[`runic.json`](web/translations/runic.json) names the npm package in `from`
-(`"from": "@acme/widgets"`), and its overrides are the same files.
-[`vite.config.ts`](web/vite.config.ts) turns on `dependencies: "auto"`:
+[`web/`](web) is the same application on the web, on the same catalog and
+overrides. [`vite.config.ts`](web/vite.config.ts) names the shared catalog and
+turns on `dependencies: "auto"`:
 
 ```ts
-runicTranslations({ dependencies: 'auto' })
+runicTranslations({ project: '../translations', dependencies: 'auto' })
 ```
 
 The plugin finds `@acme/widgets` through its `runicTranslations` field,
@@ -146,7 +159,12 @@ modules to the regenerated ones. The library's code is unchanged.
   `server.js` shares one request storage, so the library's text renders in the
   request's locale on the server (`/fr` shows "Aucun fichier pour l’instant")
   and stays so when the page hydrates. CI requests `/`, `/de` and `/fr`,
-  including 30 interleaved requests, from the production `adapter-node` server.
+  including 30 interleaved requests, from the production `adapter-node` server,
+  then loads `/fr` in Chromium and checks the text after hydration and after
+  switching to `de` and back on the client.
+- **Server data in the request's locale.** `+page.server.ts` formats library
+  text on the server and reads `url`, so SvelteKit loads it again when a switch
+  on the client changes the path (`locals` are not tracked).
 - **Currency and units.** `m.price({ amount: '4.99' })` and the library's
   `:unit` message format with the pinned CLDR data, as in .NET.
 
@@ -170,7 +188,7 @@ dotnet tool install dotnet-runic-translations --version <VERSION>
 dotnet pack library/Acme.Widgets.csproj --output packages     # add ./packages as a package source
 dotnet run --project app/Shop.csproj
 (cd library && bun run build && bun pm pack --destination .)   # acme-widgets-1.0.0.tgz
-(cd web && bun install && bun run dev)
+(cd web && bun install && bun run dev)                         # web/bun.lock pins the third-party packages
 ```
 
 There is no leg with a library built by the previous release: Runic

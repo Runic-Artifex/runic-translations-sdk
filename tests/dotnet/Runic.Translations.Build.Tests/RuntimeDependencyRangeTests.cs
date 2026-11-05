@@ -118,7 +118,7 @@ internal sealed class RuntimeDependencyRangeTests
         Directory.CreateDirectory(temporary.Resolve("translations", "overrides", "other"));
         void Project(string catalog) => File.WriteAllText(temporary.Resolve("translations", "runic.json"),
             "{ \"schemaVersion\": 1, \"catalog\": \"" + catalog + "\", \"code\": { \"namespace\": \"Acme.Grid\", \"className\": \"GridText\" }, \"baseLocale\": \"en\", " +
-            "\"sourceRoots\": [{ \"path\": \"text\", \"namespace\": [\"grid\"] }], \"overrides\": [{ \"catalog\": \"other\", \"from\": \"Other\" }] }", new UTF8Encoding(false));
+            "\"sourceRoots\": [{ \"path\": \"text\", \"namespace\": [\"grid\"] }], \"overrides\": [{ \"catalog\": \"other\", \"from\": [\"Other\", \"@acme/other\"] }] }", new UTF8Encoding(false));
         File.WriteAllText(temporary.Resolve("translations", "text", "en.rmf2"), "empty = No rows\n", new UTF8Encoding(false));
         File.WriteAllText(temporary.Resolve("translations", "text", "de.rmf2"), "empty = Keine Zeilen\n", new UTF8Encoding(false));
         File.WriteAllText(temporary.Resolve("translations", "overrides", "other", "en.rmf2"), "title = Other\n", new UTF8Encoding(false));

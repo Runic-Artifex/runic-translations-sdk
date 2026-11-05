@@ -145,8 +145,10 @@ dotnet tool run runic-translations -- review mark --key save --key deleted --loc
   `needs-review` as `translated` with `subState="runic:needs-review"`;
   `xliff import` maps the TMS's states back and updates the file (or creates it
   with `--review`).
-- The editor manages review state on the same file; in VS Code, hover shows it
-  and **Mark … reviewed** records it.
+- The editor manages review state on the same file. In VS Code, hover shows
+  it, and for a **stale** entry (`RTR0090`, below) the quick fix
+  **Mark … reviewed** records its state again for the current source; to mark
+  a message reviewed otherwise, use `review mark` or the editor.
 
 ## Stale translations
 

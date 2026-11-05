@@ -5,9 +5,10 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
 	plugins: [
-		// dependencies: 'auto' finds @acme/widgets through its package.json#runicTranslations and regenerates its
-		// catalog with translations/overrides/acme.widgets/, filtered to this app's locales (en, de, fr).
-		runicTranslations({ dependencies: 'auto' }),
+		// The catalog and its overrides are shared with the .NET application in ../app. dependencies: 'auto' finds
+		// @acme/widgets through its package.json#runicTranslations and regenerates its catalog with
+		// ../translations/overrides/acme.widgets/, filtered to this app's locales (en, de, fr).
+		runicTranslations({ project: '../translations', dependencies: 'auto' }),
 		sveltekit({
 			compilerOptions: {
 				runes: ({ filename }) =>

@@ -75,9 +75,10 @@ internal sealed class ManifestModel
 /// <summary>An <c>overrides</c> entry: a library catalog and the package that ships it.</summary>
 internal sealed class OverrideModel
 {
-    internal OverrideModel(string catalog, string from, ByteSpan span) { Catalog = catalog; From = from; Span = span; }
+    internal OverrideModel(string catalog, IReadOnlyList<string> from, ByteSpan span) { Catalog = catalog; From = from; Span = span; }
     internal string Catalog { get; }
-    internal string From { get; }
+    /// <summary>The packages that may ship the catalog: one NuGet package ID and/or npm package name each.</summary>
+    internal IReadOnlyList<string> From { get; }
     internal ByteSpan Span { get; }
 }
 

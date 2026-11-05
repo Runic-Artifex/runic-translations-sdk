@@ -64,7 +64,13 @@ jobs:
           dotnet run --project tests/dotnet/Runic.Translations.Compiler.Tests/Runic.Translations.Compiler.Tests.csproj --configuration Release -- --treenode-filter "/*/*/Rmf2DatePercentConformanceTests/Esm" --test-parameter esm-host=node --minimum-expected-tests 1
           dotnet run --project tests/dotnet/Runic.Translations.Compiler.Tests/Runic.Translations.Compiler.Tests.csproj --configuration Release -- --treenode-filter "/*/*/Rmf2EsmLocalizedFormattingTests/*" --test-parameter esm-host=node --minimum-expected-tests 1
           dotnet run --project tests/dotnet/Runic.Translations.Compiler.Tests/Runic.Translations.Compiler.Tests.csproj --configuration Release -- --treenode-filter "/*/*/LocalizedFormatComparisonTests/*" --test-parameter esm-host=node --minimum-expected-tests 1
-      - run: bun eng/verify-packages.mjs
+      # The component-library example's hydration check launches the runner image's Chrome through playwright-core,
+      # which saves the minutes of installing the locked Chromium in this job.
+      - name: Verify the packages and examples
+        run: |
+          PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH="$(command -v google-chrome || true)"
+          export PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+          bun eng/verify-packages.mjs
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:

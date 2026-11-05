@@ -1,3 +1,0 @@
-title = Cloud storage
-# @param amount The monthly price in euros.
-price = {$amount :currency currency=EUR} per month

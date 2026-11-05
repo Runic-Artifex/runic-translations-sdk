@@ -1,5 +1,0 @@
-# The application's wording of one library message. The library's German stays: a German user sees
-# "Noch keine Dateien", because overrides apply locale-first.
-storage {
-  empty = Your drive is empty
-}

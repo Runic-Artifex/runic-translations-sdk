@@ -684,8 +684,10 @@ failing, as for overlay packs.
 Library catalog to override is not available. runic.json `overrides` lists a
 catalog that no referenced package packs (`Catalog 'acme.grid' to override is
 not packed by any referenced package`), a catalog that another package ships
-than `from` names, or an entry that names the project's own catalog, a catalog
-twice or an invalid package ID. Reference the package, and pack the library
+than the ones `from` names (a string, or an array of a library's NuGet and npm
+packages, of which each build matches its own), or an entry that names the
+project's own catalog, a catalog twice, a package twice in `from` or an invalid
+package ID. Reference the package, and pack the library
 with `<RunicTranslationsPackCatalog>true</RunicTranslationsPackCatalog>`
 (Runic.Translations.Build 0.9.0 or later), which ships its `runic.json`,
 sources and contract under `runic/<catalog>/`. It is also the error when the

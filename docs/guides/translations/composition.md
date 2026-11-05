@@ -197,11 +197,13 @@ translations/
   overrides/acme.grid/fr.rmf2  French, a locale the library lacks
 ```
 
-Override files use the library's full logical keys, as its catalog shows them. `from` names the NuGet package (or npm
-package) that packs the catalog. The build validates every override message against that packed catalog, as a
+Override files use the library's full logical keys, as its catalog shows them. `from` names the package that packs the
+catalog: its NuGet package ID, its npm package name, or an array of both for a library shipped both ways
+(`"from": ["Acme.Grid", "@acme/grid"]`), so one `runic.json` serves a .NET and a Vite build. Each build matches the
+packages of its own kind; NuGet IDs never contain `@` or `/`. The build validates every override message against that packed catalog, as a
 translation of the library's base locale: a key the library does not have is `RTR0103` (with a suggestion for a typo),
 changed inputs are `RTR0016`/`RTR0065`, markup in a plain-text message `RTR0103`, and the quality checks
-`RTR0094`–`RTR0098` apply. A catalog that no referenced package packs, or another `from`, is `RTR0104`. Files under
+`RTR0094`–`RTR0098` apply. A catalog that none of the packages in `from` packs for this build is `RTR0104`. Files under
 `translations/overrides/` are never part of the application's own catalog.
 
 - **Library updates.** The build validates against the library release it compiles with, so a release that removes an
@@ -236,8 +238,9 @@ the one the build compiled against skips a message whose key it no longer has in
 locale-first.
 
 On the web, the same `overrides` and `translations/overrides/` apply to npm library catalogs through the Vite plugin's
-`dependencies: "auto"`, which regenerates each library catalog with them, filtered to the application's locales. The
-rules match the .NET build: an override of a catalog no dependency ships is `RTR0104`, added locales fall back by the same
+`dependencies: "auto"`, which regenerates each library catalog with them, filtered to the application's locales. A
+`runic.json` that a .NET and a Vite build share lists both of a library's packages in `from`. The rules match the .NET
+build: an override of a catalog that no dependency named in `from` ships is `RTR0104`, added locales fall back by the same
 chain, and libraries are discovered transitively through the libraries that ship catalogs (see
 [the plugin's README](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/packages/web/vite-plugin-runic-translations#library-catalogs-from-dependencies)).
 

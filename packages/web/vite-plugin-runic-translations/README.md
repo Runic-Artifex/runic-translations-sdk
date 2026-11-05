@@ -101,8 +101,9 @@ warning. Each catalog is regenerated into `<output>/dependencies/` with the same
 
 - with the application's overrides: runic.json `"overrides": [{ "catalog": "acme.grid", "from": "@acme/grid" }]` and
   `translations/overrides/acme.grid/<locale>.rmf2`, validated against the library's catalog key by key, which may add
-  locales the library lacks. As in a .NET build, an override of a catalog that no discovered dependency ships, or from
-  another package than `from`, fails the build (`RTR0104`), and a directory under `translations/overrides/` that
+  locales the library lacks. `from` may list the library's NuGet package too (`["Acme.Grid", "@acme/grid"]`), so a
+  runic.json that a .NET build shares serves both. As in a .NET build, an override of a catalog that no discovered
+  dependency ships, or from another package than `from` lists, fails the build (`RTR0104`), and a directory under `translations/overrides/` that
   runic.json does not list is ignored with a warning. A locale the overrides add falls back as on .NET: to its nearest
   CLDR parent among the library's and the added locales (`de-CH` to an added `de`), else to the library locale that CLDR
   likely subtags match, else to the library's base locale;

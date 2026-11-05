@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
@@ -22,7 +23,7 @@ export function verifySharedCatalogFrontend({ directory, npmArchives, nugetConfi
   assert.ok(plugin in manifest.devDependencies, `the shared-catalog page lists ${plugin}`);
   manifest.devDependencies[plugin] = `file:${npmArchives.find(([name]) => name === plugin)[1]}`;
   writeFileSync(join(frontend, "package.json"), JSON.stringify(manifest, null, 2));
-  run("bun", ["install", "--ignore-scripts"], frontend);
+  installLocked(frontend, "examples/shared-catalog/Frontend", [plugin]);
   run("dotnet", ["new", "tool-manifest", "--output", ".config"], frontend, environment);
   run("dotnet", ["tool", "install", "dotnet-runic-translations", "--version", version, "--configfile", nugetConfig], frontend, environment);
   run("dotnet", ["tool", "run", "runic-translations", "--", "validate", "--project", "translations"], frontend, environment);
@@ -37,7 +38,8 @@ export function verifySharedCatalogFrontend({ directory, npmArchives, nugetConfi
 
 // Builds examples/component-library (see its README) from the packed candidates: the library as a NuGet package
 // (packed catalog) and an npm package (exports["./runic-translations"]), the .NET console application with build-time
-// overrides, and the SvelteKit application with Vite dependencies: "auto", served by adapter-node.
+// overrides, and the SvelteKit application with Vite dependencies: "auto", served by adapter-node. Both applications
+// share one translations/ directory, whose runic.json overrides the library through its NuGet and its npm package.
 export async function verifyComponentLibraryExample({ directory, nuget, npmArchives, version, environment }) {
   const example = join(directory, "component-library");
   cpSync(resolve(root, "examples/component-library"), example, {
@@ -69,6 +71,7 @@ export async function verifyComponentLibraryExample({ directory, nuget, npmArchi
   run("dotnet", ["tool", "install", "dotnet-runic-translations", "--version", version, "--configfile", join(example, "NuGet.config")], example, environment);
 
   // The .NET application: overrides one library key, adds French, switches every catalog at once.
+  run("dotnet", ["tool", "run", "runic-translations", "--", "validate", "--project", "translations"], example, environment);
   const app = join(example, "app");
   run("dotnet", ["build", "Shop.csproj", "--configuration", "Release", ...msbuild], app, environment);
   const output = runOutput("dotnet", ["run", "--project", "Shop.csproj", "--configuration", "Release", "--no-build"], app, environment);
@@ -87,8 +90,7 @@ export async function verifyComponentLibraryExample({ directory, nuget, npmArchi
     manifest.devDependencies[name] = `file:${archive}`;
   }
   writeFileSync(join(web, "package.json"), JSON.stringify(manifest, null, 2));
-  run("bun", ["install", "--ignore-scripts"], web);
-  run("dotnet", ["tool", "run", "runic-translations", "--", "validate", "--project", "translations"], web, environment);
+  installLocked(web, "examples/component-library/web", ["@acme/widgets", ...npmArchives.map(([name]) => name)]);
   run("bun", ["run", "build"], web, environment);
   run("bun", ["run", "check"], web, environment);
   assert.ok(existsSync(join(web, ".runic", "translations", "dependencies", "acme.widgets.d.ts")), "declarations of the regenerated library catalog");
@@ -97,7 +99,7 @@ export async function verifyComponentLibraryExample({ directory, nuget, npmArchi
   assert.ok(client.includes("Your drive is empty"), "the client bundle has the application's override of the library");
   assert.ok(client.includes("Aucun fichier"), "the client bundle has the French that the overrides add");
 
-  await servePages(web, async page => {
+  await servePages(web, async (page, origin) => {
     for (const [path, expected] of Object.entries(expectedPages)) {
       const response = await page(path);
       assert.equal(response.status, 200, `${path}: ${response.status}`);
@@ -107,8 +109,74 @@ export async function verifyComponentLibraryExample({ directory, nuget, npmArchi
     const paths = Array.from({ length: 30 }, (_, index) => ["/", "/de", "/fr"][index % 3]);
     const results = await Promise.all(paths.map(page));
     results.forEach((result, index) => assertPage(result.body, expectedPages[paths[index]], `concurrent ${paths[index]} #${index}`));
+    await verifyHydration(origin);
   });
-  console.log("Component library example passed: NuGet and npm library, .NET overrides and French, SvelteKit SSR in three locales.");
+  console.log("Component library example passed: NuGet and npm library, one runic.json for .NET and Vite overrides and French, SvelteKit SSR in three locales.");
+}
+
+// The examples' bun.lock pins every third-party package, transitive ones included; D038's release-age rule applies when
+// it is updated. The first-party packages (this commit's candidate archives and the example's own library) change with
+// every build, integrity included, so the lockfile leaves them out: bun resolves only those, and the install fails when
+// any other entry would change. With RUNIC_UPDATE_EXAMPLE_LOCKS=1, the resolved lockfile is written back instead.
+function installLocked(directory, source, firstParty) {
+  const committed = resolve(root, source, "bun.lock"), update = process.env.RUNIC_UPDATE_EXAMPLE_LOCKS === "1";
+  assert.ok(update || existsSync(committed), `${source}/bun.lock is missing; run with RUNIC_UPDATE_EXAMPLE_LOCKS=1 to create it`);
+  run("bun", ["install", "--ignore-scripts"], directory);
+  const installed = withoutFirstParty(readFileSync(join(directory, "bun.lock"), "utf8"), firstParty);
+  if (update) {
+    writeFileSync(committed, installed);
+    console.log(`Wrote ${source}/bun.lock.`);
+    return;
+  }
+  assert.equal(installed, readFileSync(committed, "utf8").replaceAll("\r\n", "\n"),
+    `${source}/bun.lock does not lock this install; update it with RUNIC_UPDATE_EXAMPLE_LOCKS=1 (no third-party version published the same day, D038)`);
+}
+
+// bun.lock has one line per workspace dependency and per package, each starting with the quoted package name.
+function withoutFirstParty(lock, firstParty) {
+  const names = new Set(firstParty.map(name => JSON.stringify(name) + ":"));
+  return lock.replaceAll("\r\n", "\n").split("\n").filter(line => !names.has(line.trimStart().split(" ", 1)[0])).join("\n");
+}
+
+// The page hydrates in the server's locale and stays live: in Chromium, /fr keeps the French that the server rendered,
+// the library's included, and the de and fr buttons switch the application's and the library's text on the client.
+// CI uses the runner image's Chrome; locally, the editor shell (nix develop .#editor) sets PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH.
+async function verifyHydration(origin) {
+  const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || process.env.WEBUI_BROWSER_PATH;
+  if (!executablePath) {
+    assert.ok(!process.env.CI, "CI checks the example's hydration: set PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH to a Chromium or Chrome executable.");
+    console.log("Skipped the browser hydration check: set PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH to a Chromium or Chrome executable.");
+    return;
+  }
+  const { chromium } = createRequire(resolve(root, "packages/web/translations-svelte/package.json"))("playwright-core");
+  const browser = await chromium.launch({ executablePath, headless: true });
+  try {
+    const page = await browser.newPage();
+    const errors = [];
+    page.on("pageerror", error => errors.push(error.message));
+    // Failed requests are reported by URL below; the example has no favicon.
+    page.on("console", message => {
+      if (["error", "warning"].includes(message.type()) && !message.text().startsWith("Failed to load resource")) errors.push(message.text());
+    });
+    page.on("response", response => {
+      if (response.status() >= 400 && new URL(response.url()).pathname !== "/favicon.ico") errors.push(`${response.status()} ${response.url()}`);
+    });
+    const shown = async () => plainSpaces(JSON.stringify(await page.evaluate(() =>
+      [document.documentElement.lang, ...["h1", "h2", "#empty", "#usage", "#price"].map(selector => document.querySelector(selector)?.textContent ?? null)])));
+    const expected = path => plainSpaces(JSON.stringify([expectedPages[path].lang, ...expectedPages[path].texts]));
+    // networkidle: the client modules have loaded and SvelteKit has hydrated the page.
+    await page.goto(`${origin}/fr`, { waitUntil: "networkidle" });
+    assert.equal(await shown(), expected("/fr"), "/fr after hydration");
+    for (const [locale, path] of [["de", "/de"], ["fr", "/fr"]]) {
+      await page.getByRole("button", { name: locale, exact: true }).click();
+      await page.waitForURL(`${origin}${path}`);
+      await page.waitForFunction(text => document.querySelector("#empty")?.textContent === text, expectedPages[path].texts[2], { timeout: 15_000 });
+      assert.equal(await shown(), expected(path), `${path} after switching on the client`);
+    }
+    assert.deepEqual(errors, [], "the browser console");
+  } finally {
+    await browser.close();
+  }
 }
 
 // Formatted numbers contain CLDR's no-break spaces (U+00A0, U+202F); the comparisons read them as plain spaces.
@@ -160,7 +228,7 @@ async function servePages(web, check) {
     await check(async path => {
       const response = await fetch(`${origin}${path}`, { redirect: "manual" });
       return { status: response.status, body: await response.text() };
-    });
+    }, origin);
     assert.doesNotMatch(errors, /^\s+at /m, `The production server logged an error:\n${errors}`);
   } finally {
     if (server.exitCode === null && server.signalCode === null) server.kill();

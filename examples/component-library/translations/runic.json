@@ -5,5 +5,5 @@
   "code": { "namespace": "Shop", "className": "ShopText" },
   "baseLocale": "en",
   "locales": ["en", "de", "fr"],
-  "overrides": [{ "catalog": "acme.widgets", "from": "@acme/widgets" }]
+  "overrides": [{ "catalog": "acme.widgets", "from": ["Acme.Widgets", "@acme/widgets"] }]
 }

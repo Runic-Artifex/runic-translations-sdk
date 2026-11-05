@@ -56,8 +56,9 @@ otherwise. Packing removes the package's dependency on
 `Runic.Translations.Build`, a development dependency.
 
 An application overrides a packed catalog in its own `runic.json`:
-`"overrides": [{ "catalog": "acme.grid", "from": "Acme.Grid" }]`, with the
-override sources in `translations/overrides/acme.grid/<locale>.rmf2`, which are
+`"overrides": [{ "catalog": "acme.grid", "from": "Acme.Grid" }]` (or
+`"from": ["Acme.Grid", "@acme/grid"]` when a Vite build shares the file and the
+library ships an npm package too), with the override sources in `translations/overrides/acme.grid/<locale>.rmf2`, which are
 not part of the application's catalog. The source generator validates them
 against the packed catalog (`RTR0103`, `RTR0104` and the usual translation
 checks) and compiles them into `AppTextCatalog.Overlays`, which the application

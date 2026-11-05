@@ -1,5 +1,10 @@
 # Translate a Runic Views app
 
+> **Requires runic-sdk 0.17 or later.** This guide uses `IRunicApplicationLocale`,
+> `syncDocumentLocale`, `configureFieldErrorText` and other runic-sdk APIs that
+> 0.17 adds. runic-sdk 0.17 is not released at the time of writing; until it
+> is, the linked runic-sdk READMEs on `main` describe it.
+
 A Runic Views application shows text in three places: the page, which formats
 its own messages; ViewModels, which produce status lines and validation
 messages; and native surfaces such as menus, the tray and dialogs, which C#
@@ -15,7 +20,7 @@ language switch, in six steps:
 
 It needs Runic Translations 0.9 or later and runic-sdk 0.17 or later
 (`Runic.Application.Views`, `@runic-artifex/views` and the package of your page
-framework). The Runic side of each step is described in detail in
+framework; see the note above). The Runic side of each step is described in detail in
 [Translated text](https://github.com/Runic-Artifex/runic-sdk/blob/main/packages/dotnet/Runic.Application.Views/README.md#translated-text)
 in the `Runic.Application.Views` README.
 
@@ -47,6 +52,19 @@ A translation is written once and both builds check it. See
 [Strings outside the Views](runic-desktop.md#strings-outside-the-views) and the
 [shared-catalog example](../../../examples/shared-catalog/README.md), which has
 a C# process and a Vite page on one catalog.
+
+The same `runic.json` overrides component libraries for both builds. For a
+library that ships a NuGet package for the C# side and an npm package for the
+page, list both in `from`; each build matches its own package:
+
+```json
+"overrides": [{ "catalog": "acme.grid", "from": ["Acme.Grid", "@acme/grid"] }]
+```
+
+Its `translations/overrides/acme.grid/` files then change the library's text,
+or add a locale it lacks, in C# and on the page (with the Vite plugin's
+`dependencies: 'auto'`) alike; see
+[Use the library in an application](libraries.md#the-application).
 
 ## 2. Text from ViewModels: references
 
@@ -113,10 +131,13 @@ static RunicTextReference Text(TranslationReference reference) =>
     RunicTextReference.Create(reference, TranslationReferenceJsonContext.Default.TranslationReference);
 ```
 
-`member.DisplayName` is the `[Display(Name)]` text as written in C#. To
-translate the field's name too, write a message per field, or pass a reference
-to the name as a message argument (`new TranslationReferenceArgument(nameReference)`,
-see [Writing references](transport.md#writing-references)).
+`member.DisplayName` is the member's `[Display(Name = …)]`, else its
+`[DisplayName]`, else the property name, as written in C#. To translate the
+field's name too, write a message per field. A reference to the name as a
+message argument (`new TranslationReferenceArgument(nameReference)`) does not
+fit the generated factories, whose `field` parameter is a `string`: build that
+reference by hand, as [Writing references](transport.md#writing-references)
+shows.
 `RunicValidationMessage.Text`, `RunicValidationResult` and ReactiveUI.Validation
 take references the same way; see
 [Translated text](https://github.com/Runic-Artifex/runic-sdk/blob/main/packages/dotnet/Runic.Application.Views/README.md#translated-text).
@@ -160,7 +181,9 @@ syncDocumentLocale();   // <html lang dir> follow the window's language
   page cannot translate shows its fallback text.
 
 **References of several catalogs.** When ViewModels send references of a
-library's catalog too, resolve them by catalog:
+library's catalog too, resolve them by catalog. With the Vite plugin's
+`dependencies: 'auto'`, the page's library catalog is regenerated with the
+overrides of step 1, so a reference resolves to the same text as in C#:
 
 ```ts
 import * as notesTransport from 'virtual:runic-translations/notes/transport';
@@ -273,14 +296,24 @@ to negotiate.
 ## 5. Native text
 
 Runic ships no translations of its own. Native surfaces take their text from
-your catalog, and you set it again in the `LocaleChanged` handler:
+your catalog, and you set it again in the `LocaleChanged` handler. With Runic
+Desktop, the menus belong to the `DesktopHost` that `RunicDesktopHost.Run`
+starts (`desktopHost.Desktop`):
 
 ```csharp
-void UpdateNativeText()
+return RunicDesktopHost.Run(provider, options, async desktopHost =>
+{
+    var locale = desktopHost.Services.GetRequiredService<IRunicApplicationLocale>();
+    locale.LocaleChanged += (_, _) => UpdateNativeText(desktopHost.Desktop);
+    UpdateNativeText(desktopHost.Desktop);
+    // … open the windows
+});
+
+void UpdateNativeText(DesktopHost desktop)
 {
     var text = new NotesText(translations);
-    host.SetMenuBar(BuildMenus(text));
-    host.SetStandardMenuTitles(new DesktopStandardMenuTitles
+    desktop.SetMenuBar(BuildMenus(text));
+    desktop.SetStandardMenuTitles(new DesktopStandardMenuTitles
     {
         About = text.Messages.menu_about(app: "Notes"),
         Quit = text.Messages.menu_quit(app: "Notes"),
@@ -295,10 +328,14 @@ void UpdateNativeText()
 }
 ```
 
-- **Menus.** `SetMenuBar` replaces the application's menus;
-  `SetStandardMenuTitles` retitles the menus Runic adds (About, Edit, Quit, …).
-  A title may contain `{0}` for the application's name, but formatting the name
-  into the message, as above, lets the translation place it.
+- **Menus.** `DesktopHost.SetMenuBar` replaces the application's menus.
+  `DesktopHost.SetStandardMenuTitles` retitles the standard menus that Runic
+  adds on macOS (About, Edit, Quit, …); on Windows and Linux, which show no
+  standard menus, the call only checks the titles. The About, Hide and Quit
+  titles may contain `{0}` for the application's name, and no other title may
+  contain braces; formatting the name into the message, as above, lets the
+  translation place it. On CS-WebUI, `RunicCsWebUiHost.SetMenuBar` replaces the
+  menus, and there are no standard menus.
 - **Dialogs and pages Runic shows.** `DesktopPlatformTexts.Current` holds the
   text Runic shows where the platform has none: dialog titles, the suggested
   "Untitled" name, shortcut key names, browser error pages. Dialogs opened later
@@ -307,9 +344,13 @@ void UpdateNativeText()
   and rebuild a tray menu on a switch.
 - **Direction and the web view.** With Runic Desktop on Windows and Linux, the
   window's locale gives the native window its direction (right to left for
-  `ar`, `he`, `fa`, …) and the web view its language (its context menu, form
-  validation, `navigator.language`), also after a switch, unless the window's
-  options set them; macOS takes both from the application bundle (below).
+  `ar`, `he`, `fa`, …), also after a switch, and the web view its language
+  (its context menu, form validation, `navigator.language`) when the window
+  opens: after a switch, the web view's language stays until the window opens
+  again. Options the window sets (`LayoutDirection`, `Language`) win, and a
+  window with a `ProfilePath` keeps the platform's language, since WebView2
+  allows one language per profile. macOS takes both from the application
+  bundle (below).
   `syncDocumentLocale()` (step 3) sets `lang` and `dir` on the page. See
   [Runic.Application.Views.Desktop](https://github.com/Runic-Artifex/runic-sdk/blob/main/packages/dotnet/Runic.Application.Views.Desktop/README.md).
 - **macOS.** List your languages in `RunicApplicationLocales`
@@ -325,10 +366,12 @@ void UpdateNativeText()
 - **ViewModels.** `RunicWindowTestHost.Create<EditorViewModel>(services)` binds
   the window to the services' locale. `await host.ApplicationLocale.SetLocaleAsync("de")`
   switches the application, and `host.Content.Locale` shows the window's
-  locale. `RunicViewState.Read(vm => vm.Status)` reads a `TranslationReference`
-  member; resolve it with the context to check the text a user sees:
+  locale. A view state (`RunicViewState<TModel>`, from `host.Root.Snapshot()`
+  or a state tracker's `State`) reads a `TranslationReference` member with
+  `Read`; resolve it with the context to check the text a user sees:
 
   ```csharp
+  TranslationReference status = host.Root.Snapshot().Read(vm => vm.Status);
   await translations.SetLocaleAsync("de");   // de.rmf2: saved = Gespeichert: {$title}
   Assert.Equal("Gespeichert: Einkauf", translations.Resolve(status).Text);
   ```

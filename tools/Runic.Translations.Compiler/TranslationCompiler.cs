@@ -188,19 +188,60 @@ public static partial class TranslationCompiler
             }
             ValidateKnownMembers(item, OverrideMembers, source, diagnostics);
             JsonProperty? catalog = Required(item, "catalog", JsonKind.String, source, diagnostics);
-            JsonProperty? from = Required(item, "from", JsonKind.String, source, diagnostics);
+            JsonProperty? from = item.Property("from");
+            if (from is null) diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Missing required member 'from'.", source, item.Span);
             if (catalog is null || from is null) continue;
-            string id = catalog.Value.Text!, package = from.Value.Text!;
+            string id = catalog.Value.Text!;
+            IReadOnlyList<string>? packages = ReadOverridePackages(from.Value, source, diagnostics);
             if (!IsCatalogId(id) || IsWindowsDeviceStem(id))
                 diagnostics.Add("RTR0006", TranslationDiagnosticSeverity.Error, "Invalid catalog ID '" + id + "'.", source, catalog.Value.Span);
             else if (string.Equals(id, model.Id, StringComparison.Ordinal))
                 diagnostics.Add("RTR0104", TranslationDiagnosticSeverity.Error, "A project cannot override its own catalog '" + id + "'; edit its sources instead.", source, catalog.Value.Span);
             else if (!seen.Add(id))
                 diagnostics.Add("RTR0104", TranslationDiagnosticSeverity.Error, "Catalog '" + id + "' is overridden more than once.", source, catalog.Value.Span);
-            else if (!IsPackageId(package))
-                diagnostics.Add("RTR0104", TranslationDiagnosticSeverity.Error, "'" + package + "' is not a NuGet or npm package ID.", source, from.Value.Span);
-            else model.Overrides.Add(new OverrideModel(id, package, item.Span));
+            else if (packages is not null) model.Overrides.Add(new OverrideModel(id, packages, item.Span));
         }
+    }
+
+    // "from": one package ID, or a non-empty array of distinct ones, such as the NuGet and the npm package of a library
+    // that ships the catalog both ways ["Acme.Grid", "@acme/grid"]. Each build compares the entries against the packages
+    // of its own ecosystem; NuGet IDs never contain '@' or '/', so the entries cannot match the wrong package.
+    private static IReadOnlyList<string>? ReadOverridePackages(JsonValue value, TranslationSource source, DiagnosticBag diagnostics)
+    {
+        if (value.Kind == JsonKind.String)
+        {
+            if (IsPackageId(value.Text!)) return new[] { value.Text! };
+            diagnostics.Add("RTR0104", TranslationDiagnosticSeverity.Error, "'" + value.Text + "' is not a NuGet or npm package ID.", source, value.Span);
+            return null;
+        }
+        if (value.Kind != JsonKind.Array || value.Items.Count == 0)
+        {
+            diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Member 'from' must be a package ID or a non-empty array of package IDs.", source, value.Span);
+            return null;
+        }
+        var packages = new List<string>();
+        bool valid = true;
+        foreach (JsonValue entry in value.Items)
+        {
+            if (entry.Kind != JsonKind.String)
+            {
+                diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "Member 'from' must be a package ID or a non-empty array of package IDs.", source, entry.Span);
+                valid = false;
+            }
+            else if (!IsPackageId(entry.Text!))
+            {
+                diagnostics.Add("RTR0104", TranslationDiagnosticSeverity.Error, "'" + entry.Text + "' is not a NuGet or npm package ID.", source, entry.Span);
+                valid = false;
+            }
+            // NuGet IDs compare case-insensitively, npm names are lowercase, so a case-insensitive duplicate is one package.
+            else if (packages.Exists(package => string.Equals(package, entry.Text, StringComparison.OrdinalIgnoreCase)))
+            {
+                diagnostics.Add("RTR0104", TranslationDiagnosticSeverity.Error, "Package '" + entry.Text + "' is listed more than once in \"from\".", source, entry.Span);
+                valid = false;
+            }
+            else packages.Add(entry.Text!);
+        }
+        return valid ? packages : null;
     }
 
     // A NuGet package ID (Acme.Grid) or an npm package name, scoped or not (@acme/grid).

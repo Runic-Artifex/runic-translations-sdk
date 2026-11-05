@@ -4,7 +4,7 @@
 		synchronizeLocaleWithNavigation
 	} from '@runic-artifex/translations-sveltekit/navigation';
 	import { useMessageLocale } from '@runic-artifex/translations-svelte';
-	import { createLocaleSource } from 'virtual:runic-translations/shop/runtime';
+	import { createLocaleSource, localeDirection } from 'virtual:runic-translations/shop/runtime';
 	import { routing } from '#lib/i18n.ts';
 	import { localeContext } from '#lib/locale.ts';
 	import type { LayoutProps } from './$types';
@@ -21,8 +21,10 @@
 	// The shared locale channel: every catalog's m.*() follows this locale, @acme/widgets' included.
 	useMessageLocale(locale);
 
+	// The server renders <html lang dir> (%runic.locale%, %runic.dir%); after a switch on the client, set both.
 	$effect(() => {
 		document.documentElement.lang = locale.locale;
+		document.documentElement.dir = localeDirection(locale.locale);
 	});
 </script>
 

@@ -176,29 +176,28 @@ runicTranslations({ dependencies: 'auto' })
 </script>
 ```
 
-**Overrides and added locales.** Both builds read the same layout:
+**Overrides and added locales.** Both builds read the same layout, and one
+`translations/` directory can serve both, as in the example, where the .NET
+application and the SvelteKit application share it:
 
 ```text
 translations/
-  runic.json                         "overrides": [{ "catalog": "acme.widgets", "from": "Acme.Widgets" }]
+  runic.json                         "overrides": [{ "catalog": "acme.widgets", "from": ["Acme.Widgets", "@acme/widgets"] }]
   overrides/acme.widgets/en.rmf2     the application's wording of single messages
   overrides/acme.widgets/fr.rmf2     a locale the library lacks
 ```
 
-`from` names the package that ships the catalog: the NuGet package ID in a .NET
-build, the npm package name (`@acme/widgets`) in a Vite build. Each override is
-validated against that package's catalog. Overrides apply **locale-first**: a
-German user sees the library's German text even where the application overrides
-the English one. A locale the overrides add falls back to its nearest CLDR
-parent among the library's locales and the added ones (`de-CH` to `de`), and
-the same chain applies in .NET and on the web. Details:
-[Build-time overrides](composition.md#build-time-overrides).
-
-A `runic.json` names one package per catalog in `from`, so a catalog that a
-.NET build and a Vite build both compile, such as the shared catalog of a Runic
-Views application, cannot yet override a library through both its NuGet and its
-npm package: the other build reports `RTR0104`. Keep the .NET and the web
-overrides in two projects, as the example does.
+`from` names the package that ships the catalog: the NuGet package ID for a
+.NET build, the npm package name for a Vite build, or both in an array. Each
+build matches the packages of its own kind (NuGet IDs never contain `@` or
+`/`), and reports `RTR0104` only when none of them ships the catalog. Each
+override is validated against that package's catalog. Overrides apply
+**locale-first**: a German user sees the library's German text even where the
+application overrides the English one. A locale the overrides add falls back
+to its nearest CLDR parent among the library's locales and the added ones
+(`de-CH` to `de`), else to the library locale that CLDR likely subtags match,
+else to the library's base locale; the same chain applies in .NET and on the
+web. Details: [Build-time overrides](composition.md#build-time-overrides).
 
 **Run-time updates.** An application can also install packs for a library's
 catalog at run time (`TranslationOverlay.FromPacks("acme.widgets", …)` in .NET,
