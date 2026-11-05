@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 
 using Runic.Translations.Generated;
 
@@ -21,10 +22,25 @@ public sealed class Rmf2MarkupContract
     internal const int MaximumDepth = 16;
     internal const int MaximumNodes = 4096;
 
-    private Rmf2MarkupContract() { }
+    // The linked tags and messages, swapped as one object when Hot Reload changes the source (Relink).
+    private Data _data;
+    // The generated contract to read again after a Hot Reload update, and the JSON linked last; null for a fixed contract.
+    private readonly Func<string>? _source;
+    private string? _linkedJson;
+    private int _linkVersion;
 
-    internal Dictionary<string, Tag> Tags { get; } = new(StringComparer.Ordinal);
-    internal Dictionary<string, Message> Messages { get; } = new(StringComparer.Ordinal);
+    private Rmf2MarkupContract(Data data, Func<string>? source = null, string? linkedJson = null)
+    {
+        _data = data;
+        _source = source;
+        _linkedJson = linkedJson;
+    }
+
+    internal Dictionary<string, Tag> Tags => Volatile.Read(ref _data).Tags;
+    internal Dictionary<string, Message> Messages => Volatile.Read(ref _data).Messages;
+
+    /// <summary>How many times Hot Reload linked a changed contract into this object; caches built from it compare it.</summary>
+    internal int LinkVersion => Volatile.Read(ref _linkVersion);
 
     /// <summary>Parses and validates the compiler-exported RMF2 markup contract JSON.</summary>
     /// <param name="contractJson">The generated <c>Rmf2MarkupContract</c> constant or the <c>markupContract</c> of a locale artifact.</param>
@@ -32,25 +48,66 @@ public sealed class Rmf2MarkupContract
     public static Rmf2MarkupContract Link(string contractJson)
     {
         ArgumentNullException.ThrowIfNull(contractJson);
-        var linked = new Rmf2MarkupContract();
-        try
-        {
-            using JsonDocument json = JsonDocument.Parse(contractJson, new JsonDocumentOptions { MaxDepth = 32 });
-            linked.Read(json.RootElement);
-        }
-        catch (FormatException exception)
-        {
-            throw new ArgumentException(exception.Message, nameof(contractJson), exception);
-        }
-        catch (Exception exception) when (exception is JsonException or InvalidOperationException or KeyNotFoundException)
-        {
-            throw new ArgumentException("The RMF2 markup contract is malformed.", nameof(contractJson), exception);
-        }
+        return new Rmf2MarkupContract(Parse(contractJson, nameof(contractJson)));
+    }
+
+    /// <summary>
+    /// Parses and validates the generated markup contract that <paramref name="contractJson"/> returns, and follows it under
+    /// .NET Hot Reload: after an update that changes the generated <c>XCatalog.Rmf2MarkupContract</c> (a translation added,
+    /// a document's structure edited), the contract is linked again, so renderers and overlays built from this object check
+    /// against the new one. Without Hot Reload it is the same as <see cref="Link(string)"/>.
+    /// </summary>
+    /// <param name="contractJson">Returns the contract, for example <c>() =&gt; XCatalog.Rmf2MarkupContract</c>.</param>
+    /// <exception cref="ArgumentException">The contract is not a supported markup contract v2.</exception>
+    public static Rmf2MarkupContract Link(Func<string> contractJson)
+    {
+        ArgumentNullException.ThrowIfNull(contractJson);
+        string json = contractJson() ?? throw new ArgumentException("The markup contract source returned null.", nameof(contractJson));
+        Data data = Parse(json, nameof(contractJson));
+        if (!TranslationHotReload.IsSupported) return new Rmf2MarkupContract(data);
+        var linked = new Rmf2MarkupContract(data, contractJson, json);
+        TranslationHotReload.Track(linked);
         return linked;
     }
 
-    private void Read(JsonElement root)
+    /// <summary>Links the source again when its JSON changed (Hot Reload). A contract that fails to link keeps the previous one.</summary>
+    internal void Relink()
     {
+        if (_source is null) return;
+        string? json = _source();
+        if (json is null || string.Equals(json, Volatile.Read(ref _linkedJson), StringComparison.Ordinal)) return;
+        Data data = Parse(json, "contractJson");
+        Volatile.Write(ref _data, data);
+        Volatile.Write(ref _linkedJson, json);
+        Interlocked.Increment(ref _linkVersion);
+    }
+
+    private static Data Parse(string contractJson, string parameterName)
+    {
+        try
+        {
+            using JsonDocument json = JsonDocument.Parse(contractJson, new JsonDocumentOptions { MaxDepth = 32 });
+            return Read(json.RootElement);
+        }
+        catch (FormatException exception)
+        {
+            throw new ArgumentException(exception.Message, parameterName, exception);
+        }
+        catch (Exception exception) when (exception is JsonException or InvalidOperationException or KeyNotFoundException)
+        {
+            throw new ArgumentException("The RMF2 markup contract is malformed.", parameterName, exception);
+        }
+    }
+
+    private sealed class Data
+    {
+        internal Dictionary<string, Tag> Tags { get; } = new(StringComparer.Ordinal);
+        internal Dictionary<string, Message> Messages { get; } = new(StringComparer.Ordinal);
+    }
+
+    private static Data Read(JsonElement root)
+    {
+        var data = new Data();
         if (root.GetProperty("version").GetInt32() != Version) throw new FormatException("Unsupported RMF2 contract version.");
         foreach (JsonProperty item in root.GetProperty("contracts").EnumerateObject())
         {
@@ -88,7 +145,7 @@ public sealed class Rmf2MarkupContract
             var tag = new Tag(standalone, placement, children, item.Value.GetProperty("interactive").GetBoolean(), plainText, options);
             if (item.Name.StartsWith("runic:", StringComparison.Ordinal) && !(BuiltIns.TryGetValue(item.Name, out Tag? builtIn) && builtIn.SameShape(tag)))
                 throw new FormatException("RMF2 built-in markup '" + item.Name + "' does not have the built-in contract shape.");
-            Tags.Add(item.Name, tag);
+            data.Tags.Add(item.Name, tag);
         }
         foreach (JsonProperty message in root.GetProperty("messages").EnumerateObject())
         {
@@ -108,8 +165,9 @@ public sealed class Rmf2MarkupContract
             if (content == "inline" && skeletons.Count != 0) throw new FormatException("An inline RMF2 message cannot declare document skeletons.");
             // Whether any locale of the message uses markup; a contract without the member allows markup.
             bool structured = !message.Value.TryGetProperty("structured", out JsonElement structuredValue) || structuredValue.GetBoolean();
-            Messages.Add(message.Name, new Message(slots, bounds, locales, content == "document", skeletons, structured));
+            data.Messages.Add(message.Name, new Message(slots, bounds, locales, content == "document", skeletons, structured));
         }
+        return data;
     }
 
     /// <summary>
