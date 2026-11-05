@@ -85,8 +85,10 @@ assert.match(page, /createWindowLocaleSync\(\{ current: windowLocale, send: \(lo
   "The interface language does not set the window's locale.");
 assert.match(page, /onWindowLocale\(\(locale\) => \{\s*const match = matchUiLocale\(windowLocaleSync\.windowChanged\(locale\)/,
   "The page does not follow the window's locale.");
-assert.match(page, /onBridgeConnection\(\(state\) => \{\s*if \(state === "connected"\) windowLocaleSync\.connected\(\);/,
+assert.match(page, /onBridgeConnection\(\(state\) => \{\s*if \(state !== "connected"\) return;\s*windowLocaleSync\.connected\(\);/,
   "The page does not send its locale again after a reconnect.");
+assert.match(page, /onBridgeConnection\(\(state\) => \{\s*if \(state !== "connected"\) return;[^}]*resumeLocalEditorState\(\);/,
+  "The page does not write an interrupted local-state change again after a reconnect.");
 assert.match(page, /\} finally \{[^}]*applyUiLocale\(matchUiLocale\(getLocalEditorState\(uiLocaleStateKey\)/,
   "A failed state load skips setting the window's locale.");
 

@@ -111,6 +111,43 @@ typed property prints the new text. Your application's reference to its own
 translations library is an ordinary project reference; all Runic dependencies
 come from packages.
 
+### Edit text while the app runs
+
+Under `dotnet watch` (or a debugger with Hot Reload), saving a text-only edit of
+a `.rmf2` or `.mf2` file updates the running application without a restart:
+
+```sh
+dotnet watch --project Example.App/Example.App.csproj
+```
+
+The source generator rebuilds the catalog, Hot Reload applies the new embedded
+data, and every `TranslationManager` (and every manager of a `TranslationContext`) republishes its snapshot:
+`SnapshotPublished` is raised with `TranslationSnapshotPublishReason.Refresh`, so
+WPF bindings and other views that listen to it show the new text; code that
+formats again (`text.Messages.application_title`) reads it as well. This works for
+a translations library referenced by the app as well as for a catalog in the app
+project. A snapshot that code captured earlier keeps its text. Other locales
+that were loaded before are built again from the new data when the app next
+switches to them, and only the catalogs whose generated code changed are
+reloaded.
+
+The edit can also change the generated markup contract (a new translation, or
+a document message whose block structure changed). `XCatalog.Registration`
+reads the contract again, so overlays are checked against the new one. A
+renderer you link yourself follows it when you link the generated property
+through a function:
+
+```csharp
+// Follows Hot Reload; Link(AppTextCatalog.Rmf2MarkupContract) keeps the startup contract.
+Rmf2MarkupContract contract = Rmf2MarkupContract.Link(() => AppTextCatalog.Rmf2MarkupContract);
+```
+
+A text-only edit changes a message's text, its translations or its variants, but
+not the caller contract: adding or removing a message, an input or a slot changes
+`ContractFingerprint` and the generated API, and `dotnet watch` restarts the app
+(`ENC0011` with `--verbose`). Hot Reload is off in release, trimmed and native AOT
+builds, where nothing is tracked.
+
 Startup code that cannot await, such as a WPF application that opens its window
 with `StartupUri`, can call `AppTextCatalog.CreateManager()` instead: the embedded
 catalog is ready without I/O. A WPF application can keep this layout. Its XAML

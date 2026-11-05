@@ -96,6 +96,7 @@
     inspectLocalEditorState,
     loadLocalEditorState,
     removeLocalEditorState,
+    resumeLocalEditorState,
     setLocalEditorState,
     type LocalStateSummary,
   } from "#lib/local-state.js";
@@ -485,9 +486,12 @@
       const match = matchUiLocale(windowLocaleSync.windowChanged(locale), uiLocales);
       if (match !== undefined) uiLocale = match;
     });
-    // A reconnected host keeps the locale it had; a switch made while it was unreachable is sent again.
+    // A reconnected host keeps the locale it had; a switch made while it was unreachable is sent again, and so is a
+    // local-state write the lost connection interrupted.
     const stopConnection = onBridgeConnection((state) => {
-      if (state === "connected") windowLocaleSync.connected();
+      if (state !== "connected") return;
+      windowLocaleSync.connected();
+      resumeLocalEditorState();
     });
     return () => {
       disposed = true;
@@ -1029,7 +1033,14 @@
     const summary = localStateSummary ?? inspectLocalEditorState();
     if (summary.entries === 0) return;
     if (!confirm(ui.text("ui_feedback_clear_state_confirm"))) return;
-    const removed = await clearLocalEditorState();
+    // Called from a click handler: a failure, such as a host that went away, is reported here, never left unhandled.
+    let removed: number;
+    try {
+      removed = await clearLocalEditorState();
+    } catch (error) {
+      localStateMessage = errorNotice(error);
+      return;
+    }
     recentProjects = [];
     recoveredDrafts = {};
     localStateSummary = inspectLocalEditorState();
@@ -1362,8 +1373,14 @@
     const revision = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
     let current = diagnostic;
     if (diagnostic.sourceRevision !== revision) {
-      const result = await bridge.transformDocument(document.path, content);
-      if (workspaceGeneration !== workspaceVersion) return;
+      // Started without an awaiting caller (`void selectDiagnostic(…)`): a failed request is reported, not left unhandled.
+      const result = await bridge.transformDocument(document.path, content).catch((error: unknown) => {
+        if (workspaceGeneration !== workspaceVersion) return undefined;
+        if (repairDocument?.path === document.path) repairMessage = errorNotice(error);
+        else clientError = errorNotice(error);
+        return undefined;
+      });
+      if (result === undefined || workspaceGeneration !== workspaceVersion) return;
       current = result.diagnostics.find(candidate => candidate.id === diagnostic.id && candidate.message === diagnostic.message) ?? diagnostic;
       // A removed diagnostic cannot navigate with stale source coordinates.
       if (current.sourceRevision !== revision) return;

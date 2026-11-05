@@ -28,7 +28,13 @@ const values = new Map<string, string>();
 const pendingKeys = new Set<string>();
 const listeners = new Set<() => void>();
 let initialized: Promise<boolean> | undefined;
+// The queue of native writes. It never rejects: a failed write is kept as `unsaved` instead, so a write that a reload
+// or a lost host interrupts cannot surface as an unhandled rejection.
 let persistence = Promise.resolve();
+// The projection holds changes the native record may not have yet: set by every change, cleared when a write starts,
+// and set again when that write fails.
+let unsaved = false;
+let lastFailure: unknown;
 let recovered = false;
 let bridge: LocalStateBridge | undefined;
 
@@ -123,32 +129,61 @@ export function inspectLocalEditorState(): LocalStateSummary {
 export async function clearLocalEditorState(): Promise<number> {
   // A clear is ordered after any interaction already queued by the UI; without
   // this, a late save could recreate a record the user explicitly removed.
-  await persistence.catch(() => undefined);
+  await persistence;
   const result = await requireBridge().clearLocalState();
   values.clear();
   pendingKeys.clear();
+  unsaved = false;
   recovered = result.recovered;
-  persistence = Promise.resolve();
   notify();
   return result.removedEntries;
 }
 
-/** Waits for queued native persistence; useful before an orderly host shutdown. */
-export function flushLocalEditorState(): Promise<void> {
-  return persistence;
+/**
+ * Waits for queued native persistence; useful before an orderly host shutdown. Rejects with the last failure when the
+ * native record is still behind the projection afterwards.
+ */
+export async function flushLocalEditorState(): Promise<void> {
+  await persistence;
+  if (unsaved) throw lastFailure ?? new Error("The local editor state has not been written yet.");
+}
+
+/**
+ * The host connection opened (again): writes the projection once more when a lost connection interrupted its last
+ * write. The host may have applied that write before the reply was lost; a complete replacement is safe to repeat.
+ */
+export function resumeLocalEditorState(): void {
+  if (unsaved) queuePersist();
 }
 
 function queuePersist(): void {
-  const snapshot = () => [...values]
+  unsaved = true;
+  persistence = persistence.then(persist);
+}
+
+async function persist(): Promise<void> {
+  try {
+    // A failed load leaves the native record unknown; replacing it with this projection alone would drop the
+    // entries the load could not read, so the change stays in memory only.
+    await initialized;
+  } catch (error) {
+    lastFailure = error;
+    return;
+  }
+  unsaved = false;
+  const entries = [...values]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, value]) => ({ key, value }));
-  persistence = persistence
-    .catch(() => undefined)
-    .then(() => initialized ?? false)
-    .then(() => requireBridge().saveLocalState(snapshot()))
-    .then((state) => {
-      recovered = state.recovered;
-    });
+  try {
+    const state = await requireBridge().saveLocalState(entries);
+    recovered = state.recovered;
+  } catch (error) {
+    // A reload, navigation or closed window ends the Bridge while the write is in flight. The next change, or
+    // `resumeLocalEditorState` after a reconnect, writes the projection again.
+    unsaved = true;
+    lastFailure = error;
+    console.warn("The editor could not save its local state; it is saved again when the host reconnects.", error);
+  }
 }
 
 function requireOwnedKey(key: string): void {

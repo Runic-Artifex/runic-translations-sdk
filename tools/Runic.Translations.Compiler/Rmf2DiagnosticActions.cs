@@ -103,35 +103,40 @@ internal static class Rmf2DiagnosticActions
     }
 
     /// <summary>
-    /// Repairs that need the compiled project, for the diagnostics of <paramref name="compilation"/> located in
+    /// Repairs of project diagnostics, for the diagnostics of <paramref name="compilation"/> located in
     /// <paramref name="source"/>: RTR0095 adds the missing plural or ordinal variants of a single-selector message as
-    /// copies of its catch-all variant, inserted before it with the same separator. Messages with several selectors get
-    /// no repair. <paramref name="compilation"/> must be compiled from <paramref name="source"/>'s current bytes.
+    /// copies of its catch-all variant, inserted before it with the separator its variants use. The categories come from
+    /// the message itself (its selector's function, <c>select</c> option and <c>:integer</c> type) and the CLDR rules of
+    /// the diagnostic's locale, not from the compiled project, so the repair is offered while the catalog has errors
+    /// elsewhere, and when <c>pluralCategories</c> makes RTR0095 an error. Messages with several selectors get no repair.
+    /// <paramref name="compilation"/> must be compiled from <paramref name="source"/>'s current bytes.
     /// </summary>
     public static IReadOnlyList<Rmf2DiagnosticQuickFix> GetProjectQuickFixes(Rmf2ProjectCompilation compilation, TranslationSource source, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(compilation);
         ArgumentNullException.ThrowIfNull(source);
-        if (compilation.Project is not { } project) return Array.Empty<Rmf2DiagnosticQuickFix>();
         Rmf2ResourceDocument? document = null;
         string? revision = null;
         var fixes = new List<Rmf2DiagnosticQuickFix>();
         foreach (TranslationDiagnostic diagnostic in compilation.Diagnostics)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (diagnostic.Id != "RTR0095" || diagnostic.MessageKey is not { } key || diagnostic.Locale is not { } locale ||
+            if (diagnostic.Id != "RTR0095" || diagnostic.MessageKey is null || diagnostic.Locale is not { } locale ||
                 !string.Equals(diagnostic.Location.Path.Replace('\\', '/'), source.Path, StringComparison.Ordinal)) continue;
-            Rmf2TranslationV5? resource = project.Locales.FirstOrDefault(item => item.Tag == locale)?.DirectResources
-                .FirstOrDefault(item => item.Key == key && string.Equals(item.SourceLocation.Path.Replace('\\', '/'), source.Path, StringComparison.Ordinal));
-            if (resource is null) continue;
             bool rmf2 = source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase);
             document ??= rmf2 ? Rmf2ResourceReader.Analyze(source, cancellationToken: cancellationToken) : Rmf2ResourceReader.AnalyzeDirect(source, cancellationToken: cancellationToken);
             Rmf2ResourceNode? node = rmf2
-                ? document.Nodes.FirstOrDefault(item => !item.IsGroup && item.NameLocation.StartByte == resource.SourceLocation.StartByte)
+                ? document.Nodes.FirstOrDefault(item => !item.IsGroup && item.NameLocation.StartByte == diagnostic.Location.StartByte)
                 : document.Nodes.Count == 1 ? document.Nodes[0] : null;
-            if (node?.MessageSyntax is not { Match: { } match } syntax) continue;
-            Rmf2MessageV5 message = resource.Message;
-            if (message.Selectors.Count != 1 || message.Selectors[0].Function is not ("plural" or "ordinal") || syntax.Variants.Count != message.Variants.Count) continue;
+            if (node is not { Message: { } text, MessageSyntax: { Match: { } match } syntax }) continue;
+            // The message's own semantics; a translation whose selector is typed only by the base's caller contract
+            // takes it from the project when the project compiled.
+            Rmf2MessageV5? message = Rmf2SemanticCompilerV5.Compile(new TranslationSource(source.Path, Utf8.GetBytes(text)), cancellationToken: cancellationToken).Message
+                ?? compilation.Project?.Locales.FirstOrDefault(item => item.Tag == locale)?.DirectResources
+                    .FirstOrDefault(item => item.Key == diagnostic.MessageKey && item.SourceLocation.StartByte == node.NameLocation.StartByte &&
+                        string.Equals(item.SourceLocation.Path.Replace('\\', '/'), source.Path, StringComparison.Ordinal))?.Message;
+            if (message is null || message.Selectors.Count != 1 || message.Selectors[0].Function is not ("plural" or "ordinal") ||
+                syntax.Variants.Count != message.Variants.Count) continue;
             bool ordinal = message.Selectors[0].Function == "ordinal";
             IReadOnlyList<string> categories = Rmf2AuthoringService.PluralCategories(locale, ordinal, message.Selectors[0].Type == "int64");
             var used = new HashSet<string>(message.Variants.Select(static variant => variant.Keys[0])
@@ -145,8 +150,9 @@ internal static class Rmf2DiagnosticActions
             int Map(int offset) => map[Math.Min(offset, map.Count - 1)];
             Mf2VariantSyntax variant = syntax.Variants[catchAll];
             int insertAt = Map(variant.Location.StartByte);
-            int separatorFrom = Map(catchAll > 0 ? End(syntax.Variants[catchAll - 1].Location) : End(match.Location));
-            string separator = separatorFrom < insertAt ? Utf8.GetString(source.Bytes, separatorFrom, insertAt - separatorFrom) : string.Empty;
+            // The separator between two variants: before the catch-all, else after it when it comes first.
+            string separator = catchAll > 0 ? Between(syntax.Variants[catchAll - 1], variant)
+                : syntax.Variants.Count > 1 ? Between(variant, syntax.Variants[1]) : string.Empty;
             if (separator.Length == 0 || separator.Any(static character => !char.IsWhiteSpace(character))) separator = " ";
             int patternFrom = Map(variant.PatternLocation.StartByte), patternTo = Map(End(variant.PatternLocation));
             string pattern = Utf8.GetString(source.Bytes, patternFrom, patternTo - patternFrom);
@@ -154,6 +160,12 @@ internal static class Rmf2DiagnosticActions
                 "Add the missing " + (ordinal ? "ordinal" : "plural") + " " + (missing.Length == 1 ? "variant " : "variants ") + string.Join(", ", missing) + " (copies of the * variant)",
                 diagnostic.Id, diagnostic.Location, revision ??= Revision(source), insertAt, 0,
                 string.Concat(missing.Select(category => category + " " + pattern + separator))));
+
+            string Between(Mf2VariantSyntax first, Mf2VariantSyntax second)
+            {
+                int from = Map(End(first.Location)), to = Map(second.Location.StartByte);
+                return from < to ? Utf8.GetString(source.Bytes, from, to - from) : string.Empty;
+            }
         }
         return fixes.AsReadOnly();
         static int End(TextSourceLocation location) => location.StartByte + location.LengthBytes;

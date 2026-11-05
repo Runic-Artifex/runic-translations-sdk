@@ -26,6 +26,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
 {
     private const string KindMetadata = "build_metadata.AdditionalFiles.RunicTranslationKind";
     private const string ProjectDirectoryProperty = "build_property.ProjectDir";
+    private const string PseudoLocalesProperty = "build_property.RunicTranslationsPseudoLocales";
     private const string RuntimeAssemblyName = "Runic.Translations";
     private const int RequiredRmf2Version = Rmf2ProjectV5.RuntimeAbiVersion;
     private const string CompatibilityNamespace = "Runic.Translations.Generated";
@@ -62,8 +63,14 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         // The link and its diagnostics are computed once per change to the translation sources,
         // project file or runtime ABI. Source rendering and XAML validation are separate outputs,
         // so a XAML edit revalidates only that file and never relinks or re-renders sources.
-        IncrementalValueProvider<LinkResult> link = units.Collect().Combine(projects).WithTrackingName("TranslationCompilation").Combine(runtimeAbi)
-            .Select(static (pair, cancellationToken) => Link(pair.Left.Left, pair.Left.Right, pair.Right, cancellationToken))
+        // runic.json pseudoLocales are generated in development builds only: Runic.Translations.Build sets the
+        // property for the Debug configuration.
+        IncrementalValueProvider<bool> pseudoLocales = context.AnalyzerConfigOptionsProvider
+            .Select(static (provider, _) => provider.GlobalOptions.TryGetValue(PseudoLocalesProperty, out string? value) &&
+                string.Equals(value?.Trim(), "true", StringComparison.OrdinalIgnoreCase))
+            .WithTrackingName("TranslationPseudoLocales");
+        IncrementalValueProvider<LinkResult> link = units.Collect().Combine(projects).WithTrackingName("TranslationCompilation").Combine(runtimeAbi).Combine(pseudoLocales)
+            .Select(static (pair, cancellationToken) => Link(pair.Left.Left.Left, pair.Left.Left.Right, pair.Left.Right, pair.Right, cancellationToken))
             .WithTrackingName("TranslationLink");
         context.RegisterSourceOutput(link, static (productionContext, result) => Emit(productionContext, result));
 
@@ -235,7 +242,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
     // Links the catalog and collects that step's diagnostics. It runs in a cached Select step;
     // the outputs only report, render or validate.
     private static LinkResult Link(ImmutableArray<SourceUnit> units, ImmutableArray<GeneratorInput> projectInputs,
-        RuntimeAbiState runtimeAbi, CancellationToken cancellationToken)
+        RuntimeAbiState runtimeAbi, bool pseudoLocales, CancellationToken cancellationToken)
     {
         var diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
         var unreadable = new List<GeneratorInput>();
@@ -278,7 +285,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         GeneratorInput selected = projects[0];
         sourceTexts[selected.Path] = SourceText.From(selected.Text!, StrictUtf8);
         var project = new TranslationSource(selected.Path, StrictUtf8.GetBytes(selected.Text!));
-        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(project, compiled, CompilerOptions, cancellationToken);
+        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(project, compiled, CompilerOptions, pseudoLocales, cancellationToken);
         bool hasErrors = false;
         for (int index = 0; index < compilation.Diagnostics.Count; index++)
         {
