@@ -109,6 +109,17 @@ internal static class TranslationsDiagnostics
     internal static readonly DiagnosticDescriptor XamlSourceNotChecked = new(
         "RTR0085", "Translation XAML keys under an explicit source are not checked", "{0}", Category, DiagnosticSeverity.Info, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0085");
 
+    internal static readonly DiagnosticDescriptor PluralCategoryUnreachable = new(
+        "RTR0094", "Plural key is never selected in its locale", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0094");
+    internal static readonly DiagnosticDescriptor PluralCategoryMissing = new(
+        "RTR0095", "Plural categories of the locale fall to the catch-all variant", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0095");
+    internal static readonly DiagnosticDescriptor InputNotDisplayed = new(
+        "RTR0096", "Translation drops a placeholder the base displays", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0096");
+    internal static readonly DiagnosticDescriptor BooleanFormatted = new(
+        "RTR0097", "Boolean is formatted as text", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0097");
+    internal static readonly DiagnosticDescriptor MaxLengthExceeded = new(
+        "RTR0098", "Message is longer than its @maxLength", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0098");
+
     private static readonly Dictionary<string, DiagnosticDescriptor> ById = Index(
         UnreadableSource, DuplicateInputs, UnsupportedProjectSchema, InvalidLocale, InvalidCodeName, EmptyBaseLocale,
         MissingTranslation, ExtraLocaleKey, InvalidFallback, FallbackCycle, MalformedPattern, CallerInputChanged,
@@ -117,7 +128,7 @@ internal static class TranslationsDiagnostics
         InvalidMarkupContract, InvalidMarkup, InvalidMarkupReference, NotExecutable, SyntaxError, InvalidDataModel,
         ReadableSurfaceUnsupported, ReadableNameReserved, DocumentContentKind, DocumentVariantStructure, DocumentChildInvalid,
         DocumentLimitExceeded, DocumentStructureMismatch, DocumentBlockEmpty, DocumentHeadingLevel, DocumentLineBreakSpace, XamlDeclaration, XamlKey, XamlInputs, XamlKind,
-        XamlPositionalInputs, XamlSourceNotChecked);
+        XamlPositionalInputs, XamlSourceNotChecked, PluralCategoryUnreachable, PluralCategoryMissing, InputNotDisplayed, BooleanFormatted, MaxLengthExceeded);
 
     private static readonly object UnknownGate = new();
     private static readonly Dictionary<string, DiagnosticDescriptor> Unknown = new(System.StringComparer.Ordinal);

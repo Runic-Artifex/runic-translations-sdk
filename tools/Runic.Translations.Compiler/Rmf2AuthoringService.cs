@@ -56,8 +56,8 @@ internal static class Rmf2AuthoringService
         bool supported = syntax.Success && semantic is not null;
         return new(Revision(source), supported, supported ? null : "The compiler cannot safely project this syntax. Edit the MF2 source.",
             inputs, syntax.Match?.Selectors ?? Array.Empty<string>(), semantic?.Selectors.Select(selector => selector.Function).ToArray() ?? [], variants, PluralCategories(locale,
-                semantic is { Selectors.Count: > 0 } && semantic.Selectors[0].Function == "ordinal"),
-            semantic?.Selectors.Select(selector => (IReadOnlyList<string>)PluralCategories(locale, selector.Function == "ordinal")).ToArray() ?? [], TranslationCapabilityRegistry.CldrVersion);
+                semantic is { Selectors.Count: > 0 } && semantic.Selectors[0].Function == "ordinal", semantic is { Selectors.Count: > 0 } && semantic.Selectors[0].Type == "int64"),
+            semantic?.Selectors.Select(selector => (IReadOnlyList<string>)PluralCategories(locale, selector.Function == "ordinal", selector.Type == "int64")).ToArray() ?? [], TranslationCapabilityRegistry.CldrVersion);
         void Add(string id, IReadOnlyList<string> keys, int start, int length) => variants.Add(new(id, keys,
             Encoding.UTF8.GetString(source.Bytes, start, length), start, length));
     }
@@ -224,7 +224,8 @@ internal static class Rmf2AuthoringService
     {
         if (function is null || Rmf2FunctionRegistryV2.Find(function) is null) throw new ArgumentException("Choose a compiler-supported input formatter.");
     }
-    // The categories of the same generated CLDR rules shipped to both runtimes.
-    private static string[] PluralCategories(string locale, bool ordinal) =>
-        TranslationCapabilityRegistry.PluralCategories(locale, ordinal).ToArray();
+    // The categories of the same generated CLDR rules shipped to both runtimes. An integer selector (`:integer`, an
+    // int64 operand) has no visible fraction digits, so only the categories its rule reaches with v = 0 are selectable.
+    internal static IReadOnlyList<string> PluralCategories(string locale, bool ordinal, bool integer = false) =>
+        integer ? TranslationCapabilityRegistry.IntegerPluralCategories(locale, ordinal) : TranslationCapabilityRegistry.PluralCategories(locale, ordinal);
 }
