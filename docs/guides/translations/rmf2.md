@@ -709,9 +709,14 @@ Only the text of each pattern changes: placeholders, markup and its slots,
 declarations, selectors and variant keys stay as written, so a pseudo message has
 the base caller contract and formats the same in .NET and ESM. A label that
 shows no brackets, or plain English, does not come from the catalog. Text that
-is cut off before the closing bracket does not fit. Plural selection uses the
+is cut off before the closing bracket does not fit. In a document message the
+brackets and padding go inside each paragraph, heading and list item, and empty
+blocks stay empty. Plural selection uses the
 pseudo tag's language (English for `en-XA`, Arabic for `ar-XB`), and numbers and
-dates format for the tag.
+dates format for the tag. `ar-XB` keeps the base message's variants, so a count
+whose Arabic category the base does not have (`two`, `few`, `many`, or any
+ordinal, which is always `other` in Arabic) selects the `*` variant: `{$n}st` for
+1 in English reads as the `*` text in `ar-XB`.
 
 Release builds leave the pseudo-locales out:
 
@@ -719,13 +724,15 @@ Release builds leave the pseudo-locales out:
   `Configuration` is `Debug`; set `RunicTranslationsPseudoLocales` to `true` or
   `false` to override.
 - The Vite plugin generates them when Vite's mode is `development` (the dev
-  server); the `pseudoLocales` option overrides it.
+  server); the `pseudoLocales` option overrides it. In manifest mode it takes
+  them out of the bundle otherwise, even when a Debug `dotnet build` generated
+  them.
 - The CLI generates them with `--pseudo-locales` on `validate`, `generate` and
   `verify` (and `pseudoLocales: true` in a `serve` request).
 
 `pseudoLocales` accepts `en-XA` and `ar-XB`. A tag that is also in `locales`,
-or that has source files of its own while pseudo-locales are generated, is
-`RTR0004`.
+or that has source files of its own (`en-XA.rmf2`, `en-XA/*.mf2`), is `RTR0004`
+in every build, so a stray file cannot ship as a real locale in release.
 
 ## Import a text-keyed catalog
 

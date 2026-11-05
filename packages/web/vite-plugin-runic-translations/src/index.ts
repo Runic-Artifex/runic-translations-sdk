@@ -392,6 +392,16 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       return null;
     },
 
+    // Manifest mode: the generated directory may come from a development build (a Debug dotnet build) that added the
+    // pseudo-locales. Unless they are on (Vite's development mode, or the option), they are taken out of the bundle.
+    transform(code, id) {
+      if (compiler || pseudoLocales) return null;
+      const path = resolve(id.replace(/[?#].*$/, ""));
+      if (!generatedPaths.has(path)) return null;
+      const filtered = withoutPseudoLocales(code);
+      return filtered === code ? null : { code: filtered, map: null };
+    },
+
     // Vite calls this once per environment (client, ssr, ...) for the same change; the change is
     // compiled once and each environment invalidates its own module graph.
     async hotUpdate(update: HotUpdateOptions) {
@@ -625,6 +635,26 @@ async function containedReal(root: string, realRoot: string, relativePath: strin
   if (!isWithin(realRoot, realPath))
     throw new Error(`Generated module path escapes its manifest root through a symbolic link: '${relativePath}'.`);
   return realPath;
+}
+
+// The development pseudo-locales of runic.json pseudoLocales (Rmf2PseudoLocalesV5 in the compiler).
+const pseudoLocaleTags: readonly string[] = ["en-XA", "ar-XB"];
+
+// Takes the pseudo-locales out of generated ESM: the runtime's declared locales, so they no longer resolve, and their
+// messages, so their text is not bundled. A generated module that still names a pseudo-locale message is an error rather
+// than a bundle that ships it.
+function withoutPseudoLocales(code: string): string {
+  const pseudo = pseudoLocaleTags.map(tag => JSON.stringify(tag));
+  let result = code.replace(/^export const locales = Object\.freeze\((\[[^\]\n]*\])\);$/m, (line, list: string) => {
+    const tags = JSON.parse(list) as string[];
+    const kept = tags.filter(tag => !pseudoLocaleTags.includes(tag));
+    return kept.length === tags.length ? line : `export const locales = Object.freeze(${JSON.stringify(kept)});`;
+  });
+  result = result.replace(/^[ \t]*messages\[("[A-Za-z-]+")\] = freezeGenerated[A-Za-z]*\(.*\);\r?\n/gm,
+    (line, tag: string) => pseudo.includes(tag) ? "" : line);
+  if (pseudo.some(tag => result.includes(`messages[${tag}]`)))
+    throw new Error("A generated Runic message module contains pseudo-locale text that the plugin cannot remove; regenerate the catalog without pseudo-locales.");
+  return result;
 }
 
 function isGenerated(path: string, manifestPath: string): boolean {

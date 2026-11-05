@@ -1,5 +1,7 @@
 using System;
+using System.IO;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Text;
 using TUnit.Core;
 
@@ -70,6 +72,62 @@ internal sealed class Rmf2PseudoLocalesTests
         Assert.True(release.Project.SourceHash != linked.SourceHash, "The pseudo-locales did not change the source hash.");
     }
 
+    [Test, DisplayName("a document message is bracketed inside each leaf block, and empty blocks and variants stay empty")]
+    public void DocumentTransform()
+    {
+        Assert.Equal("{#p}[Ĥééĺĺöö {$name}]{/p}\n{#ul}{#li}[ÖÖńéé]{/li}{#li}{/li}{/ul}",
+            Rmf2PseudoLocalesV5.Transform("{#p}Hello {$name}{/p}\n{#ul}{#li}One{/li}{#li}{/li}{/ul}", "en-XA"));
+        Assert.Equal("{#h level=1}[‮Appendix‬]{/h}\n{#p}[{#strong}‮Bold‬{/strong}]{/p}",
+            Rmf2PseudoLocalesV5.Transform("{#h level=1}Appendix{/h}\n{#p}{#strong}Bold{/strong}{/p}", "ar-XB"));
+        Assert.Equal(".input {$count :integer}\n.match $count\n0 {{}}\n* {{{#p}[{$count} ḟïïĺééś]{/p}}}",
+            Rmf2PseudoLocalesV5.Transform(".input {$count :integer}\n.match $count\n0 {{}}\n* {{{#p}{$count} files{/p}}}", "en-XA"));
+    }
+
+    private static readonly string[] CorpusLocales = ["en", "de", "fr"];
+
+    [Test, DisplayName("the RMF2 document corpus compiles through both pseudo-locales")]
+    public void DocumentCorpus()
+    {
+        string corpus = RepositoryPaths.Resolve("specs", "translations", "corpus", "rmf2-document-v1");
+        JsonObject config = JsonNode.Parse(File.ReadAllText(Path.Combine(corpus, "runic.json")))!.AsObject();
+        config["pseudoLocales"] = new JsonArray("en-XA", "ar-XB");
+        TranslationSource project = Source("translations/runic.json", config.ToJsonString());
+        TranslationSource[] sources = CorpusLocales.Select(locale =>
+            new TranslationSource("translations/" + locale + ".rmf2", File.ReadAllBytes(Path.Combine(corpus, locale + ".rmf2")))).ToArray();
+        Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(project, sources, null, true);
+        Assert.True(result.Success, string.Join("\n", result.Diagnostics.Select(d => d.Id + ": " + d.Message)));
+        Assert.True(!result.Diagnostics.Any(d => d.Severity == TranslationDiagnosticSeverity.Error), "The pseudo-locales report errors.");
+        int baseCount = result.Project!.Locales.Single(locale => locale.Tag == "en").DirectResources.Count;
+        foreach (string tag in new[] { "en-XA", "ar-XB" })
+            Assert.Equal(baseCount, result.Project.Locales.Single(locale => locale.Tag == tag).DirectResources.Count, tag);
+    }
+
+    [Test, DisplayName("ar-XB compiles plural and ordinal selectors, which select with the Arabic rules")]
+    public void MirroredPlurals()
+    {
+        const string plurals = """
+            items =
+              .input {$count :integer}
+              .match $count
+              0 {{No items}}
+              one {{One item}}
+              * {{{$count} items}}
+            place =
+              .input {$n :integer select=ordinal}
+              .match $n
+              one {{{$n}st}}
+              two {{{$n}nd}}
+              * {{{$n}th}}
+
+            """;
+        Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(Project(",\"locales\":[\"en\"],\"pseudoLocales\":[\"en-XA\",\"ar-XB\"]"),
+            [Source("translations/en.rmf2", plurals)], null, true);
+        Assert.True(result.Success, string.Join("\n", result.Diagnostics.Select(d => d.Id + ": " + d.Message)));
+        Assert.True(!result.Diagnostics.Any(), string.Join("\n", result.Diagnostics.Select(d => d.Id + ": " + d.Message)));
+        Rmf2LocaleV5 mirrored = result.Project!.Locales.Single(locale => locale.Tag == "ar-XB");
+        Assert.Equal("items,place", string.Join(",", mirrored.DirectResources.Select(resource => resource.Key).Order(StringComparer.Ordinal)));
+    }
+
     [Test, DisplayName("ar-XB is generated as a right-to-left locale with mirrored text")]
     public void MirroredLocale()
     {
@@ -90,9 +148,17 @@ internal sealed class Rmf2PseudoLocalesTests
         Bad(",\"locales\":[\"en\",\"en-XA\"],\"pseudoLocales\":[\"en-XA\"]", english, "Pseudo-locale 'en-XA' is generated; remove it from locales.");
         Bad(",\"pseudoLocales\":\"en-XA\"", english, "pseudoLocales must be an array of pseudo-locale tags.");
         TranslationSource[] own = [Source("translations/en.rmf2", "save = Save\n"), Source("translations/en-XA.rmf2", "save = Mine\n")];
-        Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(Project(",\"pseudoLocales\":[\"en-XA\"]"), own, null, true);
-        Assert.True(result.Diagnostics.Any(d => d.Id == "RTR0004" && d.Message.StartsWith("Pseudo-locale 'en-XA' is generated; remove its source", StringComparison.Ordinal)),
-            string.Join("\n", result.Diagnostics.Select(d => d.Id + ": " + d.Message)));
+        // In a development build and in a release build, where the file would otherwise be discovered as a real locale.
+        foreach (bool pseudo in new[] { true, false })
+        {
+            Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(Project(",\"pseudoLocales\":[\"en-XA\"]"), own, null, pseudo);
+            Assert.True(result.Diagnostics.Any(d => d.Id == "RTR0004" && d.Message.StartsWith("Pseudo-locale 'en-XA' is generated; remove its source", StringComparison.Ordinal)),
+                $"pseudo={pseudo}:\n" + string.Join("\n", result.Diagnostics.Select(d => d.Id + ": " + d.Message)));
+        }
+        Rmf2ProjectCompilation direct = TranslationCompiler.CompileRmf2ProjectV5(Project(",\"pseudoLocales\":[\"ar-XB\"]"),
+            [Source("translations/en/save.mf2", "Save\n"), Source("translations/ar-XB/save.mf2", "Mine\n")], null, false);
+        Assert.True(direct.Diagnostics.Any(d => d.Id == "RTR0004" && d.Message.StartsWith("Pseudo-locale 'ar-XB' is generated; remove its source", StringComparison.Ordinal)),
+            string.Join("\n", direct.Diagnostics.Select(d => d.Id + ": " + d.Message)));
 
         // Without locales, the generated files are discovered like any locale's.
         Rmf2ProjectCompilation discovered = TranslationCompiler.CompileRmf2ProjectV5(Project(",\"pseudoLocales\":[\"ar-XB\"]"), english, null, true);

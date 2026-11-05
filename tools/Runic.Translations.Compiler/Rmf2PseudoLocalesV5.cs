@@ -86,12 +86,19 @@ internal static class Rmf2PseudoLocalesV5
         return result.ToArray();
     }
 
-    /// <summary>The pseudo-locale message of a base message: every pattern's text transformed and bracketed.</summary>
+    /// <summary>
+    /// The pseudo-locale message of a base message: every pattern's text transformed and bracketed. In a document message
+    /// (block markup such as <c>{#p}</c> at the root) each leaf block (<c>p</c>, <c>h</c>, <c>li</c>) is bracketed and
+    /// padded instead of the pattern, because text at the document root is not allowed (RTR0070); an empty block or
+    /// variant stays empty.
+    /// </summary>
     internal static string Transform(string message, string tag, TranslationCompilerOptions? options = null)
     {
         Mf2SyntaxDocument syntax = Mf2SyntaxReader.Read(new TranslationSource("pseudo.mf2", StrictUtf8.GetBytes(message)), options);
         if (!syntax.Success) return message;
         bool mirrored = string.Equals(tag, Mirrored, StringComparison.OrdinalIgnoreCase);
+        if (syntax.Expressions.Any(static expression => Rmf2DocumentSyntax.BlockName(expression.MarkupName) is not null))
+            return TransformDocument(syntax, mirrored);
         bool quoted = syntax.Tokens.Any(static token => token.Kind == Mf2SyntaxTokenKind.PatternStart);
         var output = new StringBuilder(message.Length * 2);
         var pattern = new PatternState();
@@ -116,6 +123,59 @@ internal static class Rmf2PseudoLocalesV5
                 output.Append(token.Raw);
         }
         if (!quoted) output.Append(pattern.Padding(mirrored)).Append(']');
+        return output.ToString();
+    }
+
+    // A document message: the text of each leaf block is transformed and bracketed inside the block; text outside the
+    // leaf blocks (whitespace between blocks and list items) and everything else keep their source spelling.
+    private static string TransformDocument(Mf2SyntaxDocument syntax, bool mirrored)
+    {
+        // The leaf block tags by the byte offset where an open tag ends and where a close tag starts.
+        var opens = new HashSet<int>();
+        var closes = new HashSet<int>();
+        foreach (Mf2ExpressionSyntax expression in syntax.Expressions)
+        {
+            if (Rmf2DocumentSyntax.BlockName(expression.MarkupName) is not ("runic:p" or "runic:h" or "runic:li")) continue;
+            if (expression.MarkupKind == Mf2MarkupKind.Open) opens.Add(expression.Location.StartByte + expression.Location.LengthBytes);
+            else if (expression.MarkupKind == Mf2MarkupKind.Close) closes.Add(expression.Location.StartByte);
+        }
+
+        var output = new StringBuilder();
+        PatternState? leaf = null;
+        int leafStart = 0;
+        bool content = false;
+        foreach (Mf2SyntaxToken token in syntax.Tokens)
+        {
+            if (leaf is not null && token.Kind == Mf2SyntaxTokenKind.ExpressionStart && closes.Contains(token.Location.StartByte))
+            {
+                if (content)
+                {
+                    output.Insert(leafStart, '[');
+                    output.Append(leaf.Padding(mirrored)).Append(']');
+                }
+                leaf = null;
+            }
+
+            if (leaf is not null && token.Kind == Mf2SyntaxTokenKind.Text)
+            {
+                if (!Rmf2DocumentProfileV5.IsBlockWhitespace(token.Raw)) content = true;
+                output.Append(mirrored ? Mirror(token.Raw) : Accent(token.Raw, leaf));
+            }
+            else
+            {
+                // A placeholder or inline markup inside the leaf is content too, as for the document profile.
+                if (leaf is not null && token.Kind == Mf2SyntaxTokenKind.ExpressionStart) content = true;
+                output.Append(token.Raw);
+            }
+
+            if (leaf is null && token.Kind == Mf2SyntaxTokenKind.ExpressionEnd &&
+                opens.Contains(token.Location.StartByte + token.Location.LengthBytes))
+            {
+                leaf = new PatternState();
+                leafStart = output.Length;
+                content = false;
+            }
+        }
         return output.ToString();
     }
 

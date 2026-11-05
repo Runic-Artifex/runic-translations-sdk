@@ -55,7 +55,10 @@ when the page is reloaded.
 In project mode the plugin also generates the development pseudo-locales that
 `runic.json` declares in `pseudoLocales` (`en-XA`, `ar-XB`) when Vite's mode is
 `development`, so `vite dev` shows them and `vite build` leaves them out. Set
-`pseudoLocales: true` or `false` to override. See
+`pseudoLocales: true` or `false` to override. In manifest mode another build
+generates the directory, and a Debug `dotnet build` includes the pseudo-locales;
+unless they are on, the plugin takes them out of the bundle (the runtime's
+`locales` and their messages), so a production `vite build` never ships them. See
 [Pseudo-locales](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md#pseudo-locales).
 
 Manifest mode treats the supplied generated directory as externally owned.

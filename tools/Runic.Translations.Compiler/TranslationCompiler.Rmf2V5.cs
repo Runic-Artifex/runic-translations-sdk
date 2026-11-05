@@ -113,14 +113,18 @@ public static partial class TranslationCompiler
         JsonValue config = parsed.Root!;
         var markup = new Rmf2ProjectMarkupV5(config, project, diagnostics);
         if (Failed()) return Result();
-        if (pseudoLocales && manifest.PseudoLocales.Count != 0)
+        if (manifest.PseudoLocales.Count != 0)
         {
-            // A pseudo-locale is generated from the base sources; files of its own would be ambiguous.
+            // A pseudo-locale is generated from the base sources; files of its own would be ambiguous in a development
+            // build and, in a release build of a catalog that discovers its locales, would ship as a real locale.
             foreach (TranslationSource source in sources)
                 foreach (LocaleModel pseudo in manifest.PseudoLocales)
                     if (IsLocaleSource(source.Path, pseudo.Tag))
                         diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Pseudo-locale '" + pseudo.Tag + "' is generated; remove its source '" + source.Path + "'.", project, pseudo.Span);
             if (Failed()) return Result();
+        }
+        if (pseudoLocales && manifest.PseudoLocales.Count != 0)
+        {
             sources = Rmf2PseudoLocalesV5.Synthesize(sources, manifest.DefaultLocale, manifest.PseudoLocales.Select(static pseudo => pseudo.Tag).ToArray(), options);
             if (manifest.Locales.Count != 0)
                 foreach (LocaleModel pseudo in manifest.PseudoLocales)
