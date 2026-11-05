@@ -89,7 +89,7 @@ internal sealed class ToolingTests
     }
 
     [Test]
-    public void SemanticXliffReportsStructuredLossAndRefusesImport()
+    public void SemanticXliffExchangesSelectorMessages()
     {
         const string english = """
             hello =
@@ -106,14 +106,15 @@ internal sealed class ToolingTests
               * {{{$count} Elemente}}
             """;
         TranslationXliffExportResult exported = Export(CompileSemantic(english, german, grouped: false));
-        if (exported.Report.IsLossless ||
-            !exported.Report.Losses.Any(loss => loss.Code == "XLIFF21-STRUCTURED-MESSAGE" && loss.SemanticLoss))
-            throw new InvalidOperationException("Structured semantic XLIFF loss was not reported.");
-        if (!Encoding.UTF8.GetString(exported.Documents.Single().Bytes.Span).Contains("<unit id=\"hello\" translate=\"no\">", StringComparison.Ordinal))
-            throw new InvalidOperationException("A structured unit was not exported as not translatable.");
+        if (!exported.Report.IsLossless || exported.Report.Losses.Any(loss => loss.Code == "XLIFF21-STRUCTURED-MESSAGE"))
+            throw new InvalidOperationException("A selector message was reported as structured loss.");
+        if (!Encoding.UTF8.GetString(exported.Documents.Single().Bytes.Span).Contains("<unit id=\"hello\">", StringComparison.Ordinal))
+            throw new InvalidOperationException("A selector unit was not exported as translatable.");
+        // Without the live catalog the file's own codes describe the message.
         TranslationXliffImportResult imported = TranslationInterchange.ImportXliff21(exported.Documents.Single().Bytes);
-        if (imported.Messages.Count != 0 || imported.Units.Single() is not { Outcome: TranslationXliffUnitOutcome.Skipped, Code: "XLIFF21-STRUCTURED-SKIPPED" })
-            throw new InvalidOperationException("A structured XLIFF unit was not skipped per unit.");
+        if (imported.Units.Single() is not { Outcome: TranslationXliffUnitOutcome.Applied } ||
+            !Encoding.UTF8.GetString(imported.Messages.Single().Bytes.Span).EndsWith(".match $count\none {{Ein Element}}\n* {{{$count} Elemente}}\n", StringComparison.Ordinal))
+            throw new InvalidOperationException("A selector XLIFF unit was not applied from its own codes: " + imported.Units.Single().Code + " " + imported.Units.Single().Message + " " + string.Join("|", imported.Messages.Select(message => System.Text.Json.JsonSerializer.Serialize(Encoding.UTF8.GetString(message.Bytes.Span)))));
     }
 
     [Test]

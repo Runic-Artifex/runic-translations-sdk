@@ -301,7 +301,10 @@ public static partial class TranslationCompiler
         return Result(new(manifest.Id, manifest.CodeNamespace, manifest.ClassName, manifest.Visibility, manifest.DefaultLocale,
             manifest.UnsupportedLocale, manifest.MissingKey, contracts.AsReadOnly(), extraContracts.AsReadOnly(), linkedLocales.AsReadOnly(), usedContracts,
             Rmf2ProjectMarkupV5.Export(usedContracts, contracts.Concat(extraContracts).ToArray(), linkedLocales), HashV5(Encoding.UTF8.GetBytes(callerContract)), SourceHashV5(project, sources))
-            { ReferenceFallbackText = manifest.ReferenceFallbackText });
+            {
+                ReferenceFallbackText = manifest.ReferenceFallbackText,
+                PluralCategoryPolicies = locales.ToDictionary(locale => locale.Tag, locale => manifest.Policy(locale.Tag, ValidationMembers.PluralCategories), StringComparer.Ordinal),
+            });
 
         Rmf2ProjectEntryV5? Compile(Rmf2ProjectSourceV5 source, IReadOnlyList<Rmf2InputV5>? callerInputs)
         {
@@ -375,6 +378,9 @@ public static partial class TranslationCompiler
         {
             TranslationPolicy policy = manifest.Policy(source.Locale, ValidationMembers.PluralCategories);
             if (policy == TranslationPolicy.Allow || message.Selectors.Count == 0 || message.Syntax.Variants.Count != message.Variants.Count) return;
+            // A pseudo-locale is synthesized from the base locale's variants; nobody can add the categories its own
+            // rules reach, so its plural keys are not checked (the base locale's are).
+            if (manifest.PseudoLocales.Any(pseudo => string.Equals(pseudo.Tag, source.Locale, StringComparison.OrdinalIgnoreCase))) return;
             string logical = string.Join(".", source.Path);
             for (int position = 0; position < message.Selectors.Count; position++)
             {

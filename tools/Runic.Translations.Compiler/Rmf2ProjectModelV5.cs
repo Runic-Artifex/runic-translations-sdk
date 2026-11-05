@@ -102,6 +102,8 @@ internal sealed record Rmf2ProjectV5(string Id, string CodeNamespace, string Cla
 
     // code.referenceFallbackText in runic.json: generated C# reference factories carry the base-locale text.
     internal bool ReferenceFallbackText { get; init; } = true;
+    /// <summary>The <c>validation.pluralCategories</c> policy of each locale, for tools that check translations they import.</summary>
+    internal IReadOnlyDictionary<string, TranslationPolicy> PluralCategoryPolicies { get; init; } = new Dictionary<string, TranslationPolicy>();
 }
 
 internal static class Rmf2ProjectV5EmissionEligibility

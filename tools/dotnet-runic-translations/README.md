@@ -86,6 +86,31 @@ message key, `{ "Remove user {name}": "stored_remove_user" }`, for an applicatio
 that must look up text it stored in the base language. See
 [Import a text-keyed catalog](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/rmf2.md#import-a-text-keyed-catalog).
 
+## Migrate a .resx or i18next catalog
+
+```bash
+dotnet tool run runic-translations -- import --from resx Properties/Strings.resx --dry-run
+dotnet tool run runic-translations -- import --from i18next public/locales --project translations
+```
+
+`import --from resx|i18next <path>` writes an existing catalog into the project's `.rmf2` sources through the same
+writer as `xliff import`: a new message goes to `<project>[/<group>]/<locale>.rmf2`, and an existing one (base text or
+translation) is kept and, when its text differs, reported as `kept` (`IMPORT-EXISTS`). `--overwrite` replaces the text
+of existing messages instead; they keep their place and comments. A neutral `Strings.resx` brings its declared `Strings.<locale>.resx` satellites;
+an i18next directory holds `<lng>.json` or `<lng>/<namespace>.json` files. Keys become RMF2 names (nested i18next keys
+and namespaces become groups), `{0}` becomes `{$arg0}`, `{name}` and `{{name}}` become `{$name}`, i18next plural suffixes
+(`_zero`, `_one`, ..., `_other`, `_ordinal_*`) become `.match $count` on the locale's CLDR categories, and `.resx`
+comments become descriptions. `--locale` (repeatable) selects locales, `--group` places new messages in a group
+directory and `--dry-run` writes nothing.
+
+What cannot be mapped is skipped or refused per message, with a code such as `RESX-NON-STRING`, `I18NEXT-NESTING`,
+`IMPORT-NO-BASE` or `IMPORT-INVALID`, and lossy mappings are notices; the rest is imported and the command exits with 0.
+The `interchange` member of the JSON payload (`operation: "import"`, `format: "resx"` or `"i18next"`) lists them per
+locale. An unreadable source fails with `RTR0092`. PO files are not supported: convert them to i18next JSON or go
+through a TMS and XLIFF. See
+[Migrate from .resx](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/migrate-resx.md)
+and [Migrate from i18next](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/migrate-i18next.md).
+
 ## Exchange XLIFF with translators and TMS tools
 
 ```bash
@@ -105,8 +130,25 @@ locale, or only for the `--locale` ones (repeatable). Each message is one unit w
 - A message with `@maxLength N` has `slr:sizeRestriction="N"` (the XLIFF Size and Length Restriction module,
   profile `xliff:codepoints` with NFC), so a TMS can stop a longer translation; placeholders are not counted.
   Import ignores the attribute, and `validate` checks the length (`RTR0098`).
-- A message with selectors, declarations or markup is exported as `translate="no"` with its MF2 source and
-  reported as loss (`XLIFF21-STRUCTURED-MESSAGE`); translate it in the `.rmf2` sources or the editor.
+- A message with selectors (plurals, selects) or declarations is one unit with its MF2 syntax protected: one
+  `<ph>` holds the declarations and `.match`, and each variant is a `<pc>` whose `equivStart` is its keys, so
+  the translator edits only the variant texts:
+
+  ```xml
+  <source><ph id="h" canCopy="no" canDelete="no" equiv=".input {$n :integer}&#xA;.match $n" disp=".match $n"/>
+    <pc id="v1" equivStart="one {{" equivEnd="}}" dispStart="one">One item</pc>
+    <pc id="v2" equivStart="* {{" equivEnd="}}" dispStart="*"><ph id="1" equiv="{$n}" disp="n"/> items</pc></source>
+  ```
+
+  A missing translation into a locale whose plural categories differ from the source's gets a target in state
+  `initial` with that locale's variants (Czech `:integer`: `one`, `few`, `*`, and `many` too for a decimal
+  `:number`; Japanese: `*`), filled with the source text for the translator to replace. `@maxLength` becomes a
+  size restriction on each variant.
+- Text holds characters that XML 1.0 forbids (such as U+0001) as `<cp hex="0001"/>`, which import reads back. A
+  placeholder, header or key that holds one cannot be an attribute, so its unit is exported as `translate="no"`
+  and reported (`XLIFF21-CONTROL-CHARACTER`).
+- A message with markup is exported as `translate="no"` with its MF2 source and reported as loss
+  (`XLIFF21-STRUCTURED-MESSAGE`); translate it in the `.rmf2` sources or the editor.
 - An existing translation is in state `translated`, a missing one has no target. With a review file (below),
   `approved` is `final` and `needs-review` is `translated` with `subState="runic:needs-review"`. An approval
   whose source changed since it was made is exported as needs-review and reported (`REVIEW-STALE`); the files
@@ -121,7 +163,12 @@ notes (ignored; a dropped translator note is reported as `XLIFF21-NOTE-IGNORED`)
 | --- | --- |
 | no target, or state `initial` | skipped, `XLIFF21-UNTRANSLATED` |
 | empty target, unless its state is `translated` or later | skipped, `XLIFF21-EMPTY-TARGET`; the base text stays the fallback |
-| selector, declaration or markup message, or `translate="no"` | skipped, `XLIFF21-STRUCTURED-SKIPPED` |
+| markup message, a selector message from an export before selector units, or `translate="no"` | skipped, `XLIFF21-STRUCTURED-SKIPPED` |
+| a selector target that changes the declarations or `.match` | refused, `XLIFF21-SELECTOR-CHANGED`; a translation may change variant texts and add or remove variants, such as an exact `0 {{…}}` |
+| a selector target with an empty variant (unless the source's variant with those keys is empty) | refused, `XLIFF21-EMPTY-VARIANT` |
+| an added variant whose `equivStart` is not only MF2 keys (`*`, a number, a category or a literal, one per selector) and `{{` | refused, `XLIFF21-VARIANT-KEY`; the composed message must read back as the same header, keys and variant texts, else `XLIFF21-PLACEHOLDER-CHANGED` |
+| a plain target (no `<pc>`) for a message with variants, unless the current translation is plain or the locale has one plural category | refused, `XLIFF21-SELECTOR-CHANGED`; a tool that strips every code joins the variant texts |
+| plural keys the target locale never selects or categories it lacks (`RTR0094`, `RTR0095`) | applied with the notice `XLIFF21-PLURAL-CATEGORIES`, or refused with that code when the locale's `validation.pluralCategories` is `error` |
 | a placeholder outside the message's caller contract, an unknown inline code, invalid MF2 | refused, `XLIFF21-PLACEHOLDER`, `XLIFF21-INLINE` or `XLIFF21-TARGET-INVALID` |
 | a target `<ph>` whose `equiv` changes a placeholder (another function or options, or a literal for a variable) | refused, `XLIFF21-PLACEHOLDER-CHANGED`; a target may only use the expressions of the current source and translation, compared in canonical form |
 | a target identical to the source, with no state and no Runic review note | applied as needs-review, reported as `XLIFF21-TARGET-COPIES-SOURCE` (some tools copy the source into untranslated units); with an explicit state it keeps that state |
@@ -218,7 +265,7 @@ The envelope's payload is `runic.translations.tool/1` for every command except
 are published as `translations-tool-v1.schema.json` and
 `translations-support-v1.schema.json` (written by `schema`). The `output` and
 `error` members of `runic.translations.tool/1` are display text, not a format to
-parse; read `diagnostics`, `interchange` (for `xliff` and `review`) and the envelope's `exitCode` instead.
+parse; read `diagnostics`, `interchange` (for `xliff`, `import` and `review`) and the envelope's `exitCode` instead.
 Later releases may add members; readers ignore members they do not know.
 
 The exit codes are the same in every Runic tool:

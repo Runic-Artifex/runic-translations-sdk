@@ -274,6 +274,7 @@ internal static class Program
     {
         ToolCommand.Help => CommandPath.Root,
         ToolCommand.ImportText => new CommandPath(["import-text"]),
+        ToolCommand.Import => new CommandPath(["import"]),
         ToolCommand.XliffExport => new CommandPath(["xliff", "export"]),
         ToolCommand.XliffImport => new CommandPath(["xliff", "import"]),
         ToolCommand.ReviewMark => new CommandPath(["review", "mark"]),
@@ -621,6 +622,8 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
             "verify" => ExecuteCompilation(request, ToolCommand.Verify, request.Output, Program.Emission(request.EmitCSharp, request.EmitJson, request.EmitEsm), OmitSourceDiagnostics()),
             "schema" => Program.Execute(new ToolInvocation(ToolCommand.Schema, request.Output, ToolEmission.None, null)),
             "import-text" => ExecuteImport(request),
+            "import" => ExecuteInterchange(request, ToolCommand.Import, (project, result) =>
+                CatalogImport.Run(project, new CatalogImportRequest(request.From!, request.Source!, request.Locales ?? [], request.Group, request.Overwrite), request.DryRun, result)),
             "xliff export" => ExecuteInterchange(request, ToolCommand.XliffExport, (project, result) =>
                 InterchangeOperations.Export(project, request.Output!, request.Locales ?? [], request.Review, result)),
             "xliff import" => ExecuteInterchange(request, ToolCommand.XliffImport, (project, result) =>

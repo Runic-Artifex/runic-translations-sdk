@@ -270,9 +270,10 @@ catalog has the same key; elsewhere `TranslationSource.Default` applies. A singl
 `{rt:Message Source=...}` overrides both. Style setters follow the styled element,
 like any other element. Locale and culture
 are separate: the source follows the manager's locale only, so set `CultureInfo` and
-`FrameworkElement.Language` yourself where existing resources need them. There is
-no `.resx` importer and no `FlowDocument` conversion; use `WpfDocumentRenderer`
-for document messages.
+`FrameworkElement.Language` yourself where existing resources need them. Existing
+`.resx` strings move over with `runic-translations import --from resx`
+([Migrate from .resx](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/migrate-resx.md)).
+There is no `FlowDocument` conversion; use `WpfDocumentRenderer` for document messages.
 
 Create every `TranslationSource` before loading the views that use it (in
 `OnStartup`, before `InitializeComponent`). A message that only a source created

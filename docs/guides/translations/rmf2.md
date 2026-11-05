@@ -689,9 +689,13 @@ AST 5 into a JavaScript executor.
 Editor changes are resource-only and do not rewrite application call sites.
 Its closed XLIFF 2.1 profile (version 3) losslessly round-trips plain messages,
 text with placeholders, for the supported execution contract: each placeholder is
-an XLIFF `<ph>` carrying its MF2 expression. Declarations, selectors and markup
-produce the semantic-loss report, are exported as `translate="no"`, and are
-skipped per unit on import rather than approximated. The loss entry of a
+an XLIFF `<ph>` carrying its MF2 expression. Messages with declarations or
+selectors (plurals, selects) are exchanged as one unit with their syntax
+protected: the declarations and `.match` as one `<ph>`, each variant as a `<pc>`
+whose start code is its keys; import checks the declarations, the caller contract
+and the target locale's plural categories. Markup produces the semantic-loss
+report, is exported as `translate="no"`, and is skipped per unit on import rather
+than approximated. The loss entry of a
 document message (`XLIFF21-STRUCTURED-MESSAGE`) names the document profile;
 segment-level XLIFF for documents is not part of this version. The same profile
 is available without the editor through `runic-translations xliff export` and
