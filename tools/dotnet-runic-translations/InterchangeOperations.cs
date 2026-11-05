@@ -11,36 +11,25 @@ using Runic.Translations.Tooling;
 namespace Runic.Translations.Tool;
 
 /// <summary>
-/// The optional, SDK-owned review file <c>&lt;catalog&gt;.review.json</c> beside runic.json
-/// (<c>runic.translations.interchange-review/2</c>). Each entry records the per-unit fingerprint of the source its
-/// translation was made or approved for; <c>validate</c> warns when the source changed since (<c>RTR0090</c>).
+/// The command line's view of the SDK review file <c>&lt;catalog&gt;.review.json</c> beside runic.json; the file format,
+/// staleness (<c>RTR0090</c>) and merge rules live in <see cref="TranslationReviewFile"/>, shared with the editor and the
+/// language server.
 /// </summary>
 internal static class ReviewFile
 {
-    internal const string StaleCode = "RTR0090";
-    internal const string InvalidCode = "RTR0091";
+    internal const string StaleCode = TranslationReviewFile.StaleCode;
+    internal const string InvalidCode = TranslationReviewFile.InvalidCode;
 
     internal static string PathFor(CompilerInputs inputs, string catalog)
     {
-        if (catalog.IndexOfAny(['/', '\\']) >= 0 || catalog is "." or ".." || catalog.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        if (!TranslationReviewFile.IsFileName(catalog))
             throw new ToolUsageException($"the catalog identifier '{catalog}' cannot name a review file.");
-        string project = Path.GetFullPath(inputs.Project.Path, Environment.CurrentDirectory);
-        return Path.Combine(Path.GetDirectoryName(project)!, catalog + ".review.json");
+        return TranslationReviewFile.PathFor(Path.GetFullPath(inputs.Project.Path, Environment.CurrentDirectory), catalog);
     }
 
-    internal static TranslationInterchangeReview? Read(string path, string catalog) =>
-        File.Exists(path) ? Parse(File.ReadAllBytes(path), catalog) : null;
+    internal static TranslationInterchangeReview? Read(string path, string catalog) => TranslationReviewFile.Read(path, catalog);
 
-    internal static TranslationInterchangeReview Parse(byte[] bytes, string catalog)
-    {
-        TranslationInterchangeReview review = TranslationInterchange.ImportReviewJson(bytes);
-        if (!string.Equals(review.CatalogId, catalog, StringComparison.Ordinal))
-            throw new TranslationInterchangeException("REVIEW-CATALOG", $"The review file is for catalog '{review.CatalogId}', not '{catalog}'.");
-        return review;
-    }
-
-    internal static void Write(string path, TranslationInterchangeReview review) =>
-        InterchangeOperations.WriteFile(path, TranslationInterchange.ExportReviewJson(review));
+    internal static TranslationInterchangeReview Parse(byte[] bytes, string catalog) => TranslationReviewFile.Parse(bytes, catalog);
 
     /// <summary>The <c>validate</c> warnings of a project with a review file: stale translations and an unreadable file.</summary>
     internal static IReadOnlyList<TranslationDiagnostic> Check(CompilerInputs inputs, Rmf2ProjectCompilation compilation)
@@ -48,60 +37,18 @@ internal static class ReviewFile
         if (compilation.Project is not { } project) return [];
         string path = PathFor(inputs, project.Id);
         if (!File.Exists(path)) return [];
-        string display = InputFiles.DisplayPath(path, Path.GetFullPath(Environment.CurrentDirectory));
         TranslationInterchangeReview review;
         try { review = Read(path, project.Id)!; }
         catch (TranslationInterchangeException exception)
         {
-            return [new TranslationDiagnostic(InvalidCode, TranslationDiagnosticSeverity.Warning,
-                $"The review file cannot be read ({exception.Code}): {exception.Message}", new TextSourceLocation(display, 0, 0, 1, 1, 1, 1))];
+            return [TranslationReviewFile.InvalidDiagnostic(InputFiles.DisplayPath(path, Path.GetFullPath(Environment.CurrentDirectory)), exception)];
         }
-        var baseResources = project.Locales.Single(locale => locale.Tag == project.DefaultLocale).DirectResources.ToDictionary(static resource => resource.Key, StringComparer.Ordinal);
-        return Stale(project, compilation, review).Select(stale => new TranslationDiagnostic(StaleCode, TranslationDiagnosticSeverity.Warning,
-            $"The '{stale.Entry.Locale}' translation of '{stale.Entry.Key}' ({TranslationReviewStatesText(stale.Entry.State)}) predates a change to its source; review it, then record it with runic-translations review mark --key {stale.Entry.Key} --locale {stale.Entry.Locale} --state <state>.",
-            stale.Translation?.SourceLocation ?? baseResources[stale.Entry.Key].SourceLocation)).ToArray();
+        return TranslationReviewFile.StaleDiagnostics(compilation, review);
     }
 
-    /// <summary>
-    /// The review entries whose source changed since they were recorded: <c>validate</c> warns about each (RTR0090) and
-    /// <c>status</c> counts them per locale. A removed translation still counts unless its entry is a draft.
-    /// </summary>
-    internal static IReadOnlyList<(TranslationInterchangeReviewEntry Entry, Rmf2TranslationV5? Translation)> Stale(Rmf2ProjectV5 project, Rmf2ProjectCompilation compilation, TranslationInterchangeReview review)
-    {
-        IReadOnlyDictionary<string, string> fingerprints = TranslationInterchange.ComputeSourceFingerprints(compilation);
-        var locales = project.Locales.ToDictionary(static locale => locale.Tag, StringComparer.Ordinal);
-        var stale = new List<(TranslationInterchangeReviewEntry, Rmf2TranslationV5?)>();
-        foreach (TranslationInterchangeReviewEntry entry in review.Entries.OrderBy(static entry => entry.Key, StringComparer.Ordinal).ThenBy(static entry => entry.Locale, StringComparer.Ordinal))
-        {
-            if (entry.SourceFingerprint is null || !fingerprints.TryGetValue(entry.Key, out string? current) ||
-                string.Equals(entry.SourceFingerprint, current, StringComparison.Ordinal) ||
-                !locales.TryGetValue(entry.Locale, out Rmf2LocaleV5? locale) || entry.Locale == project.DefaultLocale) continue;
-            Rmf2TranslationV5? translation = locale.DirectResources.FirstOrDefault(resource => resource.Key == entry.Key);
-            if (translation is null && entry.State == TranslationReviewState.Draft) continue;
-            stale.Add((entry, translation));
-        }
-        return stale;
-    }
+    internal static string TranslationReviewStatesText(TranslationReviewState state) => TranslationReviewFile.StateText(state);
 
-    internal static string TranslationReviewStatesText(TranslationReviewState state) => state switch
-    {
-        TranslationReviewState.Draft => "draft",
-        TranslationReviewState.Translated => "translated",
-        TranslationReviewState.NeedsReview => "needs-review",
-        _ => "approved",
-    };
-
-    internal static bool TryParseState(string value, out TranslationReviewState state)
-    {
-        switch (value)
-        {
-            case "draft": state = TranslationReviewState.Draft; return true;
-            case "translated": state = TranslationReviewState.Translated; return true;
-            case "needs-review": state = TranslationReviewState.NeedsReview; return true;
-            case "approved": state = TranslationReviewState.Approved; return true;
-            default: state = default; return false;
-        }
-    }
+    internal static bool TryParseState(string value, out TranslationReviewState state) => TranslationReviewFile.TryParseState(value, out state);
 }
 
 /// <summary><c>xliff export</c>, <c>xliff import</c> and <c>review mark</c>.</summary>
@@ -190,46 +137,33 @@ internal static class InterchangeOperations
 
         TranslationXliffImportResult import;
         TranslationInterchangeReview? existingReview;
-        byte[]? existingReviewBytes = File.Exists(reviewPath) ? File.ReadAllBytes(reviewPath) : null;
+        byte[]? existingReviewBytes;
         try
         {
+            existingReviewBytes = TranslationReviewFile.ReadBytes(reviewPath);
             import = TranslationInterchange.ImportXliff21(File.ReadAllBytes(sourcePath), project.compilation, new TranslationXliffImportOptions { SourceChangePolicy = policy });
             existingReview = existingReviewBytes is null ? null : ReviewFile.Parse(existingReviewBytes, catalog);
         }
         catch (TranslationInterchangeException exception) { return Refuse(result, exception, "The XLIFF document could not be imported; nothing was written."); }
 
-        Rmf2ProjectV5 compiledProject = project.compilation.Project!;
-        var existingTargets = compiledProject.Locales.Single(locale => locale.Tag == import.TargetLocale).DirectResources
-            .ToDictionary(static resource => resource.Key, static resource => Encoding.UTF8.GetString(resource.Message.Syntax.Source.GetUtf8Bytes()), StringComparer.Ordinal);
-        var messages = import.Messages.ToDictionary(static message => message.MessageId, static message => Encoding.UTF8.GetString(message.Bytes.Span).TrimEnd('\n'), StringComparer.Ordinal);
-        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        TranslationXliffImportPlan plan = TranslationXliffImportPlan.Create(project.compilation, import);
+        IReadOnlyDictionary<string, string> values = plan.Values;
         var entries = new List<TranslationsToolInterchangeEntry>();
-        int added = 0, changed = 0, unchanged = 0, skipped = 0, refused = 0, sourceChanged = 0;
-        foreach (TranslationXliffUnitResult unit in import.Units)
+        int added = plan.Count("added"), changed = plan.Count("changed"), unchanged = plan.Count("unchanged"),
+            skipped = plan.Count("skipped"), refused = plan.Count("refused"), sourceChanged = plan.SourceChanged;
+        int warned = 0;
+        foreach (TranslationXliffImportUnitPlan unit in plan.Units)
         {
-            switch (unit.Outcome)
+            if (unit.Outcome is "skipped" or "refused")
             {
-                case TranslationXliffUnitOutcome.Skipped:
-                    skipped++;
-                    entries.Add(new(unit.Key, "skipped", unit.Code, unit.Message));
-                    continue;
-                case TranslationXliffUnitOutcome.Refused:
-                    refused++;
-                    entries.Add(new(unit.Key, "refused", unit.Code, unit.Message));
-                    if (refused <= MaximumUnitWarnings)
-                        result.AddDiagnostic(ToolCodes.InterchangeUnit, "xliff-unit", $"{unit.Key}: {unit.Code}: {unit.Message}", CommandDiagnosticSeverity.Warning);
-                    continue;
+                entries.Add(new(unit.Key, unit.Outcome, unit.Code, unit.Message));
+                if (unit.Outcome == "refused" && ++warned <= MaximumUnitWarnings)
+                    result.AddDiagnostic(ToolCodes.InterchangeUnit, "xliff-unit", $"{unit.Key}: {unit.Code}: {unit.Message}", CommandDiagnosticSeverity.Warning);
+                continue;
             }
-            if (unit.SourceChanged) sourceChanged++;
-            string pattern = messages[unit.Key];
-            string state = ReviewFile.TranslationReviewStatesText(unit.State ?? TranslationReviewState.Translated);
-            if (!existingTargets.TryGetValue(unit.Key, out string? before)) { added++; values[unit.Key] = pattern; entries.Add(new(unit.Key, "added", unit.SourceChanged ? "XLIFF21-SOURCE-CHANGED" : null, null) { State = state }); }
-            else if (TranslationInterchangePattern.CanonicalMessage(before) != TranslationInterchangePattern.CanonicalMessage(pattern)) { changed++; values[unit.Key] = pattern; entries.Add(new(unit.Key, "changed", unit.SourceChanged ? "XLIFF21-SOURCE-CHANGED" : null, null) { State = state }); }
-            else
-            {
-                unchanged++;
-                if (unit.SourceChanged) entries.Add(new(unit.Key, "unchanged", "XLIFF21-SOURCE-CHANGED", null) { State = state });
-            }
+            // An unchanged unit is listed only when its source changed since export.
+            if (unit.Outcome == "unchanged" && !unit.SourceChanged) continue;
+            entries.Add(new(unit.Key, unit.Outcome, unit.Code, null) { State = ReviewFile.TranslationReviewStatesText(unit.State!.Value) });
         }
 
         IReadOnlyList<TranslationSourceEdit> edits = TranslationInterchangeSourceWriter.Plan(currentDirectory, project.inputs.Project, project.inputs.Messages, project.compilation, import.TargetLocale, values);
@@ -248,29 +182,11 @@ internal static class InterchangeOperations
         }
 
         // Review state: every applied unit whose translation or explicit state changed, with the fingerprint of the
-        // source it was translated for. Unchanged text in the default "translated" state keeps its entry.
+        // source it was translated for (TranslationReviewFile.MergeImport, shared with the editor).
         TranslationInterchangeReview? review = null;
         bool reviewChanged = false;
         if (existingReview is not null || writeReview)
-        {
-            var merged = (existingReview?.Entries ?? []).ToDictionary(static entry => entry.Key + "\0" + entry.Locale, StringComparer.Ordinal);
-            var explicitEntries = import.Review.Entries.ToDictionary(static entry => entry.Key, StringComparer.Ordinal);
-            foreach (TranslationXliffUnitResult unit in import.Units.Where(static unit => unit.Outcome == TranslationXliffUnitOutcome.Applied))
-            {
-                bool explicitState = explicitEntries.TryGetValue(unit.Key, out TranslationInterchangeReviewEntry? stated);
-                string identity = unit.Key + "\0" + import.TargetLocale;
-                merged.TryGetValue(identity, out TranslationInterchangeReviewEntry? current);
-                if (!explicitState && !values.ContainsKey(unit.Key) && current is not null) continue;
-                // An approval is made for the source the file showed; unchanged text otherwise keeps the source it was made for.
-                TranslationReviewState state = unit.State ?? TranslationReviewState.Translated;
-                string? fingerprint = state != TranslationReviewState.Approved && !values.ContainsKey(unit.Key) && current?.SourceFingerprint is { } kept
-                    ? kept : unit.SourceFingerprint;
-                var entry = new TranslationInterchangeReviewEntry(unit.Key, import.TargetLocale, state, stated?.Note ?? current?.Note, fingerprint);
-                if (current is null || current.State != entry.State || current.Note != entry.Note || current.SourceFingerprint != entry.SourceFingerprint) reviewChanged = true;
-                merged[identity] = entry;
-            }
-            review = new TranslationInterchangeReview(catalog, merged.Values);
-        }
+            (review, reviewChanged) = TranslationReviewFile.MergeImport(existingReview, catalog, import, plan);
 
         // --fail-on refused: a refused unit fails the command before anything is written.
         bool failed = failOnRefused && refused != 0;
@@ -339,16 +255,10 @@ internal static class InterchangeOperations
         foreach (string key in keys)
             if (!fingerprints.ContainsKey(key)) throw new ToolUsageException($"--key {key} is not a message of catalog '{catalog}'.");
         string path = ReviewFile.PathFor(project.inputs, catalog);
-        TranslationInterchangeReview? existing;
-        try { existing = ReviewFile.Read(path, catalog); }
+        // Compare-and-swap: another writer's change since the read is re-read and the marks applied to it.
+        try { TranslationReviewFile.Update(path, catalog, existing => TranslationReviewFile.Mark(existing, catalog, keys, locale, state, note, fingerprints)); }
+        catch (TranslationInterchangeException exception) when (exception.Code == TranslationReviewFile.ChangedCode) { return Refuse(result, exception, "The review file kept changing; nothing was written."); }
         catch (TranslationInterchangeException exception) { return Refuse(result, exception, "The review file cannot be read; nothing was written."); }
-        var merged = (existing?.Entries ?? []).ToDictionary(static entry => entry.Key + "\0" + entry.Locale, StringComparer.Ordinal);
-        foreach (string key in keys.Distinct(StringComparer.Ordinal))
-        {
-            merged.TryGetValue(key + "\0" + locale, out TranslationInterchangeReviewEntry? current);
-            merged[key + "\0" + locale] = new TranslationInterchangeReviewEntry(key, locale, state, note ?? current?.Note, fingerprints[key]);
-        }
-        ReviewFile.Write(path, new TranslationInterchangeReview(catalog, merged.Values));
         string display = Display(path);
         result.WriteOutputLine($"marked {keys.Distinct(StringComparer.Ordinal).Count()} translation(s) in {locale} as {stateName}; wrote {display}.");
         result.Interchange = new TranslationsToolInterchange("review-mark", catalog)
@@ -360,6 +270,7 @@ internal static class InterchangeOperations
         return 0;
     }
 
+    /// <summary>Replaces a file atomically through a temporary file in the same directory (runic.json, SARIF reports).</summary>
     internal static void WriteFile(string path, byte[] bytes)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);

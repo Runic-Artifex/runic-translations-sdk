@@ -163,7 +163,10 @@ public static partial class TranslationCompiler
                     manifest.Locales.Add(new(pseudo.Tag, manifest.DefaultLocale, pseudo.Span, pseudo.Span));
         }
         var discovered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var extracted = ReadRmf2ProjectSourcesV5(project, sources, units, config, discovered, diagnostics, options, cancellationToken);
+        // A relaxed compile (review fingerprints) applies no validation policy; a base-locale-only one also reads no translation.
+        if (options.RelaxedValidation || options.BaseLocaleOnly) manifest.Relaxed = true;
+        var extracted = ReadRmf2ProjectSourcesV5(project, sources, units, config, discovered, diagnostics, options, cancellationToken,
+            options.BaseLocaleOnly ? manifest.DefaultLocale : null);
         var overlayExtracted = overlaySources is null ? new List<Rmf2ProjectSourceV5>() : ReadRmf2OverlaySourcesV5(overlaySources, diagnostics, options, cancellationToken);
         if (discovered.Count > options.MaximumLocalesPerCatalog)
             diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "Locale count exceeds the configured limit.", project, manifest.DefaultLocaleSpan);
@@ -249,9 +252,9 @@ public static partial class TranslationCompiler
                 {
                     string message = "Locale '" + locale.Tag + "' does not translate '" + string.Join(".", pair.Value.Source.Path) + "' from base locale '" + manifest.DefaultLocale + "'.";
                     if (groupedFiles.TryGetValue(ProjectDirectory(pair.Value.Source.Source.Path) + "\0" + locale.Tag, out var file))
-                        AddPolicyDiagnostic("RTR0010", manifest.Policy(locale.Tag, ValidationMembers.TranslationCompleteness), message, file, new(0, 0), diagnostics);
+                        AddPolicyDiagnostic("RTR0010", manifest.Policy(locale.Tag, ValidationMembers.TranslationCompleteness), message, file, new(0, 0), diagnostics, (pair.Key, locale.Tag));
                     else
-                        AddPolicyDiagnostic("RTR0010", manifest.Policy(locale.Tag, ValidationMembers.TranslationCompleteness), message, project, locale.Span, diagnostics);
+                        AddPolicyDiagnostic("RTR0010", manifest.Policy(locale.Tag, ValidationMembers.TranslationCompleteness), message, project, locale.Span, diagnostics, (pair.Key, locale.Tag));
                 }
             }
             contracts.Add(new(contracts.Count, pair.Key, Array.AsReadOnly(pair.Value.Source.Path), pair.Value.Linked.Message.Inputs,
@@ -485,14 +488,14 @@ public static partial class TranslationCompiler
                     if (categories.Contains(key.Value)) continue;
                     TextSourceLocation location = message.Syntax.Variants[index].KeyLocations[position];
                     AddPolicyDiagnostic("RTR0094", policy, "Variant key '" + key.Value + "' of '" + logical + "' is never selected in locale '" + source.Locale + "', whose " +
-                        (ordinal ? "ordinal" : "plural") + " categories" + (integer ? " for integers" : "") + " are " + string.Join(", ", categories) + ".", source.Source, MessageSpan(source, location), diagnostics);
+                        (ordinal ? "ordinal" : "plural") + " categories" + (integer ? " for integers" : "") + " are " + string.Join(", ", categories) + ".", source.Source, MessageSpan(source, location), diagnostics, (source.Key, source.Locale));
                 }
                 if (used.Count == 0) continue;
                 string[] missing = categories.Where(category => category != "other" && !used.Contains(category)).ToArray();
                 if (missing.Length != 0)
                     AddPolicyDiagnostic("RTR0095", policy, "'" + logical + "' has no variant for the " + (ordinal ? "ordinal" : "plural") + " " + (missing.Length == 1 ? "category " : "categories ") +
                         string.Join(", ", missing) + " of locale '" + source.Locale + "'; " + (missing.Length == 1 ? "it falls" : "they fall") + " to the '*' variant.",
-                        source.Source, NameSpan(source), diagnostics);
+                        source.Source, NameSpan(source), diagnostics, (source.Key, source.Locale));
             }
         }
         // RTR0097: a boolean formatted as text prints "true" or "false" in every locale.
@@ -506,7 +509,7 @@ public static partial class TranslationCompiler
                 .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
             if (names.Length != 0)
                 AddPolicyDiagnostic("RTR0097", policy, "'" + string.Join(".", source.Path) + "' in locale '" + source.Locale + "' formats the boolean " + string.Join(", ", names) +
-                    " as text, which reads 'true' or 'false' in every locale; select on it with .match and write the words in the variants.", source.Source, NameSpan(source), diagnostics);
+                    " as text, which reads 'true' or 'false' in every locale; select on it with .match and write the words in the variants.", source.Source, NameSpan(source), diagnostics, (source.Key, source.Locale));
         }
         // RTR0096: an input the base displays that no variant of the translation displays (union over variants).
         void ValidateInputParity(Rmf2ProjectEntryV5 origin, Rmf2ProjectEntryV5 translated)
@@ -518,7 +521,7 @@ public static partial class TranslationCompiler
             if (dropped.Length != 0)
                 AddPolicyDiagnostic("RTR0096", policy, "The '" + translated.Source.Locale + "' translation of '" + string.Join(".", origin.Source.Path) + "' displays " +
                     (dropped.Length == 1 ? "no " : "none of ") + string.Join(", ", dropped.Select(name => "$" + name)) + ", which base locale '" + manifest.DefaultLocale + "' displays.",
-                    translated.Source.Source, NameSpan(translated.Source), diagnostics);
+                    translated.Source.Source, NameSpan(translated.Source), diagnostics, (origin.Source.Key, translated.Source.Locale));
         }
         // RTR0098: the literal text of a variant is longer than @maxLength; placeholder values and markup are not counted.
         void ValidateMaxLength(Rmf2ProjectEntryV5 origin, Rmf2ProjectEntryV5 translated)
@@ -535,7 +538,7 @@ public static partial class TranslationCompiler
             if (longest > limit)
                 AddPolicyDiagnostic("RTR0098", policy, "The '" + translated.Source.Locale + "' text of '" + string.Join(".", origin.Source.Path) + "' is " + longest.ToString(CultureInfo.InvariantCulture) +
                     " characters long" + (translated.Linked.Message.Variants.Count > 1 ? " in its longest variant" : "") + ", more than its @maxLength of " + limit.ToString(CultureInfo.InvariantCulture) +
-                    "; placeholder values are not counted.", translated.Source.Source, NameSpan(translated.Source), diagnostics);
+                    "; placeholder values are not counted.", translated.Source.Source, NameSpan(translated.Source), diagnostics, (origin.Source.Key, translated.Source.Locale));
         }
         void ValidateContentLocale(Rmf2TranslationV5 resource)
         {
@@ -610,7 +613,8 @@ public static partial class TranslationCompiler
     }
 
     private static List<Rmf2ProjectSourceV5> ReadRmf2ProjectSourcesV5(TranslationSource project, TranslationSource[] sources,
-        IReadOnlyDictionary<TranslationSource, Rmf2SourceUnitV5>? units, JsonValue config, HashSet<string> locales, DiagnosticBag diagnostics, TranslationCompilerOptions options, CancellationToken cancellationToken)
+        IReadOnlyDictionary<TranslationSource, Rmf2SourceUnitV5>? units, JsonValue config, HashSet<string> locales, DiagnosticBag diagnostics, TranslationCompilerOptions options, CancellationToken cancellationToken,
+        string? onlyLocale = null)
     {
         string directory = ProjectDirectory(project.Path);
         var mounts = new List<(string Root, string[] Prefix)>();
@@ -674,6 +678,7 @@ public static partial class TranslationCompiler
                 directPath = new[] { messageId };
             }
             if (!TryCanonicalizeLocale(spelling, out string locale) || namespaceParts.Any(segment => !IsIdentifier(segment)) || directPath.Any(segment => !IsIdentifier(segment))) { Error("Invalid translation locale filename or directory segment.", source, new(0, 0)); continue; }
+            if (onlyLocale is not null && !string.Equals(locale, onlyLocale, StringComparison.OrdinalIgnoreCase)) continue;
             if (spellings.TryGetValue(locale, out string? existing) && existing != spelling) Error("Duplicate canonical locale spelling.", source, new(0, 0));
             spellings[locale] = spelling; locales.Add(locale);
             string[] mount = matches[0].Prefix.Concat(namespaceParts).ToArray();

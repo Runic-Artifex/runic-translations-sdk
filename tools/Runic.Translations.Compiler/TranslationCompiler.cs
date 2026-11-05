@@ -462,10 +462,13 @@ public static partial class TranslationCompiler
     private static bool SupportsRelativeTime(string locale) =>
         TranslationCapabilityRegistry.SupportsRelativeTime(locale);
 
-    private static void AddPolicyDiagnostic(string id, TranslationPolicy policy, string message, TranslationSource source, ByteSpan span, DiagnosticBag diagnostics)
+    private static void AddPolicyDiagnostic(string id, TranslationPolicy policy, string message, TranslationSource source, ByteSpan span, DiagnosticBag diagnostics,
+        (string Key, string Locale)? subject = null)
     {
         if (policy == TranslationPolicy.Allow) return;
-        diagnostics.Add(id, policy == TranslationPolicy.Warning ? TranslationDiagnosticSeverity.Warning : TranslationDiagnosticSeverity.Error, message, source, span);
+        TranslationDiagnosticSeverity severity = policy == TranslationPolicy.Warning ? TranslationDiagnosticSeverity.Warning : TranslationDiagnosticSeverity.Error;
+        if (subject is { } about) diagnostics.Add(id, severity, message, source, span, about.Key, about.Locale);
+        else diagnostics.Add(id, severity, message, source, span);
     }
 
     // The closest base-locale path for RTR0011: the same path ignoring case and separators, else
