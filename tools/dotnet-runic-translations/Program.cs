@@ -455,7 +455,11 @@ internal static class Program
 
     private static int RunSemanticV5(ToolInvocation invocation, CompilerInputs inputs, ToolOperationResult result, SourceUnitCache? units)
     {
-        Rmf2ProjectCompilation compilation = units is null
+        // generate --overrides/--locales: a library catalog regenerated for an application (the Vite plugin's dependencies),
+        // with the application's override sources and only the locales it needs.
+        Rmf2ProjectCompilation compilation = invocation.OverridesPath is not null || invocation.Locales is not null
+            ? TranslationCompiler.CompileRmf2OverlayV5(inputs.Project, inputs.Messages, InputFiles.ReadOverrides(invocation.OverridesPath), null, invocation.Locales)
+            : units is null
             ? TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, inputs.Messages, null, invocation.PseudoLocales)
             : TranslationCompiler.CompileRmf2ProjectV5(inputs.Project, units.Resolve(inputs.Messages), units.Options, invocation.PseudoLocales);
         compilation = TranslationManifestReader.WithManifestErrors(compilation, inputs.Project.Path, inputs.ManifestError);
@@ -489,7 +493,7 @@ internal static class Program
         IReadOnlyList<ToolArtifact> artifacts;
         try
         {
-            if (invocation.ContractPath is null) artifacts = CompilerOutputAdapter.Render(compilation.Project, invocation.Emission);
+            if (invocation.ContractPath is null) artifacts = CompilerOutputAdapter.Render(compilation.Project, invocation.Emission, invocation.SharedRuntime);
             else
             {
                 Rmf2ShippedContractV5 shipped;
@@ -524,6 +528,13 @@ internal static class Program
         {
             ArtifactFiles.WriteAtomically(invocation.OutputPath!, artifacts);
             result.WriteOutputLine($"generated {artifacts.Count} artifact(s).");
+            // A dependency catalog (--overrides, --locales, --shared-runtime) owns its <catalog>.esm-v5/ directory: modules of
+            // keys or locales an earlier generation had are removed, so nothing stale can satisfy an import.
+            if ((invocation.OverridesPath is not null || invocation.Locales is not null || invocation.SharedRuntime) && (invocation.Emission & ToolEmission.Esm) != 0)
+            {
+                int removed = ArtifactFiles.RemoveStale(invocation.OutputPath!, compilation.Project.Id + ".esm-v5", artifacts);
+                if (removed != 0) result.WriteOutputLine($"removed {removed} stale file(s) from {compilation.Project.Id}.esm-v5.");
+            }
             return Success;
         }
 
@@ -769,7 +780,18 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
         string? project = string.IsNullOrWhiteSpace(request.Project) ? DefaultProject() : request.Project;
         if (project is null)
             return Program.Usage("no runic.json in the current directory or in ./translations; pass --project <directory>.", command);
-        return Program.Execute(new ToolInvocation(command, output, emission, null, project, OmitSourceDiagnostics: omitSourceDiagnostics, PseudoLocales: request.PseudoLocales, ContractPath: request.Contract));
+        if ((request.Overrides is not null || request.TargetLocales is not null || request.SharedRuntime) && request.Contract is not null)
+            return Program.Usage("--overrides, --locales and --shared-runtime cannot be combined with --contract.", command);
+        if (request.TargetLocales is { } targetLocales)
+        {
+            // A typo would otherwise ship the library's base text only.
+            if (targetLocales.Count == 0) return Program.Usage("--locales needs at least one locale tag.", command);
+            foreach (string locale in targetLocales)
+                if (!TranslationCompiler.TryCanonicalizeLocale(locale, out _))
+                    return Program.Usage($"--locales: '{locale}' is not a valid BCP 47 locale tag.", command);
+        }
+        return Program.Execute(new ToolInvocation(command, output, emission, null, project, OmitSourceDiagnostics: omitSourceDiagnostics, PseudoLocales: request.PseudoLocales,
+            ContractPath: request.Contract, OverridesPath: request.Overrides, Locales: request.TargetLocales, SharedRuntime: request.SharedRuntime));
     }
 
     // Runic.Translations.Build sets this when its source generator reports the same compilation

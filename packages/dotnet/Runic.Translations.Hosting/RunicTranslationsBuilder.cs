@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,8 +21,9 @@ public interface IRunicTranslationsBuilder
 
     /// <summary>Attaches an overlay to the catalog it names.</summary>
     /// <remarks>
-    /// Overlay packs are loaded asynchronously, so with an overlay the application must call
+    /// Overlay packs are loaded asynchronously, so with an overlay from packs the application must call
     /// <see cref="RunicTranslationsServiceProviderExtensions.InitializeRunicTranslationsAsync"/> before the context is resolved.
+    /// A compiled overlay (<see cref="TranslationOverlay.IsCompiled"/>, from runic.json <c>overrides</c>) needs no initialization.
     /// </remarks>
     IRunicTranslationsBuilder AddOverlay(TranslationOverlay overlay);
 }
@@ -88,6 +90,18 @@ public static class RunicTranslationsBuilderExtensions
         builder.AddCatalog(registration, options);
         RunicTranslationsServiceCollectionExtensions.Registrations(builder.Services).AddText(builder.Services, typeof(TText), textFactory,
             provider => textFactory(provider.GetRequiredService<ITranslationContext>()));
+        return builder;
+    }
+
+    /// <summary>
+    /// Attaches each overlay to the catalog it names, such as the overlays the build compiles from runic.json <c>overrides</c>:
+    /// <c>AddOverlays(AppTextCatalog.Overlays)</c>.
+    /// </summary>
+    public static IRunicTranslationsBuilder AddOverlays(this IRunicTranslationsBuilder builder, IEnumerable<TranslationOverlay> overlays)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(overlays);
+        foreach (TranslationOverlay overlay in overlays) builder.AddOverlay(overlay ?? throw new ArgumentException("The overlays cannot contain null.", nameof(overlays)));
         return builder;
     }
 }

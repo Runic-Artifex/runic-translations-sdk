@@ -19,3 +19,4 @@ Runic.Translations.Hosting.RunicTranslationsOptions.Lifetime.get -> Microsoft.Ex
 Runic.Translations.Hosting.RunicTranslationsOptions.Lifetime.set -> void
 Microsoft.Extensions.DependencyInjection.RunicTranslationsServiceProviderExtensions
 static Microsoft.Extensions.DependencyInjection.RunicTranslationsServiceProviderExtensions.InitializeRunicTranslationsAsync(this System.IServiceProvider! services, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+static Runic.Translations.Hosting.RunicTranslationsBuilderExtensions.AddOverlays(this Runic.Translations.Hosting.IRunicTranslationsBuilder! builder, System.Collections.Generic.IEnumerable<Runic.Translations.TranslationOverlay!>! overlays) -> Runic.Translations.Hosting.IRunicTranslationsBuilder!

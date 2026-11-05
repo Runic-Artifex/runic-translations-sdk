@@ -13,6 +13,9 @@
     <Description>Translates Runic.CommandLine help, errors and faults with Runic Translations, with built-in English and German text.</Description>
     <PackageTags>runic-artifex;i18n;localization;command-line;cli;dotnet;nativeaot</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <!-- Packs runic/runic-command-line/, so an application overrides the built-in text in its runic.json
+         ("overrides": [{ "catalog": "runic-command-line", "from": "Runic.Translations.CommandLine" }]). -->
+    <RunicTranslationsPackCatalog>true</RunicTranslationsPackCatalog>
   </PropertyGroup>
 
   <ItemGroup>
