@@ -190,6 +190,74 @@ internal sealed class TranslationProjectOperationsTests
         Throws<TranslationToolingUsageException>(() => TranslationLocaleChanges.PlanSetFallback(directory.Sources(), "fr", "es"), "An undeclared fallback was accepted.");
     }
 
+    [Test, DisplayName("locale add, set fallback and remove span every source root of a mounted project")]
+    public void LocalesAcrossSourceRoots()
+    {
+        const string project = """
+            {
+              "schemaVersion": 1,
+              "catalog": "app",
+              "code": { "namespace": "App", "className": "Text" },
+              "baseLocale": "en",
+              "sourceRoots": [
+                { "path": "../base", "namespace": [] },
+                { "path": "../feature", "namespace": ["shop"] }
+              ],
+              "locales": [
+                { "tag": "en" },
+                { "tag": "de", "fallback": "en" },
+                { "tag": "fr", "fallback": "de" }
+              ]
+            }
+
+            """;
+        using var directory = new TemporaryProject();
+        directory.Write("translations/runic.json", project);
+        directory.Write("base/en.rmf2", "amount = Amount\n");
+        directory.Write("base/de.rmf2", "amount = Betrag\n");
+        directory.Write("base/fr.rmf2", "amount = Montant\n");
+        directory.Write("feature/en.rmf2", "title = Shop\n");
+        directory.Write("feature/de.rmf2", "title = Laden\n");
+        directory.Write("feature/fr.rmf2", "title = Boutique\n");
+        TranslationProjectSources sources = directory.Sources("base", "feature");
+
+        // Copies keep each source root's directory and bytes.
+        TranslationLocalePlan add = TranslationLocaleChanges.PlanAdd(sources, "it", "de", copyFrom: "en");
+        Require(add.Errors.Count == 0 && add.Compilation.Success, Messages(add.Compilation.Diagnostics));
+        Require(add.CreatedFiles.Select(static file => file.Path).Order(StringComparer.Ordinal)
+            .SequenceEqual([directory.Resolve("base/it.rmf2"), directory.Resolve("feature/it.rmf2")]), "The copies are not beside the base-locale files: " + string.Join(", ", add.CreatedFiles.Select(static file => file.Path)));
+        Require(add.CreatedFiles.All(file => file.Bytes.SequenceEqual(File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(file.Path)!, "en.rmf2")))), "A copy changed bytes.");
+        Require(Encoding.UTF8.GetString(add.ProjectBytes).Contains("\"sourceRoots\": [\n    { \"path\": \"../base\"", StringComparison.Ordinal), "The source roots changed.");
+
+        // Fallback changes check the whole graph and keep the source roots.
+        Throws<TranslationToolingUsageException>(() => TranslationLocaleChanges.PlanSetFallback(sources, "de", "fr"), "A fallback cycle was accepted.");
+        TranslationLocalePlan fallback = TranslationLocaleChanges.PlanSetFallback(sources, "fr", "en");
+        Require(Encoding.UTF8.GetString(fallback.ProjectBytes) == project.Replace("{ \"tag\": \"fr\", \"fallback\": \"de\" }", "{ \"tag\": \"fr\", \"fallback\": \"en\" }", StringComparison.Ordinal),
+            Encoding.UTF8.GetString(fallback.ProjectBytes));
+
+        // Removal deletes the locale's file in every source root and re-links its dependents.
+        Throws<TranslationToolingUsageException>(() => TranslationLocaleChanges.PlanRemove(sources, "en"), "The base locale was removed.");
+        TranslationLocalePlan remove = TranslationLocaleChanges.PlanRemove(sources, "de", replacementFallback: "en");
+        Require(remove.Errors.Count == 0 && remove.Compilation.Success, Messages(remove.Compilation.Diagnostics));
+        Require(remove.DeletedFiles.Order(StringComparer.Ordinal).SequenceEqual([directory.Resolve("base/de.rmf2"), directory.Resolve("feature/de.rmf2")]),
+            "The deleted files differ: " + string.Join(", ", remove.DeletedFiles));
+        Require(remove.ChangedFallbacks.SequenceEqual(["fr"]), "The dependent was not re-linked.");
+        string removed = Encoding.UTF8.GetString(remove.ProjectBytes);
+        Require(!removed.Contains("\"de\"", StringComparison.Ordinal) && removed.Contains("{ \"tag\": \"fr\", \"fallback\": \"en\" }", StringComparison.Ordinal), removed);
+    }
+
+    [Test, DisplayName("locale changes refuse a runic.json whose root is not an object")]
+    public void LocalesRefuseNonObjectProject()
+    {
+        using var directory = new TemporaryProject();
+        directory.Write("translations/runic.json", """["not", "an", "object"]""");
+        directory.Write("translations/en.rmf2", "a = A\n");
+        directory.Write("translations/de.rmf2", "a = A de\n");
+        Throws<TranslationToolingUsageException>(() => TranslationLocaleChanges.PlanAdd(directory.Sources(), "fr", null), "A locale was added to a non-object project.");
+        Throws<TranslationToolingUsageException>(() => TranslationLocaleChanges.PlanSetFallback(directory.Sources(), "de", "en"), "A fallback was set in a non-object project.");
+        Throws<TranslationToolingUsageException>(() => TranslationLocaleChanges.PlanRemove(directory.Sources(), "de"), "A locale was removed from a non-object project.");
+    }
+
     [Test, DisplayName("an import plan resolves the .resx source against the base directory, not the working directory")]
     public void ResxImportPlan()
     {
@@ -345,15 +413,16 @@ internal sealed class TranslationProjectOperationsTests
             }
         }
 
-        // runic.json and every .rmf2/.mf2 file below translations/, with paths relative to the base directory.
-        internal TranslationProjectSources Sources()
+        // translations/runic.json and every .rmf2/.mf2 file below the source roots (default translations/), with paths
+        // relative to the base directory.
+        internal TranslationProjectSources Sources(params string[] sourceRoots)
         {
-            string translations = Resolve("translations");
-            TranslationSource[] messages = Directory.EnumerateFiles(translations, "*", SearchOption.AllDirectories)
+            string[] roots = (sourceRoots.Length == 0 ? ["translations"] : sourceRoots).Select(Resolve).ToArray();
+            TranslationSource[] messages = roots.SelectMany(directory => Directory.EnumerateFiles(directory, "*", SearchOption.AllDirectories))
                 .Where(static file => file.EndsWith(".rmf2", StringComparison.Ordinal) || file.EndsWith(".mf2", StringComparison.Ordinal))
                 .Select(file => new TranslationSource(Path.GetRelativePath(root, file).Replace('\\', '/'), File.ReadAllBytes(file)))
                 .OrderBy(static source => source.Path, StringComparer.Ordinal).ToArray();
-            return new TranslationProjectSources(root, new TranslationSource("translations/runic.json", File.ReadAllBytes(Resolve("translations/runic.json"))), messages, [translations]);
+            return new TranslationProjectSources(root, new TranslationSource("translations/runic.json", File.ReadAllBytes(Resolve("translations/runic.json"))), messages, roots);
         }
 
         public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, true); }

@@ -93,7 +93,6 @@ internal sealed class Rmf2AuthoringTests
             [Source("en.rmf2", "x = {#link ref=help}Help{/link}\n"), Source("de.rmf2", "x = {#link ref=help}Hilfe{/link}\n")]);
         Assert.Throws<TranslationAuthoringException>(() => arrayProject.Rename(["x"], "renamed"), "Runic project root must be an object.");
         Assert.Throws<TranslationAuthoringException>(() => arrayProject.RenameSlot("en.rmf2", "x", "help", "docs"), "Runic project root must be an object.");
-        Assert.Throws<TranslationAuthoringException>(() => arrayProject.SetFallback("de", "en"), "Runic project root must be an object.");
 
         // A mistyped markup or slots member must not fail on JsonNode indexing.
         // The edited catalog is validated and refused with the compiler's message.
@@ -174,20 +173,6 @@ internal sealed class Rmf2AuthoringTests
         Assert.True(overlapping.CreateResource(selected, ["shop", "sale", "new_message"], "New message\n").Edits
             .Single().RelativePath == "z-specific/en/new_message.mf2",
             "Direct creation selected a broader namespace mount instead of the exact source-root namespace.");
-    }
-    [Test, DisplayName("RMF2 locale mutations validate fallback graphs and preserve physical namespaces")]
-    public void Locales()
-    {
-        var workspace = new Rmf2Workspace(Path.GetTempPath(), Project(), [Source("shop/en.rmf2", "title = Shop\n")]);
-        var add = workspace.AddLocale("de", copyFrom: "en");
-        Assert.True(add.Edits.Any(edit => edit.RelativePath == "shop/de.rmf2"), "Locale copy lost the physical namespace.");
-        var config = new TranslationSource("runic.json", add.Edits.Single(edit => edit.RelativePath == "runic.json").GetUtf8Bytes()!);
-        var sources = new[] { Source("shop/en.rmf2", "title = Shop\n"), new TranslationSource("shop/de.rmf2", add.Edits.Single(edit => edit.RelativePath == "shop/de.rmf2").GetUtf8Bytes()!) };
-        var updated = new Rmf2Workspace(Path.GetTempPath(), config, sources);
-        Assert.True(updated.SetFallback("de", "en").IsValid, "Valid fallback rejected.");
-        Assert.True(updated.RemoveLocale("de").Edits.Any(edit => edit.RelativePath == "shop/de.rmf2" && edit.Kind == TranslationWorkspaceEditKind.Delete), "Locale removal missed a physical file.");
-        Assert.Throws<TranslationAuthoringException>(() => updated.RemoveLocale("en"), "fallback");
-        Assert.Throws<TranslationAuthoringException>(() => updated.SetFallback("de", "de"), "fallback");
     }
     [Test, DisplayName("RMF2 resource renames and duplicates retain conditional slot contracts")]
     public void SlotContracts()
@@ -342,8 +327,8 @@ internal sealed class Rmf2AuthoringTests
         }
         finally { Directory.Delete(root, true); }
     }
-    [Test, DisplayName("RMF2 locale plans preserve mounted projects and commit atomically")]
-    public void ExecutionV2Locales()
+    [Test, DisplayName("RMF2 plans preserve mounted projects and commit atomically")]
+    public void ExecutionV2MountedCommit()
     {
         var planType = typeof(TranslationWorkspaceTransactionPlan);
         Assert.True(planType.GetNestedType("ValidationReceipt", System.Reflection.BindingFlags.NonPublic)?.IsNestedPrivate == true,
@@ -407,46 +392,26 @@ internal sealed class Rmf2AuthoringTests
             }
             JsonObject Config() => JsonNode.Parse(File.ReadAllBytes(Path.Combine(root, "translations/runic.json")))!.AsObject();
 
-            Dictionary<string, byte[]> beforeAdd = Snapshot();
-            TranslationWorkspaceTransactionPlan add = Open().AddLocale("it", fallback: "de", copyFrom: "en");
-            Assert.Equal("app", add.CatalogId);
-            Assert.True(add.IsValid, "The RMF2 transaction did not validate.");
-            AssertSnapshot(beforeAdd, Snapshot(), "Execution-v2 locale planning changed disk before commit");
+            // A rename edits the base resource of every locale; it is planned without touching disk and commits as one transaction.
+            Dictionary<string, byte[]> beforeRename = Snapshot();
+            TranslationWorkspaceTransactionPlan rename = Open().Rename(["amount"], "total");
+            Assert.Equal("app", rename.CatalogId);
+            Assert.True(rename.IsValid, "The RMF2 transaction did not validate.");
+            Assert.True(rename.Edits.Count > 1, "The rename did not span several files.");
+            AssertSnapshot(beforeRename, Snapshot(), "Execution-v2 planning changed disk before commit");
 
-            try { TranslationWorkspaceTransaction.CommitForTesting(add, 1); }
+            try { TranslationWorkspaceTransaction.CommitForTesting(rename, 1); }
             catch (Exception) { }
-            Assert.True(TranslationWorkspaceTransaction.GetPending(root) is not null, "Interrupted execution-v2 add left no recovery journal.");
+            Assert.True(TranslationWorkspaceTransaction.GetPending(root) is not null, "Interrupted execution-v2 commit left no recovery journal.");
             TranslationWorkspaceTransaction.Recover(root, TranslationWorkspaceRecoveryMode.Rollback);
-            AssertSnapshot(beforeAdd, Snapshot(), "Execution-v2 rollback did not restore the mounted project byte-identically");
+            AssertSnapshot(beforeRename, Snapshot(), "Execution-v2 rollback did not restore the mounted project byte-identically");
 
-            add = Open().AddLocale("it", fallback: "de", copyFrom: "en");
-            TranslationWorkspaceTransaction.Commit(add);
-            Assert.True(File.ReadAllBytes(Path.Combine(root, "base/it.rmf2")).SequenceEqual(File.ReadAllBytes(Path.Combine(root, "base/en.rmf2"))), "Mounted base locale copy changed bytes.");
-            Assert.True(File.ReadAllBytes(Path.Combine(root, "feature/it.rmf2")).SequenceEqual(File.ReadAllBytes(Path.Combine(root, "feature/en.rmf2"))), "Mounted feature locale copy changed bytes.");
-            Assert.True(TranslationWorkspaceTransaction.GetPending(root) is null, "Successful execution-v2 add retained a transaction journal.");
-
-            Dictionary<string, byte[]> beforeCycle = Snapshot();
-            Assert.Throws<TranslationAuthoringException>(() => Open().SetFallback("de", "fr"), "Fallback cycle");
-            AssertSnapshot(beforeCycle, Snapshot(), "Rejected execution-v2 fallback cycle changed disk");
-
-            Dictionary<string, byte[]> beforeFallback = Snapshot();
-            TranslationWorkspaceTransactionPlan fallback = Open().SetFallback("fr", "en");
-            AssertSnapshot(beforeFallback, Snapshot(), "Execution-v2 fallback planning changed disk before commit");
-            TranslationWorkspaceTransaction.Commit(fallback);
-            JsonObject configured = Config();
-            Assert.Equal(2, configured["sourceRoots"]!.AsArray().Count, "Locale mutation lost mounted source roots.");
-            Assert.Equal("en", configured["locales"]!.AsArray().Select(node => node!.AsObject()).Single(locale => locale["tag"]!.GetValue<string>() == "fr")["fallback"]!.GetValue<string>());
-
-            Dictionary<string, byte[]> beforeRemove = Snapshot();
-            TranslationWorkspaceTransactionPlan remove = Open().RemoveLocale("de", replacementFallback: "en");
-            AssertSnapshot(beforeRemove, Snapshot(), "Execution-v2 removal planning changed disk before commit");
-            TranslationWorkspaceTransaction.Commit(remove);
-            Assert.True(!File.Exists(Path.Combine(root, "base/de.rmf2")) && !File.Exists(Path.Combine(root, "feature/de.rmf2")), "Execution-v2 removal left mounted locale sources.");
-            configured = Config();
-            JsonObject[] locales = configured["locales"]!.AsArray().Select(node => node!.AsObject()).ToArray();
-            Assert.True(locales.All(locale => locale["tag"]!.GetValue<string>() != "de"), "Removed locale remained declared.");
-            Assert.Equal("en", locales.Single(locale => locale["tag"]!.GetValue<string>() == "it")["fallback"]!.GetValue<string>(), "Dependent fallback was not redirected.");
-            Assert.True(TranslationWorkspaceTransaction.GetPending(root) is null, "Successful execution-v2 removal retained a transaction journal.");
+            TranslationWorkspaceTransaction.Commit(Open().Rename(["amount"], "total"));
+            foreach (string locale in new[] { "en", "de", "fr" })
+                Assert.True(File.ReadAllText(Path.Combine(root, "base", locale + ".rmf2")).StartsWith("total =", StringComparison.Ordinal), "Mounted base resource was not renamed: " + locale);
+            Assert.Equal("title = Shop\n", File.ReadAllText(Path.Combine(root, "feature/en.rmf2")), "The rename changed another source root.");
+            Assert.Equal(2, Config()["sourceRoots"]!.AsArray().Count, "The commit lost mounted source roots.");
+            Assert.True(TranslationWorkspaceTransaction.GetPending(root) is null, "Successful execution-v2 commit retained a transaction journal.");
         }
         finally { Directory.Delete(root, true); }
     }
