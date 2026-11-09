@@ -361,62 +361,6 @@ internal sealed class Rmf2Workspace
 
     public TranslationWorkspaceTransactionPlan Format(string path) => Plan(new Dictionary<string, byte[]?>(StringComparer.Ordinal) { [path] = Rmf2ResourceWriter.Format(_sources[path]) });
 
-    /// <summary>Adds a locale by copying its physical source documents through a validated transaction.</summary>
-    public TranslationWorkspaceTransactionPlan AddLocale(string locale, string? fallback = null, string? copyFrom = null) => ChangeLocale("add", locale, fallback, copyFrom);
-    /// <summary>Removes a non-base locale and redirects dependent fallback edges.</summary>
-    public TranslationWorkspaceTransactionPlan RemoveLocale(string locale, string? replacementFallback = null) => ChangeLocale("remove", locale, replacementFallback, null);
-    /// <summary>Changes a locale fallback after checking the complete fallback graph.</summary>
-    public TranslationWorkspaceTransactionPlan SetFallback(string locale, string? fallback = null) => ChangeLocale("fallback", locale, fallback, null);
-    private TranslationWorkspaceTransactionPlan ChangeLocale(string operation, string locale, string? fallback, string? copyFrom)
-    {
-        locale = TranslationProjectScaffolder.CanonicalizeLocale(locale.Trim());
-        ProfileLocaleView catalog = ValidateLocaleView();
-        if (!catalog.Success) throw new TranslationAuthoringException("Repair catalog diagnostics before changing locales: " + string.Join("; ", catalog.Diagnostics.Select(diagnostic => diagnostic.Message)));
-        fallback = TranslationProjectScaffolder.CanonicalizeLocale((fallback ?? catalog.DefaultLocale!).Trim());
-        var locales = catalog.Locales.ToDictionary(item => item.Tag, item => item.Fallback, StringComparer.Ordinal);
-        if (!locales.ContainsKey(fallback) || fallback == locale) throw new TranslationAuthoringException("A different existing fallback locale is required.");
-        var changes = new Dictionary<string, byte[]?>(StringComparer.Ordinal);
-        if (operation == "add")
-        {
-            if (locales.ContainsKey(locale)) throw new TranslationAuthoringException("The locale already exists.");
-            copyFrom = TranslationProjectScaffolder.CanonicalizeLocale((copyFrom ?? catalog.DefaultLocale!).Trim());
-            if (!locales.ContainsKey(copyFrom)) throw new TranslationAuthoringException("The source locale does not exist.");
-            foreach (var source in _sources.Values.Where(source => string.Equals(Locale(source.Path), copyFrom, StringComparison.OrdinalIgnoreCase)))
-            {
-                string target = _direct
-                    ? Path.Combine(Path.GetDirectoryName(Path.GetDirectoryName(source.Path)) ?? "", locale, Path.GetFileName(source.Path)).Replace('\\', '/')
-                    : Path.Combine(Path.GetDirectoryName(source.Path) ?? "", locale + ".rmf2").Replace('\\', '/');
-                if (_sources.ContainsKey(target)) throw new TranslationAuthoringException("A destination source file already exists.");
-                changes.Add(target, source.GetUtf8Bytes());
-            }
-            locales.Add(locale, fallback);
-        }
-        else
-        {
-            if (!locales.ContainsKey(locale) || locale == catalog.DefaultLocale) throw new TranslationAuthoringException("An existing non-base locale is required.");
-            if (operation == "fallback") locales[locale] = fallback;
-            else
-            {
-                locales.Remove(locale);
-                foreach (string dependent in locales.Where(pair => pair.Value == locale).Select(pair => pair.Key).ToArray()) locales[dependent] = fallback;
-                foreach (var source in _sources.Values.Where(source => string.Equals(Locale(source.Path), locale, StringComparison.OrdinalIgnoreCase))) changes[source.Path] = null;
-            }
-        }
-        JsonObject config = ProjectObject(_project.GetUtf8Bytes());
-        config["locales"] = new JsonArray(locales.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => (JsonNode)(pair.Value is null ? new JsonObject { ["tag"] = pair.Key } : new JsonObject { ["tag"] = pair.Key, ["fallback"] = pair.Value })).ToArray());
-        changes[_project.Path] = Utf8.GetBytes(config.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n");
-        return Plan(changes);
-    }
-
-    private ProfileLocaleView ValidateLocaleView()
-    {
-        Rmf2ProjectCompilation compilation = Validate();
-        if (compilation.Project is { } project)
-            return new ProfileLocaleView(project.Id, project.DefaultLocale,
-                project.Locales.Select(locale => new ProfileLocale(locale.Tag, locale.FallbackTag)).ToArray(), compilation.Diagnostics);
-        return new ProfileLocaleView(null, null, Array.Empty<ProfileLocale>(), compilation.Diagnostics);
-    }
-
     // Configuration edits rewrite runic.json as a JSON object. A malformed or
     // non-object manifest (for example an unsaved array) is refused with the
     // same wording as the compiler diagnostic instead of a raw JSON error.
@@ -475,14 +419,6 @@ internal sealed class Rmf2Workspace
         if (!compilation.Success) throw new TranslationAuthoringException("The complete edited catalog is invalid: " + string.Join("; ", compilation.Diagnostics.Select(d => d.Message)));
         string catalogId = compilation.Project!.Id;
         return new TranslationWorkspaceTransactionPlan(_root, catalogId, edits.AsReadOnly(), compilation);
-    }
-
-    private sealed record ProfileLocale(string Tag, string? Fallback);
-    private sealed record ProfileLocaleView(string? Catalog, string? DefaultLocale,
-        IReadOnlyList<ProfileLocale> Locales, IReadOnlyList<TranslationDiagnostic> Diagnostics)
-    {
-        internal bool Success => Catalog is not null && DefaultLocale is not null &&
-            !Diagnostics.Any(diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error);
     }
 
     public IReadOnlyList<string> LogicalPath(string path, Rmf2ResourceNode node) =>
