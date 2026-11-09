@@ -10,9 +10,9 @@
   "imports": { "#lib/*": "./src/lib/*" },
   "devDependencies": {
     "@acme/widgets": "file:../library/acme-widgets-1.0.0.tgz",
-    "@runic-artifex/translations-svelte": "0.9.0",
-    "@runic-artifex/translations-sveltekit": "0.9.0",
-    "@runic-artifex/vite-plugin-runic-translations": "0.9.0",
+    "@runic-artifex/translations-svelte": "0.9.1",
+    "@runic-artifex/translations-sveltekit": "0.9.1",
+    "@runic-artifex/vite-plugin-runic-translations": "0.9.1",
     "@sveltejs/adapter-node": "6.0.0",
     "@sveltejs/kit": "3.0.0",
     "@sveltejs/vite-plugin-svelte": "7.3.1",

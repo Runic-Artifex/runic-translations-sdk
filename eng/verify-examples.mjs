@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { root, run, workspace } from "./run.mjs";
 import { packageEntries, packageNuspec } from "./verify-packages.mjs";
+import { checkNugetManifests } from "./release/nuget-manifest.mjs";
 
 // Builds the examples that need packed packages: examples/shared-catalog/Frontend, a minimal Vite page, and
 // examples/component-library.
@@ -62,9 +63,12 @@ export async function verifyComponentLibraryExample({ directory, nuget, npmArchi
     assert.ok(entries.includes(entry), `Acme.Widgets packs ${entry}: ${entries.join(", ")}`);
   const nuspec = packageNuspec(nupkg);
   assert.ok(!nuspec.includes("Runic.Translations.Build"), "the library must not depend on Runic.Translations.Build");
-  const [major, minor] = version.split(".");
-  assert.ok(nuspec.includes(`id="Runic.Translations" version="[${version}, ${major}.${Number(minor) + 1}.0-0)"`) || Number(major) >= 1,
-    `the library's Runic.Translations dependency has the release range:\n${nuspec}`);
+  const [major, minor] = version.split(/[.+-]/).map(Number);
+  const range = `[${version}, ${major === 0 ? `0.${minor + 1}.0-0.0` : `${major + 1}.0.0-0.0`})`;
+  assert.ok(nuspec.includes(`id="Runic.Translations" version="${range}"`),
+    `the library's Runic.Translations dependency has the release range ${range}:\n${nuspec}`);
+  // nuget.org must accept the library packed with the candidate Build package (0.9.0's -0 bound was rejected).
+  checkNugetManifests(nupkg);
 
   // The local compiler for the library's prebuilt ESM catalog and the web application's Vite builds.
   run("dotnet", ["new", "tool-manifest", "--output", ".config"], example, environment);

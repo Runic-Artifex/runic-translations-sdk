@@ -84,7 +84,7 @@
       "runic.translations.wpf": {
         "type": "Project",
         "dependencies": {
-          "Runic.Translations": "[0.9.0, )"
+          "Runic.Translations": "[0.9.1, )"
         }
       }
     }

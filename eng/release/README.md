@@ -102,7 +102,10 @@ environment) runs `eng/release/ci-artifact.mjs`:
   <file>=<version>`. It is deterministic for a commit. The inventory and SBOM
   are uploaded as the `release-candidate-<run id>` artifact, and their `sha256sum`
   lines are passed to `publish` as the job output `release-sha256`.
-- `publish.mjs publish --dry-run` reports which versions are missing and fails if a
+- `publish.mjs publish --dry-run` first applies nuget.org's version rules
+  ([`nuget-manifest.mjs`](nuget-manifest.mjs), see
+  [nuget.org version rules](#nugetorg-version-rules)) to every `.nupkg` and the
+  `.snupkg` pushed with it, then reports which versions are missing and fails if a
   published version has different contents or if the NuGet trusted-publishing key
   could not push a missing package (see [New NuGet package IDs](#new-nuget-package-ids));
   `release-check` fails if the tag (looked
@@ -187,6 +190,24 @@ push. Keep the mirror honest when the policy changes.
 Publications run one at a time. Every workflow that publishes waits in the one
 `publish-preview` concurrency group, whatever the version, and never cancels a
 publication in progress; `publish.test.mjs` checks it.
+
+## nuget.org version rules
+
+nuget.org rejects a package (400, "The package manifest contains an invalid
+Version") unless its version and both bounds of every dependency range are
+SemVer 2.0 (a dotted prerelease label such as `0.10.0-0.0`, or build metadata,
+which a dependency bound must not carry) or match the NuGet 2.x pattern, whose
+prerelease label starts with a letter (`0.10.0-preview`). It checks the `.nupkg`
+and the `.snupkg`. 0.9.0 stopped this way after `Runic.Translations` and
+`Runic.Translations.Build` were published: the Build package had written the
+upper bound `0.10.0-0` into `Runic.Translations.CommandLine`. Since 0.9.1 the
+bound is `-0.0`.
+
+[`nuget-manifest.mjs`](nuget-manifest.mjs) reproduces these rules from
+NuGetGallery's `ManifestValidator`. `verify-packages.mjs` applies them in CI to
+every candidate package and to the libraries it packs with the candidate
+`Runic.Translations.Build`, and `publish.mjs publish` applies them, also in the
+dry run, before any registry lookup or push.
 
 ## Verifying a release
 
