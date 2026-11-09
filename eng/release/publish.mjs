@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { root, workspace } from "../run.mjs";
+import { checkNugetManifests } from "./nuget-manifest.mjs";
 
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 
@@ -209,9 +210,21 @@ async function main() {
   await publishCandidates(candidates, version, { dryRun });
 }
 
-// Every registry read and the NuGet push check finish before the first push, so a
-// refused package ID stops the release before anything is published.
-export async function publishCandidates(candidates, version, { dryRun, published = publishedMatches, checkPush = checkNugetPush, push = publish, log = console.log }) {
+// nuget.org's version rules (nuget-manifest.mjs) for the .nupkg of every NuGet candidate and the .snupkg that
+// `dotnet nuget push` sends with it, so a version nuget.org rejects stops the release before the first push.
+export function checkCandidateManifests(candidates) {
+  const files = candidates.filter(candidate => candidate.registry === "nuget").flatMap(candidate => {
+    const symbols = candidate.file.replace(/\.nupkg$/i, ".snupkg");
+    return existsSync(symbols) ? [candidate.file, symbols] : [candidate.file];
+  });
+  if (files.length) checkNugetManifests(files);
+}
+
+// The manifest check, every registry read and the NuGet push check finish before the
+// first push, so a rejected version or refused package ID stops the release before
+// anything is published.
+export async function publishCandidates(candidates, version, { dryRun, checkManifests = checkCandidateManifests, published = publishedMatches, checkPush = checkNugetPush, push = publish, log = console.log }) {
+  checkManifests(candidates);
   const pending = [];
   for (const candidate of candidates) {
     if (await published(candidate, version)) log(`Already published with matching contents: ${candidate.name}@${version}`);

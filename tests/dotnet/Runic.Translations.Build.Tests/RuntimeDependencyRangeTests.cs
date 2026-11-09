@@ -4,12 +4,13 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using NuGet.Versioning;
 using TUnit.Core;
 
 namespace Runic.Translations.Build.Tests;
 
-// The version rule's dependency range (T1g), run through MSBuild with the shipped Pack.targets: [N, next minor-0) before
-// 1.0 and [N, next major-0) from 1.0, written into the .nupkg, .snupkg and .nuspec of a pack.
+// The version rule's dependency range (T1g), run through MSBuild with the shipped Pack.targets: [N, next minor-0.0) before
+// 1.0 and [N, next major-0.0) from 1.0, written into the .nupkg, .snupkg and .nuspec of a pack.
 internal sealed class RuntimeDependencyRangeTests
 {
     [Test, DisplayName("packing stamps the Runic.Translations range into the nupkg, snupkg and nuspec and warns about other formats once")]
@@ -38,11 +39,52 @@ internal sealed class RuntimeDependencyRangeTests
         Assert.Equal(1, Regex.Count(result.Combined, "warning RTR0093"), "one warning for the floating version: " + result.Combined);
         Assert.Contains("'0.9.*'", result.Combined);
 
-        string expected = string.Join("|", "[0.9.0, 0.10.0-0)", "[0.9.0-preview.1, 0.10.0-0)", "[1.2.0, 2.0.0-0)", "[0.9.0.1, 0.10.0-0)",
+        string expected = string.Join("|", "[0.9.0, 0.10.0-0.0)", "[0.9.0-preview.1, 0.10.0-0.0)", "[1.2.0, 2.0.0-0.0)", "[0.9.0.1, 0.10.0-0.0)",
             "[0.8.0, 0.9.0)", "0.9.*");
         Assert.Equal(expected, Ranges(ReadPackage(temporary.Resolve("Library.1.0.0.nupkg"))), "nupkg");
         Assert.Equal(expected, Ranges(ReadPackage(temporary.Resolve("Library.1.0.0.snupkg"))), "snupkg");
         Assert.Equal(expected, Ranges(File.ReadAllText(temporary.Resolve("Library.nuspec"), Encoding.UTF8)), "nuspec file");
+    }
+
+    [Test, DisplayName("the stamped upper bound is one nuget.org accepts and sorts below every prerelease of the next breaking release it can host")]
+    public void UpperBoundOrdersBelowNextBreakingPrereleases()
+    {
+        using TemporaryDirectory temporary = new();
+        File.WriteAllText(temporary.Resolve("Library.nuspec"), Nuspec(["0.9.1", "1.2.0"]), new UTF8Encoding(false));
+        string targets = XmlPath(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build", "build", "Runic.Translations.Build.Pack.targets"));
+        File.WriteAllText(temporary.Resolve("Probe.proj"), $$"""
+            <Project>
+              <Import Project="{{targets}}" />
+              <ItemGroup><NuGetPackOutput Include="Library.nuspec" /></ItemGroup>
+              <Target Name="GenerateNuspec" />
+            </Project>
+            """, new UTF8Encoding(false));
+        ProcessResult result = Processes.DotNet(temporary.Path, "msbuild", "Probe.proj", "/nologo", "/t:GenerateNuspec", "/v:minimal",
+            "/p:_RunicTranslationsPackTaskAssembly=" + BuildTaskAssembly());
+        Assert.Equal(0, result.ExitCode, result.Combined);
+        string[] ranges = Ranges(File.ReadAllText(temporary.Resolve("Library.nuspec"), Encoding.UTF8)).Split('|');
+        Assert.Equal("[0.9.1, 0.10.0-0.0)|[1.2.0, 2.0.0-0.0)", string.Join("|", ranges), "stamped ranges");
+
+        foreach ((string text, string next, string[] inside) in new[]
+        {
+            (ranges[0], "0.10.0", new[] { "0.9.1", "0.9.2", "0.9.2-preview.1", "0.9.99" }),
+            (ranges[1], "2.0.0", new[] { "1.2.0", "1.2.1", "1.99.0", "1.99.0-rc.1" }),
+        })
+        {
+            VersionRange range = VersionRange.Parse(text);
+            // nuget.org (ManifestValidator) accepts a bound that is SemVer 2.0 without metadata, or whose prerelease label
+            // starts with a letter; 0.9.0's 0.10.0-0 was neither, so nuget.org rejected the packages that carried it.
+            Assert.True(range.MaxVersion!.IsSemVer2 && !range.MaxVersion.HasMetadata, text + ": upper bound accepted by nuget.org");
+            Assert.True(!range.IsMaxInclusive && range.IsMinInclusive, text + ": [N, bound)");
+            foreach (string version in inside)
+                Assert.True(range.Satisfies(NuGetVersion.Parse(version)), $"{text} admits {version}");
+            foreach (string label in new[] { "-0.0", "-0.1", "-0.0.1", "-1", "-a", "-alpha", "-beta.1", "-preview.1", "-rc.1", "" })
+                Assert.False(range.Satisfies(NuGetVersion.Parse(next + label)), $"{text} excludes {next}{label}");
+            // Only next-0 sorts below the bound (SemVer 2.0: a label with more identifiers sorts higher). nuget.org cannot
+            // host it, since it is not SemVer 2.0 and its label starts with a digit, and no Runic release uses it.
+            NuGetVersion lowest = NuGetVersion.Parse(next + "-0");
+            Assert.True(range.Satisfies(lowest) && !lowest.IsSemVer2, $"{text} admits only {lowest}, which nuget.org rejects");
+        }
     }
 
     [Test, DisplayName("RunicTranslationsStampRuntimeRange=false keeps the open range")]
@@ -106,7 +148,7 @@ internal sealed class RuntimeDependencyRangeTests
             "/p:_RunicTranslationsPackTaskAssembly=" + BuildTaskAssembly(), "/p:RunicTranslationsStampRuntimeRange=" + (stampRange ? "true" : "false"));
         Assert.Equal(0, result.ExitCode, result.Combined);
         string nuspec = File.ReadAllText(temporary.Resolve("Library.nuspec"), Encoding.UTF8);
-        Assert.Equal(stampRange ? "[0.9.0, 0.10.0-0)" : "0.9.0", Ranges(nuspec), "range");
+        Assert.Equal(stampRange ? "[0.9.0, 0.10.0-0.0)" : "0.9.0", Ranges(nuspec), "range");
         Assert.True(!nuspec.Contains("Runic.Translations.Build", StringComparison.Ordinal), nuspec);
     }
 

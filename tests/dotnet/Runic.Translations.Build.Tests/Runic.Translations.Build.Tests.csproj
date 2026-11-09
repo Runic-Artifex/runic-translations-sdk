@@ -19,6 +19,7 @@
     <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
     <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
     <PackageReference Include="JsonSchema.Net" PrivateAssets="all" />
+    <PackageReference Include="NuGet.Versioning" PrivateAssets="all" />
     <ProjectReference Include="../../../packages/dotnet/Runic.Translations/Runic.Translations.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../packages/dotnet/Runic.Translations.Build/Runic.Translations.Build.csproj"
                       ReferenceOutputAssembly="false" />

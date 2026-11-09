@@ -134,7 +134,7 @@ test("nothing is pushed when the NuGet check fails, and it runs in the dry run",
   for (const dryRun of [false, true]) {
     const pushed = [], checked = [];
     await expect(publishCandidates(candidates, "1.0.0", {
-      dryRun, log: () => {}, push: async candidate => { pushed.push(candidate.name); },
+      dryRun, log: () => {}, checkManifests: () => {}, push: async candidate => { pushed.push(candidate.name); },
       published: async candidate => candidate.name === "Runic.Translations",
       checkPush: async ids => { checked.push(...ids); throw new Error("refused"); },
     })).rejects.toThrow("refused");
@@ -142,7 +142,7 @@ test("nothing is pushed when the NuGet check fails, and it runs in the dry run",
     expect(pushed).toEqual([]);
   }
   const pushed = [];
-  await publishCandidates(candidates, "1.0.0", { dryRun: false, log: () => {}, published: async () => false,
+  await publishCandidates(candidates, "1.0.0", { dryRun: false, log: () => {}, checkManifests: () => {}, published: async () => false,
     checkPush: async () => {}, push: async candidate => { pushed.push(candidate.name); } });
   expect(pushed).toEqual(candidates.map(candidate => candidate.name));
 });

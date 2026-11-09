@@ -9,6 +9,8 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.14" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.14" />
     <PackageVersion Include="JsonSchema.Net" Version="9.4.0" />
+    <!-- Build tests check the dependency range with NuGet's own version ordering. -->
+    <PackageVersion Include="NuGet.Versioning" Version="7.9.0" />
     <PackageVersion Include="CsWebUi" Version="[2.5.0-beta.4.8]" />
     <PackageVersion Include="CsWebUi.Native" Version="[2.5.0-beta.4.8]" />
     <PackageVersion Include="Runic.CommandLine" Version="$(RunicCommandLineVersionRange)" />
