@@ -2,6 +2,10 @@
 Runic.Translations.CommandLine.TranslationCommandTextResolver
 Runic.Translations.CommandLine.TranslationCommandTextResolver.Resolve(string! key, System.Globalization.CultureInfo! culture, System.Collections.Generic.IReadOnlyList<string!>! arguments) -> string?
 Runic.Translations.CommandLine.TranslationCommandTextResolver.TranslationCommandTextResolver() -> void
+Runic.Translations.CommandLine.TranslationCommandTextResolver.TranslationCommandTextResolver(Runic.Translations.ITranslationContext! context, string? applicationCatalogId) -> void
 Runic.Translations.CommandLine.TranslationCommandTextResolver.TranslationCommandTextResolver(Runic.Translations.ITranslationManager! manager) -> void
 Runic.Translations.CommandLine.TranslationCommandTextResolver.TranslationCommandTextResolver(Runic.Translations.ITranslationSnapshot! snapshot) -> void
+Runic.Translations.CommandLine.TranslationCommandTextResolver.TranslationCommandTextResolver(Runic.Translations.TranslationContextBuilder! catalogs, string? applicationCatalogId) -> void
+const Runic.Translations.CommandLine.TranslationCommandTextResolver.CatalogId = "runic-command-line" -> string!
+static Runic.Translations.CommandLine.TranslationCommandTextResolver.CatalogRegistration.get -> Runic.Translations.TranslationCatalogRegistration!
 static Runic.Translations.CommandLine.TranslationCommandTextResolver.GetMessageName(string! key) -> string!

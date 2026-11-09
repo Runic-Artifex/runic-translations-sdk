@@ -1,4 +1,9 @@
 #nullable enable
+Runic.Translations.Wpf.CatalogSourceExtension
+Runic.Translations.Wpf.CatalogSourceExtension.Catalog.get -> string?
+Runic.Translations.Wpf.CatalogSourceExtension.Catalog.set -> void
+Runic.Translations.Wpf.CatalogSourceExtension.CatalogSourceExtension() -> void
+Runic.Translations.Wpf.CatalogSourceExtension.CatalogSourceExtension(string! catalog) -> void
 Runic.Translations.Wpf.MessageExtension
 Runic.Translations.Wpf.MessageExtension.Arg0.get -> System.Windows.Data.BindingBase?
 Runic.Translations.Wpf.MessageExtension.Arg0.set -> void
@@ -8,6 +13,8 @@ Runic.Translations.Wpf.MessageExtension.Arg2.get -> System.Windows.Data.BindingB
 Runic.Translations.Wpf.MessageExtension.Arg2.set -> void
 Runic.Translations.Wpf.MessageExtension.Arg3.get -> System.Windows.Data.BindingBase?
 Runic.Translations.Wpf.MessageExtension.Arg3.set -> void
+Runic.Translations.Wpf.MessageExtension.Catalog.get -> string?
+Runic.Translations.Wpf.MessageExtension.Catalog.set -> void
 Runic.Translations.Wpf.MessageExtension.Inputs.get -> System.Collections.ObjectModel.Collection<Runic.Translations.Wpf.MessageInput!>!
 Runic.Translations.Wpf.MessageExtension.Key.get -> string?
 Runic.Translations.Wpf.MessageExtension.Key.set -> void
@@ -60,6 +67,7 @@ Runic.Translations.Wpf.WpfInlineRendererOptions.Theme.get -> System.Action<strin
 Runic.Translations.Wpf.WpfInlineRendererOptions.Theme.init -> void
 Runic.Translations.Wpf.WpfInlineRendererOptions.WpfInlineRendererOptions() -> void
 Runic.Translations.Wpf.WpfMarkupFactory
+override Runic.Translations.Wpf.CatalogSourceExtension.ProvideValue(System.IServiceProvider! serviceProvider) -> object?
 override Runic.Translations.Wpf.MessageExtension.ProvideValue(System.IServiceProvider! serviceProvider) -> object!
 static Runic.Translations.Wpf.TranslationProperties.GetArguments(System.Windows.DependencyObject! element) -> object?
 static Runic.Translations.Wpf.TranslationProperties.GetRichMessage(System.Windows.DependencyObject! element) -> string?
@@ -69,8 +77,11 @@ static Runic.Translations.Wpf.TranslationProperties.SetArguments(System.Windows.
 static Runic.Translations.Wpf.TranslationProperties.SetRichMessage(System.Windows.DependencyObject! element, string? value) -> void
 static Runic.Translations.Wpf.TranslationProperties.SetSlots(System.Windows.DependencyObject! element, object? value) -> void
 static Runic.Translations.Wpf.TranslationProperties.SetSource(System.Windows.DependencyObject! element, Runic.Translations.Wpf.TranslationSource? value) -> void
+static Runic.Translations.Wpf.TranslationSource.Context.get -> Runic.Translations.ITranslationContext?
 static Runic.Translations.Wpf.TranslationSource.Default.get -> Runic.Translations.Wpf.TranslationSource?
 static Runic.Translations.Wpf.TranslationSource.Default.set -> void
+static Runic.Translations.Wpf.TranslationSource.ForCatalog(string! catalogId) -> Runic.Translations.Wpf.TranslationSource!
+static Runic.Translations.Wpf.TranslationSource.UseContext(Runic.Translations.ITranslationContext? context, System.Func<Runic.Translations.TranslationCatalogRegistration!, Runic.Translations.Wpf.WpfInlineRenderer?>? renderers = null) -> void
 static Runic.Translations.Wpf.WpfDocumentRenderer.ClearContent(System.Windows.Controls.FlowDocumentScrollViewer! target) -> void
 static Runic.Translations.Wpf.WpfInlineRenderer.ClearContent(System.Windows.Controls.TextBlock! target) -> void
 static readonly Runic.Translations.Wpf.TranslationProperties.ArgumentsProperty -> System.Windows.DependencyProperty!

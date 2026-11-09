@@ -8,8 +8,6 @@
     <RunicTranslationsShippingProject>true</RunicTranslationsShippingProject>
     <!-- Packed under lib/; its public API is tracked in PublicAPI.*.txt. -->
     <RunicTrackPublicApi>true</RunicTrackPublicApi>
-    <!-- Not published yet: there is no baseline to validate against. Remove this line after the first release. -->
-    <RunicTranslationsPackageValidationBaselineVersion></RunicTranslationsPackageValidationBaselineVersion>
     <Description>Registers a shared Runic Translations context, its catalogs and overlays with Microsoft.Extensions.DependencyInjection.</Description>
     <PackageTags>runic-artifex;i18n;localization;dependency-injection;dotnet;nativeaot</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>

@@ -1,12 +1,1 @@
 #nullable enable
-Runic.Translations.Wpf.CatalogSourceExtension
-Runic.Translations.Wpf.CatalogSourceExtension.Catalog.get -> string?
-Runic.Translations.Wpf.CatalogSourceExtension.Catalog.set -> void
-Runic.Translations.Wpf.CatalogSourceExtension.CatalogSourceExtension() -> void
-Runic.Translations.Wpf.CatalogSourceExtension.CatalogSourceExtension(string! catalog) -> void
-Runic.Translations.Wpf.MessageExtension.Catalog.get -> string?
-Runic.Translations.Wpf.MessageExtension.Catalog.set -> void
-override Runic.Translations.Wpf.CatalogSourceExtension.ProvideValue(System.IServiceProvider! serviceProvider) -> object?
-static Runic.Translations.Wpf.TranslationSource.Context.get -> Runic.Translations.ITranslationContext?
-static Runic.Translations.Wpf.TranslationSource.ForCatalog(string! catalogId) -> Runic.Translations.Wpf.TranslationSource!
-static Runic.Translations.Wpf.TranslationSource.UseContext(Runic.Translations.ITranslationContext? context, System.Func<Runic.Translations.TranslationCatalogRegistration!, Runic.Translations.Wpf.WpfInlineRenderer?>? renderers = null) -> void
