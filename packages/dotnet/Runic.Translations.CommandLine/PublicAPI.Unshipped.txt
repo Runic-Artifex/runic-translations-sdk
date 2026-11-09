@@ -1,5 +1,1 @@
 #nullable enable
-const Runic.Translations.CommandLine.TranslationCommandTextResolver.CatalogId = "runic-command-line" -> string!
-Runic.Translations.CommandLine.TranslationCommandTextResolver.TranslationCommandTextResolver(Runic.Translations.ITranslationContext! context, string? applicationCatalogId) -> void
-Runic.Translations.CommandLine.TranslationCommandTextResolver.TranslationCommandTextResolver(Runic.Translations.TranslationContextBuilder! catalogs, string? applicationCatalogId) -> void
-static Runic.Translations.CommandLine.TranslationCommandTextResolver.CatalogRegistration.get -> Runic.Translations.TranslationCatalogRegistration!
