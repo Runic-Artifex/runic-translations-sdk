@@ -45,7 +45,7 @@ storage {
 `Runic.Translations` and, as a development dependency, `Runic.Translations.Build`,
 and sets `RunicTranslationsPackCatalog`. `dotnet pack` then adds the catalog's
 sources and contract under `runic/acme.widgets/`, and the package depends on
-`Runic.Translations` `[0.9.1, 0.10.0-0.0)`. The library's code takes the
+`Runic.Translations` `[0.10.0, 0.11.0-0.0)`. The library's code takes the
 application's `ITranslationContext` and creates no manager of its own:
 
 ```csharp

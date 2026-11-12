@@ -33,6 +33,15 @@ to print the first message from a console application.
 - [Work with translators and translation tools](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/translators.md): XLIFF 2.1 export and import, review state, stale translations, plurals and coverage gates.
 - [Ship translation updates without a release](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/ota.md): load translation packs at run time in .NET and on the web.
 - [Command-line apps](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/command-line.md): translate Runic.CommandLine help and errors with `Runic.Translations.CommandLine`, with built-in English and German text.
+- [Framework text](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/framework-text.md): the catalogs of Runic's own text (`runic-command-line`, `runic-views`), how to register and override them, and the German style guide.
+
+`Runic.Translations.CommandLine` carries the Translations version and supports
+exactly one Runic Command Line minor; use the pair from one row:
+
+| Runic Translations | Runic.CommandLine |
+| --- | --- |
+| 0.10.x | 0.12.x |
+| 0.9.x | 0.9.x |
 
 ## Contribute from source
 

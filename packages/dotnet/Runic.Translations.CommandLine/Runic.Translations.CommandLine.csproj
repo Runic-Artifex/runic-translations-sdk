@@ -16,6 +16,8 @@
     <!-- Packs runic/runic-command-line/, so an application overrides the built-in text in its runic.json
          ("overrides": [{ "catalog": "runic-command-line", "from": "Runic.Translations.CommandLine" }]). -->
     <RunicTranslationsPackCatalog>true</RunicTranslationsPackCatalog>
+    <!-- Hosting is released with this package, so its range is bounded to the Translations minor too (D061.16). -->
+    <_RunicTranslationsStampedPackageIds>Runic.Translations;Runic.Translations.Hosting</_RunicTranslationsStampedPackageIds>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,8 +25,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Runic.CommandLine" />
+    <!-- Lockstep (D061.1): the runic-command-line catalog sources (runic.json, en.rmf2, de.rmf2) and the key list
+         text-keys.json ship in the Runic.CommandLine package under translations/, so this adapter compiles exactly the
+         text of the Command Line release it references, and that release's CI already checked every key has en and de. -->
+    <PackageReference Include="Runic.CommandLine" GeneratePathProperty="true" />
     <ProjectReference Include="../Runic.Translations/Runic.Translations.csproj" />
+    <ProjectReference Include="../Runic.Translations.Hosting/Runic.Translations.Hosting.csproj" />
     <!-- Register the compiler first so Roslyn resolves the generator's dependency from this source tree.
          The generator always builds for the SDK, also when an app publishes for a runtime with NativeAOT. -->
     <Analyzer Include="../Runic.Translations.Generator/bin/$(Configuration)/net10.0/Runic.Translations.Compiler.dll" />
@@ -38,6 +44,14 @@
   <ItemGroup>
     <None Update="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
+  <!-- PkgRunic_CommandLine comes from the restore output, so it is empty while restore itself evaluates the project. -->
+  <ItemGroup Condition="'$(PkgRunic_CommandLine)' != ''">
+    <RunicTranslationProject Include="$(PkgRunic_CommandLine)/translations/runic.json" />
+  </ItemGroup>
+  <Target Name="_RunicCommandLineCatalogSources" BeforeTargets="CoreCompile" Condition="'$(PkgRunic_CommandLine)' != ''">
+    <Error Condition="!Exists('$(PkgRunic_CommandLine)/translations/runic.json')"
+           Text="Runic.CommandLine $(RunicCommandLineVersion) has no translations/runic.json. Runic.Translations.CommandLine compiles the runic-command-line catalog from the Runic.CommandLine package, which carries it from 0.12.0." />
+  </Target>
   <Import Project="../Runic.Translations.Build/build/Runic.Translations.Build.targets" />
   <Import Project="../../../eng/build/translations.targets" />
 </Project>

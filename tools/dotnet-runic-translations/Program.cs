@@ -28,7 +28,18 @@ internal static class Program
     internal const int InternalFailure = CommandExitCodes.HostFailure;
     // Run's result: not successful; the category in ToolOperationResult decides the exit code.
     private const int Failed = 1;
-    private const string ToolVersion = "0.2";
+    // The package version (the Translations release), which --version, serve and SARIF reports carry. The informational
+    // version is that version plus "+<commit>" from SourceLink.
+    private static readonly string ToolVersion = PackageVersion(typeof(Program).Assembly);
+
+    internal static string PackageVersion(System.Reflection.Assembly assembly)
+    {
+        string? informational = System.Reflection.CustomAttributeExtensions
+            .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(assembly)?.InformationalVersion;
+        if (string.IsNullOrEmpty(informational)) return assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+        int metadata = informational.IndexOf('+', StringComparison.Ordinal);
+        return metadata < 0 ? informational : informational[..metadata];
+    }
 
     /// <summary>Selects human or JSON output, as in every Runic tool.</summary>
     internal const string FormatOptionName = "--format";

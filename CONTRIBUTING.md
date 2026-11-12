@@ -53,6 +53,19 @@ The libraries that NuGet packages expose under `lib/` set `RunicTrackPublicApi`:
 
 Packing `Runic.Translations`, `Runic.Translations.Tooling` and `Runic.Translations.Wpf` also runs package validation against `RunicTranslationsPackageValidationBaselineVersion` from `eng/Versions.props`, the last published release. It compares every assembly under `lib/`, including the bundled ones. Record an intentional binary break in the project's `CompatibilitySuppressions.xml`; regenerate it with `dotnet pack <project> -p:ApiCompatGenerateSuppressionFile=true`. A package that has not been published yet, such as `Runic.Translations.CommandLine` before its first release, clears `RunicTranslationsPackageValidationBaselineVersion` in its project; remove that line once the package is published.
 
+## Building against an unpublished Runic Command Line
+
+During a release train (see [Release trains](eng/release/README.md#release-trains)),
+`RunicCommandLineVersion` in `eng/Versions.props` can name a Command Line release
+that is not on nuget.org yet. CI then builds against the train feed. Locally,
+pack runic-cli-sdk with `eng/pack.sh <version> <dir>`, run
+`bun eng/train-feed.mjs prepare --from <dir>`, and set
+`RUNIC_TRAIN_FEED=$PWD/artifacts/train-feed/nuget` for every command. Restores then
+run unlocked against a lock file in `obj/` and leave the committed
+`packages.lock.json` files alone, since two candidates of one version differ. Clear the
+candidate from `.cache/nuget` (`runic.commandline*/<version>`) once the release is
+on nuget.org.
+
 ## Dependencies
 
 `bun run dependencies:audit` reports known vulnerabilities in every tracked `bun.lock` and in the NuGet graphs of the solution and the editor. It runs weekly in [Dependency audit](.github/workflows/dependency-audit.yml) and never upgrades packages. Pin GitHub Actions to a full commit SHA with a `# vX.Y.Z` comment.

@@ -23,7 +23,7 @@ permissions:
 jobs:
   # Read-only: finds the successful CI push run for this commit, verifies its
   # packages and VSIX files, writes their SBOM and checks NuGet, npm, tag, release
-  # and npm latest. A dry run ends here; this job never holds OIDC, attestation
+  # and npm latest. A dry run ends here and in the train gate; this job never holds OIDC, attestation
   # or write permissions.
   candidate:
     if: github.repository == 'Runic-Artifex/runic-translations-sdk' && github.ref == 'refs/heads/main'
@@ -39,6 +39,8 @@ jobs:
       # sha256sum lines of every candidate file; publish checks its download against them.
       release-sha256: ${{ steps.describe.outputs.sha256 }}
       sbom: ${{ steps.describe.outputs.sbom }}
+      # The Runic Command Line release this one is built and tested on, for the train gate.
+      command-line-version: ${{ steps.command-line.outputs.version }}
     env:
       # Pass the dispatch input through the environment, never into script text.
       VERSION: ${{ inputs.version }}
@@ -64,6 +66,9 @@ jobs:
           bun eng/release/ide-versions.mjs "$version"
           test "$version" = "$(jq -r .version eng/workspace.json)"
           test "$version" = "$(sed -n 's:.*<RunicTranslationsVersion>\(.*\)</RunicTranslationsVersion>.*:\1:p' eng/Versions.props)"
+      - name: Read the Runic Command Line release of this train
+        id: command-line
+        run: echo "version=$(sed -n 's:.*<RunicCommandLineVersion>\(.*\)</RunicCommandLineVersion>.*:\1:p' eng/Versions.props)" >> "$GITHUB_OUTPUT"
       - name: Find the successful CI run for this commit
         id: ci
         env:
@@ -119,8 +124,28 @@ jobs:
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         run: bun eng/release/publish.mjs tag-latest "$VERSION" --dry-run
 
-  publish:
+  # The train compatibility gate (runic-sdk eng/train/README.md, "Publish workflows", row P-tr): restores, builds and
+  # runs consumers of the published Command Line release of this train, exactly these Translations candidates (this CI
+  # run's artifact) and runic-sdk's newest main run, with warnings as errors. Publishing needs it; a dry run runs it too.
+  # Pinned to runic-sdk#884 (train/compat-gate); the coordinator moves the SHA to runic-sdk main once it merges.
+  train:
     needs: candidate
+    permissions:
+      contents: read
+      actions: read
+    uses: Runic-Artifex/runic-sdk/.github/workflows/train-compat.yml@fb50f55a9d2453e582e3beb3b8e9e6de0e106e0c # train/compat-gate (runic-sdk#884)
+    with:
+      row: P-tr
+      cli: published:${{ needs.candidate.outputs.command-line-version }}
+      translations: run:${{ needs.candidate.outputs.ci-run-id }}
+      sdk: run
+      gate-ref: fb50f55a9d2453e582e3beb3b8e9e6de0e106e0c
+    secrets:
+      # Only if GitHub refuses this job's token for the other repositories' artifacts (D061.12).
+      RUNIC_TRAIN_TOKEN: ${{ secrets.RUNIC_TRAIN_TOKEN }}
+
+  publish:
+    needs: [candidate, train]
     if: ${{ !inputs.dry-run }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20

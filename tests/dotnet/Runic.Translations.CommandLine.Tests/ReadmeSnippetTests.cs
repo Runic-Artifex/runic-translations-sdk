@@ -11,10 +11,12 @@ namespace Runic.Translations.CommandLine.Tests;
 internal sealed class ReadmeSnippetTests
 {
     // The two types a reader's own project generates: the catalog of their translations and the command catalog.
-    // Their shape is what the generators emit (ITranslationProvider CreateProvider() and CommandCatalog Create()).
+    // Their shape is what the generators emit (CatalogId, Registration, CreateProvider() and CommandCatalog Create()).
     private const string GeneratedTypes = """
         public static class AppTextCatalog
         {
+            public const string CatalogId = "app";
+            public static global::Runic.Translations.TranslationCatalogRegistration Registration => throw new global::System.NotSupportedException();
             public static global::Runic.Translations.ITranslationProvider CreateProvider() => throw new global::System.NotSupportedException();
         }
 

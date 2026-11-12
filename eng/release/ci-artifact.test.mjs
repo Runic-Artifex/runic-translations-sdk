@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ARTIFACT, CI_WORKFLOW, REPOSITORY, VSIX, createRelease, githubPrerelease, releaseNotes, findCiPackages, prepare, releaseCheck, scanVsix, selectArtifact, selectCiRun, verify } from "./ci-artifact.mjs";
+import { ARTIFACT, CI_WORKFLOW, REPOSITORY, VSIX, createRelease, githubPrerelease, releaseNotes, findCiPackages, prepare, refuseTrainFeed, releaseCheck, scanVsix, selectArtifact, selectCiRun, verify } from "./ci-artifact.mjs";
 import { writeVsixFixtures } from "./vsix-fixtures.mjs";
 
 const sha = "a".repeat(40);
@@ -31,6 +31,12 @@ test("fails clearly when CI for the commit is missing, running or failed, or its
   expect(() => selectArtifact([{ ...artifact, expired: true }], run(7))).toThrow("expired");
   expect(() => selectArtifact([{ ...artifact, workflow_run: { id: 7, head_sha: "c".repeat(40) } }], run(7))).toThrow();
   expect(() => selectArtifact([{ ...artifact, id: undefined }], run(7))).toThrow("no id");
+});
+
+test("refuses a CI run that built against the train feed", () => {
+  const artifact = { id: 70, name: ARTIFACT, expired: false, workflow_run: { id: 7, head_sha: sha } };
+  expect(() => refuseTrainFeed([artifact], run(7))).not.toThrow();
+  expect(() => refuseTrainFeed([artifact, { ...artifact, id: 71, name: "train-feed" }], run(7))).toThrow("cannot be published");
 });
 
 test("queries GitHub for push runs of the commit", async () => {
@@ -279,7 +285,7 @@ test("a dry run performs every read-only check and never reaches OIDC, publicati
 
 test("only the publish job attests, after verifying and before publishing, every package, VSIX and release asset", () => {
   const release = workflow("publish-preview.yml");
-  expect(Object.entries(release.jobs).filter(([, job]) => job.steps.some(s => s.uses?.startsWith("actions/attest"))).map(([name]) => name)).toEqual(["publish"]);
+  expect(Object.entries(release.jobs).filter(([, job]) => (job.steps ?? []).some(s => s.uses?.startsWith("actions/attest"))).map(([name]) => name)).toEqual(["publish"]);
   const steps = release.jobs.publish.steps;
   const attest = steps.filter(s => s.uses?.startsWith("actions/attest"));
   expect(attest.map(s => s.uses.split("@")[0])).toEqual(["actions/attest-build-provenance", "actions/attest"]);
@@ -331,4 +337,30 @@ test("hand-written release notes are used only when the version has a notes file
     expect(releaseNotes("1.2.3", directory)).toBe(join(directory, "1.2.3.md"));
     expect(releaseNotes("1.2.4", directory)).toBeUndefined();
   } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("publishing needs the train gate (row P-tr), and every managed CI job can build against the train feed", () => {
+  const { candidate, train, publish } = workflow("publish-preview.yml").jobs;
+  expect(publish.needs).toEqual(["candidate", "train"]);
+  expect(train.needs).toBe("candidate");
+  expect(train.if).toBeUndefined();
+  const [reusable, sha] = train.uses.split("@");
+  expect(reusable).toBe("Runic-Artifex/runic-sdk/.github/workflows/train-compat.yml");
+  expect(sha).toMatch(/^[0-9a-f]{40}$/);
+  expect(train.with).toEqual({ row: "P-tr", cli: "published:${{ needs.candidate.outputs.command-line-version }}",
+    translations: "run:${{ needs.candidate.outputs.ci-run-id }}", sdk: "run", "gate-ref": sha });
+  expect(train.permissions).toEqual({ contents: "read", actions: "read" });
+  expect(candidate.outputs["command-line-version"]).toBe("${{ steps.command-line.outputs.version }}");
+
+  const { jobs } = workflow("ci.yml");
+  expect(jobs["train-feed"].steps.find(s => s.id === "feed").run).toBe("bun eng/train-feed.mjs prepare");
+  expect(jobs["train-feed"].steps.find(s => s.uses?.startsWith("actions/upload-artifact@")).with.name).toBe("train-feed");
+  for (const [name, job] of Object.entries(jobs)) {
+    if (!job.steps.some(s => s.uses?.startsWith("actions/setup-dotnet@")) || name === "train-feed") continue;
+    expect([job.needs].flat()).toContain("train-feed");
+    const feed = job.steps.findIndex(s => s.uses === "./.github/actions/train-feed");
+    expect(feed, `${name} uses the train feed`).toBeGreaterThan(0);
+    expect(job.steps[feed].with.active).toBe("${{ needs.train-feed.outputs.active }}");
+  }
+  expect(jobs.verify.needs).toContain("train-feed");
 });

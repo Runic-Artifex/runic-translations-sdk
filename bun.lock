@@ -12,15 +12,15 @@
       "name": "@runic-artifex/translations-editor-frontend",
       "version": "1.0.0-preview.1",
       "dependencies": {
-        "@runic-artifex/svelte": "0.16.0",
-        "@runic-artifex/views": "0.16.0",
+        "@runic-artifex/svelte": "0.17.1",
+        "@runic-artifex/views": "0.17.1",
         "svelte": "5.57.1",
       },
       "devDependencies": {
         "@fontsource-variable/inter": "^5.3.0",
         "@internationalized/date": "^3.12.4",
         "@lucide/svelte": "^1.52.0",
-        "@runic-artifex/sveltekit": "0.16.0",
+        "@runic-artifex/sveltekit": "0.17.1",
         "@runic-artifex/translations-svelte": "workspace:*",
         "@runic-artifex/vite-plugin-runic-translations": "workspace:*",
         "@sveltejs/adapter-static": "4.0.0",
@@ -42,7 +42,7 @@
     },
     "packages/web/translations-svelte": {
       "name": "@runic-artifex/translations-svelte",
-      "version": "0.9.1",
+      "version": "0.10.0",
       "dependencies": {
         "esm-env": "^1.2.2",
       },
@@ -66,7 +66,7 @@
     },
     "packages/web/translations-sveltekit": {
       "name": "@runic-artifex/translations-sveltekit",
-      "version": "0.9.1",
+      "version": "0.10.0",
       "devDependencies": {
         "@runic-artifex/translations-svelte": "workspace:*",
         "@sveltejs/adapter-static": "4.0.0",
@@ -86,7 +86,7 @@
     },
     "packages/web/vite-plugin-runic-translations": {
       "name": "@runic-artifex/vite-plugin-runic-translations",
-      "version": "0.9.1",
+      "version": "0.10.0",
       "devDependencies": {
         "@types/node": "24.19.1",
         "typescript": "^6.0.3",
@@ -159,9 +159,9 @@
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
 
-    "@runic-artifex/svelte": ["@runic-artifex/svelte@0.16.0", "", { "peerDependencies": { "@runic-artifex/views": "0.16.0", "svelte": ">=5.57.1 <6" } }, "sha512-PvYcBE/llPYbpsXNBqH4nAItOn0UPZjc3s/V6j1L23Oi3xqd3ew5XrO8/tOuzXnp89h2VNym3k95wpHkdjAXFw=="],
+    "@runic-artifex/svelte": ["@runic-artifex/svelte@0.17.1", "", { "peerDependencies": { "@runic-artifex/views": "0.17.1", "svelte": ">=5.57.1 <6" } }, "sha512-+yQTtJot4VzBdJpX/RpqgLnPFPRee1ak40VuOJZCxurlxirr2BVYHkHhDHXqcv4QoiGosFzxzReUajYhmOKMNw=="],
 
-    "@runic-artifex/sveltekit": ["@runic-artifex/sveltekit@0.16.0", "", { "peerDependencies": { "@sveltejs/adapter-static": ">=4 <5", "@sveltejs/kit": ">=3 <4", "@sveltejs/vite-plugin-svelte": ">=7 <8", "svelte": ">=5.57.1 <6", "vite": ">=8.3.3 <9" } }, "sha512-iMipjKQf3T+28pxTxY0F2E4kkEFCgNw+ND/q5hyTjLYE5jQjHuKLUh4ACS1+4XdyDDXSHmg07ZGgl44euMJjgA=="],
+    "@runic-artifex/sveltekit": ["@runic-artifex/sveltekit@0.17.1", "", { "peerDependencies": { "@sveltejs/adapter-static": ">=4 <5", "@sveltejs/kit": ">=3 <4", "@sveltejs/vite-plugin-svelte": ">=7 <8", "svelte": ">=5.57.1 <6", "vite": ">=8.3.3 <9" } }, "sha512-SODTfcp+XJQH7ZH7Az7ZmgzRCGKBDTrqET2LYgexJ/KvTYITuIsA/lNvjBDMmvAB73VGIY9fC3pmZB7zRTw7xA=="],
 
     "@runic-artifex/translations-editor-frontend": ["@runic-artifex/translations-editor-frontend@workspace:apps/translations-editor/Frontend"],
 
@@ -169,7 +169,7 @@
 
     "@runic-artifex/translations-sveltekit": ["@runic-artifex/translations-sveltekit@workspace:packages/web/translations-sveltekit"],
 
-    "@runic-artifex/views": ["@runic-artifex/views@0.16.0", "", {}, "sha512-0iYjCja0qXyik3+tYmmRR7ozI0NDMsctI2N3o4nVFmnoJWeicFkWlH+VSpVqUubdak42tyVZupFGPkRZ5ZUfEg=="],
+    "@runic-artifex/views": ["@runic-artifex/views@0.17.1", "", {}, "sha512-0ublWqdOFJcccNxlcnkqdyHObUXihu3Mrd99BePUGobssXEfngPPfF+lLllrgZXPfVPsBFyRtw8iEJ8WBeCIaA=="],
 
     "@runic-artifex/vite-plugin-runic-translations": ["@runic-artifex/vite-plugin-runic-translations@workspace:packages/web/vite-plugin-runic-translations"],
 

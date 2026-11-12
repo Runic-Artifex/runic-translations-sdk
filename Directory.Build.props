@@ -8,4 +8,16 @@
     <RunicDiagnosticsCatalog>docs/guides/translations/diagnostics.md</RunicDiagnosticsCatalog>
     <RunicApplicationFrontendInstallEnabled>false</RunicApplicationFrontendInstallEnabled>
   </PropertyGroup>
+  <!-- The train feed (eng/train-feed.mjs): RUNIC_TRAIN_FEED names a folder with the Command Line release of this train
+       before it is on nuget.org. Its packages are not the bytes nuget.org will publish, and two candidates of one version
+       differ, so a committed lock file would fail with NU1403: restores run unlocked against a lock file in obj/ and
+       leave the committed ones alone. A CI run built this way cannot be published. -->
+  <PropertyGroup Condition="'$(RunicCommandLinePackageFeed)' == '' and '$(RUNIC_TRAIN_FEED)' != ''">
+    <RunicCommandLinePackageFeed>$(RUNIC_TRAIN_FEED)</RunicCommandLinePackageFeed>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(RunicCommandLinePackageFeed)' != ''">
+    <RestoreAdditionalProjectSources>$(RestoreAdditionalProjectSources);$(RunicCommandLinePackageFeed)</RestoreAdditionalProjectSources>
+    <RestoreForceEvaluate>true</RestoreForceEvaluate>
+    <NuGetLockFilePath>$(MSBuildProjectDirectory)/obj/train-feed.packages.lock.json</NuGetLockFilePath>
+  </PropertyGroup>
 </Project>

@@ -224,11 +224,12 @@ when running from source, pass those arguments after the `--` above.
 Translations dependencies resolve from source in this repository. Runic Command
 Line and the Runic SDK packages (Views with its CS-WebUI host and ReactiveUI
 adapter, Navigation, Platform) and their npm counterparts resolve from
-independently pinned published packages; the editor is built on Runic SDK 0.16.0.
-No sibling SDK checkout is needed. The native transport is pinned to published
-`CsWebUi` and `CsWebUi.Native` `2.5.0-beta.4.8`, which bundle WebUI nightly
-`2b35db13f`: it includes WebUI's fix for concurrent Bridge calls, and one
-stalled client no longer blocks writes to other windows. These resolve through the repository's ordinary NuGet.org configuration.
+independently pinned published packages; the editor is built on Runic SDK 0.17.1
+(NuGet and npm, which must match: Bridge protocol 3 is a strict version match).
+No sibling SDK checkout is needed. The native transport is published `CsWebUi` and
+`CsWebUi.Native` `[2.5.0-beta.4.9, 3.0.0)`, the floor of Runic SDK 0.17.1's
+CS-WebUI host (an exact `2.5.0-beta.4.8` pin was a downgrade, NU1605). These
+resolve through the repository's ordinary NuGet.org configuration.
 `bun run test` checks the frontend, generated Views client, editor save/recovery smoke and example workspace.
 `bun run verify-packages` checks the SDK's isolated package consumers. See the
 [contributor guide](../../CONTRIBUTING.md) for the complete verification sequence.

@@ -1,0 +1,22 @@
+name: Use the train feed
+description: >-
+  Downloads the Runic Command Line train feed that the train-feed job of this CI run prepared (eng/train-feed.mjs) and
+  points RUNIC_TRAIN_FEED at it, so restores find the unpublished Command Line release of this train. Without one it
+  does nothing.
+inputs:
+  active:
+    description: The train-feed job's active output
+    required: true
+runs:
+  using: composite
+  steps:
+    - if: inputs.active == 'true'
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      with:
+        name: train-feed
+        path: artifacts/train-feed
+    - if: inputs.active == 'true'
+      shell: bash
+      run: |
+        echo "RUNIC_TRAIN_FEED=$GITHUB_WORKSPACE/artifacts/train-feed/nuget" >> "$GITHUB_ENV"
+        echo "::notice title=Train feed::Built against an unpublished Runic Command Line candidate; Publish preview refuses this run."

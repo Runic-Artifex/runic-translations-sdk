@@ -70,6 +70,35 @@ export function nuspecVersionProblems(nuspec) {
   return problems;
 }
 
+// Dependencies released in lockstep with this repository (COMPATIBILITY.md R2/R3, D061.13, D061.16): the Translations
+// runtime and Hosting, and Runic Command Line. Each must be [F, U) with U the next minor before 1.0 (the next major from
+// 1.0) in the -0.0 form, so one range form covers every cross-repository dependency and the next line's previews.
+const lockstepDependency = /^(Runic\.Translations|Runic\.Translations\.Hosting|Runic\.CommandLine(\..+)?)$/i;
+
+// The upper bound of the version rule for a floor: 0.12.0 gives 0.13.0-0.0, 1.2.0 gives 2.0.0-0.0.
+export function lockstepUpperBound(floor) {
+  const match = /^(\d+)\.(\d+)\.\d+(?:-[0-9A-Za-z.-]+)?$/.exec(floor);
+  if (!match) return undefined;
+  const [major, minor] = [Number(match[1]), Number(match[2])];
+  return major === 0 ? `0.${minor + 1}.0-0.0` : `${major + 1}.0.0-0.0`;
+}
+
+// Each lockstep dependency whose range is not [F, next minor-0.0) before 1.0 or [F, next major-0.0) from 1.0.
+export function lockstepRangeProblems(nuspec) {
+  const metadata = /<metadata(?:\s[^>]*)?>([\s\S]*?)<\/metadata>/.exec(nuspec)?.[1] ?? "";
+  const problems = [];
+  for (const [element] of metadata.matchAll(/<dependency\b[^>]*>/g)) {
+    const id = attribute(element, "id");
+    const range = attribute(element, "version")?.trim();
+    if (!id || !lockstepDependency.test(id) || range === undefined) continue;
+    const match = /^\[\s*([^,\s]+)\s*,\s*([^\s)]+)\s*\)$/.exec(range);
+    const expected = match && lockstepUpperBound(match[1]);
+    if (!match || !expected || match[2] !== expected)
+      problems.push(`dependency ${id} has the range '${range}'; a lockstep dependency must be [F, ${expected ?? "next minor-0.0"}) (one bound form, D061.13)`);
+  }
+  return problems;
+}
+
 // Reads the root .nuspec of a .nupkg or .snupkg (a zip archive) through its central directory.
 export function packageNuspec(path) {
   const zip = readFileSync(path);
@@ -104,5 +133,7 @@ export function checkNugetManifests(paths) {
     ...problems,
     "A version or dependency bound must be SemVer 2.0 (for example 0.10.0-0.0) or have a prerelease label that starts with a letter (0.10.0-a); a dependency bound must not carry build metadata.",
   ].join("\n"));
+  const ranges = files.flatMap(file => lockstepRangeProblems(packageNuspec(file)).map(problem => `- ${file}: ${problem}`));
+  if (ranges.length) throw new Error(["These packages break the lockstep range rule:", ...ranges].join("\n"));
   return files;
 }

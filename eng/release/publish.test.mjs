@@ -154,7 +154,8 @@ test("the mirrored policy covers every NuGet package of the workspace, and the d
     expect(nugetPolicy.packageGlobs.some(pattern => globMatches(pattern, entry.name))).toBe(true);
   const jobs = Bun.YAML.parse(readFileSync(new URL("../../.github/workflows/publish-preview.yml", import.meta.url), "utf8")).jobs;
   expect(jobs.candidate.steps.some(s => s.run?.includes("publish.mjs publish \"$VERSION\" --dry-run"))).toBe(true);
-  expect(jobs.publish.needs).toBe("candidate");
+  // The train gate (row P-tr) also runs before publishing.
+  expect(jobs.publish.needs).toEqual(["candidate", "train"]);
   const steps = jobs.publish.steps;
   expect(steps.findIndex(s => s.uses?.startsWith("NuGet/login@"))).toBeLessThan(steps.findIndex(s => s.run?.includes("publish.mjs publish \"$VERSION\"")));
 });
