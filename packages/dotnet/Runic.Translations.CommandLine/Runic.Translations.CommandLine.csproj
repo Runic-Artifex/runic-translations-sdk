@@ -16,8 +16,11 @@
     <!-- Packs runic/runic-command-line/, so an application overrides the built-in text in its runic.json
          ("overrides": [{ "catalog": "runic-command-line", "from": "Runic.Translations.CommandLine" }]). -->
     <RunicTranslationsPackCatalog>true</RunicTranslationsPackCatalog>
-    <!-- Hosting is released with this package, so its range is bounded to the Translations minor too (D061.16). -->
-    <_RunicTranslationsStampedPackageIds>Runic.Translations;Runic.Translations.Hosting</_RunicTranslationsStampedPackageIds>
+    <!-- The packed ranges come from Runic.Translations.Build's stamp after NuGet generated the .nuspec, as 0.9.1's
+         Runic.Translations range did: [N, next minor-0.0). Hosting is released with this package, so it is bounded to the
+         Translations minor too (D061.16), and Runic.CommandLine to its tested minor (lockstep, D061.13). A -0.0 bound in
+         the PackageReference itself would be NuGet's NU5104 (a stable package with a prerelease dependency). -->
+    <_RunicTranslationsStampedPackageIds>Runic.Translations;Runic.Translations.Hosting;Runic.CommandLine</_RunicTranslationsStampedPackageIds>
   </PropertyGroup>
 
   <ItemGroup>

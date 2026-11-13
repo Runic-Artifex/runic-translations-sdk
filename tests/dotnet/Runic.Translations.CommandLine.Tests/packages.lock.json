@@ -45,7 +45,7 @@
       },
       "Runic.CommandLine": {
         "type": "Direct",
-        "requested": "[0.12.0, 0.13.0-0.0)",
+        "requested": "[0.12.0, )",
         "resolved": "0.12.0",
         "contentHash": "VdhrKc55XV6u54ZoOrJx4Mbt2LOJiolORSA5vuAgIHGLvUFU3LS6gk8ZJl0khNw10VHT0gxIkjlOZzUSlsLwXA=="
       },
@@ -122,7 +122,7 @@
       "runic.translations.commandline": {
         "type": "Project",
         "dependencies": {
-          "Runic.CommandLine": "[0.12.0, 0.13.0-0.0)",
+          "Runic.CommandLine": "[0.12.0, )",
           "Runic.Translations": "[0.10.0, )",
           "Runic.Translations.Hosting": "[0.10.0, )"
         }

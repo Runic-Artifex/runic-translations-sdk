@@ -128,8 +128,8 @@
       "dotnet-runic-translations": {
         "type": "Project",
         "dependencies": {
-          "Runic.CommandLine": "[0.12.0, 0.13.0-0.0)",
-          "Runic.CommandLine.Spectre": "[0.12.0, 0.13.0-0.0)",
+          "Runic.CommandLine": "[0.12.0, )",
+          "Runic.CommandLine.Spectre": "[0.12.0, )",
           "Runic.Translations": "[0.10.0, )",
           "Runic.Translations.Authoring": "[0.10.0, )",
           "Runic.Translations.Compiler": "[0.10.0, )",
@@ -153,13 +153,13 @@
       },
       "Runic.CommandLine": {
         "type": "CentralTransitive",
-        "requested": "[0.12.0, 0.13.0-0.0)",
+        "requested": "[0.12.0, )",
         "resolved": "0.12.0",
         "contentHash": "VdhrKc55XV6u54ZoOrJx4Mbt2LOJiolORSA5vuAgIHGLvUFU3LS6gk8ZJl0khNw10VHT0gxIkjlOZzUSlsLwXA=="
       },
       "Runic.CommandLine.Spectre": {
         "type": "CentralTransitive",
-        "requested": "[0.12.0, 0.13.0-0.0)",
+        "requested": "[0.12.0, )",
         "resolved": "0.12.0",
         "contentHash": "CSjUlZGmOEL1GM+2cHIgYNLEQZTD93fdwohw/uIdW++yCd3CfbpmgJduM8cJXudib5snlbWV+qrMdVQf9hjjHg==",
         "dependencies": {

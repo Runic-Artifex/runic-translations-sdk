@@ -28,6 +28,11 @@ namespace Runic.Translations.Build;
 /// nuget.org cannot host a <c>-0</c> version.
 /// </para>
 /// <para>
+/// Writing the range after the <c>.nuspec</c> is generated also keeps NuGet's pack check NU5104 ("a stable release of a
+/// package should not have a prerelease dependency") from reading the <c>-0.0</c> upper bound as a prerelease
+/// dependency; the floor is a release, and nuget.org accepts the range.
+/// </para>
+/// <para>
 /// NuGet takes dependency ranges from the restore output, and a package's build files join restore only from the
 /// second restore on, so the range is written into the packed <c>.nuspec</c> instead, in the <c>.nupkg</c>, the
 /// <c>.snupkg</c> and a written <c>.nuspec</c> file. A dependency that already names a range is left as it is; a version
@@ -55,7 +60,7 @@ public sealed class RuntimeDependencyRange : ITask
 
     /// <summary>
     /// The dependencies that get the range; <c>Runic.Translations</c> when empty. The Translations repository adds packages
-    /// released together with the runtime, such as <c>Runic.Translations.Hosting</c>.
+    /// released in lockstep with it, such as <c>Runic.Translations.Hosting</c> and <c>Runic.CommandLine</c>.
     /// </summary>
     public string[] PackageIds { get; set; } = Array.Empty<string>();
 

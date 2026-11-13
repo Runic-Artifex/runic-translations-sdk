@@ -13,8 +13,9 @@
     <PackageVersion Include="NuGet.Versioning" Version="7.9.0" />
     <PackageVersion Include="CsWebUi" Version="[2.5.0-beta.4.9, 3.0.0)" />
     <PackageVersion Include="CsWebUi.Native" Version="[2.5.0-beta.4.9, 3.0.0)" />
-    <PackageVersion Include="Runic.CommandLine" Version="$(RunicCommandLineVersionRange)" />
-    <PackageVersion Include="Runic.CommandLine.Spectre" Version="$(RunicCommandLineVersionRange)" />
+    <!-- The floor only: the packed range is stamped after pack (eng/Versions.props, RunicCommandLineVersion). -->
+    <PackageVersion Include="Runic.CommandLine" Version="$(RunicCommandLineVersion)" />
+    <PackageVersion Include="Runic.CommandLine.Spectre" Version="$(RunicCommandLineVersion)" />
     <PackageVersion Include="Runic.Application.Views.CsWebUi" Version="$(RunicSdkCsWebUiDependencyVersion)" />
     <PackageVersion Include="Runic.Application.Testing" Version="$(RunicSdkDependencyVersion)" />
     <PackageVersion Include="Runic.Application.Views.ReactiveUI" Version="$(RunicSdkDependencyVersion)" />

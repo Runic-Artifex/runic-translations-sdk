@@ -212,10 +212,18 @@ dry run, before any registry lookup or push.
 The same check enforces one range form for dependencies released in lockstep
 (`Runic.Translations`, `Runic.Translations.Hosting`, `Runic.CommandLine*`):
 `[F, next minor-0.0)` before 1.0 and `[F, next major-0.0)` from 1.0. The
-Command Line range comes from `RunicCommandLineVersion` in `eng/Versions.props`
-(`RunicCommandLineVersionRange` is derived, not written by hand), and
-`Runic.Translations.CommandLine`, `.Hosting` and `.Wpf` stamp their Translations
-range when they are packed.
+Command Line floor is `RunicCommandLineVersion` in `eng/Versions.props`. Every
+upper bound is written by one helper, `Runic.Translations.Build`'s
+`RuntimeDependencyRange`, into the packed `.nuspec` after NuGet generated it:
+`Runic.Translations.CommandLine` (on `Runic.Translations`, `.Hosting` and
+`Runic.CommandLine`), `.Hosting` and `.Wpf` (on `Runic.Translations`), and every
+library packed with `Runic.Translations.Build`. The project files name only the
+floor. A `-0.0` bound in a `PackageReference` would be NU5104 at pack time ("a
+stable release of a package should not have a prerelease dependency"), an error
+in Verification builds (`CI=true`); after the `.nuspec` is generated NuGet no
+longer checks it, and nuget.org accepts the bound (0.9.1 shipped
+`[0.9.1, 0.10.0-0.0)` this way). runic-sdk's train gate (`eng/train/checks.mjs`,
+`lintRanges`) expects the same form.
 
 ## Release trains
 
