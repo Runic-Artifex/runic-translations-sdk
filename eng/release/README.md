@@ -209,6 +209,58 @@ every candidate package and to the libraries it packs with the candidate
 `Runic.Translations.Build`, and `publish.mjs publish` applies them, also in the
 dry run, before any registry lookup or push.
 
+The same check enforces one range form for dependencies released in lockstep
+(`Runic.Translations`, `Runic.Translations.Hosting`, `Runic.CommandLine*`):
+`[F, next minor-0.0)` before 1.0 and `[F, next major-0.0)` from 1.0. The
+Command Line floor is `RunicCommandLineVersion` in `eng/Versions.props`. Every
+upper bound is written by one helper, `Runic.Translations.Build`'s
+`RuntimeDependencyRange`, into the packed `.nuspec` after NuGet generated it:
+`Runic.Translations.CommandLine` (on `Runic.Translations`, `.Hosting` and
+`Runic.CommandLine`), `.Hosting` and `.Wpf` (on `Runic.Translations`), and every
+library packed with `Runic.Translations.Build`. The project files name only the
+floor. A `-0.0` bound in a `PackageReference` would be NU5104 at pack time ("a
+stable release of a package should not have a prerelease dependency"), an error
+in Verification builds (`CI=true`); after the `.nuspec` is generated NuGet no
+longer checks it, and nuget.org accepts the bound (0.9.1 shipped
+`[0.9.1, 0.10.0-0.0)` this way). runic-sdk's train gate (`eng/train/checks.mjs`,
+`lintRanges`) expects the same form.
+
+## Release trains
+
+Runic Command Line, Runic Translations and Runic SDK release as one train, in
+that order (D060). `Runic.Translations.CommandLine` supports exactly one Command
+Line minor, so a Translations release that moves `RunicCommandLineVersion`
+follows a Command Line release.
+
+**Before Command Line is published (the train feed).** While the version in
+`RunicCommandLineVersion` is not on nuget.org, the CI job **Train feed** runs
+[`eng/train-feed.mjs`](../train-feed.mjs) `prepare`: it takes the Command Line
+packages of that version from a successful runic-cli-sdk `main` CI run, or packs
+runic-cli-sdk at its newest successful `main` commit with its own `eng/pack.sh`,
+and uploads them as the `train-feed` artifact. Every managed job then restores
+through it (`RUNIC_TRAIN_FEED`, read by `Directory.Build.props` and by the
+consumer `NuGet.config` files of the verify scripts), unlocked and against a lock
+file in `obj/`, because those bytes are not the package nuget.org will publish
+(a committed lock file would fail with NU1403). **Publish preview refuses a CI
+run with a `train-feed` artifact.** Locally:
+
+```sh
+# in runic-cli-sdk: eng/pack.sh 0.12.0 /tmp/cli-feed
+direnv exec . bun eng/train-feed.mjs prepare --from /tmp/cli-feed
+RUNIC_TRAIN_FEED=$PWD/artifacts/train-feed/nuget direnv exec . bun run test
+```
+
+**After Command Line is published.** Refresh the lock files against nuget.org
+(`dotnet restore <project> --force-evaluate` for each project with a
+`packages.lock.json`, without `RUNIC_TRAIN_FEED`, after removing the candidate
+from the package cache) and merge that. Its CI run has no train feed.
+
+**The gate.** Publish preview's `train` job calls runic-sdk's
+`train-compat.yml` (row **P-tr**: Command Line `published:<RunicCommandLineVersion>`,
+Translations `run:<the CI run being published>`, SDK `run`), pinned to a
+runic-sdk commit, and `publish` needs it; a dry run runs it too. See
+runic-sdk's `eng/train/README.md`.
+
 ## Verifying a release
 
 Every package, VSIX file and the SBOM of a release have a signed build-provenance

@@ -3,7 +3,7 @@
        repository, so it does not import the repository's Directory.Build.props or central package versions.
        eng/verify-examples.mjs passes the candidate's version as RunicTranslationsVersion. -->
   <PropertyGroup>
-    <RunicTranslationsVersion Condition="'$(RunicTranslationsVersion)' == ''">0.9.1</RunicTranslationsVersion>
+    <RunicTranslationsVersion Condition="'$(RunicTranslationsVersion)' == ''">0.10.0</RunicTranslationsVersion>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync } from "node:fs
 import { basename, dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { stageAndPromote, stampNpmManifest } from "./release/candidate.mjs";
+import { activeTrainFeed } from "./train-feed.mjs";
 
 export const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const workspace = JSON.parse(readFileSync(resolve(root, "eng/workspace.json"), "utf8"));
@@ -110,7 +111,9 @@ function verifyEditorPacked(version = editorPackedVersion(workspace.version)) {
     assert.ok(existsSync(tool), `Missing installed tool ${tool}`);
     run("dotnet", ["build", workspace.editor.project, "--configuration", configuration, "-p:RunicTranslationsBuildMode=Verification", "--nologo",
       "-p:RunicEditorUsePackedTranslations=true", `-p:RunicEditorTranslationsPackageVersion=${version}`,
-      `-p:RestoreAdditionalProjectSources=${feed}`, `-p:RunicTranslationsToolCommand=dotnet "${tool}"`]);
+      // A global property replaces Directory.Build.props' value, so the train feed (eng/train-feed.mjs) is named again;
+      // %3B is an escaped ";", which -p would read as the start of another property.
+      `-p:RestoreAdditionalProjectSources=${[feed, activeTrainFeed()].filter(Boolean).join("%3B")}`, `-p:RunicTranslationsToolCommand=dotnet "${tool}"`]);
     const editorDirectory = dirname(resolve(root, workspace.editor.project));
     const assets = JSON.parse(readFileSync(resolve(editorDirectory, "obj/project.assets.json"), "utf8"));
     const sourceProjects = Object.entries(assets.libraries)
@@ -206,12 +209,15 @@ function testNativeAot() {
     return { status: result.status, text: result.stdout + result.stderr };
   };
   assert.deepEqual(invoke("de", "greet", "Ada"), { status: 0, text: "Hallo Ada\n" });
-  assert.deepEqual(invoke("de", "greet", "--unknown"), { status: 2, text: "RCLI1001: Unbekannte Option. (--unknown)\n" });
+  // Since Command Line 0.10 a usage error has no code prefix and ends with the usage line and the help hint (hints.usage, #168).
+  assert.deepEqual(invoke("de", "greet", "--unknown"), { status: 2,
+    text: "Die Option '--unknown' ist unbekannt.\nAufruf: localized greet <name> [Optionen]\nWeitere Informationen erhalten Sie mit \"localized greet --help\".\n" });
   const help = invoke("de", "greet", "--help");
   assert.equal(help.status, 0);
   for (const text of ["Aufruf: localized greet", "Grüßt eine Person", "Argumente:", "Optionen:", "Hilfe anzeigen"])
     assert.ok(help.text.includes(text), `German help lacks ${text}:\n${help.text}`);
-  assert.deepEqual(invoke("en", "greet", "--unknown"), { status: 2, text: "RCLI1001: An unrecognized option was supplied. (--unknown)\n" });
+  assert.deepEqual(invoke("en", "greet", "--unknown"), { status: 2,
+    text: "The option '--unknown' is not recognized.\nUsage: localized greet <name> [options]\nRun \"localized greet --help\" for more information.\n" });
 
   // The shared-catalog example: a C# process formatting a frontend's catalog, read from embedded data on first use.
   const tray = resolve(root, "artifacts/shared-catalog-aot");

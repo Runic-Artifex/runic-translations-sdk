@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { checkNugetManifests, nugetVersionProblem, nuspecVersionProblems, rangeBounds } from "./nuget-manifest.mjs";
+import { checkNugetManifests, lockstepRangeProblems, lockstepUpperBound, nugetVersionProblem, nuspecVersionProblems, rangeBounds } from "./nuget-manifest.mjs";
 import { publishCandidates } from "./publish.mjs";
 
 const nuspec = (version, dependencies = []) => `<?xml version="1.0" encoding="utf-8"?>
@@ -95,4 +95,17 @@ test("CI's package verification and the publish dry run both run the manifest ch
   expect(Bun.YAML.parse(readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8")).jobs)
     .toSatisfy(jobs => Object.values(jobs).some(job => job.steps?.some(step => step.run?.includes("bun eng/verify-packages.mjs"))));
   expect(readFileSync(new URL("./publish.mjs", import.meta.url), "utf8")).toMatch(/publishCandidates\(candidates, version, \{ dryRun, checkManifests = checkCandidateManifests/);
+});
+
+test("lockstep dependencies use one bound form: [F, next minor-0.0) before 1.0, [F, next major-0.0) from 1.0", () => {
+  expect(lockstepUpperBound("0.12.0")).toBe("0.13.0-0.0");
+  expect(lockstepUpperBound("0.10.0-preview.1")).toBe("0.11.0-0.0");
+  expect(lockstepUpperBound("1.2.3")).toBe("2.0.0-0.0");
+  expect(lockstepUpperBound("x")).toBeUndefined();
+  expect(lockstepRangeProblems(nuspec("0.10.0", [["Runic.Translations", "[0.10.0, 0.11.0-0.0)"], ["Runic.Translations.Hosting", "[0.10.0, 0.11.0-0.0)"],
+    ["Runic.CommandLine", "[0.12.0, 0.13.0-0.0)"], ["Microsoft.Extensions.DependencyInjection.Abstractions", "10.0.14"]]))).toEqual([]);
+  // 0.9.1's Command Line bound, an open Hosting/Wpf dependency (I4), a -0 bound and a range across two minors.
+  for (const [id, range] of [["Runic.CommandLine", "[0.9.1, 0.10.0)"], ["Runic.Translations", "0.9.1"], ["Runic.Translations.Hosting", "[0.10.0, 0.11.0-0)"],
+    ["Runic.CommandLine.Spectre", "[0.12.0, 0.14.0-0.0)"], ["Runic.Translations", "[0.10.0, )"]])
+    expect(lockstepRangeProblems(nuspec("0.10.0", [[id, range]]))).toEqual([expect.stringContaining(`dependency ${id} has the range '${range}'`)]);
 });

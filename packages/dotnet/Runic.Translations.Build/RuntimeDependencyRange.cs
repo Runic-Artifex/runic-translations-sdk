@@ -28,6 +28,11 @@ namespace Runic.Translations.Build;
 /// nuget.org cannot host a <c>-0</c> version.
 /// </para>
 /// <para>
+/// Writing the range after the <c>.nuspec</c> is generated also keeps NuGet's pack check NU5104 ("a stable release of a
+/// package should not have a prerelease dependency") from reading the <c>-0.0</c> upper bound as a prerelease
+/// dependency; the floor is a release, and nuget.org accepts the range.
+/// </para>
+/// <para>
 /// NuGet takes dependency ranges from the restore output, and a package's build files join restore only from the
 /// second restore on, so the range is written into the packed <c>.nuspec</c> instead, in the <c>.nupkg</c>, the
 /// <c>.snupkg</c> and a written <c>.nuspec</c> file. A dependency that already names a range is left as it is; a version
@@ -52,6 +57,12 @@ public sealed class RuntimeDependencyRange : ITask
 
     /// <summary>Whether to write the version rule's range (<c>RunicTranslationsStampRuntimeRange</c>); the Build dependency is removed either way.</summary>
     public bool StampRange { get; set; } = true;
+
+    /// <summary>
+    /// The dependencies that get the range; <c>Runic.Translations</c> when empty. The Translations repository adds packages
+    /// released in lockstep with it, such as <c>Runic.Translations.Hosting</c> and <c>Runic.CommandLine</c>.
+    /// </summary>
+    public string[] PackageIds { get; set; } = Array.Empty<string>();
 
     public IBuildEngine BuildEngine { get; set; } = null!;
     public ITaskHost HostObject { get; set; } = null!;
@@ -107,7 +118,7 @@ public sealed class RuntimeDependencyRange : ITask
     private readonly System.Collections.Generic.HashSet<string> _reported = new(StringComparer.Ordinal);
 
     private string? Stamp(string nuspec, string path) =>
-        Stamp(nuspec, !StampRange ? null : version =>
+        Stamp(nuspec, PackageIds.Length == 0 ? null : PackageIds, !StampRange ? null : version =>
         {
             if (_reported.Add(version)) BuildEngine.LogWarningEvent(new BuildWarningEventArgs("translations", "RTR0093", path, 0, 0, 0, 0,
             $"The Runic.Translations dependency version '{version}' has a format the version rule does not handle, so the package keeps it as an open " +
@@ -131,8 +142,12 @@ public sealed class RuntimeDependencyRange : ITask
     }
 
     // Returns the updated nuspec, or null when nothing changed. stampRange false only removes the Build dependency.
-    internal static string? Stamp(string nuspec, Action<string>? unhandled = null, bool stampRange = true)
+    internal static string? Stamp(string nuspec, Action<string>? unhandled = null, bool stampRange = true) =>
+        Stamp(nuspec, null, unhandled, stampRange);
+
+    internal static string? Stamp(string nuspec, string[]? packageIds, Action<string>? unhandled = null, bool stampRange = true)
     {
+        packageIds ??= [RuntimePackageId];
         XDocument document = XDocument.Parse(nuspec, LoadOptions.PreserveWhitespace);
         bool changed = false;
         foreach (XElement dependency in document.Descendants().Where(static element => element.Name.LocalName == "dependency" &&
@@ -145,7 +160,8 @@ public sealed class RuntimeDependencyRange : ITask
 
         foreach (XElement dependency in document.Descendants().Where(element => stampRange && element.Name.LocalName == "dependency"))
         {
-            if (!string.Equals((string?)dependency.Attribute("id"), RuntimePackageId, StringComparison.OrdinalIgnoreCase)) continue;
+            string? id = (string?)dependency.Attribute("id");
+            if (id is null || !packageIds.Contains(id, StringComparer.OrdinalIgnoreCase)) continue;
             XAttribute? version = dependency.Attribute("version");
             if (version is null) continue;
             string value = version.Value.Trim();

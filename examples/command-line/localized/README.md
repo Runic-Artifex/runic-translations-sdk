@@ -20,9 +20,18 @@ RCLI_EXAMPLE_CULTURE=de dotnet run --project examples/command-line/localized -c 
 ```
 
 They print `Hallo Ada`, German help that starts with
-`Aufruf: localized greet <name> [Optionen]`, and
-`RCLI1001: Unbekannte Option. (--unknown)` with exit code 2. With
-`RCLI_EXAMPLE_CULTURE=en` the same commands print the framework's English text.
+`Aufruf: localized greet <name> [Optionen]`, and, with exit code 2:
+
+```text
+Die Option '--unknown' ist unbekannt.
+Aufruf: localized greet <name> [Optionen]
+Weitere Informationen erhalten Sie mit "localized greet --help".
+```
+
+Since Runic.CommandLine 0.10 a usage error has no `RCLI` code prefix in human
+output (`--format json` carries the code) and ends with the usage line and a
+help hint. With `RCLI_EXAMPLE_CULTURE=en` the same commands print the
+framework's English text.
 
 `bun eng/run.mjs native-aot` publishes the example with NativeAOT, with trim and
 AOT warnings treated as errors, and checks these outputs. See the

@@ -19,5 +19,8 @@
     <None Include="../../../specs/translations/THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />
     <None Include="../../../specs/translations/cldr/LICENSE" Pack="true" PackagePath="licenses" />
   </ItemGroup>
+  <!-- Bounds the Runic.Translations dependency to this release's minor, [N, next minor-0.0), as for the adapter and every
+       packed library (D061.16): a mismatched Translations runtime is then NU1608 at restore instead of a runtime break. -->
+  <Import Project="../Runic.Translations.Build/build/Runic.Translations.Build.Pack.targets" />
   <Import Project="../../../eng/build/translations.targets" />
 </Project>

@@ -8,6 +8,10 @@ import { basename, join, resolve } from "node:path";
 import { root, run, workspace } from "./run.mjs";
 import { packageEntries, packageNuspec } from "./verify-packages.mjs";
 import { checkNugetManifests } from "./release/nuget-manifest.mjs";
+import { trainFeedNugetConfig } from "./train-feed.mjs";
+
+// The Runic Command Line train feed (eng/train-feed.mjs), mapped in every consumer NuGet.config when it is in use.
+const trainFeed = trainFeedNugetConfig();
 
 // Builds the examples that need packed packages: examples/shared-catalog/Frontend, a minimal Vite page, and
 // examples/component-library.
@@ -49,7 +53,7 @@ export async function verifyComponentLibraryExample({ directory, nuget, npmArchi
   });
   const feed = join(example, "packages");
   writeFileSync(join(example, "NuGet.config"), `<?xml version="1.0" encoding="utf-8"?>
-<configuration><packageSources><clear/><add key="candidate" value="${quoted(nuget)}"/><add key="library" value="${quoted(feed)}"/><add key="nuget.org" value="https://api.nuget.org/v3/index.json"/></packageSources><packageSourceMapping><clear/><packageSource key="candidate"><package pattern="Runic.Translations*"/><package pattern="dotnet-runic-translations"/></packageSource><packageSource key="library"><package pattern="Acme.*"/></packageSource><packageSource key="nuget.org"><package pattern="*"/></packageSource></packageSourceMapping></configuration>`);
+<configuration><packageSources><clear/><add key="candidate" value="${quoted(nuget)}"/><add key="library" value="${quoted(feed)}"/>${trainFeed.source}<add key="nuget.org" value="https://api.nuget.org/v3/index.json"/></packageSources><packageSourceMapping><clear/>${trainFeed.mapping}<packageSource key="candidate"><package pattern="Runic.Translations*"/><package pattern="dotnet-runic-translations"/></packageSource><packageSource key="library"><package pattern="Acme.*"/></packageSource><packageSource key="nuget.org"><package pattern="*"/></packageSource></packageSourceMapping></configuration>`);
   const msbuild = [`-p:RunicTranslationsVersion=${version}`];
 
   // The library's NuGet package: the packed catalog, no dependency on the development-only Build package, and the
@@ -279,7 +283,7 @@ if (import.meta.main) {
   const environment = { NUGET_PACKAGES: join(directory, "nuget-cache"), DOTNET_CLI_HOME: join(directory, "dotnet-home") };
   const nugetConfig = join(directory, "NuGet.config");
   writeFileSync(nugetConfig, `<?xml version="1.0" encoding="utf-8"?>
-<configuration><packageSources><clear/><add key="candidate" value="${quoted(nuget)}"/><add key="nuget.org" value="https://api.nuget.org/v3/index.json"/></packageSources><packageSourceMapping><clear/><packageSource key="candidate"><package pattern="Runic.Translations*"/><package pattern="dotnet-runic-translations"/></packageSource><packageSource key="nuget.org"><package pattern="*"/></packageSource></packageSourceMapping></configuration>`);
+<configuration><packageSources><clear/><add key="candidate" value="${quoted(nuget)}"/>${trainFeed.source}<add key="nuget.org" value="https://api.nuget.org/v3/index.json"/></packageSources><packageSourceMapping><clear/>${trainFeed.mapping}<packageSource key="candidate"><package pattern="Runic.Translations*"/><package pattern="dotnet-runic-translations"/></packageSource><packageSource key="nuget.org"><package pattern="*"/></packageSource></packageSourceMapping></configuration>`);
   Promise.resolve()
     .then(() => verifySharedCatalogFrontend({ directory, npmArchives, nugetConfig, version, environment }))
     .then(() => verifyComponentLibraryExample({ directory, nuget, npmArchives, version, environment }))

@@ -49,6 +49,7 @@
   <Target Name="_RunicTranslationsStampRuntimeRange"
           AfterTargets="GenerateNuspec"
           Condition="Exists('$(_RunicTranslationsPackTaskAssembly)')">
-    <Runic.Translations.Build.RuntimeDependencyRange Packages="@(NuGetPackOutput)" StampRange="$([MSBuild]::ValueOrDefault('$(RunicTranslationsStampRuntimeRange)', 'true'))" />
+    <Runic.Translations.Build.RuntimeDependencyRange Packages="@(NuGetPackOutput)" StampRange="$([MSBuild]::ValueOrDefault('$(RunicTranslationsStampRuntimeRange)', 'true'))"
+                                                     PackageIds="$(_RunicTranslationsStampedPackageIds)" />
   </Target>
 </Project>

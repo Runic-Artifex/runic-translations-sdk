@@ -13,6 +13,7 @@ import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { root, workspace } from "../run.mjs";
 import { ideVersions, vsixMetadata } from "./ide-versions.mjs";
+import { TRAIN_FEED_ARTIFACT } from "../train-feed.mjs";
 
 export const REPOSITORY = "Runic-Artifex/runic-translations-sdk";
 export const CI_WORKFLOW = ".github/workflows/ci.yml";
@@ -50,6 +51,14 @@ export function selectArtifact(artifacts, run, name = ARTIFACT) {
   return artifact;
 }
 
+// A CI run that built against a train feed (eng/train-feed.mjs) used a Command Line candidate that is not the published
+// package, and restored without its lock files; such a run is never published (COMPATIBILITY.md 3.4).
+export function refuseTrainFeed(artifacts, run) {
+  if (artifacts.some(artifact => artifact.name === TRAIN_FEED_ARTIFACT))
+    throw new Error(`CI run ${run.html_url} built against the ${TRAIN_FEED_ARTIFACT} (an unpublished Runic Command Line candidate), so it cannot be published. ` +
+      "Publish Runic Command Line first, commit the lock files refreshed against nuget.org, and publish the commit whose CI ran without the train feed.");
+}
+
 export async function findCiPackages({ repository, sha, token, fetchImpl = fetch }) {
   assert.match(sha, /^[a-f0-9]{40}$/, "Expected a full commit SHA");
   const api = async path => {
@@ -61,6 +70,7 @@ export async function findCiPackages({ repository, sha, token, fetchImpl = fetch
   const query = new URLSearchParams({ head_sha: sha, event: "push", branch: "main", per_page: "100" });
   const run = selectCiRun((await api(`actions/workflows/ci.yml/runs?${query}`)).workflow_runs, { repository, sha });
   const artifacts = (await api(`actions/runs/${run.id}/artifacts?per_page=100`)).artifacts;
+  refuseTrainFeed(artifacts, run);
   const artifact = selectArtifact(artifacts, run);
   const vsix = VSIX.map(entry => selectArtifact(artifacts, run, entry.artifact));
   // Download by id: re-uploading under the same name creates a new id, so the

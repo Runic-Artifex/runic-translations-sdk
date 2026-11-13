@@ -16,13 +16,26 @@ dotnet add package Runic.Translations.CommandLine
 
 ```csharp
 CultureInfo culture = CultureInfo.GetCultureInfo("de");
-ITranslationManager manager = await CliTextCatalog.CreateManagerAsync(culture.Name);
+TranslationContext translations = await TranslationContext.CreateBuilder()
+    .Add(CliTextCatalog.Registration)
+    .Add(TranslationCommandTextResolver.CatalogRegistration)
+    .AddOverlays(CliTextCatalog.Overlays)
+    .BuildAsync(culture.Name);
 return await new CommandApp(GeneratedCommandCatalog.Create())
 {
     Culture = culture,
-    TextResolver = new TranslationCommandTextResolver(manager),
+    TextResolver = new TranslationCommandTextResolver(translations, CliTextCatalog.CatalogId),
 }.RunAsync(args);
 ```
+
+Lead with a context: the framework text then follows the context's locale and
+its overlays, including your build-time overrides of `runic-command-line`. The
+constructors over a snapshot or a manager use the built-in framework text
+without those overlays. With `Runic.Translations.Hosting`,
+`services.AddRunicCommandLineTranslations(CliTextCatalog.CatalogId)` registers
+the catalog and an `ICommandTextResolver` over the shared context.
+[Framework text](framework-text.md) lists both framework catalogs, their
+overrides and the German style guide.
 
 Your catalog holds the text behind your `DescriptionKey` values:
 
@@ -36,7 +49,8 @@ arguments {
 ```
 
 With `de`, `greet --help` prints `Aufruf: localized greet <name> [Optionen]`
-and an unknown option prints `RCLI1001: Unbekannte Option. (--unknown)`. The
+and an unknown option prints `Die Option '--unknown' ist unbekannt.`, the usage
+line and `Weitere Informationen erhalten Sie mit "localized greet --help".`. The
 [localized example](../../../examples/command-line/localized/README.md) is a
 complete app that is also published with NativeAOT in CI.
 
@@ -147,15 +161,21 @@ in the overlay are both French, so your catalog wins.
 
 ## Packages and versions
 
-The adapter depends on `Runic.CommandLine` through `ICommandTextResolver`
-only, but `Runic.Translations.CommandLine` requires Runic.CommandLine 0.9.1,
-within the tested minor `[0.9.1, 0.10)`, whose prompt, JSON output alias,
-output selector and response-file keys the built-in catalogs translate. A Runic.CommandLine minor
-may change its API until 1.0, so the range moves in a Translations release
-after testing. A project that adds only the adapter therefore restores a
-Runic.CommandLine that names the cause of a command catalog error instead of
-aborting at startup. Releases
-before 0.6.0-preview.4, the one that adds `CommandTextKeys`, report value
-errors as `faults.RCLI2xxx` without arguments; preview.4 and later ask for
-`diagnostics.invalid-integer`, `diagnostics.out-of-range` and the other keys,
-which the built-in catalogs translate.
+The adapter and Runic.CommandLine move in lockstep: each Translations minor
+supports exactly one Runic.CommandLine minor, and its package depends on
+`Runic.CommandLine` `[0.y.0, 0.(y+1).0-0.0)`. The adapter compiles the
+`runic-command-line` catalog from the sources that the Runic.CommandLine
+package carries under `translations/` (`runic.json`, `en.rmf2`, `de.rmf2` and
+the key list `text-keys.json`), so it has text for every key of exactly the
+Command Line release it is built against, and reads each key's argument names
+from that release's `CommandTextKeys`.
+
+| Runic.Translations.CommandLine | Runic.CommandLine |
+| --- | --- |
+| 0.10.x | 0.12.x |
+| 0.9.x | 0.9.x |
+
+Runic.CommandLine 0.10 and 0.11 have no adapter release. Another combination
+is NuGet warning `NU1608` at restore, and keys the adapter does not know stay
+English. Every Runic.CommandLine minor is followed in the same release train
+by a Translations release for it, and patches add no keys.

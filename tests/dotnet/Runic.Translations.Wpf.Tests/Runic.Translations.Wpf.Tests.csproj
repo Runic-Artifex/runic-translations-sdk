@@ -12,7 +12,7 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <TUnitImplicitUsings>false</TUnitImplicitUsings>
-    <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
+    <RestoreLockedMode Condition="'$(CI)' == 'true' and '$(RunicCommandLinePackageFeed)' == ''">true</RestoreLockedMode>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="TUnit.Core" />

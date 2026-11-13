@@ -54,6 +54,7 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
     private readonly string? _applicationCatalogId;
     private readonly ConcurrentDictionary<string, TranslationContext>? _contexts;
     private int _reportedCulture;
+    private int _reportedLocale;
 
     /// <summary>Where the culture-mismatch warning goes besides the trace; <see langword="null"/> for standard error. Tests set it.</summary>
     internal TextWriter? WarningOutput { get; init; }
@@ -115,9 +116,13 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
         ArgumentNullException.ThrowIfNull(arguments);
 
         string name = GetMessageName(key);
-        string[] names = FrameworkTextArguments.For(key);
+        // The argument names come from the Runic.CommandLine release this adapter is built and packed against (lockstep),
+        // so a framework key and its inputs cannot drift between the two packages.
+        IReadOnlyList<string>? frameworkArguments = CommandTextKeys.Find(key)?.Arguments;
+        IReadOnlyList<string> names = frameworkArguments ?? [];
         (ITranslationSnapshot? application, ITranslationSnapshot? framework, string requested) = Layers(culture);
-        bool frameworkKey = FrameworkTextArguments.ByKey.ContainsKey(key);
+        bool frameworkKey = frameworkArguments is not null;
+        if (frameworkKey) ReportMissingFrameworkLocale(application, framework, requested);
 
         string? text = null;
         int rank = int.MaxValue;
@@ -228,6 +233,32 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
         }
     }
 
+    // Reports once when the application has text in the requested language but runic-command-line has none, so framework
+    // lines would fall back to another language, as event 1261 (LocalesWithoutRunicViewsText) does for runic-views. An
+    // override file (translations/overrides/runic-command-line/<locale>.rmf2) or an overlay adds the locale.
+    private void ReportMissingFrameworkLocale(ITranslationSnapshot? application, ITranslationSnapshot? framework, string requested)
+    {
+        if (application is null || framework is null || requested.Length == 0 || Volatile.Read(ref _reportedLocale) != 0) return;
+        if (!SameLanguage(application.Locale, requested)) return;
+        // The content locale of one framework message, which also counts an overlay that adds the locale.
+        string frameworkLocale = framework.TryGetKey(GetMessageName(CommandTextKeys.HelpUsage), out TranslationKey probe) &&
+            framework.TryGetContentLocale(probe, out string content) ? content : framework.Locale;
+        if (SameLanguage(frameworkLocale, requested)) return;
+        if (Interlocked.Exchange(ref _reportedLocale, 1) != 0) return;
+        string message = $"Runic.Translations.CommandLine: the catalog '{CatalogId}' has no text for the locale '{requested}', which the application's text has; " +
+            $"command-line framework text uses '{frameworkLocale}'. Add translations/overrides/{CatalogId}/{Language(requested).ToString()}.rmf2 to the application, " +
+            "or an overlay of the catalog (docs/guides/translations/framework-text.md).";
+        Trace.TraceWarning(message);
+        try
+        {
+            (WarningOutput ?? Console.Error).WriteLine("warning: " + message);
+        }
+        catch (Exception exception) when (exception is IOException or ObjectDisposedException)
+        {
+            // A closed standard error must not fail text resolution.
+        }
+    }
+
     private static bool SameLanguage(string left, string right) =>
         Language(left).Equals(Language(right), StringComparison.OrdinalIgnoreCase);
 
@@ -281,7 +312,7 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
         return count;
     }
 
-    private static bool TryFormat(ITranslationSnapshot snapshot, string name, string[] names, IReadOnlyList<string> arguments, out string? text,
+    private static bool TryFormat(ITranslationSnapshot snapshot, string name, IReadOnlyList<string> names, IReadOnlyList<string> arguments, out string? text,
         out string? contentLocale)
     {
         text = null;
@@ -313,9 +344,9 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
         }
     }
 
-    private static int Position(string input, string[] names, int count)
+    private static int Position(string input, IReadOnlyList<string> names, int count)
     {
-        for (int index = 0; index < names.Length && index < count; index++)
+        for (int index = 0; index < names.Count && index < count; index++)
             if (string.Equals(names[index], input, StringComparison.Ordinal)) return index;
         if (input.StartsWith("arg", StringComparison.Ordinal) && input.Length > 3 && input[3] is >= '0' and <= '9' &&
             (input.Length == 4 || input[3] != '0') &&

@@ -143,6 +143,75 @@ internal sealed class OverlayTests
         Assert.Equal(1, written.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
     }
 
+    [Test, DisplayName("a locale the application has but runic-command-line lacks is reported once"), NotInParallel("trace")]
+    public async Task MissingFrameworkLocaleReportedOnce()
+    {
+        ITranslationSnapshot english = await TestTextCatalog.CreateProvider().GetSnapshotAsync("en");
+        using var standardError = new StringWriter();
+        // The application's text is French; the built-in framework text has only en and de.
+        var resolver = new TranslationCommandTextResolver(new RequestedAs(english, "fr")) { WarningOutput = standardError };
+        using var listener = new Capture();
+        Trace.Listeners.Add(listener);
+        try
+        {
+            // The application's own English help.usage and the framework's English help.options: neither has French.
+            Assert.Equal("Synopsis", resolver.Resolve("help.usage", French, []));
+            Assert.Equal("Options", resolver.Resolve("help.options", French, []));
+            // An application key alone reports nothing: the warning is about framework text.
+            Assert.Equal(null, new TranslationCommandTextResolver(new RequestedAs(english, "fr")).Resolve("commands.unknown", French, []));
+        }
+        finally
+        {
+            Trace.Listeners.Remove(listener);
+        }
+
+        Assert.Equal(1, listener.Count("the catalog 'runic-command-line' has no text for the locale 'fr'"), string.Join("\n", listener.Messages));
+        string written = standardError.ToString();
+        Assert.True(written.StartsWith("warning: Runic.Translations.CommandLine: the catalog 'runic-command-line' has no text for the locale 'fr'", StringComparison.Ordinal), written);
+        Assert.True(written.Contains("translations/overrides/runic-command-line/fr.rmf2", StringComparison.Ordinal), written);
+        Assert.Equal(1, written.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
+
+        // German, which both have, and a French overlay of the framework text report nothing.
+        using var quiet = new StringWriter();
+        ITranslationSnapshot german = await TestTextCatalog.CreateProvider().GetSnapshotAsync("de");
+        Assert.Equal("Optionen", new TranslationCommandTextResolver(german) { WarningOutput = quiet }.Resolve("help.options", German, []));
+        TranslationContext context = await TranslationContext.CreateBuilder()
+            .Add(TestTextCatalog.Registration)
+            .Add(TranslationCommandTextResolver.CatalogRegistration)
+            .AddOverlay(FrenchOverlay())
+            .BuildAsync("fr");
+        Assert.Equal("Utilisation", new TranslationCommandTextResolver(context, TestTextCatalog.CatalogId) { WarningOutput = quiet }.Resolve("help.usage", French, []));
+        Assert.Equal("", quiet.ToString());
+    }
+
+    [Test, DisplayName("AddRunicCommandLineTranslations adds the catalog to the shared context and a resolver that follows it")]
+    public async Task HostingRegistration()
+    {
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        Microsoft.Extensions.DependencyInjection.RunicTranslationsServiceCollectionExtensions.AddRunicTranslations(services, options => options.InitialLocale = "de")
+            .AddCatalog(TestTextCatalog.Registration)
+            .AddOverlay(FrenchOverlay());
+        Microsoft.Extensions.DependencyInjection.RunicCommandLineTranslationsServiceCollectionExtensions.AddRunicCommandLineTranslations(services, TestTextCatalog.CatalogId);
+        // A second call registers nothing more.
+        int count = services.Count;
+        Microsoft.Extensions.DependencyInjection.RunicCommandLineTranslationsServiceCollectionExtensions.AddRunicCommandLineTranslations(services, TestTextCatalog.CatalogId);
+        Assert.Equal(count, services.Count, "second registration");
+
+        await using Microsoft.Extensions.DependencyInjection.ServiceProvider provider =
+            Microsoft.Extensions.DependencyInjection.ServiceCollectionContainerBuilderExtensions.BuildServiceProvider(services);
+        await Microsoft.Extensions.DependencyInjection.RunicTranslationsServiceProviderExtensions.InitializeRunicTranslationsAsync(provider);
+        var context = (ITranslationContext)provider.GetService(typeof(ITranslationContext))!;
+        Assert.True(context.TryGetManager(TranslationCommandTextResolver.CatalogId, out _), "runic-command-line is not registered");
+        var resolver = (Runic.CommandLine.ICommandTextResolver)provider.GetService(typeof(Runic.CommandLine.ICommandTextResolver))!;
+        // The application's catalog overrides help.usage; the framework catalog supplies the rest, both in the context's locale.
+        Assert.Equal("Übersicht", resolver.Resolve("help.usage", German, []));
+        Assert.Equal("Optionen", resolver.Resolve("help.options", German, []));
+        await context.SetLocaleAsync("fr");
+        Assert.Equal("Afficher l'aide", resolver.Resolve("help.show-help", French, []));
+        Assert.Throws<ArgumentNullException>(() =>
+            Microsoft.Extensions.DependencyInjection.RunicCommandLineTranslationsServiceCollectionExtensions.AddRunicCommandLineTranslations(null!));
+    }
+
     private sealed class Capture : TraceListener
     {
         private readonly List<string> _messages = [];

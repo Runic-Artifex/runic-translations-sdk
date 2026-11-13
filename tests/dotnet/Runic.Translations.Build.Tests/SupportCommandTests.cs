@@ -104,7 +104,9 @@ internal sealed class SupportCommandTests
         AssertFault(mode, 2, "RTRSUP001");
         ProcessResult human = TestFixture.RunTool(temporary, "support", "upload");
         Assert.Equal(2, human.ExitCode, human.Combined);
-        Assert.Contains("RTRSUP001: Use support preview, collect, or remove.", human.StandardError);
+        // Since Runic.CommandLine 0.10 the human line has no code prefix; the JSON fault above carries the code.
+        Assert.Contains("Use support preview, collect, or remove.", human.StandardError);
+        Assert.False(human.StandardError.Contains("RTRSUP001:", StringComparison.Ordinal), human.StandardError);
         Assert.Contains("docs/guides/translations/diagnostics.md#rtrsup001", human.StandardOutput);
 
         AssertFault(TestFixture.RunTool(temporary, "support", "collect", "--editor-diagnostics", "editor.zip", "--format", "json"), 2, "RTRSUP002");

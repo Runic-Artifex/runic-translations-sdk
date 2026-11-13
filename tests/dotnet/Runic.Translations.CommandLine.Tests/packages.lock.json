@@ -12,6 +12,15 @@
           "Microsoft.CodeAnalysis.Common": "[5.9.0]"
         }
       },
+      "Microsoft.Extensions.DependencyInjection": {
+        "type": "Direct",
+        "requested": "[10.0.14, )",
+        "resolved": "10.0.14",
+        "contentHash": "2LzcuVjemeXR+WdY9wGIr8iGb7fYsDAit+IScxXX2XJnX0b++mWcE/WO6fEGIqhdMfSQM2ZS5JGMHYZix7YXZg==",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.14"
+        }
+      },
       "Microsoft.Testing.Extensions.CodeCoverage": {
         "type": "Direct",
         "requested": "[18.12.0, )",
@@ -36,9 +45,9 @@
       },
       "Runic.CommandLine": {
         "type": "Direct",
-        "requested": "[0.9.1, 0.10.0)",
-        "resolved": "0.9.1",
-        "contentHash": "r794Nk1n2mYzwEtP7llW45wGqgsdtu4JJq937QR+ZkiiAeFQNLdKepPhDPBURTTRNnSsSg2fzkROC0S8EuXCmg=="
+        "requested": "[0.12.0, )",
+        "resolved": "0.12.0",
+        "contentHash": "VdhrKc55XV6u54ZoOrJx4Mbt2LOJiolORSA5vuAgIHGLvUFU3LS6gk8ZJl0khNw10VHT0gxIkjlOZzUSlsLwXA=="
       },
       "TUnit.Core": {
         "type": "Direct",
@@ -113,9 +122,23 @@
       "runic.translations.commandline": {
         "type": "Project",
         "dependencies": {
-          "Runic.CommandLine": "[0.9.1, 0.10.0)",
-          "Runic.Translations": "[0.9.1, )"
+          "Runic.CommandLine": "[0.12.0, )",
+          "Runic.Translations": "[0.10.0, )",
+          "Runic.Translations.Hosting": "[0.10.0, )"
         }
+      },
+      "runic.translations.hosting": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.14, )",
+          "Runic.Translations": "[0.10.0, )"
+        }
+      },
+      "Microsoft.Extensions.DependencyInjection.Abstractions": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.14, )",
+        "resolved": "10.0.14",
+        "contentHash": "QtpQzuSZVyTPCuHW058yCs9Nj0394uUkNyFHS813nOmK9UgUdBdaprJ5PPsBgsQIpxADTsTkbaMMonykem6qdw=="
       }
     }
   }
