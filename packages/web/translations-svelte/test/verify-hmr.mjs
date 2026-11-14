@@ -3,7 +3,8 @@
 // a plain-JS page that follows the text-change channel itself, a Svelte page through useMessageLocale, and a page that
 // follows nothing. A library catalog regenerated with `dependencies: "auto"` shows the application's override. Each
 // text edit must update the page without a navigation, keep its state and fetch only the edited message's module;
-// structural edits and the page without a listener must reload. The in-page editing API (translations#178) writes a
+// structural edits and the page without a listener must reload. Marker mode (runic-sdk#956) marks the text of the plain and
+// Svelte pages while it is on, and leaves it plain once it is off. The in-page editing API (translations#178) writes a
 // message from the page, which then updates in place; it refuses a stale hash and, without configuration, a client
 // beyond loopback. Finally a production build with the plugin must equal the plain re-export of the same generated
 // catalog, with and without in-page editing.
@@ -39,6 +40,22 @@ const english = ({ title = "Hello", taps = "{{{$count} taps}}", extra = "" } = {
 const german = ({ title = "Hallo", extra = "" } = {}) =>
   `title = ${title}\nclicks =\n  .input {$count :integer}\n  .match $count\n  one {{Ein Tipp}}\n  * {{{$count} Tipps}}\n${extra}`;
 const pause = milliseconds => new Promise(resolveDelay => setTimeout(resolveDelay, milliseconds));
+// Runs in the page: turns marker mode on and off and reports the texts, their markers and their widths.
+function markerCheck(selectors) {
+  const text = globalThis[Symbol.for("runic.translations.text")];
+  const read = () => selectors.map(selector => document.querySelector(selector).textContent);
+  const widths = () => selectors.map(selector => {
+    const range = document.createRange();
+    range.selectNodeContents(document.querySelector(selector));
+    return Math.round(range.getBoundingClientRect().width * 100) / 100;
+  });
+  const revision = text.revision, before = read(), off = widths();
+  text.markers.set(true);
+  const marked = read(), on = widths();
+  const found = marked.map(value => text.markers.decode(value).map(message => `${message.catalog}:${message.key}:${message.locale}`));
+  text.markers.set(false);
+  return { before, marked, found, stripped: marked.map(value => text.markers.strip(value)), after: read(), widths: { on, off }, revisions: text.revision - revision };
+}
 const textIs = (selector, expected) => `document.querySelector(${JSON.stringify(selector)})?.textContent === ${JSON.stringify(expected)}`;
 
 let vite;
@@ -166,6 +183,17 @@ render();
     await view.tab.evaluate(() => { document.querySelector("#title").dataset.kept = "yes"; });
     assert.equal((await vite.ssrLoadModule("/ssr.js")).title(), "Hello");
 
+    // Marker mode (runic-sdk#956): while an inspector has it on, every message's text carries an invisible marker that
+    // names its catalog, key and locale; the page renders again on the switch, and is plain text again once it is off.
+    const markers = await view.tab.evaluate(markerCheck, ["#title", "#title-de", "#clicks", "#library"]);
+    assert.deepEqual(markers.found, [["app:title:en"], ["app:title:de"], ["app:clicks:en"], ["acme.grid:empty:en"]], JSON.stringify(markers));
+    assert.ok(markers.marked.every((text, index) => text !== markers.before[index]), "the texts carry markers while it is on");
+    assert.deepEqual(markers.stripped, markers.before, "a marker is the only difference");
+    assert.deepEqual(markers.widths.on, markers.widths.off, "markers take no space");
+    assert.deepEqual(markers.after, markers.before, "plain text again once it is off");
+    assert.equal(markers.revisions, 2, "each switch renders again");
+    assert.equal(view.state.navigations, 0, "marker mode does not reload");
+
     await view.edit("translations/en.rmf2", english({ title: "Hello, edited" }));
     await view.until("#title", "Hello, edited", "the edited title");
     assert.equal(view.state.navigations, 0, "no reload");
@@ -273,6 +301,16 @@ render();
     assert.equal(view.state.navigations, 0);
 
     // German text while German shows.
+    // Svelte renders again when marker mode switches (useMessageLocale follows the text-change channel).
+    await view.tab.evaluate(() => globalThis[Symbol.for("runic.translations.text")].markers.set(true));
+    await view.watch.waitForResult(`globalThis[Symbol.for("runic.translations.text")].markers.decode(document.querySelector("#title").textContent)[0]?.key === "title"`,
+      "the Svelte title with its marker");
+    assert.deepEqual(await view.tab.evaluate(() => globalThis[Symbol.for("runic.translations.text")].markers.decode(document.querySelector("#library").textContent)
+      .map(message => `${message.catalog}:${message.key}`)), ["acme.grid:empty"]);
+    await view.tab.evaluate(() => globalThis[Symbol.for("runic.translations.text")].markers.set(false));
+    await view.until("#title", "Svelte, edited", "the Svelte title without its marker");
+    assert.equal(await view.text("#count"), "3", "marker mode keeps Svelte state");
+
     await view.tab.click("#german");
     await view.until("#title", "Hallo", "the German title");
     await view.edit("translations/de.rmf2", german({ title: "Hallo, bearbeitet", extra: "added = Neu\n" }));
@@ -403,10 +441,10 @@ render();
   const withoutEditing = await bundle("no-editing", runicTranslations({ project: join(fixture, "translations"), cwd: fixture, command: "dotnet", commandArguments: [tool], inPageEditing: false }));
   assert.deepEqual(withoutEditing, withPlugin, "in-page editing adds nothing to a production build");
   assert.ok(!withPlugin["bundle.js"].includes("__runic-translations"), "no editing route in the bundle");
-  for (const marker of ["import.meta.hot", "runicMessageSetters", "runic.translations.text", "runic-translations:hmr"])
+  for (const marker of ["import.meta.hot", "runicMessageSetters", "runic.translations.text", "runic-translations:hmr", "__runicFormat", "__runicMarked", "\u2063"])
     assert.ok(!withPlugin["bundle.js"].includes(marker), marker);
   assert.match(withPlugin["bundle.js"], /Reloaded/);
-  console.log("Vite in-place updates passed: plain JS, Svelte and a library override in Chromium, in-page editing, the reloads, SSR and the production build.");
+  console.log("Vite in-place updates passed: plain JS, Svelte and a library override in Chromium, marker mode, in-page editing, the reloads, SSR and the production build.");
 } catch (error) {
   console.error(`Dev server log:\n${logged.join("\n")}`);
   const overlay = await current?.evaluate(() => document.querySelector("vite-error-overlay")?.shadowRoot?.textContent).catch(() => undefined);

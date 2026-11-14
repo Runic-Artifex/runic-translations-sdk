@@ -85,6 +85,19 @@ a locale switch. A production build is unchanged: the code that makes message
 modules update themselves exists only under the dev server, and the generated
 ESM is the same.
 
+### Message markers for inspectors
+
+Under `vite dev` the text-change channel also has a `markers` member. An
+inspector such as runic-sdk's Runic Inspect turns marker mode on while its select
+mode is on; every `m.key()` call then puts an invisible marker in front of its
+text that names the message's catalog, key and locale, and the page renders
+again with them, as on a locale switch. Turning it off renders the plain text
+again. Nothing else turns it on, so `textContent`, copied text and tests see
+plain text. The markers are invisible format characters that take no width; a
+marked text that ends up in an attribute or a stored value carries its marker
+until it renders again. A production build contains none of this. See
+[Message markers](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/esm.md#message-markers).
+
 The dev server does not watch the generated declarations (`virtual.d.ts`,
 `<output>/**/*.d.ts` and the generated directory's `.d.ts` files): the plugin
 writes them only when their content changes, and needs no event for them. This

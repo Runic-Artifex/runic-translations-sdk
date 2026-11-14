@@ -73,39 +73,144 @@ if (import.meta.hot) {
 `;
 }
 
+/** The call of `formatMessage` in a generated message module's function, which marker mode wraps. */
+export const formatCall = "return formatMessage(";
+
+/**
+ * Lets a generated message module mark its text while marker mode is on (runic-sdk#956: Runic Inspect's select mode), or
+ * returns undefined when its `formatMessage` call is missing or not unique. The call goes through `__runicFormat`, a name
+ * of the same length, so every column stays; `__runicFormat` formats as before and passes the result to the dev client's
+ * `marked`, which returns it unchanged unless marker mode is on. The runtime is imported as a namespace, so a runtime
+ * without `getMessageLocale` still links.
+ */
+export function withMarkers(code: string): string | undefined {
+  if (occurrences(code, formatCall) !== 1) return undefined;
+  return code.replace(formatCall, "return __runicFormat(") + `
+import { marked as __runicMarked } from ${JSON.stringify(devClientSpecifier)};
+import * as __runicRuntime from "../runtime.js";
+function __runicFormat(key, table, inputs, options) {
+  return __runicMarked(formatMessage(key, table, inputs, options), __runicRuntime.catalog, key,
+    () => __runicRuntime.getMessageLocale?.(key, options)?.locale);
+}
+`;
+}
+
+/**
+ * The marker characters (docs/guides/translations/esm.md, "Message markers"): a marker is U+2063, the message's ID in
+ * binary with U+2061 for 0 and U+2062 for 1 (most significant bit first), then U+2064. All four are invisible format
+ * characters (default ignorable, line-break class AL), so a marked text keeps its width and its line breaks.
+ */
+export const markerCharacters = { start: "\u2063", zero: "\u2061", one: "\u2062", end: "\u2064" } as const;
+
 /**
  * The dev client. It creates the text-change channel (docs/guides/translations/esm.md, "Text changes during
  * development") and, once per Vite update in which message tables changed, increments its revision and calls its
  * listeners. With no listener the page reloads, since nothing would show the new text. Without a DOM (a server-side
  * module runner) it flushes on a timer and never reloads.
+ *
+ * It also adds the channel's `markers` member: while an inspector turns marker mode on, every generated message function
+ * prefixes its text with an invisible marker that names the message ("Message markers" in the same guide).
  */
 export const devClientCode = `const key = Symbol.for("runic.translations.text");
+const start = "\\u2063", zero = "\\u2061", one = "\\u2062", end = "\\u2064";
+const markerPattern = /\\u2063([\\u2061\\u2062]{1,24})\\u2064/g;
 function channel() {
   let text = globalThis[key];
   if (text === undefined || text === null || typeof text !== "object")
     globalThis[key] = text = { version: 1, revision: 0, listeners: new Set() };
   if (typeof text.revision !== "number") text.revision = 0;
   if (!(text.listeners instanceof Set)) text.listeners = new Set();
+  if (text.markers === undefined || text.markers === null || typeof text.markers !== "object") text.markers = createMarkers();
   return text;
 }
+function notify(text) {
+  text.revision++;
+  const listeners = [...text.listeners];
+  for (const listener of listeners) {
+    try { listener(); } catch (error) { console.error(error); }
+  }
+  return listeners.length;
+}
+// Marker mode: off until an inspector turns it on. A message's ID is its index in messages, one per catalog, key and locale.
+function createMarkers() {
+  let enabled = false;
+  const messages = [], ids = new Map();
+  return {
+    version: 1,
+    get enabled() { return enabled; },
+    set(on) {
+      if (typeof on !== "boolean") throw new TypeError("markers.set needs a boolean.");
+      if (on === enabled) return 0;
+      enabled = on;
+      return notify(channel());
+    },
+    marker(catalog, messageKey, locale) {
+      const name = catalog + "\\u0000" + messageKey + "\\u0000" + locale;
+      let id = ids.get(name);
+      if (id === undefined) {
+        id = messages.length;
+        messages.push(Object.freeze({ catalog, key: messageKey, locale }));
+        ids.set(name, id);
+      }
+      return start + id.toString(2).replaceAll("0", zero).replaceAll("1", one) + end;
+    },
+    decode(value) {
+      const found = [];
+      if (typeof value !== "string") return found;
+      for (const match of value.matchAll(markerPattern)) {
+        const message = messages[parseInt(match[1].replaceAll(zero, "0").replaceAll(one, "1"), 2)];
+        if (message !== undefined) found.push(message);
+      }
+      return found;
+    },
+    strip(value) { return typeof value === "string" ? value.replace(markerPattern, "") : value; },
+  };
+}
 channel();
+// A formatted message with its marker in front while marker mode is on, else the value itself. Structured content gets
+// the marker in its first text; an inline message without text gets a text node with only the marker.
+function markContent(content, marker) {
+  let done = false;
+  const visit = nodes => {
+    let changed = false;
+    const result = nodes.map(node => {
+      if (done) return node;
+      if (node.kind === "text") { done = changed = true; return Object.freeze({ ...node, value: marker + node.value }); }
+      if (node.kind !== "element" || !Array.isArray(node.children)) return node;
+      const children = visit(node.children);
+      if (children === node.children) return node;
+      changed = true;
+      return Object.freeze({ ...node, children });
+    });
+    return changed ? Object.freeze(result) : nodes;
+  };
+  let nodes = visit(content.nodes);
+  if (!done) {
+    if (content.kind !== "localized-content") return content;
+    nodes = Object.freeze([Object.freeze({ kind: "text", value: marker, annotations: Object.freeze([]) }), ...content.nodes]);
+  }
+  return Object.freeze({ ...content, nodes });
+}
+export function marked(value, catalog, messageKey, localeOf) {
+  const markers = globalThis[key]?.markers;
+  if (markers?.enabled !== true || typeof markers.marker !== "function") return value;
+  try {
+    if (typeof value === "string") return markers.marker(catalog, messageKey, localeOf() ?? "") + value;
+    if (value !== null && typeof value === "object" && Array.isArray(value.nodes) && (value.kind === "localized-content" || value.kind === "localized-document"))
+      return markContent(value, markers.marker(catalog, messageKey, value.locale));
+  } catch (error) {
+    console.error(error);
+  }
+  return value;
+}
 const browser = typeof window !== "undefined" && typeof document !== "undefined";
 let pending = false;
 function flush() {
   if (!pending) return;
   pending = false;
-  const text = channel();
-  text.revision++;
-  const listeners = [...text.listeners];
-  if (listeners.length === 0) {
-    if (browser) {
-      console.info("[runic-translations] page reload: nothing on this page follows text changes (the text-change channel has no listener).");
-      location.reload();
-    }
-    return;
-  }
-  for (const listener of listeners) {
-    try { listener(); } catch (error) { console.error(error); }
+  if (notify(channel()) === 0 && browser) {
+    console.info("[runic-translations] page reload: nothing on this page follows text changes (the text-change channel has no listener).");
+    location.reload();
   }
 }
 if (import.meta.hot && browser) import.meta.hot.on("vite:afterUpdate", flush);

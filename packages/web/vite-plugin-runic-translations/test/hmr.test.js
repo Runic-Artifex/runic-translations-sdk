@@ -10,7 +10,7 @@ import { dirname, join, relative } from "node:path";
 import test from "node:test";
 import vm from "node:vm";
 import { build, createServer } from "vite";
-import { classify, devClientCode, messagesAnchor, selfAccepting, withoutSourceHash } from "../dist/hmr.js";
+import { classify, devClientCode, markerCharacters, messagesAnchor, selfAccepting, withMarkers, withoutSourceHash } from "../dist/hmr.js";
 import { runicTranslations } from "../dist/index.js";
 
 const fingerprint = `sha256:${"a".repeat(64)}`;
@@ -177,13 +177,14 @@ test("the transform makes a message module self-accepting only when its anchor o
 });
 
 // Runs a transformed message module as Vite does one instance of it: a new instance per update, one hot.data per URL.
-function instance(code, data, changed) {
+function instance(code, data, changed, { marked = value => value, runtime: runtimeModule = { catalog: "app" } } = {}) {
   const body = code.replace(/^import .*$/gm, "").replaceAll("import.meta.hot", "hot").replace(/^export function (r_[0-9a-f]+)/m, "function $1");
   const name = /function (r_[0-9a-f]+)/.exec(body)[1];
   const hot = { data, accept() {} };
-  const runtime = { freezeGeneratedText: (contract, locale, text) => ({ text }), formatMessage: (key, messages) => messages.en.text };
+  const runtime = { freezeGeneratedText: (contract, locale, text) => ({ text }), formatMessage: (key, messages, inputs, options) => messages[options?.locale ?? "en"].text };
   return new Function("hot", "formatMessage", "freezeGeneratedText", "freezeGeneratedMessage", "freezeGeneratedPattern", "__runicTextChanged",
-    `${body}\nreturn ${name};`)(hot, runtime.formatMessage, runtime.freezeGeneratedText, undefined, undefined, changed);
+    "__runicMarked", "__runicRuntime", `${body}\nreturn ${name};`)(hot, runtime.formatMessage, runtime.freezeGeneratedText, undefined, undefined, changed,
+    marked, runtimeModule);
 }
 
 test("every instance of an updated message module formats the latest text", () => {
@@ -373,6 +374,9 @@ test("the dev client resolves only in development and the transform never runs w
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+// Values of the sandbox's realm, as plain values of this one.
+const plain = value => JSON.parse(JSON.stringify(value));
+
 // Runs the dev client in a sandbox: a browser (window, location, Vite's hot context) or a server-side runner (neither).
 function loadDevClient({ browser }) {
   const handlers = new Map(), reloads = [], timers = [], logged = [];
@@ -384,10 +388,10 @@ function loadDevClient({ browser }) {
   });
   context.globalThis = context;
   // The module as a function of its hot context that returns its export.
-  const source = devClientCode.replaceAll("import.meta.hot", "hot").replace("export function textChanged", "function textChanged");
-  const textChanged = vm.runInContext(`(hot => {\n${source}\nreturn textChanged;\n})`, context)(hot);
-  const channel = context[Symbol.for("runic.translations.text")];
-  return { textChanged, channel, reloads, timers, logged, afterUpdate: () => handlers.get("vite:afterUpdate")?.() };
+  const source = devClientCode.replaceAll("import.meta.hot", "hot").replaceAll("export function ", "function ");
+  const { textChanged, marked } = vm.runInContext(`(hot => {\n${source}\nreturn { textChanged, marked };\n})`, context)(hot);
+  const channel = vm.runInContext('globalThis[Symbol.for("runic.translations.text")]', context);
+  return { textChanged, marked, channel, context, reloads, timers, logged, afterUpdate: () => handlers.get("vite:afterUpdate")?.() };
 }
 
 test("the dev client bumps the text-change channel once per update and reloads when nothing listens", () => {
@@ -430,6 +434,119 @@ test("the dev client bumps the text-change channel once per update and reloads w
   const lonely = loadDevClient({ browser: false });
   lonely.textChanged(); lonely.timers[0]();
   assert.equal(lonely.reloads.length, 0);
+});
+
+test("marker mode wraps a message module's formatMessage call with the columns kept", () => {
+  const code = messageModule("title", { en: "Hello" });
+  const marking = withMarkers(code);
+  const line = code.split("\n").findIndex(text => text.includes("return formatMessage("));
+  assert.equal(marking.split("\n")[line], code.split("\n")[line].replace("formatMessage(", "__runicFormat("));
+  assert.equal(marking.split("\n")[line].length, code.split("\n")[line].length, "the same columns");
+  assert.ok(marking.startsWith(code.split("\n").map((text, index) => index === line ? text.replace("formatMessage(", "__runicFormat(") : text).join("\n")));
+  assert.match(marking, /import \{ marked as __runicMarked \} from "virtual:runic-translations:hmr";/);
+  assert.match(marking, /import \* as __runicRuntime from "\.\.\/runtime\.js";/, "a namespace import links with any runtime");
+  assert.equal(withMarkers(code.replace("return formatMessage(", "return format(")), undefined, "no call");
+  assert.equal(withMarkers(code + "function x() { return formatMessage(1); }\n"), undefined, "two calls");
+  // Both transforms together, as the dev server applies them.
+  assert.match(withMarkers(selfAccepting(code)), /import\.meta\.hot\.accept\(\);[\s\S]*function __runicFormat/);
+});
+
+test("marker mode: the dev client marks text only while it is on and decodes the markers back to their messages", () => {
+  const page = loadDevClient({ browser: true });
+  const { markers } = page.channel;
+  assert.equal(markers.version, 1);
+  assert.equal(markers.enabled, false);
+  assert.equal(page.marked("Hello", "app", "title", () => "en"), "Hello", "off: the text itself");
+  const content = Object.freeze({ kind: "localized-content", key: "intro", locale: "en", formatLocale: "en",
+    nodes: Object.freeze([Object.freeze({ kind: "text", value: "Read ", annotations: [] })]) });
+  assert.equal(page.marked(content, "app", "intro", () => "en"), content, "off: the same content object");
+
+  // On: listeners render again, as on a locale switch; nothing reloads, even without a listener.
+  const seen = [];
+  page.channel.listeners.add(() => seen.push([page.channel.revision, page.channel.markers.enabled]));
+  assert.equal(markers.set(true), 1, "one listener notified");
+  assert.deepEqual(seen, [[1, true]]);
+  assert.equal(markers.set(true), 0, "no change, no notification");
+  assert.throws(() => markers.set("yes"), /boolean/);
+
+  const title = page.marked("Hello", "app", "title", () => "en");
+  assert.notEqual(title, "Hello");
+  assert.equal(markers.strip(title), "Hello");
+  assert.ok(title.endsWith("Hello"), "the marker is in front of the text");
+  assert.match(title, /^\u2063[\u2061\u2062]+\u2064Hello$/);
+  const { start, zero, one, end } = markerCharacters;
+  assert.equal(title, `${start}${zero}${end}Hello`, "the first message is ID 0");
+  assert.equal(page.marked("Hello", "app", "title", () => "en"), title, "the same message keeps its marker");
+  // IDs per catalog, key and locale, so several bits.
+  const marks = [["app", "title", "de"], ["app", "other", "en"], ["acme.grid", "title", "en"], ["app", "fourth", "en"], ["app", "fifth", "en"]]
+    .map(([catalog, key, locale]) => page.marked(`[${key}]`, catalog, key, () => locale));
+  assert.equal(marks[3], `${start}${one}${zero}${zero}${end}[fourth]`, "ID 4");
+  const sentence = `${title} and ${marks[2]}, ${marks[3]}`;
+  assert.deepEqual(plain(markers.decode(sentence)),
+    [{ catalog: "app", key: "title", locale: "en" }, { catalog: "acme.grid", key: "title", locale: "en" }, { catalog: "app", key: "fourth", locale: "en" }]);
+  assert.equal(markers.strip(sentence), "Hello and [title], [fourth]");
+  assert.deepEqual(plain(markers.decode("plain text")), []);
+  assert.deepEqual(plain(markers.decode(`${start}${one}${one}${one}${one}${end}unknown ID`)), [], "an unknown ID is ignored");
+  assert.deepEqual(plain(markers.decode(42)), []);
+  assert.equal(markers.strip(42), 42);
+
+  // Structured content: the marker goes into its first text, or a text node of its own for an inline message without one.
+  const markedContent = page.marked(content, "app", "intro", () => "unused");
+  assert.notEqual(markedContent, content);
+  assert.ok(Object.isFrozen(markedContent) && Object.isFrozen(markedContent.nodes) && Object.isFrozen(markedContent.nodes[0]));
+  assert.deepEqual(plain(markers.decode(markedContent.nodes[0].value).map(message => message.key)), ["intro"]);
+  assert.equal(markers.strip(markedContent.nodes[0].value), "Read ");
+  assert.equal(content.nodes[0].value, "Read ", "the original is unchanged");
+  const strongFirst = { kind: "localized-content", key: "bold", locale: "de", formatLocale: "de", nodes: [
+    { kind: "element", name: "runic:strong", attributes: {}, children: [{ kind: "text", value: "Fett", annotations: [] }] },
+    { kind: "text", value: " danach", annotations: [] }] };
+  const markedStrong = page.marked(strongFirst, "app", "bold", () => "unused");
+  assert.equal(markedStrong.nodes.length, 2, "no node added when the content has text");
+  assert.equal(markers.strip(markedStrong.nodes[0].children[0].value), "Fett");
+  assert.deepEqual({ ...markers.decode(markedStrong.nodes[0].children[0].value)[0] }, { catalog: "app", key: "bold", locale: "de" }, "the content's locale");
+  assert.equal(markedStrong.nodes[1], strongFirst.nodes[1], "later nodes are kept");
+  const iconOnly = { kind: "localized-content", key: "icon", locale: "en", formatLocale: "en", nodes: [{ kind: "element", name: "runic:icon", attributes: { ref: "i" }, children: [] }] };
+  const markedIcon = page.marked(iconOnly, "app", "icon", () => "unused");
+  assert.equal(markedIcon.nodes.length, 2);
+  assert.equal(markedIcon.nodes[0].kind, "text");
+  assert.deepEqual(plain(markers.decode(markedIcon.nodes[0].value).map(message => message.key)), ["icon"]);
+  const document = { kind: "localized-document", key: "doc", locale: "en", formatLocale: "en", nodes: [
+    { kind: "element", name: "runic:paragraph", attributes: {}, children: [{ kind: "text", value: "Body", annotations: [] }] }] };
+  const markedDocument = page.marked(document, "app", "doc", () => "unused");
+  assert.equal(markedDocument.nodes.length, 1, "a document keeps its blocks");
+  assert.deepEqual(plain(markers.decode(markedDocument.nodes[0].children[0].value).map(message => message.key)), ["doc"]);
+  const emptyDocument = { kind: "localized-document", key: "empty", locale: "en", formatLocale: "en", nodes: [] };
+  assert.equal(page.marked(emptyDocument, "app", "empty", () => "unused"), emptyDocument, "a document without text stays unmarked");
+  assert.equal(page.marked(7, "app", "x", () => "en"), 7, "anything else is returned as it is");
+  assert.equal(page.marked("Text", "app", "broken", () => { throw new Error("no locale"); }), "Text", "a failure leaves the text unmarked");
+  assert.match(page.logged.join("\n"), /no locale/);
+
+  // Off: listeners render again, and the text is plain once more.
+  assert.equal(markers.set(false), 1);
+  assert.deepEqual(seen.at(-1), [2, false]);
+  assert.equal(page.marked("Hello", "app", "title", () => "en"), "Hello");
+  assert.deepEqual(page.reloads, [], "marker mode never reloads");
+
+  // Without a listener nothing renders again, and nothing reloads.
+  const bare = loadDevClient({ browser: true });
+  assert.equal(bare.channel.markers.set(true), 0);
+  assert.deepEqual(bare.reloads, []);
+});
+
+test("marker mode: a message module marks its text with its catalog, key and content locale", () => {
+  const page = loadDevClient({ browser: true });
+  const runtime = { catalog: "shop", getMessageLocale: (key, options) => ({ key, locale: options?.locale === "de-CH" ? "de" : "en" }) };
+  const format = instance(withMarkers(selfAccepting(messageModule("title", { en: "Hello", de: "Hallo", "de-CH": "Grüezi" }))), {}, () => {}, { marked: page.marked, runtime });
+  assert.equal(format(), "Hello");
+  page.channel.markers.set(true);
+  const text = format({ locale: "de-CH" });
+  assert.equal(page.channel.markers.strip(text), "Grüezi");
+  assert.deepEqual({ ...page.channel.markers.decode(text)[0] }, { catalog: "shop", key: "title", locale: "de" });
+  // A runtime without getMessageLocale (an earlier compiler): marked with an empty locale.
+  const older = instance(withMarkers(messageModule("title", { en: "Hello" })), {}, () => {}, { marked: page.marked, runtime: { catalog: "old" } });
+  assert.deepEqual({ ...page.channel.markers.decode(older())[0] }, { catalog: "old", key: "title", locale: "" });
+  page.channel.markers.set(false);
+  assert.equal(format(), "Hello");
 });
 
 test("generated declarations are kept out of the dev server's watcher and written only when they change", async () => {
@@ -496,6 +613,7 @@ test("a dev server makes message modules self-accepting and sends one js-update 
     const transformed = await client.transformRequest(await url(title));
     assert.match(transformed.code, /import\.meta\.hot\.accept\(\)/);
     assert.match(transformed.code, /__x00__runic-translations:hmr/);
+    assert.match(transformed.code, /return __runicFormat\("title", messages/, "marker mode wraps the message function's formatMessage call");
     const [titleModule] = client.moduleGraph.getModulesByFile(title);
     assert.equal(titleModule.isSelfAccepting, true);
     // The dev client is served as a module.
@@ -552,7 +670,7 @@ test("a production build is byte-identical to the plain re-export of the generat
     const plain = await bundle("reference", reference);
     assert.deepEqual(withPlugin, plain);
     assert.deepEqual(await bundle("plugin-again", runicTranslations({ manifest, typeDeclarations: false })), withPlugin);
-    for (const marker of ["import.meta.hot", "runicMessageSetters", "runic.translations.text", "runic-translations:hmr", "let   messages"])
+    for (const marker of ["import.meta.hot", "runicMessageSetters", "runic.translations.text", "runic-translations:hmr", "let   messages", "__runicFormat", "__runicMarked", "\u2063"])
       assert.ok(!withPlugin["bundle.js"].includes(marker), marker);
     assert.match(withPlugin["bundle.js"], /Hello/);
     assert.doesNotMatch(withPlugin["bundle.js"], /Other/, "tree-shaking still drops the uncalled message");

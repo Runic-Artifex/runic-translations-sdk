@@ -12,7 +12,7 @@ import {
   AccessList, allowEnvironmentVariable, allowListFromEnvironment, createEditMiddleware, parseAllowList, type InPageEditingOptions,
 } from "./edit.js";
 import {
-  classify, devClientCode, devClientId, devClientSpecifier, hasMessagesAnchor, messageModulePattern, selfAccepting, withoutSourceHash,
+  classify, devClientCode, devClientId, devClientSpecifier, hasMessagesAnchor, messageModulePattern, selfAccepting, withMarkers, withoutSourceHash,
   type CatalogSnapshot, type Classification,
 } from "./hmr.js";
 
@@ -613,7 +613,8 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       if (accepting === undefined) notSelfAccepting.add(path);
       else {
         notSelfAccepting.delete(path);
-        result = accepting;
+        // Marker mode for inspectors (runic-sdk#956): the module's text can carry a marker that names the message.
+        result = withMarkers(accepting) ?? accepting;
       }
     }
     return result === code ? null : { code: result, map: null };
