@@ -201,6 +201,62 @@ const channel = ((globalThis as any)[key] ??= { version: 1, revision: 0, listene
 channel.listeners.add(render); // render() calls m.*() again
 ```
 
+### Message markers
+
+Under `vite dev`, the plugin (0.12 or later) also adds a `markers` member to the
+channel. While an inspector turns marker mode on, such as runic-sdk's Runic
+Inspect in select mode, every generated message function puts an invisible
+marker in front of the text it returns. The marker names the message's catalog,
+key and locale, so the inspector can tell which message a selected element
+shows. Marker mode is off unless something turns it on, and it does not exist in
+a build.
+
+```ts
+interface RunicTextChannel {
+  // … version, revision, listeners as above
+  /** Present under the plugin's dev server (0.12 or later). */
+  markers?: {
+    /** The protocol version of this member: 1. */
+    readonly version: number;
+    /** Whether message functions mark their text now. */
+    readonly enabled: boolean;
+    /** Turns marker mode on or off. A change increments `revision` and calls `listeners`, as a text edit does, so the
+     *  page renders its messages again with markers, then without them. Returns how many listeners ran. */
+    set(on: boolean): number;
+    /** The messages whose markers a text contains, in order. */
+    decode(text: string): readonly { catalog: string; key: string; locale: string }[];
+    /** The text without its markers. */
+    strip(text: string): string;
+  };
+}
+```
+
+- **What gets a marker.** The text of each `m.key()` call of a generated message
+  module while marker mode is on: a string message's result, or the first text
+  of a structured message's content (inline or document), which renders as its
+  first text node. An inline message without text gets a text node with only the
+  marker; a document without text stays unmarked. `locale` is the locale whose
+  text the message shows (`getMessageLocale(key).locale`), so a fallback names
+  the fallback locale. Formatting through `dynamic.js` (`formatDynamicMessage`)
+  is not marked.
+- **The characters.** A marker is U+2063, the message's ID in binary with
+  U+2061 for 0 and U+2062 for 1, then U+2064. These are invisible format
+  characters (default ignorable, line-break class AL): they take no width and
+  break lines as a letter does, so a marked text lays out as the plain one.
+  IDs are only meaningful to the same page's `decode`.
+- **Where a marker ends up.** Wherever the application puts the text: element
+  text, but also attributes such as `title`, `aria-label` or `placeholder`, an
+  input's value, `document.title`, or a string the code compares. That lasts
+  only while marker mode is on, and only for what renders again: a value
+  computed once keeps whatever it had then, as on a locale switch. Use
+  `markers.strip` where code needs the plain text.
+- **Turning it off** renders again without markers, so the page's text,
+  `textContent` and copied text are plain again. Nothing reloads, even when
+  nothing listens.
+- **Production.** The rewrite that adds markers is part of the serve-only
+  transform of message modules. The generated runtime is unchanged, and a build
+  contains none of it.
+
 ## Without Vite
 
 The generated directory is a set of ordinary ES modules with relative imports and
