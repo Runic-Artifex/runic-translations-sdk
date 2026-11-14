@@ -63,7 +63,7 @@ try {
   write("translations/en.rmf2", english());
   write("translations/de.rmf2", german());
   write("translations/overrides/acme.grid/en.rmf2", "empty = Nothing to show\n");
-  const page = (name, script) => write(`${name}.html`, '<!doctype html><html lang="en"><body><h1 id="title"></h1><p id="clicks"></p>' +
+  const page = (name, script) => write(`${name}.html`, '<!doctype html><html lang="en"><body><h1 id="title"></h1><p id="title-de"></p><p id="clicks"></p>' +
     `<p id="library"></p><button id="tap">tap</button><span id="count"></span><button id="load">load</button><p id="lazy"></p>` +
     `<script type="module" src="/${script}"></script></body></html>`);
   page("plain", "plain.js");
@@ -72,6 +72,7 @@ import { empty } from "@acme/grid";
 let count = 0;
 const render = () => {
   document.querySelector("#title").textContent = m.title();
+  document.querySelector("#title-de").textContent = m.title({ locale: "de" });
   document.querySelector("#clicks").textContent = m.clicks({ count });
   document.querySelector("#library").textContent = empty();
   document.querySelector("#count").textContent = String(count);
@@ -110,7 +111,7 @@ render();
 <span id="count">{count}</span>
 <button id="german" onclick={() => (locale = "de")}>de</button>
 `);
-  write("ssr.js", 'import { m } from "virtual:runic-translations/app";\nexport const title = () => m.title();\n');
+  write("ssr.js", 'import { m } from "virtual:runic-translations/app";\nexport const title = () => m.title();\nexport const titles = () => `${m.title()}|${m.title({ locale: "de" })}`;\n');
 
   const logger = createLogger("info", { allowClearScreen: false });
   for (const level of ["info", "warn", "error"]) {
@@ -198,6 +199,48 @@ render();
     await view.until("#lazy", "Hello again", "the edit in the lazily loaded module");
     await view.watch.waitForResult("document.querySelector('vite-error-overlay') === null", "the overlay to close");
     assert.equal(view.state.navigations, 0, "no reload after the fix");
+    assert.equal(await view.text("#count"), "3");
+
+    // Saves in a burst, as format-on-save, auto-save, a checkout or a tool writing several files make them. The watcher
+    // reports only the first change of a file within 50 ms, and Vite handles changes of different files concurrently;
+    // the last save must win, in place.
+    const taps = "{{{$count} clicks}}";
+    const burst = async (gap, ...writes) => {
+      await pause(300);
+      for (const [index, [path, content]] of writes.entries()) {
+        if (index > 0 && gap > 0) await pause(gap);
+        write(path, content);
+      }
+    };
+    const serverTitles = async expected => {
+      let titles = "";
+      for (let attempt = 0; attempt < 100 && titles !== expected; attempt++, await pause(50)) titles = (await vite.ssrLoadModule("/ssr.js")).titles();
+      return titles;
+    };
+    const last = async (expected, description) => {
+      for (const [selector, text] of Object.entries(expected)) await view.until(selector, text, description);
+      // Still there once every save of the burst was handled.
+      await pause(700);
+      for (const [selector, text] of Object.entries(expected)) assert.equal(await view.text(selector), text, `${description}: ${selector} after the burst settled`);
+    };
+    await burst(0, ["translations/en.rmf2", english({ title: "Burst 1", taps })], ["translations/en.rmf2", english({ title: "Burst 2", taps })]);
+    await last({ "#title": "Burst 2" }, "the last of two saves of one file 0 ms apart");
+    await burst(0, ...["Burst 3", "Burst 4", "Burst 5"].map(title => ["translations/en.rmf2", english({ title, taps })]));
+    await last({ "#title": "Burst 5" }, "the last of three saves of one file 0 ms apart");
+    // Wherever the second save falls: before the compiler reads the file, while it compiles, or after the update.
+    for (const gap of [2, 5, 10, 20, 35]) {
+      await burst(gap, ["translations/en.rmf2", english({ title: `First ${gap}`, taps })], ["translations/en.rmf2", english({ title: `Second ${gap}`, taps })]);
+      await last({ "#title": `Second ${gap}` }, `the last of two saves of one file ${gap} ms apart`);
+    }
+    assert.equal(await serverTitles("Second 35|Hallo"), "Second 35|Hallo", "the server renders the last save of one file");
+    await burst(0, ["translations/en.rmf2", english({ title: "Pair", taps })], ["translations/de.rmf2", german({ title: "Paar" })]);
+    await last({ "#title": "Pair", "#title-de": "Paar" }, "two files saved in one burst");
+    assert.equal(await serverTitles("Pair|Paar"), "Pair|Paar", "the server renders both files of the burst");
+    await burst(0, ["translations/de.rmf2", german({ title: "Paar 2" })], ["translations/en.rmf2", english({ title: "Pair 2", taps })],
+      ["translations/de.rmf2", german({ title: "Paar 3" })]);
+    await last({ "#title": "Pair 2", "#title-de": "Paar 3" }, "two files, one saved twice, in one burst");
+    assert.equal(await serverTitles("Pair 2|Paar 3"), "Pair 2|Paar 3", "the server renders the last saves of the burst");
+    assert.equal(view.state.navigations, 0, "bursts of text edits stay in place");
     assert.equal(await view.text("#count"), "3");
 
     // An added message reloads, with its reason in the server's log.

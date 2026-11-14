@@ -73,6 +73,10 @@ compares the regenerated catalog with the previous one:
   files, and changes to runic.json.
 - **A compile error** shows Vite's error overlay over the last good text. The
   next good save is compared with that last good catalog and updates in place.
+- **Rapid saves** (format-on-save, auto-save, a checkout, a tool writing several
+  files) are compiled in turn, and the last save always wins. Vite's watcher
+  drops a second change of a file within 50 ms, so once a change is handled the
+  plugin checks the file again and compiles a save the watcher did not report.
 
 Values computed once rather than while rendering, such as `const title =
 m.app_title()` at module level, data returned from a SvelteKit `load` function,

@@ -272,6 +272,65 @@ test("hotUpdate updates an edited message in place in every environment and relo
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("every environment gets each change when Vite handles changes of several files at once", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-hmr-concurrent-"));
+  try {
+    const { plugin, generated, manifest, module } = await devPlugin(root);
+    const [client, ssr] = environments();
+    const call = (target, file, timestamp) => plugin.hotUpdate.call({ environment: target }, { type: "update", file, timestamp, modules: [], read: async () => "" });
+    // Vite runs the environments of one file's change in turn, but the changes of two files concurrently: client A,
+    // client B, then ssr A and ssr B.
+    await writeCatalog(generated, { messages: { title: { en: "A", de: "Hallo" }, other: { en: "Other", de: "Andere" } } });
+    const clientA = call(client, manifest, 1001);
+    const runtime = join(generated, "runtime.js");
+    const clientB = call(client, runtime, 1002);
+    const [ssrA, ssrB] = [call(ssr, manifest, 1001), call(ssr, runtime, 1002)];
+    const ids = async result => (await result).map(item => item.id);
+    assert.deepEqual(await ids(clientA), [module("title")]);
+    assert.deepEqual(await ids(ssrA), [module("title")], "the server environment gets the change it shares with the client");
+    assert.deepEqual([await ids(clientB), await ids(ssrB)], [[], []], "the second file's regeneration found nothing new");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a save the watcher dropped is reported again once the change is handled", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-hmr-settle-"));
+  try {
+    const generated = join(root, "app.esm-v5");
+    const manifest = await writeCatalog(generated, { messages: { title: { en: "Hello", de: "Hallo" } } });
+    const plugin = runicTranslations({ manifest, typeDeclarations: false });
+    plugin.configResolved({ logger: { info() {}, warn() {} }, mode: "development" });
+    const watcher = new EventEmitter(), reported = [];
+    watcher.add = () => {};
+    watcher.on("change", path => reported.push(path));
+    plugin.configureServer({ watcher, httpServer: new EventEmitter(), ws: { send() {} }, moduleGraph: environment("mixed").moduleGraph });
+    await plugin.buildStart.call({ addWatchFile() {} });
+    const settled = () => new Promise(resolveDelay => setTimeout(resolveDelay, 400));
+
+    // A save the watcher reported, and nothing after it: no second report.
+    await writeCatalog(generated, { messages: { title: { en: "One", de: "Hallo" } } });
+    await save(plugin, manifest, environments());
+    await settled();
+    assert.deepEqual(reported, []);
+
+    // A second save right after the first, which the watcher drops: reported again, once.
+    await writeCatalog(generated, { messages: { title: { en: "Two", de: "Hallo" } } });
+    const pending = save(plugin, manifest, environments());
+    await writeCatalog(generated, { messages: { title: { en: "Three", de: "Hallo" } } });
+    await pending;
+    await settled();
+    assert.deepEqual(reported, [manifest]);
+
+    // A later event of the same file does its own check, so an earlier one does not report it twice.
+    reported.length = 0;
+    await writeCatalog(generated, { messages: { title: { en: "Four", de: "Hallo" } } });
+    const earlier = save(plugin, manifest, environments());
+    await writeCatalog(generated, { messages: { title: { en: "Five", de: "Hallo" } } });
+    await Promise.all([earlier, save(plugin, manifest, environments())]);
+    await settled();
+    assert.deepEqual(reported, []);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("a message module the transform could not make self-accepting reloads instead of updating in place", async () => {
   const root = await mkdtemp(join(tmpdir(), "runic-vite-hmr-shape-"));
   try {

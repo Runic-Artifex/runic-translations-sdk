@@ -181,7 +181,7 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
   let dependencyCatalogs: readonly DependencyCatalog[] = [];
   let dependencyEntries = new Map<string, Entries>();
   let dependencyPaths: ReadonlySet<string> = new Set();
-  let dependencyRegeneration: Promise<void> = Promise.resolve();
+  let dependencyRegeneration: Promise<unknown> = Promise.resolve();
   // The settings the dependency catalogs were last generated with, to regenerate when runic.json changes them.
   let dependencySettingsKey: string | undefined;
   let dependencyWarnings: readonly string[] = [];
@@ -205,7 +205,11 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
   let dependencySnapshots: readonly CatalogSnapshot[] | undefined;
   const notSelfAccepting = new Set<string>();
   let compilation: Promise<unknown> = Promise.resolve();
-  let lastChange: { readonly key: string; readonly change: Promise<Change> } | undefined;
+  // The compiled change of each file event, by path and timestamp, which Vite's environments (client, ssr, ...) share.
+  // Vite handles the events of different files concurrently, so several are in flight at once.
+  const changes = new Map<string, Promise<Change>>();
+  // The latest event of each path, so a settle check of an earlier event leaves the check to the later one.
+  const latestEvents = new Map<string, object>();
   let logger: Logger | undefined;
   // reportUnused logs once per build environment, not once per output: `build.rollupOptions.output` may list several,
   // and library mode bundles each of `build.lib.formats` separately. A watch rebuild reports again.
@@ -336,9 +340,12 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
 
   // Compiles every dependency catalog with the application's overrides and locales into one directory with one shared
   // runtime, then checks each regenerated manifest. A failure keeps the last validated catalogs.
-  function regenerateDependencies(): Promise<void> {
-    const next = dependencyRegeneration.catch(() => undefined).then(async () => {
-      if (options.dependencies !== "auto") return;
+  // Resolves with the generated paths and snapshots before this regeneration, taken in turn, so concurrent changes compare
+  // each regeneration with the one before it.
+  function regenerateDependencies(): Promise<DependencyGeneration> {
+    const next = dependencyRegeneration.catch(() => undefined).then(async (): Promise<DependencyGeneration> => {
+      const before: DependencyGeneration = { paths: dependencyPaths, snapshots: dependencySnapshots };
+      if (options.dependencies !== "auto") return before;
       const settings = applicationSettings();
       const { locales, overrides } = settings;
       // As RTR0104 in a .NET build: every override must name a catalog that a dependency ships, from one of the packages it
@@ -363,7 +370,7 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       }
       if (dependencyCatalogs.length === 0) {
         dependencySettingsKey = settingsKey(settings);
-        return;
+        return before;
       }
       const entriesByCatalog = new Map<string, Entries>();
       const paths = new Set<string>();
@@ -398,6 +405,7 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       dependencySnapshots = server ? snapshots : undefined;
       dependencySettingsKey = settingsKey(settings);
       server?.watcher.add(dependencyWatchPaths(settings));
+      return before;
     });
     dependencyRegeneration = next;
     return next;
@@ -556,6 +564,23 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       for (const module of graph.getModulesByFile(generated) ?? []) invalidateModule(module);
     for (const module of modules) invalidateModule(module);
     return modules;
+  }
+
+  // The watcher reports only the first change of a file within 50 ms (chokidar's throttle) and never the later ones, so a
+  // save that follows another within that time, after the compiler read the file, would be lost. Once the change is
+  // handled and that time has passed, a file that differs from what it was before the change is reported again, so the
+  // last save always wins. A later event of the same file does its own check.
+  function settle(path: string, before: string, change: Promise<unknown>): void {
+    const arrived = Date.now(), event = {};
+    latestEvents.set(path, event);
+    void change.catch(() => undefined).then(() => {
+      const timer = setTimeout(() => {
+        if (latestEvents.get(path) !== event || !server || fingerprint(path) === before) return;
+        latestEvents.delete(path);
+        server.watcher.emit("change", path);
+      }, Math.max(0, arrived + watcherThrottle - Date.now()));
+      timer.unref?.();
+    });
   }
 
   function developmentTransform(code: string, id: string): { code: string; map: null } | null {
@@ -753,33 +778,33 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       if (compiler && isWithin(compiler.output, path)) return [];
       if (isWithin(dependencyOutput, path)) return [];
       const key = `${path}\0${update.timestamp}`;
-      let first = false;
-      // A library source or an application override of a dependency catalog: regenerate the dependency catalogs and
-      // compare them with their previous generation, as for the application's catalog.
-      if (isDependencySource(path)) {
-        if (update.type !== "update") return [];
-        if (lastChange?.key !== key) {
-          const previous = { paths: new Set(dependencyPaths), snapshots: dependencySnapshots };
-          const change = regenerateDependencies().then(async () => ({
+      const dependency = isDependencySource(path);
+      // The watcher listeners above own additions and removals.
+      if (update.type !== "update") return dependency || isRelevant(path) ? [] : undefined;
+      let pending = changes.get(key);
+      const first = pending === undefined;
+      if (pending === undefined) {
+        // Read before the compiler can, for the settle check below.
+        const before = fingerprint(path);
+        // A library source or an application override of a dependency catalog: regenerate the dependency catalogs and
+        // compare them with their previous generation, as for the application's catalog.
+        pending = dependency
+          ? regenerateDependencies().then(async previous => ({
             catalogs: [], generatedPaths: new Set([...previous.paths, ...dependencyPaths]),
             update: await classified(previous.snapshots && dependencySnapshots ? classify(previous.snapshots, dependencySnapshots) : undefined),
-          }));
-          lastChange = { key, change };
-          first = true;
+          }))
+          : prepare(path);
+        if (!pending) return undefined;
+        changes.set(key, pending);
+        for (const old of changes.keys()) {
+          if (changes.size <= 64) break;
+          changes.delete(old);
         }
-      } else {
-        // The watcher listeners above own additions and removals.
-        if (update.type !== "update") return isRelevant(path) ? [] : undefined;
-        if (lastChange?.key !== key) {
-          const change = prepare(path);
-          if (!change) return undefined;
-          lastChange = { key, change };
-          first = true;
-        }
+        settle(path, before, pending);
       }
       let change: Change;
       try {
-        change = await lastChange.change;
+        change = await pending;
       } catch (error) {
         // Report a failed change once, from the environment that started it; the page keeps its last good text.
         if (first) throw error;
@@ -788,6 +813,24 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       return apply(this.environment as unknown as HotEnvironment, change, update.timestamp, first) as never[];
     },
   };
+}
+
+/** The dependency catalogs' generated paths and snapshots before a regeneration. */
+interface DependencyGeneration {
+  readonly paths: ReadonlySet<string>;
+  readonly snapshots: readonly CatalogSnapshot[] | undefined;
+}
+
+// Longer than the time in which the watcher drops further changes of a file (chokidar: 50 ms).
+const watcherThrottle = 120;
+
+// A file's content, to see whether it changed; "" when it cannot be read.
+function fingerprint(path: string): string {
+  try {
+    return createHash("sha256").update(readFileSync(path)).digest("hex");
+  } catch {
+    return "";
+  }
 }
 
 /** A validated web module manifest and its generated files. */
