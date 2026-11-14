@@ -9,7 +9,7 @@ import { CompilerUnavailable, PersistentCompiler } from "./compiler-service.js";
 import { composeDeclarationMap, readMessagesDeclarationMap, writeDeclarationMap, type DeclarationCopy } from "./declaration-map.js";
 import { discoverDependencyCatalogs, type DependencyCatalog } from "./dependencies.js";
 import {
-  AccessList, allowEnvironmentVariable, allowListFromEnvironment, createEditMiddleware, parseAllowList, type InPageEditingOptions,
+  AccessList, allowRulesFromEnvironment, createEditMiddleware, parseAllowList, type InPageEditingOptions,
 } from "./edit.js";
 import {
   classify, devClientCode, devClientId, devClientSpecifier, hasMessagesAnchor, messageModulePattern, selfAccepting, withoutSourceHash,
@@ -82,8 +82,8 @@ export interface RunicTranslationsOptions {
   /**
    * The in-page editing API of the dev server (`/__runic-translations/message`): read a message in every locale and write
    * one locale's text back to its source, which then updates in place. On by default under `vite dev` (never in a build),
-   * for requests from loopback only; `allow` adds hosts and networks, as does the `RUNIC_TRANSLATIONS_EDIT_ALLOW`
-   * environment variable. Needs project mode. `false` turns it off. See the README, "In-page editing API".
+   * for requests from loopback only; `allow` adds hosts and networks, as do the `RUNIC_DEV_ALLOW` (shared with
+   * vite-plugin-runic) and `RUNIC_TRANSLATIONS_EDIT_ALLOW` environment variables. Needs project mode. `false` turns it off. See the README, "In-page editing API".
    */
   readonly inPageEditing?: boolean | InPageEditingOptions;
 }
@@ -636,8 +636,7 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
   function mountEditing(target: ViteDevServer): void {
     const middlewares = (target as Partial<ViteDevServer>).middlewares;
     if (!middlewares) return;
-    const environment = allowListFromEnvironment(process.env[allowEnvironmentVariable]);
-    const rules = [...allowRules, ...parseAllowList(environment, allowEnvironmentVariable)];
+    const rules = [...allowRules, ...allowRulesFromEnvironment()];
     const config = (target as Partial<ViteDevServer>).config;
     if (rules.length > 0)
       config?.logger.info(`[runic-translations] in-page editing accepts requests from loopback and ${rules.map(rule => rule.text).join(", ")}`, { timestamp: true });
