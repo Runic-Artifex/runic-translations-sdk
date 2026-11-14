@@ -216,9 +216,10 @@ test("failed manifest refresh keeps the last validated catalog, entries, and dec
     assert.deepEqual(invalidated, []);
 
     await writeV3Fixture(generated, { catalog: "renamed" });
-    const modules = await hot(plugin, manifest, server.moduleGraph);
-    assert.ok(modules.some(module => module.id === "\0virtual:runic-translations/app/messages"));
-    assert.ok(modules.some(module => module.id === "\0virtual:runic-translations/renamed/messages"));
+    // A renamed catalog reloads: the old and the new virtual modules are invalidated, and nothing is left to propagate.
+    assert.deepEqual(await hot(plugin, manifest, server.moduleGraph), []);
+    assert.ok(invalidated.includes("\0virtual:runic-translations/app/messages"));
+    assert.ok(invalidated.includes("\0virtual:runic-translations/renamed/messages"));
     assert.equal(await plugin.resolveId("virtual:runic-translations/app"), null);
     assert.equal(await plugin.resolveId("virtual:runic-translations/renamed"), "\0virtual:runic-translations/renamed/messages");
     assert.match(await readFile(declarationPath, "utf8"), /virtual:runic-translations\/renamed/);
@@ -666,10 +667,9 @@ test("one change compiles once for every Vite environment", async () => {
       invalidateModule(module) { this.invalidated.push(module.id); },
     });
     const client = graph("client"), ssr = graph("ssr");
+    // The fake compiler rewrites nothing, so the regenerated catalog is the same and no environment has anything to do.
     const [clientModules, ssrModules] = await Promise.all([hot(plugin, english, client, 1000), hot(plugin, english, ssr, 1000)]);
-    assert.ok(clientModules.every(module => module.id.startsWith("client:")) && clientModules.length === 5);
-    assert.ok(ssrModules.every(module => module.id.startsWith("ssr:")) && ssrModules.length === 5);
-    assert.equal(ssr.invalidated.length, 5);
+    assert.deepEqual([clientModules, ssrModules, client.invalidated, ssr.invalidated], [[], [], [], []]);
     assert.equal((await log()).filter(line => line.startsWith("serve-generate")).length, 2, "build start plus one change");
 
     const fail = join(root, "fail"); await writeFile(fail, "");
@@ -870,6 +870,6 @@ test("published package inventory contains only declared runtime files", async (
     const archives = (await readdir(output)).filter(file => file.endsWith(".tgz")); assert.equal(archives.length, 1);
     const { stdout } = await execFileAsync("tar", ["-tzf", join(output, archives[0])]);
     const files = stdout.split("\n").filter(file => file.startsWith("package/") && !file.endsWith("/")).map(file => file.slice("package/".length)).sort();
-    assert.deepEqual(files, ["LICENSE", "README.md", "dist/compiler-service.d.ts", "dist/compiler-service.js", "dist/dependencies.d.ts", "dist/dependencies.js", "dist/index.d.ts", "dist/index.js", "package.json"]);
+    assert.deepEqual(files, ["LICENSE", "README.md", "dist/compiler-service.d.ts", "dist/compiler-service.js", "dist/dependencies.d.ts", "dist/dependencies.js", "dist/hmr.d.ts", "dist/hmr.js", "dist/index.d.ts", "dist/index.js", "package.json"]);
   } finally { await rm(output, { recursive: true, force: true }); }
 });

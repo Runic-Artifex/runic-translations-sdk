@@ -45,12 +45,47 @@ process and everything it started, generates that change one-shot, and restarts
 the compiler on the next change. `vite build`
 always runs the tool once.
 
-A change is compiled once and then invalidated in every Vite environment
-(client, SSR) through the `hotUpdate` hook. The regenerated modules get a new
-HMR timestamp, so the browser imports the new messages, and components that
-render them update in place. Values computed once on the server, such as data
-returned from a SvelteKit `load` function, are not re-run by HMR; they update
-when the page is reloaded.
+### Edited messages update in place
+
+A save is compiled once for every Vite environment (client, SSR), and the plugin
+compares the regenerated catalog with the previous one:
+
+- **Text edits update the page in place.** When only message text changed (a
+  message's text in any locale, a plural or selector variant, the text inside
+  inline markup or a document, a pseudo-locale), the plugin sends Vite one update
+  for each edited message's module and nothing else: the browser fetches those
+  modules, which hand their new text to the modules the page already holds, so
+  the runtime, the catalog's resolvers and installed overlays stay, and the page
+  keeps its state. The server's environment gets the same update, so the next
+  server render shows the new text.
+- **The page then formats again.** The plugin reports each update on the
+  [text-change channel](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/esm.md#text-changes-during-development),
+  once per update, and whatever listens re-renders its messages, as a locale
+  switch does. `useMessageLocale` from `@runic-artifex/translations-svelte`
+  listens, and so do the runic-sdk text helpers (`@runic-artifex/views`, and the
+  React, Vue, Svelte and Angular packages) from their release that supports it.
+  A page with no listener reloads, so it never shows stale text.
+- **Everything else reloads the page,** with the reason in the dev server's log,
+  for example `[runic-translations] page reload: messages were added, removed or
+  renamed in catalog 'app'`: an added, removed or renamed message (`m` is a module
+  namespace and cannot gain members), a changed input, markup or content kind
+  (`dynamic.js changed (the catalog's contract changed)`), added or removed source
+  files, and changes to runic.json.
+- **A compile error** shows Vite's error overlay over the last good text. The
+  next good save is compared with that last good catalog and updates in place.
+
+Values computed once rather than while rendering, such as `const title =
+m.app_title()` at module level, data returned from a SvelteKit `load` function,
+or `document.title` set imperatively, keep their text until they run again, as on
+a locale switch. A production build is unchanged: the code that makes message
+modules update themselves exists only under the dev server, and the generated
+ESM is the same.
+
+The dev server does not watch the generated declarations (`virtual.d.ts`,
+`<output>/**/*.d.ts` and the generated directory's `.d.ts` files): the plugin
+writes them only when their content changes, and needs no event for them. This
+keeps framework plugins that reload on any `.d.ts` change, such as Analog's,
+from turning each edit into a reload. Editors and `tsc` still read them from disk.
 
 In project mode the plugin also generates the development pseudo-locales that
 `runic.json` declares in `pseudoLocales` (`en-XA`, `ar-XB`) when Vite's mode is
@@ -66,7 +101,13 @@ Changes to `sourceFiles` trigger a Vite refresh, but the plugin cannot recompile
 the project or recompute `sourceHash` without a compiler command. The owning
 build must regenerate the ESM package and manifest before the refresh is served;
 otherwise the plugin will reload the still-current manifest bytes, not detect
-that authoring sources are newer than them.
+that authoring sources are newer than them. Edits that the owning build
+regenerates, such as a `dotnet build` that rewrites the directory, update in
+place by the same comparison: the compiler rewrites only the files whose content
+changed, and the plugin compares the validated manifest with the previous one.
+While the build is still writing, the manifest and its files can disagree; that
+save then shows an integrity error until the build finishes and its last file
+change arrives.
 
 ## Library catalogs from dependencies
 
@@ -133,8 +174,11 @@ The library's imports of its own catalog modules are redirected to the regenerat
 the application's `virtual.d.ts` references; nothing is written into `node_modules`. These packages are excluded from
 Vite's dependency pre-bundling and are not externalized for server rendering, so the plugin sees their imports.
 
-**Development server.** Editing an override, or changing runic.json `overrides` or `locales`, regenerates the
-dependencies and reloads the page; a new directory under `translations/overrides/` is picked up as well. While runic.json
+**Development server.** Editing an override regenerates the dependency catalogs and compares them with their previous
+generation, as for the application's catalog: an edited override's text, or a library's text in a workspace-linked
+library, updates in place, and an added or removed override message, an added or removed override file, or a change to
+runic.json `overrides` or `locales` reloads the page with its reason. A new directory under `translations/overrides/` is
+picked up as well. While runic.json
 is invalid in the middle of an edit, the plugin reports it once and keeps its last valid overrides and locales. Library
 sources are watched only outside `node_modules` (a workspace-linked library); Vite does not watch `node_modules`, so after
 changing an installed package, restart the development server.

@@ -364,11 +364,14 @@ npm run dev
 ```
 
 Open `/`, `/de`, and `/de/about`, then use the buttons to switch languages.
-Saving an `.rmf2` file recompiles it while the dev server keeps running, and
-text rendered by components updates in place through Vite HMR. HMR does not re-run
-`load` functions, so text computed in one, like the `/about` title, keeps its
-old value until a reload or a client-side navigation to the page runs the load
-again.
+Saving an `.rmf2` file recompiles it while the dev server keeps running. An
+edited message's text updates in place: templates that call it through
+`useMessageLocale` render it again and keep their state, and the next server
+render shows it too. Adding, removing or renaming a message, or changing its
+inputs or markup, reloads the page (the dev server logs why). In-place updates do
+not re-run `load` functions, so text computed in one, like the `/about` title,
+keeps its old value until a reload or a client-side navigation to the page runs
+the load again.
 
 ```bash
 npm run build

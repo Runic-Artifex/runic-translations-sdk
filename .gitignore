@@ -14,6 +14,7 @@
 /examples/bun/operation-history/generated/
 /examples/bun/operation-history/history/current.log
 /packages/web/translations-sveltekit/test/generated-*/
+/packages/web/translations-svelte/test/hmr-fixture-*/
 /examples/component-library/.config/
 /examples/component-library/NuGet.config
 /examples/component-library/packages/

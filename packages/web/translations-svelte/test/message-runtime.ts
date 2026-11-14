@@ -9,8 +9,10 @@ export function configureLocaleResolver(next: () => string): () => void {
 }
 
 export const getLocale = (): string => (["en", "de"].includes(resolver()) ? resolver() : "en");
+// The text the message functions format; a test edits it as the dev server swaps an edited message's table in.
+export const texts: Record<string, string> = { "title.en": "Title", "title.de": "Titel", "empty.en": "No rows", "empty.de": "Keine Zeilen" };
 export const m = {
-  title: () => (getLocale() === "de" ? "Titel" : "Title"),
+  title: () => texts[`title.${getLocale()}`]!,
   count: (inputs: { count: number }) => `${inputs.count} ${getLocale() === "de" ? "Einträge" : "entries"}`,
 };
 
@@ -21,6 +23,6 @@ function sharedLocale(): string {
   return typeof channel?.resolver === "function" ? channel.resolver() : "en";
 }
 export const library = {
-  empty: () => (sharedLocale().startsWith("de") ? "Keine Zeilen" : "No rows"),
+  empty: () => texts[sharedLocale().startsWith("de") ? "empty.de" : "empty.en"]!,
   requested: () => sharedLocale(),
 };

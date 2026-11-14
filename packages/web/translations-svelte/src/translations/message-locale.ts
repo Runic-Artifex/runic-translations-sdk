@@ -1,5 +1,6 @@
 import { BROWSER } from "esm-env";
 import { onDestroy } from "svelte";
+import { createSubscriber } from "svelte/reactivity";
 
 /** The generated runtime's `configureLocaleResolver`: installs a resolver and returns the function that removes it. */
 export type ConfigureLocaleResolver = (resolver: () => string) => () => void;
@@ -28,6 +29,36 @@ function localeChannel(): LocaleChannel {
   return channel;
 }
 
+// The text-change channel (Runic Translations 0.12 or later): in development, the Vite plugin increments `revision` and
+// calls every listener once per update in which message text changed in place. The shape is a protocol between
+// packages; members are only ever added, and whoever comes first creates it.
+interface TextChannel {
+  version: number;
+  revision: number;
+  listeners: Set<() => void>;
+}
+
+const textChannelKey = Symbol.for("runic.translations.text");
+
+function textChannel(): TextChannel {
+  const host = globalThis as unknown as Record<symbol, TextChannel | undefined>;
+  let channel = host[textChannelKey];
+  if (channel === undefined || channel === null || typeof channel !== "object")
+    host[textChannelKey] = channel = { version: 1, revision: 0, listeners: new Set() };
+  if (typeof channel.revision !== "number") channel.revision = 0;
+  if (!(channel.listeners instanceof Set)) channel.listeners = new Set();
+  return channel;
+}
+
+// One listener for the page while any template, $derived or $effect reads a message through a resolver installed here:
+// reading subscribes it, so it runs again when edited text is swapped in. Nothing listens otherwise, so the plugin
+// reloads a page that would not show the new text.
+const followTextChanges = createSubscriber(update => {
+  const listeners = textChannel().listeners;
+  listeners.add(update);
+  return () => { listeners.delete(update); };
+});
+
 /**
  * Makes the generated message functions (`m.*()`) of every catalog on the page, the application's and its libraries',
  * follow a locale that the application owns, such as a {@link SvelteLocale} or a ViewModel's language setting.
@@ -51,6 +82,10 @@ function localeChannel(): LocaleChannel {
  *
  * With the generated `configureLocaleResolver` as the first argument, it sets that catalog's own resolver only, as
  * before 0.9.
+ *
+ * In development with `@runic-artifex/vite-plugin-runic-translations` 0.12 or later, an edited message updates in place:
+ * whatever reads `m.*()` through the resolver runs again with the new text, and component state is kept. It follows the
+ * plugin's text-change channel (`Symbol.for("runic.translations.text")`) in the browser; production builds never write it.
  *
  * @example
  * ```svelte
@@ -78,8 +113,10 @@ export function useMessageLocale(
   if (typeof locale !== "function" && (typeof locale !== "object" || locale === null || !("locale" in locale)))
     throw new TypeError("The locale must be a function or an object with a locale property, such as a SvelteLocale.");
   // A SvelteLocale reports the requested tag (de-CH for de), so numbers and dates follow the requested region.
-  const read = typeof locale === "function" ? locale
+  const requested = typeof locale === "function" ? locale
     : () => "requestedLocale" in locale && typeof locale.requestedLocale === "string" ? locale.requestedLocale : locale.locale;
+  // In the browser, reading the locale also follows text changes, so messages format again with edited text.
+  const read = BROWSER ? () => { followTextChanges(); return requested(); } : requested;
   // onDestroy first: outside a component it throws before anything is installed.
   let remove: (() => void) | undefined;
   onDestroy(() => remove?.());

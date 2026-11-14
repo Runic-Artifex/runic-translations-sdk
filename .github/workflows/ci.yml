@@ -200,6 +200,40 @@ jobs:
       - name: Generate the maintained document example and verify it in Chromium
         working-directory: packages/web/translations-svelte
         run: bun run --bun test:document-example
+  vite-hmr:
+    name: Vite in-place message updates / Chromium
+    needs: train-feed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/train-feed
+        with:
+          active: ${{ needs.train-feed.outputs.active }}
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.22.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - name: Install the locked Chromium browser
+        working-directory: packages/web/translations-svelte
+        run: |
+          "$GITHUB_WORKSPACE/eng/ci/install-chromium.sh"
+          bun -e 'import { chromium } from "playwright-core"; console.log("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=" + chromium.executablePath())' >> "$GITHUB_ENV"
+      - name: Build the Vite plugin and translations-svelte
+        run: |
+          (cd packages/web/vite-plugin-runic-translations && bun run --bun build)
+          (cd packages/web/translations-svelte && bun run --bun build)
+      - name: Edit messages under a dev server and verify in-place updates in Chromium
+        working-directory: packages/web/translations-svelte
+        run: bun run --bun test:hmr
   rmf2-native-aot:
     name: RMF2 NativeAOT / linux-x64
     needs: train-feed
@@ -448,7 +482,7 @@ jobs:
   verify:
     name: verify
     if: always()
-    needs: [source-checks, train-feed, build-and-test, node-26, inline-browser, rmf2-document-example, rmf2-native-aot, wpf, formatting-windows, formatting-macos, editor-e2e, editor-packed, ide-packaging, vsix]
+    needs: [source-checks, train-feed, build-and-test, node-26, inline-browser, rmf2-document-example, vite-hmr, rmf2-native-aot, wpf, formatting-windows, formatting-macos, editor-e2e, editor-packed, ide-packaging, vsix]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

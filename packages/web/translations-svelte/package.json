@@ -50,7 +50,8 @@
     "test": "bun run --bun build && vitest run test/locale.svelte.test.ts test/message-locale.svelte.test.ts test/locale-hydration.svelte.test.ts test/localization-stress.test.ts test/document.svelte.test.ts && node test/verify-inline-ssr.mjs",
     "pack:check": "bun pm pack --dry-run",
     "test:inline-browser": "node test/verify-inline-ssr.mjs && node test/verify-inline-hydration.mjs && node test/verify-document-hydration.mjs",
-    "test:document-example": "node test/verify-document-example.mjs"
+    "test:document-example": "node test/verify-document-example.mjs",
+    "test:hmr": "node test/verify-hmr.mjs"
   },
   "dependencies": {
     "esm-env": "^1.2.2"

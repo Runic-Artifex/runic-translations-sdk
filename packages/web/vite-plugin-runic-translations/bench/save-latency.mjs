@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 // Measures save-to-update latency of a real Vite dev server: the time from writing a translation
-// source until the plugin has regenerated, validated and invalidated the virtual modules and Vite
-// has sent the HMR update (or full reload) to clients.
+// source until the plugin has regenerated and validated the catalog and Vite has sent the HMR update
+// to clients: for a text edit, the in-place update of the edited message's module.
 //
 //   node bench/save-latency.mjs --tool <dotnet-runic-translations.dll> [--plugin <module>]
 //     [--project <translations directory to copy>] [--samples 10] [--persistent true|false]
 //
 // The default project is the editor's own catalog. The tool is invoked as `dotnet <dll>`; projects
 // using `dotnet tool run` pay additional tool-resolution time on every cold invocation.
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -50,6 +50,9 @@ try {
   await server.environments.client.transformRequest("/main.js");
   await server.environments.client.transformRequest(`virtual:runic-translations/${config.catalog}`);
   const ready = performance.now() - started;
+  // As a page does: load every message module, so the edited one is in the module graph and updates in place.
+  for (const file of await readdir(join(root, ".runic/translations", `${config.catalog}.esm-v5`, "messages")))
+    await server.environments.client.transformRequest(`/.runic/translations/${config.catalog}.esm-v5/messages/${file}`);
 
   const waiters = [];
   const send = server.environments.client.hot.send.bind(server.environments.client.hot);
