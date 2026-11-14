@@ -4,11 +4,10 @@ Runic Translations releases eight NuGet packages together: `Runic.Translations`,
 `Runic.Translations.Build`, `Runic.Translations.CommandLine`, `Runic.Translations.Hosting`, `Runic.Translations.Tooling`,
 `Runic.Translations.Wpf`, `Runic.Translations.Templates`, and
 `dotnet-runic-translations`. It also releases the Vite, Svelte, and SvelteKit
-packages listed in `eng/workspace.json`, and attaches the VS Code and Visual Studio
-extensions (`runic-translations.vsix`, `runic-translations-visualstudio.vsix`) that
-CI builds from the same commit to the GitHub release; they are not published to an
-extension marketplace. The editor is verified with the release source but is not
-released by this workflow.
+packages listed in `eng/workspace.json`. The editor is verified with the release
+source but is not released by this workflow. The VS Code and Visual Studio
+extensions release from [Runic-Artifex/runic-editors](https://github.com/Runic-Artifex/runic-editors)
+on their own schedule; since 0.12.0 a Translations release carries no `.vsix` assets.
 
 ## Release notes
 
@@ -18,61 +17,19 @@ file to `gh release create --notes-file`, and gh puts it above the list of merge
 pull requests that `--generate-notes` adds. Without a notes file the release has
 only the generated list.
 
-## IDE extension versions
+## Release versions
 
-Neither VSIX format accepts a SemVer prerelease label, so CI stamps each extension
-with a version mapped from the `eng/workspace.json` release version when it packages
-it. The committed manifests carry no release number (`tools/vscode-runic-translations/package.json`
-keeps a `0.0.1` placeholder; `source.extension.vsixmanifest` carries the
-`|%CurrentProject%;GetRunicVsixVersion|` build token), so changing the release
-version touches only `eng/workspace.json` and `eng/Versions.props`.
-
-| Release | Visual Studio (`N.N.N.N`) | VS Code (`x.y.z`) | VS Code pre-release |
-| --- | --- | --- | --- |
-| `0.8.0` | `0.8.0.1000` | `0.8.1000` | no |
-| `0.8.1` | `0.8.1.1000` | `0.8.2000` | no |
-| `1.0.0-preview.N` | `1.0.0.N` | `1.0.N` | yes |
-| `1.0.0-rc.N` | `1.0.0.(500 + N)` | `1.0.(500 + N)` | yes |
-| `1.0.0` | `1.0.0.1000` | `1.0.1000` | no |
-
-Releases before 1.0 are plain `0.y.z` versions (see
-[Versions before 1.0](#versions-before-10)), packaged like a final release: no VS
-Code pre-release flag. `-preview.N` and `-rc.N` are for previews and release
-candidates of a coming version from 1.0 on. Visual Studio uses the same mapping as
-the generator's `AnalyzerReleases` headers: the fourth component is the preview
-number, 500 plus the release-candidate number, or 1000 for the final release. VS
-Code folds that component into the patch (`patch × 1000 + revision`) and packages a
-prerelease with `vsce package --pre-release`. Both orders match the release order:
-every preview sorts below every release candidate of the same version, and since a
-final release is a multiple of 1000 and a prerelease never is, no prerelease can
-take a later final release's number.
-
-Only three release version forms can pass CI: a plain `x.y.z`, and `x.y.z-preview.N`
-or `x.y.z-rc.N` with N from 1 to 499. IDE packaging rejects every other prerelease
-label (`-beta`, `-preview.0`, `-rc.500`), build metadata (`+build`) and, because
-Visual Studio reads each component as a 16-bit `System.Version` part, any major,
-minor or patch above 65534; the folded VS Code patch is then at most 65535000. The
-**Validate version** step of **Publish preview** applies the same pattern before it
-looks for a CI run, so a dispatch with another version fails there with that
-message. [`ide-versions.mjs`](ide-versions.mjs) defines the mapping and
-`ide-versions.test.mjs` checks that the Visual Studio project (`GetRunicVsixVersion`)
-and `package.py` agree with it.
-
-- `bun run package` in `tools/vscode-runic-translations` (`package.mjs`) copies the
-  files `vsce ls` would package to a staging directory, stamps the copied
-  `package.json` and packs that, so tracked files are never modified. The stamp
-  sets `version` and `preview`. Every release keeps `"preview": true`, the
-  Marketplace "Preview" label (`GalleryFlags`), because the extensions are a
-  preview product until 2.0 (see [Versioning and support from 1.0](#versioning-and-support-from-10));
-  the label is independent of the pre-release flag. It then checks the identity,
-  `extension/package.json` version and `preview` field, the pre-release flag and the
-  Preview gallery flag of the VSIX; `prepare` checks them again.
-  `node package.mjs <release> [output]` packages another release; CI packages
-  `0.8.0` this way to check the flags of a plain release.
-- The Visual Studio project replaces the manifest token with its
-  `GetRunicVsixVersion` result during the Windows build, and `package.py` fails
-  unless the built VSIX has the mapped version. Set `-p:RunicIdeReleaseVersion=<version>`
-  to build another version locally.
+Only three release version forms can pass **Publish preview**: a plain `x.y.z`, and
+`x.y.z-preview.N` or `x.y.z-rc.N` with N from 1 to 499. Releases before 1.0 are plain
+`0.y.z` versions (see [Versions before 1.0](#versions-before-10)); `-preview.N` and
+`-rc.N` are for previews and release candidates of a coming version from 1.0 on.
+The generator's `AnalyzerReleases` headers map each release onto a four-component
+version: the fourth component is the preview number, 500 plus the
+release-candidate number, or 1000 for the final release, so every preview sorts
+below every release candidate of the same version. No other prerelease label
+(`-beta`, `-preview.0`, `-rc.500`) or build metadata (`+build`) fits that mapping.
+The **Validate version** step applies this pattern before it looks for a CI run, so
+a dispatch with another version fails there.
 
 Set the intended release version in both `eng/Versions.props` and
 `eng/workspace.json`, merge to `main` and wait for that commit's CI push run to
@@ -84,22 +41,18 @@ of these exact files. Its `candidate` job (`contents: read`, `actions: read`, no
 environment) runs `eng/release/ci-artifact.mjs`:
 
 - `find-ci` finds the newest successful `ci.yml` push run on `main` for the
-  dispatched commit, its `runic-translations-packages` artifact and its
-  `rmf2-vscode-vsix` and `rmf2-visualstudio-vsix` artifacts. It fails clearly
-  when there is no such run, the run is still in progress or failed, or an artifact
-  expired (CI keeps them 30 days; rerun all jobs of that CI run to upload them again).
-- `actions/download-artifact` downloads them by id (`artifact-ids`, `run-id`,
+  dispatched commit and its `runic-translations-packages` artifact. It fails clearly
+  when there is no such run, the run is still in progress or failed, or the artifact
+  expired (CI keeps it 30 days; rerun all jobs of that CI run to upload it again).
+- `actions/download-artifact` downloads it by id (`artifact-ids`, `run-id`,
   `github-token`); a re-upload under the same name gets a new id, so it cannot swap the bytes.
 - `prepare` requires exactly the `eng/workspace.json` packages at the requested
-  version, packed from the dispatched commit for this repository, and the two VSIX
-  files with their expected identities, the IDE versions mapped from the requested
-  version and, for VS Code, the matching pre-release flag and the Preview label (`scanVsix`). It records
+  version, packed from the dispatched commit for this repository. It records
   their hashes.
 - `describe` writes `runic-translations-sdk-<version>.cdx.json`, a CycloneDX 1.6
   SBOM of exactly those files (`sbom.py`, standard library only; it reads package metadata
-  and executes nothing). Every file must declare the release version, except that
-  each VSIX must declare its mapped version, passed as `--artifact-version
-  <file>=<version>`. It is deterministic for a commit. The inventory and SBOM
+  and executes nothing). Every file must declare the release version. It is
+  deterministic for a commit. The inventory and SBOM
   are uploaded as the `release-candidate-<run id>` artifact, and their `sha256sum`
   lines are passed to `publish` as the job output `release-sha256`.
 - `publish.mjs publish --dry-run` first applies nuget.org's version rules
@@ -120,15 +73,14 @@ release. Apart from the NuGet push check, it cannot detect missing trusted-publi
 configuration, such as the first publication of a new npm package name (W120-023). Otherwise the `publish` job, the
 only one in the `preview` environment and the only one with `id-token: write`,
 `attestations: write` and `contents: write`, downloads the same artifacts and
-candidate files, checks the files against `release-sha256` and the packages and
-VSIX files against the candidate inventory, requested version and CI run
+candidate files, checks the files against `release-sha256` and the packages
+against the candidate inventory, requested version and CI run
 (`ci-artifact.mjs verify`). Before anything is published it attests those verified
-bytes: `actions/attest-build-provenance` covers every `.nupkg`, npm `.tgz`, both
-VSIX files and the SBOM, and `actions/attest` attaches the SBOM to the packages and
-VSIX files. It repeats every registry lookup and the NuGet push check before the
+bytes: `actions/attest-build-provenance` covers every `.nupkg`, npm `.tgz` and the
+SBOM, and `actions/attest` attaches the SBOM to the packages. It repeats every registry lookup and the NuGet push check before the
 first push, then publishes missing package versions (npm also with
 `--provenance`), creates the GitHub release at the dispatched commit from those
-same packages, the VSIX files and the SBOM (`ci-artifact.mjs release`; a rerun after a partial
+same packages and the SBOM (`ci-artifact.mjs release`; a rerun after a partial
 publication keeps a release of this tag and commit, and for a draft uploads only
 missing assets and publishes it), and then moves npm `latest` to it when the
 version may have it, never to an older version, waiting while npm still answers 401
@@ -267,9 +219,10 @@ runic-sdk's `eng/train/README.md`.
 
 ## Verifying a release
 
-Every package, VSIX file and the SBOM of a release have a signed build-provenance
-attestation from `publish-preview.yml` on `main`; the packages and VSIX files also
-have an SBOM attestation. Verify with the GitHub CLI (`gh auth login` first):
+Every package and the SBOM of a release have a signed build-provenance
+attestation from `publish-preview.yml` on `main`; the packages also have an SBOM
+attestation. Releases up to 0.11 also attached and attested the two `.vsix` files;
+the extensions now release from runic-editors. Verify with the GitHub CLI (`gh auth login` first):
 
 ```sh
 version=0.8.0
@@ -277,10 +230,6 @@ gh release download "v$version" -R Runic-Artifex/runic-translations-sdk
 gh attestation verify "Runic.Translations.$version.nupkg" -R Runic-Artifex/runic-translations-sdk \
   --signer-workflow Runic-Artifex/runic-translations-sdk/.github/workflows/publish-preview.yml
 gh attestation verify "runic-translations-sdk-$version.cdx.json" -R Runic-Artifex/runic-translations-sdk \
-  --signer-workflow Runic-Artifex/runic-translations-sdk/.github/workflows/publish-preview.yml
-gh attestation verify runic-translations.vsix -R Runic-Artifex/runic-translations-sdk \
-  --signer-workflow Runic-Artifex/runic-translations-sdk/.github/workflows/publish-preview.yml
-gh attestation verify runic-translations-visualstudio.vsix -R Runic-Artifex/runic-translations-sdk \
   --signer-workflow Runic-Artifex/runic-translations-sdk/.github/workflows/publish-preview.yml
 # The SBOM attestation (CycloneDX); the release asset runic-translations-sdk-<version>.cdx.json is the same document.
 gh attestation verify "Runic.Translations.$version.nupkg" -R Runic-Artifex/runic-translations-sdk \
@@ -343,8 +292,8 @@ baseline. See [Public API](../../CONTRIBUTING.md#public-api).
 Translations goes through `1.0.0-rc.N` to `1.0.0` in the release train, after
 Command Line and before Runic SDK. An rc is a routine release, except:
 
-- **Validate version** accepts `1.0.0-rc.N` and `1.0.0`; the IDE extensions map them
-  as [IDE extension versions](#ide-extension-versions) describes.
+- **Validate version** accepts `1.0.0-rc.N` and `1.0.0` (see
+  [Release versions](#release-versions)).
 - After an rc, move the PublicAPI entries as above, but leave
   `RunicTranslationsPackageValidationBaselineVersion` at the last `0.y.z` release:
   from 1.0 the baseline is never a prerelease (`ci-artifact.test.mjs` fails
@@ -372,12 +321,9 @@ Releases before 1.0 use plain `0.y.z` versions, as Runic SDK does from 0.9.0
   or adds. Only the latest minor gets fixes.
 - Releases are still previews: the GitHub release is marked as a prerelease, and
   npm `latest` moves to every release (the publish workflow keeps its name
-  `publish-preview.yml`, to which trusted publishing is bound). A plain `0.y.z` is
-  packaged as a final IDE release, without the VS Code pre-release flag, since the
-  VSIX files are attached to the GitHub release and not published to a marketplace.
+  `publish-preview.yml`, to which trusted publishing is bound).
 - Translations has no preview packages: every package is stable-tier and follows
-  these rules. The IDE extensions and the `lsp` command are the exception listed
-  below.
+  these rules. The `lsp` command is the exception listed below.
 
 ## Versioning and support from 1.0
 
@@ -391,7 +337,7 @@ same policy. For Translations:
 - Every NuGet and npm package shares the version in `eng/workspace.json` and is
   stable from 1.0.0. From 1.0 npm previews go to the `preview` dist-tag and
   `latest` moves only to stable versions. A 1.0 release candidate is published as
-  `1.0.0-rc.N` ([IDE extension versions](#ide-extension-versions)). The Translations
+  `1.0.0-rc.N` ([Release versions](#release-versions)). The Translations
   Editor is a separate product on its own timeline and is not released here.
 - `Runic.Translations.Tooling` is a stable package. Its public API is the
   compiler (`TranslationCompiler` and its source, options, diagnostic and
@@ -402,10 +348,10 @@ same policy. For Translations:
   be published later as additive API. There is no experimental API family.
 - Outside the 1.0 compatibility rules, until the production language server (2.0):
   the `lsp` command of `dotnet-runic-translations` (hidden from help) with its
-  protocol subset and custom methods, and the VS Code and Visual Studio extensions
-  with their commands and settings. The extensions keep the "Preview" label on every
-  release and may change in a minor release. Both extensions share the release
-  version and are attached to every GitHub release.
+  protocol subset and custom methods (see
+  [the language server](../../docs/guides/translations/language-server.md)). The VS Code and
+  Visual Studio extensions that launch it are versioned and released by
+  [runic-editors](https://github.com/Runic-Artifex/runic-editors), not here.
 - `Runic.Translations.CommandLine` depends on Runic Command Line. Translations
   ships 1.0.0 after Command Line 1.0.0 and before Runic SDK 1.0.0 in one release
   train. Until 1.0 it references the Command Line minor it was tested with

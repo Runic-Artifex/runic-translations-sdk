@@ -29,10 +29,12 @@ ask otherwise.
 
 ## Verifying releases
 
-Every published NuGet package, npm package and GitHub release asset, including
-the VS Code and Visual Studio VSIX files, has a signed build-provenance
-attestation, and each release has a CycloneDX SBOM that is attached to the
-release and attested for its packages and extensions. Verify a file with
+Every published NuGet package, npm package and GitHub release asset has a signed
+build-provenance attestation, and each release has a CycloneDX SBOM that is
+attached to the release and attested for its packages. The VS Code and Visual
+Studio extensions release from
+[runic-editors](https://github.com/Runic-Artifex/runic-editors) (until 0.11.0
+their VSIX files were attested release assets here). Verify a file with
 `gh attestation verify <file> -R Runic-Artifex/runic-translations-sdk --signer-workflow Runic-Artifex/runic-translations-sdk/.github/workflows/publish-preview.yml`.
 The attestation shows that the publish workflow of this repository, which runs
 only on `main`, published those bytes. It does not build them: it takes the

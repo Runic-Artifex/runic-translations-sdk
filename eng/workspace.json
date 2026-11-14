@@ -52,8 +52,6 @@
     }
   ],
   "editor": {
-    "project": "apps/translations-editor/Runic.Translations.Editor.csproj",
-    "vscode": "tools/vscode-runic-translations",
-    "visualStudioVerification": "tools/visualstudio-runic-translations/package.py"
+    "project": "apps/translations-editor/Runic.Translations.Editor.csproj"
   }
 }

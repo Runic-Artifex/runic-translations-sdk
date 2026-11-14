@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   # Read-only: finds the successful CI push run for this commit, verifies its
-  # packages and VSIX files, writes their SBOM and checks NuGet, npm, tag, release
+  # packages, writes their SBOM and checks NuGet, npm, tag, release
   # and npm latest. A dry run ends here and in the train gate; this job never holds OIDC, attestation
   # or write permissions.
   candidate:
@@ -35,7 +35,6 @@ jobs:
     outputs:
       ci-run-id: ${{ steps.ci.outputs.run-id }}
       artifact-id: ${{ steps.ci.outputs.artifact-id }}
-      vsix-artifact-ids: ${{ steps.ci.outputs.vsix-artifact-ids }}
       # sha256sum lines of every candidate file; publish checks its download against them.
       release-sha256: ${{ steps.describe.outputs.sha256 }}
       sbom: ${{ steps.describe.outputs.sbom }}
@@ -56,14 +55,12 @@ jobs:
         run: |
           set -euo pipefail
           version="$VERSION"
-          # The IDE extension versions cannot express another prerelease label, so CI never packages one
-          # (eng/release/ide-versions.mjs, the same pattern; README "IDE extension versions").
+          # The analyzer release headers (AnalyzerReleases.Shipped.md) map a release onto a four-component
+          # version that cannot express another prerelease label (README "Release versions").
           if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(preview|rc)\.([1-9][0-9]?|[1-4][0-9]{2}))?$ ]]; then
-            echo "::error::Version '$version' is not a plain x.y.z, x.y.z-preview.N or x.y.z-rc.N (1 <= N <= 499); IDE extension packaging rejects every other version, so CI cannot have built it."
+            echo "::error::Version '$version' is not a plain x.y.z, x.y.z-preview.N or x.y.z-rc.N (1 <= N <= 499)."
             exit 1
           fi
-          # Also enforces the 65534 component limit and prints the IDE versions this release maps to.
-          bun eng/release/ide-versions.mjs "$version"
           test "$version" = "$(jq -r .version eng/workspace.json)"
           test "$version" = "$(sed -n 's:.*<RunicTranslationsVersion>\(.*\)</RunicTranslationsVersion>.*:\1:p' eng/Versions.props)"
       - name: Read the Runic Command Line release of this train
@@ -80,25 +77,18 @@ jobs:
           path: artifacts/packages
           run-id: ${{ steps.ci.outputs.run-id }}
           github-token: ${{ github.token }}
-      # Two ids: each VSIX artifact is extracted into artifacts/vsix/<artifact name>.
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          artifact-ids: ${{ steps.ci.outputs.vsix-artifact-ids }}
-          path: artifacts/vsix
-          run-id: ${{ steps.ci.outputs.run-id }}
-          github-token: ${{ github.token }}
-      - name: Verify packages and VSIX files against the version and commit
+      - name: Verify packages against the version and commit
         id: prepare
         env:
           CI_RUN_ID: ${{ steps.ci.outputs.run-id }}
         run: |
           mkdir -p artifacts/release
-          bun eng/release/ci-artifact.mjs prepare artifacts/packages "$VERSION" "$CI_RUN_ID" artifacts/release/packages.json artifacts/vsix
+          bun eng/release/ci-artifact.mjs prepare artifacts/packages "$VERSION" "$CI_RUN_ID" artifacts/release/packages.json
       # Standard library only: the SBOM generator installs and executes nothing from the packages.
       - name: Describe the release (CycloneDX SBOM)
         id: describe
         run: |
-          bun eng/release/ci-artifact.mjs describe artifacts/packages artifacts/vsix "$VERSION" artifacts/release
+          bun eng/release/ci-artifact.mjs describe artifacts/packages "$VERSION" artifacts/release
           {
             echo 'sha256<<SHA256'
             (cd artifacts/release && sha256sum -- *)
@@ -180,12 +170,6 @@ jobs:
           github-token: ${{ github.token }}
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          artifact-ids: ${{ needs.candidate.outputs.vsix-artifact-ids }}
-          path: artifacts/vsix
-          run-id: ${{ needs.candidate.outputs.ci-run-id }}
-          github-token: ${{ github.token }}
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
           name: release-candidate-${{ github.run_id }}
           path: artifacts/release
       - name: Check the candidate files against the candidate job
@@ -195,10 +179,10 @@ jobs:
         run: |
           test -n "$RELEASE_SHA256"
           printf '%s\n' "$RELEASE_SHA256" | sha256sum --check --strict
-      - name: Verify packages and VSIX files against the candidate inventory
+      - name: Verify packages against the candidate inventory
         env:
           CI_RUN_ID: ${{ needs.candidate.outputs.ci-run-id }}
-        run: bun eng/release/ci-artifact.mjs verify artifacts/packages artifacts/release/packages.json "$VERSION" "$CI_RUN_ID" artifacts/vsix
+        run: bun eng/release/ci-artifact.mjs verify artifacts/packages artifacts/release/packages.json "$VERSION" "$CI_RUN_ID"
       # Attest the verified bytes before anything is published: every package and release asset.
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
@@ -206,7 +190,6 @@ jobs:
           subject-path: |
             artifacts/packages/nuget/*.nupkg
             artifacts/packages/npm/*.tgz
-            artifacts/vsix/*/*.vsix
             artifacts/release/${{ needs.candidate.outputs.sbom }}
       - name: Attest the SBOM
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
@@ -214,7 +197,6 @@ jobs:
           subject-path: |
             artifacts/packages/nuget/*.nupkg
             artifacts/packages/npm/*.tgz
-            artifacts/vsix/*/*.vsix
           sbom-path: artifacts/release/${{ needs.candidate.outputs.sbom }}
       - id: nuget-login
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
@@ -229,7 +211,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SBOM: ${{ needs.candidate.outputs.sbom }}
-        run: bun eng/release/ci-artifact.mjs release "$VERSION" artifacts/packages artifacts/vsix "artifacts/release/$SBOM"
+        run: bun eng/release/ci-artifact.mjs release "$VERSION" artifacts/packages "artifacts/release/$SBOM"
       # Only a stable version or a 0.y.z release moves latest; 1.0.0-rc.N stays on the preview dist-tag.
       - name: Move npm latest to this release
         run: bun eng/release/publish.mjs tag-latest "$VERSION"
