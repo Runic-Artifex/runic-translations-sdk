@@ -155,7 +155,7 @@ test("requests from beyond loopback, or from another origin, are refused unless 
   for (const address of ["100.100.1.2", "192.168.1.20", "fd7a:115c:a1e0::1", "::ffff:10.0.0.1", null]) {
     const refused = await invoke(middleware, { ...read, address });
     assert.equal(refused.status, 403, String(address));
-    assert.match(refused.body.detail, /RUNIC_TRANSLATIONS_EDIT_ALLOW/);
+    assert.match(refused.body.detail, /RUNIC_DEV_ALLOW or RUNIC_TRANSLATIONS_EDIT_ALLOW/);
   }
   assert.match(warnings[0], /refused a request from 100\.100\.1\.2/);
   // X-Forwarded-For is never trusted.
@@ -186,6 +186,8 @@ test("the plugin validates the editing options and the environment variable", as
 
   const root = await mkdtemp(join(tmpdir(), "runic-vite-edit-"));
   const previous = process.env.RUNIC_TRANSLATIONS_EDIT_ALLOW;
+  const previousShared = process.env.RUNIC_DEV_ALLOW;
+  delete process.env.RUNIC_DEV_ALLOW;
   try {
     const { plugin, server, used } = await fakeServer(root, {});
     process.env.RUNIC_TRANSLATIONS_EDIT_ALLOW = "10.0.0.0/8 nope/1";
@@ -195,12 +197,27 @@ test("the plugin validates the editing options and the environment variable", as
     next.plugin.configureServer(next.server);
     assert.equal(next.used.length, 1, "mounted under vite dev");
     assert.match(next.infos.join("\n"), /accepts requests from loopback and 10\.0\.0\.0\/8/);
+    // RUNIC_DEV_ALLOW, the setting vite-plugin-runic shares, adds to the list as well and is validated under its own name.
+    process.env.RUNIC_DEV_ALLOW = "100.64.0.0/10,laptop.tailnet.ts.net";
+    const shared = await fakeServer(root, {});
+    shared.plugin.configureServer(shared.server);
+    assert.match(shared.infos.join("\n"), /accepts requests from loopback and 100\.64\.0\.0\/10, laptop\.tailnet\.ts\.net, 10\.0\.0\.0\/8/);
+    delete process.env.RUNIC_TRANSLATIONS_EDIT_ALLOW;
+    process.env.RUNIC_DEV_ALLOW = "100.64.0.0/10";
+    const sharedOnly = await fakeServer(root, {});
+    sharedOnly.plugin.configureServer(sharedOnly.server);
+    assert.match(sharedOnly.infos.join("\n"), /accepts requests from loopback and 100\.64\.0\.0\/10$/m);
+    process.env.RUNIC_DEV_ALLOW = "100.64.0.0/40";
+    const invalid = await fakeServer(root, {});
+    assert.throws(() => invalid.plugin.configureServer(invalid.server), /RUNIC_DEV_ALLOW: '100\.64\.0\.0\/40' is not a network/);
+    delete process.env.RUNIC_DEV_ALLOW;
     const off = await fakeServer(root, { inPageEditing: false });
     off.plugin.configureServer(off.server);
     assert.equal(off.used.length, 0, "inPageEditing: false mounts nothing");
     assert.equal(used.length, 0);
   } finally {
     if (previous === undefined) delete process.env.RUNIC_TRANSLATIONS_EDIT_ALLOW; else process.env.RUNIC_TRANSLATIONS_EDIT_ALLOW = previous;
+    if (previousShared === undefined) delete process.env.RUNIC_DEV_ALLOW; else process.env.RUNIC_DEV_ALLOW = previousShared;
     await rm(root, { recursive: true, force: true });
   }
 });
