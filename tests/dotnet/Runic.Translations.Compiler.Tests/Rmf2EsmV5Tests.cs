@@ -697,7 +697,13 @@ internal sealed class Rmf2EsmV5Tests
         Assert.True(Module("plural").Contains("JSON.parse(", StringComparison.Ordinal), Module("plural"));
         Assert.True(Module("count").Contains("JSON.parse(", StringComparison.Ordinal), Module("count"));
         foreach (TranslationGeneratedOutput output in outputs.Where(output => output.RelativePath.Contains("/messages/r_", StringComparison.Ordinal)))
+        {
             Assert.True(!output.Text.Contains("\\n  ", StringComparison.Ordinal), output.RelativePath + " contains indented JSON.");
+            // The anchor the Vite plugin's development server rewrites (see DevelopmentUpdateAnchor), for every compact form.
+            Assert.Equal(output.Text.IndexOf("const messages = /* @__PURE__ */ (() => {", StringComparison.Ordinal),
+                output.Text.LastIndexOf("const messages = /* @__PURE__ */ (() => {", StringComparison.Ordinal), output.RelativePath);
+            Assert.True(output.Text.Contains("const messages = /* @__PURE__ */ (() => {", StringComparison.Ordinal), output.RelativePath);
+        }
 
         string directory = Write(outputs);
         try
@@ -731,6 +737,30 @@ internal sealed class Rmf2EsmV5Tests
             Run("bun", [script], directory);
         }
         finally { Directory.Delete(directory, true); }
+    }
+
+    // The Vite plugin's development server makes each message module self-accepting by rewriting this one line
+    // (vite-plugin-runic-translations src/hmr.ts, messagesAnchor); it reloads instead when the line is missing or repeated.
+    [Test, DisplayName("RMF2 v5 ESM message modules hold their table behind the development-update anchor exactly once")]
+    public void DevelopmentUpdateAnchor()
+    {
+        const string anchor = "const messages = /* @__PURE__ */ (() => {";
+        // The corpus (selectors, locals, inline markup) and the document example (document content, links, actions).
+        string example = RepositoryPaths.Resolve("specs", "translations", "examples", "rmf2-document");
+        Rmf2ProjectCompilation document = TranslationCompiler.CompileRmf2ProjectV5(
+            new TranslationSource("translations/runic.json", File.ReadAllBytes(Path.Combine(example, "runic.json"))),
+            [new("translations/en.rmf2", File.ReadAllBytes(Path.Combine(example, "en.rmf2"))), new("translations/de.rmf2", File.ReadAllBytes(Path.Combine(example, "de.rmf2")))]);
+        Assert.True(document.Success, string.Join("; ", document.Diagnostics.Select(item => item.Message)));
+        TranslationGeneratedOutput[] modules = TranslationOutputRenderer.RenderRmf2V5EsmModules(Fixture())
+            .Concat(TranslationOutputRenderer.RenderRmf2V5EsmModules(document.Project!))
+            .Where(output => output.RelativePath.Contains("/messages/r_", StringComparison.Ordinal)).ToArray();
+        Assert.True(modules.Length >= 3, "the corpus and the document example have message modules");
+        foreach (TranslationGeneratedOutput module in modules)
+        {
+            int count = 0;
+            for (int at = module.Text.IndexOf(anchor, StringComparison.Ordinal); at >= 0; at = module.Text.IndexOf(anchor, at + anchor.Length, StringComparison.Ordinal)) count++;
+            Assert.Equal(1, count, module.RelativePath + " holds the anchor " + count + " times.");
+        }
     }
 
     internal static Rmf2ProjectV5 CompileProject(string id, string baseLocale, IReadOnlyList<string> locales,

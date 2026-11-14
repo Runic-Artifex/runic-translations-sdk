@@ -8,6 +8,10 @@ import type { HotUpdateOptions, Logger, Plugin, ViteDevServer } from "vite";
 import { CompilerUnavailable, PersistentCompiler } from "./compiler-service.js";
 import { composeDeclarationMap, readMessagesDeclarationMap, writeDeclarationMap, type DeclarationCopy } from "./declaration-map.js";
 import { discoverDependencyCatalogs, type DependencyCatalog } from "./dependencies.js";
+import {
+  classify, devClientCode, devClientId, devClientSpecifier, hasMessagesAnchor, messageModulePattern, selfAccepting, withoutSourceHash,
+  type CatalogSnapshot, type Classification,
+} from "./hmr.js";
 
 interface ApplicationSettings {
   readonly locales?: readonly string[];
@@ -125,6 +129,14 @@ interface ModuleGraph<Module> {
 interface Change {
   readonly catalogs: readonly string[];
   readonly generatedPaths: ReadonlySet<string>;
+  /** What the change means for an open page; a reload unless a dev server compared the regenerated files. */
+  readonly update: Classification;
+}
+
+/** The hot channel and module graph of one Vite environment, as hotUpdate sees them. */
+interface HotEnvironment {
+  readonly moduleGraph: ModuleGraph<unknown>;
+  readonly hot?: { send(payload: { readonly type: "full-reload"; readonly path: string }): void };
 }
 
 const prefix = "\0virtual:runic-translations/";
@@ -170,7 +182,7 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
   let dependencyCatalogs: readonly DependencyCatalog[] = [];
   let dependencyEntries = new Map<string, Entries>();
   let dependencyPaths: ReadonlySet<string> = new Set();
-  let dependencyRegeneration: Promise<void> = Promise.resolve();
+  let dependencyRegeneration: Promise<unknown> = Promise.resolve();
   // The settings the dependency catalogs were last generated with, to regenerate when runic.json changes them.
   let dependencySettingsKey: string | undefined;
   let dependencyWarnings: readonly string[] = [];
@@ -187,8 +199,18 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
   let catalog: string | undefined;
   let entries: Entries | undefined;
   let generatedPaths: ReadonlySet<string> = new Set();
+  // Development only: the generated files of the last validated regeneration of the catalog and of the dependency
+  // catalogs, which the next regeneration is compared with, and the message modules the transform could not make
+  // self-accepting.
+  let catalogSnapshot: CatalogSnapshot | undefined;
+  let dependencySnapshots: readonly CatalogSnapshot[] | undefined;
+  const notSelfAccepting = new Set<string>();
   let compilation: Promise<unknown> = Promise.resolve();
-  let lastChange: { readonly key: string; readonly change: Promise<Change> } | undefined;
+  // The compiled change of each file event, by path and timestamp, which Vite's environments (client, ssr, ...) share.
+  // Vite handles the events of different files concurrently, so several are in flight at once.
+  const changes = new Map<string, Promise<Change>>();
+  // The latest event of each path, so a settle check of an earlier event leaves the check to the later one.
+  const latestEvents = new Map<string, object>();
   let logger: Logger | undefined;
   // reportUnused logs once per build environment, not once per output: `build.rollupOptions.output` may list several,
   // and library mode bundles each of `build.lib.formats` separately. A watch rebuild reports again.
@@ -223,7 +245,9 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
 
   async function refresh(nextProject?: ProjectSources): Promise<void> {
     const nextManifestPath = nextProject?.manifest ?? manifestPath;
-    const { document, root, assets, entries: nextEntries, generatedPaths: nextGeneratedPaths, typesEntry } = await loadManifest(nextManifestPath);
+    const loaded = await loadManifest(nextManifestPath);
+    const { document, root, assets, entries: nextEntries, generatedPaths: nextGeneratedPaths, typesEntry } = loaded;
+    const nextSnapshot = server ? snapshotOf(loaded) : undefined;
     if (typeDeclarationsPath) {
       const safeDeclarationsPath = await safeTypeDeclarationsPath(typeDeclarationsPath, nextManifestPath, assets, typeDeclarationsBase);
       await writeTypeDeclarations(safeDeclarationsPath, document.catalog, root, assets, typesEntry, dependencyDeclarations(safeDeclarationsPath));
@@ -239,6 +263,7 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
     catalog = document.catalog;
     generatedPaths = nextGeneratedPaths;
     entries = nextEntries;
+    catalogSnapshot = nextSnapshot;
   }
 
   function virtualId(kind: EntryKind, id = catalog): string {
@@ -316,9 +341,12 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
 
   // Compiles every dependency catalog with the application's overrides and locales into one directory with one shared
   // runtime, then checks each regenerated manifest. A failure keeps the last validated catalogs.
-  function regenerateDependencies(): Promise<void> {
-    const next = dependencyRegeneration.catch(() => undefined).then(async () => {
-      if (options.dependencies !== "auto") return;
+  // Resolves with the generated paths and snapshots before this regeneration, taken in turn, so concurrent changes compare
+  // each regeneration with the one before it.
+  function regenerateDependencies(): Promise<DependencyGeneration> {
+    const next = dependencyRegeneration.catch(() => undefined).then(async (): Promise<DependencyGeneration> => {
+      const before: DependencyGeneration = { paths: dependencyPaths, snapshots: dependencySnapshots };
+      if (options.dependencies !== "auto") return before;
       const settings = applicationSettings();
       const { locales, overrides } = settings;
       // As RTR0104 in a .NET build: every override must name a catalog that a dependency ships, from one of the packages it
@@ -343,10 +371,11 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       }
       if (dependencyCatalogs.length === 0) {
         dependencySettingsKey = settingsKey(settings);
-        return;
+        return before;
       }
       const entriesByCatalog = new Map<string, Entries>();
       const paths = new Set<string>();
+      const snapshots: CatalogSnapshot[] = [];
       for (const dependency of dependencyCatalogs) {
         const directory = overrides.get(dependency.catalog)?.directory;
         await execFileAsync(tool.command, [...tool.commandArguments, "generate", "--project", dependency.project, "--output", dependencyOutput, "--emit-esm", "--shared-runtime",
@@ -370,11 +399,14 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
         }
         entriesByCatalog.set(dependency.catalog, loaded.entries);
         for (const path of loaded.generatedPaths) paths.add(path);
+        if (server) snapshots.push(snapshotOf(loaded));
       }
       dependencyEntries = entriesByCatalog;
       dependencyPaths = paths;
+      dependencySnapshots = server ? snapshots : undefined;
       dependencySettingsKey = settingsKey(settings);
       server?.watcher.add(dependencyWatchPaths(settings));
+      return before;
     });
     dependencyRegeneration = next;
     return next;
@@ -424,9 +456,8 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
     const previous = new Set(dependencyPaths);
     const previousCatalogs = [...dependencyEntries.keys()];
     void regenerateDependencies().then(() => {
-      const change = { catalogs: previousCatalogs, generatedPaths: new Set([...previous, ...dependencyPaths]) };
-      for (const graph of graphsOf(target)) invalidate(graph, change);
-      target.ws.send({ type: "full-reload" });
+      const change = { catalogs: previousCatalogs, generatedPaths: new Set([...previous, ...dependencyPaths]), update: reload("runic.json changed the overrides or locales of the dependency catalogs") };
+      reloadServer(target, change);
     }).catch((error: Error) => {
       target.ws.send({ type: "error", err: { message: error.message, stack: error.stack ?? "", plugin: "runic-translations" } });
     });
@@ -444,21 +475,83 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
   }
 
   // Regenerates (project mode) and revalidates the manifest once per file change. Changes are
-  // serialized; a failed change keeps the last validated catalog.
+  // serialized; a failed change keeps the last validated catalog, and its snapshot, which the next change is compared with.
   function prepare(path: string): Promise<Change> | undefined {
     if (!isRelevant(path)) return undefined;
     const source = isSource(path);
     const operation = updates.catch(() => undefined).then(async () => {
-      const previous: Change = { catalogs: catalog ? [catalog] : [], generatedPaths };
+      const previous = { catalogs: catalog ? [catalog] : [], generatedPaths, snapshot: catalogSnapshot };
       const nextProject = compiler && source ? await compile() : undefined;
       await refresh(nextProject);
-      return { catalogs: [...new Set([...previous.catalogs, catalog!])], generatedPaths: new Set([...previous.generatedPaths, ...generatedPaths]) };
+      const update = compiler && path === compiler.config ? reload("runic.json changed")
+        : await classified(previous.snapshot && catalogSnapshot ? classify([previous.snapshot], [catalogSnapshot]) : undefined);
+      return { catalogs: [...new Set([...previous.catalogs, catalog!])], generatedPaths: new Set([...previous.generatedPaths, ...generatedPaths]), update };
     });
     updates = operation;
     return operation;
   }
 
-  function invalidate<Module>(graph: ModuleGraph<Module>, change: Change, timestamp?: number): Module[] {
+  function reload(reason: string): Classification {
+    return { kind: "reload", reason };
+  }
+
+  // An in-place change needs every changed message module to update itself: the transform made the loaded one
+  // self-accepting, and the regenerated one still has the shape it rewrites.
+  async function classified(update: Classification | undefined): Promise<Classification> {
+    if (!update) return reload("the catalog was not compared with its previous generation");
+    if (update.kind !== "in-place") return update;
+    for (const module of update.modules)
+      if (notSelfAccepting.has(module) || !hasMessagesAnchor(await readFile(module, "utf8")))
+        return reload(`${basename(module)} cannot update itself: it does not have the shape of a generated message module`);
+    return update;
+  }
+
+  function logReload(reason: string): void {
+    const message = `[runic-translations] page reload: ${reason}`;
+    if (logger) logger.info(message, { timestamp: true });
+    else console.info(message);
+  }
+
+  // Applies a compiled change to one environment: in place, the changed message modules get a new HMR timestamp and are
+  // returned (they accept themselves, so Vite sends one js-update each); a reload invalidates everything and sends
+  // full-reload explicitly, so a module that happens to accept the virtual modules cannot keep a half-updated page.
+  function apply(environment: HotEnvironment, change: Change, timestamp: number, first: boolean): unknown[] {
+    const graph = environment.moduleGraph;
+    const { update } = change;
+    if (update.kind === "none") return [];
+    if (update.kind === "in-place") {
+      const seen = new Set<unknown>(), modules: unknown[] = [];
+      for (const file of update.modules)
+        for (const module of graph.getModulesByFile(file) ?? []) {
+          graph.invalidateModule(module, seen, timestamp, true);
+          modules.push(module);
+        }
+      return modules;
+    }
+    invalidate(graph, change, timestamp);
+    if (first) logReload(update.reason);
+    if (environment.hot) environment.hot.send({ type: "full-reload", path: "*" });
+    else if (first) server?.ws.send({ type: "full-reload", path: "*" });
+    return [];
+  }
+
+  // A change the watcher reported outside hotUpdate (an added or removed file, a runic.json setting): reload every
+  // environment.
+  function reloadServer(target: ViteDevServer, change: Change): void {
+    const environments = (target as Partial<ViteDevServer>).environments;
+    if (change.update.kind === "reload") logReload(change.update.reason);
+    if (!environments) {
+      invalidate(target.moduleGraph as ModuleGraph<unknown>, change);
+      target.ws.send({ type: "full-reload", path: "*" });
+      return;
+    }
+    for (const environment of Object.values(environments)) {
+      invalidate(environment.moduleGraph as ModuleGraph<unknown>, change);
+      environment.hot.send({ type: "full-reload", path: "*" });
+    }
+  }
+
+  function invalidate<Module>(graph: ModuleGraph<Module>, change: Pick<Change, "catalogs" | "generatedPaths">, timestamp?: number): Module[] {
     const modules = change.catalogs.flatMap(id => entryKinds.map(kind => graph.getModuleById(`${prefix}${id}/${kind}`)))
       .filter((module): module is Module => module !== undefined);
     // Generated dependencies can keep transformed code after a virtual re-export is invalidated.
@@ -474,9 +567,48 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
     return modules;
   }
 
-  function graphsOf(target: ViteDevServer): ModuleGraph<unknown>[] {
-    const environments = (target as Partial<ViteDevServer>).environments;
-    return environments ? Object.values(environments).map(environment => environment.moduleGraph as ModuleGraph<unknown>) : [target.moduleGraph as ModuleGraph<unknown>];
+  // The watcher reports only the first change of a file within 50 ms (chokidar's throttle) and never the later ones, so a
+  // save that follows another within that time, after the compiler read the file, would be lost. Once the change is
+  // handled and that time has passed, a file that differs from what it was before the change is reported again, so the
+  // last save always wins. A later event of the same file does its own check.
+  function settle(path: string, before: string, change: Promise<unknown>): void {
+    const arrived = Date.now(), event = {};
+    latestEvents.set(path, event);
+    void change.catch(() => undefined).then(() => {
+      const timer = setTimeout(() => {
+        if (latestEvents.get(path) !== event || !server || fingerprint(path) === before) return;
+        latestEvents.delete(path);
+        server.watcher.emit("change", path);
+      }, Math.max(0, arrived + watcherThrottle - Date.now()));
+      timer.unref?.();
+    });
+  }
+
+  function developmentTransform(code: string, id: string): { code: string; map: null } | null {
+    const path = resolve(id.replace(/[?#].*$/, ""));
+    let result = code;
+    if (!compiler && !pseudoLocales && generatedPaths.has(path)) result = withoutPseudoLocales(result);
+    if (isMessageModule(path)) {
+      const accepting = selfAccepting(result);
+      if (accepting === undefined) notSelfAccepting.add(path);
+      else {
+        notSelfAccepting.delete(path);
+        result = accepting;
+      }
+    }
+    return result === code ? null : { code: result, map: null };
+  }
+
+  // A generated declaration file, or its declaration map (`.d.ts.map`, written next to it for editor navigation).
+  function isGeneratedDeclaration(path: string): boolean {
+    const declaration = path.endsWith(".map") ? path.slice(0, -".map".length) : path;
+    return /\.d\.[cm]?ts$/.test(declaration) &&
+      (declaration === typeDeclarationsPath || isWithin(applicationOutput, declaration) || isWithin(dirname(manifestPath), declaration));
+  }
+
+  // A generated message module of the catalog or of a dependency catalog, which the dev server makes self-accepting.
+  function isMessageModule(path: string): boolean {
+    return (generatedPaths.has(path) || dependencyPaths.has(path)) && messageModulePattern.test(`${basename(dirname(path))}/${basename(path)}`);
   }
 
   return {
@@ -485,14 +617,18 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
 
     // dependencies: "auto": Vite must load the libraries through this plugin, so it does not pre-bundle them in development
     // or leave them to Node during server rendering.
-    config(config) {
-      if (options.dependencies !== "auto") return undefined;
+    config(config, environment) {
+      // The dev server does not watch the generated declarations: the plugin writes them and needs no event for them,
+      // and a framework plugin that reloads on any .d.ts change (Analog) would turn every edit into a page reload.
+      const watch = environment?.command === "serve" && config.server?.watch !== null
+        ? { server: { watch: { ignored: [(path: string) => isGeneratedDeclaration(resolve(path))] } } } : undefined;
+      if (options.dependencies !== "auto") return watch;
       // The nearest package.json at or above the Vite root (which may be a subdirectory such as src).
       const discovery = discoverDependencyCatalogs(resolve(options.cwd ?? process.cwd(), config.root ?? "."));
       dependencyCatalogs = discovery.catalogs;
       dependencyWarnings = discovery.warnings;
       const names = [...new Set(dependencyCatalogs.map(dependency => dependency.packageName))];
-      return names.length === 0 ? undefined : { optimizeDeps: { exclude: names }, ssr: { noExternal: names } };
+      return names.length === 0 ? watch : { ...watch, optimizeDeps: { exclude: names }, ssr: { noExternal: names } };
     },
 
     configResolved(config) {
@@ -520,9 +656,8 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
         if (isDependencySource(resolve(path))) {
           const previous = new Set(dependencyPaths);
           void regenerateDependencies().then(() => {
-            const change = { catalogs: [], generatedPaths: new Set([...previous, ...dependencyPaths]) };
-            for (const graph of graphsOf(value)) invalidate(graph, change);
-            value.ws.send({ type: "full-reload" });
+            reloadServer(value, { catalogs: [], generatedPaths: new Set([...previous, ...dependencyPaths]),
+              update: reload(`a source of a dependency catalog was added or removed (${basename(path)})`) });
           }).catch((error: Error) => {
             value.ws.send({ type: "error", err: { message: error.message, stack: error.stack ?? "", plugin: "runic-translations" } });
           });
@@ -531,8 +666,7 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
         const pending = prepare(resolve(path));
         if (!pending) return;
         void pending.then(change => {
-          for (const graph of graphsOf(value)) invalidate(graph, change);
-          value.ws.send({ type: "full-reload" });
+          reloadServer(value, { ...change, update: reload(`a translation source was added or removed (${basename(path)})`) });
         }).catch((error: Error) => {
           value.ws.send({ type: "error", err: { message: error.message, stack: error.stack ?? "", plugin: "runic-translations" } });
         });
@@ -591,6 +725,8 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
     },
 
     async resolveId(id, importer) {
+      // The dev client, imported only by message modules the dev server made self-accepting.
+      if (id === devClientSpecifier) return devClientId;
       if (!entries) await refresh();
       for (const name of [catalog, ...dependencyEntries.keys()]) {
         if (id === `virtual:runic-translations/${name}` || id === `virtual:runic-translations/${name}/messages`)
@@ -614,6 +750,7 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
     },
 
     async load(id) {
+      if (id === devClientId) return devClientCode;
       if (!entries) await refresh();
       for (const kind of entryKinds)
         if (id === virtualId(kind)) return `export * from ${JSON.stringify(toVitePath(entries![kind]))};\n`;
@@ -625,7 +762,11 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
 
     // Manifest mode: the generated directory may come from a development build (a Debug dotnet build) that added the
     // pseudo-locales. Unless they are on (Vite's development mode, or the option), they are taken out of the bundle.
+    //
+    // With a dev server, generated message modules also accept themselves (see hmr.ts), so an edited message updates in
+    // place. A build has no dev server and never reaches that branch.
     transform(code, id) {
+      if (server) return developmentTransform(code, id);
       if (compiler || pseudoLocales) return null;
       const path = resolve(id.replace(/[?#].*$/, ""));
       if (!generatedPaths.has(path)) return null;
@@ -639,38 +780,60 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       const path = resolve(update.file);
       if (compiler && isWithin(compiler.output, path)) return [];
       if (isWithin(dependencyOutput, path)) return [];
-      // A library source or an application override of a dependency catalog: regenerate the dependencies and reload.
-      if (isDependencySource(path)) {
-        const key = `${path}\0${update.timestamp}`;
-        if (lastChange?.key !== key) {
-          const previous = new Set(dependencyPaths);
-          const change = regenerateDependencies().then(() => ({ catalogs: [], generatedPaths: new Set([...previous, ...dependencyPaths]) }));
-          lastChange = { key, change };
-          void change.then(() => server?.ws.send({ type: "full-reload" }), () => undefined);
-        }
-        try { return invalidate(this.environment.moduleGraph, await lastChange.change, update.timestamp); } catch { return []; }
-      }
-      // The watcher listeners above own additions and removals.
-      if (update.type !== "update") return isRelevant(path) ? [] : undefined;
       const key = `${path}\0${update.timestamp}`;
-      let first = false;
-      if (lastChange?.key !== key) {
-        const change = prepare(path);
-        if (!change) return undefined;
-        lastChange = { key, change };
-        first = true;
+      const dependency = isDependencySource(path);
+      // The watcher listeners above own additions and removals.
+      if (update.type !== "update") return dependency || isRelevant(path) ? [] : undefined;
+      let pending = changes.get(key);
+      const first = pending === undefined;
+      if (pending === undefined) {
+        // Read before the compiler can, for the settle check below.
+        const before = fingerprint(path);
+        // A library source or an application override of a dependency catalog: regenerate the dependency catalogs and
+        // compare them with their previous generation, as for the application's catalog.
+        pending = dependency
+          ? regenerateDependencies().then(async previous => ({
+            catalogs: [], generatedPaths: new Set([...previous.paths, ...dependencyPaths]),
+            update: await classified(previous.snapshots && dependencySnapshots ? classify(previous.snapshots, dependencySnapshots) : undefined),
+          }))
+          : prepare(path);
+        if (!pending) return undefined;
+        changes.set(key, pending);
+        for (const old of changes.keys()) {
+          if (changes.size <= 64) break;
+          changes.delete(old);
+        }
+        settle(path, before, pending);
       }
       let change: Change;
       try {
-        change = await lastChange.change;
+        change = await pending;
       } catch (error) {
-        // Report a failed change once, from the environment that started it.
+        // Report a failed change once, from the environment that started it; the page keeps its last good text.
         if (first) throw error;
         return [];
       }
-      return invalidate(this.environment.moduleGraph, change, update.timestamp);
+      return apply(this.environment as unknown as HotEnvironment, change, update.timestamp, first) as never[];
     },
   };
+}
+
+/** The dependency catalogs' generated paths and snapshots before a regeneration. */
+interface DependencyGeneration {
+  readonly paths: ReadonlySet<string>;
+  readonly snapshots: readonly CatalogSnapshot[] | undefined;
+}
+
+// Longer than the time in which the watcher drops further changes of a file (chokidar: 50 ms).
+const watcherThrottle = 120;
+
+// A file's content, to see whether it changed; "" when it cannot be read.
+function fingerprint(path: string): string {
+  try {
+    return createHash("sha256").update(readFileSync(path)).digest("hex");
+  } catch {
+    return "";
+  }
 }
 
 /** A validated web module manifest and its generated files. */
@@ -681,6 +844,24 @@ interface LoadedManifest {
   readonly entries: Entries;
   readonly generatedPaths: ReadonlySet<string>;
   readonly typesEntry: string;
+  /** The validated runtime.js. */
+  readonly runtimeSource: string;
+}
+
+/** The generated files of a validated catalog, which the next regeneration is compared with (development only). */
+function snapshotOf(loaded: LoadedManifest): CatalogSnapshot {
+  const files = new Map<string, string>(), paths = new Map<string, string>();
+  for (const asset of loaded.document.assets) {
+    files.set(asset.path, asset.sha256);
+    paths.set(asset.path, loaded.assets.get(asset.path)!);
+  }
+  const shared = (loaded.document as { readonly sharedRuntime?: { readonly sha256: string } }).sharedRuntime;
+  if (shared) {
+    files.set("../runtime-core.js", shared.sha256);
+    paths.set("../runtime-core.js", join(dirname(loaded.root), "runtime-core.js"));
+  }
+  const runtime = createHash("sha256").update(withoutSourceHash(loaded.runtimeSource)).digest("hex");
+  return { catalog: loaded.document.catalog, files, paths, runtime };
 }
 
 /**
@@ -776,7 +957,7 @@ async function loadManifest(manifestPath: string): Promise<LoadedManifest> {
     transport: assets.get(expectedEntrypoints.transport)!,
     dynamic: assets.get(expectedEntrypoints.dynamic)!,
   });
-  return { document, root, assets, entries, generatedPaths, typesEntry: expectedEntrypoints.types };
+  return { document, root, assets, entries, generatedPaths, typesEntry: expectedEntrypoints.types, runtimeSource: runtime };
 }
 
 async function checkIntegrity(path: string, name: string, sha256: string, byteLength: number): Promise<void> {

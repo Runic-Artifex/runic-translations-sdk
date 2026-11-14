@@ -23,7 +23,18 @@ channel is process-wide: the request's locale comes from the generated
 `runWithLocale` (SvelteKit's `createLocaleHandle` sets it), so concurrent
 requests stay isolated, and a server without it renders the base locale unless
 a call passes `{ locale }`. `useMessageLocale(configureLocaleResolver, () => locale)` sets one
-catalog's own resolver only, as before 0.9. The
+catalog's own resolver only, as before 0.9.
+
+In development with `@runic-artifex/vite-plugin-runic-translations` 0.12 or
+later, an edited message updates in place: every template, `$derived` and
+`$effect` that reads `m.*()` through `useMessageLocale` (either form) runs again
+with the new text, and component state is kept. It follows the plugin's
+[text-change channel](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/esm.md#text-changes-during-development)
+with one listener for the page while anything reads a message through it, and
+only in the browser. Without a reader the plugin reloads the page instead.
+Production builds never write the channel.
+
+The
 `./inline` and `./document` components work in any Svelte 5 app built with Vite,
 with or without SvelteKit; see
 [Svelte without SvelteKit](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/quickstart-vite.md#svelte-without-sveltekit).

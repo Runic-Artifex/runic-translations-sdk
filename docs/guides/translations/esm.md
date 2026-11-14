@@ -53,8 +53,9 @@ or Cloudflare Workers with `nodejs_compat` enabled. Runtimes without
 server code imports `server.js`; `messages.js` and `runtime.js` have no
 Node.js dependency and run in the browser.
 The optional Vite package maps `virtual:runic-translations/{catalog}`, `/runtime`,
-`/transport`, and `/dynamic` to these ordinary modules and invalidates them on
-watched changes.
+`/transport`, and `/dynamic` to these ordinary modules and, during development,
+updates an edited message in place (see [Text changes during
+development](#text-changes-during-development)).
 
 `transport.js` writes, decodes and resolves [text references](transport.md):
 `createTextReference`, `decodeTextReference`, `formatTextReference` and
@@ -143,6 +144,62 @@ ahead of its Views, is checked key by key: an unchanged key translates with a
 text. A reference of an unlisted catalog shows its fallback text with
 `catalog-mismatch`.
 
+
+## Text changes during development
+
+`@runic-artifex/vite-plugin-runic-translations` 0.12 or later updates an edited
+message in place under `vite dev` instead of reloading the page (see its
+README). It swaps the message's table into the module the page already holds,
+so a call of `m.key()` formats the new text, and then reports the change on a
+second global channel, so the code that rendered messages can render them again.
+The channel is a protocol between packages, like the shared locale channel, and
+runic-sdk's text helpers follow it too.
+
+The channel is an object at `globalThis[Symbol.for("runic.translations.text")]`:
+
+```ts
+interface RunicTextChannel {
+  /** The channel's protocol version: 1. */
+  version: number;
+  /** Incremented once for every update in which message text changed; starts at 0. */
+  revision: number;
+  /** Called with no arguments after `revision` was incremented. */
+  listeners: Set<() => void>;
+}
+```
+
+- **Who creates it.** Whoever comes first: the plugin's development client, or
+  a listener that subscribes before any message module loads. Code that finds
+  the object keeps it and adds only missing members; members are only ever
+  added. A value that is not an object is replaced.
+- **When it fires.** Once per Vite update payload in which at least one message
+  module swapped its table, after every module of that update ran (Vite's
+  `vite:afterUpdate`). Several messages edited in one save, or several catalogs
+  on one page, notify once. The text is already in place when listeners run, so
+  a listener only needs to make its view format its messages again, as a locale
+  switch does. Listeners run in insertion order; one that throws is reported with
+  `console.error` and does not stop the others.
+- **Subscribing.** Add a function to `listeners`, remove the same function to
+  unsubscribe. A listener that tracks `revision` can skip work it already did.
+  Subscribe only in the browser: on a server the channel is process-wide.
+- **No listener.** When the set is empty at that point, the development client
+  reloads the page (`location.reload()`), so a page that follows no text changes
+  behaves as before 0.12 instead of showing stale text. A server-side module
+  runner never reloads; the next render formats the new text.
+- **Production.** Nothing writes the channel: the generated runtimes do not know
+  it, and the plugin's development client and the module rewrite that swaps
+  tables exist only under the dev server. A listener in production code costs a
+  set entry and never runs.
+
+`useMessageLocale` from `@runic-artifex/translations-svelte` 0.12 subscribes
+while a template, `$derived` or `$effect` reads a message through it. A page
+without a framework helper can subscribe itself:
+
+```ts
+const key = Symbol.for('runic.translations.text');
+const channel = ((globalThis as any)[key] ??= { version: 1, revision: 0, listeners: new Set() });
+channel.listeners.add(render); // render() calls m.*() again
+```
 
 ## Without Vite
 

@@ -5,7 +5,18 @@ import { describe, expect, test } from "vitest";
 import { createSvelteLocale, useMessageLocale, type MutableLocaleSource } from "../src/translations/index.js";
 import MessageLocaleFixture from "./MessageLocaleFixture.svelte";
 import SharedLocaleFixture from "./SharedLocaleFixture.svelte";
-import { configureLocaleResolver, getLocale, library } from "./message-runtime.js";
+import { configureLocaleResolver, getLocale, library, texts } from "./message-runtime.js";
+
+// The development text-change channel, as @runic-artifex/vite-plugin-runic-translations writes it after an edited
+// message's table was swapped in.
+function textChannel(): { version: number; revision: number; listeners: Set<() => void> } {
+  return (globalThis as Record<symbol, ReturnType<typeof textChannel>>)[Symbol.for("runic.translations.text")]!;
+}
+function textChanged(): void {
+  const channel = textChannel();
+  channel.revision++;
+  for (const listener of channel.listeners) listener();
+}
 
 describe("useMessageLocale", () => {
   test("re-renders message calls when the application's locale changes, without keying the page", async () => {
@@ -142,6 +153,53 @@ describe("useMessageLocale", () => {
     expect(document.querySelector("span")?.textContent).toBe("en");
     await unmount(component);
     locale.dispose();
+  });
+
+  test("formats messages again, keeping the page, when the dev server swaps edited text in", async () => {
+    const state = $state({ locale: "en", count: 2 });
+    const component = mount(MessageLocaleFixture, { target: document.body, props: { state } });
+    flushSync();
+    const heading = document.querySelector("h1")!;
+    expect(textChannel().version).toBe(1);
+    expect(textChannel().listeners.size).toBe(1);
+    try {
+      texts["title.en"] = "Edited title";
+      flushSync();
+      expect(heading.textContent).toBe("Title");
+      textChanged();
+      flushSync();
+      expect(document.querySelector("h1")).toBe(heading);
+      expect(heading.textContent).toBe("Edited title");
+      // The locale still switches afterwards.
+      state.locale = "de";
+      flushSync();
+      expect(heading.textContent).toBe("Titel");
+    } finally {
+      texts["title.en"] = "Title";
+    }
+    await unmount(component);
+    expect(textChannel().listeners.size).toBe(0);
+  });
+
+  test("with the locale alone, follows text changes too, with one listener for the page", async () => {
+    const first = mount(SharedLocaleFixture, { target: document.body, props: { state: { locale: "de" } } });
+    const second = mount(SharedLocaleFixture, { target: document.body, props: { state: { locale: "de" } } });
+    flushSync();
+    expect(textChannel().listeners.size).toBe(1);
+    const paragraphs = [...document.querySelectorAll("p")];
+    try {
+      texts["empty.de"] = "Nichts da";
+      textChanged();
+      flushSync();
+      expect(paragraphs.map(paragraph => paragraph.textContent)).toEqual(["Nichts da", "Nichts da"]);
+      expect([...document.querySelectorAll("p")]).toEqual(paragraphs);
+    } finally {
+      texts["empty.de"] = "Keine Zeilen";
+    }
+    await unmount(second);
+    await unmount(first);
+    flushSync();
+    expect(textChannel().listeners.size).toBe(0);
   });
 
   test("replaces a channel value that is not an object", async () => {
