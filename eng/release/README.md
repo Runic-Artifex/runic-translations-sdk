@@ -253,7 +253,11 @@ RUNIC_TRAIN_FEED=$PWD/artifacts/train-feed/nuget direnv exec . bun run test
 **After Command Line is published.** Refresh the lock files against nuget.org
 (`dotnet restore <project> --force-evaluate` for each project with a
 `packages.lock.json`, without `RUNIC_TRAIN_FEED`, after removing the candidate
-from the package cache) and merge that. Its CI run has no train feed.
+from the package cache) and merge that. Its CI run has no train feed. NuGet's
+content hash leaves out the repository signature that nuget.org adds, so when the
+train feed used the very Command Line CI run that was published, the refresh
+changes nothing (0.11.0). Any other change merged to `main` then gives the
+publishable run.
 
 **The gate.** Publish preview's `train` job calls runic-sdk's
 `train-compat.yml` (row **P-tr**: Command Line `published:<RunicCommandLineVersion>`,
