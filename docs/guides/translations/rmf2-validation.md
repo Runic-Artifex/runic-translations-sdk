@@ -47,52 +47,26 @@ UI Automation runner. It verifies native controls, custom badge options,
 meaningful icon accessibility and stale callback deactivation after replacing
 content. Linux cross-compilation also passes.
 
-## IDE and language-service checks
+## Language-service checks
 
-VS Code's isolated extension-host check passes activation, native symbol and
-definition providers, example/runtime preview, malformed-input recovery,
-versioned resource/configuration rename, unsaved restart and refusal of partial
-application renames. The shared LSP integration suite covers all three position
-encodings, cancellation, stale requests and new unsaved resources. The editor's
-shared preview-model extraction passes Svelte type checking.
+The [language server](language-server.md) (`runic-translations lsp`) is tested
+here. The shared LSP integration suite (`Rmf2*LspTests` in
+`Runic.Translations.Build.Tests`, part of the focused checks above) covers all
+three position encodings, cancellation, stale requests, new unsaved resources,
+v5 preview, resource-only refactors, mounted multi-project discovery and
+diagnostic isolation. The editor's shared preview-model extraction passes Svelte
+type checking.
 
-```sh
-dotnet build tools/dotnet-runic-translations
-cd tools/vscode-runic-translations
-bun run check
-bun run test
-bun run build
-bun run test:host
-bun run package
-```
+The VS Code and Visual Studio extensions, with their extension-host and native
+Visual Studio 2026 interaction tests, moved to
+[runic-editors](https://github.com/Runic-Artifex/runic-editors) (see its
+[VS Code](https://github.com/Runic-Artifex/runic-editors/blob/main/vscode/README.md) and
+[Visual Studio](https://github.com/Runic-Artifex/runic-editors/blob/main/visualstudio/README.md)
+READMEs); they run against `dotnet-runic-translations` from NuGet. The Visual
+Studio 2026 runs below were made in this repository before the move and are kept
+because they found and verified a language-server fix.
 
-The Visual Studio client supports Visual Studio 2026 (18.x) only. Its VSIX
-declares `[18.0,19.0)` for both the installation target and the core-editor
-prerequisite. On 2026-10-07 the maintainer narrowed the range from
-`[17.14,19.0)`, so Visual Studio 2022 17.14 is no longer a declared host.
-The client still builds against its pinned 17.14 SDK, an API surface that
-18.x hosts provide, with zero warnings or errors on Linux and with Visual
-Studio's native MSBuild on Windows. The official VSSDK packaging targets
-generate the installer metadata. The archive verifier checks the declared
-assets and range, the TextMate grammar, and the exclusion of host DLLs.
-Installation and native host checks passed on Windows 11 build 26200 with
-Visual Studio Community 2026 18.8.2 on 2026-09-11, in an isolated `RunicRmf2`
-profile that used the default-profile fixture of that time. The maintained
-[native interaction test](../../../tools/visualstudio-runic-translations/test/native-host.ps1)
-checks:
-
-- registered commands;
-- inert rich content;
-- invalid-number recovery;
-- locale selection;
-- unsaved text after a server restart.
-
-The focused RMF2 CLI/LSP suite includes v5 preview and
-resource-only refactor coverage, plus mounted multi-project discovery and
-diagnostic isolation. See the [Windows integration procedure](../../../tools/visualstudio-runic-translations/README.md)
-for build, installation and interactive-session execution.
-
-### Visual Studio 2026 rerun (2026-10-07)
+### Visual Studio 2026 rerun (2026-10-07, before the move)
 
 The execution-v2 journey was rerun on Windows 11 Pro build 26200 (the
 snapshot-restored `bootstrap-imgui-win11` VM) with Visual Studio Community 2026
@@ -136,7 +110,7 @@ that no `RunicLanguageClient` export was found. Running
 fixed it. Note also that `devenv /Log <path>` takes the next argument as the
 log file, so pass a document before `/Log`.
 
-### Visual Studio 2026 journey after the server fix (2026-10-07)
+### Visual Studio 2026 journey after the server fix (2026-10-07, before the move)
 
 After the language-server fix for loose-file buffers (#17, `9ec00fc4`), the
 journey was run again on the same snapshot-restored VM: Windows 11 Pro build
@@ -150,7 +124,7 @@ journey was run again on the same snapshot-restored VM: Windows 11 Pro build
 - `RUNIC_TRANSLATIONS_SERVER`, plus `/RootSuffix RunicRmf2`, after
   `/updateconfiguration`.
 
-The unmodified `native-host.ps1` ran once and exited with 0. Its receipt lists
+The unmodified [`native-host.ps1`](https://github.com/Runic-Artifex/runic-editors/blob/main/visualstudio/test/native-host.ps1) ran once and exited with 0. Its receipt lists
 all seven checks:
 
 - selected semantic project;

@@ -244,13 +244,6 @@ function testWeb() {
   for (const entry of orderedNpmPackages()) run("bun", ["run", "--bun", "test"], resolve(root, entry.path));
 }
 
-function verifyEditorIntegrations() {
-  run("bun", ["install", "--frozen-lockfile"], resolve(root, workspace.editor.vscode));
-  run("bun", ["run", "--bun", "check"], resolve(root, workspace.editor.vscode));
-  run("bun", ["run", "--bun", "test"], resolve(root, workspace.editor.vscode));
-  run("python3", [workspace.editor.visualStudioVerification, "--check-source"]);
-}
-
 // Read-only vulnerability audit of every lockfile and NuGet restore graph; it never
 // upgrades dependencies.
 function auditDependencies() {
@@ -285,7 +278,6 @@ export function test() {
   verifyEditorFrontend();
   testManaged();
   testWeb();
-  verifyEditorIntegrations();
   pack(workspace.version, { built: true });
   testPackagedManaged();
 }
@@ -350,12 +342,11 @@ async function main() {
       pack(version);
       await (await import("./verify-packages.mjs")).verifyPackages(version ?? workspace.version);
       break;
-    case "verify-editor": verifyEditorIntegrations(); break;
     case "verify-editor-packed": verifyEditorPacked(version); break;
     case "native-aot": testNativeAot(); break;
     case "audit": auditDependencies(); break;
     default:
-      throw new Error("Use bootstrap, build, test, pack [version], pack-built [version], verify:candidate [version], verify-packages [version] (alias), verify-editor, verify-editor-packed [version], native-aot, or audit.");
+      throw new Error("Use bootstrap, build, test, pack [version], pack-built [version], verify:candidate [version], verify-packages [version] (alias), verify-editor-packed [version], native-aot, or audit.");
   }
 }
 

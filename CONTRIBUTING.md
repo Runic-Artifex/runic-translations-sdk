@@ -13,10 +13,8 @@ Pull requests must pass the `verify` job in [CI](.github/workflows/ci.yml), whic
 | Vite in-place message updates / Chromium | `bun run --bun build` in `packages/web/vite-plugin-runic-translations` and in `packages/web/translations-svelte`, then `bun run --bun test:hmr` in `packages/web/translations-svelte` (builds the CLI; set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to a Chromium, such as the `editor` dev shell's) |
 | Editor / hosted RMF2 E2E | `bun run build`, `dotnet apps/translations-editor/bin/Release/net10.0/Runic.Translations.Editor.dll validate apps/translations-editor/ExampleWorkspace`, then the commands in [the hosted E2E README](apps/translations-editor/tests/HostedBrowserE2E/README.md) |
 | Editor / packed Translations packages | `bun run verify-editor-packed` |
-| IDE / VS Code extension package | `bun install --frozen-lockfile && bun run --bun check && bun run --bun test && bun run package` in `tools/vscode-runic-translations` |
 | Localized formatting / Windows, macOS | `bash eng/ci/localized-formatting.sh` (the localized formatting tests, the date/percent corpus and the all-locale comparison, ESM in Bun and Node) |
 | WPF / Windows | `dotnet run --project tests/dotnet/Runic.Translations.Wpf.Tests --configuration Release`, `dotnet build examples/wpf/document-sample --configuration Release`, then `dotnet run --project tests/dotnet/Runic.Translations.Build.Tests --configuration Release -- --treenode-filter "/*/*/XamlBuildTests/*" --test-parameter xaml-wpf=true --minimum-expected-tests 3` |
-| IDE / Windows VSIX package | Windows only; see [the Visual Studio extension README](tools/visualstudio-runic-translations/README.md) |
 
 When a `--check` command reports a stale file, run the same script without `--check` and commit the result. `bun eng/generate-cldr.mjs` also rewrites `specs/translations/capabilities-v1.json`, so run `bun eng/render-capabilities.mjs` after it.
 

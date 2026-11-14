@@ -1,6 +1,6 @@
 # Runic Translations SDK
 
-Runic Translations provides deterministic RMF2 compilation, runtime libraries, build integration, editor tooling, IDE extensions, and Vite integration. It is independently versioned and released from the application SDK.
+Runic Translations provides deterministic RMF2 compilation, runtime libraries, build integration, editor tooling, the language server for the [editor extensions](https://github.com/Runic-Artifex/runic-editors), and Vite integration. It is independently versioned and released from the application SDK.
 
 ## Start with packages
 

@@ -352,7 +352,7 @@ runic-translations serve
 - `verify` renders in isolation and byte-compares the selected expected output, including extra-file detection.
 - `schema` copies the bundled source, artifact, manifest, normalized-AST, capability, review-file and tool payload schemas.
 - `serve` is a persistent compiler for development servers, used by `@runic-artifex/vite-plugin-runic-translations`. It keeps unchanged sources parsed and compiled between requests, so a request after an edit recompiles only the edited files. See [serve protocol](#serve-protocol).
-- `lsp` runs the RMF2 language server over standard input/output for the VS Code and Visual Studio extensions. It is hidden from help, and its protocol subset and custom methods are outside the 1.0 compatibility rules until the production language server (2.0).
+- `lsp` runs the RMF2 language server over standard input/output for the VS Code and Visual Studio extensions in [runic-editors](https://github.com/Runic-Artifex/runic-editors); see the [language server guide](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/language-server.md). It is hidden from help, and its protocol subset and custom methods are outside the 1.0 compatibility rules until the production language server (2.0).
 
 `generate` leaves output files whose bytes are unchanged untouched, so file watchers only see artifacts that changed.
 

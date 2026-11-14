@@ -418,71 +418,10 @@ jobs:
           name: editor-hosted-packed
           path: artifacts/editor-hosted-packed
           if-no-files-found: ignore
-  ide-packaging:
-    name: IDE / VS Code extension package
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24.22.1
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: 1.4.4
-      # Packaging stamps the eng/workspace.json release version (eng/release/ide-versions.mjs) and checks the VSIX.
-      # The second package (not uploaded) checks that a plain release drops the pre-release flag and keeps the Preview label.
-      - name: Build, test and package the VS Code extension
-        working-directory: tools/vscode-runic-translations
-        run: |
-          bun install --frozen-lockfile
-          bun run --bun check
-          bun run --bun test
-          bun run package
-          node package.mjs 0.8.0 "$RUNNER_TEMP/final-release-check.vsix"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: rmf2-vscode-vsix
-          path: tools/vscode-runic-translations/artifacts/runic-translations.vsix
-          if-no-files-found: error
-          # Kept as long as the package artifact: Publish preview releases it.
-          retention-days: 30
-  vsix:
-    name: IDE / Windows VSIX package
-    needs: train-feed
-    runs-on: windows-2025
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: ./.github/actions/train-feed
-        with:
-          active: ${{ needs.train-feed.outputs.active }}
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
-      - uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3.0.0
-      - name: Build the language server
-        run: dotnet build tools/dotnet-runic-translations/dotnet-runic-translations.csproj -c Release
-      # The project stamps the VSIX version from eng/workspace.json; package.py checks it.
-      - name: Build the native VSIX with full-framework MSBuild
-        run: msbuild tools/visualstudio-runic-translations/Runic.Translations.VisualStudio.csproj /restore /m:1 /p:Configuration=Release
-      - name: Verify the generated VSIX against the source manifest
-        run: python tools/visualstudio-runic-translations/package.py --configuration Release
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: rmf2-visualstudio-vsix
-          path: tools/visualstudio-runic-translations/artifacts/runic-translations-visualstudio.vsix
-          if-no-files-found: error
-          # Kept as long as the package artifact: Publish preview releases it.
-          retention-days: 30
   verify:
     name: verify
     if: always()
-    needs: [source-checks, train-feed, build-and-test, node-26, inline-browser, rmf2-document-example, vite-hmr, rmf2-native-aot, wpf, formatting-windows, formatting-macos, editor-e2e, editor-packed, ide-packaging, vsix]
+    needs: [source-checks, train-feed, build-and-test, node-26, inline-browser, rmf2-document-example, vite-hmr, rmf2-native-aot, wpf, formatting-windows, formatting-macos, editor-e2e, editor-packed]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

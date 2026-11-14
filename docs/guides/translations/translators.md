@@ -5,7 +5,7 @@ in one of three ways:
 
 - in the **Translations Editor**, which edits the sources and the review file
   directly;
-- in the sources with an IDE and the **VS Code or Visual Studio extension**,
+- in the sources with an IDE and the **VS Code or Visual Studio extension** ([runic-editors](https://github.com/Runic-Artifex/runic-editors)),
   which check every edit as `validate` does;
 - in a **translation management system** (TMS) or CAT tool, through XLIFF 2.1
   files that `runic-translations xliff export` writes and `xliff import` reads

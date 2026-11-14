@@ -733,9 +733,10 @@ runic-translations generate --project translations --output obj/translations --e
 runic-translations lsp
 ```
 
-`runic-translations lsp` serves the IDE extensions; it is hidden from help and,
-with its protocol subset and custom methods, outside the 1.0 compatibility rules
-until the production language server (2.0). The workspace it shares with the
+`runic-translations lsp` is the [language server](language-server.md) the editor
+extensions run; it is hidden from help and, with its protocol subset and custom
+methods, outside the 1.0 compatibility rules until the production language
+server (2.0). The workspace it shares with the
 Translations Editor is internal to the tool and the editor; it accepts unsaved
 buffers and revisions. Rename, format,
 extract-group, and inline-resource produce validated transaction plans. Extracting
@@ -835,10 +836,14 @@ loader consume its common typed execution and rejection expectations. It is
 evidence for the implemented contract, not a claim of general Unicode MF2 or
 general XLIFF conformance.
 
-The [VS Code extension](../../../tools/vscode-runic-translations/README.md) and
-[Visual Studio extension](../../../tools/visualstudio-runic-translations/README.md)
-package this language server with native IDE navigation and preview commands.
-Their READMEs describe configuration, supported refactor scope and host checks.
+The VS Code and Visual Studio extensions in
+[runic-editors](https://github.com/Runic-Artifex/runic-editors) run this language
+server from the project's local tool and add native IDE navigation and preview
+commands; their READMEs describe configuration, supported refactor scope and host
+checks. The VS Code extension is becoming one Runic extension for Translations
+and the Runic SDK ([runic-editors#2](https://github.com/Runic-Artifex/runic-editors/issues/2)).
+See [Language server](language-server.md) for the protocol, how editors launch
+it and which versions work together.
 
 ## Pseudo-locales
 

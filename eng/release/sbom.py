@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Write a CycloneDX 1.6 SBOM describing the files of one release.
 
-sbom.py --repository OWNER/NAME --version VERSION --source SHA --epoch SECONDS --output FILE
-        [--artifact-version FILE_NAME=VERSION]... ARTIFACT...
+sbom.py --repository OWNER/NAME --version VERSION --source SHA --epoch SECONDS --output FILE ARTIFACT...
 
 Reads archive metadata with the standard library only: nothing is extracted or
 executed and nothing is installed, so it runs in the read-only candidate job. The
@@ -10,17 +9,15 @@ output is deterministic: the same artifacts, version, source and commit time
 (--epoch, from `git show -s --format=%ct`) always give the same bytes, so a rerun
 describes a published release identically.
 
-Every artifact must declare the release --version, except an artifact named by
---artifact-version, which must declare the version given there (for example a
-VSIX, whose format cannot express a SemVer prerelease, with its mapped version).
+Every artifact must declare the release --version.
 
-Every artifact (.nupkg, npm .tgz, .vsix) is a component with its SHA-256. Its
+Every artifact (.nupkg, npm .tgz) is a component with its SHA-256. Its
 dependencies are
 - declared: nuspec dependency groups and package.json dependencies,
   optionalDependencies and peerDependencies, as external components with the
   requested range (consumers resolve them);
 - bundled: libraries listed in the *.deps.json files a package ships (exact
-  version and NuGet SHA-512), and the dependencies a VS Code extension bundles.
+  version and NuGet SHA-512).
 A declared dependency on another artifact of this release links to that artifact.
 """
 import argparse
@@ -39,7 +36,6 @@ from urllib.parse import quote
 MAX_ENTRY = 16 * 1024 * 1024  # largest metadata entry read from an archive
 TOOL = 'runic-release-sbom'
 TOOL_VERSION = '1'
-EXACT = re.compile(r'^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$')
 
 
 def zip_entry(archive, name):
@@ -130,12 +126,6 @@ def declared(graph, owner, kind, name, requested, shipped):
                                    **({'properties': property_list({'runic:requested-range': requested})} if requested else {})}))
 
 
-def bundled_npm(graph, owner, name, version):
-    identity = npm_name(name)
-    graph.depend(owner, graph.add({'type': 'library', 'bom-ref': purl('npm', name, version), **identity, 'version': version,
-                                   'purl': purl('npm', name, version)}))
-
-
 def deps_json(graph, owner, document, shipped):
     """Bundled .NET libraries of one *.deps.json, with the dependency edges between them."""
     refs = {}
@@ -202,37 +192,15 @@ def npm(path):
     return component, requested, None
 
 
-def vsix(path):
-    with zipfile.ZipFile(path) as archive:
-        identity = child(child(xml(zip_entry(archive, 'extension.vsixmanifest'), 'extension.vsixmanifest'), 'Metadata'), 'Identity')
-        manifest = json.loads(zip_entry(archive, 'extension/package.json')) if 'extension/package.json' in archive.namelist() else {}
-    name, version, publisher = identity.get('Id'), identity.get('Version'), identity.get('Publisher')
-    component = {'type': 'application', 'bom-ref': f'vsix:{publisher}/{name}@{version}', 'name': name, 'version': version,
-                 'publisher': publisher, 'licenses': license_of(manifest.get('license')), 'properties': {}}
-    # A VS Code extension packed with --no-dependencies bundles its runtime dependencies.
-    dependencies = sorted((manifest.get('dependencies') or {}).items())
-
-    def bundle(graph, ref, shipped):
-        for key, value in dependencies:
-            if EXACT.match(value):
-                bundled_npm(graph, ref, key, value)
-            else:
-                declared(graph, ref, 'npm', key, value, shipped)
-    return component, [], bundle
+READERS = {'.nupkg': nuget, '.tgz': npm}
 
 
-READERS = {'.nupkg': nuget, '.tgz': npm, '.vsix': vsix}
-
-
-def build(repository, version, source, epoch, paths, artifact_versions=None):
-    artifact_versions = artifact_versions or {}
+def build(repository, version, source, epoch, paths):
     owner, _, project = repository.partition('/')
     if not owner or not project or not re.fullmatch(r'[0-9a-f]{40}', source):
         raise ValueError('Expected OWNER/NAME and a full source commit')
     if len({path.name for path in paths}) != len(paths) or not paths:
         raise ValueError('Expected uniquely named artifacts')
-    if set(artifact_versions) - {path.name for path in paths}:
-        raise ValueError(f'--artifact-version names no artifact: {", ".join(sorted(set(artifact_versions) - {path.name for path in paths}))}')
     graph, artifacts = Graph(), []
     for path in sorted(paths, key=lambda item: item.name):
         reader = READERS.get(path.suffix)
@@ -240,9 +208,8 @@ def build(repository, version, source, epoch, paths, artifact_versions=None):
             raise ValueError(f'Unsupported artifact {path.name}')
         data = path.read_bytes()
         component, requested, extra = reader(path)
-        expected = artifact_versions.get(path.name, version)
-        if component['version'] != expected:
-            raise ValueError(f"{path.name} is version {component['version']}, not {expected}")
+        if component['version'] != version:
+            raise ValueError(f"{path.name} is version {component['version']}, not {version}")
         component['hashes'] = [{'alg': 'SHA-256', 'content': hashlib.sha256(data).hexdigest()}]
         component['externalReferences'] = [*component.get('externalReferences', []), {'type': 'vcs', 'url': f'https://github.com/{repository}'}]
         component['properties'] = property_list({**component['properties'], 'runic:file': path.name})
@@ -289,17 +256,9 @@ def main(argv=None):
     parser.add_argument('--source', required=True)
     parser.add_argument('--epoch', required=True, type=int, help='Commit time in seconds since the epoch')
     parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--artifact-version', action='append', default=[], metavar='FILE_NAME=VERSION',
-                        help='Version the named artifact must declare instead of --version')
     parser.add_argument('artifacts', nargs='+', type=Path)
     args = parser.parse_args(argv)
-    artifact_versions = {}
-    for item in args.artifact_version:
-        name, separator, value = item.partition('=')
-        if not separator or not name or not value or name in artifact_versions:
-            parser.error(f'--artifact-version expects one FILE_NAME=VERSION per artifact: {item}')
-        artifact_versions[name] = value
-    bom = build(args.repository, args.version, args.source, args.epoch, args.artifacts, artifact_versions)
+    bom = build(args.repository, args.version, args.source, args.epoch, args.artifacts)
     args.output.write_text(json.dumps(bom, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
     print(f"Described {len(bom['dependencies'][0]['dependsOn'])} artifacts and {len(bom['components'])} components in {args.output}")
 
