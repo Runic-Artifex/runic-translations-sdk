@@ -12,11 +12,96 @@ released by this workflow.
 
 ## Release notes
 
-Add user-facing notes to `eng/release/notes/<version>.md` as changes merge,
-including upgrade steps for breaking changes. `ci-artifact.mjs release` passes that
-file to `gh release create --notes-file`, and gh puts it above the list of merged
-pull requests that `--generate-notes` adds. Without a notes file the release has
-only the generated list.
+Each pull request writes its user-facing notes, including upgrade steps for
+breaking changes, as files of its own under `eng/release/notes/<version>/`, where
+`<version>` is the candidate on `main` (D066.33). Pull requests then never edit the
+same file, so merging one does not make the others conflict and run CI again. The
+release pull request assembles the fragments into `eng/release/notes/<version>.md`.
+`ci-artifact.mjs release` passes that file to `gh release create --notes-file`, and
+gh puts it above the list of merged pull requests that `--generate-notes` adds.
+Without a notes file the release has only the generated list.
+
+One directory per section, one file per entry:
+
+| Path | Assembled as |
+| --- | --- |
+| `_intro.md` | The title, install lines and introduction, before the first section. The release pull request writes the introduction. |
+| `highlights/` | `## Highlights`, a list. Usually written by the release pull request. |
+| `features/` | One `## Title` section per file, with its issue (`(#176)` in the heading, or a `([#176](...))` line under it). |
+| `upgrading/` | `## Upgrading`: list items directly under it. Its `_intro.md` holds the heading with the previous version (`## Upgrading from 0.11`) and any text before the entries. |
+| `breaking/` | `### Breaking changes` under Upgrading, a list. |
+| `behaviour/` | `### Behaviour and output changes` under Upgrading, a list. |
+| `experimental/` | `### Experimental features and how to opt in` under Upgrading: list items or table rows. |
+| `fixes/` | `## Fixes`, a list. |
+| `ci/` | `## Release engineering`, a list. |
+| `known-issues/` | `## Known issues`, a list. |
+
+This is runic-sdk's layout, except that Translations lists its feature sections
+before Upgrading and calls the CI section Release engineering, as its notes did
+before.
+
+- **Names.** Name an entry by its issue or pull request: `features/176.md`,
+  `fixes/180.md`; add words when one number has several entries in a section
+  (`fixes/180-plural-variants.md`), and use words alone for an entry without one
+  (`features/tool.md`). Lower case, `.md`.
+- **Content.** A feature fragment starts with its `##` heading and has no other
+  `#` or `##` heading (`###` and deeper are fine). Every other entry is a list item
+  (`- ...`, with indented continuation lines) or, in `experimental/`, a table row;
+  it has no heading. One pull request contributes to as many sections as it needs:
+  `features/176.md`, `breaking/176.md` and `fixes/176.md` side by side.
+- **Section text.** A section's `_intro.md` comes after its heading and before its
+  entries, and `_end.md` after them. An `_intro.md` that starts with a heading of
+  the section's level replaces the default heading.
+- **Order.** Sections follow the table. Within one, entries with an `order: <n>`
+  front matter come first, by it; the others follow by issue number, then by file
+  name:
+
+  ```md
+  ---
+  order: 10
+  ---
+  ## Edited messages update in place during development
+  ```
+
+- **Links.** Write links as they work from the assembled
+  `eng/release/notes/<version>.md`: same-document anchors (`#upgrading-from-011`)
+  and links to the release tag, as before.
+
+`eng/release/notes.mjs` has three commands:
+
+- `bun eng/release/notes.mjs check [<version>...]` validates the fragments of the
+  given versions, or of every fragment directory: known sections and file names,
+  one `##` heading per feature fragment, list entries without headings, no
+  repeated `##` heading, relative links and same-document anchors that resolve in
+  the assembled notes, and no `<version>.md` beside the fragments. CI runs it with
+  the release tests (`eng/release/notes.test.mjs`).
+- `bun eng/release/notes.mjs assemble <version>` checks the fragments, writes
+  `<version>.md` and removes `<version>/`, so a released version has one notes
+  file, as before. Fragments added after the release belong to the next version.
+- `bun eng/release/notes.mjs split <version> [<file>] [--keep]` turns notes written
+  as one file into fragments: `<version>.md` (which it then removes, unless
+  `--keep`), or `<file>`, for example a pull request branch's version of it. It
+  skips what is a fragment already: the intro and a section's `_intro.md` or
+  `_end.md` when present, a feature with the same heading, an entry with the same
+  text. It reports an entry that differs from an existing one with the same issue
+  number, which then needs a look. A pull request that still edits `<version>.md`
+  converts its note when it merges `main`, without rename detection (Git can
+  otherwise take the deleted file for a renamed fragment and merge the branch's
+  text into that fragment):
+
+  ```sh
+  git merge -X no-renames origin/main   # stops: <version>.md modified here, deleted on main
+  bun eng/release/notes.mjs split <version>   # adds the branch's own entries, removes the file
+  git add eng/release/notes && git commit --no-edit
+  ```
+
+**The release pull request** writes the introduction and highlights (`_intro.md`,
+`highlights/`), runs `bun eng/release/notes.mjs assemble <version>`, reviews the
+assembled `eng/release/notes/<version>.md` and commits it with the removed
+fragments. **Publish preview** stops at `ci-artifact.mjs release-check` (also in a
+dry run) while `eng/release/notes/<version>/` still holds fragments. When `main`'s
+version changes before a release (to `1.0.0-rc.1`), rename the directory with
+`git mv`.
 
 ## IDE extension versions
 
@@ -336,7 +421,10 @@ After publishing, move each library's `PublicAPI.Unshipped.txt` entries into
 `PublicAPI.Shipped.txt`, set `RunicTranslationsPackageValidationBaselineVersion`
 in `eng/Versions.props` to the published version, and delete any
 `CompatibilitySuppressions.xml` files, which describe breaks from the old
-baseline. See [Public API](../../CONTRIBUTING.md#public-api).
+baseline. See [Public API](../../CONTRIBUTING.md#public-api). When `main` moves to
+the next candidate, add `eng/release/notes/<next version>/_intro.md` with its title
+and install lines; pull requests add their notes beside it as fragments (see
+[Release notes](#release-notes)).
 
 ### Release candidates and 1.0.0
 
