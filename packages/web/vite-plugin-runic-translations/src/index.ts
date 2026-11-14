@@ -9,6 +9,9 @@ import { CompilerUnavailable, PersistentCompiler } from "./compiler-service.js";
 import { composeDeclarationMap, readMessagesDeclarationMap, writeDeclarationMap, type DeclarationCopy } from "./declaration-map.js";
 import { discoverDependencyCatalogs, type DependencyCatalog } from "./dependencies.js";
 import {
+  AccessList, allowEnvironmentVariable, allowListFromEnvironment, createEditMiddleware, parseAllowList, type InPageEditingOptions,
+} from "./edit.js";
+import {
   classify, devClientCode, devClientId, devClientSpecifier, hasMessagesAnchor, messageModulePattern, selfAccepting, withoutSourceHash,
   type CatalogSnapshot, type Classification,
 } from "./hmr.js";
@@ -76,7 +79,16 @@ export interface RunicTranslationsOptions {
    * and the library's base locale). Defaults to the locales of the project's runic.json in project mode, else all.
    */
   readonly locales?: readonly string[];
+  /**
+   * The in-page editing API of the dev server (`/__runic-translations/message`): read a message in every locale and write
+   * one locale's text back to its source, which then updates in place. On by default under `vite dev` (never in a build),
+   * for requests from loopback only; `allow` adds hosts and networks, as does the `RUNIC_TRANSLATIONS_EDIT_ALLOW`
+   * environment variable. Needs project mode. `false` turns it off. See the README, "In-page editing API".
+   */
+  readonly inPageEditing?: boolean | InPageEditingOptions;
 }
+
+export type { InPageEditingOptions } from "./edit.js";
 
 type EntryKind = "messages" | "runtime" | "server" | "transport" | "dynamic";
 type Entries = Readonly<Record<EntryKind | "types", string>>;
@@ -163,6 +175,12 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
     throw new TypeError('dependencies must be "auto" or false.');
   if (options.locales !== undefined && (!Array.isArray(options.locales) || options.locales.some(locale => typeof locale !== "string" || locale.length === 0)))
     throw new TypeError("locales must be an array of locale tags.");
+  const editing = options.inPageEditing;
+  if (editing !== undefined && typeof editing !== "boolean" && (!editing || typeof editing !== "object" || Array.isArray(editing) ||
+      (editing.allow !== undefined && !Array.isArray(editing.allow))))
+    throw new TypeError("inPageEditing must be a boolean or { allow?: string[] }.");
+  // Validated now, so a mistyped network fails the configuration rather than a request.
+  const allowRules = typeof editing === "object" ? parseAllowList(editing.allow ?? [], "inPageEditing.allow") : [];
   const compiler = options.manifest === undefined ? projectOptions(options) : undefined;
   let manifestPath = compiler?.manifest ?? resolve(options.manifest!);
   if (options.typeDeclarations !== undefined && options.typeDeclarations !== false &&
@@ -194,6 +212,8 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
   let sourceFiles = new Set([...explicitSources, ...(compiler?.sourceFiles ?? [])]);
   let server: ViteDevServer | undefined;
   let service: PersistentCompiler | undefined;
+  // In-page editing without a persistent compiler for generation (persistentCompiler: false): one started on first use.
+  let editService: PersistentCompiler | undefined;
   let cleanupServer: (() => void) | undefined;
   let updates: Promise<unknown> = Promise.resolve();
   let catalog: string | undefined;
@@ -611,6 +631,29 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
     return (generatedPaths.has(path) || dependencyPaths.has(path)) && messageModulePattern.test(`${basename(dirname(path))}/${basename(path)}`);
   }
 
+  // The in-page editing API (edit.ts) on the dev server's middleware stack, after Vite's CORS and host checks. Requests go to
+  // the persistent compiler, which writes the source; the watcher then sees the change and updates the page in place.
+  function mountEditing(target: ViteDevServer): void {
+    const middlewares = (target as Partial<ViteDevServer>).middlewares;
+    if (!middlewares) return;
+    const environment = allowListFromEnvironment(process.env[allowEnvironmentVariable]);
+    const rules = [...allowRules, ...parseAllowList(environment, allowEnvironmentVariable)];
+    const config = (target as Partial<ViteDevServer>).config;
+    if (rules.length > 0)
+      config?.logger.info(`[runic-translations] in-page editing accepts requests from loopback and ${rules.map(rule => rule.text).join(", ")}`, { timestamp: true });
+    middlewares.use(createEditMiddleware({
+      unavailable: () => compiler ? undefined
+        : "In-page editing needs project mode (the project option), where the plugin compiles the catalog from its sources.",
+      catalogs: () => ({ application: catalog, libraries: options.dependencies === "auto" ? dependencyCatalogs.map(dependency => dependency.catalog) : [] }),
+      request: (method, body) => {
+        const current = service && !service.disabledReason ? service : editService ??= new PersistentCompiler({
+          command: compiler!.command, commandArguments: compiler!.commandArguments, cwd: compiler!.cwd, requestTimeout: options.persistentCompilerTimeout,
+        });
+        return current.edit(method, { project: compiler!.project, ...body });
+      },
+    }, new AccessList(rules), config?.base ?? "/", config?.logger));
+  }
+
   return {
     name: "runic-translations",
     enforce: "pre",
@@ -679,12 +722,15 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       server.watcher.on("unlink", membershipChanged);
       server.watcher.on("change", configChanged);
       if (options.dependencies === "auto") server.watcher.add(dependencyWatchPaths(applicationSettings()));
+      if (editing !== false) mountEditing(value);
       const currentService = service;
       const cleanup = () => {
         value.watcher.off("add", membershipChanged);
         value.watcher.off("unlink", membershipChanged);
         value.watcher.off("change", configChanged);
         void currentService?.close();
+        void editService?.close();
+        editService = undefined;
       };
       server.httpServer?.once("close", cleanup);
       cleanupServer = cleanup;

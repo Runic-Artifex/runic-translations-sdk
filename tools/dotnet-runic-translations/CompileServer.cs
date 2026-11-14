@@ -19,13 +19,18 @@ namespace Runic.Translations.Tool;
 /// <c>runic-translations-serve/1</c>). On start the server writes
 /// <c>{"protocol":"runic-translations-serve/1","event":"ready","version":"..."}</c>. Each request is one
 /// line, <c>{"id":1,"method":"generate","project":"translations","output":".runic/translations","emit":["esm"]}</c>,
-/// with methods <c>generate</c>, <c>validate</c> and <c>shutdown</c>. Requests run one at a time and each
+/// with methods <c>generate</c>, <c>validate</c>, <c>message</c>, <c>set-message</c> and <c>shutdown</c>. Requests run one at a time and each
 /// receives exactly one response line with the same <c>id</c>:
 /// <c>{"id":1,"ok":true,"exitCode":0,"output":"...","message":"","diagnostics":[],"elapsedMs":12}</c>.
 /// <c>exitCode</c> and <c>diagnostics</c> match the one-shot command; a translation diagnostic (<c>RTR</c> code) also carries
 /// <c>path</c>, <c>line</c>, <c>column</c>, <c>endLine</c>, <c>endColumn</c> and <c>helpUri</c>. The server exits when standard input
 /// closes or after answering <c>shutdown</c>. A request line over 1 MiB is dropped while it is read and answered with
 /// a null <c>id</c>.</para>
+/// <para>In-page translation editing (<see cref="MessageEditing"/>): <c>{"method":"message","project":…,"key":…,"catalog":…}</c>
+/// reads one message in every locale, and <c>{"method":"set-message","project":…,"key":…,"catalog":…,"locale":…,"text":…,"expectedHash":…}</c>
+/// writes one locale's text. Their responses add a <c>result</c> object: the message (<c>message</c>), the written files
+/// and the message after the write (<c>set-message</c>), or on failure <c>error</c> (<c>not-found</c>, <c>invalid</c>,
+/// <c>conflict</c>, <c>unsupported</c>) with the current message where it is known.</para>
 /// <para>Trust: requests come only from the parent process through standard input, and may name any project and
 /// output directory this process can access, like the one-shot commands.</para>
 /// <para>Paths resolve against the server's working directory, like the one-shot commands. Unchanged
@@ -106,6 +111,7 @@ internal sealed class CompileServer
         string? project = null, output = null;
         ToolEmission emission = ToolEmission.None;
         bool pseudoLocales = false;
+        string? key = null, catalog = null, locale = null, text = null, expectedHash = null;
         try
         {
             using JsonDocument document = JsonDocument.Parse(line);
@@ -122,6 +128,13 @@ internal sealed class CompileServer
                 : throw new FormatException("A request requires a string method.");
             project = OptionalString(root, "project");
             output = OptionalString(root, "output");
+            key = OptionalString(root, "key");
+            catalog = OptionalString(root, "catalog");
+            locale = OptionalString(root, "locale");
+            if (root.TryGetProperty("text", out JsonElement textValue))
+                text = textValue.ValueKind == JsonValueKind.String ? textValue.GetString() : throw new FormatException("text must be a string.");
+            if (root.TryGetProperty("expectedHash", out JsonElement hashValue) && hashValue.ValueKind != JsonValueKind.Null)
+                expectedHash = hashValue.ValueKind == JsonValueKind.String ? hashValue.GetString() : throw new FormatException("expectedHash must be a string or null.");
             if (root.TryGetProperty("pseudoLocales", out JsonElement pseudo))
                 pseudoLocales = pseudo.ValueKind switch
                 {
@@ -149,6 +162,15 @@ internal sealed class CompileServer
         }
 
         long started = Stopwatch.GetTimestamp();
+        if (method is "message" or "set-message")
+        {
+            MessageEditing.Reply reply = method == "message"
+                ? project is null || key is null ? new(Usage("message requires project and key."), null) : MessageEditing.Read(project, catalog, key, _units)
+                : project is null || key is null || locale is null || text is null ? new(Usage("set-message requires project, key, locale and text."), null)
+                : MessageEditing.Write(project, catalog, key, locale, text, expectedHash, _units);
+            Respond(hasId, id, reply.Result, (long)Stopwatch.GetElapsedTime(started).TotalMilliseconds, reply.Body);
+            return true;
+        }
         ToolOperationResult result = method switch
         {
             "generate" when project is null || output is null => Usage("generate requires project and output."),
@@ -163,7 +185,7 @@ internal sealed class CompileServer
 
     private static string? OptionalString(JsonElement root, string name)
     {
-        if (!root.TryGetProperty(name, out JsonElement value)) return null;
+        if (!root.TryGetProperty(name, out JsonElement value) || value.ValueKind == JsonValueKind.Null) return null;
         return value.ValueKind == JsonValueKind.String && value.GetString() is { Length: > 0 } text
             ? text
             : throw new FormatException($"{name} must be a non-empty string.");
@@ -184,7 +206,7 @@ internal sealed class CompileServer
         return result;
     }
 
-    private void Respond(bool hasId, JsonElement id, ToolOperationResult result, long elapsedMilliseconds) => Write(writer =>
+    private void Respond(bool hasId, JsonElement id, ToolOperationResult result, long elapsedMilliseconds, Action<Utf8JsonWriter>? body = null) => Write(writer =>
     {
         writer.WritePropertyName("id");
         if (hasId) id.WriteTo(writer);
@@ -218,6 +240,7 @@ internal sealed class CompileServer
         }
         writer.WriteEndArray();
         writer.WriteNumber("elapsedMs", elapsedMilliseconds);
+        body?.Invoke(writer);
     });
 
     // The text a one-shot invocation would print for this failure.

@@ -201,6 +201,47 @@ const channel = ((globalThis as any)[key] ??= { version: 1, revision: 0, listene
 channel.listeners.add(render); // render() calls m.*() again
 ```
 
+## In-page translation editing
+
+`@runic-artifex/vite-plugin-runic-translations` 0.12 or later offers an HTTP API
+on the dev server, `/__runic-translations/message`, for editing a translation
+from the page: `GET` reads a message in every locale (its text as authored, its
+inputs and plural or selector variants, the source file and line, and a hash per
+file), and `POST` writes one locale's whole message text back to its `.rmf2` or
+`.mf2` source, which then updates in place as described above. runic-sdk's Runic
+Inspect builds its editing card on it. The requests, responses and errors are
+documented in the plugin's README, under "In-page editing API".
+
+The write goes through `runic-translations serve` and the Translations Editor's
+writer: only the message's text changes, and formatting, comments and the order
+of the file stay. The text is compiled with the rest of the catalog first and
+refused with its diagnostics when it does not compile, and the file's hash must
+match the one read, so an edit saved in an editor meanwhile is never
+overwritten. A library catalog's text goes to the application's override file,
+by the rules of `runic-translations overrides add`.
+
+Security notes:
+
+- **Development only.** Only `vite dev` mounts the API. `vite build`, `vite
+  preview` and the generated ESM contain nothing of it.
+- **Loopback by default.** The API accepts a request only from the machine the
+  dev server runs on (`127.0.0.0/8`, `::1`), judged by the connection's address,
+  never by forwarded headers. Other clients need an explicit allow list:
+  `inPageEditing: { allow: ["100.64.0.0/10", "192.168.1.20", "laptop.example"] }`
+  or `RUNIC_TRANSLATIONS_EDIT_ALLOW="100.64.0.0/10 192.168.1.20"` (addresses,
+  CIDR networks and host names; an invalid entry stops the dev server). Allow
+  only networks whose members may change your sources.
+- **Same origin.** A request must come from a page of the dev server itself
+  (`Sec-Fetch-Site`, `Origin`), so another site or another local dev server
+  cannot use it. Vite's own host check (`server.allowedHosts`) runs first and
+  keeps refusing DNS-rebinding hosts.
+- **No paths from the browser.** A request names a catalog, a key and a locale;
+  the compiler resolves the file among the catalog's own sources and the
+  application's override directory, so a request cannot write anywhere else.
+- **Reverse proxies.** A proxy on the same machine makes every client it forwards
+  look like loopback. Do not expose the dev server through one while editing is
+  on, or set `inPageEditing: false`.
+
 ## Without Vite
 
 The generated directory is a set of ordinary ES modules with relative imports and

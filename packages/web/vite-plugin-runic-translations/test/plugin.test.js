@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { mkdtemp, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -961,6 +962,58 @@ test("published package inventory contains only declared runtime files", async (
     const archives = (await readdir(output)).filter(file => file.endsWith(".tgz")); assert.equal(archives.length, 1);
     const { stdout } = await execFileAsync("tar", ["-tzf", join(output, archives[0])]);
     const files = stdout.split("\n").filter(file => file.startsWith("package/") && !file.endsWith("/")).map(file => file.slice("package/".length)).sort();
-    assert.deepEqual(files, ["LICENSE", "README.md", "dist/compiler-service.d.ts", "dist/compiler-service.js", "dist/declaration-map.d.ts", "dist/declaration-map.js", "dist/dependencies.d.ts", "dist/dependencies.js", "dist/hmr.d.ts", "dist/hmr.js", "dist/index.d.ts", "dist/index.js", "package.json"]);
+    assert.deepEqual(files, ["LICENSE", "README.md", "dist/compiler-service.d.ts", "dist/compiler-service.js", "dist/declaration-map.d.ts", "dist/declaration-map.js", "dist/dependencies.d.ts", "dist/dependencies.js", "dist/edit.d.ts", "dist/edit.js", "dist/hmr.d.ts", "dist/hmr.js", "dist/index.d.ts", "dist/index.js", "package.json"]);
   } finally { await rm(output, { recursive: true, force: true }); }
+});
+
+// A real dev server: the API runs after Vite's own host check, and talks to the compiler through serve mode.
+test("in a Vite dev server, the API answers through runic-translations serve after Vite's host check", async () => {
+  const root = await mkdtemp(join(tmpdir(), "runic-vite-edit-server-"));
+  let vite;
+  try {
+    const project = join(root, "translations"), output = join(root, "generated");
+    await mkdir(project);
+    await writeFile(join(project, "runic.json"), JSON.stringify({ schemaVersion: 1, catalog: "app" }));
+    await writeFile(join(project, "en.rmf2"), "title = Hello\n");
+    const compiler = join(root, "serve.mjs"), calls = join(root, "calls.json");
+    // Generates nothing (the fixture below is the catalog) and answers message requests with the request it got.
+    await writeFile(compiler, `import { appendFileSync } from "node:fs";
+import { createInterface } from "node:readline";
+if (process.argv[2] !== "serve") process.exit(0);
+process.stdout.write(JSON.stringify({ protocol: "runic-translations-serve/1", event: "ready", version: "test" }) + "\\n");
+createInterface({ input: process.stdin }).on("line", line => {
+  const request = JSON.parse(line);
+  appendFileSync(${JSON.stringify(calls)}, line + "\\n");
+  const result = request.method === "message" ? { message: { catalog: "app", key: request.key, project: request.project } } : undefined;
+  process.stdout.write(JSON.stringify({ id: request.id, ok: true, exitCode: 0, output: "", message: "", diagnostics: [], elapsedMs: 0, result }) + "\\n");
+  if (request.method === "shutdown") process.exit(0);
+});
+`);
+    await writeV3Fixture(join(output, "app.esm-v5"));
+    vite = await createServer({
+      root, configFile: false, logLevel: "silent",
+      plugins: [runicTranslations({ project, output, command: process.execPath, commandArguments: [compiler] })],
+      server: { host: "127.0.0.1", port: 0, allowedHosts: [] },
+    });
+    await vite.listen();
+    const { port } = vite.httpServer.address();
+    const get = host => new Promise((resolve, reject) => {
+      const outgoing = httpRequest({ host: "127.0.0.1", port, path: "/__runic-translations/message?key=title", headers: { host } }, response => {
+        let text = ""; response.setEncoding("utf8");
+        response.on("data", chunk => { text += chunk; });
+        response.on("end", () => resolve({ status: response.statusCode, text }));
+      });
+      outgoing.on("error", reject); outgoing.end();
+    });
+    const answered = await get(`127.0.0.1:${port}`);
+    assert.equal(answered.status, 200, answered.text);
+    assert.deepEqual(JSON.parse(answered.text).message, { catalog: "app", key: "title", project });
+    // DNS rebinding: Vite refuses a Host it does not allow before the API sees the request.
+    const rebound = await get(`attacker.example:${port}`);
+    assert.equal(rebound.status, 403);
+    assert.doesNotMatch(rebound.text, /runic|forbidden/i);
+  } finally {
+    await vite?.close();
+    await rm(root, { recursive: true, force: true });
+  }
 });
