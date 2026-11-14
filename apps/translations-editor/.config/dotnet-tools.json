@@ -3,7 +3,7 @@
   "isRoot": true,
   "tools": {
     "dotnet-runic-translations": {
-      "version": "0.11.0",
+      "version": "0.12.0",
       "commands": [
         "runic-translations"
       ]
