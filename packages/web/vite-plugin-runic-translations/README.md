@@ -125,8 +125,8 @@ build is byte for byte the same with or without it.
 
 It is on by default and accepts requests from the same machine only. Turn it off
 with `inPageEditing: false`; allow other hosts and networks with
-`inPageEditing: { allow: [...] }` or the `RUNIC_TRANSLATIONS_EDIT_ALLOW`
-environment variable (see [Who may edit](#who-may-edit)).
+`inPageEditing: { allow: [...] }` or the `RUNIC_DEV_ALLOW` environment variable
+(see [Who may edit](#who-may-edit)).
 
 Reading and writing go through `runic-translations serve`, which reuses the
 Translations Editor's source-preserving writer: only the message's own text
@@ -275,12 +275,15 @@ runicTranslations({ inPageEditing: { allow: ["100.64.0.0/10", "fd7a:115c:a1e0::/
 ```
 
 ```sh
-RUNIC_TRANSLATIONS_EDIT_ALLOW="100.64.0.0/10, 192.168.1.20" vite dev --host
+RUNIC_DEV_ALLOW="100.64.0.0/10, 192.168.1.20" vite dev --host
 ```
 
 Entries are IPv4 or IPv6 addresses, CIDR networks, or host names (resolved when a
 request arrives, and cached for 30 seconds). The environment variable takes the
-same entries separated by commas or spaces, and adds to the option. An invalid
+same entries separated by commas or spaces, and adds to the option.
+`RUNIC_DEV_ALLOW` is the setting vite-plugin-runic (`@runic-artifex/vite-plugin-runic`)
+also reads for Runic Inspect's dev endpoints, so one variable admits a client to
+both; `RUNIC_TRANSLATIONS_EDIT_ALLOW` keeps working, and the two add up. An invalid
 entry stops the dev server with an error naming it. When the list is not empty,
 the dev server logs it at start. Vite must also accept the `Host` those clients
 use (`server.allowedHosts`, which allows IP addresses and `localhost` by

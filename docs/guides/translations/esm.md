@@ -228,7 +228,8 @@ Security notes:
   dev server runs on (`127.0.0.0/8`, `::1`), judged by the connection's address,
   never by forwarded headers. Other clients need an explicit allow list:
   `inPageEditing: { allow: ["100.64.0.0/10", "192.168.1.20", "laptop.example"] }`
-  or `RUNIC_TRANSLATIONS_EDIT_ALLOW="100.64.0.0/10 192.168.1.20"` (addresses,
+  or `RUNIC_DEV_ALLOW="100.64.0.0/10 192.168.1.20"` (the setting Runic Inspect in
+  vite-plugin-runic shares; `RUNIC_TRANSLATIONS_EDIT_ALLOW` still works) (addresses,
   CIDR networks and host names; an invalid entry stops the dev server). Allow
   only networks whose members may change your sources.
 - **Same origin.** A request must come from a page of the dev server itself
