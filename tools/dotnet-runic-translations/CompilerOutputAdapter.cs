@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Runic.Translations.Compiler;
 using Runic.Translations.Compiler.Generation;
@@ -8,7 +9,8 @@ namespace Runic.Translations.Tool;
 
 internal static class CompilerOutputAdapter
 {
-    internal static IReadOnlyList<ToolArtifact> Render(Rmf2ProjectV5 project, ToolEmission emission, bool sharedRuntime = false)
+    // outputPath: the output directory, so the ESM output's messages.d.ts.map can name the sources relative to itself.
+    internal static IReadOnlyList<ToolArtifact> Render(Rmf2ProjectV5 project, ToolEmission emission, bool sharedRuntime = false, string? outputPath = null)
     {
         ArgumentNullException.ThrowIfNull(project);
         if (emission == ToolEmission.None) emission = ToolEmission.CSharp | ToolEmission.Json | ToolEmission.Esm;
@@ -30,11 +32,24 @@ internal static class CompilerOutputAdapter
             outputs.Add(TranslationOutputRenderer.RenderRmf2V5AssetManifestJson(project, outputs));
         }
         if ((emission & ToolEmission.Esm) != 0)
-            outputs.AddRange(TranslationOutputRenderer.RenderRmf2V5EsmModules(project, sharedRuntime));
+            outputs.AddRange(TranslationOutputRenderer.RenderRmf2V5EsmModules(project, sharedRuntime,
+                outputPath is null ? null : DeclarationMapSource(Path.Combine(outputPath, project.Id + ".esm-v5"))));
 
         return ArtifactFiles.Normalize(outputs
             .Select(static output => new ToolArtifact(output.RelativePath, output.GetUtf8Bytes()))
             .ToArray());
+    }
+
+    // A source location path (relative to the current directory, like every input path) as a path relative to the map's
+    // directory with forward slashes; null for a source on another drive, which has no relative path.
+    private static Func<string, string?> DeclarationMapSource(string mapDirectory)
+    {
+        string current = Path.GetFullPath(Environment.CurrentDirectory), directory = Path.GetFullPath(mapDirectory, current);
+        return path =>
+        {
+            string relative = Path.GetRelativePath(directory, Path.GetFullPath(path, current));
+            return Path.IsPathRooted(relative) ? null : relative.Replace('\\', '/');
+        };
     }
 
     // generate --emit-json --contract: packs for a shipped release, for the locales it declares, and their asset manifest.

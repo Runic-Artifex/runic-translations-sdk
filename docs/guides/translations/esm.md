@@ -216,6 +216,38 @@ frontend, a server and other processes share one catalogue. The
 [Bun operation-history example](../../../examples/bun/operation-history/README.md)
 runs a Bun server and a separate process this way; CI runs it.
 
+## Editor navigation
+
+`generate --emit-esm` (and the build package, which runs it) also writes
+`messages.d.ts.map`, a declaration map, and ends `messages.d.ts` with
+`//# sourceMappingURL=messages.d.ts.map`. Go to Definition or Peek Definition on
+`m.key()`, or on an input name in its argument object, then opens the
+message's entry in its `.rmf2` or `.mf2` source, at the line of its key. It
+needs no extension: it works in every editor whose TypeScript support follows
+declaration maps through `tsserver`, such as VS Code and Visual Studio.
+Navigation from a message back to its callers is not part of the map.
+
+- **Which source.** The entry of the catalog's `baseLocale`, the text the hover
+  shows. A key that the base locale takes from somewhere else maps to that
+  entry: in a library catalog that the Vite plugin regenerates with
+  `dependencies: "auto"`, an overridden key opens the application's file under
+  `translations/overrides/<catalog>/` and every other key opens the library's
+  packed source under `node_modules`.
+- **Paths.** The map's `sources` are relative to the map, so a checkout can move
+  as a whole. A source on another drive than the output (Windows) has no
+  relative path and is left out; Go to Definition on its messages stays in
+  `messages.d.ts`. A library's prebuilt catalog keeps its map: it works for an
+  application as long as the package ships the sources at the same place
+  relative to the catalog, as the `runic/` directory of a packed library does.
+- **Vite.** The plugin copies `messages.d.ts` into its generated `virtual.d.ts`
+  and `dependencies/<catalog>.d.ts` and writes the matching `.d.ts.map` beside
+  each, so an import from `virtual:runic-translations/<catalog>` navigates the
+  same way. The plugin removes a map left from an earlier generation when the
+  catalog has none, since `tsserver` reads `<file>.map` even without a comment.
+- **Nothing else changes.** The JavaScript modules are byte for byte the same.
+  The map is an editor aid and not a module, so `web-module-manifest-v3.json`
+  does not list it. `verify` compares it like any other generated file.
+
 ## Messages
 
 Import `m` from the generated or virtual messages entrypoint. A single-segment

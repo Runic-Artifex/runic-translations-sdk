@@ -205,6 +205,11 @@ generated file, for example:
 }
 ```
 
+When the catalog has a `messages.d.ts.map`, as `generate --emit-esm` writes,
+the plugin also writes `virtual.d.ts.map`, so Go to Definition on `m.key()` opens
+the message's `.rmf2` or `.mf2` source line (see
+[Editor navigation](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/esm.md#editor-navigation)).
+
 The file exists once Vite has run the plugin (`vite build`, or `vite` for the
 dev server). A type checker does not run Vite, so on a clean checkout check
 after building: `vite build && svelte-check`, `vite build && tsc --noEmit`.
