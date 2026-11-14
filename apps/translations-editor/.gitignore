@@ -2,6 +2,7 @@ Frontend/.svelte-kit/
 Frontend/build/
 Frontend/node_modules/
 Frontend/src/generated/runic-translations.d.ts
+Frontend/src/generated/runic-translations.d.ts.map
 artifacts/
 bin/
 obj/
