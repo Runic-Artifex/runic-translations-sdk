@@ -4,7 +4,7 @@
 [Runic.CommandLine](https://github.com/Runic-Artifex/runic-cli-sdk) app to
 Runic Translations. Its `TranslationCommandTextResolver` translates help
 labels, parse and value errors, `CommandPrompts` hints and errors, faults and
-your `DescriptionKey` values. It ships English and German text for every
+your `DescriptionKey` and `LongDescriptionKey` values. It ships English and German text for every
 framework key, so you translate only your own text and write no key mapping.
 
 ```sh
@@ -37,7 +37,9 @@ the catalog and an `ICommandTextResolver` over the shared context.
 [Framework text](framework-text.md) lists both framework catalogs, their
 overrides and the German style guide.
 
-Your catalog holds the text behind your `DescriptionKey` values:
+Your catalog holds the text behind your `DescriptionKey` values, and behind
+the `LongDescriptionKey` of a `[Command]` or `[CommandGroup]`, whose extended
+help keeps the message's paragraphs and indented lines:
 
 ```rmf2
 commands {
@@ -49,8 +51,14 @@ arguments {
 ```
 
 With `de`, `greet --help` prints `Aufruf: localized greet <name> [Optionen]`
-and an unknown option prints `Die Option '--unknown' ist unbekannt.`, the usage
-line and `Weitere Informationen erhalten Sie mit "localized greet --help".`. The
+an unknown option prints `Die Option '--unknown' ist unbekannt.`, the usage
+line and `Weitere Informationen erhalten Sie mit "localized greet --help".`, and
+a missing argument prints `Das Argument <name> fehlt.`. Since Runic.CommandLine
+0.13 the framework names an argument by its placeholder (`<name>`, or its
+`ValueName` such as `<Container-Pfad>`) and the options in a `[requires: …]` or
+`[conflicts: …]` note by their spelling in the app's syntax (`[erfordert: /factor]`,
+`[schließt aus: /l]` with the Windows slash syntax), and help shows no default
+for flags. The adapter's German text is unchanged; only these arguments differ. The
 [localized example](../../../examples/command-line/localized/README.md) is a
 complete app that is also published with NativeAOT in CI.
 
@@ -73,6 +81,7 @@ capitalizing the letter after it (`TranslationCommandTextResolver.GetMessageName
 | `faults.RCLI4000` | `faults.RCLI4000` |
 | `hints.RCLI5000` | `hints.RCLI5000` |
 | `commands.greet` (a `DescriptionKey`) | `commands.greet` |
+| `commands.greet-details` (a `LongDescriptionKey`) | `commands.greetDetails` |
 
 Framework text comes from the adapter's `runic-command-line` catalog, which
 ships English and German. Your catalog overlays it: a message in your catalog,
@@ -172,6 +181,7 @@ from that release's `CommandTextKeys`.
 
 | Runic.Translations.CommandLine | Runic.CommandLine |
 | --- | --- |
+| 0.11.x | 0.13.x |
 | 0.10.x | 0.12.x |
 | 0.9.x | 0.9.x |
 

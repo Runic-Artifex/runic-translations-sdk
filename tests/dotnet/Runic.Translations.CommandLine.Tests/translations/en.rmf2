@@ -1,6 +1,17 @@
 # Application text, keyed by DescriptionKey, plus overrides of framework text.
 commands {
   greet = Greet a person
+  storeShow = Show the store
+  # LongDescriptionKey text keeps its paragraphs and preformatted lines.
+  storeShowDetails =
+    Restart the service afterwards.
+
+      /a   first entry
+      /b   second entry
+}
+groups {
+  store = Manage the store
+  storeDetails = The store keeps one entry per container.
 }
 arguments {
   name = Name of the person to greet
