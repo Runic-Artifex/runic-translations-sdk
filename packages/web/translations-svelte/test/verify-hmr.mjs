@@ -4,11 +4,15 @@
 // follows nothing. A library catalog regenerated with `dependencies: "auto"` shows the application's override. Each
 // text edit must update the page without a navigation, keep its state and fetch only the edited message's module;
 // structural edits and the page without a listener must reload. Marker mode (runic-sdk#956) marks the text of the plain and
-// Svelte pages while it is on, and leaves it plain once it is off. Finally a production build with the plugin must equal
-// the plain re-export of the same generated catalog.
+// Svelte pages while it is on, and leaves it plain once it is off. The in-page editing API (translations#178) writes a
+// message from the page, which then updates in place; it refuses a stale hash and, without configuration, a client
+// beyond loopback. Finally a production build with the plugin must equal the plain re-export of the same generated
+// catalog, with and without in-page editing.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { request as httpRequest } from "node:http";
+import { networkInterfaces } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
@@ -317,6 +321,66 @@ render();
     await view.tab.close();
   }
 
+  // --- In-page editing: read a message from the page, write it, and see it in place (translations#178). ---
+  {
+    const view = await open("plain.html");
+    for (let tap = 0; tap < 2; tap++) await view.tab.click("#tap");
+    const api = (method, body, query = "") => view.tab.evaluate(async ([method, body, query]) => {
+      const response = await fetch(`/__runic-translations/message${query}`, method === "GET" ? {} :
+        { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      return { status: response.status, body: await response.json() };
+    }, [method, body, query]);
+    const read = await api("GET", undefined, "?key=title");
+    assert.equal(read.status, 200, JSON.stringify(read.body));
+    const englishTitle = read.body.message.locales.find(locale => locale.locale === "en");
+    assert.equal(englishTitle.text, "Svelte, edited");
+    assert.equal(englishTitle.file.path, join(fixture, "translations/en.rmf2").split("\\").join("/"));
+    assert.equal(read.body.message.locales.find(locale => locale.locale === "de").text, "Hallo, bearbeitet");
+
+    await pause(150);
+    view.state.hot.length = 0;
+    const written = await api("POST", { key: "title", locale: "en", text: "Edited in the page", expectedHash: englishTitle.file.hash });
+    assert.equal(written.status, 200, JSON.stringify(written.body));
+    await view.until("#title", "Edited in the page", "the message written through the API");
+    assert.equal(view.state.navigations, 0, "a write updates the page in place");
+    assert.equal(await view.text("#count"), "2", "the page's state is kept");
+    assert.equal(readFileSync(join(fixture, "translations/en.rmf2"), "utf8"),
+      english({ title: "Edited in the page", taps: "{{{$count} clicks}}", extra: "added = New\n" }), "only the message's text changed in the source");
+    await pause(300);
+    assert.deepEqual(view.fetched(), ["app.esm-v5/messages/r_7469746c65.js"], "only the edited message's module is fetched");
+
+    // The hash the first write was made against is stale now.
+    const stale = await api("POST", { key: "title", locale: "en", text: "Lost update", expectedHash: englishTitle.file.hash });
+    assert.equal(stale.status, 409, JSON.stringify(stale.body));
+    assert.equal(stale.body.message.locales.find(locale => locale.locale === "en").text, "Edited in the page", "a conflict returns the current message");
+    const broken = await api("POST", { key: "title", locale: "en", text: "Broken {$name", expectedHash: written.body.message.locales.find(locale => locale.locale === "en").file.hash });
+    assert.equal(broken.status, 422, JSON.stringify(broken.body));
+    assert.ok(broken.body.diagnostics.some(diagnostic => diagnostic.code.startsWith("RTR")), JSON.stringify(broken.body));
+    assert.equal(await view.text("#title"), "Edited in the page");
+
+    // A plural message is written as its whole text.
+    const clicks = (await api("GET", undefined, "?key=clicks")).body.message.locales.find(locale => locale.locale === "en");
+    assert.deepEqual(clicks.structure.variants.map(variant => variant.keys.join(" ")), ["one", "*"]);
+    const plural = await api("POST", { key: "clicks", locale: "en", text: ".input {$count :integer}\n.match $count\none {{One press}}\n* {{{$count} presses}}", expectedHash: clicks.file.hash });
+    assert.equal(plural.status, 200, JSON.stringify(plural.body));
+    await view.until("#clicks", "2 presses", "the plural message written through the API");
+
+    // A library catalog's text goes to the application's override, regenerated with dependencies: "auto".
+    const library = await api("GET", undefined, "?catalog=acme.grid&key=empty");
+    assert.equal(library.status, 200, JSON.stringify(library.body));
+    const override = library.body.message.locales.find(locale => locale.locale === "en");
+    assert.equal(override.origin, "override");
+    const overridden = await api("POST", { catalog: "acme.grid", key: "empty", locale: "en", text: "Nothing, from the page", expectedHash: override.file.hash });
+    assert.equal(overridden.status, 200, JSON.stringify(overridden.body));
+    await view.until("#library", "Nothing, from the page", "the library override written through the API");
+    assert.equal(view.state.navigations, 0, "no reload for any of the writes");
+    assert.equal(await view.text("#count"), "2");
+    assert.equal(readFileSync(join(fixture, "translations/overrides/acme.grid/en.rmf2"), "utf8"), "empty = Nothing, from the page\n");
+    assert.equal(readFileSync(join(fixture, "node_modules/@acme/grid/runic/acme.grid/en.rmf2"), "utf8"), "empty = No rows\n", "the library's own source is never written");
+    assert.deepEqual(view.watch.errors, []);
+    await view.tab.close();
+  }
+
   // --- A page that follows no text changes reloads instead of showing stale text. ---
   {
     const view = await open("unfollowed.html");
@@ -329,6 +393,32 @@ render();
   browser = undefined;
   await vite.close();
   vite = undefined;
+
+  // --- In-page editing beyond loopback: refused without configuration, accepted for an allowed network. ---
+  const external = Object.values(networkInterfaces()).flat().find(item => item && item.family === "IPv4" && !item.internal)?.address;
+  if (!external) console.log("In-page editing: no non-loopback IPv4 address on this machine; the remote-client checks are left to the unit tests.");
+  else for (const allow of [undefined, `${external}/32`]) {
+    // The environment variable, as a developer would set it for a Tailscale network or a laptop.
+    if (allow) process.env.RUNIC_TRANSLATIONS_EDIT_ALLOW = allow; else delete process.env.RUNIC_TRANSLATIONS_EDIT_ALLOW;
+    const remote = await createServer({
+      root: fixture, configFile: false, logLevel: "silent",
+      plugins: [runicTranslations({ project: join(fixture, "translations"), cwd: fixture, command: "dotnet", commandArguments: [tool] })],
+      server: { host: "0.0.0.0", port: 0 },
+    });
+    try {
+      await remote.listen();
+      const { port } = remote.httpServer.address();
+      const status = await new Promise((resolveStatus, reject) => {
+        const outgoing = httpRequest({ host: external, port, path: "/__runic-translations/message?key=title" }, response => { response.resume(); resolveStatus(response.statusCode); });
+        outgoing.on("error", reject);
+        outgoing.end();
+      });
+      assert.equal(status, allow ? 200 : 403, `a request from ${external} with RUNIC_TRANSLATIONS_EDIT_ALLOW=${allow ?? "(unset)"}`);
+    } finally {
+      delete process.env.RUNIC_TRANSLATIONS_EDIT_ALLOW;
+      await remote.close();
+    }
+  }
 
   // --- Production: the plugin adds nothing to a build. ---
   write("entry.js", 'import { m } from "virtual:runic-translations/app";\nexport const text = count => [m.title(), m.clicks({ count })].join("|");\n');
@@ -348,10 +438,13 @@ render();
   const withPlugin = await bundle("plugin", runicTranslations({ project: join(fixture, "translations"), cwd: fixture, command: "dotnet", commandArguments: [tool] }));
   const plain = await bundle("reference", reference);
   assert.deepEqual(withPlugin, plain, "a production build with the plugin is the plain re-export of the generated catalog");
+  const withoutEditing = await bundle("no-editing", runicTranslations({ project: join(fixture, "translations"), cwd: fixture, command: "dotnet", commandArguments: [tool], inPageEditing: false }));
+  assert.deepEqual(withoutEditing, withPlugin, "in-page editing adds nothing to a production build");
+  assert.ok(!withPlugin["bundle.js"].includes("__runic-translations"), "no editing route in the bundle");
   for (const marker of ["import.meta.hot", "runicMessageSetters", "runic.translations.text", "runic-translations:hmr", "__runicFormat", "__runicMarked", "\u2063"])
     assert.ok(!withPlugin["bundle.js"].includes(marker), marker);
   assert.match(withPlugin["bundle.js"], /Reloaded/);
-  console.log("Vite in-place updates passed: plain JS, Svelte and a library override in Chromium, marker mode, the reloads, SSR and the production build.");
+  console.log("Vite in-place updates passed: plain JS, Svelte and a library override in Chromium, marker mode, in-page editing, the reloads, SSR and the production build.");
 } catch (error) {
   console.error(`Dev server log:\n${logged.join("\n")}`);
   const overlay = await current?.evaluate(() => document.querySelector("vite-error-overlay")?.shadowRoot?.textContent).catch(() => undefined);

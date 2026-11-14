@@ -171,7 +171,7 @@ internal sealed class ServeModeTests
         JsonSerializer.Serialize(new { id, method, project, output, emit = EsmOnly });
 
     // Drives one in-process server: each Send writes a request line and reads its response line.
-    private sealed class CompileServerHarness : IDisposable
+    internal sealed class CompileServerHarness : IDisposable
     {
         private readonly BlockingLineReader _input = new();
         private readonly ResponseStream _output = new();

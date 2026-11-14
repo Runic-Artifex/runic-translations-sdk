@@ -77,6 +77,10 @@
         "elapsedMs": {
           "type": "integer",
           "minimum": 0
+        },
+        "result": {
+          "$ref": "#/$defs/messageResult",
+          "description": "Only in responses to message and set-message: the message, the files written, or why the request failed."
         }
       }
     },
@@ -173,6 +177,8 @@
           "enum": [
             "generate",
             "validate",
+            "message",
+            "set-message",
             "shutdown"
           ]
         },
@@ -197,6 +203,336 @@
         "pseudoLocales": {
           "type": "boolean",
           "description": "Also generate the development pseudo-locales that runic.json declares (pseudoLocales), as --pseudo-locales does. Defaults to false."
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "description": "message, set-message: the message's canonical key (grid_title) or logical key (grid.title)."
+        },
+        "catalog": {
+          "type": "string",
+          "minLength": 1,
+          "description": "message, set-message: the catalog; the project's own when omitted. Another catalog is a library catalog of an installed package, whose edits go to the application's override source."
+        },
+        "locale": {
+          "type": "string",
+          "minLength": 1,
+          "description": "set-message: the locale to write."
+        },
+        "text": {
+          "type": "string",
+          "description": "set-message: the locale's new message text as authored (the whole MF2 message, with declarations, selectors and markup)."
+        },
+        "expectedHash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "set-message: the file hash the edit was made against (locales[].file.hash of the message as read): sha256:<hex>, or none (or null) for a file that does not exist yet."
+        }
+      }
+    },
+    "messageResult": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "$ref": "#/$defs/message",
+          "description": "message: the message as read; set-message: the message after the write; on a conflict or a refused write: the current message."
+        },
+        "written": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "set-message: the absolute paths of the files written (the source, and for a new library override also runic.json and the review file when they changed)."
+        },
+        "error": {
+          "enum": [
+            "not-found",
+            "invalid",
+            "conflict",
+            "unsupported"
+          ],
+          "description": "Why the request failed: an unknown catalog, key or locale (exit code 2); a text that does not compile, with its diagnostics; a file that changed since it was read; or a message that cannot be written there."
+        }
+      }
+    },
+    "message": {
+      "type": "object",
+      "required": [
+        "catalog",
+        "kind",
+        "key",
+        "logicalKey",
+        "baseLocale",
+        "content",
+        "structured",
+        "inputs",
+        "markup",
+        "locales"
+      ],
+      "properties": {
+        "catalog": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "catalog",
+            "library"
+          ],
+          "description": "The project's own catalog, or a library catalog the application overrides."
+        },
+        "package": {
+          "type": "string",
+          "description": "For a library catalog: the package and version that ship it."
+        },
+        "key": {
+          "type": "string",
+          "description": "The canonical key."
+        },
+        "logicalKey": {
+          "type": "string",
+          "description": "The dotted logical key."
+        },
+        "baseLocale": {
+          "type": "string"
+        },
+        "content": {
+          "enum": [
+            "inline",
+            "document"
+          ]
+        },
+        "structured": {
+          "type": "boolean",
+          "description": "Whether the message has markup in a locale."
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "type"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "markup": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "locales": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/messageLocale"
+          }
+        }
+      }
+    },
+    "messageLocale": {
+      "type": "object",
+      "required": [
+        "locale",
+        "fallback",
+        "origin",
+        "text",
+        "source",
+        "file",
+        "editable",
+        "structure"
+      ],
+      "properties": {
+        "locale": {
+          "type": "string"
+        },
+        "fallback": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "origin": {
+          "enum": [
+            "catalog",
+            "override",
+            "library",
+            "missing"
+          ],
+          "description": "Where the locale's text comes from: the catalog's source, the application's override, the library (read-only; a write creates an override), or nowhere (the locale falls back)."
+        },
+        "text": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The message text as authored, or null for a missing one."
+        },
+        "source": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/sourceLocation"
+            }
+          ],
+          "description": "Where text is defined."
+        },
+        "file": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/messageFile"
+            }
+          ],
+          "description": "The file a write of this locale changes, or null when it cannot be written (reason)."
+        },
+        "editable": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Why the locale cannot be written."
+        },
+        "structure": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/messageStructure"
+            }
+          ]
+        }
+      }
+    },
+    "sourceLocation": {
+      "type": "object",
+      "required": [
+        "path",
+        "line",
+        "column"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "messageFile": {
+      "type": "object",
+      "required": [
+        "path",
+        "exists",
+        "hash"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute path."
+        },
+        "exists": {
+          "type": "boolean"
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^(sha256:[a-f0-9]{64}|none)$"
+        }
+      }
+    },
+    "messageStructure": {
+      "type": "object",
+      "required": [
+        "supported"
+      ],
+      "properties": {
+        "supported": {
+          "type": "boolean",
+          "description": "Whether the authoring projection understands the message; when false, edit the MF2 source as text."
+        },
+        "reason": {
+          "type": "string"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "function": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "declared": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "selectors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "selectorFunctions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "keys": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "pattern": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "pluralCategories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     }
