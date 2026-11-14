@@ -1,5 +1,15 @@
 commands {
   greet = Grüßt eine Person
+  storeShow = Zeigt den Speicher an
+  storeShowDetails =
+    Starten Sie den Dienst danach neu.
+
+      /a   erster Eintrag
+      /b   zweiter Eintrag
+}
+groups {
+  store = Verwaltet den Speicher
+  storeDetails = Der Speicher hat einen Eintrag pro Container.
 }
 arguments {
   name = Name der Person

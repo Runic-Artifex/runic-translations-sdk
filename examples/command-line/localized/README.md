@@ -17,6 +17,7 @@ dotnet build examples/command-line/localized -c Release
 RCLI_EXAMPLE_CULTURE=de dotnet run --project examples/command-line/localized -c Release --no-build -- greet Ada
 RCLI_EXAMPLE_CULTURE=de dotnet run --project examples/command-line/localized -c Release --no-build -- greet --help
 RCLI_EXAMPLE_CULTURE=de dotnet run --project examples/command-line/localized -c Release --no-build -- greet --unknown
+RCLI_EXAMPLE_CULTURE=de dotnet run --project examples/command-line/localized -c Release --no-build -- greet
 ```
 
 They print `Hallo Ada`, German help that starts with
@@ -24,6 +25,15 @@ They print `Hallo Ada`, German help that starts with
 
 ```text
 Die Option '--unknown' ist unbekannt.
+Aufruf: localized greet <name> [Optionen]
+Weitere Informationen erhalten Sie mit "localized greet --help".
+```
+
+Without the name, also with exit code 2, the error names the argument by its
+placeholder, as the usage line does (Runic.CommandLine 0.13 and later):
+
+```text
+Das Argument <name> fehlt.
 Aufruf: localized greet <name> [Optionen]
 Weitere Informationen erhalten Sie mit "localized greet --help".
 ```

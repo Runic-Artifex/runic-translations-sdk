@@ -35,10 +35,11 @@ covers every key of it, and patches add no keys. Use the pair from one row:
 
 | Runic.Translations.CommandLine | Runic.CommandLine |
 | --- | --- |
+| 0.11.x | 0.13.x |
 | 0.10.x | 0.12.x |
 | 0.9.x | 0.9.x |
 
-Runic.CommandLine 0.10 and 0.11 have no adapter release; use 0.12 with 0.10.
+Runic.CommandLine 0.10 and 0.11 have no adapter release; use Runic.CommandLine 0.12 or later with the matching adapter row.
 Another combination is NuGet warning `NU1608` at restore and can show English
 framework lines. The text itself comes from the Runic.CommandLine package: it
 carries the `runic-command-line` catalog sources under `translations/`

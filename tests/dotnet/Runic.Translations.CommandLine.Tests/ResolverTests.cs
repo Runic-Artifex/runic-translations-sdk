@@ -199,7 +199,7 @@ internal sealed partial class ResolverTests
         Assert.True(unknown.Error.Contains("Keine solche Option: --bogus", StringComparison.Ordinal), unknown.Error);
         // The application message declares an input the framework does not supply, so the built-in text is used.
         Result missing = await Run(resolver, "de", "greet");
-        Assert.True(missing.Error.Contains("Das Argument name fehlt.", StringComparison.Ordinal), missing.Error);
+        Assert.True(missing.Error.Contains("Das Argument <name> fehlt.", StringComparison.Ordinal), missing.Error);
 
         // An application diagnostic with positional string and integer inputs.
         Assert.Equal("disk hat sein Kontingent von 5 überschritten.", resolver.Resolve("diagnostics.quota-exceeded", german, ["disk", "5"]));

@@ -212,6 +212,9 @@ function testNativeAot() {
   // Since Command Line 0.10 a usage error has no code prefix and ends with the usage line and the help hint (hints.usage, #168).
   assert.deepEqual(invoke("de", "greet", "--unknown"), { status: 2,
     text: "Die Option '--unknown' ist unbekannt.\nAufruf: localized greet <name> [Optionen]\nWeitere Informationen erhalten Sie mit \"localized greet --help\".\n" });
+  // Since Command Line 0.13 the missing-argument error names the argument by its placeholder, as the usage line does.
+  assert.deepEqual(invoke("de", "greet"), { status: 2,
+    text: "Das Argument <name> fehlt.\nAufruf: localized greet <name> [Optionen]\nWeitere Informationen erhalten Sie mit \"localized greet --help\".\n" });
   const help = invoke("de", "greet", "--help");
   assert.equal(help.status, 0);
   for (const text of ["Aufruf: localized greet", "Grüßt eine Person", "Argumente:", "Optionen:", "Hilfe anzeigen"])
