@@ -26,8 +26,9 @@ internal static class TranslationOutputRenderer
     internal static TranslationGeneratedOutput RenderRmf2V5CSharpReadable(Rmf2ProjectV5 project) =>
         Rmf2CSharpOutputRendererV5.RenderReadable(RequireProject(project));
 
-    internal static IReadOnlyList<TranslationGeneratedOutput> RenderRmf2V5EsmModules(Rmf2ProjectV5 project, bool sharedRuntime = false) =>
-        Rmf2EsmOutputRendererV5.Render(RequireProject(project), sharedRuntime);
+    internal static IReadOnlyList<TranslationGeneratedOutput> RenderRmf2V5EsmModules(Rmf2ProjectV5 project, bool sharedRuntime = false,
+        Func<string, string?>? declarationMapSource = null) =>
+        Rmf2EsmOutputRendererV5.Render(RequireProject(project), sharedRuntime, declarationMapSource);
 
     internal static TranslationGeneratedOutput RenderRmf2V5AssetManifestJson(
         Rmf2ProjectV5 project,

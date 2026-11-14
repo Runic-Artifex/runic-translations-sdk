@@ -87,6 +87,10 @@ internal sealed class Rmf2DependencyCatalogTests
                 equal(bundle.split("function createCatalogRuntime(").length - 1, 1, "one shared runtime for both dependency catalogs");
                 const types = await readFile(join(root, ".runic", "translations", "dependencies", "acme.grid.d.ts"), "utf8");
                 if (!types.includes('declare module "virtual:runic-translations/acme.grid"')) throw new Error("no declarations for the dependency catalog");
+                // Go to Definition on grid.empty() opens the application's override, on grid.rows() the library's packed source.
+                if (!types.endsWith("//# sourceMappingURL=acme.grid.d.ts.map\n")) throw new Error("the dependency's declarations have no map");
+                const typesMap = JSON.parse(await readFile(join(root, ".runic", "translations", "dependencies", "acme.grid.d.ts.map"), "utf8"));
+                equal(JSON.stringify(typesMap.sources), JSON.stringify(["../../../node_modules/@acme/grid/runic/acme.grid/en.rmf2", "../../../translations/overrides/acme.grid/en.rmf2"]), "declaration map sources");
                 const declarations = await readFile(join(root, ".runic", "translations", "virtual.d.ts"), "utf8");
                 if (!declarations.includes('/// <reference path="dependencies/acme.grid.d.ts" />')) throw new Error("the application's declarations do not reference the dependency's: " + declarations);
                 const library = await readdir(join(root, "node_modules", "@acme", "grid"), { recursive: true });
