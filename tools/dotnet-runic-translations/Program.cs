@@ -567,7 +567,7 @@ internal static class Program
     internal static void ReportDiagnostics(IReadOnlyList<TranslationDiagnostic> diagnostics, ToolOperationResult result) =>
         WriteDiagnostics(diagnostics, result);
 
-    private static void WriteDiagnostics(IReadOnlyList<TranslationDiagnostic> diagnostics, ToolOperationResult result)
+    internal static void WriteDiagnostics(IReadOnlyList<TranslationDiagnostic> diagnostics, ToolOperationResult result)
     {
         // Reported under their own RTR codes with structured locations, not as RCLI diagnostics.
         for (int index = 0; index < diagnostics.Count; index++)

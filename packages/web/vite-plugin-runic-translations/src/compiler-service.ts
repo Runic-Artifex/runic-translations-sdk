@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
+import type { EditReply } from "./edit.js";
 
 /** Protocol spoken by `runic-translations serve`; see the tool's CompileServer. */
 export const serveProtocol = "runic-translations-serve/1";
@@ -69,6 +70,8 @@ interface ServeResponse {
   readonly exitCode: number;
   readonly message?: string;
   readonly diagnostics?: readonly CompilerDiagnostic[];
+  /** The `message` and `set-message` result (in-page editing). */
+  readonly result?: EditReply["result"];
 }
 
 interface Pending {
@@ -135,6 +138,14 @@ export class PersistentCompiler {
     const response = await this.#request({ method: "generate", ...request });
     if (!response.ok)
       throw new CompilerFailure(response.message ?? "", response.exitCode, response.diagnostics ?? []);
+  }
+
+  /**
+   * Sends an in-page editing request (`message` reads a message in every locale, `set-message` writes one locale's text)
+   * and resolves with the compiler's reply, failed or not; rejects with {@link CompilerUnavailable} when it cannot serve it.
+   */
+  async edit(method: "message" | "set-message", body: Readonly<Record<string, unknown>>): Promise<EditReply> {
+    return this.#request({ ...body, method });
   }
 
   /** Asks the process to exit and stops it if it does not within the grace period. */

@@ -52,6 +52,10 @@ The libraries that NuGet packages expose under `lib/` set `RunicTrackPublicApi`:
 
 Packing `Runic.Translations`, `Runic.Translations.Tooling` and `Runic.Translations.Wpf` also runs package validation against `RunicTranslationsPackageValidationBaselineVersion` from `eng/Versions.props`, the last published release. It compares every assembly under `lib/`, including the bundled ones. Record an intentional binary break in the project's `CompatibilitySuppressions.xml`; regenerate it with `dotnet pack <project> -p:ApiCompatGenerateSuppressionFile=true`. A package that has not been published yet, such as `Runic.Translations.CommandLine` before its first release, clears `RunicTranslationsPackageValidationBaselineVersion` in its project; remove that line once the package is published.
 
+## Release notes
+
+A pull request with a user-facing change adds its release notes as fragments under `eng/release/notes/<version>/`, `<version>` being the candidate on `main`: one file per entry, in the directory of its section, named by the issue or pull request, for example `features/176.md` (a `## Title` section with its issue), `breaking/176.md` and `fixes/180.md` (list items). Never edit `eng/release/notes/<version>.md`: the release pull request assembles it from the fragments. `bun eng/release/notes.mjs check` validates them; [the release guide](eng/release/README.md#release-notes) lists the sections, names and order.
+
 ## Building against an unpublished Runic Command Line
 
 During a release train (see [Release trains](eng/release/README.md#release-trains)),

@@ -192,6 +192,7 @@ function existingRelease(version, source, spawn) {
 export const githubPrerelease = version => /^0\./.test(version) || version.split("+")[0].includes("-");
 
 export function releaseCheck(version, source, spawn = spawnSync) {
+  releaseNotes(version);
   const found = existingRelease(version, source, spawn);
   if (found?.isDraft) return `Would resume the draft release v${version} for ${source} (${found.url}).`;
   return found ? `GitHub release v${version} already exists for ${source} (${found.url}); a rerun keeps it.`
@@ -203,8 +204,12 @@ export function releaseCheck(version, source, spawn = spawnSync) {
 // A published release is never changed: with immutable releases its assets cannot be
 // added, so a published release missing an asset (for example one created before the
 // SBOM existed) is kept as it is with a warning. The attestations still cover those files.
-// Hand-written notes for a version, if eng/release/notes/<version>.md exists.
+// Hand-written notes for a version, if eng/release/notes/<version>.md exists. The
+// release pull request assembles them from the fragments in eng/release/notes/<version>/
+// (D066.33); a release whose fragments were not assembled stops, also in a dry run.
 export function releaseNotes(version, directory = resolve(root, "eng/release/notes")) {
+  if (existsSync(join(directory, version)))
+    throw new Error(`eng/release/notes/${version}/ holds unassembled release-note fragments; run bun eng/release/notes.mjs assemble ${version} in the release pull request.`);
   const path = join(directory, `${version}.md`);
   return existsSync(path) ? path : undefined;
 }

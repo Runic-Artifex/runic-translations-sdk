@@ -297,6 +297,9 @@ test("hand-written release notes are used only when the version has a notes file
     writeFileSync(join(directory, "1.2.3.md"), "# Notes\n");
     expect(releaseNotes("1.2.3", directory)).toBe(join(directory, "1.2.3.md"));
     expect(releaseNotes("1.2.4", directory)).toBeUndefined();
+    // Fragments not assembled by the release pull request stop the release.
+    mkdirSync(join(directory, "1.2.5", "fixes"), { recursive: true });
+    expect(() => releaseNotes("1.2.5", directory)).toThrow("run bun eng/release/notes.mjs assemble 1.2.5");
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
