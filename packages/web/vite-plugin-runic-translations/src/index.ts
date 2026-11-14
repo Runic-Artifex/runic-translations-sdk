@@ -599,9 +599,11 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
     return result === code ? null : { code: result, map: null };
   }
 
+  // A generated declaration file, or its declaration map (`.d.ts.map`, written next to it for editor navigation).
   function isGeneratedDeclaration(path: string): boolean {
-    return /\.d\.[cm]?ts$/.test(path) &&
-      (path === typeDeclarationsPath || isWithin(applicationOutput, path) || isWithin(dirname(manifestPath), path));
+    const declaration = path.endsWith(".map") ? path.slice(0, -".map".length) : path;
+    return /\.d\.[cm]?ts$/.test(declaration) &&
+      (declaration === typeDeclarationsPath || isWithin(applicationOutput, declaration) || isWithin(dirname(manifestPath), declaration));
   }
 
   // A generated message module of the catalog or of a dependency catalog, which the dev server makes self-accepting.

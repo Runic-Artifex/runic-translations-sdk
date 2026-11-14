@@ -442,8 +442,11 @@ test("generated declarations are kept out of the dev server's watcher and writte
     const [ignored] = config.server.watch.ignored;
     assert.equal(ignored(join(generated, "virtual.d.ts")), true);
     assert.equal(ignored(join(generated, "messages.d.ts")), true);
+    assert.equal(ignored(join(generated, "virtual.d.ts.map")), true, "declaration maps are generated too");
+    assert.equal(ignored(join(generated, "messages.d.ts.map")), true);
     assert.equal(ignored(join(generated, "messages", "r_74.js")), false);
     assert.equal(ignored(join(root, "src", "types.d.ts")), false, "the application's own declarations stay watched");
+    assert.equal(ignored(join(root, "src", "types.d.ts.map")), false);
     assert.equal(plugin.config({ root }, { command: "build", mode: "production" }), undefined, "a build is unchanged");
     assert.equal(plugin.config({ root, server: { watch: null } }, { command: "serve", mode: "development" }), undefined, "a disabled watcher stays disabled");
     await mkdir(join(root, "translations"));
@@ -452,6 +455,8 @@ test("generated declarations are kept out of the dev server's watcher and writte
     const [projectIgnored] = project.config({ root }, { command: "serve" }).server.watch.ignored;
     assert.equal(projectIgnored(join(root, "out", "dependencies", "acme.grid.d.ts")), true);
     assert.equal(projectIgnored(join(root, "types", "runic.d.ts")), true);
+    assert.equal(projectIgnored(join(root, "types", "runic.d.ts.map")), true);
+    assert.equal(projectIgnored(join(root, "out", "dependencies", "acme.grid.d.ts.map")), true);
 
     plugin.configResolved({ mode: "development" });
     await plugin.buildStart.call({ addWatchFile() {} });
