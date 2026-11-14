@@ -751,10 +751,10 @@ internal sealed class Rmf2EsmV5Tests
             new TranslationSource("translations/runic.json", File.ReadAllBytes(Path.Combine(example, "runic.json"))),
             [new("translations/en.rmf2", File.ReadAllBytes(Path.Combine(example, "en.rmf2"))), new("translations/de.rmf2", File.ReadAllBytes(Path.Combine(example, "de.rmf2")))]);
         Assert.True(document.Success, string.Join("; ", document.Diagnostics.Select(item => item.Message)));
-        IReadOnlyList<TranslationGeneratedOutput> modules = TranslationOutputRenderer.RenderRmf2V5EsmModules(Fixture())
+        TranslationGeneratedOutput[] modules = TranslationOutputRenderer.RenderRmf2V5EsmModules(Fixture())
             .Concat(TranslationOutputRenderer.RenderRmf2V5EsmModules(document.Project!))
             .Where(output => output.RelativePath.Contains("/messages/r_", StringComparison.Ordinal)).ToArray();
-        Assert.True(modules.Count >= 3, "the corpus and the document example have message modules");
+        Assert.True(modules.Length >= 3, "the corpus and the document example have message modules");
         foreach (TranslationGeneratedOutput module in modules)
         {
             int count = 0;
