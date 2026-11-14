@@ -506,7 +506,7 @@ internal static class Program
         IReadOnlyList<ToolArtifact> artifacts;
         try
         {
-            if (invocation.ContractPath is null) artifacts = CompilerOutputAdapter.Render(compilation.Project, invocation.Emission, invocation.SharedRuntime);
+            if (invocation.ContractPath is null) artifacts = CompilerOutputAdapter.Render(compilation.Project, invocation.Emission, invocation.SharedRuntime, invocation.OutputPath);
             else
             {
                 Rmf2ShippedContractV5 shipped;

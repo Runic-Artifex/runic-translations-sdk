@@ -12,12 +12,19 @@ internal sealed class GenerationWriter
 
     internal void Indent() => _indent++;
     internal void Unindent() => _indent--;
-    internal void Blank() => _builder.Append('\n');
+    internal void Blank() { _builder.Append('\n'); LineCount++; }
+
+    /// <summary>The lines written so far, for callers whose values contain no line break: the 0-based index of the next line.</summary>
+    internal int LineCount { get; private set; }
+
+    /// <summary>The column the next <see cref="Line"/> value starts at.</summary>
+    internal int IndentColumn => _indent * 4;
 
     internal void Line(string value = "")
     {
         for (int i = 0; i < _indent; i++) _builder.Append("    ");
         _builder.Append(value).Append('\n');
+        LineCount++;
     }
 
     public override string ToString() => _builder.ToString();

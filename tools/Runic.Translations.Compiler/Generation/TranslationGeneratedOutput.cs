@@ -47,6 +47,8 @@ internal enum TranslationGeneratedOutputKind
     EsmServerTypes,
     /// <summary>The readable C# facade and typed slot bindings (readable-name policy 1).</summary>
     CSharpReadable,
+    /// <summary>The declaration map from generated message functions to their base-locale source entries.</summary>
+    EsmMessagesTypesMap,
 }
 
 /// <summary>A deterministic, UTF-8 compiler output for exactly one concern.</summary>
