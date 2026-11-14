@@ -1,6 +1,6 @@
 {
   "capabilityMatrixVersion": 1,
-  "releaseTarget": "0.11.0",
+  "releaseTarget": "0.12.0",
   "cldr": {
     "version": "48.2",
     "jsonTag": "48.2.0",

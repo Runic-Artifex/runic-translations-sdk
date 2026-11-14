@@ -86,3 +86,20 @@ Rule ID | Category | Severity | Notes
 --------|----------|----------|------
 RTR0084 | Runic.Translations | Warning | Translation XAML binds several inputs by position
 RTR0085 | Runic.Translations | Info | Translation XAML keys under an explicit source are not checked
+
+## Release 0.9.0.1000
+
+### New Rules
+
+Rule ID | Category | Severity | Notes
+--------|----------|----------|-------
+RTR0094 | Runic.Translations | Warning | Plural key is never selected in its locale
+RTR0095 | Runic.Translations | Warning | Plural categories of the locale fall to the catch-all variant
+RTR0096 | Runic.Translations | Warning | Translation drops a placeholder the base displays
+RTR0097 | Runic.Translations | Warning | Boolean is formatted as text
+RTR0098 | Runic.Translations | Warning | Message is longer than its @maxLength
+RTR0100 | Runic.Translations | Info | Message is not referenced from C# code
+RTR0101 | Runic.Translations | Error | Currency or unit is not in the pinned CLDR data
+RTR0102 | Runic.Translations | Error | Run-time currency or unit has no declared set
+RTR0103 | Runic.Translations | Error | Override does not match the library catalog
+RTR0104 | Runic.Translations | Error | Library catalog to override is not available

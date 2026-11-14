@@ -7,7 +7,7 @@
     "build": "vite build"
   },
   "devDependencies": {
-    "@runic-artifex/vite-plugin-runic-translations": "0.11.0",
+    "@runic-artifex/vite-plugin-runic-translations": "0.12.0",
     "vite": "8.3.4"
   }
 }
