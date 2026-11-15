@@ -55,13 +55,14 @@ export function hasMessagesAnchor(code: string): boolean {
  * its own setter. Every instance is kept current, not only the first: Vite gives the importers of an updated module a
  * new timestamp, so a chunk loaded later imports the instance of that update. A plain accept callback would not do:
  * Vite replaces the callbacks with each new instance's. `const` becomes `let` padded to the same length, so the columns
- * of that line stay.
+ * of that line stay. Vitest's stand-in for `import.meta.hot` has no `data` (and no updates to apply), so the module only
+ * hands its table on where `import.meta.hot.data` exists.
  */
 export function selfAccepting(code: string): string | undefined {
   if (!hasMessagesAnchor(code)) return undefined;
   return code.replace(messagesAnchor, `let   ${messagesAnchor.slice("const ".length)}`) + `
 import { textChanged as __runicTextChanged } from ${JSON.stringify(devClientSpecifier)};
-if (import.meta.hot) {
+if (import.meta.hot?.data) {
   const __runicSetters = import.meta.hot.data.runicMessageSetters ??= [];
   if (__runicSetters.length > 0) {
     for (const set of __runicSetters) set(messages);
