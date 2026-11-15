@@ -177,10 +177,9 @@ test("the transform makes a message module self-accepting only when its anchor o
 });
 
 // Runs a transformed message module as Vite does one instance of it: a new instance per update, one hot.data per URL.
-function instance(code, data, changed, { marked = value => value, runtime: runtimeModule = { catalog: "app" } } = {}) {
+function instance(code, data, changed, { marked = value => value, runtime: runtimeModule = { catalog: "app" }, hot = { data, accept() {} } } = {}) {
   const body = code.replace(/^import .*$/gm, "").replaceAll("import.meta.hot", "hot").replace(/^export function (r_[0-9a-f]+)/m, "function $1");
   const name = /function (r_[0-9a-f]+)/.exec(body)[1];
-  const hot = { data, accept() {} };
   const runtime = { freezeGeneratedText: (contract, locale, text) => ({ text }), formatMessage: (key, messages, inputs, options) => messages[options?.locale ?? "en"].text };
   return new Function("hot", "formatMessage", "freezeGeneratedText", "freezeGeneratedMessage", "freezeGeneratedPattern", "__runicTextChanged",
     "__runicMarked", "__runicRuntime", `${body}\nreturn ${name};`)(hot, runtime.formatMessage, runtime.freezeGeneratedText, undefined, undefined, changed,
@@ -198,6 +197,17 @@ test("every instance of an updated message module formats the latest text", () =
   const third = instance(selfAccepting(messageModule("title", { en: "Three" })), data, () => changes.push("third"));
   assert.deepEqual([first(), second(), third()], ["Three", "Three", "Three"]);
   assert.deepEqual(changes, ["second", "third"], "each update reports one change");
+});
+
+// Vitest evaluates modules with a stand-in `import.meta.hot` that has no `data`; a message module must still load there.
+test("a message module loads where import.meta.hot has no data (Vitest) and where there is none", () => {
+  const code = selfAccepting(messageModule("title", { en: "Hello" }));
+  let accepted = 0;
+  const vitest = instance(code, undefined, () => assert.fail("no update in Vitest"), { hot: { accept() { accepted++; } } });
+  assert.equal(vitest(), "Hello");
+  assert.equal(accepted, 0, "nothing to accept without hot.data");
+  const production = instance(code, undefined, () => assert.fail("no update without HMR"), { hot: null });
+  assert.equal(production(), "Hello");
 });
 
 test("hotUpdate updates an edited message in place in every environment and reloads structural changes once", async () => {
