@@ -962,7 +962,7 @@ test("published package inventory contains only declared runtime files", async (
     const archives = (await readdir(output)).filter(file => file.endsWith(".tgz")); assert.equal(archives.length, 1);
     const { stdout } = await execFileAsync("tar", ["-tzf", join(output, archives[0])]);
     const files = stdout.split("\n").filter(file => file.startsWith("package/") && !file.endsWith("/")).map(file => file.slice("package/".length)).sort();
-    assert.deepEqual(files, ["LICENSE", "README.md", "dist/compiler-service.d.ts", "dist/compiler-service.js", "dist/declaration-map.d.ts", "dist/declaration-map.js", "dist/dependencies.d.ts", "dist/dependencies.js", "dist/edit.d.ts", "dist/edit.js", "dist/hmr.d.ts", "dist/hmr.js", "dist/index.d.ts", "dist/index.js", "package.json"]);
+    assert.deepEqual(files, ["LICENSE", "README.md", "dist/compiler-service.d.ts", "dist/compiler-service.js", "dist/declaration-map.d.ts", "dist/declaration-map.js", "dist/dependencies.d.ts", "dist/dependencies.js", "dist/edit.d.ts", "dist/edit.js", "dist/hmr.d.ts", "dist/hmr.js", "dist/index.d.ts", "dist/index.js", "dist/local-user.d.ts", "dist/local-user.js", "package.json"]);
   } finally { await rm(output, { recursive: true, force: true }); }
 });
 

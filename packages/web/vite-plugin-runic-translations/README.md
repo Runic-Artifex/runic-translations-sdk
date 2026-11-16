@@ -276,7 +276,19 @@ browser by default:
   cannot read or write through the API.
 - **Vite's checks still apply first.** The API runs after Vite's CORS and host
   checks, so `server.allowedHosts` refuses a request whose `Host` it does not
-  allow (DNS rebinding) before the API sees it.
+  allow (DNS rebinding) before the API sees it. With `allowedHosts: true`, Vite
+  answers any name, so the API then checks `Host` itself: it answers IP
+  addresses, `localhost` (and names below it) and the host names of its allow
+  list, and refuses other names. The dev server logs this at start.
+- **Your account only, on Linux.** Loopback admits every account on the
+  machine, and a program, unlike a browser, sends any `Origin` it likes. A
+  write from loopback is therefore accepted only when the client's socket
+  belongs to the account that runs the dev server (`/proc/net/tcp`). macOS and
+  Windows give an unprivileged process no such table, so there the API does not
+  tell local accounts apart, and the dev server logs this at start: on a shared
+  machine, any account that reaches the dev server can write translation
+  sources. Reads are not checked by account; Vite itself serves the frontend
+  sources to every local account.
 
 To edit from another machine, such as a phone or a laptop on a
 [Tailscale](https://tailscale.com/kb/1015/100.x-addresses) network, or a browser
@@ -292,7 +304,11 @@ RUNIC_DEV_ALLOW="100.64.0.0/10, 192.168.1.20" vite dev --host
 ```
 
 Entries are IPv4 or IPv6 addresses, CIDR networks, or host names (resolved when a
-request arrives, and cached for 30 seconds). The environment variable takes the
+request arrives, and cached for 30 seconds). A host name is only as trustworthy as
+the resolver that answers for it: when MagicDNS is unavailable and a network's own
+resolver answers instead, it can point the name at another machine, which may then
+write your sources. Prefer addresses and networks, such as Tailscale's
+`100.64.0.0/10`. The environment variable takes the
 same entries separated by commas or spaces, and adds to the option.
 `RUNIC_DEV_ALLOW` is the setting vite-plugin-runic (`@runic-artifex/vite-plugin-runic`)
 also reads for Runic Inspect's dev endpoints, so one variable admits a client to

@@ -2,6 +2,7 @@ import { lookup as dnsLookup } from "node:dns/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { BlockList, isIP } from "node:net";
 import type { CompilerDiagnostic } from "./compiler-service.js";
+import { isLocalUser, type LocalUserCheck } from "./local-user.js";
 
 /** The URL path of the in-page editing API, below Vite's `base`. */
 export const editRoute = "__runic-translations/message";
@@ -146,6 +147,35 @@ export class AccessList {
   }
 }
 
+/**
+ * Whether a `Host` header may be answered when Vite's own host check is off (`server.allowedHosts: true`): an IP literal,
+ * `localhost` or a name below it, or a host name of the allow list. A name that DNS-rebinding points at loopback is
+ * none of these. A request without `Host` (HTTP/1.0, a tool) did not come from a browser and passes.
+ */
+export function isTrustedHost(host: string | undefined, access: AccessList): boolean {
+  if (host === undefined) return true;
+  const text = host.trim().toLowerCase();
+  if (text.startsWith("[")) {
+    const end = text.indexOf("]");
+    if (end < 0 || !/^(?::\d{1,5})?$/.test(text.slice(end + 1))) return false;
+    return isIP(text.slice(1, end)) === 6;
+  }
+  const port = /:\d{1,5}$/.exec(text);
+  const name = (port === null ? text : text.slice(0, port.index)).replace(/\.$/, "");
+  if (name.length === 0) return false;
+  if (isIP(name) === 4) return true;
+  if (name === "localhost" || name.endsWith(".localhost")) return true;
+  return access.rules.some(rule => rule.kind === "host" && rule.name === name);
+}
+
+/** The middleware's checks besides the access list. */
+export interface EditGuards {
+  /** Check `Host` (`isTrustedHost`): set when Vite's host check is off (`server.allowedHosts: true`). */
+  readonly checkHost?: boolean;
+  /** Whether a loopback client belongs to the server's user (local-user.ts); writes need it. */
+  readonly localUser?: LocalUserCheck;
+}
+
 /** A refused or failed request: an HTTP status and the JSON body. */
 class HttpError extends Error {
   constructor(readonly status: number, readonly error: string, message: string, readonly extra: Readonly<Record<string, unknown>> = {}) {
@@ -154,7 +184,8 @@ class HttpError extends Error {
 }
 
 /** The connect middleware of the API, mounted only by the dev server (`configureServer`). */
-export function createEditMiddleware(backend: EditBackend, access: AccessList, base: string, logger?: { warn(message: string): void }) {
+export function createEditMiddleware(backend: EditBackend, access: AccessList, base: string, logger?: { warn(message: string): void }, guards: EditGuards = {}) {
+  const localUser = guards.localUser ?? isLocalUser;
   const prefix = base.endsWith("/") ? base : `${base}/`;
   const routes = new Set([`/${editRoute}`, `${prefix}${editRoute}`]);
   return (request: IncomingMessage, response: ServerResponse, next: (error?: unknown) => void): void => {
@@ -168,6 +199,11 @@ export function createEditMiddleware(backend: EditBackend, access: AccessList, b
   };
 
   async function handle(request: IncomingMessage, response: ServerResponse, url: URL): Promise<void> {
+    // With server.allowedHosts: true, Vite answers any Host, so a DNS-rebinding name would pass as a same-origin page.
+    const host = request.headers.host ?? request.headers[":authority"];
+    if (guards.checkHost && !isTrustedHost(typeof host === "string" ? host : undefined, access))
+      throw new HttpError(403, "forbidden", `In-page translation editing does not answer the host ${String(host)}: with server.allowedHosts: true it answers ` +
+        `IP addresses, localhost and the host names of its allow list only.`);
     // Who may ask: the client address (never a forwarded header), then the browser's own origin signals.
     if (!(await access.allows(request.socket.remoteAddress)))
       throw new HttpError(403, "forbidden", `In-page translation editing accepts requests from loopback only, unless the client's host or network is allowed: ` +
@@ -188,6 +224,11 @@ export function createEditMiddleware(backend: EditBackend, access: AccessList, b
       response.setHeader("Allow", "GET, HEAD, POST");
       throw new HttpError(405, "method-not-allowed", "Use GET to read a message and POST to write one.");
     }
+    // Another account of this machine is loopback too, and a program sends any Origin it likes: a write from loopback
+    // needs a client of the server's own user (Linux; see local-user.ts for other platforms).
+    if (isLoopback(request.socket.remoteAddress ?? "") && !(await localUser(request.socket)))
+      throw new HttpError(403, "forbidden", "In-page translation editing writes only for the user who runs the dev server: " +
+        "this request came from a program of another account on this machine.");
     const type = (request.headers["content-type"] ?? "").split(";")[0]!.trim().toLowerCase();
     if (type !== "application/json") throw new HttpError(415, "unsupported-media-type", "Send the edit as application/json.");
     const body = await readJson(request);
