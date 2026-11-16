@@ -42,8 +42,8 @@ Notes/
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="Runic.Translations" Version="0.12.0" />
-  <PackageReference Include="Runic.Translations.Build" Version="0.12.0" PrivateAssets="all" />
+  <PackageReference Include="Runic.Translations" Version="0.13.0" />
+  <PackageReference Include="Runic.Translations.Build" Version="0.13.0" PrivateAssets="all" />
   <RunicTranslationProject Include="Frontend/translations/runic.json" />
 </ItemGroup>
 ```
