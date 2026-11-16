@@ -123,13 +123,13 @@ jobs:
     permissions:
       contents: read
       actions: read
-    uses: Runic-Artifex/runic-sdk/.github/workflows/train-compat.yml@79f934f020804813d1be6a0924e8219d8a2cc393 # runic-sdk main after #1036 (train gate: Translations npm candidates)
+    uses: Runic-Artifex/runic-sdk/.github/workflows/train-compat.yml@b57d083c754db40316834644f457d3c65a475631 # runic-sdk main after #1074 (0.21 train candidate: Translations 0.13.0)
     with:
       row: P-tr
       cli: published:${{ needs.candidate.outputs.command-line-version }}
       translations: run:${{ needs.candidate.outputs.ci-run-id }}
       sdk: run
-      gate-ref: 79f934f020804813d1be6a0924e8219d8a2cc393
+      gate-ref: b57d083c754db40316834644f457d3c65a475631
     secrets:
       # Only if GitHub refuses this job's token for the other repositories' artifacts (D061.12).
       RUNIC_TRAIN_TOKEN: ${{ secrets.RUNIC_TRAIN_TOKEN }}
