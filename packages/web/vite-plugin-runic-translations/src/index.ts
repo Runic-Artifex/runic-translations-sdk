@@ -11,6 +11,7 @@ import { discoverDependencyCatalogs, type DependencyCatalog } from "./dependenci
 import {
   AccessList, allowRulesFromEnvironment, createEditMiddleware, parseAllowList, type InPageEditingOptions,
 } from "./edit.js";
+import { localUserCheckAvailable } from "./local-user.js";
 import {
   classify, devClientCode, devClientId, devClientSpecifier, hasMessagesAnchor, messageModulePattern, selfAccepting, withMarkers, withoutSourceHash,
   type CatalogSnapshot, type Classification,
@@ -641,6 +642,14 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
     const config = (target as Partial<ViteDevServer>).config;
     if (rules.length > 0)
       config?.logger.info(`[runic-translations] in-page editing accepts requests from loopback and ${rules.map(rule => rule.text).join(", ")}`, { timestamp: true });
+    // With allowedHosts: true Vite answers any Host, so the API checks it itself (edit.ts, isTrustedHost).
+    const checkHost = config?.server?.allowedHosts === true;
+    if (checkHost)
+      config?.logger.info("[runic-translations] server.allowedHosts is true; in-page editing still answers only IP addresses, localhost " +
+        "and the host names of its allow list", { timestamp: true });
+    if (!localUserCheckAvailable())
+      config?.logger.info(`[runic-translations] On ${process.platform}, in-page editing cannot tell this machine's users apart: ` +
+        "any local account that reaches the dev server can write translation sources", { timestamp: true });
     middlewares.use(createEditMiddleware({
       unavailable: () => compiler ? undefined
         : "In-page editing needs project mode (the project option), where the plugin compiles the catalog from its sources.",
@@ -651,7 +660,7 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
         });
         return current.edit(method, { project: compiler!.project, ...body });
       },
-    }, new AccessList(rules), config?.base ?? "/", config?.logger));
+    }, new AccessList(rules), config?.base ?? "/", config?.logger, { checkHost }));
   }
 
   return {

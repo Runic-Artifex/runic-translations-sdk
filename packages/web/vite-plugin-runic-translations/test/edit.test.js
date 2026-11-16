@@ -8,7 +8,11 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import test from "node:test";
 import { runicTranslations } from "../dist/index.js";
-import { AccessList, allowListFromEnvironment, createEditMiddleware, isLoopback, normalizeAddress, parseAllowList } from "../dist/edit.js";
+import { AccessList, allowListFromEnvironment, createEditMiddleware as createMiddleware, isLoopback, isTrustedHost, normalizeAddress, parseAllowList } from "../dist/edit.js";
+
+// The middleware with the test's client counted as the server's own user: the requests here have no real socket for the
+// owner check (local-user.ts), which its own test covers.
+const createEditMiddleware = (api, access, base, logger, guards = {}) => createMiddleware(api, access, base, logger, { localUser: async () => true, ...guards });
 
 const message = { catalog: "app", key: "title", locales: [{ locale: "en", text: "Hello", file: { path: "/p/en.rmf2", hash: "none" } }] };
 const hash = `sha256:${"a".repeat(64)}`;
@@ -179,6 +183,81 @@ test("requests from beyond loopback, or from another origin, are refused unless 
   assert.equal(api.calls.length, 3, "only the allowed requests reached the compiler");
 });
 
+test("a write from loopback needs a client of the server's own user; reads and allowed machines do not", async () => {
+  const api = backend();
+  const owners = [];
+  const middleware = createEditMiddleware(api, new AccessList(parseAllowList(["100.64.0.0/10"], "test")), "/", undefined, {
+    localUser: async socket => { owners.push(socket.remoteAddress); return false; },
+  });
+  const edit = { key: "title", locale: "en", text: "Hi", expectedHash: hash };
+  const refused = await invoke(middleware, post(edit));
+  assert.equal(refused.status, 403);
+  assert.match(refused.body.detail, /another account on this machine/);
+  assert.equal((await invoke(middleware, { ...post(edit), address: "::ffff:127.0.0.1" })).status, 403);
+  assert.equal((await invoke(middleware, { url: "/__runic-translations/message?key=title" })).status, 200, "a read");
+  assert.equal((await invoke(middleware, { ...post(edit, { origin: "http://100.100.1.1:5173", host: "100.100.1.1:5173" }), address: "100.100.1.2" })).status, 200,
+    "an allowed machine is judged by its address; the owner check is for loopback");
+  assert.deepEqual(owners, ["127.0.0.1", "::ffff:127.0.0.1"]);
+  assert.deepEqual(api.calls.map(([method]) => method), ["message", "set-message"]);
+});
+
+test("with server.allowedHosts: true, the API answers IP literals, localhost and the allow list's names only", async () => {
+  const access = new AccessList(parseAllowList(["laptop.tailnet.ts.net", "100.64.0.0/10"], "test"));
+  for (const host of ["127.0.0.1:5173", "[::1]:5173", "100.100.1.2", "localhost:5173", "app.localhost", "Laptop.Tailnet.TS.net.:5173", undefined])
+    assert.equal(isTrustedHost(host, access), true, String(host));
+  for (const host of ["rebind.attacker.example:5173", "localhost.attacker.example", "127.0.0.1.nip.io", "", "[::1", "[127.0.0.1]"])
+    assert.equal(isTrustedHost(host, access), false, host);
+
+  const api = backend();
+  const checked = createEditMiddleware(api, access, "/", undefined, { checkHost: true });
+  const unchecked = createEditMiddleware(api, access, "/");
+  const rebound = { origin: "http://rebind.attacker.example:5173", host: "rebind.attacker.example:5173", "sec-fetch-site": "same-origin" };
+  const edit = { key: "title", locale: "en", text: "Written through DNS rebinding", expectedHash: hash };
+  const refused = await invoke(checked, post(edit, rebound));
+  assert.equal(refused.status, 403);
+  assert.match(refused.body.detail, /allowedHosts: true/);
+  assert.equal((await invoke(checked, { url: "/__runic-translations/message?key=title", headers: rebound })).status, 403);
+  assert.equal((await invoke(checked, post(edit))).status, 200, "the dev server's own localhost page");
+  assert.equal((await invoke(unchecked, post(edit, rebound))).status, 200, "without allowedHosts: true, Vite's host check refuses it first");
+});
+
+test("the owner of a loopback client comes from /proc/net/tcp and tcp6", async () => {
+  const { addressKey, createLocalUserCheck, parseProcNetTcp } = await import("../dist/local-user.js");
+  const header = "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n";
+  const row = (local, remote, uid) => `   0: ${local} ${remote} 01 00000000:00000000 00:00000000 00000000 ${String(uid).padStart(5)}        0 4242 1\n`;
+  const tables = {
+    "/proc/net/tcp": header + row("0100007F:A0F2", "0100007F:1435", 1001) + row("0100007F:1435", "0100007F:A0F2", 1000),
+    "/proc/net/tcp6": header + row("00000000000000000000000001000000:A0F3", "00000000000000000000000001000000:1435", 1000) +
+      row("0000000000000000FFFF00000100007F:A0F4", "0000000000000000FFFF00000100007F:1435", 1000),
+  };
+  assert.equal(parseProcNetTcp(tables["/proc/net/tcp"], true)[0].localAddress, addressKey("127.0.0.1"));
+  assert.equal(parseProcNetTcp(header + row("7F000001:A0F2", "7F000001:1435", 7), false)[0].localAddress, addressKey("::ffff:127.0.0.1"));
+  const read = async path => { if (path in tables) return tables[path]; throw new Error("ENOENT"); };
+  const check = createLocalUserCheck({ platform: "linux", uid: 1000, read, littleEndian: true });
+  const socket = (remoteAddress, remotePort) => ({ remoteAddress, remotePort, localAddress: remoteAddress, localPort: 5173 });
+  assert.equal(await check(socket("127.0.0.1", 41_202)), false, "another user's client");
+  assert.equal(await check(socket("::1", 41_203)), true);
+  assert.equal(await check(socket("::ffff:127.0.0.1", 41_204)), true, "an IPv4 client of a dual-stack server");
+  assert.equal(await check(socket("127.0.0.1", 40_000)), false, "not in the tables");
+  assert.equal(await check({ remoteAddress: "127.0.0.1" }), false, "no endpoints");
+  assert.equal(await createLocalUserCheck({ platform: "linux", uid: 1000, read: async () => { throw new Error("ENOENT"); } })(socket("127.0.0.1", 41_202)), true,
+    "no tables: the check is not available");
+  assert.equal(await createLocalUserCheck({ platform: "darwin", uid: 1000, read })(socket("127.0.0.1", 41_202)), true);
+  if (process.platform === "linux") {
+    // A real connection of this process: its own user.
+    const { createServer } = await import("node:http");
+    const { connect } = await import("node:net");
+    const { server, client } = await new Promise(resolve => {
+      const listening = createServer().on("connection", accepted => resolve({ server: listening, client: accepted }));
+      listening.listen(0, "127.0.0.1", () => connect(listening.address().port, "127.0.0.1"));
+    });
+    try {
+      assert.equal(await createLocalUserCheck()(client), true);
+      assert.equal(await createLocalUserCheck({ uid: process.getuid() + 1 })(client), false);
+    } finally { client.destroy(); server.close(); }
+  }
+});
+
 test("the plugin validates the editing options and the environment variable", async () => {
   assert.throws(() => runicTranslations({ inPageEditing: "yes" }), /inPageEditing must be a boolean/);
   assert.throws(() => runicTranslations({ inPageEditing: { allow: "100.64.0.0/10" } }), /inPageEditing must be a boolean/);
@@ -211,6 +290,10 @@ test("the plugin validates the editing options and the environment variable", as
     const invalid = await fakeServer(root, {});
     assert.throws(() => invalid.plugin.configureServer(invalid.server), /RUNIC_DEV_ALLOW: '100\.64\.0\.0\/40' is not a network/);
     delete process.env.RUNIC_DEV_ALLOW;
+    const open = await fakeServer(root, {}, { allowedHosts: true });
+    open.plugin.configureServer(open.server);
+    assert.match(open.infos.join("\n"), /server\.allowedHosts is true; in-page editing still answers only IP addresses/);
+    assert.doesNotMatch(next.infos.join("\n"), /allowedHosts/);
     const off = await fakeServer(root, { inPageEditing: false });
     off.plugin.configureServer(off.server);
     assert.equal(off.used.length, 0, "inPageEditing: false mounts nothing");
@@ -222,7 +305,7 @@ test("the plugin validates the editing options and the environment variable", as
   }
 });
 
-async function fakeServer(root, options) {
+async function fakeServer(root, options, serverOptions = {}) {
   const project = join(root, "translations");
   await mkdir(project, { recursive: true });
   await writeFile(join(project, "runic.json"), JSON.stringify({ schemaVersion: 1, catalog: "app" }));
@@ -230,6 +313,6 @@ async function fakeServer(root, options) {
   const used = [], infos = [];
   const watcher = { add() {}, on() {}, off() {} };
   const server = { watcher, httpServer: { once() {} }, ws: { send() {} }, middlewares: { use: handler => used.push(handler) },
-    config: { base: "/", logger: { info: line => infos.push(line), warn() {} } } };
+    config: { base: "/", server: serverOptions, logger: { info: line => infos.push(line), warn() {} } } };
   return { plugin, server, used, infos };
 }
