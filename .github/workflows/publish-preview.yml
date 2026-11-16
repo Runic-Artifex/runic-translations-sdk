@@ -117,19 +117,19 @@ jobs:
   # The train compatibility gate (runic-sdk eng/train/README.md, "Publish workflows", row P-tr): restores, builds and
   # runs consumers of the published Command Line release of this train, exactly these Translations candidates (this CI
   # run's artifact) and runic-sdk's newest main run, with warnings as errors. Publishing needs it; a dry run runs it too.
-  # Pinned to runic-sdk#1036 (train gate: Translations npm candidates); the coordinator moves the SHA to runic-sdk main once it merges.
+  # Pinned to runic-sdk main after #1036 (train gate: Translations npm candidates); the coordinator moves the SHA when the gate changes.
   train:
     needs: candidate
     permissions:
       contents: read
       actions: read
-    uses: Runic-Artifex/runic-sdk/.github/workflows/train-compat.yml@a7ddb75cbc6804914ce9633c8c64b2911235b01e # runic-sdk#1036 (train gate: Translations npm candidates)
+    uses: Runic-Artifex/runic-sdk/.github/workflows/train-compat.yml@79f934f020804813d1be6a0924e8219d8a2cc393 # runic-sdk main after #1036 (train gate: Translations npm candidates)
     with:
       row: P-tr
       cli: published:${{ needs.candidate.outputs.command-line-version }}
       translations: run:${{ needs.candidate.outputs.ci-run-id }}
       sdk: run
-      gate-ref: a7ddb75cbc6804914ce9633c8c64b2911235b01e
+      gate-ref: 79f934f020804813d1be6a0924e8219d8a2cc393
     secrets:
       # Only if GitHub refuses this job's token for the other repositories' artifacts (D061.12).
       RUNIC_TRAIN_TOKEN: ${{ secrets.RUNIC_TRAIN_TOKEN }}
