@@ -458,7 +458,7 @@ Runic.Translations.TranslationContext.SupportedLocales.get -> System.Collections
 Runic.Translations.TranslationContext.TryGetManager(string! catalogId, out Runic.Translations.ITranslationManager? manager) -> bool
 Runic.Translations.TranslationContext.TryGetRegistration(string! catalogId, out Runic.Translations.TranslationCatalogRegistration? registration) -> bool
 Runic.Translations.TranslationContextBuilder
-Runic.Translations.TranslationContextBuilder.Add(Runic.Translations.TranslationCatalogRegistration! registration, Runic.Translations.TranslationOptions? options = null) -> Runic.Translations.TranslationContextBuilder!
+Runic.Translations.TranslationContextBuilder.AddCatalog(Runic.Translations.TranslationCatalogRegistration! registration, Runic.Translations.TranslationOptions? options = null) -> Runic.Translations.TranslationContextBuilder!
 Runic.Translations.TranslationContextBuilder.AddOverlay(Runic.Translations.TranslationOverlay! overlay) -> Runic.Translations.TranslationContextBuilder!
 Runic.Translations.TranslationContextBuilder.AddOverlays(System.Collections.Generic.IEnumerable<Runic.Translations.TranslationOverlay!>! overlays) -> Runic.Translations.TranslationContextBuilder!
 Runic.Translations.TranslationContextBuilder.Build(string? initialLocale = null) -> Runic.Translations.TranslationContext!
