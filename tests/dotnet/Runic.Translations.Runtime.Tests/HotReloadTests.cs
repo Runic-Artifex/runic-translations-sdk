@@ -72,7 +72,7 @@ internal sealed class HotReloadTests
                 [CompiledTranslationLocale.CreateDeferred("en", null, () => CompiledTranslationLocale.ReadRmf2Values(Encoding.UTF8.GetBytes(data)))]);
             var registration = new TranslationCatalogRegistration("hot", "en", "sha256:" + new string('0', 64), "{\"version\":2,\"contracts\":{},\"messages\":{}}",
                 (valueFormatter, snapshotFactory, options) => new CompiledTranslationProvider(catalog, valueFormatter, snapshotFactory));
-            context = await TranslationContext.CreateBuilder().Add(registration).BuildAsync("en");
+            context = await TranslationContext.CreateBuilder().AddCatalog(registration).BuildAsync("en");
         }
         finally
         {

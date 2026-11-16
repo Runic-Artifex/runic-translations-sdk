@@ -18,12 +18,12 @@ internal sealed class InterchangeCliTests
     public void XliffImportAppliesPerUnit()
     {
         using TemporaryDirectory temporary = CopyProject();
-        ProcessResult dryRun = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--source", Path.Combine(Corpus, "files", "crowdin.de.xliff"), "--dry-run");
+        ProcessResult dryRun = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--input", Path.Combine(Corpus, "files", "crowdin.de.xliff"), "--dry-run");
         Assert.Equal(0, dryRun.ExitCode, dryRun.Combined);
         Assert.Contains("dry run: imported de: 3 added, 1 changed, 1 unchanged, 5 skipped, 0 refused.", dryRun.StandardOutput);
         Assert.FileBytesEqual(Path.Combine(Corpus, "project", "de.rmf2"), temporary.Resolve("translations", "de.rmf2"));
 
-        ProcessResult import = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--source", Path.Combine(Corpus, "files", "crowdin.de.xliff"), "--format", "json");
+        ProcessResult import = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--input", Path.Combine(Corpus, "files", "crowdin.de.xliff"), "--format", "json");
         Assert.Equal(0, import.ExitCode, import.Combined);
         Assert.FileBytesEqual(Path.Combine(Corpus, "expected", "crowdin.de.rmf2"), temporary.Resolve("translations", "de.rmf2"));
         using JsonDocument envelope = JsonDocument.Parse(import.StandardOutput);
@@ -45,7 +45,7 @@ internal sealed class InterchangeCliTests
     public void XliffImportRefusals()
     {
         using TemporaryDirectory temporary = CopyProject();
-        ProcessResult partial = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--source", Path.Combine(Corpus, "files", "partial.de.xliff"), "--format", "json");
+        ProcessResult partial = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--input", Path.Combine(Corpus, "files", "partial.de.xliff"), "--format", "json");
         Assert.Equal(0, partial.ExitCode, partial.Combined);
         Assert.FileBytesEqual(Path.Combine(Corpus, "expected", "partial.de.rmf2"), temporary.Resolve("translations", "de.rmf2"));
         using (JsonDocument envelope = JsonDocument.Parse(partial.StandardOutput))
@@ -54,13 +54,13 @@ internal sealed class InterchangeCliTests
                 partial.StandardOutput);
 
         File.WriteAllText(temporary.Resolve("other.xliff"), File.ReadAllText(Path.Combine(Corpus, "files", "partial.de.xliff")).Replace("<file id=\"shop\"", "<file id=\"other\"", StringComparison.Ordinal), new UTF8Encoding(false));
-        ProcessResult other = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--source", "other.xliff", "--format", "json");
+        ProcessResult other = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--input", "other.xliff", "--format", "json");
         Assert.Equal(2, other.ExitCode, other.Combined);
         using JsonDocument failure = JsonDocument.Parse(other.StandardOutput);
         Assert.Equal("RTR0092", failure.RootElement.GetProperty("fault").GetProperty("code").GetString());
         Assert.True(failure.RootElement.GetProperty("diagnostics").EnumerateArray().Any(diagnostic =>
             diagnostic.GetProperty("code").GetString() == "RCLI8215" && diagnostic.GetProperty("message").GetString()!.StartsWith("XLIFF21-CATALOG-MISMATCH", StringComparison.Ordinal)), other.StandardOutput);
-        ProcessResult human = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--source", "other.xliff");
+        ProcessResult human = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--input", "other.xliff");
         Assert.Equal(2, human.ExitCode, human.Combined);
         Assert.Contains("XLIFF21-CATALOG-MISMATCH", human.StandardError);
     }
@@ -120,11 +120,12 @@ internal sealed class InterchangeCliTests
     {
         using TemporaryDirectory temporary = CopyProject();
         string file = Path.Combine(Corpus, "files", "stale-approval.de.xliff");
-        ProcessResult refuse = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--source", file, "--source-changed", "refuse");
+        ProcessResult refuse = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--input", file, "--source-changed", "refuse");
         Assert.Equal(0, refuse.ExitCode, refuse.Combined);
         Assert.Contains("refused farewell: XLIFF21-SOURCE-CHANGED", refuse.StandardOutput);
 
         using TemporaryDirectory second = CopyProject();
+        // --source, the spelling of 0.12, still names the document as a hidden alias of --input.
         ProcessResult review = TestFixture.RunTool(second, "xliff", "import", "--project", "translations", "--source", file);
         Assert.Equal(0, review.ExitCode, review.Combined);
         Assert.Contains("1 translation(s) of changed sources were imported as needs-review.", review.StandardOutput);
@@ -141,9 +142,20 @@ internal sealed class InterchangeCliTests
         ProcessResult help = TestFixture.RunTool(second, "--help");
         Assert.Contains("xliff ", help.StandardOutput);
         Assert.Contains("review ", help.StandardOutput);
-        ProcessResult policy = TestFixture.RunTool(second, "xliff", "import", "--project", "translations", "--source", file, "--source-changed", "keep");
+        ProcessResult policy = TestFixture.RunTool(second, "xliff", "import", "--project", "translations", "--input", file, "--source-changed", "keep");
         Assert.Equal(2, policy.ExitCode, policy.Combined);
         Assert.Contains("--source-changed expects needs-review or refuse.", policy.StandardError);
+
+        // --input names the document (0.13); help does not list the hidden --source, and the command needs one of them.
+        ProcessResult importHelp = TestFixture.RunTool(second, "xliff", "import", "--help");
+        Assert.Contains("--input <path>", importHelp.StandardOutput);
+        Assert.True(!importHelp.StandardOutput.Contains("--source <path>", StringComparison.Ordinal), importHelp.StandardOutput);
+        ProcessResult missing = TestFixture.RunTool(second, "xliff", "import", "--project", "translations");
+        Assert.Equal(2, missing.ExitCode, missing.Combined);
+        Assert.Contains("xliff import requires --input <path>", missing.StandardError);
+        ProcessResult both = TestFixture.RunTool(second, "xliff", "import", "--project", "translations", "--input", file, "--source", file);
+        Assert.Equal(2, both.ExitCode, both.Combined);
+        Assert.Contains("pass --input only", both.StandardError);
     }
 
     [Test, DisplayName("CLI xliff import --fail-on refused fails with RTR0092 and writes nothing when a unit is refused")]
@@ -151,7 +163,7 @@ internal sealed class InterchangeCliTests
     {
         using TemporaryDirectory temporary = CopyProject();
         string file = Path.Combine(Corpus, "files", "partial.de.xliff");
-        ProcessResult strict = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--source", file, "--fail-on", "refused", "--format", "json");
+        ProcessResult strict = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--input", file, "--fail-on", "refused", "--format", "json");
         Assert.Equal(2, strict.ExitCode, strict.Combined);
         Assert.FileBytesEqual(Path.Combine(Corpus, "project", "de.rmf2"), temporary.Resolve("translations", "de.rmf2"));
         Assert.FileBytesEqual(Path.Combine(Corpus, "project", "shop.review.json"), temporary.Resolve("translations", "shop.review.json"));
@@ -169,10 +181,10 @@ internal sealed class InterchangeCliTests
         }
 
         // Without a refused unit the flag changes nothing.
-        ProcessResult clean = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--source", Path.Combine(Corpus, "files", "crowdin.de.xliff"), "--fail-on", "refused");
+        ProcessResult clean = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--input", Path.Combine(Corpus, "files", "crowdin.de.xliff"), "--fail-on", "refused");
         Assert.Equal(0, clean.ExitCode, clean.Combined);
         Assert.FileBytesEqual(Path.Combine(Corpus, "expected", "crowdin.de.rmf2"), temporary.Resolve("translations", "de.rmf2"));
-        ProcessResult usage = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--source", file, "--fail-on", "skipped");
+        ProcessResult usage = TestFixture.RunTool(temporary, "xliff", "import", "--project", "translations", "--input", file, "--fail-on", "skipped");
         Assert.Equal(2, usage.ExitCode, usage.Combined);
         Assert.Contains("--fail-on expects refused.", usage.StandardError);
     }

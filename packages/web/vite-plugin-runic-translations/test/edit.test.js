@@ -159,7 +159,7 @@ test("requests from beyond loopback, or from another origin, are refused unless 
   for (const address of ["100.100.1.2", "192.168.1.20", "fd7a:115c:a1e0::1", "::ffff:10.0.0.1", null]) {
     const refused = await invoke(middleware, { ...read, address });
     assert.equal(refused.status, 403, String(address));
-    assert.match(refused.body.detail, /RUNIC_DEV_ALLOW or RUNIC_TRANSLATIONS_EDIT_ALLOW/);
+    assert.match(refused.body.detail, /inPageEditing: \{ allow: \[\.\.\.\] \} \}\) or RUNIC_DEV_ALLOW\./);
   }
   assert.match(warnings[0], /refused a request from 100\.100\.1\.2/);
   // X-Forwarded-For is never trusted.
@@ -268,20 +268,21 @@ test("the plugin validates the editing options and the environment variable", as
   const previousShared = process.env.RUNIC_DEV_ALLOW;
   delete process.env.RUNIC_DEV_ALLOW;
   try {
-    const { plugin, server, used } = await fakeServer(root, {});
+    const { used } = await fakeServer(root, {});
+    // RUNIC_TRANSLATIONS_EDIT_ALLOW was removed in 0.13: the plugin ignores it, even an invalid list, and warns.
     process.env.RUNIC_TRANSLATIONS_EDIT_ALLOW = "10.0.0.0/8 nope/1";
-    assert.throws(() => plugin.configureServer(server), /RUNIC_TRANSLATIONS_EDIT_ALLOW: 'nope\/1' is not a network/);
-    process.env.RUNIC_TRANSLATIONS_EDIT_ALLOW = "10.0.0.0/8";
     const next = await fakeServer(root, {});
     next.plugin.configureServer(next.server);
     assert.equal(next.used.length, 1, "mounted under vite dev");
-    assert.match(next.infos.join("\n"), /accepts requests from loopback and 10\.0\.0\.0\/8/);
-    // RUNIC_DEV_ALLOW, the setting vite-plugin-runic shares, adds to the list as well and is validated under its own name.
+    assert.doesNotMatch(next.infos.join("\n"), /accepts requests from/);
+    assert.match(next.warnings.join("\n"), /RUNIC_TRANSLATIONS_EDIT_ALLOW is no longer read .*Set RUNIC_DEV_ALLOW/);
+    // RUNIC_DEV_ALLOW, the setting vite-plugin-runic shares, adds to the list and is validated under its own name.
     process.env.RUNIC_DEV_ALLOW = "100.64.0.0/10,laptop.tailnet.ts.net";
     const shared = await fakeServer(root, {});
     shared.plugin.configureServer(shared.server);
-    assert.match(shared.infos.join("\n"), /accepts requests from loopback and 100\.64\.0\.0\/10, laptop\.tailnet\.ts\.net, 10\.0\.0\.0\/8/);
+    assert.match(shared.infos.join("\n"), /accepts requests from loopback and 100\.64\.0\.0\/10, laptop\.tailnet\.ts\.net$/m);
     delete process.env.RUNIC_TRANSLATIONS_EDIT_ALLOW;
+    assert.equal(next.warnings.length, 1);
     process.env.RUNIC_DEV_ALLOW = "100.64.0.0/10";
     const sharedOnly = await fakeServer(root, {});
     sharedOnly.plugin.configureServer(sharedOnly.server);
@@ -310,9 +311,9 @@ async function fakeServer(root, options, serverOptions = {}) {
   await mkdir(project, { recursive: true });
   await writeFile(join(project, "runic.json"), JSON.stringify({ schemaVersion: 1, catalog: "app" }));
   const plugin = runicTranslations({ project, output: join(root, "generated"), persistentCompiler: false, ...options });
-  const used = [], infos = [];
+  const used = [], infos = [], warnings = [];
   const watcher = { add() {}, on() {}, off() {} };
   const server = { watcher, httpServer: { once() {} }, ws: { send() {} }, middlewares: { use: handler => used.push(handler) },
-    config: { base: "/", server: serverOptions, logger: { info: line => infos.push(line), warn() {} } } };
-  return { plugin, server, used, infos };
+    config: { base: "/", server: serverOptions, logger: { info: line => infos.push(line), warn: line => warnings.push(line) } } };
+  return { plugin, server, used, infos, warnings };
 }

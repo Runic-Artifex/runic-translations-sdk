@@ -265,7 +265,7 @@ internal sealed class RunicTranslationsRegistrations : ITranslationContextFactor
         {
             if (_builder is not null) return _builder;
             TranslationContextBuilder builder = TranslationContext.CreateBuilder();
-            foreach ((TranslationCatalogRegistration registration, TranslationOptions? options) in _catalogs) builder.Add(registration, options);
+            foreach ((TranslationCatalogRegistration registration, TranslationOptions? options) in _catalogs) builder.AddCatalog(registration, options);
             foreach (TranslationOverlay overlay in _overlays) builder.AddOverlay(overlay);
             if (ValueFormatter is not null) builder.UseValueFormatter(ValueFormatter);
             return _builder = builder;

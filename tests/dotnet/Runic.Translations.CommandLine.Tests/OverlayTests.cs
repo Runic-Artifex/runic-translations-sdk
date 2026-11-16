@@ -63,8 +63,8 @@ internal sealed class OverlayTests
     public void BuilderFollowsCulture()
     {
         TranslationContextBuilder catalogs = TranslationContext.CreateBuilder()
-            .Add(TestTextCatalog.Registration)
-            .Add(TranslationCommandTextResolver.CatalogRegistration)
+            .AddCatalog(TestTextCatalog.Registration)
+            .AddCatalog(TranslationCommandTextResolver.CatalogRegistration)
             .AddOverlay(FrenchOverlay());
         var resolver = new TranslationCommandTextResolver(catalogs, TestTextCatalog.CatalogId);
 
@@ -86,11 +86,11 @@ internal sealed class OverlayTests
     [Test, DisplayName("a context builder without the framework catalog uses the built-in text, and an invalid culture the default")]
     public void BuilderWithoutFrameworkCatalog()
     {
-        var resolver = new TranslationCommandTextResolver(TranslationContext.CreateBuilder().Add(TestTextCatalog.Registration), TestTextCatalog.CatalogId);
+        var resolver = new TranslationCommandTextResolver(TranslationContext.CreateBuilder().AddCatalog(TestTextCatalog.Registration), TestTextCatalog.CatalogId);
         Assert.Equal("Optionen", resolver.Resolve("help.options", German, []));
         Assert.Equal("Options", resolver.Resolve("help.options", French, []));
         Assert.Equal("Synopsis", resolver.Resolve("help.usage", French, []));
-        var frameworkOnly = new TranslationCommandTextResolver(TranslationContext.CreateBuilder().Add(TranslationCommandTextResolver.CatalogRegistration)
+        var frameworkOnly = new TranslationCommandTextResolver(TranslationContext.CreateBuilder().AddCatalog(TranslationCommandTextResolver.CatalogRegistration)
             .AddOverlay(FrenchOverlay()), applicationCatalogId: null);
         Assert.Equal("Utilisation", frameworkOnly.Resolve("help.usage", French, []));
         Assert.Equal(null, frameworkOnly.Resolve("commands.greet", French, []));
@@ -100,8 +100,8 @@ internal sealed class OverlayTests
     public async Task ContextFollowsLocale()
     {
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(TestTextCatalog.Registration)
-            .Add(TranslationCommandTextResolver.CatalogRegistration)
+            .AddCatalog(TestTextCatalog.Registration)
+            .AddCatalog(TranslationCommandTextResolver.CatalogRegistration)
             .AddOverlay(FrenchOverlay())
             .BuildAsync("de");
         var resolver = new TranslationCommandTextResolver(context, TestTextCatalog.CatalogId);
@@ -176,8 +176,8 @@ internal sealed class OverlayTests
         ITranslationSnapshot german = await TestTextCatalog.CreateProvider().GetSnapshotAsync("de");
         Assert.Equal("Optionen", new TranslationCommandTextResolver(german) { WarningOutput = quiet }.Resolve("help.options", German, []));
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(TestTextCatalog.Registration)
-            .Add(TranslationCommandTextResolver.CatalogRegistration)
+            .AddCatalog(TestTextCatalog.Registration)
+            .AddCatalog(TranslationCommandTextResolver.CatalogRegistration)
             .AddOverlay(FrenchOverlay())
             .BuildAsync("fr");
         Assert.Equal("Utilisation", new TranslationCommandTextResolver(context, TestTextCatalog.CatalogId) { WarningOutput = quiet }.Resolve("help.usage", French, []));

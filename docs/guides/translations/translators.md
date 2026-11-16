@@ -102,8 +102,8 @@ Import accepts what TMS tools typically change: nested groups, split segments,
 ## Import
 
 ```sh
-dotnet tool run runic-translations -- xliff import --project translations --source xliff/shop.fr.xliff --dry-run
-dotnet tool run runic-translations -- xliff import --project translations --source xliff/shop.fr.xliff
+dotnet tool run runic-translations -- xliff import --project translations --input xliff/shop.fr.xliff --dry-run
+dotnet tool run runic-translations -- xliff import --project translations --input xliff/shop.fr.xliff
 dotnet tool run runic-translations -- validate --project translations
 ```
 
@@ -120,7 +120,7 @@ For a bot or CI job that imports TMS output, make any problem fail the job and
 write nothing:
 
 ```sh
-dotnet tool run runic-translations -- xliff import --project translations --source xliff/shop.fr.xliff \
+dotnet tool run runic-translations -- xliff import --project translations --input xliff/shop.fr.xliff \
   --source-changed refuse --fail-on refused
 ```
 

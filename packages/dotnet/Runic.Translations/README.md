@@ -43,8 +43,8 @@ one context. `SetLocaleAsync` prepares every catalog's snapshot and publishes th
 
 ```csharp
 TranslationContext translations = await TranslationContext.CreateBuilder()
-    .Add(AppTextCatalog.Registration)
-    .Add(GridTextCatalog.Registration)          // a library's generated registration
+    .AddCatalog(AppTextCatalog.Registration)
+    .AddCatalog(GridTextCatalog.Registration)          // a library's generated registration
     .AddOverlay(TranslationOverlay.FromPacks("acme.grid", packSource,
         addedLocales: [new TranslationOverlayLocale("fr")]))
     .BuildAsync(initialLocale: "de");

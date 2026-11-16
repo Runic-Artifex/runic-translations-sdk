@@ -43,7 +43,7 @@ public sealed class TranslationContextBuilder
     /// <exception cref="ArgumentException">
     /// The catalog is already registered with another contract fingerprint, or with other options.
     /// </exception>
-    public TranslationContextBuilder Add(TranslationCatalogRegistration registration, TranslationOptions? options = null)
+    public TranslationContextBuilder AddCatalog(TranslationCatalogRegistration registration, TranslationOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(registration);
         for (int index = 0; index < _catalogs.Count; index++)

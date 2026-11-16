@@ -30,7 +30,7 @@ internal sealed class CatalogSourceTests
     public void ForCatalog()
     {
         Dispatcher dispatcher = Dispatcher.CurrentDispatcher;
-        TranslationContext context = TranslationContext.CreateBuilder().Add(Registration(GridId, readable: true)).Add(Registration("plain", readable: false)).Build("en");
+        TranslationContext context = TranslationContext.CreateBuilder().AddCatalog(Registration(GridId, readable: true)).AddCatalog(Registration("plain", readable: false)).Build("en");
         try
         {
             Throws<InvalidOperationException>(() => TranslationSource.ForCatalog(GridId), "no context yet");
@@ -68,7 +68,7 @@ internal sealed class CatalogSourceTests
             TranslationSource.UseContext(context, registration => null);
             TranslationSource.UseContext(context, registration => null);
             Require(ReferenceEquals(source, TranslationSource.ForCatalog(GridId)), "the same context keeps its sources");
-            Throws<InvalidOperationException>(() => TranslationSource.UseContext(TranslationContext.CreateBuilder().Add(Registration(GridId, readable: true)).Build()), "replace");
+            Throws<InvalidOperationException>(() => TranslationSource.UseContext(TranslationContext.CreateBuilder().AddCatalog(Registration(GridId, readable: true)).Build()), "replace");
         }
         finally
         {
@@ -82,7 +82,7 @@ internal sealed class CatalogSourceTests
     [Test, DisplayName("catalog: a source first asked for on a secondary UI thread stays on the context's dispatcher"), NotInParallel(WpfSuite.Key, Order = 251)]
     public void ForCatalogOnSecondaryUiThread()
     {
-        TranslationContext context = TranslationContext.CreateBuilder().Add(Registration(GridId, readable: true)).Build("en");
+        TranslationContext context = TranslationContext.CreateBuilder().AddCatalog(Registration(GridId, readable: true)).Build("en");
         try
         {
             TranslationSource.UseContext(context);
@@ -114,7 +114,7 @@ internal sealed class CatalogSourceTests
     [Test, DisplayName("catalog: a custom context without registrations reports what to implement"), NotInParallel(WpfSuite.Key, Order = 252)]
     public void ForCatalogCustomContext()
     {
-        TranslationContext inner = TranslationContext.CreateBuilder().Add(Registration(GridId, readable: true)).Build("en");
+        TranslationContext inner = TranslationContext.CreateBuilder().AddCatalog(Registration(GridId, readable: true)).Build("en");
         try
         {
             TranslationSource.UseContext(new ManagersOnlyContext(inner));

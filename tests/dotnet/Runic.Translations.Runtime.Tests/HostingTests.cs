@@ -161,7 +161,7 @@ internal sealed class HostingTests
     public async Task PreRegisteredContextIsChecked()
     {
         var services = new ServiceCollection();
-        services.AddSingleton(await TranslationContext.CreateBuilder().Add(Registration("app", "Hello", "Hallo")).BuildAsync());
+        services.AddSingleton(await TranslationContext.CreateBuilder().AddCatalog(Registration("app", "Hello", "Hallo")).BuildAsync());
         services.AddRunicTranslations().AddCatalog(Registration("app", "Hello", "Hallo"));
         services.AddRunicTranslations().AddCatalog(Registration("lib", "Grid", "Raster"), static context => new LibText(context));
         await using ServiceProvider provider = services.BuildServiceProvider();

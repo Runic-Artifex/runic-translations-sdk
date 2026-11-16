@@ -399,7 +399,7 @@ render();
   if (!external) console.log("In-page editing: no non-loopback IPv4 address on this machine; the remote-client checks are left to the unit tests.");
   else for (const allow of [undefined, `${external}/32`]) {
     // The environment variable, as a developer would set it for a Tailscale network or a laptop.
-    if (allow) process.env.RUNIC_TRANSLATIONS_EDIT_ALLOW = allow; else delete process.env.RUNIC_TRANSLATIONS_EDIT_ALLOW;
+    if (allow) process.env.RUNIC_DEV_ALLOW = allow; else delete process.env.RUNIC_DEV_ALLOW;
     const remote = await createServer({
       root: fixture, configFile: false, logLevel: "silent",
       plugins: [runicTranslations({ project: join(fixture, "translations"), cwd: fixture, command: "dotnet", commandArguments: [tool] })],
@@ -413,9 +413,9 @@ render();
         outgoing.on("error", reject);
         outgoing.end();
       });
-      assert.equal(status, allow ? 200 : 403, `a request from ${external} with RUNIC_TRANSLATIONS_EDIT_ALLOW=${allow ?? "(unset)"}`);
+      assert.equal(status, allow ? 200 : 403, `a request from ${external} with RUNIC_DEV_ALLOW=${allow ?? "(unset)"}`);
     } finally {
-      delete process.env.RUNIC_TRANSLATIONS_EDIT_ALLOW;
+      delete process.env.RUNIC_DEV_ALLOW;
       await remote.close();
     }
   }

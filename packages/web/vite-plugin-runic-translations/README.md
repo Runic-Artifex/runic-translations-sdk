@@ -312,7 +312,8 @@ write your sources. Prefer addresses and networks, such as Tailscale's
 same entries separated by commas or spaces, and adds to the option.
 `RUNIC_DEV_ALLOW` is the setting vite-plugin-runic (`@runic-artifex/vite-plugin-runic`)
 also reads for Runic Inspect's dev endpoints, so one variable admits a client to
-both; `RUNIC_TRANSLATIONS_EDIT_ALLOW` keeps working, and the two add up. An invalid
+both. `RUNIC_TRANSLATIONS_EDIT_ALLOW`, its former name, was removed in 0.13: the
+plugin ignores it and warns when it is set. An invalid
 entry stops the dev server with an error naming it. When the list is not empty,
 the dev server logs it at start. Vite must also accept the `Host` those clients
 use (`server.allowedHosts`, which allows IP addresses and `localhost` by

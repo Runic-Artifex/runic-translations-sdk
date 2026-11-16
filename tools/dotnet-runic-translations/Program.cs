@@ -684,8 +684,12 @@ internal sealed class ToolHostOperations : ITranslationsToolCommandOperations
                 CatalogImport.Run(project, new TranslationCatalogImportRequest(request.From!, request.Source!, request.Locales ?? [], request.Group, request.Overwrite), request.DryRun, result)),
             "xliff export" => ExecuteInterchange(request, ToolCommand.XliffExport, (project, result) =>
                 InterchangeOperations.Export(project, request.Output!, request.Locales ?? [], request.Review, result)),
+            "xliff import" when request.Source is not null && request.FormerSource is not null =>
+                Program.Usage("--input and --source name the same XLIFF document; pass --input only.", ToolCommand.XliffImport),
+            "xliff import" when (request.Source ?? request.FormerSource) is null =>
+                Program.Usage("xliff import requires --input <path>, the XLIFF document to import.", ToolCommand.XliffImport),
             "xliff import" => ExecuteInterchange(request, ToolCommand.XliffImport, (project, result) =>
-                InterchangeOperations.Import(project, request.Source!, request.SourceChanged, request.WriteReview, request.DryRun, result, request.FailOn)),
+                InterchangeOperations.Import(project, (request.Source ?? request.FormerSource)!, request.SourceChanged, request.WriteReview, request.DryRun, result, request.FailOn)),
             "review mark" => ExecuteInterchange(request, ToolCommand.ReviewMark, (project, result) =>
                 InterchangeOperations.Mark(project, request.Keys ?? [], request.Locales![0], request.State!, request.Note, result)),
             "locale add" => ExecuteInterchange(request, ToolCommand.LocaleAdd, (project, result) =>
