@@ -58,7 +58,7 @@
   "devDependencies": {
     "@runic-artifex/translations-svelte": "workspace:*",
     "@sveltejs/adapter-static": "4.0.1",
-    "@sveltejs/kit": "3.0.0",
+    "@sveltejs/kit": "3.1.1",
     "@sveltejs/vite-plugin-svelte": "7.3.1",
     "@types/node": "24.19.1",
     "happy-dom": "^21.0.4",
