@@ -29,7 +29,7 @@
     "@runic-artifex/sveltekit": "0.17.1",
     "@runic-artifex/translations-svelte": "workspace:*",
     "@runic-artifex/vite-plugin-runic-translations": "workspace:*",
-    "@sveltejs/adapter-static": "4.0.0",
+    "@sveltejs/adapter-static": "4.0.1",
     "@sveltejs/kit": "3.0.0",
     "@sveltejs/vite-plugin-svelte": "7.3.1",
     "@tailwindcss/vite": "^4.3.3",
