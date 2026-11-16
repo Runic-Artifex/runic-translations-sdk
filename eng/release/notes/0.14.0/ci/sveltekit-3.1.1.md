@@ -1,0 +1,1 @@
+- Update `@sveltejs/kit` to 3.1.1 and `@sveltejs/adapter-node` (in `examples/component-library/web`) to 6.0.1 to fix GHSA-mw6w-2fmv-pvw3 and GHSA-rqw3-x7hx-mm3p.
