@@ -1,1 +1,3 @@
 #nullable enable
+*REMOVED*Runic.Translations.TranslationContextBuilder.Add(Runic.Translations.TranslationCatalogRegistration! registration, Runic.Translations.TranslationOptions? options = null) -> Runic.Translations.TranslationContextBuilder!
+Runic.Translations.TranslationContextBuilder.AddCatalog(Runic.Translations.TranslationCatalogRegistration! registration, Runic.Translations.TranslationOptions? options = null) -> Runic.Translations.TranslationContextBuilder!

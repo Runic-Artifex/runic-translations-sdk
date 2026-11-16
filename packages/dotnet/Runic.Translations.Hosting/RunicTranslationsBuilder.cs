@@ -15,7 +15,7 @@ public interface IRunicTranslationsBuilder
     /// <summary>Registers a catalog, such as <c>GridTextCatalog.Registration</c>.</summary>
     /// <remarks>
     /// A catalog registered again with the same contract fingerprint is ignored, and options belong to one registration;
-    /// see <see cref="TranslationContextBuilder.Add"/>. Conflicts throw when the context is built.
+    /// see <see cref="TranslationContextBuilder.AddCatalog"/>. Conflicts throw when the context is built.
     /// </remarks>
     IRunicTranslationsBuilder AddCatalog(TranslationCatalogRegistration registration, TranslationOptions? options = null);
 

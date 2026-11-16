@@ -17,8 +17,8 @@ dotnet add package Runic.Translations.CommandLine
 ```csharp
 CultureInfo culture = CultureInfo.GetCultureInfo("de");
 TranslationContext translations = await TranslationContext.CreateBuilder()
-    .Add(CliTextCatalog.Registration)
-    .Add(TranslationCommandTextResolver.CatalogRegistration)
+    .AddCatalog(CliTextCatalog.Registration)
+    .AddCatalog(TranslationCommandTextResolver.CatalogRegistration)
     .AddOverlays(CliTextCatalog.Overlays)
     .BuildAsync(culture.Name);
 return await new CommandApp(GeneratedCommandCatalog.Create())
@@ -141,7 +141,7 @@ the culture:
 
 ```csharp
 TextResolver = new TranslationCommandTextResolver(
-    TranslationContext.CreateBuilder().Add(CliTextCatalog.Registration),
+    TranslationContext.CreateBuilder().AddCatalog(CliTextCatalog.Registration),
     CliTextCatalog.CatalogId),
 ```
 
@@ -155,8 +155,8 @@ every other key falls back along the framework catalog's chain:
 
 ```csharp
 TranslationContextBuilder catalogs = TranslationContext.CreateBuilder()
-    .Add(CliTextCatalog.Registration)
-    .Add(TranslationCommandTextResolver.CatalogRegistration)
+    .AddCatalog(CliTextCatalog.Registration)
+    .AddCatalog(TranslationCommandTextResolver.CatalogRegistration)
     .AddOverlay(TranslationOverlay.FromPacks(TranslationCommandTextResolver.CatalogId, packs, [new TranslationOverlayLocale("fr")]));
 TextResolver = new TranslationCommandTextResolver(catalogs, CliTextCatalog.CatalogId),
 ```

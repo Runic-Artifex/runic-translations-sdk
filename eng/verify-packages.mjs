@@ -95,7 +95,7 @@ using Runic.Translations;
 // A catalog generated before TranslationCatalogRegistration existed is registered from its generated members.
 var registration = new TranslationCatalogRegistration(GridTextCatalog.CatalogId, GridTextCatalog.DefaultLocale,
     GridTextCatalog.ContractFingerprint, GridTextCatalog.Rmf2MarkupContract, GridTextCatalog.CreateProvider);
-TranslationContext context = await TranslationContext.CreateBuilder().Add(registration).BuildAsync("de-AT");
+TranslationContext context = await TranslationContext.CreateBuilder().AddCatalog(registration).BuildAsync("de-AT");
 var text = new GridText(context.GetManager(GridTextCatalog.CatalogId));
 string german = text.Messages.title + "|" + text.Messages.rows(2) + "|" + context.Catalogs[0].LocaleResolution;
 if (german != "Raster|2 Zeilen|Parent") throw new InvalidOperationException(german);
@@ -226,9 +226,9 @@ using Shop;
 
 // The overrides are compiled into the application: no packs, and Build composes synchronously.
 TranslationContext context = TranslationContext.CreateBuilder()
-    .Add(ShopTextCatalog.Registration)
-    .Add(TableTextCatalog.Registration)
-    .Add(TranslationCommandTextResolver.CatalogRegistration)
+    .AddCatalog(ShopTextCatalog.Registration)
+    .AddCatalog(TableTextCatalog.Registration)
+    .AddCatalog(TranslationCommandTextResolver.CatalogRegistration)
     .AddOverlays(ShopTextCatalog.Overlays)
     .Build("en");
 Check(string.Join(",", ShopTextCatalog.Overlays.Select(overlay => overlay.Catalog)), "acme.table,runic-command-line");

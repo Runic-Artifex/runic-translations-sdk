@@ -25,17 +25,19 @@ internal static class XliffCommandModule
 
     [Command("xliff import", Description = "Import a translated XLIFF document into the .rmf2 or .mf2 sources.",
         LongDescription = "Applies each translated unit to the target locale's sources; untranslated, empty and markup units are skipped and invalid units refused (a selector unit that changes its declarations or .match, leaves a variant empty or, under an error pluralCategories policy, misses the locale's plural categories), each with a reason, and the rest is applied. A unit whose source changed since export is applied as needs-review, or refused with --source-changed refuse. Updates <catalog>.review.json when it exists or --review is given. In CI, --fail-on refused makes any refused unit fail the command, and then nothing is written.\n\n" + ExitCodes,
-        Examples = ["runic-translations xliff import --source xliff/app.de.xliff --dry-run", "runic-translations xliff import --project translations --source app.de.xliff --source-changed refuse", "runic-translations xliff import --source app.de.xliff --fail-on refused"])]
+        Examples = ["runic-translations xliff import --input xliff/app.de.xliff --dry-run", "runic-translations xliff import --project translations --input app.de.xliff --source-changed refuse", "runic-translations xliff import --input app.de.xliff --fail-on refused"])]
     [CommandResult("runic.translations.tool/1", typeof(TranslationsToolCommandJsonContext))]
     internal static CommandOutcome<TranslationsToolCommandResult> Import(
         [FromServices] ITranslationsToolCommandOperations operations,
         [Option("--project", Description = ProjectDescription, ValueName = "directory")] string? project,
-        [Option("--source", Required = true, ValueName = "path", Description = "The XLIFF document to import.")] string source,
+        [Option("--input", ValueName = "path", Description = "The XLIFF document to import. Required.")] string? input,
+        // The spelling of 0.12 and earlier, a hidden alias until 2.0 (D067.11).
+        [Option("--source", Hidden = true, ValueName = "path")] string? formerInput,
         [Option("--source-changed", ValueName = "policy", Description = "needs-review (default) applies a unit whose source changed since export as needs-review; refuse refuses it.")] string? sourceChanged,
         [Option("--review", Description = "Write review state to <catalog>.review.json even when it does not exist yet.")] bool review,
         [Option("--fail-on", ValueName = "condition", Description = "refused: fail (exit 2) and write nothing when any unit is refused. By default refused units are warnings and the rest is applied.")] string? failOn,
         [Option("--dry-run", Description = "Report the outcome without writing files.")] bool dryRun) =>
-        operations.Execute(new("xliff import", Project: project, DryRun: dryRun) { Source = source, SourceChanged = sourceChanged, WriteReview = review, FailOn = failOn });
+        operations.Execute(new("xliff import", Project: project, DryRun: dryRun) { Source = input, FormerSource = formerInput, SourceChanged = sourceChanged, WriteReview = review, FailOn = failOn });
 }
 
 /// <summary><c>runic-translations review mark</c>: the SDK-owned review file, <c>&lt;catalog&gt;.review.json</c>.</summary>

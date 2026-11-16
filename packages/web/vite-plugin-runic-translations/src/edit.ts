@@ -6,10 +6,13 @@ import { isLocalUser, type LocalUserCheck } from "./local-user.js";
 
 /** The URL path of the in-page editing API, below Vite's `base`. */
 export const editRoute = "__runic-translations/message";
-/** Hosts and networks, besides loopback, that may use the in-page editing API: comma- or space-separated. */
-export const allowEnvironmentVariable = "RUNIC_TRANSLATIONS_EDIT_ALLOW";
-/** The same list, shared with vite-plugin-runic's dev endpoints (Runic Inspect), so one setting covers both plugins. */
-export const sharedAllowEnvironmentVariable = "RUNIC_DEV_ALLOW";
+/**
+ * Hosts and networks, besides loopback, that may use the in-page editing API: comma- or space-separated. The setting is
+ * shared with vite-plugin-runic's dev endpoints (Runic Inspect), so one variable covers both plugins.
+ */
+export const allowEnvironmentVariable = "RUNIC_DEV_ALLOW";
+/** The variable of 0.12 and earlier, removed in 0.13: the plugin warns when it is set, and reads `RUNIC_DEV_ALLOW` only. */
+export const removedAllowEnvironmentVariable = "RUNIC_TRANSLATIONS_EDIT_ALLOW";
 /** The largest request body the API reads (the compiler's request limit is 1 MiB). */
 const maximumBody = 512 * 1024;
 /** How long a resolved host name of the allow list is trusted. */
@@ -20,7 +23,7 @@ export interface InPageEditingOptions {
   /**
    * Hosts and networks besides loopback whose requests the API accepts: IPv4 or IPv6 addresses (`192.168.1.20`,
    * `fd7a:115c:a1e0::1`), CIDR networks (`100.64.0.0/10`, `fd7a:115c:a1e0::/48`) and host names (`laptop.tailnet.ts.net`),
-   * resolved when a request arrives. The `RUNIC_DEV_ALLOW` and `RUNIC_TRANSLATIONS_EDIT_ALLOW` environment variables add to them.
+   * resolved when a request arrives. The `RUNIC_DEV_ALLOW` environment variable adds to them.
    */
   readonly allow?: readonly string[];
 }
@@ -78,10 +81,9 @@ export function parseAllowList(entries: readonly unknown[], source: string): Acc
   });
 }
 
-/** The rules of both environment variables (`RUNIC_DEV_ALLOW`, then `RUNIC_TRANSLATIONS_EDIT_ALLOW`), each validated under its name. */
+/** The rules of the `RUNIC_DEV_ALLOW` environment variable, validated under its name. */
 export function allowRulesFromEnvironment(environment: Readonly<Record<string, string | undefined>> = process.env): AccessRule[] {
-  return [sharedAllowEnvironmentVariable, allowEnvironmentVariable]
-    .flatMap(name => parseAllowList(allowListFromEnvironment(environment[name]), name));
+  return parseAllowList(allowListFromEnvironment(environment[allowEnvironmentVariable]), allowEnvironmentVariable);
 }
 
 /** The entries of the environment variable: separated by commas or whitespace. */
@@ -207,7 +209,7 @@ export function createEditMiddleware(backend: EditBackend, access: AccessList, b
     // Who may ask: the client address (never a forwarded header), then the browser's own origin signals.
     if (!(await access.allows(request.socket.remoteAddress)))
       throw new HttpError(403, "forbidden", `In-page translation editing accepts requests from loopback only, unless the client's host or network is allowed: ` +
-        `add it to runicTranslations({ inPageEditing: { allow: [...] } }), ${sharedAllowEnvironmentVariable} or ${allowEnvironmentVariable}.`);
+        `add it to runicTranslations({ inPageEditing: { allow: [...] } }) or ${allowEnvironmentVariable}.`);
     sameOrigin(request);
     if (!routes.has(url.pathname)) throw new HttpError(404, "not-found", `The in-page editing API has no ${url.pathname}.`);
     const reason = backend.unavailable();

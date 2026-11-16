@@ -5,8 +5,8 @@ using Shop;
 // One context for the application's catalog and the library's. ShopTextCatalog.Overlays holds the overrides of
 // translations/overrides/acme.widgets/, compiled into this assembly, so Build composes without I/O.
 TranslationContext translations = TranslationContext.CreateBuilder()
-    .Add(ShopTextCatalog.Registration)
-    .Add(WidgetsTextCatalog.Registration)
+    .AddCatalog(ShopTextCatalog.Registration)
+    .AddCatalog(WidgetsTextCatalog.Registration)
     .AddOverlays(ShopTextCatalog.Overlays)
     .Build("en");
 

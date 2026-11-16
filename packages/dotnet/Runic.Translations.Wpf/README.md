@@ -306,8 +306,8 @@ and shares the context with XAML once at startup, before views load:
 
 ```csharp
 TranslationContext translations = TranslationContext.CreateBuilder()
-    .Add(AppTextCatalog.Registration)
-    .Add(GridTextCatalog.Registration)
+    .AddCatalog(AppTextCatalog.Registration)
+    .AddCatalog(GridTextCatalog.Registration)
     .Build("en");
 TranslationSource.UseContext(translations, registration => new WpfInlineRenderer(registration.Rmf2MarkupContract, Navigate));
 TranslationSource.Default = TranslationSource.ForCatalog(AppTextCatalog.CatalogId);

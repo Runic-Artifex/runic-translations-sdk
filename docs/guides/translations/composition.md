@@ -59,8 +59,8 @@ Register every catalog once, the application's own first, and build the context:
 
 ```csharp
 TranslationContext translations = await TranslationContext.CreateBuilder()
-    .Add(AppTextCatalog.Registration)
-    .Add(GridTextCatalog.Registration)
+    .AddCatalog(AppTextCatalog.Registration)
+    .AddCatalog(GridTextCatalog.Registration)
     .BuildAsync(initialLocale: settings.Language);
 
 await translations.SetLocaleAsync("fr");   // every catalog switches together
@@ -250,8 +250,8 @@ catalog. Attach them where the library catalogs are registered:
 
 ```csharp
 TranslationContext translations = TranslationContext.CreateBuilder()
-    .Add(ShopTextCatalog.Registration)
-    .Add(GridTextCatalog.Registration)
+    .AddCatalog(ShopTextCatalog.Registration)
+    .AddCatalog(GridTextCatalog.Registration)
     .AddOverlays(ShopTextCatalog.Overlays)
     .Build("fr");
 ```
@@ -278,8 +278,8 @@ catalog ID, for example downloaded ones:
 
 ```csharp
 TranslationContext translations = await TranslationContext.CreateBuilder()
-    .Add(AppTextCatalog.Registration)
-    .Add(GridTextCatalog.Registration)
+    .AddCatalog(AppTextCatalog.Registration)
+    .AddCatalog(GridTextCatalog.Registration)
     .AddOverlay(TranslationOverlay.FromPacks("acme.grid", packSource,
         addedLocales: [new TranslationOverlayLocale("fr", fallbackLocale: "en")]))
     .BuildAsync("fr");

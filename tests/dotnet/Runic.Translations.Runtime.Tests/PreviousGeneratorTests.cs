@@ -31,7 +31,7 @@ internal sealed class PreviousGeneratorTests
         var registration = new TranslationCatalogRegistration(SnapshotTextCatalog.CatalogId, SnapshotTextCatalog.DefaultLocale,
             SnapshotTextCatalog.ContractFingerprint, SnapshotTextCatalog.Rmf2MarkupContract, SnapshotTextCatalog.CreateProvider);
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(registration)
+            .AddCatalog(registration)
             .AddOverlay(TranslationOverlay.FromPacks(SnapshotTextCatalog.CatalogId, new FrenchPack(), [new TranslationOverlayLocale("fr")]))
             .BuildAsync("fr");
         var text = new SnapshotText(context.GetManager(SnapshotTextCatalog.CatalogId));

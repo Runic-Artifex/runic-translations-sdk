@@ -243,7 +243,7 @@ the C# catalog follow it:
 
 ```csharp
 TranslationContext translations = await TranslationContext.CreateBuilder()
-    .Add(NotesTextCatalog.Registration)
+    .AddCatalog(NotesTextCatalog.Registration)
     .BuildAsync();
 
 var locale = services.GetRequiredService<IRunicApplicationLocale>();

@@ -153,8 +153,8 @@ and switch it once:
 
 ```csharp
 TranslationContext translations = TranslationContext.CreateBuilder()
-    .Add(ShopTextCatalog.Registration)
-    .Add(WidgetsTextCatalog.Registration)
+    .AddCatalog(ShopTextCatalog.Registration)
+    .AddCatalog(WidgetsTextCatalog.Registration)
     .AddOverlays(ShopTextCatalog.Overlays)      // the build-time overrides below
     .Build(settings.Language);
 
@@ -233,7 +233,7 @@ build.
   application uses it, in every locale the library ships:
 
   ```csharp
-  TranslationContext translations = TranslationContext.CreateBuilder().Add(WidgetsTextCatalog.Registration).Build("de");
+  TranslationContext translations = TranslationContext.CreateBuilder().AddCatalog(WidgetsTextCatalog.Registration).Build("de");
   Assert.Equal("Speicher", new StorageMeter(translations).Title);
   ```
 

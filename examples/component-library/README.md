@@ -104,8 +104,8 @@ catalogs and the overlays in one `TranslationContext` and switches it:
 
 ```csharp
 TranslationContext translations = TranslationContext.CreateBuilder()
-    .Add(ShopTextCatalog.Registration)
-    .Add(WidgetsTextCatalog.Registration)
+    .AddCatalog(ShopTextCatalog.Registration)
+    .AddCatalog(WidgetsTextCatalog.Registration)
     .AddOverlays(ShopTextCatalog.Overlays)
     .Build("en");
 

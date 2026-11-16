@@ -14,8 +14,8 @@ using Runic.Translations;
 using Runic.Translations.CommandLine;
 
 TranslationContext translations = await TranslationContext.CreateBuilder()
-    .Add(AppTextCatalog.Registration)
-    .Add(TranslationCommandTextResolver.CatalogRegistration)
+    .AddCatalog(AppTextCatalog.Registration)
+    .AddCatalog(TranslationCommandTextResolver.CatalogRegistration)
     .BuildAsync("de");
 return await new CommandApp(GeneratedCommandCatalog.Create())
 {
@@ -82,8 +82,8 @@ in the builder and attach a `TranslationOverlay` for
 
 ```csharp
 TranslationContextBuilder catalogs = TranslationContext.CreateBuilder()
-    .Add(AppTextCatalog.Registration)
-    .Add(TranslationCommandTextResolver.CatalogRegistration)
+    .AddCatalog(AppTextCatalog.Registration)
+    .AddCatalog(TranslationCommandTextResolver.CatalogRegistration)
     .AddOverlay(TranslationOverlay.FromPacks(TranslationCommandTextResolver.CatalogId, packs, [new TranslationOverlayLocale("fr")]));
 var resolver = new TranslationCommandTextResolver(catalogs, AppTextCatalog.CatalogId);
 ```

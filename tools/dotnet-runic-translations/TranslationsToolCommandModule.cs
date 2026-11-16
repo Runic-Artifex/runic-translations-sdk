@@ -263,6 +263,9 @@ internal sealed record TranslationsToolCommandRequest(
     /// <summary>The XLIFF document that <c>xliff import</c> reads, or the file or directory that <c>import</c> reads.</summary>
     public string? Source { get; init; }
 
+    /// <summary>The XLIFF document given to <c>xliff import</c> with the hidden former spelling <c>--source</c>.</summary>
+    public string? FormerSource { get; init; }
+
     /// <summary>The <c>--source-changed</c> policy of <c>xliff import</c>: <c>needs-review</c> or <c>refuse</c>.</summary>
     public string? SourceChanged { get; init; }
 

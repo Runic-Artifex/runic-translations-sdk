@@ -10,8 +10,8 @@ register and override them, lists what stays English on purpose, and ends with t
 
 | Text of | Catalog id | Ships in (NuGet / npm) | Register | Override `from` | Key list |
 | --- | --- | --- | --- | --- | --- |
-| `Runic.CommandLine`, `.Processes`, `.Spectre`: help, usage errors and their hints, help links, prompts, faults (including the process faults `RCLI6001`–`RCLI6011`), redaction notes | `runic-command-line` | `Runic.Translations.CommandLine` / none | `.Add(TranslationCommandTextResolver.CatalogRegistration)` and `new TranslationCommandTextResolver(context, AppTextCatalog.CatalogId)`; or `AddRunicCommandLineTranslations()` | `"Runic.Translations.CommandLine"` | runic-cli-sdk [`text-keys.md`](https://github.com/Runic-Artifex/runic-cli-sdk/blob/main/docs/guides/command-line/text-keys.md); `translations/text-keys.json` in the `Runic.CommandLine` package |
-| `Runic.Platform`, `Runic.Desktop`, `Runic.Application.Views`, `@runic-artifex/views`: validation, field errors, dialog titles, "Untitled", shortcut key names, browser-window error pages, standard macOS menus | `runic-views` | `Runic.Application.Views.Translations` / `@runic-artifex/views-translations` | `AddRunicViewsTranslations()`; or `.Add(RunicViewsTranslations.CatalogRegistration)` with `FollowPlatformTexts` and `MenuTitles`; page: `configureRunicViewsText()` | `["Runic.Application.Views.Translations", "@runic-artifex/views-translations"]` | [Keys](https://github.com/Runic-Artifex/runic-sdk/blob/main/packages/dotnet/Runic.Application.Views.Translations/README.md#keys) in the package README |
+| `Runic.CommandLine`, `.Processes`, `.Spectre`: help, usage errors and their hints, help links, prompts, faults (including the process faults `RCLI6001`–`RCLI6011`), redaction notes | `runic-command-line` | `Runic.Translations.CommandLine` / none | `.AddCatalog(TranslationCommandTextResolver.CatalogRegistration)` and `new TranslationCommandTextResolver(context, AppTextCatalog.CatalogId)`; or `AddRunicCommandLineTranslations()` | `"Runic.Translations.CommandLine"` | runic-cli-sdk [`text-keys.md`](https://github.com/Runic-Artifex/runic-cli-sdk/blob/main/docs/guides/command-line/text-keys.md); `translations/text-keys.json` in the `Runic.CommandLine` package |
+| `Runic.Platform`, `Runic.Desktop`, `Runic.Application.Views`, `@runic-artifex/views`: validation, field errors, dialog titles, "Untitled", shortcut key names, browser-window error pages, standard macOS menus | `runic-views` | `Runic.Application.Views.Translations` / `@runic-artifex/views-translations` | `AddRunicViewsTranslations()`; or `.AddCatalog(RunicViewsTranslations.CatalogRegistration)` with `FollowPlatformTexts` and `MenuTitles`; page: `configureRunicViewsText()` | `["Runic.Application.Views.Translations", "@runic-artifex/views-translations"]` | [Keys](https://github.com/Runic-Artifex/runic-sdk/blob/main/packages/dotnet/Runic.Application.Views.Translations/README.md#keys) in the package README |
 
 Keys and their inputs are API: an override names them, and the build checks it. A message whose meaning
 changes gets a new key, and keys are added only in minor releases.
@@ -38,9 +38,9 @@ them. Without dependency injection, for a command-line app or a GUI app with a c
 
 ```csharp
 TranslationContext translations = TranslationContext.CreateBuilder()
-    .Add(AppTextCatalog.Registration)
-    .Add(TranslationCommandTextResolver.CatalogRegistration)   // runic-command-line
-    .Add(RunicViewsTranslations.CatalogRegistration)           // runic-views (desktop apps)
+    .AddCatalog(AppTextCatalog.Registration)
+    .AddCatalog(TranslationCommandTextResolver.CatalogRegistration)   // runic-command-line
+    .AddCatalog(RunicViewsTranslations.CatalogRegistration)           // runic-views (desktop apps)
     .AddOverlays(AppTextCatalog.Overlays)                      // your build-time overrides of all three
     .Build("de");
 

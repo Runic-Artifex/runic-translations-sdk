@@ -221,8 +221,8 @@ and [Migrate from i18next](https://github.com/Runic-Artifex/runic-translations-s
 
 ```bash
 dotnet tool run runic-translations -- xliff export --project translations --output xliff
-dotnet tool run runic-translations -- xliff import --project translations --source xliff/app.de.xliff --dry-run
-dotnet tool run runic-translations -- xliff import --project translations --source xliff/app.de.xliff
+dotnet tool run runic-translations -- xliff import --project translations --input xliff/app.de.xliff --dry-run
+dotnet tool run runic-translations -- xliff import --project translations --input xliff/app.de.xliff
 ```
 
 [Work with translators and translation tools](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/translators.md)
@@ -263,7 +263,7 @@ locale, or only for the `--locale` ones (repeatable). Each message is one unit w
   whose source changed since it was made is exported as needs-review and reported (`REVIEW-STALE`); the files
   are not changed. `--review <path>` reads another review file.
 
-`xliff import --source <file>` checks the document against the project and applies it **per unit**. It accepts
+`xliff import --input <file>` checks the document against the project and applies it **per unit**. It accepts
 XLIFF 2.0 and 2.1, the profile 2 files of 0.8, and what TMS tools write from an export: nested `<group>`s,
 several segments with `<ignorable>`s, `<mrk>` annotations, module metadata, unknown attributes and foreign
 notes (ignored; a dropped translator note is reported as `XLIFF21-NOTE-IGNORED`). For each unit:
@@ -303,7 +303,7 @@ writes nothing and fails with `RTR0092` and exit code 2, so a refused unit (incl
 in the failure data:
 
 ```bash
-dotnet tool run runic-translations -- xliff import --source xliff/app.de.xliff --source-changed refuse --fail-on refused
+dotnet tool run runic-translations -- xliff import --input xliff/app.de.xliff --source-changed refuse --fail-on refused
 ```
 
 The review state comes from the segment `state` (`translated`, `translated` + `subState="runic:needs-review"`,

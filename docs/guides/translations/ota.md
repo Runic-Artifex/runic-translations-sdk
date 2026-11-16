@@ -153,7 +153,7 @@ sealed class PackSource(PackCache cache) : IExternalTranslationSource
 }
 
 TranslationContext translations = await TranslationContext.CreateBuilder()
-    .Add(AppTextCatalog.Registration)
+    .AddCatalog(AppTextCatalog.Registration)
     .AddOverlay(TranslationOverlay.FromPacks("app", new PackSource(cache), integrityVerifier: verifier))
     .BuildAsync(settings.Language);
 

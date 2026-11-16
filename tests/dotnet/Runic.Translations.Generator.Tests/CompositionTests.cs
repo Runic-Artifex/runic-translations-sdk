@@ -154,7 +154,7 @@ internal sealed class CompositionTests
             overlay.Catalog + ":" + string.Join(",", overlay.AddedLocales.Select(locale => locale.Locale)) + ":" + overlay.IsCompiled)), "overlays");
 
         // No InitializeAsync and no packs: a compiled overlay composes synchronously.
-        TranslationContext context = TranslationContext.CreateBuilder().Add(GridV1.Registration).AddOverlays(overlays).Build("en");
+        TranslationContext context = TranslationContext.CreateBuilder().AddCatalog(GridV1.Registration).AddOverlays(overlays).Build("en");
         Assert.Equal("Data grid|No rows", Text(context, GridId, "title") + "|" + Text(context, GridId, "empty"), "English override");
         await context.SetLocaleAsync("de");
         Assert.Equal("Raster", Text(context, GridId, "title"), "the library's German beats the English override (locale-first)");
@@ -164,7 +164,7 @@ internal sealed class CompositionTests
         Assert.Equal("acme-grid:fr>fr:Exact", Describe(context.Catalogs[0]), "fr is a locale of the catalog");
 
         // Validated against release 1, the overlay still applies key by key to release 2.
-        TranslationContext later = TranslationContext.CreateBuilder().Add(GridV2.Registration).AddOverlays(overlays).Build("fr");
+        TranslationContext later = TranslationContext.CreateBuilder().AddCatalog(GridV2.Registration).AddOverlays(overlays).Build("fr");
         Assert.Equal("Grille", Text(later, GridId, "title"), "release 2");
         Assert.Equal(0, later.Catalogs[0].OverlayDiagnostics.Count, "nothing skipped");
     }
@@ -184,7 +184,7 @@ internal sealed class CompositionTests
         var overlays = (IReadOnlyList<TranslationOverlay>)catalog.GetProperty("Overlays")!.GetValue(null)!;
         Assert.Equal("fr>en,fr-CH>fr", string.Join(",", overlays.Single().AddedLocales.Select(static locale => locale.Locale + ">" + locale.FallbackLocale)), "explicit fallbacks");
 
-        TranslationContext context = TranslationContext.CreateBuilder().Add(GridV1.Registration).AddOverlays(overlays).Build("fr-CH");
+        TranslationContext context = TranslationContext.CreateBuilder().AddCatalog(GridV1.Registration).AddOverlays(overlays).Build("fr-CH");
         Assert.Equal("Grille suisse|3 lignes|No rows", Text(context, GridId, "title") + "|" + Text(context, GridId, "rows", new TextArgument("count", 3L)) + "|" +
             Text(context, GridId, "empty"), "fr-CH, then the French override, then the library's English");
     }
@@ -194,13 +194,13 @@ internal sealed class CompositionTests
     {
         Dictionary<string, byte[]> packs = Packs(OverlayProject.Replace("[ \"en\", \"fr\" ]", "[ \"en\", \"fr\", \"fr-CH\" ]", StringComparison.Ordinal),
             ("en", "title = Data grid\nempty = Nothing here\n"), ("fr", "title = Grille\nempty = Aucune ligne\n"), ("fr-CH", "title = Grille suisse\n"));
-        TranslationContext context = await TranslationContext.CreateBuilder().Add(GridV1.Registration)
+        TranslationContext context = await TranslationContext.CreateBuilder().AddCatalog(GridV1.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(packs), [new TranslationOverlayLocale("fr-CH", "fr")]))
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(packs), [new TranslationOverlayLocale("fr", "de")]))
             .BuildAsync("fr-CH");
         Assert.Equal("Grille suisse|Aucune ligne|3 Zeilen", Text(context, GridId, "title") + "|" + Text(context, GridId, "empty") + "|" +
             Text(context, GridId, "rows", new TextArgument("count", 3L)), "fr-CH, the added fr, then the library's de");
-        ArgumentException cycle = await Throws<ArgumentException>(() => TranslationContext.CreateBuilder().Add(GridV1.Registration)
+        ArgumentException cycle = await Throws<ArgumentException>(() => TranslationContext.CreateBuilder().AddCatalog(GridV1.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(packs), [new TranslationOverlayLocale("fr-CH", "fr"), new TranslationOverlayLocale("fr", "fr-CH")]))
             .BuildAsync().AsTask());
         Assert.True(cycle.Message.Contains("cycle", StringComparison.Ordinal), cycle.Message);
@@ -258,8 +258,8 @@ internal sealed class CompositionTests
     public async Task SharedLocale()
     {
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(App.Registration)
-            .Add(GridV1.Registration)
+            .AddCatalog(App.Registration)
+            .AddCatalog(GridV1.Registration)
             .BuildAsync("de");
         Assert.Equal("Hallo|Raster", Text(context, "app", "greeting") + "|" + Text(context, GridId, "title"), "German");
         Assert.Equal("de", context.RequestedLocale, "requested");
@@ -310,7 +310,7 @@ internal sealed class CompositionTests
             ("en", "title = Data grid\nrows =\n  .input {$count :integer}\n  {{{$count} rows}}\n"),
             ("ar", "title = شبكة\nrows =\n  .input {$count :integer}\n  {{{$count} صفوف}}\n"));
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(GridV1.Registration)
+            .AddCatalog(GridV1.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(packs), [new TranslationOverlayLocale("ar")]))
             .BuildAsync("en");
         // The library (en/de) was compiled with bidiIsolation default, which a pre-0.9 compile-time decision turned off.
@@ -327,7 +327,7 @@ internal sealed class CompositionTests
     [Test, DisplayName("a registration creates the catalog's readable surface over a context manager")]
     public async Task ReadableRegistration()
     {
-        TranslationContext context = await TranslationContext.CreateBuilder().Add(App.Registration).Add(GridV1.Registration).BuildAsync("de");
+        TranslationContext context = await TranslationContext.CreateBuilder().AddCatalog(App.Registration).AddCatalog(GridV1.Registration).BuildAsync("de");
         Assert.True(context.TryGetRegistration(GridId, out TranslationCatalogRegistration? registration) && ReferenceEquals(registration, GridV1.Registration),
             "registration by ID");
         Assert.True(!context.TryGetRegistration("missing", out TranslationCatalogRegistration? missing) && missing is null, "unknown catalog");
@@ -356,8 +356,8 @@ internal sealed class CompositionTests
     {
         var packs = new MemoryPackSource(Overlay) { Failing = "de" };
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(App.Registration)
-            .Add(GridV1.Registration)
+            .AddCatalog(App.Registration)
+            .AddCatalog(GridV1.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, packs))
             .BuildAsync("en");
 
@@ -394,7 +394,7 @@ internal sealed class CompositionTests
     public async Task LocaleFirstOverlay()
     {
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(GridV1.Registration)
+            .AddCatalog(GridV1.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(Overlay), [new TranslationOverlayLocale("fr")]))
             .BuildAsync("en");
         Assert.Equal("Data grid|Nothing here|3 rows", Text(context, GridId, "title") + "|" + Text(context, GridId, "empty") + "|" +
@@ -418,7 +418,7 @@ internal sealed class CompositionTests
     public async Task OverlayAcrossLibraryReleases()
     {
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(GridV2.Registration)
+            .AddCatalog(GridV2.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(Overlay), [new TranslationOverlayLocale("fr", "en")]))
             .BuildAsync("fr");
         Assert.True(!string.Equals(GridV1.Registration.ContractFingerprint, GridV2.Registration.ContractFingerprint, StringComparison.Ordinal),
@@ -444,7 +444,7 @@ internal sealed class CompositionTests
                 help = See the {#strong}manual{/strong}.
                 """));
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(GridV1.Registration)
+            .AddCatalog(GridV1.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(packs)))
             .BuildAsync();
         Assert.Equal("Grid|No data", Text(context, GridId, "title") + "|" + Text(context, GridId, "empty"), "checked overrides");
@@ -459,14 +459,14 @@ internal sealed class CompositionTests
     {
         var misplaced = new Dictionary<string, byte[]>(StringComparer.Ordinal) { ["de"] = Overlay["en"] };
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(GridV1.Registration)
+            .AddCatalog(GridV1.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(misplaced)))
             .BuildAsync("en");
         TranslationPackException wrongLocale = await Throws<TranslationPackException>(() => context.SetLocaleAsync("de").AsTask());
         Assert.Equal("RTR0023/locale-mismatch|en", wrongLocale.RejectionId + "|" + context.RequestedLocale, "pack for another locale");
 
         TranslationPackException rejected = await Throws<TranslationPackException>(() => TranslationContext.CreateBuilder()
-            .Add(GridV1.Registration)
+            .AddCatalog(GridV1.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(Overlay), integrityVerifier: static (_, _) => ValueTask.FromResult(false)))
             .BuildAsync("en").AsTask());
         Assert.Equal(TranslationPackFailureReason.IntegrityRejected, rejected.Reason, "integrity policy");
@@ -477,8 +477,8 @@ internal sealed class CompositionTests
     {
         var packs = new MemoryPackSource(Overlay);
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(App.Registration)
-            .Add(GridV1.Registration)
+            .AddCatalog(App.Registration)
+            .AddCatalog(GridV1.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, packs))
             .BuildAsync("en");
         packs.Replace(Packs(OverlayProject, ("en", """
@@ -500,8 +500,8 @@ internal sealed class CompositionTests
     public async Task ResolvesReferences()
     {
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(App.Registration)
-            .Add(GridV1.Registration)
+            .AddCatalog(App.Registration)
+            .AddCatalog(GridV1.Registration)
             .BuildAsync("de");
         var rows = new TranslationReference(GridId, GridV1.Registration.ContractFingerprint, "rows",
             new Dictionary<string, TranslationReferenceArgument> { ["count"] = new TranslationReferenceArgument(TextArgumentType.Int, "2") }, "2 rows");
@@ -518,8 +518,8 @@ internal sealed class CompositionTests
     {
         var packs = new GatedPackSource(Overlay, "de", observeCancellation: true);
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(App.Registration)
-            .Add(GridV1.Registration)
+            .AddCatalog(App.Registration)
+            .AddCatalog(GridV1.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, packs))
             .BuildAsync("en");
         var seen = new List<string>();
@@ -537,7 +537,7 @@ internal sealed class CompositionTests
         using (var cancellation = new CancellationTokenSource())
         {
             var gated = new GatedPackSource(Overlay, "de", observeCancellation: true);
-            TranslationContext other = await TranslationContext.CreateBuilder().Add(GridV1.Registration)
+            TranslationContext other = await TranslationContext.CreateBuilder().AddCatalog(GridV1.Registration)
                 .AddOverlay(TranslationOverlay.FromPacks(GridId, gated)).BuildAsync("en");
             Task canceled = other.SetLocaleAsync("de", cancellation.Token).AsTask();
             await gated.Entered.Task;
@@ -552,8 +552,8 @@ internal sealed class CompositionTests
     {
         var packs = new GatedPackSource(Overlay, "de", observeCancellation: false);
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(App.Registration)
-            .Add(GridV1.Registration)
+            .AddCatalog(App.Registration)
+            .AddCatalog(GridV1.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, packs, [new TranslationOverlayLocale("fr")]))
             .BuildAsync("en");
         var seen = new List<string>();
@@ -575,7 +575,7 @@ internal sealed class CompositionTests
     public async Task RegionalSwitchRaisesLocaleChanged()
     {
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(GridV1.Registration)
+            .AddCatalog(GridV1.Registration)
             .BuildAsync("de");
         var seen = new List<string>();
         context.GetManager(GridId).LocaleChanged += (_, change) =>
@@ -598,8 +598,8 @@ internal sealed class CompositionTests
     public async Task OverlappingSwitchEvents()
     {
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(App.Registration)
-            .Add(GridV1.Registration)
+            .AddCatalog(App.Registration)
+            .AddCatalog(GridV1.Registration)
             .BuildAsync("en");
         var seen = new List<string>();
         Task? nested = null;
@@ -658,7 +658,7 @@ internal sealed class CompositionTests
         }
 
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(shop.Registration)
+            .AddCatalog(shop.Registration)
             .AddOverlay(TranslationOverlay.FromPacks("shop", new MemoryPackSource(added), [new TranslationOverlayLocale("de"), new TranslationOverlayLocale("ar-EG")]))
             .AddOverlay(TranslationOverlay.FromPacks("shop", new MemoryPackSource(bare)))
             .BuildAsync("de");
@@ -691,7 +691,7 @@ internal sealed class CompositionTests
         var onlySwiss = new Dictionary<string, byte[]>(StringComparer.Ordinal) { ["de-CH"] = swiss["de-CH"] };
 
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(GridV1.Registration)
+            .AddCatalog(GridV1.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(onlySwiss), [new TranslationOverlayLocale("de-CH")]))
             .BuildAsync("de-CH");
         Assert.Equal("Datenraster|Keine Zeilen|3 Zeilen", Text(context, GridId, "title") + "|" + Text(context, GridId, "empty") + "|" +
@@ -700,17 +700,17 @@ internal sealed class CompositionTests
 
         // An explicit fallback still wins.
         TranslationContext english = await TranslationContext.CreateBuilder()
-            .Add(GridV1.Registration)
+            .AddCatalog(GridV1.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(onlySwiss), [new TranslationOverlayLocale("de-CH", "en")]))
             .BuildAsync("de-CH");
         Assert.Equal("Datenraster|No rows", Text(english, GridId, "title") + "|" + Text(english, GridId, "empty"), "explicit fallback");
 
         // Two overlays that add one locale with different fallbacks are an error; an overlay without one accepts the other's.
-        await Throws<ArgumentException>(() => TranslationContext.CreateBuilder().Add(GridV1.Registration)
+        await Throws<ArgumentException>(() => TranslationContext.CreateBuilder().AddCatalog(GridV1.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(onlySwiss), [new TranslationOverlayLocale("de-CH", "en")]))
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(Overlay), [new TranslationOverlayLocale("de-CH", "de")]))
             .BuildAsync().AsTask());
-        TranslationContext merged = await TranslationContext.CreateBuilder().Add(GridV1.Registration)
+        TranslationContext merged = await TranslationContext.CreateBuilder().AddCatalog(GridV1.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(onlySwiss), [new TranslationOverlayLocale("de-CH")]))
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource([]), [new TranslationOverlayLocale("de-CH", "en")]))
             .BuildAsync("de-CH");
@@ -737,7 +737,7 @@ internal sealed class CompositionTests
     [Test, DisplayName("a catalog matches an undeclared locale with CLDR likely subtags and reports a parent or a related locale")]
     public async Task LikelySubtagResolution()
     {
-        TranslationContext context = await TranslationContext.CreateBuilder().Add(Regional.Registration).BuildAsync("es-AR");
+        TranslationContext context = await TranslationContext.CreateBuilder().AddCatalog(Regional.Registration).BuildAsync("es-AR");
         Assert.Equal("acme-regional:es-AR>es-419:Parent", Describe(context.Catalogs[0]), "CLDR parent locale");
         await context.SetLocaleAsync("de-AT");
         Assert.Equal("acme-regional:de-AT>de-DE:Related", Describe(context.Catalogs[0]), "sibling region");
@@ -762,7 +762,7 @@ internal sealed class CompositionTests
         packs.Remove("en");
 
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(Regional.Registration)
+            .AddCatalog(Regional.Registration)
             .AddOverlay(TranslationOverlay.FromPacks("acme-regional", new MemoryPackSource(packs),
                 [new TranslationOverlayLocale("de-CH"), new TranslationOverlayLocale("es-MX"), new TranslationOverlayLocale("sr-Latn")]))
             .BuildAsync("es-MX");
@@ -782,8 +782,8 @@ internal sealed class CompositionTests
     public async Task ContextPreferences()
     {
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(App.Registration)
-            .Add(GridV1.Registration)
+            .AddCatalog(App.Registration)
+            .AddCatalog(GridV1.Registration)
             .BuildAsync("en");
         await context.SetLocaleFromPreferencesAsync(["fr-CH", "de-AT", "en"]);
         Assert.Equal("de|app:de>de:Exact|acme-grid:de>de:Exact", context.RequestedLocale + "|" + Describe(context.Catalogs[0]) + "|" +
@@ -804,7 +804,7 @@ internal sealed class CompositionTests
         // A fr pack built with relaxed completeness carries en copies of the keys it does not translate.
         var onlyFrench = new Dictionary<string, byte[]>(StringComparer.Ordinal) { ["fr"] = Overlay["fr"] };
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(GridV1.Registration)
+            .AddCatalog(GridV1.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(onlyFrench), [new TranslationOverlayLocale("fr")]))
             .BuildAsync("fr");
         string french = Text(context, GridId, "title") + "|" + Text(context, GridId, "empty");
@@ -817,8 +817,8 @@ internal sealed class CompositionTests
     {
         var packs = new MemoryPackSource(Overlay);
         TranslationContextBuilder builder = TranslationContext.CreateBuilder()
-            .Add(App.Registration)
-            .Add(GridV1.Registration)
+            .AddCatalog(App.Registration)
+            .AddCatalog(GridV1.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, packs, [new TranslationOverlayLocale("fr")]));
         TranslationContext first = await builder.BuildAsync("fr");
         int loads = packs.Loads;
@@ -836,8 +836,8 @@ internal sealed class CompositionTests
     {
         using var listener = new ResolutionListener("pt-BR");
         TranslationContext context = await TranslationContext.CreateBuilder()
-            .Add(App.Registration)
-            .Add(GridV1.Registration)
+            .AddCatalog(App.Registration)
+            .AddCatalog(GridV1.Registration)
             .BuildAsync("de");
         await context.SetLocaleAsync("pt-BR");
         Assert.Equal("LocaleDefaultFallback:acme-grid:pt-BR>en|LocaleDefaultFallback:app:pt-BR>en",
@@ -856,24 +856,24 @@ internal sealed class CompositionTests
     [Test, DisplayName("the builder ignores a repeated registration and rejects conflicts and orphan overlays")]
     public async Task BuilderRules()
     {
-        TranslationContext context = await TranslationContext.CreateBuilder().Add(GridV1.Registration).Add(GridV1.Registration).BuildAsync();
+        TranslationContext context = await TranslationContext.CreateBuilder().AddCatalog(GridV1.Registration).AddCatalog(GridV1.Registration).BuildAsync();
         Assert.Equal(1, context.Catalogs.Count, "repeated registration");
         Assert.Equal("en", context.RequestedLocale, "default locale of the first catalog");
-        await Throws<ArgumentException>(() => Task.FromResult(TranslationContext.CreateBuilder().Add(GridV1.Registration).Add(GridV2.Registration)));
+        await Throws<ArgumentException>(() => Task.FromResult(TranslationContext.CreateBuilder().AddCatalog(GridV1.Registration).AddCatalog(GridV2.Registration)));
         // Options belong to one registration: a registration without options accepts another's, different options conflict.
         var exact = new TranslationOptions { UnsupportedLocale = UnsupportedLocalePolicy.Exact };
-        TranslationContextBuilder withOptions = TranslationContext.CreateBuilder().Add(GridV1.Registration)
-            .Add(GridV1.Registration, exact).Add(GridV1.Registration, new TranslationOptions { UnsupportedLocale = UnsupportedLocalePolicy.Exact })
-            .Add(GridV1.Registration);
+        TranslationContextBuilder withOptions = TranslationContext.CreateBuilder().AddCatalog(GridV1.Registration)
+            .AddCatalog(GridV1.Registration, exact).AddCatalog(GridV1.Registration, new TranslationOptions { UnsupportedLocale = UnsupportedLocalePolicy.Exact })
+            .AddCatalog(GridV1.Registration);
         await Throws<TranslationNotFoundException>(() => withOptions.BuildAsync("pt").AsTask());
         ArgumentException conflict = await Throws<ArgumentException>(() => Task.FromResult(TranslationContext.CreateBuilder()
-            .Add(GridV1.Registration, exact).Add(GridV1.Registration, new TranslationOptions { MissingKey = MissingTranslationPolicy.ReturnMarker })));
+            .AddCatalog(GridV1.Registration, exact).AddCatalog(GridV1.Registration, new TranslationOptions { MissingKey = MissingTranslationPolicy.ReturnMarker })));
         Assert.True(conflict.Message.Contains("other options", StringComparison.Ordinal), conflict.Message);
-        await Throws<InvalidOperationException>(() => TranslationContext.CreateBuilder().Add(App.Registration)
+        await Throws<InvalidOperationException>(() => TranslationContext.CreateBuilder().AddCatalog(App.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(Overlay))).BuildAsync().AsTask());
         await Throws<InvalidOperationException>(() => TranslationContext.CreateBuilder().BuildAsync().AsTask());
         // An added locale must fall back to a locale the library declares or an overlay adds.
-        await Throws<ArgumentException>(() => TranslationContext.CreateBuilder().Add(GridV1.Registration)
+        await Throws<ArgumentException>(() => TranslationContext.CreateBuilder().AddCatalog(GridV1.Registration)
             .AddOverlay(TranslationOverlay.FromPacks(GridId, new MemoryPackSource(Overlay), [new TranslationOverlayLocale("fr", "it")])).BuildAsync().AsTask());
     }
 
@@ -887,7 +887,7 @@ internal sealed class CompositionTests
                 public static string Run()
                 {
                     global::Runic.Translations.TranslationContext context = global::Runic.Translations.TranslationContext.CreateBuilder()
-                        .Add(GridTextCatalog.Registration)
+                        .AddCatalog(GridTextCatalog.Registration)
                         .Build("de");
                     var text = new GridText(context);
                     string german = text.Messages.title;
@@ -936,7 +936,7 @@ internal sealed class CompositionTests
         foreach (JsonElement @case in table.RootElement.GetProperty("cases").EnumerateArray())
         {
             string name = @case.GetProperty("name").GetString()!;
-            TranslationContextBuilder builder = TranslationContext.CreateBuilder().Add(compiled.Registration);
+            TranslationContextBuilder builder = TranslationContext.CreateBuilder().AddCatalog(compiled.Registration);
             int index = 0;
             foreach (JsonElement overlay in @case.GetProperty("overlays").EnumerateArray())
             {
