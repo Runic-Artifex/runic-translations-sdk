@@ -267,8 +267,12 @@ internal sealed class Rmf2V1CorpusTests
     // marked function and option entries that a catalog without the formatters leaves out, in both digests (ESM only).
     // Re-pinned for D072.2 T2: the C# CatalogData embeds each locale's JSON as DEFLATE data with its length, read with
     // GeneratedCatalogSupport.ReadDeflatedValues, and the C# requires RMF2 runtime ABI 4, in both digests (C# only).
-    private const string EncodedOutputDigest = "97af6dacf707433904cc3a0ff88208264274badf477b33ee07cc866718ac9f61";
-    private const string HiddenEncodedOutputDigest = "3f41883c0d6d4a75ffd2448064be44758345ca92954fa481bcaa0ed848a1f844";
+    // Re-pinned for D072.2 T3: the C# CatalogData reads its definitions and external-pack contracts from one message
+    // table (GeneratedCatalogSupport.ReadDefinitions, CreatePackContract), the keys are created from it in one loop
+    // (CreateKeys), and the accessors call shared __Format/__FormatContent bodies with typed CreateArgument overloads,
+    // in both digests (C# only).
+    private const string EncodedOutputDigest = "3192f09889d91b30dd3717e5ec97be3b885820ca224745cfca101235212f0e97";
+    private const string HiddenEncodedOutputDigest = "78492f6368b2a58394cb979c9a58fdf7209f7583239331f4388fa63c045e08a6";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]
