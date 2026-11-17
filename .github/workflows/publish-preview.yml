@@ -123,19 +123,18 @@ jobs:
   # commit runic-sdk's train feed served (H5; runic-sdk eng/train/README.md, "Choreography"). Publishing needs it; a
   # dry run runs it too. A release pull request moves the pin itself (step 2 of the choreography): the uses SHA,
   # gate-ref and sdk's run@ name one runic-sdk main commit.
-  # Transitional: uses/gate-ref name runic-sdk#1104's commit and sdk names main before it; repin all three to its merge commit.
   train:
     needs: candidate
     permissions:
       contents: read
       actions: read
-    uses: Runic-Artifex/runic-sdk/.github/workflows/train-compat.yml@d97d4f1a4b5f7308f51fca0ac35aa8260d5b11e3 # runic-sdk#1104 (run@<commit>, movement check)
+    uses: Runic-Artifex/runic-sdk/.github/workflows/train-compat.yml@6b46de43e52c496dd0c7c9d7ab52178fe682c17d # runic-sdk main with #1104 (run@<commit>, movement check)
     with:
       row: P-tr
       cli: published:${{ needs.candidate.outputs.command-line-version }}
       translations: run:${{ needs.candidate.outputs.ci-run-id }}
-      sdk: run@a4a9eab8916ee3bef3d4691595c3feca07d5d15b
-      gate-ref: d97d4f1a4b5f7308f51fca0ac35aa8260d5b11e3
+      sdk: run@6b46de43e52c496dd0c7c9d7ab52178fe682c17d
+      gate-ref: 6b46de43e52c496dd0c7c9d7ab52178fe682c17d
     secrets:
       # Only if GitHub refuses this job's token for the other repositories' artifacts (D061.12).
       RUNIC_TRAIN_TOKEN: ${{ secrets.RUNIC_TRAIN_TOKEN }}
