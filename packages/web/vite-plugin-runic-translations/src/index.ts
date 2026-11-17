@@ -1306,6 +1306,8 @@ function withoutPseudoLocales(code: string): string {
     const kept = tags.filter(tag => !pseudoLocaleTags.includes(tag));
     return kept.length === tags.length ? line : `export const locales = Object.freeze(${JSON.stringify(kept)});`;
   });
+  // The runtime's list of the pseudo-locales that only their own tag selects (#212).
+  result = result.replace(/^const pseudoLocales = Object\.freeze\(\[[^\]\n]*\]\);$/m, "const pseudoLocales = Object.freeze([]);");
   result = result.replace(/^[ \t]*messages\[("[A-Za-z-]+")\] = freezeGenerated[A-Za-z]*\(.*\);\r?\n/gm,
     (line, tag: string) => pseudo.includes(tag) ? "" : line);
   if (pseudo.some(tag => result.includes(`messages[${tag}]`)))

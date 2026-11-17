@@ -383,6 +383,7 @@ public static partial class TranslationCompiler
         {
             var declared = locales.ToDictionary(locale => locale.Tag, StringComparer.OrdinalIgnoreCase);
             string[] available = locales.Select(locale => locale.Tag).Order(StringComparer.Ordinal).ToArray();
+            string[] matchable = PseudoLocaleTags.WithoutPseudo(available);
             var kept = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { manifest.DefaultLocale };
             foreach (string requested in keepLocales)
             {
@@ -390,8 +391,9 @@ public static partial class TranslationCompiler
                 if (!TryCanonicalizeLocale(requested, out string tag)) continue;
                 // The locale the runtimes resolve the application locale to (LocaleNegotiation.Match, the ESM matchLocale): the
                 // locale itself, else CLDR likely subtags and parent locales (zh-TW to zh-Hant, sr-ME to sr-Latn, en-GB to
-                // en-001), else a truncation with the same likely script. A subset that keeps it resolves to it too.
-                string? current = declared.ContainsKey(tag) ? tag : CldrLocales.Match(tag, available) ?? CldrLocales.Truncate(tag, available);
+                // en-001), else a truncation with the same likely script, never a pseudo-locale for another tag. A subset that
+                // keeps it resolves to it too.
+                string? current = declared.ContainsKey(tag) ? tag : CldrLocales.Match(tag, matchable) ?? CldrLocales.Truncate(tag, matchable);
                 // The locale and its fallback chain; the graph was validated, the bound only guards against a cycle.
                 for (int hops = 0; current is not null && hops <= locales.Length && declared.TryGetValue(current, out var model); hops++)
                 {
@@ -845,11 +847,15 @@ public static partial class TranslationCompiler
     // fallback (OverlayTranslationProvider in .NET, overlayState in ESM): its nearest CLDR parent among the library's and the
     // added locales (de-CH to an added de or the library's de, es-MX to es-419, zh-TW to zh-Hant, never sr-Latn-RS to a
     // Cyrillic sr), else the library locale CLDR likely subtags match (de-CH to de-DE), else the library's base locale.
-    // Generated code passes it explicitly, so the runtimes follow this choice.
-    internal static string AddedLocaleFallback(string locale, string[] candidates, string[] libraryLocales, string defaultLocale) =>
-        CldrLocales.NearestParent(locale, candidates) ??
-        CldrLocales.Match(locale, libraryLocales) ?? CldrLocales.Truncate(locale, libraryLocales) ??
-        defaultLocale;
+    // A pseudo-locale (en-XA, ar-XB) is never chosen. Generated code passes it explicitly, so the runtimes follow this choice.
+    internal static string AddedLocaleFallback(string locale, string[] candidates, string[] libraryLocales, string defaultLocale)
+    {
+        candidates = PseudoLocaleTags.WithoutPseudo(candidates);
+        libraryLocales = PseudoLocaleTags.WithoutPseudo(libraryLocales);
+        return CldrLocales.NearestParent(locale, candidates) ??
+            CldrLocales.Match(locale, libraryLocales) ?? CldrLocales.Truncate(locale, libraryLocales) ??
+            defaultLocale;
+    }
 
     private static string NormalizeResourceRoot(string directory, string path)
     {
