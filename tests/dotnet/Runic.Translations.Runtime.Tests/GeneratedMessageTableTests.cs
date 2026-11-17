@@ -152,7 +152,7 @@ internal sealed class GeneratedMessageTableTests
         }
         TextArgument listArgument = GeneratedCatalogSupport.CreateArgument("items", (IReadOnlyList<string>)list);
         Assert.Equal(TextArgumentType.List, listArgument.Type);
-        Assert.True(listArgument.TryGetValue(out IReadOnlyList<string>? items) && items.SequenceEqual(list), "list items");
+        Assert.True(listArgument.TryGetValue(out IReadOnlyList<string>? items) && items!.SequenceEqual(list), "list items");
         Assert.Throws<ArgumentException>(() => GeneratedCatalogSupport.CreateArgument("not a name", "x"));
         Assert.Throws<ArgumentNullException>(() => GeneratedCatalogSupport.CreateArgument("n", (string)null!));
     }
