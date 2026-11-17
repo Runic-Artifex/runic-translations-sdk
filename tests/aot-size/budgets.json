@@ -35,7 +35,7 @@
         "m800-l2"
       ],
       "margin": 0.02,
-      "note": "mstat bytes of the catalog's own records (locale data and generated code) with 200 and 800 messages in 2 locales; the slope is the cost per message. Before #PR2, with the locale JSON embedded as is: 229,512 at 200 (1,148 per message); deflated (D072.2, T2) it falls to the generated code and a tenth of the data",
+      "note": "mstat bytes of the catalog's own records (locale data and generated code) with 200 and 800 messages in 2 locales; the slope is the cost per message. Before #217, with the locale JSON embedded as is: 229,512 at 200 (1,148 per message); deflated (D072.2, T2) it falls to the generated code and a tenth of the data",
       "measured": [
         84655,
         338087
@@ -53,7 +53,7 @@
         "m200-l10"
       ],
       "margin": 0.1,
-      "note": "mstat bytes of the catalog's locale data (RvaFields) for 200 messages in 2 and 10 locales; the slope is the cost per message and locale. Before #PR2: 148,804 at 2 locales (372 per message and locale). Deflate compresses scripts unevenly (ar, ja, ru), so the margin is 10 %",
+      "note": "mstat bytes of the catalog's locale data (RvaFields) for 200 messages in 2 and 10 locales; the slope is the cost per message and locale. Before #217: 148,804 at 2 locales (372 per message and locale). Deflate compresses scripts unevenly (ar, ja, ru), so the margin is 10 %",
       "measured": [
         3937,
         19747
