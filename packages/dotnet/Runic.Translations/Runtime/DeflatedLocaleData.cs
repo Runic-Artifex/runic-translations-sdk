@@ -32,6 +32,29 @@ internal static class DeflatedLocaleData
         }
     }
 
+    /// <summary>Inflates UTF-8 text, such as a generated catalog's markup contract (RMF2 runtime ABI 4).</summary>
+    internal static string ReadText(ReadOnlySpan<byte> deflated, int length)
+    {
+        if (length is < 0 or > MaximumLength)
+            throw new TranslationPackException("The generated data declares an invalid length.", TranslationPackFailureReason.Malformed);
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(Math.Max(length, 1));
+        try
+        {
+            Inflate(deflated, buffer.AsSpan(0, length));
+            return StrictUtf8.GetString(buffer, 0, length);
+        }
+        catch (System.Text.DecoderFallbackException exception)
+        {
+            throw new TranslationPackException("The generated text is not valid UTF-8.", TranslationPackFailureReason.Malformed, exception);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private static readonly System.Text.UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+
     /// <summary>Inflates <paramref name="deflated"/> into <paramref name="destination"/>, which it must fill exactly.</summary>
     internal static void Inflate(ReadOnlySpan<byte> deflated, Span<byte> destination)
     {

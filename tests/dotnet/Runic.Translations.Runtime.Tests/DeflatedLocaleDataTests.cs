@@ -55,6 +55,20 @@ internal sealed class DeflatedLocaleDataTests
         }
     }
 
+    [Test, DisplayName("deflated text such as a generated markup contract inflates to the same string, and wrong lengths or data are refused")]
+    public void DeflatedText()
+    {
+        string text = "{\"version\":2,\"messages\":{\"grüße\":{}}}" + new string(' ', 5000);
+        byte[] utf8 = Encoding.UTF8.GetBytes(text);
+        byte[] deflated = Deflate(utf8);
+        Assert.Equal(text, GeneratedCatalogSupport.ReadDeflatedText(deflated, utf8.Length));
+        Assert.Equal("", GeneratedCatalogSupport.ReadDeflatedText(Deflate([]), 0));
+        foreach (int length in new[] { utf8.Length - 1, utf8.Length + 1, -1 })
+            Assert.Throws<TranslationPackException>(() => GeneratedCatalogSupport.ReadDeflatedText(deflated, length), null);
+        Assert.Throws<TranslationPackException>(() => GeneratedCatalogSupport.ReadDeflatedText(Deflate([0xC3, 0x28]), 2), null);
+        Assert.Throws<TranslationPackException>(() => GeneratedCatalogSupport.ReadDeflatedText([0xFF, 0xFF, 0xFF], 3), null);
+    }
+
     [Test, DisplayName("deflated locale data inflates to the original bytes, also for a large locale")]
     public void InflatesExactly()
     {

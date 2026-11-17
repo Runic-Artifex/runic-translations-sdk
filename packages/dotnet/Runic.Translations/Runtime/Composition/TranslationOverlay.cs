@@ -52,6 +52,9 @@ public sealed class TranslationOverlay
         Catalog = catalog;
         _addedLocales = locales.AsReadOnly();
         Source = source;
+        // A context composes a catalog with its overlays only when one exists, so the composition is linked from here:
+        // a trimmed or NativeAOT application that creates no overlay does not keep it (runic-sdk#1109).
+        OverlayComposition.Enable();
     }
 
     /// <summary>The ID of the catalog this overlay targets.</summary>

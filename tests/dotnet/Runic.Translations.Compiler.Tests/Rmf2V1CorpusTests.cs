@@ -271,10 +271,13 @@ internal sealed class Rmf2V1CorpusTests
     // table (GeneratedCatalogSupport.ReadDefinitions, CreatePackContract), the keys are created from it in one loop
     // (CreateKeys), and the accessors call shared __Format/__FormatContent bodies with typed CreateArgument overloads,
     // in both digests (C# only).
+    // Re-pinned for runic-sdk#1109: XCatalog.Rmf2MarkupContract inflates the contract JSON from DEFLATE data in
+    // CatalogData (GeneratedCatalogSupport.ReadDeflatedText) instead of a UTF-16 literal, in both digests (C# only).
     // Re-pinned for #212: runtime.js declares the catalog's pseudoLocales (none here) and leaves them out of locale fallback
     // and negotiation, in both digests (ESM only).
-    private const string EncodedOutputDigest = "0d2dd0ef15a6bbc950f8d2f7e6679770641c97d971124be4092b97f8fa0670d2";
-    private const string HiddenEncodedOutputDigest = "c8ee77986019da6052d7c7f380d57ae773d9f4704a40abd37b93a4e0736b021c";
+    // Re-pinned for merging runic-sdk#1109 (C#) with #212 (ESM), in both digests.
+    private const string EncodedOutputDigest = "8d9cd94a3f7ddc5251266db89b3e96f7f6dddac3ef204872b198db98d8b63282";
+    private const string HiddenEncodedOutputDigest = "a9dd42662e9e3f793295594e2c5ad50d9e860d776fe0ad17c483b6ff23426450";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

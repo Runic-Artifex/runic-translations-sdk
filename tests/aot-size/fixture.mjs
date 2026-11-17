@@ -78,8 +78,10 @@ export function writeFixture(directory, messages, locales) {
   const calls = Array.from({ length: messages }, (_, index) => call(index));
   writeFileSync(resolve(directory, "Program.cs"), [
     "using AotSizeProbe.Translations;", "",
-    `var manager = await AppTextCatalog.CreateManagerAsync(Environment.GetEnvironmentVariable("PROBE_LOCALE") ?? "${locales[0]}");`,
-    "var text = new AppText(manager);",
+    // Registered in a translation context, as Runic applications register their catalogs (runic-sdk#1109).
+    "var context = await Runic.Translations.TranslationContext.CreateBuilder().AddCatalog(AppTextCatalog.Registration)",
+    `    .BuildAsync(Environment.GetEnvironmentVariable("PROBE_LOCALE") ?? "${locales[0]}");`,
+    "var text = new AppText(context);",
     ...calls,
     "return 0;", "",
   ].join("\n"));

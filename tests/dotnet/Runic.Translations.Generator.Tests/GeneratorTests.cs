@@ -132,8 +132,16 @@ internal sealed class GeneratorTests
         // A runtime before 0.14 has none of the ABI 4 factories: the code per message stays.
         foreach (string expected in new[] { "GeneratedCatalogSupport.CreateDefinition(", "CreatePackMessageContract(", "new global::Runic.Translations.TranslationKey(", "new global::Runic.Translations.TextArgument(\"_\"" })
             Assert.True(earlier.Contains(expected, StringComparison.Ordinal), "ABI 3 output lacks " + expected);
-        foreach (string retired in new[] { "MessageTable", "ReadDefinitions", "CreateKeys", "__Format(" })
+        foreach (string retired in new[] { "MessageTable", "ReadDefinitions", "CreateKeys", "__Format(", "ReadDeflatedText" })
             Assert.True(!earlier.Contains(retired, StringComparison.Ordinal), "ABI 3 output uses " + retired);
+        // The markup contract: DEFLATE data that inflates to exactly the JSON literal of ABI 3 (runic-sdk#1109).
+        string registration = earlierRun.SingleResult.GeneratedSources.Single(static item => item.HintName == "AppText.Registration.g.cs").SourceText.ToString();
+        string literal = ((Microsoft.CodeAnalysis.CSharp.Syntax.LiteralExpressionSyntax)Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(registration).GetRoot().DescendantNodes()
+            .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.PropertyDeclarationSyntax>().Single(static property => property.Identifier.ValueText == "Rmf2MarkupContract").ExpressionBody!.Expression).Token.ValueText;
+        Assert.True(literal.Contains("\"version\":2", StringComparison.Ordinal), "The ABI 3 contract is not a literal.");
+        Assert.Equal(literal, GeneratedLocaleData.InflateMarkupContract(CatalogData(currentRun)), "inflated markup contract");
+        Assert.True(current.Contains("Rmf2MarkupContract => global::Runic.Translations.Generated.GeneratedCatalogSupport.ReadDeflatedText(AppTextCatalogData.MarkupContractData, AppTextCatalogData.MarkupContractLength);", StringComparison.Ordinal),
+            "ABI 4 registration does not read the deflated contract.");
     }
 
     private static string CatalogData(GeneratorRun run) =>

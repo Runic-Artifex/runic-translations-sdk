@@ -213,6 +213,22 @@ internal readonly record struct TestInput(string Path, string Kind, string Text,
 // in locale order, one per line.
 internal static class GeneratedLocaleData
 {
+    // The markup contract of RMF2 ABI 4 generated C# (CatalogData.MarkupContractData), inflated.
+    internal static string InflateMarkupContract(string catalogData)
+    {
+        System.Text.RegularExpressions.Match match = System.Text.RegularExpressions.Regex.Match(catalogData,
+            @"internal static int MarkupContractLength => (\d+);\s*internal static global::System\.ReadOnlySpan<byte> MarkupContractData => new byte\[\]\s*\{([^}]*)\};");
+        if (!match.Success) throw new InvalidOperationException("The catalog data has no MarkupContractData.");
+        byte[] deflated = System.Text.RegularExpressions.Regex.Matches(match.Groups[2].Value, "0x([0-9A-F]{2})")
+            .Select(static item => Convert.ToByte(item.Groups[1].Value, 16)).ToArray();
+        using var inflater = new System.IO.Compression.DeflateStream(new MemoryStream(deflated), System.IO.Compression.CompressionMode.Decompress);
+        using var inflated = new MemoryStream();
+        inflater.CopyTo(inflated);
+        if (inflated.Length != int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture))
+            throw new InvalidOperationException("MarkupContractData does not inflate to MarkupContractLength.");
+        return System.Text.Encoding.UTF8.GetString(inflated.ToArray());
+    }
+
     internal static string Inflate(string catalogData)
     {
         var json = new System.Text.StringBuilder();

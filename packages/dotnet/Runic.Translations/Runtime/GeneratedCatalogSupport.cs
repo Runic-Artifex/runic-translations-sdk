@@ -83,6 +83,15 @@ public static class GeneratedCatalogSupport
     public static IReadOnlyList<CompiledTranslationValue> ReadDeflatedValues(ReadOnlySpan<byte> deflatedUtf8Json, int length, ReadOnlySpan<byte> formatData) =>
         DeflatedLocaleData.Read(deflatedUtf8Json, length, Rmf2FormatData.Parse(formatData));
 
+    /// <summary>
+    /// Inflates UTF-8 text that a generated catalog embeds as raw DEFLATE data (RMF2 runtime ABI 4), such as its
+    /// <c>Rmf2MarkupContract</c>: a few kilobytes of data instead of a UTF-16 string literal of its JSON.
+    /// </summary>
+    /// <param name="deflatedUtf8">The DEFLATE data.</param>
+    /// <param name="length">The length of the inflated text in UTF-8 bytes, which the data must match exactly.</param>
+    /// <exception cref="TranslationPackException">The data does not inflate to <paramref name="length"/> bytes of UTF-8.</exception>
+    public static string ReadDeflatedText(ReadOnlySpan<byte> deflatedUtf8, int length) => DeflatedLocaleData.ReadText(deflatedUtf8, length);
+
     /// <summary>Copies a closed argument carrier under an NFC RMF2 input name.</summary>
     public static TextArgument CreateArgument(string name, TextArgument value) => TextArgument.CreateRmf2(name, value);
 

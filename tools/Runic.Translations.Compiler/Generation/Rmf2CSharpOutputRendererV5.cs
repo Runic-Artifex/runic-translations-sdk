@@ -105,7 +105,15 @@ internal static class Rmf2CSharpOutputRendererV5
         if (rmf2Abi4) WriteMessageTable(writer, table);
         else WriteDefinitionChunks(writer, table);
         WriteLocaleData(writer, project, table, rmf2Abi4);
-        if (rmf2Abi4) WritePackContractTable(writer, project, table);
+        if (rmf2Abi4)
+        {
+            byte[] contract = System.Text.Encoding.UTF8.GetBytes(project.MarkupContract);
+            writer.Line("// The markup contract JSON (" + className.Replace("CatalogData", "Catalog") + ".Rmf2MarkupContract) as DEFLATE data, inflated when it is read.");
+            writer.Line("internal static int MarkupContractLength => " + contract.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) + ";");
+            WriteBytes(writer, "MarkupContractData", Deflate(contract), "internal");
+            writer.Blank();
+            WritePackContractTable(writer, project, table);
+        }
         else WritePackContractFactory(writer, project, table);
         writer.Unindent(); writer.Line("}");
         return Output(TranslationGeneratedOutputKind.CSharpCatalogData, project.ClassName + ".CatalogData.g.cs", writer);
@@ -132,7 +140,11 @@ internal static class Rmf2CSharpOutputRendererV5
         // Properties, not constants: a text-only edit changes them, and .NET Hot Reload can update a property body but
         // not a constant's value (ENC0011), so a constant would force a restart for every catalog edit.
         writer.Line("public static string SourceHash => " + GenerationSupport.CSharpString(project.SourceHash) + ";");
-        writer.Line("public static string Rmf2MarkupContract => " + GenerationSupport.CSharpString(project.MarkupContract) + ";");
+        // RMF2 ABI 4: the contract's JSON is DEFLATE data in CatalogData (a few kilobytes, mostly default entries) instead of a
+        // UTF-16 literal, which Registration's contract lambda keeps in every trimmed or NativeAOT executable (runic-sdk#1109).
+        if (rmf2Abi4) writer.Line("public static string Rmf2MarkupContract => global::Runic.Translations.Generated.GeneratedCatalogSupport.ReadDeflatedText(" +
+            className + "CatalogData.MarkupContractData, " + className + "CatalogData.MarkupContractLength);");
+        else writer.Line("public static string Rmf2MarkupContract => " + GenerationSupport.CSharpString(project.MarkupContract) + ";");
         writer.Line("public const string Rmf2Profile = " + GenerationSupport.CSharpString(Rmf2ProjectV5.Profile) + ";");
         writer.Line("public const int RuntimeAbiVersion = 1;");
         writer.Line("public const int Rmf2RuntimeAbiVersion = " + Rmf2RuntimeAbi(rmf2Abi4) + ";");
@@ -792,9 +804,9 @@ internal static class Rmf2CSharpOutputRendererV5
 
     // A ReadOnlySpan<byte> property over a constant byte array, which the C# compiler embeds as RVA data: no allocation
     // and no copy at run time. 32 bytes per line.
-    private static void WriteBytes(GenerationWriter writer, string name, byte[] bytes)
+    private static void WriteBytes(GenerationWriter writer, string name, byte[] bytes, string visibility = "private")
     {
-        writer.Line("private static global::System.ReadOnlySpan<byte> " + name + " => new byte[]");
+        writer.Line(visibility + " static global::System.ReadOnlySpan<byte> " + name + " => new byte[]");
         writer.Line("{"); writer.Indent();
         var line = new System.Text.StringBuilder();
         for (int offset = 0; offset < bytes.Length; offset += 32)
