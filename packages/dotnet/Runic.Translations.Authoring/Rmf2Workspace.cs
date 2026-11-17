@@ -453,8 +453,7 @@ internal sealed class Rmf2Workspace
         foreach (var mount in _mounts)
         {
             if (mount.Root.Length == 0) continue; // A malformed mount owns no files.
-            string relative = Path.GetRelativePath(mount.Root, physical);
-            if (relative != ".." && !relative.StartsWith("../", StringComparison.Ordinal) && !Path.IsPathRooted(relative)) return mount;
+            if (PathContainment.IsWithin(mount.Root, physical)) return mount;
         }
         throw new TranslationAuthoringException("Resource is outside every configured source root.");
     }
@@ -465,7 +464,7 @@ internal sealed class Rmf2Workspace
         {
             if (mount.Root.Length == 0) continue; // A malformed mount owns no files.
             string relative = Path.GetRelativePath(mount.Root, physical);
-            if (relative == ".." || relative.StartsWith("../", StringComparison.Ordinal) || Path.IsPathRooted(relative)) continue;
+            if (!PathContainment.IsWithinRelative(relative)) continue;
             string directory = Path.GetDirectoryName(relative)?.Replace('\\', '/') ?? "";
             return mount.Prefix.Concat(directory.Split('/', StringSplitOptions.RemoveEmptyEntries)).ToArray();
         }
@@ -473,9 +472,7 @@ internal sealed class Rmf2Workspace
     }
     private string Relative(string path)
     {
-        string relative = Path.GetRelativePath(_root, Path.GetFullPath(path, _root)).Replace('\\', '/');
-        if (relative == ".." || relative.StartsWith("../", StringComparison.Ordinal)) throw new TranslationAuthoringException("An edit escapes the workspace root.");
-        return relative;
+        return PathContainment.RelativeWithin(_root, Path.GetFullPath(path, _root)) ?? throw new TranslationAuthoringException("An edit escapes the workspace root.");
     }
     private static string Hash(byte[] value) => Convert.ToHexStringLower(SHA256.HashData(value));
 }

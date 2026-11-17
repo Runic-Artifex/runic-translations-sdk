@@ -146,11 +146,5 @@ public sealed class Rmf2SourceDiscovery : ITask
         }
     }
 
-    internal static bool IsWithin(string root, string path)
-    {
-        string relative = Path.GetRelativePath(root, path);
-        return !Path.IsPathRooted(relative) && relative != ".." &&
-            !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) &&
-            !relative.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
-    }
+    internal static bool IsWithin(string root, string path) => PathContainment.IsWithin(root, path);
 }

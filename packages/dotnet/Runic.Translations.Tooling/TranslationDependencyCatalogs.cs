@@ -99,8 +99,8 @@ internal sealed record TranslationDependencyResolution(string ProjectPath, strin
     {
         if (OverridesRoot is null) return null;
         string full = Path.GetFullPath(path);
-        string relative = Path.GetRelativePath(OverridesRoot, full).Replace('\\', '/');
-        if (Path.IsPathRooted(relative) || relative == "." || relative == ".." || relative.StartsWith("../", StringComparison.Ordinal)) return null;
+        string? relative = PathContainment.RelativeWithin(OverridesRoot, full);
+        if (relative is null || relative == ".") return null;
         int separator = relative.IndexOf('/');
         return separator <= 0 ? null : Override(relative[..separator]);
     }
@@ -480,13 +480,7 @@ internal static class TranslationDependencyCatalogs
         return null;
     }
 
-    internal static bool IsWithin(string root, string path)
-    {
-        string relative = Path.GetRelativePath(root, path);
-        return !Path.IsPathRooted(relative) && relative != ".." && relative != "." &&
-            !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) &&
-            !relative.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
-    }
+    internal static bool IsWithin(string root, string path) => PathContainment.IsBelow(root, path);
 
     /// <summary>The packed runic.json of a library catalog and every <c>.rmf2</c>/<c>.mf2</c> file below it, as the build reads them.</summary>
     /// <exception cref="IOException">A file cannot be read, is larger than 8 MiB, or the catalog has more than 10,000 sources.</exception>

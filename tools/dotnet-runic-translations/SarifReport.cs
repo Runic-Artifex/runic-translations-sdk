@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using Runic.Translations.Compiler;
 using Runic.Translations.Internal;
 
 namespace Runic.Translations.Tool;
@@ -32,8 +33,7 @@ internal static class SarifReport
         if (string.IsNullOrEmpty(path)) return null;
         string full = Path.GetFullPath(path, currentDirectory);
         string relative = Path.GetRelativePath(root, full);
-        if (Path.IsPathRooted(relative) || relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar, System.StringComparison.Ordinal) ||
-            relative.StartsWith("../", System.StringComparison.Ordinal))
+        if (!PathContainment.IsWithinRelative(relative))
             return (new System.Uri(full).AbsoluteUri, false);
         return (string.Join('/', relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Select(System.Uri.EscapeDataString)), true);
     }
