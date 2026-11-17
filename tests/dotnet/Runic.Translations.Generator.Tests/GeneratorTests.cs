@@ -96,8 +96,8 @@ internal sealed class GeneratorTests
         ];
         string current = CatalogData(GeneratorTestHost.Run(inputs));
         string earlier = CatalogData(GeneratorTestHost.Run(RuntimeReferenceMode.Rmf2V3, inputs));
-        Assert.True(current.Contains("RequiredRmf2RuntimeAbiVersion = 4", StringComparison.Ordinal) && !current.Contains("u8;", StringComparison.Ordinal),
-            "The current runtime does not get deflated data.");
+        Assert.True(current.Contains("RequiredRmf2RuntimeAbiVersion = 4", StringComparison.Ordinal) && current.Contains("ReadDeflatedValues(Locale0Data, Locale0Length)", StringComparison.Ordinal) &&
+            !current.Contains("ReadValues(Locale", StringComparison.Ordinal), "The current runtime does not get deflated data.");
         Assert.True(earlier.Contains("RequiredRmf2RuntimeAbiVersion = 3", StringComparison.Ordinal) && earlier.Contains("ReadValues(Locale0Data)", StringComparison.Ordinal) &&
             !earlier.Contains("ReadDeflatedValues", StringComparison.Ordinal), "A runtime before 0.14 does not get the JSON and ABI 3.");
         // The u8 literals of the ABI 3 output, as the compiler reads them.
@@ -107,6 +107,33 @@ internal sealed class GeneratorTests
             .Select(static property => ((Microsoft.CodeAnalysis.CSharp.Syntax.LiteralExpressionSyntax)property.ExpressionBody!.Expression).Token.ValueText + "\n"));
         Assert.True(json.Contains("Grüß dich", StringComparison.Ordinal), "The ABI 3 output lacks the German text.");
         Assert.Equal(json, GeneratedLocaleData.Inflate(current), "inflated locale data");
+    }
+
+    [Test, DisplayName("generated C# reads definitions, keys and pack contracts from a message table for RMF2 ABI 4 and writes code per message before 0.14")]
+    public void MessageTableForRmf2Abi4()
+    {
+        TestInput[] inputs =
+        [
+            ProjectInput(Project.Replace("\"locales\": [ \"en\" ]", "\"locales\": [ \"en\", \"de\" ]", StringComparison.Ordinal)),
+            MessageInput(),
+            MessageInput("filesDeleted =\n  .input {$folder :string}\n  .input {$count :integer}\n  .match $count\n  one {{eine Datei aus {$folder} gelöscht.}}\n  * {{{$count} Dateien aus {$folder} gelöscht.}}\n",
+                "C:/repo/translations/de.rmf2"),
+        ];
+        GeneratorRun currentRun = GeneratorTestHost.Run(inputs), earlierRun = GeneratorTestHost.Run(RuntimeReferenceMode.Rmf2V3, inputs);
+        string current = string.Concat(currentRun.SingleResult.GeneratedSources.Select(static item => item.SourceText.ToString()));
+        string earlier = string.Concat(earlierRun.SingleResult.GeneratedSources.Select(static item => item.SourceText.ToString()));
+        // One line per message, its key and its inputs in ordinal order; no code per message.
+        Assert.True(current.Contains("\"filesDeleted count:int64 folder:string\\n\"u8", StringComparison.Ordinal), "The message table lacks filesDeleted:\n" + CatalogData(currentRun));
+        foreach (string expected in new[] { "GeneratedCatalogSupport.ReadDefinitions(MessageTable, CanonicalMessageCount)", "GeneratedCatalogSupport.CreateKeys(",
+            "GeneratedCatalogSupport.CreatePackContract(\"app\", \"de\"", "private string __Format(int id, ", "GeneratedCatalogSupport.CreateArgument(\"count\", r_636f756e74)" })
+            Assert.True(current.Contains(expected, StringComparison.Ordinal), "ABI 4 output lacks " + expected);
+        foreach (string retired in new[] { "GeneratedCatalogSupport.CreateDefinition(", "CreatePackMessageContract(", "new global::Runic.Translations.TranslationKey(", "new global::Runic.Translations.TextArgument(\"_\"" })
+            Assert.True(!current.Contains(retired, StringComparison.Ordinal), "ABI 4 output still uses " + retired);
+        // A runtime before 0.14 has none of the ABI 4 factories: the code per message stays.
+        foreach (string expected in new[] { "GeneratedCatalogSupport.CreateDefinition(", "CreatePackMessageContract(", "new global::Runic.Translations.TranslationKey(", "new global::Runic.Translations.TextArgument(\"_\"" })
+            Assert.True(earlier.Contains(expected, StringComparison.Ordinal), "ABI 3 output lacks " + expected);
+        foreach (string retired in new[] { "MessageTable", "ReadDefinitions", "CreateKeys", "__Format(" })
+            Assert.True(!earlier.Contains(retired, StringComparison.Ordinal), "ABI 3 output uses " + retired);
     }
 
     private static string CatalogData(GeneratorRun run) =>

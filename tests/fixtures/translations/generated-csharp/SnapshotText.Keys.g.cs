@@ -9,11 +9,15 @@ public static partial class SnapshotTextKeys
 {
     /// <summary>Key for <c>greeting</c>.</summary>
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    public static global::Runic.Translations.TranslationKey r_6772656574696e67 { get; } = new global::Runic.Translations.TranslationKey("snapshot", 0, "greeting");
+    public static global::Runic.Translations.TranslationKey r_6772656574696e67 => __keys[0];
     /// <summary>Key for <c>help</c>.</summary>
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    public static global::Runic.Translations.TranslationKey r_68656c70 { get; } = new global::Runic.Translations.TranslationKey("snapshot", 1, "help");
+    public static global::Runic.Translations.TranslationKey r_68656c70 => __keys[1];
     /// <summary>Key for <c>items</c>.</summary>
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    public static global::Runic.Translations.TranslationKey r_6974656d73 { get; } = new global::Runic.Translations.TranslationKey("snapshot", 2, "items");
+    public static global::Runic.Translations.TranslationKey r_6974656d73 => __keys[2];
+
+    // Every canonical message's key by ID, created on first use from the catalog's message table.
+    private static readonly global::Runic.Translations.TranslationKey[] __keys = global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateKeys("snapshot", SnapshotTextCatalogData.MessageTable, SnapshotTextCatalogData.CanonicalMessageCount);
+    internal static global::Runic.Translations.TranslationKey __Key(int id) => __keys[id];
 }

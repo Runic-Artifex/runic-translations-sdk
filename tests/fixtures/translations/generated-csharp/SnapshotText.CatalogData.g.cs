@@ -8,13 +8,14 @@ internal static class SnapshotTextCatalogData
 {
     internal const int GeneratedRuntimeAbiVersion = 1;
     internal const int RequiredRmf2RuntimeAbiVersion = 4;
+    internal const int CanonicalMessageCount = 3;
 
     internal static global::Runic.Translations.CompiledTranslationCatalog CreateDefinition()
     {
         return new global::Runic.Translations.CompiledTranslationCatalog(
             "snapshot",
             "en",
-            CreateDefinitions(),
+            global::Runic.Translations.Generated.GeneratedCatalogSupport.ReadDefinitions(MessageTable, CanonicalMessageCount),
             new global::Runic.Translations.CompiledTranslationLocale[]
             {
                 global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateDeferredLocale("de", "en", static () => global::Runic.Translations.Generated.GeneratedCatalogSupport.ReadDeflatedValues(Locale0Data, Locale0Length)),
@@ -24,30 +25,13 @@ internal static class SnapshotTextCatalogData
             global::Runic.Translations.MissingTranslationPolicy.Throw);
     }
 
-    private static global::Runic.Translations.CompiledTranslationDefinition[] CreateDefinitions()
-    {
-        var definitions = new global::Runic.Translations.CompiledTranslationDefinition[3];
-        Definitions0(definitions);
-        return definitions;
-    }
-
-    private static void Definitions0(global::Runic.Translations.CompiledTranslationDefinition[] definitions)
-    {
-        definitions[0] = global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateDefinition("greeting",
-            new global::Runic.Translations.Generated.CompiledRmf2Input[]
-            {
-                new global::Runic.Translations.Generated.CompiledRmf2Input("name", global::Runic.Translations.TextArgumentType.String),
-            }, isCanonical: true);
-        definitions[1] = global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateDefinition("help",
-            new global::Runic.Translations.Generated.CompiledRmf2Input[]
-            {
-            }, isCanonical: true);
-        definitions[2] = global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateDefinition("items",
-            new global::Runic.Translations.Generated.CompiledRmf2Input[]
-            {
-                new global::Runic.Translations.Generated.CompiledRmf2Input("count", global::Runic.Translations.TextArgumentType.Int),
-            }, isCanonical: true);
-    }
+    // The message table: one line per message in ID order, its key and " name:type" per caller input. The first
+    // CanonicalMessageCount lines are the canonical messages, the rest the permitted locale extras. The definitions, the keys
+    // and the external-pack contracts are read from it (GeneratedCatalogSupport).
+    internal static global::System.ReadOnlySpan<byte> MessageTable =>
+        "greeting name:string\n"u8 + // 0
+        "help\n"u8 + // 1
+        "items count:int64\n"u8; // 2
 
     // "de": the compiler's locale JSON as DEFLATE data, inflated on the locale's first use.
     private static int Locale0Length => 1559;
@@ -91,68 +75,10 @@ internal static class SnapshotTextCatalogData
     {
         if (locale is null) throw new global::System.ArgumentNullException(nameof(locale));
         if (global::System.String.Equals(locale, "de", global::System.StringComparison.Ordinal))
-            return CreateExternalPackContract0();
+            return global::Runic.Translations.Generated.GeneratedCatalogSupport.CreatePackContract("snapshot", "de", "sha256:a687dec2a95d67bc25c81e59a6874d63eed871ee966b9f9f5376e01fc9f70904", MessageTable, CanonicalMessageCount, default, SnapshotTextCatalog.Rmf2MarkupContract);
         if (global::System.String.Equals(locale, "en", global::System.StringComparison.Ordinal))
-            return CreateExternalPackContract1();
+            return global::Runic.Translations.Generated.GeneratedCatalogSupport.CreatePackContract("snapshot", "en", "sha256:a687dec2a95d67bc25c81e59a6874d63eed871ee966b9f9f5376e01fc9f70904", MessageTable, CanonicalMessageCount, default, SnapshotTextCatalog.Rmf2MarkupContract);
         throw new global::System.ArgumentException("The locale is not declared by this generated catalog.", nameof(locale));
-    }
-
-    private static global::Runic.Translations.TranslationPackContract CreateExternalPackContract0()
-    {
-        var messages = new global::Runic.Translations.TranslationPackMessageContract[3];
-        ExternalPackContract0Messages0(messages);
-        return global::Runic.Translations.Generated.GeneratedCatalogSupport.CreatePackContract(
-            "snapshot", "de", "sha256:a687dec2a95d67bc25c81e59a6874d63eed871ee966b9f9f5376e01fc9f70904", messages, "{\"version\":2,\"contracts\":{\"runic:link\":{\"kind\":\"paired\",\"placement\":\"inline\",\"children\":\"inline\",\"interactive\":true,\"plainText\":\"children\",\"options\":{}}},\"messages\":{\"greeting\":{\"slots\":{},\"structured\":false,\"contentLocales\":{\"de\":\"de\",\"en\":\"en\"},\"content\":\"inline\",\"skeletons\":[]},\"help\":{\"slots\":{\"link\":{\"kind\":\"runic:link\",\"min\":1,\"max\":1}},\"structured\":true,\"contentLocales\":{\"de\":\"de\",\"en\":\"en\"},\"content\":\"inline\",\"skeletons\":[]},\"items\":{\"slots\":{},\"structured\":false,\"contentLocales\":{\"de\":\"de\",\"en\":\"en\"},\"content\":\"inline\",\"skeletons\":[]}}}");
-    }
-
-    private static void ExternalPackContract0Messages0(global::Runic.Translations.TranslationPackMessageContract[] messages)
-    {
-        messages[0] = global::Runic.Translations.Generated.GeneratedCatalogSupport.CreatePackMessageContract(
-            new global::Runic.Translations.TranslationKey("snapshot", 0, "greeting"),
-            new global::Runic.Translations.Generated.CompiledRmf2Input[]
-            {
-                new global::Runic.Translations.Generated.CompiledRmf2Input("name", global::Runic.Translations.TextArgumentType.String),
-            });
-        messages[1] = global::Runic.Translations.Generated.GeneratedCatalogSupport.CreatePackMessageContract(
-            new global::Runic.Translations.TranslationKey("snapshot", 1, "help"),
-            new global::Runic.Translations.Generated.CompiledRmf2Input[]
-            {
-            });
-        messages[2] = global::Runic.Translations.Generated.GeneratedCatalogSupport.CreatePackMessageContract(
-            new global::Runic.Translations.TranslationKey("snapshot", 2, "items"),
-            new global::Runic.Translations.Generated.CompiledRmf2Input[]
-            {
-                new global::Runic.Translations.Generated.CompiledRmf2Input("count", global::Runic.Translations.TextArgumentType.Int),
-            });
-    }
-
-    private static global::Runic.Translations.TranslationPackContract CreateExternalPackContract1()
-    {
-        var messages = new global::Runic.Translations.TranslationPackMessageContract[3];
-        ExternalPackContract1Messages0(messages);
-        return global::Runic.Translations.Generated.GeneratedCatalogSupport.CreatePackContract(
-            "snapshot", "en", "sha256:a687dec2a95d67bc25c81e59a6874d63eed871ee966b9f9f5376e01fc9f70904", messages, "{\"version\":2,\"contracts\":{\"runic:link\":{\"kind\":\"paired\",\"placement\":\"inline\",\"children\":\"inline\",\"interactive\":true,\"plainText\":\"children\",\"options\":{}}},\"messages\":{\"greeting\":{\"slots\":{},\"structured\":false,\"contentLocales\":{\"de\":\"de\",\"en\":\"en\"},\"content\":\"inline\",\"skeletons\":[]},\"help\":{\"slots\":{\"link\":{\"kind\":\"runic:link\",\"min\":1,\"max\":1}},\"structured\":true,\"contentLocales\":{\"de\":\"de\",\"en\":\"en\"},\"content\":\"inline\",\"skeletons\":[]},\"items\":{\"slots\":{},\"structured\":false,\"contentLocales\":{\"de\":\"de\",\"en\":\"en\"},\"content\":\"inline\",\"skeletons\":[]}}}");
-    }
-
-    private static void ExternalPackContract1Messages0(global::Runic.Translations.TranslationPackMessageContract[] messages)
-    {
-        messages[0] = global::Runic.Translations.Generated.GeneratedCatalogSupport.CreatePackMessageContract(
-            new global::Runic.Translations.TranslationKey("snapshot", 0, "greeting"),
-            new global::Runic.Translations.Generated.CompiledRmf2Input[]
-            {
-                new global::Runic.Translations.Generated.CompiledRmf2Input("name", global::Runic.Translations.TextArgumentType.String),
-            });
-        messages[1] = global::Runic.Translations.Generated.GeneratedCatalogSupport.CreatePackMessageContract(
-            new global::Runic.Translations.TranslationKey("snapshot", 1, "help"),
-            new global::Runic.Translations.Generated.CompiledRmf2Input[]
-            {
-            });
-        messages[2] = global::Runic.Translations.Generated.GeneratedCatalogSupport.CreatePackMessageContract(
-            new global::Runic.Translations.TranslationKey("snapshot", 2, "items"),
-            new global::Runic.Translations.Generated.CompiledRmf2Input[]
-            {
-                new global::Runic.Translations.Generated.CompiledRmf2Input("count", global::Runic.Translations.TextArgumentType.Int),
-            });
     }
 
 }
