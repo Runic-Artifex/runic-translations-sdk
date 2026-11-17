@@ -113,7 +113,7 @@ internal sealed partial class Rmf2LanguageServer
         "runic/documentInfo", "runic/message", "runic/libraryCatalogs", "runic/libraryDocument",
         "textDocument/codeAction", "textDocument/semanticTokens/full", "textDocument/documentSymbol", "textDocument/foldingRange",
         "textDocument/formatting", "textDocument/hover", "textDocument/completion", "textDocument/definition",
-        "textDocument/references", "textDocument/rename",
+        "textDocument/references", "textDocument/rename", "textDocument/prepareRename",
     };
     // Protocol 1 reports every failure as InvalidParams, as 0.13 did. Protocol 2 keeps InvalidParams for malformed
     // parameters and reports a request that could not be carried out as RequestFailed (-32803).
@@ -584,6 +584,9 @@ internal sealed partial class Rmf2LanguageServer
                 ["slots"] = new JsonArray(slots.Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
             };
         }
+        // Protocol 2: F2 on resources, MF2 locals and inputs, and slot references (Rmf2LanguageServer.Refactoring.cs).
+        if (_protocol >= 2 && method == "textDocument/prepareRename") return PrepareRename(buffer, entry, atByte);
+        if (_protocol >= 2 && method == "textDocument/rename") return StandardRename(uri, entry, atByte, args["newName"]!.GetValue<string>());
         if (method == "textDocument/rename")
         {
             if (entry is null) throw new InvalidOperationException("The position is not on a resource symbol.");
@@ -709,7 +712,7 @@ internal sealed partial class Rmf2LanguageServer
             ["positionEncoding"] = _encoding, ["textDocumentSync"] = 2, ["documentSymbolProvider"] = true,
             ["semanticTokensProvider"] = new JsonObject { ["legend"] = new JsonObject { ["tokenTypes"] = new JsonArray("namespace", "property", "variable", "function", "keyword", "string", "comment", "type"), ["tokenModifiers"] = new JsonArray() }, ["full"] = true },
             ["referencesProvider"] = true, ["foldingRangeProvider"] = true, ["hoverProvider"] = true, ["definitionProvider"] = true,
-            ["documentFormattingProvider"] = true, ["renameProvider"] = true,
+            ["documentFormattingProvider"] = true, ["renameProvider"] = new JsonObject { ["prepareProvider"] = true },
             ["codeActionProvider"] = new JsonObject { ["codeActionKinds"] = new JsonArray("quickfix"), ["resolveProvider"] = true },
             ["executeCommandProvider"] = new JsonObject { ["commands"] = new JsonArray(WorkspaceCommands.Select(command => (JsonNode)JsonValue.Create(command)).ToArray()) },
             ["completionProvider"] = new JsonObject { ["triggerCharacters"] = new JsonArray("$", ":", "#", "/", "=") },
@@ -775,9 +778,11 @@ internal sealed partial class Rmf2LanguageServer
         while (index + 1 < entry.MessageByteMap.Count && entry.MessageByteMap[index + 1] <= physicalByte) index++;
         return index;
     }
-    private void RequireResourceOnlyWorkspace(string path)
+    // Native application-language services own call sites. Never return a partial F2 edit unasked. With allowMixed, a
+    // workspace whose only problem is that it contains application sources returns true instead of refusing, so the
+    // caller can ask the user (protocol 2); every other refusal still throws.
+    private bool RequireResourceOnlyWorkspace(string path, bool allowMixed = false)
     {
-        // Native application-language services own call sites. Never return a partial F2 edit.
         string root = _workspaceRoots.Where(value => IsWithin(value, path)).OrderByDescending(value => value.Length).FirstOrDefault()
             ?? throw new TranslationAuthoringException("Rename requires an explicit workspace root. Use Rename Resource in Resource Sources for an intentionally bounded edit.");
         var directories = new Stack<string>(); directories.Push(root);
@@ -796,10 +801,15 @@ internal sealed partial class Rmf2LanguageServer
                     if (Path.GetFileName(entry) is not (".git" or "node_modules" or "bin" or "obj" or "dist" or "artifacts" or ".cache" or ".direnv" or ".vs")) directories.Push(entry);
                 }
                 else if (Path.GetExtension(entry).ToLowerInvariant() is ".cs" or ".ts" or ".tsx" or ".js" or ".jsx" or ".svelte" or ".resx" or ".razor" or ".xaml" or ".cpp" or ".h" or ".mf2")
-                    throw new TranslationAuthoringException("Rename refused: this workspace contains application or legacy sources whose references Runic cannot safely rewrite. Use the native language refactor, or explicitly choose Rename Resource in Resource Sources and update call sites separately.");
+                {
+                    if (allowMixed) return true;
+                    throw new TranslationAuthoringException(MixedWorkspaceRefusal);
+                }
             }
         }
+        return false;
     }
+    private const string MixedWorkspaceRefusal = "Rename refused: this workspace contains application or legacy sources whose references Runic cannot safely rewrite. Use the native language refactor, or explicitly choose Rename Resource in Resource Sources and update call sites separately.";
     private static bool IsWithin(string root, string path)
     {
         string relative = Path.GetRelativePath(root, path);
