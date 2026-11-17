@@ -198,6 +198,7 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
         return Path.Combine(AppContext.BaseDirectory, "ExampleWorkspace");
     }
 
+#if RUNIC_EDITOR_SMOKE_TEST
     private static async Task<CommandOutcome<EditorCommandResult>> RunSmokeTestAsync(string workspacePath)
     {
         int exitCode = await EditorSmokeTest.RunAsync(workspacePath, new EditorCommandLineOperations(opensPackagedExample: false)).ConfigureAwait(false);
@@ -207,6 +208,15 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
                 CommandExitCategory.Validation,
                 new CommandFault("REDIT0001", $"The editor smoke test failed for '{workspacePath}'."));
     }
+#else
+    // A published editor carries neither the smoke test nor the SDK's window test host it drives (FD6). Verification
+    // builds compile both with -p:RunicEditorSmokeTest=true (eng/run.mjs).
+    private static Task<CommandOutcome<EditorCommandResult>> RunSmokeTestAsync(string workspacePath) =>
+        Task.FromResult(CommandOutcome.Failure<EditorCommandResult>(
+            CommandExitCategory.Unavailable,
+            new CommandFault("REDIT0001",
+                $"This editor build does not include the smoke test, so '{workspacePath}' was not tested. Build the editor with -p:RunicEditorSmokeTest=true.")));
+#endif
 
     private static async Task<CommandOutcome<EditorCommandResult>> RunNativeShellCanaryAsync(string workspacePath)
     {

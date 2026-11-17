@@ -221,6 +221,29 @@ launch, embedded WebView, or native chooser behavior.
 The shell examples elsewhere on this page use the standalone launcher's name;
 when running from source, pass those arguments after the `--` above.
 
+To publish the editor, name the target runtime; a publish for another operating
+system works from any build machine, for example from Linux:
+
+```sh
+direnv exec . dotnet publish apps/translations-editor/Runic.Translations.Editor.csproj \
+  --configuration Release --runtime win-x64 --self-contained false --output artifacts/editor-win-x64
+```
+
+Use `linux-x64`, `win-x64` or `osx-arm64`. The runtime selects the native platform
+package (`Runic.Platform.Linux` with its portal, `Runic.Platform.Windows` or
+`Runic.Platform.MacOS`), so each publish carries only its own.
+
+The editor smoke test (`edit --smoke-test`) drives the editor's window through the
+Runic SDK's window test host, `Runic.Application.Testing`. Only verification builds
+compile them: `bun run build` and `bun run verify-editor-packed` pass
+`-p:RunicEditorSmokeTest=true`, and a plain build or publish leaves both out, so
+there `--smoke-test` fails with `REDIT0001`. To run it by hand:
+
+```sh
+direnv exec . dotnet run --project apps/translations-editor/Runic.Translations.Editor.csproj \
+  --configuration Release -p:RunicEditorSmokeTest=true -- --smoke-test
+```
+
 Translations dependencies resolve from source in this repository. Runic Command
 Line and the Runic SDK packages (Views with its CS-WebUI host and ReactiveUI
 adapter, Navigation, Platform) and their npm counterparts resolve from
@@ -230,7 +253,7 @@ No sibling SDK checkout is needed. The native transport is published `CsWebUi` a
 `CsWebUi.Native` `[2.5.0-beta.4.9, 3.0.0)`, the floor of Runic SDK 0.17.1's
 CS-WebUI host (an exact `2.5.0-beta.4.8` pin was a downgrade, NU1605). These
 resolve through the repository's ordinary NuGet.org configuration.
-`bun run test` checks the frontend, generated Views client, editor save/recovery smoke and example workspace.
+`bun run test` checks the frontend, generated Views client, editor save/recovery smoke (a verification build, above) and example workspace.
 `bun run verify-packages` checks the SDK's isolated package consumers. See the
 [contributor guide](../../CONTRIBUTING.md) for the complete verification sequence.
 

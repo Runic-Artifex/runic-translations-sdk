@@ -23,6 +23,8 @@ internal sealed class EditorWorkspacePicker : IDisposable
     private IAsyncDisposable? _selection;
     private bool _disposed;
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static",
+        Justification = "The Linux portal path keeps the selection's lease in this instance; other builds compile it out.")]
     public async Task<EditorWorkspacePickerResult> PickAsync(CancellationToken cancellationToken)
     {
 #if RUNIC_PLATFORM_Linux
@@ -86,7 +88,10 @@ internal sealed class EditorWorkspacePicker : IDisposable
         Keep(lease);
         return new EditorWorkspacePickerResult(true, false, path, null);
     }
+#endif
 
+    // Outside the portal block: builds without RUNIC_PLATFORM_Linux (Windows, macOS, the Views bootstrap) must still read
+    // _disposed, or the compiler reports CS0414.
     private void Keep(IAsyncDisposable selection)
     {
         IAsyncDisposable? previous;
@@ -101,7 +106,6 @@ internal sealed class EditorWorkspacePicker : IDisposable
         }
         Release(previous);
     }
-#endif
 
     public void Dispose()
     {
