@@ -22,6 +22,8 @@ jobs:
           bun-version: 1.4.4
       - name: Check generated CLDR selectors and capability matrix
         run: bun eng/generate-cldr.mjs --check
+      - name: Test the CLDR plural rule parser and bytecode
+        run: bun test eng/cldr-plural-rules.test.mjs
       - name: Check rendered capability documentation
         run: bun eng/render-capabilities.mjs --check
       # runic-sdk's flake provides the same actionlint version for local runs.

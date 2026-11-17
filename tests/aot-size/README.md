@@ -30,6 +30,7 @@ Each publish takes well under a minute with a warm NuGet cache and needs the Nat
 | `aot/translations/fixed-bytes` | The executable of `m200-l2` less the catalog's own records: the runtime, the framework and their metadata. |
 | `aot/translations/per-message-bytes` | The catalog's own records (locale data and generated code) at 200 and 800 messages in 2 locales, `O(n)`. |
 | `aot/translations/per-locale-message-bytes` | The catalog's locale data (`RvaFields`) for 200 messages in 2 and 10 locales, `O(n)`. |
+| `aot/translations/cldr-subset-resource-bytes` | mstat bytes of the embedded resources of `m200-l2-cldr-subset`, the probe built with `RunicTranslationsCldrSubset`: the English and German CLDR subset, without Runic.Translations' full `GeneratedLocaleData.bin`, which the publish drops. |
 | `aot/translations/reflection-runtime-bytes` | mstat bytes of `System.Reflection.Runtime.*`, the reflection stack behind `Delegate.Method` and `MethodInfo`. Hot Reload's tracking needs it, so it stays out only while `TranslationHotReload.IsSupported` folds to a constant in a trimmed publish. |
 
 To see why something is in the executable, publish with `--keep` and `-p:IlcGenerateDgmlFile=true` (add it to the

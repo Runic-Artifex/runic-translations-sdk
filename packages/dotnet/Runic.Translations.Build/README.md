@@ -207,6 +207,45 @@ only by a key string, from XAML markup that no generated code reads, from anothe
 reported too, so read the list as candidates. The web side
 has `reportUnused` in `@runic-artifex/vite-plugin-runic-translations`.
 
+## Embed only your catalog's CLDR data
+
+`Runic.Translations` carries the pinned CLDR number formats, date overrides, list patterns and relative-time data of
+about 430 locales, 52.7 KB compressed, so that any locale formats correctly, including one that an overlay or a
+language pack adds at run time. An application that only ever shows the locales its catalog declares can keep just
+their share of it:
+
+```xml
+<PropertyGroup>
+  <RunicTranslationsCldrSubset>true</RunicTranslationsCldrSubset>
+</PropertyGroup>
+```
+
+Set it in the application project, the one whose assembly starts the process. The build then embeds the CLDR data of
+the catalog's languages, and of the languages CLDR links to them (`nb` and `nn` with `no`), in the application: the
+locales of `runic.json` (`baseLocale`, `locales`, `pseudoLocales`, or the locales the sources name), of the catalogs
+that referenced packages pack, and of `RunicTranslationsCldrLocale` items. Regional variants come along (`de` brings
+`de-CH`, so a Swiss user reading German text still sees Swiss separators). A trimmed or NativeAOT publish leaves the full
+data out: an English and German catalog keeps about 1 KB, and the executable shrinks by about 52 KB (`tests/aot-size`,
+`aot/translations/cldr-subset-resource-bytes`). Plural rules are not affected.
+
+The trade-off: a locale of another language, such as one an overlay or a pack adds at run time, formats numbers with
+CLDR's root formats and dates with .NET's names, as a locale without CLDR data does, and lists and relative times with
+the patterns of the catalog's base locale (where a locale without CLDR data would fail). Its plural rules stay exact.
+The runtime reports each such locale once, as the warning event 4 of the `Runic-Translations` event source and in an
+attached debugger's output. Name such locales in advance with items:
+
+```xml
+<ItemGroup>
+  <RunicTranslationsCldrLocale Include="fr;pl" />
+</ItemGroup>
+```
+
+The setting holds in Debug runs too (it is the `Runic.Translations.CldrSubset` runtime switch in
+`runtimeconfig.json`), so a missing locale shows up before publishing. The default is `false`: every locale keeps its
+CLDR data. The build fails with
+[`RTR0108`](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/diagnostics.md#rtr0108)
+when it finds no catalog locale or no `Runic.Translations` reference.
+
 ## Important build behavior
 
 - Discovery follows the declared `RunicTranslationProject` directory, including nondefault paths. Explicit `RunicTranslationMf2` items override corresponding discovery. File membership is recorded in generation state so additions and removals invalidate artifacts.

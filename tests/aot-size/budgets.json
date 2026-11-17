@@ -11,6 +11,13 @@
     "m200-l10": {
       "messages": 200,
       "locales": 10
+    },
+    "m200-l2-cldr-subset": {
+      "messages": 200,
+      "locales": 2,
+      "properties": {
+        "RunicTranslationsCldrSubset": "true"
+      }
     }
   },
   "cases": {
@@ -18,11 +25,11 @@
       "class": "total",
       "build": "m200-l2",
       "margin": 0.02,
-      "note": "linux-x64 executable bytes of the probe with 200 messages × 2 locales, less the catalog's own mstat records: the runtime, the framework and their metadata. 3,418,992 on main before #216 (T1); the limit is the measured value plus 2 %",
+      "note": "linux-x64 executable bytes of the probe with 200 messages × 2 locales, less the catalog's own mstat records: the runtime, the framework and their metadata. 3,418,992 on main before #216 (T1), 3,069,346 before the CLDR tables and plural rules became data (D072.2, T4); the limit is the measured value plus 2 %",
       "measured": [
-        3069346
+        2987410
       ],
-      "limit": 3130733
+      "limit": 3047159
     },
     "aot/translations/per-message-bytes": {
       "class": "O(n)",
@@ -69,6 +76,16 @@
         19173
       ],
       "limit": 21091
+    },
+    "aot/translations/cldr-subset-resource-bytes": {
+      "class": "total",
+      "build": "m200-l2-cldr-subset",
+      "margin": 0.1,
+      "note": "mstat bytes of the embedded resources of the probe with 200 messages × en, de built with RunicTranslationsCldrSubset (D072.6): the deflated CLDR subset of English and German, without Runic.Translations' full GeneratedLocaleData.bin (52,676), which the publish drops. The limit is the measured value plus 10 %",
+      "measured": [
+        1013
+      ],
+      "limit": 1115
     }
   }
 }

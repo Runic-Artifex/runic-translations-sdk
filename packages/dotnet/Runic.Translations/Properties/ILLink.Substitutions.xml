@@ -8,4 +8,19 @@
       <method signature="System.Boolean get_IsOverrideSupported()" body="stub" value="false" />
     </type>
   </assembly>
+  <!-- An application that builds with RunicTranslationsCldrSubset embeds the CLDR data of its catalogs' languages and sets
+       the Runic.Translations.CldrSubset switch (Runic.Translations.Build.targets); its trimmed or NativeAOT publish then
+       drops the full data, about 52 KB. Every other trimmed or NativeAOT publish folds GeneratedLocaleData.IsSubset to
+       false (featuredefault: the switch is not set at all) and drops the subset code. -->
+  <assembly fullname="Runic.Translations" feature="Runic.Translations.CldrSubset" featurevalue="true">
+    <resource name="Runic.Translations.GeneratedLocaleData.bin" action="remove" />
+    <type fullname="Runic.Translations.GeneratedLocaleData">
+      <method signature="System.Boolean get_IsSubset()" body="stub" value="true" />
+    </type>
+  </assembly>
+  <assembly fullname="Runic.Translations" feature="Runic.Translations.CldrSubset" featurevalue="false" featuredefault="true">
+    <type fullname="Runic.Translations.GeneratedLocaleData">
+      <method signature="System.Boolean get_IsSubset()" body="stub" value="false" />
+    </type>
+  </assembly>
 </linker>

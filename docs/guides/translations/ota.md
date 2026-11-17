@@ -24,6 +24,13 @@ Releases built before 0.9, and code that uses the exact-pack loaders, need a
 pack built for their contract; see [Packs for a shipped
 release](#packs-for-a-shipped-release).
 
+A .NET application built with `RunicTranslationsCldrSubset` embeds only the
+CLDR formatting data of its catalog's languages. A pack that adds a locale of
+another language then formats its numbers, lists and relative times without
+that locale's CLDR data; list such locales as `RunicTranslationsCldrLocale`
+items, or leave the property off (see the [Runic.Translations.Build
+README](../../../packages/dotnet/Runic.Translations.Build/README.md#embed-only-your-catalogs-cldr-data)).
+
 ## Build packs
 
 Keep the translations of a shipped catalog in source control as usual, and

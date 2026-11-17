@@ -183,3 +183,82 @@ export function visibleOperands(coefficient, scale, exponent = 0n) {
   if (t === 0n) w = 0n;
   return { i: coefficient / divisor, v: BigInt(scale), w, f, t, e: exponent };
 }
+
+// The bytecode of a rule set, which the .NET runtime interprets (GeneratedLocaleData.ApplyPluralRule) instead of
+// compiling a method per rule set: about 1.5 KB of data for every pinned rule set, where the compiled selectors took
+// 32 KB of NativeAOT code. A rule set is
+//   count  (category orCount (andCount relation…)…)…   for each category but 'other', which is the fallback;
+// a relation is a header byte (operand code | 8 when negated | 16 with a modulus), the modulus, a range count and
+// each range's low and high value. Counts are bytes; the modulus and the range bounds are unsigned LEB128.
+export const operandCodes = { n: 0, i: 1, v: 2, w: 3, f: 4, t: 5, e: 6 };
+
+/** Encodes a parsed rule set (parseRuleSet) as plural rule bytecode. */
+export function encodeRuleSet(ruleSet) {
+  const bytes = [];
+  const count = (value) => {
+    if (!Number.isInteger(value) || value < 0 || value > 255) throw new Error(`A plural rule count ${value} does not fit a byte.`);
+    bytes.push(value);
+  };
+  const varint = (value) => {
+    if (!Number.isSafeInteger(value) || value < 0) throw new Error(`A plural rule value ${value} is not a nonnegative integer.`);
+    do {
+      const low = value % 128;
+      value = Math.floor(value / 128);
+      bytes.push(value > 0 ? low | 128 : low);
+    } while (value > 0);
+  };
+  const conditional = ruleSet.filter((rule) => rule.condition !== null);
+  if (ruleSet.at(-1).condition !== null || conditional.length !== ruleSet.length - 1)
+    throw new Error("Only the last category of a rule set may be unconditional.");
+  count(conditional.length);
+  for (const rule of conditional) {
+    count(pluralCategories.indexOf(rule.category));
+    count(rule.condition.length);
+    for (const and of rule.condition) {
+      count(and.length);
+      for (const { operand, modulus, negated, ranges } of and) {
+        bytes.push(operandCodes[operand] | (negated ? 8 : 0) | (modulus === null ? 0 : 16));
+        if (modulus !== null) varint(modulus);
+        count(ranges.length);
+        for (const [low, high] of ranges) { varint(low); varint(high); }
+      }
+    }
+  }
+  return bytes;
+}
+
+/**
+ * Selects a category with plural rule bytecode over BigInt operands, as GeneratedLocaleData.ApplyPluralRule does in
+ * .NET; the tests compare it with the compiled selectors.
+ */
+export function selectEncoded(bytes, operands) {
+  let position = 0;
+  const varint = () => {
+    let value = 0n, shift = 0n, byte;
+    do { byte = bytes[position++]; value |= BigInt(byte & 127) << shift; shift += 7n; } while (byte & 128);
+    return value;
+  };
+  const names = ["n", "i", "v", "w", "f", "t", "e"];
+  for (let categories = bytes[position++]; categories > 0; categories--) {
+    const category = bytes[position++];
+    let any = false;
+    for (let alternatives = bytes[position++]; alternatives > 0; alternatives--) {
+      let all = true;
+      for (let relations = bytes[position++]; relations > 0; relations--) {
+        const header = bytes[position++], operand = names[header & 7];
+        let value = operands[operand === "n" ? "i" : operand];
+        if (header & 16) value %= varint();
+        let match = false;
+        for (let ranges = bytes[position++]; ranges > 0; ranges--) {
+          const low = varint(), high = varint();
+          if (value >= low && value <= high) match = true;
+        }
+        if (operand === "n" && operands.t !== 0n) match = false;
+        if (match === Boolean(header & 8)) all = false;
+      }
+      if (all) any = true;
+    }
+    if (any) return pluralCategories[category];
+  }
+  return "other";
+}
