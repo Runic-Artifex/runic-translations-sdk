@@ -700,22 +700,55 @@ internal sealed class Rmf2DiagnosticLspTests
             Send(method, args, id);
             return id;
         }
+        // Server-to-client requests in the order they arrived.
+        internal List<JsonNode> ServerRequests { get; } = new();
+        // Answers a server-to-client request with the members of its response (`result` or `error`); null leaves it
+        // unanswered, for a test that answers it later with Respond. Without a handler, requests stay unanswered.
+        internal Func<JsonNode, JsonObject?>? OnServerRequest { get; set; }
         internal JsonNode Wait(int id)
         {
             while (true)
             {
                 JsonNode frame = Task.Run(ReadFrame).WaitAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
-                if (frame["id"]?.GetValue<int>() == id) return frame;
+                if (frame["method"] is not null && frame["id"] is not null) { HandleServerRequest(frame); continue; }
+                if (frame["method"] is null && frame["id"]?.GetValue<int>() == id) return frame;
                 Publications.Add(frame);
             }
+        }
+        // Reads until the server sends a request with this method, which it returns unanswered.
+        internal JsonNode WaitForServerRequest(string method)
+        {
+            while (true)
+            {
+                JsonNode frame = Task.Run(ReadFrame).WaitAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
+                if (frame["method"]?.GetValue<string>() == method && frame["id"] is not null) { ServerRequests.Add(frame); return frame; }
+                if (frame["method"] is not null && frame["id"] is not null) { HandleServerRequest(frame); continue; }
+                Publications.Add(frame);
+            }
+        }
+        private void HandleServerRequest(JsonNode frame)
+        {
+            ServerRequests.Add(frame);
+            if (OnServerRequest?.Invoke(frame) is { } members) Respond(frame["id"]!, members);
+        }
+        // Sends the client's response to a server-to-client request.
+        internal void Respond(JsonNode id, JsonObject members)
+        {
+            var response = new JsonObject { ["jsonrpc"] = "2.0", ["id"] = id.DeepClone() };
+            foreach (var member in members) response[member.Key] = member.Value?.DeepClone();
+            SendFrame(response);
+        }
+        internal void SendFrame(JsonObject frame)
+        {
+            byte[] bytes = Encoding.UTF8.GetBytes(frame.ToJsonString());
+            Stream input = _serverInput ?? _process!.StandardInput.BaseStream;
+            input.Write(Encoding.ASCII.GetBytes("Content-Length: " + bytes.Length + "\r\n\r\n")); input.Write(bytes); input.Flush();
         }
         private void Send(string method, JsonObject args, int? id)
         {
             var request = new JsonObject { ["jsonrpc"] = "2.0", ["method"] = method, ["params"] = args.DeepClone() };
             if (id is not null) request["id"] = id.Value;
-            byte[] bytes = Encoding.UTF8.GetBytes(request.ToJsonString());
-            Stream input = _serverInput ?? _process!.StandardInput.BaseStream;
-            input.Write(Encoding.ASCII.GetBytes("Content-Length: " + bytes.Length + "\r\n\r\n")); input.Write(bytes); input.Flush();
+            SendFrame(request);
         }
         private JsonNode ReadFrame()
         {

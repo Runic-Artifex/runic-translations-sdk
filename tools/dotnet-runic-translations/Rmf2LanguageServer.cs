@@ -32,6 +32,20 @@ internal sealed partial class Rmf2LanguageServer
     private bool _fileOperations;
     private bool _configurationSync;
     private bool _codeDescriptionSupport;
+    // The Runic protocol revision this session speaks (experimental.runic). A client opts in to revision 2 with
+    // initializationOptions.runicProtocol; without it the server keeps the revision 1 behaviour of Translations 0.13
+    // (results, error codes, serverInfo) for one minor (D069.3, D070.1).
+    internal const int LatestProtocol = 2;
+    private int _protocol = 1;
+    // Client capabilities that revision 2 uses when the client advertises them, and degrades without.
+    private bool _applyEditSupport;
+    private bool _showMessageRequestSupport;
+    private bool _watchedFilesRegistration;
+    // Server-to-client requests awaiting their response, by the JSON text of their ID. The reader thread completes
+    // them, so the worker can wait for a response while the reader keeps reading.
+    private readonly Dictionary<string, TaskCompletionSource<JsonObject>> _clientRequests = new(StringComparer.Ordinal);
+    private long _nextClientRequest;
+    private bool _readerStopped;
     // Review data per project and buffer group, for code actions and hover: the compilation with the open buffers, its
     // review compilation (TranslationReviewFile.ForReview), the fingerprints and the review file. Dropped when a buffer,
     // a watched file or the configuration changes, and when the review file's size or write time differs.
@@ -92,6 +106,25 @@ internal sealed partial class Rmf2LanguageServer
     private long _latestRevision;
     private long _processedRevision;
     private sealed class ContentModifiedException : Exception { }
+    private sealed class MethodNotFoundException(string method) : Exception("Unknown method '" + method + "'.") { }
+    // The requests this server answers. Under protocol 2 any other request is answered with MethodNotFound.
+    private static readonly HashSet<string> RequestMethods = new(StringComparer.Ordinal) {
+        "initialize", "shutdown", "codeAction/resolve", "workspace/executeCommand",
+        "runic/documentInfo", "runic/message", "runic/libraryCatalogs", "runic/libraryDocument",
+        "textDocument/codeAction", "textDocument/semanticTokens/full", "textDocument/documentSymbol", "textDocument/foldingRange",
+        "textDocument/formatting", "textDocument/hover", "textDocument/completion", "textDocument/definition",
+        "textDocument/references", "textDocument/rename",
+    };
+    // Protocol 1 reports every failure as InvalidParams, as 0.13 did. Protocol 2 keeps InvalidParams for malformed
+    // parameters and reports a request that could not be carried out as RequestFailed (-32803).
+    private int ErrorCode(Exception error) => error switch {
+        ContentModifiedException => -32801,
+        OperationCanceledException => -32800,
+        MethodNotFoundException => -32601,
+        _ when _protocol < 2 => -32602,
+        ArgumentException or FormatException or OverflowException or KeyNotFoundException or System.Text.Json.JsonException => -32602,
+        _ => -32803,
+    };
     internal int Run()
     {
         // The reader remains responsive to cancellation while one worker owns document state.
@@ -111,6 +144,7 @@ internal sealed partial class Rmf2LanguageServer
                     // never supplies a hook or exposes a barrier method.
                     _beforeRequest?.Invoke(method);
                     if (method == "exit") return _shutdown ? 0 : 1;
+                    if (id is not null && _protocol >= 2 && !RequestMethods.Contains(method)) throw new MethodNotFoundException(method);
                     JsonNode? result = Handle(method, request["params"] as JsonObject ?? new JsonObject());
                     lock (_revisionGate)
                     {
@@ -122,9 +156,9 @@ internal sealed partial class Rmf2LanguageServer
                         if (id is not null) Send(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = id, ["result"] = result });
                     }
                 }
-                catch (Exception error) when (error is ContentModifiedException or OperationCanceledException or ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or TranslationAuthoringException or KeyNotFoundException or IOException or FormatException or OverflowException or TranslationFormatException or TranslationPackException or TranslationContractException or System.Text.Json.JsonException)
+                catch (Exception error) when (error is ContentModifiedException or OperationCanceledException or MethodNotFoundException or ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or TranslationAuthoringException or KeyNotFoundException or IOException or FormatException or OverflowException or TranslationFormatException or TranslationPackException or TranslationContractException or System.Text.Json.JsonException)
                 {
-                    if (id is not null) Send(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = id, ["error"] = new JsonObject { ["code"] = error is ContentModifiedException ? -32801 : error is OperationCanceledException ? -32800 : -32602, ["message"] = error is ContentModifiedException ? "Document content changed while the request was pending." : error is OperationCanceledException ? "Request cancelled." : error.Message } });
+                    if (id is not null) Send(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = id, ["error"] = new JsonObject { ["code"] = ErrorCode(error), ["message"] = error is ContentModifiedException ? "Document content changed while the request was pending." : error is OperationCanceledException ? "Request cancelled." : error.Message } });
                 }
                 finally
                 {
@@ -144,6 +178,13 @@ internal sealed partial class Rmf2LanguageServer
         {
             while (Read() is { } request)
             {
+                // A message without a method is the client's response to a server-to-client request. It completes
+                // the waiting request here and never reaches the worker, which may be the one waiting for it.
+                if (request["method"] is null)
+                {
+                    CompleteClientRequest(request);
+                    continue;
+                }
                 string method = request["method"]?.GetValue<string>() ?? "";
                 if (method == "$/cancelRequest")
                 {
@@ -172,8 +213,89 @@ internal sealed partial class Rmf2LanguageServer
                 if (method == "exit") break;
             }
         }
-        finally { queue.CompleteAdding(); worker.GetAwaiter().GetResult(); }
+        finally
+        {
+            // No response can arrive any more: a request the worker is waiting on fails instead of hanging.
+            FailClientRequests();
+            queue.CompleteAdding(); worker.GetAwaiter().GetResult();
+        }
         return worker.GetAwaiter().GetResult();
+    }
+
+    // Sends a server-to-client request. The returned task completes with the client's response message.
+    private Task<JsonObject> StartClientRequest(string method, JsonObject parameters, out long id)
+    {
+        id = Interlocked.Increment(ref _nextClientRequest);
+        var completion = new TaskCompletionSource<JsonObject>(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_clientRequests)
+        {
+            if (_readerStopped) completion.SetException(new IOException("The client closed the connection."));
+            else _clientRequests[JsonValue.Create(id).ToJsonString()] = completion;
+        }
+        if (!completion.Task.IsCompleted)
+            Send(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = id, ["method"] = method, ["params"] = parameters });
+        return completion.Task;
+    }
+
+    // Sends a server-to-client request and waits for its result while the current request runs. Cancelling the
+    // current request cancels the wait and tells the client; a response that arrives later is ignored.
+    private JsonNode? ClientRequest(string method, JsonObject parameters)
+    {
+        Task<JsonObject> response = StartClientRequest(method, parameters, out long id);
+        try { response.Wait(_requestCancellation); }
+        catch (OperationCanceledException)
+        {
+            bool pending;
+            lock (_clientRequests) pending = _clientRequests.Remove(JsonValue.Create(id).ToJsonString());
+            if (pending) Send(new JsonObject { ["jsonrpc"] = "2.0", ["method"] = "$/cancelRequest", ["params"] = new JsonObject { ["id"] = id } });
+            throw;
+        }
+        catch (AggregateException failure) when (failure.InnerException is IOException closed) { throw closed; }
+        JsonObject message = response.Result;
+        if (message["error"] is JsonObject error)
+            throw new InvalidOperationException($"The client failed {method}: {error["message"]?.GetValue<string>() ?? "no message"}");
+        return message["result"];
+    }
+
+    private void CompleteClientRequest(JsonObject response)
+    {
+        // A response to a request this server no longer waits for (cancelled), or never sent, is dropped.
+        string? key = response["id"]?.ToJsonString();
+        TaskCompletionSource<JsonObject>? completion = null;
+        if (key is not null) lock (_clientRequests) _clientRequests.Remove(key, out completion);
+        completion?.TrySetResult(response);
+    }
+
+    private void FailClientRequests()
+    {
+        TaskCompletionSource<JsonObject>[] pending;
+        lock (_clientRequests)
+        {
+            _readerStopped = true;
+            pending = _clientRequests.Values.ToArray();
+            _clientRequests.Clear();
+        }
+        foreach (var completion in pending) completion.TrySetException(new IOException("The client closed the connection."));
+    }
+
+    // Under protocol 2, a client that registers watchers dynamically gets them from the server, so it needs no watcher
+    // code of its own: the manifests, the resources, the review files and the restore and install state that decides
+    // which library catalogs resolve. A client without dynamic registration forwards these events itself, as before.
+    internal static readonly string[] WatchedFilePatterns = [
+        "**/runic.json", "**/*.{rmf2,mf2}", "**/*.review.json",
+        "**/{obj/project.assets.json,node_modules/.package-lock.json,node_modules/.modules.yaml,node_modules/.yarn-state.yml,package-lock.json,pnpm-lock.yaml,yarn.lock,bun.lock,bun.lockb}",
+    ];
+    private void RegisterWatchedFiles()
+    {
+        var watchers = new JsonArray(WatchedFilePatterns.Select(pattern => (JsonNode)new JsonObject { ["globPattern"] = pattern }).ToArray());
+        Task<JsonObject> response = StartClientRequest("client/registerCapability", new JsonObject { ["registrations"] = new JsonArray(new JsonObject {
+            ["id"] = "runic.watchedFiles", ["method"] = "workspace/didChangeWatchedFiles", ["registerOptions"] = new JsonObject { ["watchers"] = watchers },
+        }) }, out _);
+        // Nothing waits for the answer; a refusal only means the client keeps forwarding events itself.
+        response.ContinueWith(task => {
+            if (task.IsCompletedSuccessfully && task.Result["error"] is JsonObject error)
+                Console.Error.WriteLine("runic-rmf2: the client refused the watched-file registration: " + error["message"]?.GetValue<string>());
+        }, TaskScheduler.Default);
     }
     private JsonNode? Handle(string method, JsonObject args)
     {
@@ -191,6 +313,14 @@ internal sealed partial class Rmf2LanguageServer
             _fileOperations = args["capabilities"]?["workspace"]?["workspaceEdit"]?["resourceOperations"] is JsonArray operations && operations.Any(v => v?.GetValue<string>() == "create") && operations.Any(v => v?.GetValue<string>() == "delete");
             var encodings = args["capabilities"]?["general"]?["positionEncodings"] as JsonArray;
             _encoding = encodings?.Select(v => v!.GetValue<string>()).FirstOrDefault(v => v is "utf-8" or "utf-16" or "utf-32") ?? "utf-16";
+            // A client that asks for a newer revision than this server knows gets the latest one, and sees which in
+            // experimental.runic.protocol.
+            _protocol = args["initializationOptions"]?["runicProtocol"] is JsonValue requested && requested.TryGetValue(out int revision) && revision >= 2 ? LatestProtocol : 1;
+            JsonNode? clientCapabilities = args["capabilities"];
+            _applyEditSupport = clientCapabilities?["workspace"]?["applyEdit"] is JsonValue applyEdit && applyEdit.TryGetValue(out bool canApply) && canApply;
+            _showMessageRequestSupport = clientCapabilities?["window"]?["showMessage"] is JsonObject;
+            _watchedFilesRegistration = clientCapabilities?["workspace"]?["didChangeWatchedFiles"]?["dynamicRegistration"] is JsonValue dynamic && dynamic.TryGetValue(out bool canRegister) && canRegister;
+            if (_protocol >= 2) return Protocol2Capabilities();
             return new JsonObject { ["capabilities"] = new JsonObject {
                 ["positionEncoding"] = _encoding, ["textDocumentSync"] = 2, ["documentSymbolProvider"] = true,
                 ["semanticTokensProvider"] = new JsonObject { ["legend"] = new JsonObject { ["tokenTypes"] = new JsonArray("namespace", "property", "variable", "function", "keyword", "string", "comment", "type"), ["tokenModifiers"] = new JsonArray() }, ["full"] = true },
@@ -202,7 +332,12 @@ internal sealed partial class Rmf2LanguageServer
             }, ["serverInfo"] = new JsonObject { ["name"] = "Runic RMF2", ["version"] = "1" } };
         }
         if (method == "shutdown") { _shutdown = true; return null; }
-        if (method is "initialized" or "$/cancelRequest") return null;
+        if (method == "initialized")
+        {
+            if (_protocol >= 2 && _watchedFilesRegistration) RegisterWatchedFiles();
+            return null;
+        }
+        if (method == "$/cancelRequest") return null;
         if (method == "codeAction/resolve")
         {
             // A "mark reviewed" action is a command, complete as offered.
@@ -557,6 +692,32 @@ internal sealed partial class Rmf2LanguageServer
         }
         return null;
     }
+    internal static readonly string[] WorkspaceCommands = ["runic.extractGroup", "runic.inlineResource", "runic.markReviewed", "runic.preview", "runic.renameInput", "runic.renameSlot", "runic.renameResource", "runic.renderPreview"];
+    internal static readonly string[] RunicRequests = ["runic/documentInfo", "runic/libraryCatalogs", "runic/libraryDocument", "runic/message"];
+
+    // experimental.runic: the protocol revision this session speaks and the Runic commands and requests it answers.
+    // Only a session that opted in advertises it; a protocol 1 session answers initialize exactly as 0.13 did.
+    private JsonObject RunicCapability() => new() {
+        ["protocol"] = _protocol,
+        ["commands"] = new JsonArray(WorkspaceCommands.Select(command => (JsonNode)JsonValue.Create(command)).ToArray()),
+        ["requests"] = new JsonArray(RunicRequests.Select(request => (JsonNode)JsonValue.Create(request)).ToArray()),
+    };
+
+    // The capabilities of protocol 2. serverInfo.version is the tool's version (Translations release).
+    private JsonObject Protocol2Capabilities() => new() {
+        ["capabilities"] = new JsonObject {
+            ["positionEncoding"] = _encoding, ["textDocumentSync"] = 2, ["documentSymbolProvider"] = true,
+            ["semanticTokensProvider"] = new JsonObject { ["legend"] = new JsonObject { ["tokenTypes"] = new JsonArray("namespace", "property", "variable", "function", "keyword", "string", "comment", "type"), ["tokenModifiers"] = new JsonArray() }, ["full"] = true },
+            ["referencesProvider"] = true, ["foldingRangeProvider"] = true, ["hoverProvider"] = true, ["definitionProvider"] = true,
+            ["documentFormattingProvider"] = true, ["renameProvider"] = true,
+            ["codeActionProvider"] = new JsonObject { ["codeActionKinds"] = new JsonArray("quickfix"), ["resolveProvider"] = true },
+            ["executeCommandProvider"] = new JsonObject { ["commands"] = new JsonArray(WorkspaceCommands.Select(command => (JsonNode)JsonValue.Create(command)).ToArray()) },
+            ["completionProvider"] = new JsonObject { ["triggerCharacters"] = new JsonArray("$", ":", "#", "/", "=") },
+            ["experimental"] = new JsonObject { ["runic"] = RunicCapability() },
+        },
+        ["serverInfo"] = new JsonObject { ["name"] = "Runic RMF2", ["version"] = Program.Version },
+    };
+
     // The owning catalog and the file's locale, for a client's status display. A file that no
     // project owns, or a project whose manifest cannot be read yet, answers with null members
     // rather than an error: the client shows the state, not a failure.
