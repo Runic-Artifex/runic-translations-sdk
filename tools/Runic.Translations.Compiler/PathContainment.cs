@@ -52,8 +52,10 @@ internal static class PathContainment
     internal static bool IsWithinRelative(string relative, bool windows)
     {
         ArgumentNullException.ThrowIfNull(relative);
-        if (relative.Length == 0 || Path.IsPathRooted(relative)) return false;
-        if (windows && (relative[0] is '/' or '\\' || (relative.Length >= 2 && relative[1] == ':' && char.IsAsciiLetter(relative[0])))) return false;
+        // The rules come from `windows`, not from the host: Path.IsPathRooted would apply Windows rules on a Windows host
+        // even for a Unix-shaped check ("C:translations" is a file name by Unix rules).
+        if (relative.Length == 0 || relative[0] == '/') return false;
+        if (windows && (relative[0] == '\\' || (relative.Length >= 2 && relative[1] == ':' && char.IsAsciiLetter(relative[0])))) return false;
         // "..", "../x" or "..\x" leave the directory; "..x" is a file name within it.
         return !(relative.Length >= 2 && relative[0] == '.' && relative[1] == '.' && (relative.Length == 2 || relative[2] is '/' or '\\'));
     }
