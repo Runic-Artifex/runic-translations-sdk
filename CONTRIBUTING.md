@@ -71,6 +71,8 @@ on nuget.org.
 
 ## Dependencies
 
+The `bun.lock` files of `examples/component-library/web` and `examples/shared-catalog/Frontend` lock only third-party packages: `bun eng/verify-packages.mjs` (the `Build and test` job) installs the example with the current commit's packed Runic packages and fails when the rest of the install differs from the committed lock. Update them with `RUNIC_UPDATE_EXAMPLE_LOCKS=1 bun eng/verify-examples.mjs` after `bun eng/run.mjs pack`.
+
 `bun run dependencies:audit` reports known vulnerabilities in every tracked `bun.lock` and in the NuGet graphs of the solution and the editor. It runs weekly in [Dependency audit](.github/workflows/dependency-audit.yml) and never upgrades packages. Pin GitHub Actions to a full commit SHA with a `# vX.Y.Z` comment.
 
 Report security issues as described in [SECURITY.md](SECURITY.md).

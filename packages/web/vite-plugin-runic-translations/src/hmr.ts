@@ -2,6 +2,8 @@
 // server: the classifier compares the generated files of two regenerations, the transform makes generated message
 // modules self-accepting, and the dev client tells the page that text changed. A production build never reaches it.
 
+import { posix, sep } from "node:path";
+
 /** The generated files of one catalog after a validated regeneration. */
 export interface CatalogSnapshot {
   readonly catalog: string;
@@ -18,6 +20,29 @@ export type Classification =
   | { readonly kind: "none" }
   | { readonly kind: "in-place"; readonly modules: readonly string[] }
   | { readonly kind: "reload"; readonly reason: string };
+
+/**
+ * A file path as Vite's module graph and watcher key it, which is what Vite's `normalizePath` returns: forward slashes on
+ * Windows, and `.` and `..` segments resolved. The plugin keeps native paths (from `realpath` and `resolve`) for its own
+ * comparisons; every path it hands to Vite goes through this (translations#210). `separator` is the platform's; tests
+ * pass `"\\"` to check Windows paths on any platform.
+ */
+export function viteFilePath(path: string, separator: string = sep): string {
+  return posix.normalize(separator === "\\" ? path.replace(/\\/g, "/") : path);
+}
+
+/** The part of a Vite module graph that looks modules up by file. */
+export interface FileModuleGraph<Module> {
+  getModulesByFile(file: string): Set<Module> | undefined;
+}
+
+/** The modules of the module graph for native file paths, in order, each file looked up by its Vite path. */
+export function modulesOfFiles<Module>(graph: FileModuleGraph<Module>, files: Iterable<string>, separator: string = sep): Module[] {
+  const modules: Module[] = [];
+  for (const file of files)
+    for (const module of graph.getModulesByFile(viteFilePath(file, separator)) ?? []) modules.push(module);
+  return modules;
+}
 
 /** The generated message modules the transform makes self-accepting. */
 export const messageModulePattern = /^messages\/r_[0-9a-f]+\.js$/;

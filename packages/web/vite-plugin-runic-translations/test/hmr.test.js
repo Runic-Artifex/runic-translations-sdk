@@ -6,11 +6,13 @@ import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { mkdtemp, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { dirname, join, relative, sep, win32 } from "node:path";
 import test from "node:test";
 import vm from "node:vm";
-import { build, createServer } from "vite";
-import { classify, devClientCode, markerCharacters, messagesAnchor, selfAccepting, withMarkers, withoutSourceHash } from "../dist/hmr.js";
+import { build, createServer, normalizePath } from "vite";
+import {
+  classify, devClientCode, markerCharacters, messagesAnchor, modulesOfFiles, selfAccepting, viteFilePath, withMarkers, withoutSourceHash,
+} from "../dist/hmr.js";
 import { runicTranslations } from "../dist/index.js";
 
 const fingerprint = `sha256:${"a".repeat(64)}`;
@@ -162,6 +164,65 @@ test("the classifier updates text in place and reloads for anything structural",
   assert.match(classify([snapshot(grid, "r", "acme.grid")], [snapshot({ ...grid, "../runtime-core.js": "core2" }, "r", "acme.grid")]).reason,
     /\.\.\/runtime-core\.js of catalog 'acme\.grid' changed/);
   assert.equal(withoutSourceHash(`export const a = 1;\nexport const sourceHash = "sha256:${"c".repeat(64)}";\nexport const b = 2;\n`), "export const a = 1;\nexport const b = 2;\n");
+});
+
+// translations#210: on Windows the snapshot's paths are native (C:\\...), and Vite's module graph keys files by their Vite
+// path (C:/...). Windows-shaped paths here run on every platform.
+test("Vite file paths follow Vite's normalizePath, also for Windows paths on any platform", () => {
+  const cases = [
+    ["C:\\work\\.runic\\translations\\app.esm-v5\\messages\\r_74.js", "C:/work/.runic/translations/app.esm-v5/messages/r_74.js"],
+    ["C:\\work\\app.esm-v5\\..\\runtime-core.js", "C:/work/runtime-core.js"],
+    ["C:/work\\mixed\\.\\en.rmf2", "C:/work/mixed/en.rmf2"],
+    ["\\\\server\\share\\app\\runic.json", "/server/share/app/runic.json"],
+    ["C:/work/app.esm-v5/runtime.js", "C:/work/app.esm-v5/runtime.js"],
+  ];
+  for (const [native, expected] of cases) assert.equal(viteFilePath(native, "\\"), expected, native);
+  // A backslash in a POSIX file name is part of the name, as in Vite on Linux and macOS.
+  assert.equal(viteFilePath("/work/a\\b/r_74.js", "/"), "/work/a\\b/r_74.js");
+  // On this platform the result is Vite's own.
+  for (const native of [join(tmpdir(), "app.esm-v5", "messages", "r_74.js"), join(tmpdir(), "app.esm-v5", "..", "runtime-core.js")])
+    assert.equal(viteFilePath(native), normalizePath(native), native);
+  assert.equal(viteFilePath("C:\\a\\b.js"), sep === "\\" ? "C:/a/b.js" : "C:\\a\\b.js");
+});
+
+test("Windows snapshot paths find the module graph's modules for an in-place update and for a reload", () => {
+  const out = "C:\\work\\.runic\\translations\\app.esm-v5";
+  const windowsSnapshot = (files, runtime = "r") => ({
+    catalog: "app", runtime, files: new Map(Object.entries(files)), paths: new Map(Object.keys(files).map(path => [path, win32.join(out, path)])),
+  });
+  // A module graph keyed as Vite keys it on Windows; ids are relative to the catalog directory.
+  const graph = ids => {
+    const byFile = new Map(ids.map(id => [`C:/work/.runic/translations/${id.startsWith("../") ? id.slice(3) : `app.esm-v5/${id}`}`, new Set([{ id }])]));
+    return { lookups: [], getModulesByFile(file) { this.lookups.push(file); return byFile.get(file); } };
+  };
+  const base = { "messages/r_74.js": "1", "messages/r_75.js": "2", "messages/_index.js": "i", "runtime.js": "x", "../runtime-core.js": "core" };
+
+  const inPlace = classify([windowsSnapshot(base)], [windowsSnapshot({ ...base, "messages/r_74.js": "1b", "runtime.js": "y" })]);
+  assert.deepEqual(inPlace, { kind: "in-place", modules: [`${out}\\messages\\r_74.js`] });
+  const client = graph(["messages/r_74.js", "messages/r_75.js"]);
+  assert.deepEqual(modulesOfFiles(client, inPlace.modules, "\\").map(module => module.id), ["messages/r_74.js"]);
+  assert.deepEqual(client.lookups, ["C:/work/.runic/translations/app.esm-v5/messages/r_74.js"]);
+  assert.equal(client.getModulesByFile(inPlace.modules[0]), undefined, "the native path itself matches nothing (the 0.13 behaviour)");
+
+  // The reload fallback invalidates every generated path of both regenerations, including the shared runtime.
+  const reloaded = classify([windowsSnapshot(base)], [windowsSnapshot({ ...base, "messages/r_76.js": "3", "messages/_index.js": "i2" })]);
+  assert.equal(reloaded.kind, "reload");
+  const generatedPaths = new Set([...windowsSnapshot(base).paths.values(), win32.join(out, "messages", "r_76.js")]);
+  const all = graph(["messages/r_74.js", "messages/_index.js", "runtime.js", "../runtime-core.js"]);
+  assert.deepEqual(modulesOfFiles(all, generatedPaths, "\\").map(module => module.id).sort(),
+    ["../runtime-core.js", "messages/_index.js", "messages/r_74.js", "runtime.js"]);
+  assert.ok(all.lookups.every(file => !file.includes("\\")), JSON.stringify(all.lookups));
+});
+
+// Every path the plugin gives Vite's module graph or watcher goes through viteFilePath (translations#210).
+test("the plugin hands Vite only Vite file paths", async () => {
+  const code = await readFile(new URL("../dist/index.js", import.meta.url), "utf8");
+  assert.doesNotMatch(code, /getModulesByFile\(/, "module graph lookups by file go through modulesOfFiles");
+  const calls = (pattern) => [...code.matchAll(pattern)].map(match => match[0]);
+  for (const call of calls(/\.addWatchFile\([^)]*\)?/g)) assert.match(call, /\.addWatchFile\(viteFilePath\(/, call);
+  for (const call of calls(/watcher\.add\([^)]*\)?/g)) assert.match(call, /watcher\.add\(vitePaths\(/, call);
+  for (const call of calls(/watcher\.emit\([^;]*/g)) assert.match(call, /viteFilePath\(/, call);
+  assert.ok(calls(/\.addWatchFile\(/g).length >= 5 && calls(/watcher\.add\(/g).length >= 5);
 });
 
 test("the transform makes a message module self-accepting only when its anchor occurs once", () => {
