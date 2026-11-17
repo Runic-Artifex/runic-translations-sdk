@@ -15,7 +15,7 @@ policies (`allow`, `warning` or `error`), which a locale entry in `locales` can
 override for that locale (`{ "tag": "fr", "fallback": "en", "validation": {
 "translationCompleteness": "warning" } }`). The quality checks are warnings by
 default, so a project that treats warnings as errors sees them as errors; and some `RTR0051` reports are warnings, as are `RTR0068`, `RTR0069`, `RTR0071`,
-`RTR0076`, `RTR0077`, `RTR0078`, `RTR0084`, `RTR0090`, `RTR0091`, `RTR0093` and `RTR0105`. `RTR0085` is informational.
+`RTR0076`, `RTR0077`, `RTR0078`, `RTR0084`, `RTR0090`, `RTR0091`, `RTR0093`, `RTR0105` and `RTR0107`. `RTR0085` is informational.
 
 ## RTR0001
 
@@ -733,6 +733,25 @@ On NuGet the check runs when the library is packed and compares the package ID
 prefix, so it relies on nuget.org reserving the `Runic.` ID prefix for the
 Runic organization. On npm the Vite plugin checks the `@runic-artifex` scope,
 which only its owners can publish to.
+
+## RTR0107
+
+Message overrides command-line framework text through the deprecated second path.
+A warning when the project references `Runic.Translations.CommandLine`
+and its own catalog has a message named after a `runic-command-line` key, such
+as `help.usage` or `diagnostics.unknownOption`. `TranslationCommandTextResolver`
+shows such a message in place of the framework text in 0.14, and also writes a
+trace warning once per resolver when it does. Runic Translations 0.15 no longer
+asks the application's catalog for framework keys, so the framework text
+returns.
+
+Move the message to `translations/overrides/runic-command-line/<locale>.rmf2`,
+list `{ "catalog": "runic-command-line", "from": "Runic.Translations.CommandLine" }`
+in runic.json `overrides`, and register `AppTextCatalog.Overlays` with a
+context-based resolver, as in
+[Framework text](framework-text.md#overrides). The build then checks the key
+and its inputs (`RTR0103`). If the message is your own text that only shares
+the name, rename it.
 
 ## RCLI8201
 

@@ -22,8 +22,11 @@ namespace Runic.Translations.CommandLine;
 /// </para>
 /// <para>
 /// Framework text comes from the <c>runic-command-line</c> catalog (<see cref="CatalogRegistration"/>), which ships English
-/// and German. The application's catalog overlays it, so it can override any framework text and translate its own
-/// description keys. Precedence is locale-first: for each locale of the requested locale's fallback chain, the
+/// and German, with the application's build-time overrides (<c>translations/overrides/runic-command-line/</c>) when a
+/// context registers them. The application's catalog translates its own description keys. It still overlays framework
+/// text too, but that second override path is deprecated: the build reports such messages as <c>RTR0107</c>, the resolver
+/// writes a trace warning once, and Runic Translations 0.15 no longer asks the application's catalog for framework keys.
+/// Precedence is locale-first: for each locale of the requested locale's fallback chain, the
 /// application's message is tried before the framework's, and only then the next locale. The built-in German text
 /// therefore beats an English application override when German is requested. Other locales come from overlays of
 /// <c>runic-command-line</c> in a <see cref="TranslationContext"/>, or from the application's catalog. A key that neither
@@ -55,9 +58,13 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
     private readonly ConcurrentDictionary<string, TranslationContext>? _contexts;
     private int _reportedCulture;
     private int _reportedLocale;
+    private int _reportedOverride;
 
     /// <summary>Where the culture-mismatch warning goes besides the trace; <see langword="null"/> for standard error. Tests set it.</summary>
     internal TextWriter? WarningOutput { get; init; }
+
+    /// <summary>Where the deprecated-override warning goes; <see langword="null"/> for <see cref="Trace.TraceWarning(string)"/>. Tests set it.</summary>
+    internal Action<string>? TraceWarning { get; init; }
 
     /// <summary>Creates a resolver with only the built-in framework text, in the invocation culture.</summary>
     public TranslationCommandTextResolver()
@@ -128,6 +135,7 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
         int rank = int.MaxValue;
         if (application is not null && TryFormat(application, name, names, arguments, out string? applicationText, out string? content))
         {
+            if (frameworkKey) ReportApplicationOverride(name);
             text = applicationText;
             rank = Rank(requested, content!);
             // The application's text in the requested locale itself cannot be beaten.
@@ -258,6 +266,22 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
             // A closed standard error must not fail text resolution.
         }
     }
+
+    // Reports once when the application's catalog supplies text for a framework key: the second override path (D061.5), which
+    // is deprecated in 0.14 and removed in 0.15, after which only translations/overrides/runic-command-line/ (an overlay of the
+    // framework catalog) changes framework text. A trace warning only: it is the developer's to act on, and the build already
+    // reports the same messages as RTR0107, so a shipped app's users see nothing on standard error.
+    private void ReportApplicationOverride(string name)
+    {
+        if (Volatile.Read(ref _reportedOverride) != 0 || Interlocked.Exchange(ref _reportedOverride, 1) != 0) return;
+        (TraceWarning ?? DefaultTraceWarning)(
+            $"Runic.Translations.CommandLine: the application's catalog overrides the framework text '{name}' by naming its message after a " +
+            $"{CatalogId} key. This override path is deprecated and is removed in Runic Translations 0.15, which then shows the framework text. " +
+            $"Move the message to translations/overrides/{CatalogId}/<locale>.rmf2, list {{ \"catalog\": \"{CatalogId}\", \"from\": \"Runic.Translations.CommandLine\" }} " +
+            "in runic.json \"overrides\", and register AppTextCatalog.Overlays with a context-based resolver (docs/guides/translations/framework-text.md#overrides).");
+    }
+
+    private static void DefaultTraceWarning(string message) => Trace.TraceWarning(message);
 
     private static bool SameLanguage(string left, string right) =>
         Language(left).Equals(Language(right), StringComparison.OrdinalIgnoreCase);

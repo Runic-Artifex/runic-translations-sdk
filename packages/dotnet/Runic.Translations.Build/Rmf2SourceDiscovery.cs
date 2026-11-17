@@ -9,6 +9,8 @@ namespace Runic.Translations.Build;
 /// <summary>Discovers configured source mounts without executing application code.</summary>
 public sealed class Rmf2SourceDiscovery : ITask
 {
+    private const string CommandLineCatalog = "runic-command-line";
+
     [Required]
     public ITaskItem[] Projects { get; set; } = Array.Empty<ITaskItem>();
     /// <summary>The packed library catalogs of referenced packages (<c>RunicTranslationsPackedCatalog</c>: runic.json with Package and Catalog metadata).</summary>
@@ -19,8 +21,9 @@ public sealed class Rmf2SourceDiscovery : ITask
     [Output]
     public ITaskItem[] OverrideSources { get; set; } = Array.Empty<ITaskItem>();
     /// <summary>
-    /// The runic.json and sources of each packed catalog that runic.json overrides, as additional files for the source generator
-    /// (RunicTranslationKind PackedCatalogProject or PackedCatalogSource).
+    /// The runic.json and sources of each packed catalog that runic.json overrides, and of <c>runic-command-line</c> whenever a
+    /// referenced package packs it, as additional files for the source generator (RunicTranslationKind PackedCatalogProject or
+    /// PackedCatalogSource).
     /// </summary>
     [Output]
     public ITaskItem[] PackedCatalogFiles { get; set; } = Array.Empty<ITaskItem>();
@@ -81,7 +84,9 @@ public sealed class Rmf2SourceDiscovery : ITask
             foreach (ITaskItem packed in PackedCatalogs)
             {
                 string catalog = packed.GetMetadata("Catalog"), package = packed.GetMetadata("Package");
-                if (!overridden.Contains(catalog)) continue;
+                // runic-command-line also goes to the generator without an override, so it can report application messages
+                // named after its keys (RTR0107, the deprecated second override path).
+                if (!overridden.Contains(catalog) && !string.Equals(catalog, CommandLineCatalog, StringComparison.Ordinal)) continue;
                 string config = Path.GetFullPath(packed.ItemSpec), root = Path.GetDirectoryName(config)!;
                 if (!File.Exists(config)) continue;
                 var project = new TaskItem(config);
