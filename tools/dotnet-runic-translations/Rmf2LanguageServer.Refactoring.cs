@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Text.Json.Nodes;
 using JsonValue = System.Text.Json.Nodes.JsonValue;
 using Runic.Translations.Authoring;
@@ -8,7 +11,8 @@ using Runic.Translations.Compiler;
 namespace Runic.Translations.Tool;
 
 // Protocol 2's standard LSP refactorings: F2 (prepareRename and rename) on resources, MF2 locals, caller inputs and slot
-// references. They reuse the workspace's transaction plans, so they edit exactly what the runic.* commands edit.
+// references, Extract Group and Inline Resource as refactor code actions, and runic.* commands applied through
+// workspace/applyEdit. They reuse the workspace's transaction plans, so they edit exactly what the runic.* commands edit.
 internal sealed partial class Rmf2LanguageServer
 {
     private enum RenameKind { Resource, Local, Input, Slot }
@@ -90,5 +94,87 @@ internal sealed partial class Rmf2LanguageServer
             ["actions"] = new JsonArray(new JsonObject { ["title"] = RenameInResourceSources }, new JsonObject { ["title"] = "Cancel" }),
         });
         return choice is JsonObject action && action["title"] is JsonValue title && title.TryGetValue(out string? text) && text == RenameInResourceSources;
+    }
+
+    // Whether a code-action request's `only` selects a kind: LSP kinds are hierarchical, so `refactor` selects
+    // `refactor.extract`, and an empty kind selects everything.
+    private static bool RequestsKind(JsonArray? only, string kind) =>
+        only is null || only.Any(value => value is JsonValue text && text.TryGetValue(out string? requested) &&
+            (requested.Length == 0 || kind == requested || kind.StartsWith(requested + ".", StringComparison.Ordinal)));
+
+    // Unresolved refactor actions: the edit is built by codeAction/resolve, against the revision they were offered for.
+    // Both refactorings create or delete files, so a client without those resource operations is not offered them.
+    private IEnumerable<JsonObject> RefactorActions(string uri, Buffer buffer, int from, int to, JsonArray? only)
+    {
+        string path = LocalPath(uri);
+        if (!_fileOperations || !Path.GetExtension(path).Equals(".rmf2", StringComparison.OrdinalIgnoreCase)) yield break;
+        string revision = Rmf2DiagnosticActions.Revision(buffer.Encoded);
+        JsonObject Data(string refactor) => new() { ["uri"] = uri, ["version"] = buffer.Version, ["revision"] = revision, ["refactor"] = refactor };
+        string fileName = Path.GetFileName(path);
+        string directory = Path.GetDirectoryName(Path.GetFullPath(path))!;
+        // Extract Group, on a group's name: the group moves to the same locale's file in its directory.
+        if (RequestsKind(only, "refactor.extract"))
+            foreach (Rmf2ResourceNode group in buffer.Syntax.Nodes.Where(node => node.IsGroup && node.NameLocation.StartByte <= to && from <= node.NameLocation.StartByte + node.NameLocation.LengthBytes))
+            {
+                string destination = Path.Combine(directory, Path.Combine(group.Path.ToArray()), fileName);
+                if (PathEntryExists(destination) || TryGetBuffer(destination, out _, out _)) continue;
+                JsonObject data = Data("extractGroup");
+                data["group"] = new JsonArray(group.Path.Select(segment => (JsonNode)JsonValue.Create(segment)).ToArray());
+                yield return new JsonObject { ["title"] = $"Extract group '{string.Join('.', group.Path)}' to {string.Join('/', group.Path)}/{fileName}", ["kind"] = "refactor.extract", ["data"] = data };
+            }
+        // Inline Resource: one action per existing resource of the same locale in an ancestor directory within the
+        // file's source root, nearest first. This replaces the destination picker of the runic.inlineResource command.
+        if (RequestsKind(only, "refactor.inline") && InlineRoot(uri, path) is { } root)
+            for (string? ancestor = Path.GetDirectoryName(directory); ancestor is not null && IsWithin(root, ancestor); ancestor = Path.GetDirectoryName(ancestor))
+            {
+                string destination = Path.Combine(ancestor, fileName);
+                if (!File.Exists(destination) && !TryGetBuffer(destination, out _, out _)) continue;
+                JsonObject data = Data("inlineResource");
+                data["destination"] = ClientUri(destination);
+                yield return new JsonObject { ["title"] = $"Inline into {Path.GetRelativePath(directory, destination).Replace('\\', '/')}", ["kind"] = "refactor.inline", ["data"] = data };
+            }
+    }
+
+    // The source root that contains a resource: the most specific configured root, or the project directory.
+    private string? InlineRoot(string uri, string path)
+    {
+        if (BufferProject(uri, out _) is not { } project) return null;
+        string[] roots = ProjectSourceRoots(project);
+        string full = Path.GetFullPath(path);
+        return (roots.Length == 0 ? [project] : roots).Select(Path.GetFullPath).Where(root => IsWithin(root, full))
+            .OrderByDescending(root => root.Length).FirstOrDefault();
+    }
+
+    // codeAction/resolve of a refactor action whose revision evidence the caller has checked.
+    private JsonObject ResolveRefactor(JsonObject action, string uri, JsonNode data)
+    {
+        if (!_fileOperations) throw new InvalidOperationException("The client does not support the required file operations.");
+        string path = LocalPath(uri);
+        var workspace = Workspace(path);
+        TranslationWorkspaceTransactionPlan plan = data["refactor"]!.GetValue<string>() switch {
+            "extractGroup" => workspace.Extract(path, data["group"]!.AsArray().Select(segment => segment!.GetValue<string>()).ToArray()),
+            "inlineResource" => workspace.Inline(path, LocalPath(data["destination"]!.GetValue<string>())),
+            _ => throw new ArgumentException("Unknown Runic refactoring."),
+        };
+        JsonObject resolved = action.DeepClone().AsObject();
+        resolved["edit"] = WorkspaceEdit(plan);
+        return resolved;
+    }
+
+    // Protocol 2: the server applies a runic.* command's edit with workspace/applyEdit and answers null, as LSP expects
+    // of commands. Protocol 1, and a client without applyEdit, receive the WorkspaceEdit as the result.
+    private JsonObject? ApplyCommandEdit(string label, JsonObject edit)
+    {
+        if (_protocol < 2 || !_applyEditSupport) return edit;
+        // Never apply an edit computed from documents the client has changed since.
+        if (_processedRevision != Interlocked.Read(ref _latestRevision)) throw new ContentModifiedException();
+        JsonNode? result = ClientRequest("workspace/applyEdit", new JsonObject { ["label"] = label, ["edit"] = edit });
+        if (result is not JsonObject response || response["applied"] is not JsonValue applied || !applied.TryGetValue(out bool done) || !done)
+        {
+            string? reason = result is JsonObject failed && failed["failureReason"] is JsonValue text && text.TryGetValue(out string? value) ? value : null;
+            throw new InvalidOperationException("The client did not apply the edit" + (reason is null ? "." : ": " + reason));
+        }
+        _editApplied = true;
+        return null;
     }
 }

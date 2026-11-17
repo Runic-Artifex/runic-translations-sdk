@@ -46,6 +46,8 @@ internal sealed partial class Rmf2LanguageServer
     private readonly Dictionary<string, TaskCompletionSource<JsonObject>> _clientRequests = new(StringComparer.Ordinal);
     private long _nextClientRequest;
     private bool _readerStopped;
+    // Whether the current request had the client apply an edit (workspace/applyEdit).
+    private bool _editApplied;
     // Review data per project and buffer group, for code actions and hover: the compilation with the open buffers, its
     // review compilation (TranslationReviewFile.ForReview), the fingerprints and the review file. Dropped when a buffer,
     // a watched file or the configuration changes, and when the review file's size or write time differs.
@@ -135,7 +137,7 @@ internal sealed partial class Rmf2LanguageServer
             {
                 var request = item.Request; string method = request["method"]?.GetValue<string>() ?? "";
                 JsonNode? id = request["id"]?.DeepClone();
-                _requestCancellation = item.Cancellation.Token; _processedRevision = item.Revision;
+                _requestCancellation = item.Cancellation.Token; _processedRevision = item.Revision; _editApplied = false;
                 try
                 {
                     _requestCancellation.ThrowIfCancellationRequested();
@@ -152,7 +154,9 @@ internal sealed partial class Rmf2LanguageServer
                         // this same gate. Cancellation after that commit point
                         // is completion, not a cancelled partial transaction.
                         if (method != "initialize") _requestCancellation.ThrowIfCancellationRequested();
-                        if (id is not null && (request["params"]?["textDocument"] is not null || method is "workspace/executeCommand" or "codeAction/resolve") && item.Revision != _latestRevision) throw new ContentModifiedException();
+                        // An edit the client has applied (workspace/applyEdit) changes its documents; the revisions that
+                        // follow are its own result, not a reason to discard the request's.
+                        if (id is not null && !_editApplied && (request["params"]?["textDocument"] is not null || method is "workspace/executeCommand" or "codeAction/resolve") && item.Revision != _latestRevision) throw new ContentModifiedException();
                         if (id is not null) Send(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = id, ["result"] = result });
                     }
                 }
@@ -346,11 +350,13 @@ internal sealed partial class Rmf2LanguageServer
             string actionUri = data["uri"]?.GetValue<string>() ?? throw new ArgumentException("Missing quick-fix document URI.");
             int actionVersion = data["version"]?.GetValue<int>() ?? throw new ArgumentException("Missing quick-fix document version.");
             string actionRevision = data["revision"]?.GetValue<string>() ?? throw new ArgumentException("Missing quick-fix source revision.");
-            string fixId = data["fixId"]?.GetValue<string>() ?? throw new ArgumentException("Missing quick-fix ID.");
             if (!_buffers.TryGetValue(actionUri, out Buffer? actionBuffer)) throw new ContentModifiedException();
             var source = new TranslationSource(LocalPath(actionUri), Utf8.GetBytes(actionBuffer.Text));
             if (actionBuffer.Version != actionVersion || Rmf2DiagnosticActions.Revision(source) != actionRevision)
                 throw new ContentModifiedException();
+            // Protocol 2 refactorings (Extract Group, Inline Resource) carry the same revision evidence as quick fixes.
+            if (_protocol >= 2 && data["refactor"] is not null) return ResolveRefactor(args, actionUri, data);
+            string fixId = data["fixId"]?.GetValue<string>() ?? throw new ArgumentException("Missing quick-fix ID.");
             Rmf2DiagnosticQuickFix? fix = Rmf2DiagnosticActions.GetQuickFixes(actionBuffer.Syntax, _requestCancellation)
                 .Concat(ProjectQuickFixes(actionUri, actionBuffer).Fixes).FirstOrDefault(candidate => candidate.Id == fixId);
             if (fix is null) throw new ContentModifiedException();
@@ -404,19 +410,21 @@ internal sealed partial class Rmf2LanguageServer
                     .SelectMany(node => node.Properties.Where(value => value.StartsWith("example ", StringComparison.Ordinal)).Select(value => JsonNode.Parse(value.Substring(8))));
                 return new JsonObject { ["key"] = key, ["locale"] = locale, ["ast"] = message.DeepClone(), ["inputs"] = inputContract, ["markup"] = markup, ["examples"] = new JsonArray(examples.ToArray()) };
             }
+            // Protocol 2 applies a command's edit through workspace/applyEdit and answers null; protocol 1, and a client
+            // without applyEdit, receive the WorkspaceEdit as before.
             if (command == "runic.renameResource")
-                return WorkspaceEdit(workspace.Rename(arguments[1]!.AsArray().Select(value => value!.GetValue<string>()).ToArray(), arguments[2]!.GetValue<string>()));
+                return ApplyCommandEdit("Rename resource", WorkspaceEdit(workspace.Rename(arguments[1]!.AsArray().Select(value => value!.GetValue<string>()).ToArray(), arguments[2]!.GetValue<string>())));
             if (command == "runic.renameSlot")
-                return WorkspaceEdit(workspace.RenameSlot(sourcePath, arguments[1]!.GetValue<string>(), arguments[2]!.GetValue<string>(), arguments[3]!.GetValue<string>()));
+                return ApplyCommandEdit("Rename slot", WorkspaceEdit(workspace.RenameSlot(sourcePath, arguments[1]!.GetValue<string>(), arguments[2]!.GetValue<string>(), arguments[3]!.GetValue<string>())));
             if (command == "runic.renameInput")
-                return WorkspaceEdit(workspace.RenameInput(sourcePath, arguments[1]!.GetValue<string>(), arguments[2]!.GetValue<string>(), arguments[3]!.GetValue<string>()));
+                return ApplyCommandEdit("Rename input", WorkspaceEdit(workspace.RenameInput(sourcePath, arguments[1]!.GetValue<string>(), arguments[2]!.GetValue<string>(), arguments[3]!.GetValue<string>())));
             if (!_fileOperations) throw new InvalidOperationException("The client does not support the required file operations.");
             var plan = command switch {
                 "runic.extractGroup" => workspace.Extract(sourcePath, arguments[1]!.AsArray().Select(v => v!.GetValue<string>()).ToArray()),
                 "runic.inlineResource" => workspace.Inline(sourcePath, LocalPath(arguments[1]!.GetValue<string>())),
                 _ => throw new ArgumentException("Unknown RMF2 workspace command."),
             };
-            return WorkspaceEdit(plan);
+            return ApplyCommandEdit(command == "runic.extractGroup" ? "Extract group" : "Inline resource", WorkspaceEdit(plan));
         }
         var document = args["textDocument"] as JsonObject;
         if (document is null) return null;
@@ -484,11 +492,14 @@ internal sealed partial class Rmf2LanguageServer
         if (Path.GetFileName(LocalPath(uri)) == "runic.json") return null;
         if (method == "textDocument/codeAction")
         {
-            if (args["context"]?["only"] is JsonArray only && !only.Any(kind => kind?.GetValue<string>() is "" or "quickfix")) return new JsonArray();
+            JsonArray? only = args["context"]?["only"] as JsonArray;
+            if (_protocol < 2 && only is not null && !only.Any(kind => kind?.GetValue<string>() is "" or "quickfix")) return new JsonArray();
             JsonObject requestedRange = args["range"]?.AsObject() ?? throw new ArgumentException("Missing code-action range.");
             int from = Utf8.GetByteCount(buffer.Text.AsSpan(0, Offset(buffer.Text, requestedRange["start"]!)));
             int to = Utf8.GetByteCount(buffer.Text.AsSpan(0, Offset(buffer.Text, requestedRange["end"]!)));
             if (to < from) throw new ArgumentException("Invalid code-action range.");
+            // Protocol 2 also offers refactorings; `only` selects kinds hierarchically (refactor covers refactor.extract).
+            if (_protocol >= 2 && !RequestsKind(only, "quickfix")) return new JsonArray(RefactorActions(uri, buffer, from, to, only).ToArray());
             // A fix applies at its diagnostic and at the source it edits (RTR0078 is reported at the
             // message name, but the line break is further down).
             bool AtEdit(Rmf2DiagnosticQuickFix fix) => fix.StartByte <= to && from <= fix.StartByte + fix.LengthBytes;
@@ -509,6 +520,7 @@ internal sealed partial class Rmf2LanguageServer
                     ["command"] = new JsonObject { ["title"] = title, ["command"] = "runic.markReviewed",
                         ["arguments"] = new JsonArray((JsonNode)JsonValue.Create(uri), JsonValue.Create(item.Entry.Key), JsonValue.Create(item.Entry.Locale)) } });
             }
+            if (_protocol >= 2) foreach (JsonNode refactor in RefactorActions(uri, buffer, from, to, only)) actions.Add(refactor);
             return actions;
         }
         if (method == "textDocument/semanticTokens/full") return SemanticTokens(buffer);
@@ -713,7 +725,7 @@ internal sealed partial class Rmf2LanguageServer
             ["semanticTokensProvider"] = new JsonObject { ["legend"] = new JsonObject { ["tokenTypes"] = new JsonArray("namespace", "property", "variable", "function", "keyword", "string", "comment", "type"), ["tokenModifiers"] = new JsonArray() }, ["full"] = true },
             ["referencesProvider"] = true, ["foldingRangeProvider"] = true, ["hoverProvider"] = true, ["definitionProvider"] = true,
             ["documentFormattingProvider"] = true, ["renameProvider"] = new JsonObject { ["prepareProvider"] = true },
-            ["codeActionProvider"] = new JsonObject { ["codeActionKinds"] = new JsonArray("quickfix"), ["resolveProvider"] = true },
+            ["codeActionProvider"] = new JsonObject { ["codeActionKinds"] = new JsonArray("quickfix", "refactor.extract", "refactor.inline"), ["resolveProvider"] = true },
             ["executeCommandProvider"] = new JsonObject { ["commands"] = new JsonArray(WorkspaceCommands.Select(command => (JsonNode)JsonValue.Create(command)).ToArray()) },
             ["completionProvider"] = new JsonObject { ["triggerCharacters"] = new JsonArray("$", ":", "#", "/", "=") },
             ["experimental"] = new JsonObject { ["runic"] = RunicCapability() },
