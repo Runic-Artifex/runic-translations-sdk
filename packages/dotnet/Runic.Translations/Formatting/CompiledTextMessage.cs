@@ -235,7 +235,7 @@ public sealed class CompiledTextMessage
         for (int index = 0; index < nodes.Count; index++)
         {
             CompiledTextMessageNode node = nodes[index] ?? throw new ArgumentException("Compiled message nodes cannot contain null.", parameterName);
-            if (!Enum.IsDefined(node.Kind)) throw new ArgumentException("Unknown compiled message node kind.", parameterName);
+            if (!DefinedEnums.IsDefined(node.Kind)) throw new ArgumentException("Unknown compiled message node kind.", parameterName);
             if (node.Kind != CompiledTextMessageNodeKind.Text && !(node.Kind is CompiledTextMessageNodeKind.MarkupStart or CompiledTextMessageNodeKind.MarkupEnd or CompiledTextMessageNodeKind.MarkupStandalone ? Rmf2Name(node.Value) : TranslationDataValidation.IsIdentifier(node.Value)))
                 throw new ArgumentException("Compiled message input names must be identifiers.", parameterName);
             if (node.Kind == CompiledTextMessageNodeKind.RelativeTime &&
@@ -256,7 +256,7 @@ public sealed class CompiledTextMessage
             CompiledTextMessageSelector selector = selectors[index];
             if (!TranslationDataValidation.IsIdentifier(selector.Name) || !names.Add(selector.Name))
                 throw new ArgumentException("Selector names must be unique identifiers.", nameof(selectors));
-            if (!TranslationDataValidation.IsIdentifier(selector.Input) || !Enum.IsDefined(selector.Kind))
+            if (!TranslationDataValidation.IsIdentifier(selector.Input) || !DefinedEnums.IsDefined(selector.Kind))
                 throw new ArgumentException("A selector contains an invalid input or kind.", nameof(selectors));
             result[index] = selector;
         }

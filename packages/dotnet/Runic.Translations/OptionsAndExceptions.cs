@@ -71,7 +71,7 @@ public sealed class TranslationPackException : Exception
     public TranslationPackException(string message, TranslationPackFailureReason reason, Exception? innerException = null)
         : base(message, innerException)
     {
-        if (!Enum.IsDefined(reason)) throw new ArgumentOutOfRangeException(nameof(reason), reason, "Unknown pack failure reason.");
+        if (!DefinedEnums.IsDefined(reason)) throw new ArgumentOutOfRangeException(nameof(reason), reason, "Unknown pack failure reason.");
         Reason = reason;
     }
 

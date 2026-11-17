@@ -6,6 +6,7 @@ import { basename, dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { stageAndPromote, stampNpmManifest } from "./release/candidate.mjs";
 import { activeTrainFeed } from "./train-feed.mjs";
+import { dirtyNpmInputs, npmSourceCommit } from "./release/npm-inputs.mjs";
 
 export const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const workspace = JSON.parse(readFileSync(resolve(root, "eng/workspace.json"), "utf8"));
@@ -242,6 +243,9 @@ function testNativeAot() {
     ""].join("\n"));
   rmSync(tray, { recursive: true, force: true });
   rmSync(example, { recursive: true, force: true });
+
+  // The NativeAOT size budgets of a generated catalog (tests/aot-size/README.md).
+  run("bun", ["tests/aot-size/measure.mjs"]);
 }
 
 function testWeb() {
@@ -291,7 +295,9 @@ export const packages = resolve(root, "artifacts/packages");
 const npmArchiveName = (name, version) => `${name.replace("@", "").replace("/", "-")}-${version}.tgz`;
 
 // Bun resolves workspace: ranges from the checkout, so pack in place, then stamp
-// the candidate version and gitHead into the archive.
+// the candidate version and gitHead into the archive. `source` is the commit that
+// last changed the package's inputs (release/npm-inputs.mjs npmSourceCommit), so
+// the bytes depend only on the package's content and the version.
 function packNpm(directory, destination, version, source) {
   const manifest = packageManifest(directory);
   const packed = resolve(destination, npmArchiveName(manifest.name, manifest.version));
@@ -321,8 +327,15 @@ export function pack(version = workspace.version, { built = false } = {}) {
         `-p:PackageVersion=${version}`, `-p:RepositoryCommit=${source}`]);
       assert.ok(existsSync(resolve(nuget, `${entry.name}.${version}.nupkg`)), `Missing ${entry.name} package`);
     }
+    // Each archive's gitHead is the commit that last changed its inputs, so a commit outside them keeps its bytes.
     for (const entry of orderedNpmPackages()) {
-      packNpm(resolve(root, entry.path), npm, version, source);
+      const dirty = dirtyNpmInputs(entry.name, { root, workspace });
+      if (dirty.length) {
+        const message = `${entry.name}: uncommitted changes to its inputs, so its archive is not its gitHead's:\n${dirty.join("\n")}`;
+        if (process.env.CI) throw new Error(message);
+        console.warn(`warning: ${message}`);
+      }
+      packNpm(resolve(root, entry.path), npm, version, npmSourceCommit(entry.name, { root, workspace }));
       assert.ok(existsSync(resolve(npm, npmArchiveName(entry.name, version))), `Missing ${entry.name} package`);
     }
   });

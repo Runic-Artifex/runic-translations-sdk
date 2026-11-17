@@ -1,5 +1,6 @@
 # Keyed by the DescriptionKey values in Program.cs. Framework text comes from
-# Runic.Translations.CommandLine; add a key such as help.usage here to override it.
+# Runic.Translations.CommandLine; override it in translations/overrides/runic-command-line/,
+# not here (a framework key such as help.usage here is the deprecated RTR0107 path).
 commands {
   greet = Greet a person
 }

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The NativeAOT size probe (tests/aot-size/README.md): a console application with a generated catalog that
+       tests/aot-size/fixture.mjs writes to $(AotSizeCatalogDirectory), calling every message. It builds against this
+       repository's sources, as an application with the Runic.Translations and Runic.Translations.Build packages would. -->
+  <Import Project="../../../eng/build/translations.props" />
+  <Import Project="../../../packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.props" />
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <IlcGenerateMstatFile>true</IlcGenerateMstatFile>
+    <AotSizeCatalogDirectory Condition="'$(AotSizeCatalogDirectory)' == ''">$(MSBuildThisFileDirectory)../../../artifacts/aot-size/catalog</AotSizeCatalogDirectory>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(AotSizeCatalogDirectory)/Program.cs" Link="Program.cs" />
+    <RunicTranslationProject Include="$(AotSizeCatalogDirectory)/translations/runic.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../packages/dotnet/Runic.Translations/Runic.Translations.csproj" />
+    <Analyzer Include="../../../packages/dotnet/Runic.Translations.Generator/bin/$(Configuration)/net10.0/Runic.Translations.Compiler.dll" />
+    <ProjectReference Include="../../../packages/dotnet/Runic.Translations.Generator/Runic.Translations.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"
+                      GlobalPropertiesToRemove="RuntimeIdentifier;SelfContained;PublishAot;IlcTreatWarningsAsErrors" />
+  </ItemGroup>
+  <Import Project="../../../packages/dotnet/Runic.Translations.Build/build/Runic.Translations.Build.targets" />
+  <Import Project="../../../eng/build/translations.targets" />
+</Project>
