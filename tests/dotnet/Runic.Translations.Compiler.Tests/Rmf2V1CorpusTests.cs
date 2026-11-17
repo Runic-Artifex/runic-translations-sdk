@@ -271,8 +271,10 @@ internal sealed class Rmf2V1CorpusTests
     // table (GeneratedCatalogSupport.ReadDefinitions, CreatePackContract), the keys are created from it in one loop
     // (CreateKeys), and the accessors call shared __Format/__FormatContent bodies with typed CreateArgument overloads,
     // in both digests (C# only).
-    private const string EncodedOutputDigest = "3192f09889d91b30dd3717e5ec97be3b885820ca224745cfca101235212f0e97";
-    private const string HiddenEncodedOutputDigest = "78492f6368b2a58394cb979c9a58fdf7209f7583239331f4388fa63c045e08a6";
+    // Re-pinned for #212: runtime.js declares the catalog's pseudoLocales (none here) and leaves them out of locale fallback
+    // and negotiation, in both digests (ESM only).
+    private const string EncodedOutputDigest = "0d2dd0ef15a6bbc950f8d2f7e6679770641c97d971124be4092b97f8fa0670d2";
+    private const string HiddenEncodedOutputDigest = "c8ee77986019da6052d7c7f380d57ae773d9f4704a40abd37b93a4e0736b021c";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

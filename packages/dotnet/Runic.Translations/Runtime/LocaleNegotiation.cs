@@ -29,6 +29,11 @@ namespace Runic.Translations;
 /// <c>und-DE</c>) unless a locale is exactly that tag. POSIX forms are accepted: <c>de_DE</c>, <c>de_DE.UTF-8</c> and
 /// <c>de_DE@euro</c> name <c>de-DE</c>.
 /// </para>
+/// <para>
+/// The development pseudo-locales <c>en-XA</c> and <c>ar-XB</c> (<c>runic.json</c> <c>pseudoLocales</c>) match only a
+/// preference for their own tag: <c>en-US</c>, <c>en</c> and <c>en-GB</c> never choose <c>en-XA</c>, so a development build
+/// negotiates as a release build without pseudo-locales does.
+/// </para>
 /// </remarks>
 public static class LocaleNegotiation
 {
@@ -68,9 +73,16 @@ public static class LocaleNegotiation
         return null;
     }
 
-    /// <summary>The best locale for a canonical tag: exact, CLDR likely-subtag matching, then truncation within the same script.</summary>
-    internal static string? Match(string canonical, string[] available) =>
-        CldrLocales.Match(canonical, available) ?? CldrLocales.Truncate(canonical, available);
+    /// <summary>
+    /// The best locale for a canonical tag: exact, CLDR likely-subtag matching, then truncation within the same script.
+    /// A pseudo-locale (<c>en-XA</c>, <c>ar-XB</c>) matches only its own tag (<see cref="PseudoLocaleTags"/>).
+    /// </summary>
+    internal static string? Match(string canonical, string[] available)
+    {
+        if (Array.IndexOf(available, canonical) >= 0) return canonical;
+        string[] candidates = PseudoLocaleTags.WithoutPseudo(available);
+        return CldrLocales.Match(canonical, candidates) ?? CldrLocales.Truncate(canonical, candidates);
+    }
 
     // A POSIX locale name may carry a code set and a modifier: de_DE.UTF-8@euro.
     private static string? Canonical(string preference)

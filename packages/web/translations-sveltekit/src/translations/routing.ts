@@ -79,10 +79,12 @@ export function createLocaleRouting<const Locale extends string>(
 
   function matchLocale(value: string | null | undefined): Locale | undefined {
     if (!value) return undefined;
-    let candidate = normalizeLocale(value);
+    const requested = normalizeLocale(value);
+    let candidate = requested;
     while (candidate.length > 0) {
       const match = normalized.get(candidate);
-      if (match) return match;
+      // A development pseudo-locale (en-XA, ar-XB) matches only its own tag, as in the generated runtime.
+      if (match && (candidate === requested || !pseudoLocaleTags.has(candidate))) return match;
       const separator = candidate.lastIndexOf("-");
       if (separator < 0) return undefined;
       candidate = candidate.slice(0, separator);
@@ -209,6 +211,9 @@ export function parseAcceptLanguage(value: string | null | undefined): readonly 
     .sort((left, right) => right.quality - left.quality || left.index - right.index)
     .map(({ locale }) => locale);
 }
+
+// The development pseudo-locales of runic.json pseudoLocales, normalized; see the generated runtime's pseudoLocaleTags.
+const pseudoLocaleTags: ReadonlySet<string> = new Set(["en-xa", "ar-xb"]);
 
 function normalizeLocale(locale: string): string {
   return locale.trim().replaceAll("_", "-").toLowerCase();

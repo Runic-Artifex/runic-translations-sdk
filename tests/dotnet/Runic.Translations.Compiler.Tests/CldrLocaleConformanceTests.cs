@@ -170,11 +170,14 @@ internal sealed class CldrLocaleConformanceTests
             string ownData = TranslationCapabilityRegistry.EsmLocaleSource(["en"]);
             Assert.True(runtime.Contains(ownData, StringComparison.Ordinal), "The runtime does not embed its locale data as expected.");
             Assert.True(!runtime.Contains("\"ru\":", StringComparison.Ordinal), "An English catalog embeds Russian locale data.");
+            Assert.True(runtime.Contains("\nconst pseudoLocales = Object.freeze([]);\n", StringComparison.Ordinal), "The runtime does not declare its pseudo-locales as expected.");
             // One module per negotiation group, with every CLDR language's data so all locales can be compared.
             string harness(string[] locales, string baseLocale) => runtime
                 .Replace(ownData, TranslationCapabilityRegistry.EsmLocaleSource(all), StringComparison.Ordinal)
                 .Replace("export const baseLocale = \"en\";", "export const baseLocale = " + JsonSerializer.Serialize(baseLocale) + ";", StringComparison.Ordinal)
                 .Replace("export const locales = Object.freeze([\"en\"]);", "export const locales = Object.freeze(" + JsonSerializer.Serialize(locales.Order(StringComparer.Ordinal)) + ");", StringComparison.Ordinal)
+                // The pseudo-locales among them, as the compiler lists them for a development build.
+                .Replace("const pseudoLocales = Object.freeze([]);", "const pseudoLocales = Object.freeze(" + JsonSerializer.Serialize(locales.Where(PseudoLocaleTags.IsPseudo).Order(StringComparer.Ordinal)) + ");", StringComparison.Ordinal)
                 + "\nexport { formatList as conformanceFormatList, formatRelative as conformanceFormatRelative, selectPlural as conformanceSelectPlural, canonicalLocale as conformanceCanonicalLocale };\n";
             File.WriteAllText(Path.Combine(directory, "cldr.esm-v5", "harness-all.js"), harness(["en"], "en"), new UTF8Encoding(false));
             var groups = new JsonArray();

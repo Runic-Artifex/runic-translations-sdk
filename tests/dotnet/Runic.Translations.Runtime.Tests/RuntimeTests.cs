@@ -605,6 +605,71 @@ internal sealed class RuntimeTests
         Assert.Throws<ArgumentException>(() => LocaleNegotiation.Negotiate(["de"], ["en", "not a tag"], "en"));
     }
 
+    [Test, DisplayName("a pseudo-locale is chosen only by its own tag, never by fallback or negotiation (#212)")]
+    public async Task PseudoLocalesOnlyByTag()
+    {
+        // runic.json baseLocale "de", locales ["de"], pseudoLocales ["en-XA", "ar-XB"]: a development build adds both,
+        // falling back to the base locale; a release build declares de alone.
+        static CompiledTranslationCatalog Catalog(bool pseudo, params CompiledTranslationLocale[] extra) => new(
+            "app", "de", [new CompiledTranslationDefinition("ok", [])],
+            new CompiledTranslationLocale[]
+            {
+                new("de", null, [new(0, "Verstanden")]),
+            }
+            .Concat(pseudo
+                ? [new("en-XA", "de", [new(0, "[Ṽééŕśťààńďééń]")]), new("ar-XB", "de", [new(0, "[‮Verstanden‬]")])]
+                : [])
+            .Concat(extra)
+            .OrderBy(static locale => locale.Locale, StringComparer.Ordinal).ToArray(), UnsupportedLocalePolicy.ParentsThenDefault, MissingTranslationPolicy.Throw);
+
+        CompiledTranslationProvider debug = new(Catalog(pseudo: true)), release = new(Catalog(pseudo: false));
+        foreach (string requested in new[] { "en-US", "en", "en-GB", "en-Latn-XA", "en-XA-x-test", "ar", "ar-EG", "fr" })
+        {
+            ITranslationSnapshot debugSnapshot = await debug.GetSnapshotAsync(requested), releaseSnapshot = await release.GetSnapshotAsync(requested);
+            Assert.Equal("de", debugSnapshot.Locale, requested);
+            Assert.Equal(releaseSnapshot.Locale + "|" + releaseSnapshot.LocaleResolution,
+                debugSnapshot.Locale + "|" + debugSnapshot.LocaleResolution, requested);
+            Assert.Equal(release.NegotiateLocale([requested]), debug.NegotiateLocale([requested]), requested);
+        }
+
+        TranslationManager manager = new(debug, await debug.GetSnapshotAsync("de"));
+        await manager.SetLocaleAsync("en-US");
+        Assert.Equal("de", manager.CurrentLocale);
+        Assert.Equal("Verstanden", manager.Current.Get(new TranslationKey("app", 0, "ok")));
+        // The pseudo-locales by their own tag, in any case.
+        await manager.SetLocaleAsync("en-XA");
+        Assert.Equal("en-XA", manager.CurrentLocale);
+        Assert.Equal("[Ṽééŕśťààńďééń]", manager.Current.Get(new TranslationKey("app", 0, "ok")));
+        await manager.SetLocaleAsync("ar-xb");
+        Assert.Equal("ar-XB", manager.CurrentLocale);
+        await manager.SetLocaleAsync("EN_xa");
+        Assert.Equal("en-XA", manager.CurrentLocale);
+
+        // Negotiation skips them unless a preference names one.
+        Assert.Equal("de", debug.NegotiateLocale(["en-US", "en", "en-GB"]));
+        Assert.Equal("en-XA", debug.NegotiateLocale(["en-US", "en-XA", "de"]));
+        Assert.Equal("ar-XB", debug.NegotiateLocale(["ar-EG", "ar-XB"]));
+        await manager.SetLocaleFromPreferencesAsync(["en-GB", "en"]);
+        Assert.Equal("de", manager.CurrentLocale);
+        Assert.Equal("de", LocaleNegotiation.Negotiate(["en-US"], ["de", "en-XA", "ar-XB"], "de"));
+        Assert.Equal("en-XA", LocaleNegotiation.Negotiate(["en-xa"], ["de", "en-XA"], "de"));
+        Assert.Equal(null, LocaleNegotiation.Match("en", ["de", "en-XA"]));
+        Assert.Equal("en-XA", LocaleNegotiation.Match("en-XA", ["de", "en-XA"]));
+
+        // A catalog with real English: English always wins over the pseudo-locale for an English request.
+        CompiledTranslationProvider english = new(Catalog(pseudo: true,
+            new CompiledTranslationLocale("en", "de", [new(0, "Understood")]), new CompiledTranslationLocale("en-GB", "en", [])));
+        Assert.Equal("en", (await english.GetSnapshotAsync("en-US")).Locale);
+        Assert.Equal("en-GB", (await english.GetSnapshotAsync("en-AU")).Locale);
+        Assert.Equal("en-XA", (await english.GetSnapshotAsync("en-XA")).Locale);
+        Assert.Equal("en", english.NegotiateLocale(["en-US", "en-XA"]));
+        Assert.Equal("en-XA", english.NegotiateLocale(["en-XA", "en"]));
+
+        // An overlay-added locale never falls back to a pseudo-locale.
+        Assert.Equal(null, LocaleRequestResolver.NearestParent("en-AU", ["de", "en-XA"]));
+        Assert.Equal("en", LocaleRequestResolver.NearestParent("en-AU", ["de", "en", "en-XA"]));
+    }
+
     [Test, DisplayName("provider caches and coalesces canonical locale")]
     public async Task ProviderCoalescing()
     {

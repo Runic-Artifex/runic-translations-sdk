@@ -24,6 +24,7 @@
     <EmbeddedResource Include="GeneratedFormatData.bin" LogicalName="Runic.Translations.Compiler.GeneratedFormatData.bin" />
     <!-- The pinned CLDR locale tables and algorithm are shared with the runtime (eng/generate-cldr.mjs). -->
     <Compile Include="../../packages/dotnet/Runic.Translations/Formatting/CldrLocales.cs" Link="Cldr/CldrLocales.cs" />
+    <Compile Include="../../packages/dotnet/Runic.Translations/Runtime/PseudoLocaleTags.cs" Link="Cldr/PseudoLocaleTags.cs" />
     <Compile Include="../../packages/dotnet/Runic.Translations/Formatting/GeneratedLocaleTables.cs" Link="Cldr/GeneratedLocaleTables.cs" />
     <EmbeddedResource Include="../../packages/dotnet/Runic.Translations/Formatting/GeneratedLocaleData.bin" LogicalName="Runic.Translations.Compiler.GeneratedLocaleData.bin" Link="Cldr/GeneratedLocaleData.bin" />
     <None Update="README.md" Pack="true" PackagePath="\" />

@@ -251,3 +251,21 @@ test("the package exposes the root entry and ./navigation only, with unprefixed 
   const entry = await import("../src/translations/index.js");
   expect(Object.keys(entry).filter(name => name.includes("Runic"))).toEqual([]);
 });
+
+describe("Runic locale routing with a pseudo-locale", () => {
+  const pseudo = createLocaleRouting({
+    locales: ["de", "en-XA", "ar-XB"] as const,
+    baseLocale: "de",
+    baseLocalePath: "unprefixed",
+  });
+
+  test("matches a pseudo-locale only by its own tag", () => {
+    expect(pseudo.matchLocale("en-XA")).toBe("en-XA");
+    expect(pseudo.matchLocale("en-xa")).toBe("en-XA");
+    expect(pseudo.matchLocale("ar-XB")).toBe("ar-XB");
+    expect(pseudo.matchLocale("en-XA-x-test")).toBeUndefined();
+    expect(pseudo.matchLocale("en-US")).toBeUndefined();
+    expect(pseudo.matchLocale("en")).toBeUndefined();
+    expect(pseudo.matchLocale("de-CH")).toBe("de");
+  });
+});
