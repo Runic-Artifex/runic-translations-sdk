@@ -97,7 +97,7 @@ internal sealed class GeneratorIncrementalityTests
         AssertAll(edited, "TranslationRuntimeAbi", IncrementalStepRunReason.Cached);
         Assert.True(ReferenceEquals(english, Unit(edited, EnglishPath)), "The unchanged English unit was not reused.");
         Assert.Equal(englishLowering, english.Compiled.LoweringCount, "Relinking lowered unchanged English messages again");
-        Assert.True(Generated(edited).Contains("Geschäft", StringComparison.Ordinal), "The edit did not reach the generated catalog.");
+        Assert.True(GeneratedLocaleData.Inflate(Generated(edited)).Contains("Geschäft", StringComparison.Ordinal), "The edit did not reach the generated catalog.");
         AssertAll(edited, "TranslationCompilation", IncrementalStepRunReason.Modified);
 
         // Saving identical bytes reruns the input but changes nothing downstream.

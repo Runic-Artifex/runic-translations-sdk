@@ -799,7 +799,7 @@ linking has already resolved element identities and validated markup option and
 slot schemas. The [v5 project linker](rmf2-project-v5.md) performs that
 validation without converting v5 messages through the v4 model.
 
-`Rmf2RuntimeAbiVersion` is **3**; legacy `RuntimeAbiVersion = 1` and
+The ESM `rmf2RuntimeAbiVersion` is **3** (the .NET runtime's is **4**, below); legacy `RuntimeAbiVersion = 1` and
 `MessageGrammarVersion = 2` remain unchanged. Generated v5 consumers must embed
 the literal requirement **3**, then call `EnsureRmf2RuntimeAbi(3)` or
 `SupportsRmf2RuntimeAbi(3)`. These methods execute against the loaded runtime
@@ -810,6 +810,15 @@ an artifact or pack with another markup contract version is rejected as
 `RTR0023/markup-contract-version-mismatch` and must be rebuilt. A generated constant that aliases the runtime's
 constant is not a compatibility check. Missing or unknown ABI markers are
 rejected.
+
+RMF2 ABI **4** (Runic Translations 0.14) changes only how generated C# embeds a
+locale: as raw DEFLATE data (RFC 1951) of the same UTF-8 JSON, with its inflated
+length, read by `GeneratedCatalogSupport.ReadDeflatedValues(data, length)` on
+the locale's first use. The runtime's `Rmf2RuntimeAbiVersion` is **4** and its
+`MinimumRmf2RuntimeAbiVersion` stays **3**, so it runs both. The source
+generator emits ABI 4 when the referenced runtime runs it and ABI 3, with the
+JSON as is, otherwise. ESM output, external packs and the caller contract keep
+ABI 3.
 
 The source generator, CLI, MSBuild integration, and Vite plugin emit the v5
 contract for .NET/C# and ESM, including strict v5 pack readers and web manifest

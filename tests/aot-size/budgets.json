@@ -3,9 +3,63 @@
     "m200-l2": {
       "messages": 200,
       "locales": 2
+    },
+    "m800-l2": {
+      "messages": 800,
+      "locales": 2
+    },
+    "m200-l10": {
+      "messages": 200,
+      "locales": 10
     }
   },
   "cases": {
+    "aot/translations/fixed-bytes": {
+      "class": "total",
+      "build": "m200-l2",
+      "margin": 0.02,
+      "note": "linux-x64 executable bytes of the probe with 200 messages × 2 locales, less the catalog's own mstat records: the runtime, the framework and their metadata. 3,418,992 on main before #216 (T1); the limit is the measured value plus 2 %",
+      "measured": [
+        3069346
+      ],
+      "limit": 3130733
+    },
+    "aot/translations/per-message-bytes": {
+      "class": "O(n)",
+      "sizes": [
+        200,
+        800
+      ],
+      "builds": [
+        "m200-l2",
+        "m800-l2"
+      ],
+      "margin": 0.02,
+      "note": "mstat bytes of the catalog's own records (locale data and generated code) with 200 and 800 messages in 2 locales; the slope is the cost per message. Before #217, with the locale JSON embedded as is: 229,752 at 200 (1,149 per message); deflated (D072.2, T2) it falls to the generated code and a tenth of the data",
+      "measured": [
+        84678,
+        338167
+      ],
+      "limit": 344931
+    },
+    "aot/translations/per-locale-message-bytes": {
+      "class": "O(n)",
+      "sizes": [
+        2,
+        10
+      ],
+      "builds": [
+        "m200-l2",
+        "m200-l10"
+      ],
+      "margin": 0.1,
+      "note": "mstat bytes of the catalog's locale data (RvaFields) for 200 messages in 2 and 10 locales; the slope is the cost per message and locale. Before #217: 149,044 at 2 locales and 819,390 at 10 (419 per message and extra locale). Each locale's plurals have a variant per CLDR integer category (fixture.mjs). Deflate compresses scripts unevenly (ar, ja, ru), so the margin is 10 %",
+      "measured": [
+        3960,
+        20964
+      ],
+      "limit": 23061
+    },
     "aot/translations/reflection-runtime-bytes": {
       "class": "total",
       "build": "m200-l2",
