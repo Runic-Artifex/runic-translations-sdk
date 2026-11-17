@@ -79,8 +79,12 @@ internal static class LocaleRequestResolver
             : LocaleResolution.Related;
     }
 
-    /// <summary>The nearest parent of a canonical tag among <paramref name="candidates"/>; see <see cref="CldrLocales.NearestParent"/>.</summary>
-    internal static string? NearestParent(string canonicalLocale, string[] candidates) => CldrLocales.NearestParent(canonicalLocale, candidates);
+    /// <summary>
+    /// The nearest parent of a canonical tag among <paramref name="candidates"/>; see <see cref="CldrLocales.NearestParent"/>.
+    /// A pseudo-locale is never a parent (<see cref="PseudoLocaleTags"/>).
+    /// </summary>
+    internal static string? NearestParent(string canonicalLocale, string[] candidates) =>
+        CldrLocales.NearestParent(canonicalLocale, PseudoLocaleTags.WithoutPseudo(candidates));
 
     /// <summary>Canonicalizes a requested tag; an empty tag, the name of the invariant culture, stays empty.</summary>
     internal static string Canonicalize(string requestedLocale, string parameterName)

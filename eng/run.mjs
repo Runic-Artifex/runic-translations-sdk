@@ -73,8 +73,12 @@ function buildManaged() {
   run("dotnet", ["build", "Runic.Translations.slnx", "--configuration", configuration, "--no-restore", "-p:RunicTranslationsBuildMode=Verification", "--nologo"]);
 }
 
+// Verification builds compile the editor's smoke test (edit --smoke-test), which verifyEditorFrontend runs, with the
+// SDK's window test host. A plain build or publish of the editor leaves both out.
+const editorSmokeTestBuild = "-p:RunicEditorSmokeTest=true";
+
 function buildEditor() {
-  run("dotnet", ["build", workspace.editor.project, "--configuration", configuration, "-p:RunicTranslationsBuildMode=Verification", "--nologo"]);
+  run("dotnet", ["build", workspace.editor.project, "--configuration", configuration, "-p:RunicTranslationsBuildMode=Verification", editorSmokeTestBuild, "--nologo"]);
 }
 
 function verifyEditorFrontend() {
@@ -114,7 +118,7 @@ function verifyEditorPacked(version = editorPackedVersion(workspace.version)) {
     const tool = resolve(toolPath, ".store/dotnet-runic-translations", version, "dotnet-runic-translations", version,
       "tools/net10.0/any/dotnet-runic-translations.dll");
     assert.ok(existsSync(tool), `Missing installed tool ${tool}`);
-    run("dotnet", ["build", workspace.editor.project, "--configuration", configuration, "-p:RunicTranslationsBuildMode=Verification", "--nologo",
+    run("dotnet", ["build", workspace.editor.project, "--configuration", configuration, "-p:RunicTranslationsBuildMode=Verification", editorSmokeTestBuild, "--nologo",
       "-p:RunicEditorUsePackedTranslations=true", `-p:RunicEditorTranslationsPackageVersion=${version}`,
       // A global property replaces Directory.Build.props' value, so the train feed (eng/train-feed.mjs) is named again;
       // %3B is an escaped ";", which -p would read as the start of another property.

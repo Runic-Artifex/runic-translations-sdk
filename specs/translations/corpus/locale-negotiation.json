@@ -1,7 +1,7 @@
 {
   "corpusVersion": 1,
   "cldrVersion": "48.2",
-  "comment": "Shared .NET (LocaleNegotiation.Negotiate) and ESM (negotiateLocale) oracle. Each group declares its locales and base locale; each case lists preferences, most preferred first. A preference never matches a locale of another likely script, so the next preference is consulted; und preferences are skipped.",
+  "comment": "Shared .NET (LocaleNegotiation.Negotiate) and ESM (negotiateLocale) oracle. Each group declares its locales and base locale; each case lists preferences, most preferred first. A preference never matches a locale of another likely script, so the next preference is consulted; und preferences are skipped. The pseudo-locales en-XA and ar-XB match only a preference for their own tag.",
   "groups": [
     { "id": "chinese-scripts", "locales": ["en", "zh", "zh-Hant"], "base": "en", "cases": [
       { "preferences": ["zh-TW"], "expected": "zh-Hant" },
@@ -151,6 +151,32 @@
       { "preferences": ["en-AU"], "expected": "en" },
       { "preferences": ["zh-TW"], "expected": "zh-Hant-TW" },
       { "preferences": ["zh-HK"], "expected": "zh-Hant" }
+    ] },
+    { "id": "pseudo-locales-only-by-tag", "locales": ["de", "en-XA", "ar-XB"], "base": "de", "cases": [
+      { "preferences": ["en-US"], "expected": "de" },
+      { "preferences": ["en"], "expected": "de" },
+      { "preferences": ["en-GB"], "expected": "de" },
+      { "preferences": ["en-Latn-XA"], "expected": "de" },
+      { "preferences": ["en-XA-x-test"], "expected": "de" },
+      { "preferences": ["ar"], "expected": "de" },
+      { "preferences": ["ar-EG"], "expected": "de" },
+      { "preferences": ["en-XA"], "expected": "en-XA" },
+      { "preferences": ["EN-xa"], "expected": "en-XA" },
+      { "preferences": ["en_XA.UTF-8"], "expected": "en-XA" },
+      { "preferences": ["ar-XB"], "expected": "ar-XB" },
+      { "preferences": ["en-US", "en-XA"], "expected": "en-XA" },
+      { "preferences": ["en-US", "de-CH"], "expected": "de" },
+      { "preferences": ["ar-XB", "de"], "expected": "ar-XB" }
+    ] },
+    { "id": "pseudo-locales-beside-english", "locales": ["ar", "de", "en", "en-GB", "en-XA", "ar-XB"], "base": "de", "cases": [
+      { "preferences": ["en-US"], "expected": "en" },
+      { "preferences": ["en"], "expected": "en" },
+      { "preferences": ["en-AU"], "expected": "en-GB" },
+      { "preferences": ["ar-EG"], "expected": "ar" },
+      { "preferences": ["en-XA"], "expected": "en-XA" },
+      { "preferences": ["ar-XB"], "expected": "ar-XB" },
+      { "preferences": ["en-XA", "en"], "expected": "en-XA" },
+      { "preferences": ["en", "en-XA"], "expected": "en" }
     ] }
   ]
 }

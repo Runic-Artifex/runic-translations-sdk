@@ -12,7 +12,8 @@ namespace Runic.Translations;
 /// A catalog that resolves a requested locale to another locale (<see cref="LocaleResolution.Parent"/>,
 /// <see cref="LocaleResolution.Related"/> or <see cref="LocaleResolution.Default"/>) when a context publishes is reported at the <see cref="EventLevel.Verbose"/>
 /// level, for <c>dotnet-trace</c>, <c>dotnet-counters</c> or an <see cref="EventListener"/>, and to an attached debugger's
-/// output. Nothing is computed when neither listens.
+/// output. Nothing is computed when neither listens. A locale that an application's CLDR subset
+/// (<c>RunicTranslationsCldrSubset</c>) does not cover is reported once, at the <see cref="EventLevel.Warning"/> level.
 /// </remarks>
 [EventSource(Name = "Runic-Translations")]
 internal sealed class TranslationsEventSource : EventSource
@@ -45,6 +46,18 @@ internal sealed class TranslationsEventSource : EventSource
         }
     }
 
+    /// <summary>
+    /// Reports, once per locale (<see cref="GeneratedLocaleData.LocaleEntry.MarkReported"/>), that the application's CLDR
+    /// subset lacks the number, date, list or relative-time data of a locale, which then formats as a locale without CLDR data.
+    /// </summary>
+    internal static void ReportOutsideCldrSubset(string locale)
+    {
+        if (Log.IsEnabled(EventLevel.Warning, EventKeywords.All)) Log.LocaleOutsideCldrSubset(locale);
+        if (Debugger.IsLogging())
+            Debugger.Log(0, "Runic.Translations", FormattableString.Invariant(
+                $"Locale '{locale}' is outside this application's CLDR subset (RunicTranslationsCldrSubset), so it formats numbers, dates, lists and relative times as a locale without CLDR data. Declare it in runic.json or add a RunicTranslationsCldrLocale item.{Environment.NewLine}"));
+    }
+
     /// <summary>A catalog lacks the requested locale and shows a parent locale.</summary>
     [Event(1, Level = EventLevel.Verbose, Message = "Catalog '{0}' lacks requested locale '{1}' and shows its parent '{2}'.")]
     public void LocaleParentFallback(string catalog, string requestedLocale, string locale) => WriteEvent(1, catalog, requestedLocale, locale);
@@ -56,4 +69,8 @@ internal sealed class TranslationsEventSource : EventSource
     /// <summary>A catalog lacks the requested locale and its parents and shows a locale CLDR likely subtags match.</summary>
     [Event(3, Level = EventLevel.Verbose, Message = "Catalog '{0}' lacks requested locale '{1}' and shows the related locale '{2}'.")]
     public void LocaleRelatedMatch(string catalog, string requestedLocale, string locale) => WriteEvent(3, catalog, requestedLocale, locale);
+
+    /// <summary>The application's CLDR subset lacks a locale's data; the locale formats as one without CLDR data.</summary>
+    [Event(4, Level = EventLevel.Warning, Message = "Locale '{0}' is outside this application's CLDR subset (RunicTranslationsCldrSubset) and formats numbers, dates, lists and relative times as a locale without CLDR data. Declare it in runic.json or add a RunicTranslationsCldrLocale item.")]
+    public void LocaleOutsideCldrSubset(string locale) => WriteEvent(4, locale);
 }

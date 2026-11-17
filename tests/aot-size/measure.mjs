@@ -15,6 +15,9 @@ const root = resolve(fileURLToPath(import.meta.url), "../../..");
 const budgetsFile = resolve(root, "tests/aot-size/budgets.json");
 const probe = resolve(root, "tests/aot-size/Probe/AotSizeProbe.csproj");
 const reader = resolve(root, "tests/aot-size/MstatReader/MstatReader.csproj");
+// The build's task assembly (CldrLocaleSubset for RunicTranslationsCldrSubset builds): the probe imports the targets
+// from source, which register the task only when the assembly exists as the probe is evaluated, as a package's does.
+const buildTasks = resolve(root, "packages/dotnet/Runic.Translations.Build/Runic.Translations.Build.csproj");
 const output = resolve(root, "artifacts/aot-size");
 const rid = "linux-x64";
 const mstat = resolve(root, `tests/aot-size/Probe/obj/Release/net10.0/${rid}/native/AotSizeProbe.mstat`);
@@ -23,7 +26,7 @@ const mstat = resolve(root, `tests/aot-size/Probe/obj/Release/net10.0/${rid}/nat
 // The probe's own records (owner AotSizeProbe) are its generated catalog: the locale data and the message table
 // (RvaFields), and the code.
 export function measurement(executableBytes, records) {
-  const result = { executableBytes, reflectionRuntimeBytes: 0, catalogDataBytes: 0, catalogCodeBytes: 0, catalogBytes: 0, overlayProviderBytes: 0, largeStringBytes: 0 };
+  const result = { executableBytes, reflectionRuntimeBytes: 0, resourceBytes: 0, catalogDataBytes: 0, catalogCodeBytes: 0, catalogBytes: 0, overlayProviderBytes: 0, largeStringBytes: 0 };
   for (const line of records.split("\n")) {
     const [kind, size, owner, name = ""] = line.split("\t");
     const bytes = Number(size);
@@ -36,6 +39,8 @@ export function measurement(executableBytes, records) {
     if (name.includes("Runic.Translations.OverlayTranslationProvider")) result.overlayProviderBytes += bytes;
     // Frozen strings of 4 KB or more: a catalog's markup contract as a UTF-16 literal would be one.
     if (kind === "FrozenObjects" && name === "System.String" && bytes >= 4096) result.largeStringBytes += bytes;
+    // Embedded manifest resources: Runic.Translations' CLDR data, or with RunicTranslationsCldrSubset the probe's subset.
+    if (kind === "ManifestResources") result.resourceBytes += bytes;
     if (owner === "AotSizeProbe") {
       result.catalogBytes += bytes;
       if (kind === "RvaFields") result.catalogDataBytes += bytes;
@@ -57,6 +62,8 @@ export const metrics = {
   "aot/translations/reflection-runtime-bytes": (entry, builds) => [builds[entry.build].reflectionRuntimeBytes],
   "aot/translations/overlay-provider-bytes": (entry, builds) => [builds[entry.build].overlayProviderBytes],
   "aot/translations/large-string-bytes": (entry, builds) => [builds[entry.build].largeStringBytes],
+  // The embedded resources with RunicTranslationsCldrSubset: the subset of the catalog's languages, without the full data.
+  "aot/translations/cldr-subset-resource-bytes": (entry, builds) => [builds[entry.build].resourceBytes],
 };
 
 // Checks one metric. A "total" has one value and its limit. An "O(n)" has a value at each of its two sizes: the larger
@@ -90,7 +97,7 @@ function run(command, args, options = {}) {
 }
 
 // Publishes the probe with one build's catalog, runs it and measures it.
-function publish(name, { messages, locales }, keep) {
+function publish(name, { messages, locales, properties = {} }, keep) {
   const localeList = allLocales.slice(0, locales);
   const catalog = resolve(output, "catalog");
   writeFixture(catalog, messages, localeList);
@@ -102,7 +109,8 @@ function publish(name, { messages, locales }, keep) {
   run("dotnet", ["publish", probe, "-c", "Release", "-r", rid, "--self-contained", "true", "-p:PublishAot=true",
     "-p:IlcTreatWarningsAsErrors=true",
     // As a CI (Verification) build: a catalog diagnostic such as RTR0095 fails the publish locally too.
-    "-p:TreatWarningsAsErrors=true", `-p:AotSizeCatalogDirectory=${catalog}`, "-o", resolve(directory, "bin"), "--nologo", "-v:q"]);
+    "-p:TreatWarningsAsErrors=true", `-p:AotSizeCatalogDirectory=${catalog}`, ...Object.entries(properties).map(([key, value]) => `-p:${key}=${value}`),
+    "-o", resolve(directory, "bin"), "--nologo", "-v:q"]);
   const seconds = Math.round((Date.now() - started) / 1000);
   // Every locale formats every message: the probe must work, not only link.
   for (const locale of localeList) {
@@ -118,7 +126,7 @@ function publish(name, { messages, locales }, keep) {
     copyFileSync(mstat, resolve(directory, "AotSizeProbe.mstat"));
     writeFileSync(resolve(directory, "records.tsv"), records.stdout);
   } else rmSync(directory, { recursive: true, force: true });
-  console.log(`  ${build.executableBytes} bytes; catalog ${build.catalogBytes} mstat bytes (data ${build.catalogDataBytes}, code ${build.catalogCodeBytes}); System.Reflection.Runtime ${build.reflectionRuntimeBytes} (${seconds} s)`);
+  console.log(`  ${build.executableBytes} bytes; catalog ${build.catalogBytes} mstat bytes (data ${build.catalogDataBytes}, code ${build.catalogCodeBytes}); resources ${build.resourceBytes}; System.Reflection.Runtime ${build.reflectionRuntimeBytes} (${seconds} s)`);
   return build;
 }
 
@@ -139,6 +147,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
 
   mkdirSync(output, { recursive: true });
   run("dotnet", ["build", reader, "-c", "Release", "--nologo", "-v:q"]);
+  run("dotnet", ["build", buildTasks, "-c", "Release", "--nologo", "-v:q"]);
   const builds = Object.fromEntries(Object.entries(budgets.builds).map(([name, build]) => [name, publish(name, build, keep)]));
   rmSync(resolve(output, "catalog"), { recursive: true, force: true });
 

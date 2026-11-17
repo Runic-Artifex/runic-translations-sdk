@@ -30,6 +30,7 @@ Each publish takes well under a minute with a warm NuGet cache and needs the Nat
 | `aot/translations/fixed-bytes` | The executable of `m200-l2` less the catalog's own records: the runtime, the framework and their metadata. |
 | `aot/translations/per-message-bytes` | The catalog's own records (locale data and generated code) at 200 and 800 messages in 2 locales, `O(n)`. |
 | `aot/translations/per-locale-message-bytes` | The catalog's `RvaFields` for 200 messages in 2 and 10 locales, `O(n)`: the locale data and the message table, which does not grow with the locales. |
+| `aot/translations/cldr-subset-resource-bytes` | mstat bytes of the embedded resources of `m200-l2-cldr-subset`, the probe built with `RunicTranslationsCldrSubset`: the English and German CLDR subset, without Runic.Translations' full `GeneratedLocaleData.bin`, which the publish drops. |
 | `aot/translations/reflection-runtime-bytes` | mstat bytes of `System.Reflection.Runtime.*`, the reflection stack behind `Delegate.Method` and `MethodInfo`. Hot Reload's tracking needs it, so it stays out only while `TranslationHotReload.IsSupported` folds to a constant in a trimmed publish. |
 | `aot/translations/overlay-provider-bytes` | mstat bytes of `OverlayTranslationProvider`, which a context without overlays must not link (runic-sdk#1109). Limit 0. |
 | `aot/translations/large-string-bytes` | mstat bytes of frozen strings of 4 KB or more, such as a markup contract kept as a UTF-16 literal (runic-sdk#1109). Limit 0. |

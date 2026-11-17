@@ -232,7 +232,16 @@ export function negotiateLocale(preferences) {
 // nearest truncation with the same likely script (tlh-x-a → tlh, but never sr-Latn-RS → sr or zh-Hant → zh), else
 // undefined. The undetermined language (und, und-DE) matches nothing. LocaleNegotiation.Match in .NET.
 function matchLocale(canonical, available = overlays === null ? locales : overlays.supported) {
+  if (available.includes(canonical)) return canonical;
+  available = withoutPseudoLocales(available);
   return cldrMatch(canonical, available) ?? truncateLocale(canonical, available);
+}
+// The development pseudo-locales of runic.json pseudoLocales (the generated pseudoLocales constant lists the catalog's,
+// none in a release build) are chosen only when requested by their own tag: fallback and negotiation of every other tag
+// skip them, so a development build resolves en-US, en or ar-EG exactly as a release build does. PseudoLocaleTags in .NET.
+function withoutPseudoLocales(candidates) {
+  if (pseudoLocales === undefined || pseudoLocales.length === 0) return candidates;
+  return candidates.filter(tag => !pseudoLocales.includes(tag));
 }
 // The nearest locale of available (canonical tags in ordinal order) left by removing subtags, with the same likely script.
 function truncateLocale(canonical, available) {
@@ -1511,6 +1520,7 @@ function overlayState(tables) {
 // locales (es-419 for es-MX, de for de-CH), else the nearest truncation with its likely script. Every result is a strict
 // ancestor, so a chain of nearest parents ends. LocaleRequestResolver.NearestParent in .NET.
 function nearestParent(canonical, candidates) {
+  candidates = withoutPseudoLocales(candidates);
   const steps = cldrChain(cldrDataId(canonical)); let best, bestStep = Infinity;
   for (const candidate of candidates) {
     if (candidate === canonical) continue;

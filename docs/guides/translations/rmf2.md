@@ -874,8 +874,18 @@ before any translation exists. Declare them in `runic.json`:
 In a development build the compiler generates each one from the base locale, as
 if `<tag>.rmf2` files existed beside every `<baseLocale>.rmf2` (or `<tag>/` beside
 a direct `<baseLocale>/` directory), with the base locale as its fallback. Select
-it like any locale: `CreateManager("en-XA")`, `SetLocaleAsync("ar-XB")`, or
-`{ locale: "en-XA" }` in ESM.
+it by its own tag: `CreateManager("en-XA")`, `SetLocaleAsync("ar-XB")`, or
+`{ locale: "en-XA" }` in ESM (in any case, `en-xa` or `en_XA` too).
+
+A pseudo-locale is chosen only when it is requested by that tag. Locale fallback
+and negotiation of every other tag skip it, in .NET (`SetLocaleAsync`,
+`LocaleNegotiation`, `SetLocaleFromPreferencesAsync`, a locale that an overlay
+adds) and in ESM (`resolveLocale`, `negotiateLocale`, `createLocaleSource`, the
+SvelteKit locale routing), so a development build resolves them exactly as a
+release build does: with `"baseLocale": "de"` and `"locales": ["de"]`, a request
+for `en-US`, `en` or `en-GB` keeps `de` rather than choosing `en-XA`, and `ar-EG`
+keeps `de` rather than choosing `ar-XB`. A preference list that names the
+pseudo-locale itself, such as `["en-US", "en-XA"]`, selects it.
 
 | Tag | Text | Direction |
 | --- | --- | --- |

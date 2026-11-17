@@ -4,6 +4,7 @@
     <_Rmf2DiscoveryAssembly Condition="!Exists('$(_Rmf2DiscoveryAssembly)')">$(MSBuildThisFileDirectory)../bin/$(Configuration)/net10.0/Runic.Translations.Build.dll</_Rmf2DiscoveryAssembly>
   </PropertyGroup>
   <UsingTask TaskName="Runic.Translations.Build.Rmf2SourceDiscovery" AssemblyFile="$(_Rmf2DiscoveryAssembly)" Condition="Exists('$(_Rmf2DiscoveryAssembly)')" />
+  <UsingTask TaskName="Runic.Translations.Build.CldrLocaleSubset" AssemblyFile="$(_Rmf2DiscoveryAssembly)" Condition="Exists('$(_Rmf2DiscoveryAssembly)')" />
   <!-- The version rule's dependency range for packed libraries; buildMultiTargeting imports it into the outer build. -->
   <Import Project="Runic.Translations.Build.Pack.targets" Condition="'$(_RunicTranslationsPackTargetsImported)' != 'true'" />
   <PropertyGroup>
@@ -363,6 +364,35 @@
       <_TranslationsCurrentArtifact Include="@(_TranslationsGeneratedArtifact)"
                                      Condition="Exists('%(_TranslationsGeneratedArtifact.Identity)')" />
       <RunicTranslationsGeneratedFile Include="@(_TranslationsCurrentArtifact)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- RunicTranslationsCldrSubset (opt-in, D072.6): embed only the CLDR number, date, list and relative-time data of the
+       catalog's languages, and of the languages CLDR links to them, in this assembly, for an application that never adds
+       a locale of another language at run time. The Runic.Translations.CldrSubset switch makes the runtime read it from
+       the entry assembly, and a trimmed or NativeAOT publish drops the full data (about 52 KB). A locale outside the
+       subset formats as a locale without CLDR data and is reported once (event source Runic-Translations).
+       RunicTranslationsCldrLocale items add locales, such as those of an overlay or pack added at run time. -->
+  <ItemGroup Condition="'$(RunicTranslationsCldrSubset)' == 'true'">
+    <RuntimeHostConfigurationOption Include="Runic.Translations.CldrSubset" Value="true" Trim="true" />
+  </ItemGroup>
+  <Target Name="_RunicTranslationsCldrSubset"
+          BeforeTargets="PrepareResourceNames"
+          DependsOnTargets="ResolveAssemblyReferences;_RunicTranslationsDiscoverTranslationSources"
+          Condition="'$(RunicTranslationsCldrSubset)' == 'true'">
+    <PropertyGroup>
+      <_RunicTranslationsCldrSubsetFile>$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)RunicTranslations.CldrSubset.bin', '$(MSBuildProjectDirectory)'))</_RunicTranslationsCldrSubsetFile>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(_Rmf2DiscoveryAssembly)')" Code="RTR0108" HelpKeyword="RTR0108"
+           Text="RunicTranslationsCldrSubset needs the Runic.Translations.Build task assembly '$(_Rmf2DiscoveryAssembly)': in a source checkout, build packages/dotnet/Runic.Translations.Build first." />
+    <Runic.Translations.Build.CldrLocaleSubset Projects="@(RunicTranslationProject)" Sources="@(RunicTranslationMf2)"
+                                                PackedCatalogs="@(RunicTranslationsPackedCatalog)" Locales="@(RunicTranslationsCldrLocale)"
+                                                References="@(ReferencePath)" OutputFile="$(_RunicTranslationsCldrSubsetFile)">
+      <Output TaskParameter="Languages" PropertyName="RunicTranslationsCldrSubsetLanguages" />
+    </Runic.Translations.Build.CldrLocaleSubset>
+    <ItemGroup>
+      <EmbeddedResource Include="$(_RunicTranslationsCldrSubsetFile)" LogicalName="Runic.Translations.CldrSubset.bin" WithCulture="false" Type="Non-Resx" />
+      <FileWrites Include="$(_RunicTranslationsCldrSubsetFile)" />
     </ItemGroup>
   </Target>
 

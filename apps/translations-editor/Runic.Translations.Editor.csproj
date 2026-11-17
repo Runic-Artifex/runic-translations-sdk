@@ -28,21 +28,42 @@
     <RunicEditorUpdateChannel Condition="'$(RunicEditorUpdateChannel)' == ''">preview</RunicEditorUpdateChannel>
   </PropertyGroup>
 
-  <PropertyGroup>
+  <!-- The native provider follows the RID, then the build machine's OS. The Views bootstrap build evaluates the
+       project again with RuntimeIdentifier= but compiles against the outer build's restore, which holds only the RID's
+       provider package; guessing the build machine's provider there broke cross-publishing (-r win-x64 or -r osx-arm64
+       from Linux). The bootstrap assembly only feeds the Bridge code generator, so it compiles without a provider. -->
+  <PropertyGroup Condition="'$(RunicApplicationFrontendBootstrap)' != 'true'">
     <RunicNativeProvider Condition="'$(RunicNativeProvider)' == '' and $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win-'))">Windows</RunicNativeProvider>
     <RunicNativeProvider Condition="'$(RunicNativeProvider)' == '' and $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-'))">MacOS</RunicNativeProvider>
     <RunicNativeProvider Condition="'$(RunicNativeProvider)' == '' and $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('linux-'))">Linux</RunicNativeProvider>
     <RunicNativeProvider Condition="'$(RunicNativeProvider)' == '' and $([MSBuild]::IsOSPlatform('Linux'))">Linux</RunicNativeProvider>
     <RunicNativeProvider Condition="'$(RunicNativeProvider)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">Windows</RunicNativeProvider>
     <RunicNativeProvider Condition="'$(RunicNativeProvider)' == '' and $([MSBuild]::IsOSPlatform('OSX'))">MacOS</RunicNativeProvider>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(RunicNativeProvider)' != ''">
     <DefineConstants>$(DefineConstants);RUNIC_PLATFORM_$(RunicNativeProvider)</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../eng/translations/Rmf2Preview.cs" Link="Shared/Rmf2Preview.cs" />
     <Compile Include="../../eng/translations/TranslationManifestReader.cs" Link="Shared/TranslationManifestReader.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(RunicNativeProvider)' != ''">
     <PackageReference Include="Runic.Platform.$(RunicNativeProvider)" />
     <!-- The workspace folder picker uses the portal's unparented FileChooser (EditorWorkspacePicker). -->
     <PackageReference Include="Runic.Platform.Linux.Portal" Condition="'$(RunicNativeProvider)' == 'Linux'" />
+  </ItemGroup>
+
+  <!-- The editor smoke test (the smoke-test option of edit) drives the editor's window through the SDK's window test host,
+       Runic.Application.Testing. Only verification builds compile it (eng/run.mjs sets RunicEditorSmokeTest=true), so
+       a publish carries neither the test nor the test host. -->
+  <PropertyGroup Condition="'$(RunicEditorSmokeTest)' == 'true'">
+    <DefineConstants>$(DefineConstants);RUNIC_EDITOR_SMOKE_TEST</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(RunicEditorSmokeTest)' == 'true'">
+    <PackageReference Include="Runic.Application.Testing" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(RunicEditorSmokeTest)' != 'true'">
+    <Compile Remove="EditorSmokeTest*.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -53,8 +74,6 @@
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <!-- The editor smoke test drives the editor's window through the SDK's window test host. -->
-    <PackageReference Include="Runic.Application.Testing" />
     <PackageReference Include="Runic.Application.Views.CsWebUi" />
     <PackageReference Include="Runic.Application.Views.ReactiveUI" />
     <PackageReference Include="Runic.CommandLine" />

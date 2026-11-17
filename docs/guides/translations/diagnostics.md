@@ -753,6 +753,18 @@ context-based resolver, as in
 and its inputs (`RTR0103`). If the message is your own text that only shares
 the name, rename it.
 
+## RTR0108
+
+The CLDR subset could not be built. A project that sets
+`RunicTranslationsCldrSubset` embeds the CLDR data of its catalog's languages
+(see the
+[Runic.Translations.Build README](../../../packages/dotnet/Runic.Translations.Build/README.md#embed-only-your-catalogs-cldr-data)),
+which the build reads from the referenced `Runic.Translations` assembly. The
+message names the problem: the project declares no `RunicTranslationProject`
+and no `RunicTranslationsCldrLocale` item, it does not reference
+`Runic.Translations` (0.14 or later), or a `runic.json` could not be read.
+Reference the runtime package, declare the catalog, or remove the property.
+
 ## RCLI8201
 
 The requested output could not be written, for example because of an

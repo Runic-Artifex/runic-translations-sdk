@@ -112,11 +112,10 @@ const listTypes = { conjunction: "standard", disjunction: "or", unit: "unit" };
 const listStyles = { long: "", short: "-short", narrow: "-narrow" };
 const units = ["second", "minute", "hour", "day", "week", "month", "year"];
 const offsets = ["-2", "-1", "0", "1", "2"];
-const resolved = new Map();
-for (const id of available) {
+// The list patterns and relative-time data of a CLDR locale (main/<id>), verbatim.
+async function listAndRelativeTime(id) {
   const misc = await json("cldr-misc-full", `main/${id}/listPatterns.json`);
   const dates = await json("cldr-dates-full", `main/${id}/dateFields.json`);
-  const numbers = await json("cldr-numbers-full", `main/${id}/numbers.json`);
   const listData = misc.main[id].listPatterns, fields = dates.main[id].dates.fields;
   const listPatterns = Object.fromEntries(Object.entries(listTypes).map(([type, cldrType]) => [type, Object.fromEntries(
     Object.entries(listStyles).map(([style, suffix]) => {
@@ -139,6 +138,12 @@ for (const id of available) {
       .map((offset) => [offset, field[`relative-type-${offset}`]]));
     return [unit, { past: counts("past"), future: counts("future"), relative }];
   }));
+  return { listPatterns, relativeTime };
+}
+const resolved = new Map();
+for (const id of available) {
+  const numbers = await json("cldr-numbers-full", `main/${id}/numbers.json`);
+  const { listPatterns, relativeTime } = await listAndRelativeTime(id);
   const numberData = numbers.main[id].numbers;
   const minimumGroupingDigits = Number(numberData.minimumGroupingDigits);
   // The default numbering system and, for it and for latn (-u-nu-latn), the symbols and the standard decimal and
@@ -234,6 +239,9 @@ const subset = {
   // Every CLDR locale as a data ID, for the cross-runtime comparisons of platform-data formatting.
   availableLocales: [...resolved.keys()].sort(ordinalSort),
   locales: Object.fromEntries(localeEntries),
+  // CLDR root (main/und): the list and relative-time patterns of a .NET application's CLDR subset
+  // (RunicTranslationsCldrSubset) for a locale outside it.
+  root: await listAndRelativeTime("und"),
 };
 if (!subset.source.packageIntegrity || packages.some((name) => typeof subset.source.packageIntegrity[name] !== "string"))
   throw new Error("Record source.packageIntegrity (npm dist.integrity per package) first.");

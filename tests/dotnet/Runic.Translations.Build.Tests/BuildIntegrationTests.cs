@@ -1,7 +1,9 @@
 using System;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using TUnit.Core;
 
 namespace Runic.Translations.Build.Tests;
@@ -212,6 +214,53 @@ internal sealed class BuildIntegrationTests
         Assert.True(failed.ExitCode != 0, $"Build succeeded although the tool exited with {exitCode}:\n" + failed.Combined);
         Assert.Contains(withGenerator && exitCode == 2 ? "The Runic Translations tool reported translation errors" : $"The Runic Translations tool exited with code {exitCode}.", failed.Combined);
         Assert.False(failed.Combined.Contains("MSB3073", StringComparison.Ordinal), failed.Combined);
+    }
+
+    [Test, DisplayName("RunicTranslationsCldrSubset embeds the catalog languages' CLDR data and sets the switch; the default build is unchanged")]
+    public void CldrSubset()
+    {
+        foreach (bool subset in new[] { true, false })
+        {
+            using TemporaryDirectory temporary = CreateConsumer(false, extraProperties: subset ? "<RunicTranslationsCldrSubset>true</RunicTranslationsCldrSubset>" : null,
+                extraItems: subset ? "<RunicTranslationsCldrLocale Include=\"nb\" />" : null);
+            AddSourceGenerator(temporary);
+            Directory.Delete(temporary.Resolve("translations", "en"), recursive: true);
+            File.WriteAllText(temporary.Resolve("translations", "runic.json"), "{\"schemaVersion\":1,\"catalog\":\"minimal\",\"code\":{\"namespace\":\"Example\",\"className\":\"MinimalText\"},\"baseLocale\":\"en\",\"locales\":[\"en\",\"de\"]}\n", new UTF8Encoding(false));
+            File.WriteAllText(temporary.Resolve("translations", "en.rmf2"), "amount = Amount: {$amount :number}\n", new UTF8Encoding(false));
+            File.WriteAllText(temporary.Resolve("translations", "de.rmf2"), "amount = Betrag: {$amount :number}\n", new UTF8Encoding(false));
+            File.WriteAllText(temporary.Resolve("Program.cs"), """
+                using Example;
+                foreach (string locale in new[] { "en", "de", "de-CH" })
+                    System.Console.WriteLine(new MinimalText(await MinimalTextCatalog.CreateManagerAsync(locale)).Messages.amount(amount: 1234567.5m));
+                """, new UTF8Encoding(false));
+
+            ProcessResult build = Build(temporary);
+            Assert.Equal(0, build.ExitCode, build.Combined);
+            string[] subsetFiles = Directory.GetFiles(temporary.Resolve("artifacts", "obj"), "RunicTranslations.CldrSubset.bin", SearchOption.AllDirectories);
+            string runtimeConfig = File.ReadAllText(Directory.GetFiles(temporary.Resolve("artifacts", "bin"), "Consumer.runtimeconfig.json", SearchOption.AllDirectories).Single());
+            Assert.Equal(subset, runtimeConfig.Contains("\"Runic.Translations.CldrSubset\": true", StringComparison.Ordinal), runtimeConfig);
+            Assert.Equal(subset ? 1 : 0, subsetFiles.Length, "subset files");
+            if (subset)
+            {
+                // en, de and, for the nb item, no (its CLDR parent, which holds its data) and nn (no's other child); and CLDR
+                // root's lists and relative times, for a locale outside the subset. Nothing else.
+                using var inflater = new DeflateStream(File.OpenRead(subsetFiles[0]), CompressionMode.Decompress);
+                using JsonDocument data = JsonDocument.Parse(inflater);
+                string[] sections = data.RootElement.EnumerateObject().Select(section => section.Name).ToArray();
+                Assert.Equal("numbers|weekdays|dayPeriods|list|relativeTime", string.Join('|', sections));
+                string[] languages = data.RootElement.EnumerateObject().SelectMany(section => section.Value.EnumerateObject())
+                    .Select(record => record.Name.Split('-')[0]).Distinct().Order(StringComparer.Ordinal).ToArray();
+                Assert.Equal("de|en|nn|no|root", string.Join('|', languages));
+                Assert.Equal("{0}, {1}", data.RootElement.GetProperty("list").GetProperty("root")[2].GetString());
+                Assert.True(data.RootElement.GetProperty("numbers").TryGetProperty("de-CH", out _), "The subset lacks de-CH's number formats.");
+                Assert.True(new FileInfo(subsetFiles[0]).Length < 4096, "The subset is larger than expected: " + new FileInfo(subsetFiles[0]).Length);
+            }
+
+            ProcessResult run = Processes.DotNet(temporary.Path, Directory.GetFiles(temporary.Resolve("artifacts", "bin"), "Consumer.dll", SearchOption.AllDirectories).Single());
+            Assert.Equal(0, run.ExitCode, run.Combined);
+            // de-CH users reading German text see Swiss separators (Rmf2LocalizedFormats.FormattingLocale), from the subset too.
+            Assert.Equal("Amount: 1,234,567.5|Betrag: 1.234.567,5|Betrag: 1'234'567.5", string.Join('|', run.StandardOutput.Trim().Split('\n').Select(line => line.Trim())), subset ? "subset" : "full");
+        }
     }
 
     private static void AddSourceGenerator(TemporaryDirectory temporary)

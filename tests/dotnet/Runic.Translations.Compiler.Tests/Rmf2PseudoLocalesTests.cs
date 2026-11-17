@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json.Nodes;
 using System.Text;
+using Runic.Translations.Compiler.Generation;
 using TUnit.Core;
 
 namespace Runic.Translations.Compiler.Tests;
@@ -165,6 +166,57 @@ internal sealed class Rmf2PseudoLocalesTests
         Rmf2ProjectCompilation discovered = TranslationCompiler.CompileRmf2ProjectV5(Project(",\"pseudoLocales\":[\"ar-XB\"]"), english, null, true);
         Assert.True(discovered.Success, string.Join("\n", discovered.Diagnostics.Select(d => d.Id + ": " + d.Message)));
         Assert.Equal("ar-XB,en", string.Join(",", discovered.Project!.Locales.Select(locale => locale.Tag)));
+    }
+
+    [Test, NotInParallel, DisplayName("the ESM runtime chooses a pseudo-locale only by its own tag, as a release build resolves other tags (#212)")]
+    public void EsmPseudoLocalesOnlyByTag()
+    {
+        TranslationSource project = Source("translations/runic.json",
+            "{\"schemaVersion\":1,\"catalog\":\"app\",\"code\":{\"namespace\":\"Example\",\"className\":\"AppText\"},\"baseLocale\":\"de\",\"locales\":[\"de\"],\"pseudoLocales\":[\"en-XA\",\"ar-XB\"]}");
+        TranslationSource[] sources = [Source("translations/de.rmf2", "ok = Verstanden\n")];
+        foreach (bool pseudo in new[] { true, false })
+        {
+            Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(project, sources, null, pseudo);
+            Assert.True(result.Success, string.Join("\n", result.Diagnostics.Select(d => d.Id + ": " + d.Message)));
+            string directory = Rmf2EsmV5Tests.Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(result.Project!));
+            try
+            {
+                string script = Path.Combine(directory, "pseudo.mjs");
+                File.WriteAllText(script, $$"""
+                    import { m } from "./app.esm-v5/messages.js";
+                    import { createLocaleSource, negotiateLocale, resolveLocale } from "./app.esm-v5/runtime.js";
+                    const pseudo = {{(pseudo ? "true" : "false")}};
+                    const check = (actual, expected, what) => { if (actual !== expected) throw new Error(`${what}: expected ${expected}, got ${actual}`); };
+                    for (const tag of ["en-US", "en", "en-GB", "en-XA-x-test", "ar", "ar-EG"]) {
+                      check(resolveLocale(tag), "de", `resolveLocale(${tag})`);
+                      check(negotiateLocale([tag]), "de", `negotiateLocale([${tag}])`);
+                    }
+                    check(negotiateLocale(["en-US", "en", "en-GB"]), "de", "negotiateLocale(en-US, en, en-GB)");
+                    const source = createLocaleSource({ initialLocale: "en-US" });
+                    check(source.getLocale(), "de", "createLocaleSource(en-US)");
+                    check(m.ok({ locale: "en-US" }), "Verstanden", "m.ok(en-US)");
+                    if (pseudo) {
+                      check(resolveLocale("en-XA"), "en-XA", "resolveLocale(en-XA)");
+                      check(resolveLocale("EN_xa"), "en-XA", "resolveLocale(EN_xa)");
+                      check(resolveLocale("ar-XB"), "ar-XB", "resolveLocale(ar-XB)");
+                      check(negotiateLocale(["en-US", "en-XA", "de"]), "en-XA", "negotiateLocale(en-US, en-XA, de)");
+                      source.setLocale("en-XA");
+                      check(source.getLocale(), "en-XA", "setLocale(en-XA)");
+                      check(m.ok({ locale: "en-XA" }), "[Ṽééŕśťààńďééń]", "m.ok(en-XA)");
+                    }
+                    """, new UTF8Encoding(false));
+                Rmf2EsmV5Tests.Run("bun", [script], directory);
+            }
+            finally { Directory.Delete(directory, true); }
+        }
+    }
+
+    [Test, DisplayName("a locale that overrides add never falls back to a pseudo-locale")]
+    public void AddedLocaleFallbackSkipsPseudoLocales()
+    {
+        Assert.Equal("de", TranslationCompiler.AddedLocaleFallback("en-AU", ["de", "en-AU", "en-XA"], ["de", "en-XA"], "de"));
+        Assert.Equal("en", TranslationCompiler.AddedLocaleFallback("en-AU", ["de", "en", "en-AU", "en-XA"], ["de", "en", "en-XA"], "de"));
+        Assert.Equal("de", TranslationCompiler.AddedLocaleFallback("ar-EG", ["ar-EG", "ar-XB", "de"], ["ar-XB", "de"], "de"));
     }
 
     [Test, DisplayName("direct .mf2 projects get <root>/<tag>/<id>.mf2 pseudo files")]

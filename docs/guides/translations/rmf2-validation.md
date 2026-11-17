@@ -21,7 +21,7 @@ Run these in the locked project development shell:
 dotnet run --project tests/dotnet/Runic.Translations.Compiler.Tests
 dotnet run --project tests/dotnet/Runic.Translations.Authoring.Tests
 dotnet run --project tests/dotnet/Runic.Translations.Build.Tests -- --treenode-filter "/*/*/(XamlBuildTests)|(Rmf2*Tests)/*"
-dotnet run --project apps/translations-editor -- --smoke-test
+dotnet run --project apps/translations-editor -p:RunicEditorSmokeTest=true -- --smoke-test
 cd packages/web/translations-svelte
 bun run check
 bun run test
