@@ -242,15 +242,16 @@ internal sealed class BuildIntegrationTests
             Assert.Equal(subset ? 1 : 0, subsetFiles.Length, "subset files");
             if (subset)
             {
-                // en, de and, for the nb item, no (its CLDR parent, which holds its data) and nn (no's other child); nothing else.
+                // en, de and, for the nb item, no (its CLDR parent, which holds its data) and nn (no's other child); and CLDR
+                // root's lists and relative times, for a locale outside the subset. Nothing else.
                 using var inflater = new DeflateStream(File.OpenRead(subsetFiles[0]), CompressionMode.Decompress);
                 using JsonDocument data = JsonDocument.Parse(inflater);
                 string[] sections = data.RootElement.EnumerateObject().Select(section => section.Name).ToArray();
-                Assert.Equal("fallback|numbers|weekdays|dayPeriods|list|relativeTime", string.Join('|', sections));
-                Assert.Equal("en", data.RootElement.GetProperty("fallback").GetString());
-                string[] languages = data.RootElement.EnumerateObject().Where(section => section.Value.ValueKind == JsonValueKind.Object).SelectMany(section => section.Value.EnumerateObject())
+                Assert.Equal("numbers|weekdays|dayPeriods|list|relativeTime", string.Join('|', sections));
+                string[] languages = data.RootElement.EnumerateObject().SelectMany(section => section.Value.EnumerateObject())
                     .Select(record => record.Name.Split('-')[0]).Distinct().Order(StringComparer.Ordinal).ToArray();
-                Assert.Equal("de|en|nn|no", string.Join('|', languages));
+                Assert.Equal("de|en|nn|no|root", string.Join('|', languages));
+                Assert.Equal("{0}, {1}", data.RootElement.GetProperty("list").GetProperty("root")[2].GetString());
                 Assert.True(data.RootElement.GetProperty("numbers").TryGetProperty("de-CH", out _), "The subset lacks de-CH's number formats.");
                 Assert.True(new FileInfo(subsetFiles[0]).Length < 4096, "The subset is larger than expected: " + new FileInfo(subsetFiles[0]).Length);
             }

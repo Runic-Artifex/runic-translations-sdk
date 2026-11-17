@@ -384,7 +384,7 @@
       <_RunicTranslationsCldrSubsetFile>$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)RunicTranslations.CldrSubset.bin', '$(MSBuildProjectDirectory)'))</_RunicTranslationsCldrSubsetFile>
     </PropertyGroup>
     <Error Condition="!Exists('$(_Rmf2DiscoveryAssembly)')" Code="RTR0108" HelpKeyword="RTR0108"
-           Text="RunicTranslationsCldrSubset needs the Runic.Translations.Build task assembly." />
+           Text="RunicTranslationsCldrSubset needs the Runic.Translations.Build task assembly '$(_Rmf2DiscoveryAssembly)': in a source checkout, build packages/dotnet/Runic.Translations.Build first." />
     <Runic.Translations.Build.CldrLocaleSubset Projects="@(RunicTranslationProject)" Sources="@(RunicTranslationMf2)"
                                                 PackedCatalogs="@(RunicTranslationsPackedCatalog)" Locales="@(RunicTranslationsCldrLocale)"
                                                 References="@(ReferencePath)" OutputFile="$(_RunicTranslationsCldrSubsetFile)">

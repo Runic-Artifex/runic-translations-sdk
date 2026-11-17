@@ -51,11 +51,9 @@ public sealed class CldrLocaleSubset : ITask
         try
         {
             var tags = new SortedSet<string>(StringComparer.Ordinal);
-            string? baseLocale = null;
-            foreach (ITaskItem project in Projects) baseLocale ??= ReadProject(project.ItemSpec, tags, includeSources: true);
+            foreach (ITaskItem project in Projects) ReadProject(project.ItemSpec, tags, includeSources: true);
             foreach (ITaskItem packed in PackedCatalogs) ReadProject(packed.ItemSpec, tags, includeSources: false);
             foreach (ITaskItem locale in Locales) tags.Add(locale.ItemSpec);
-            baseLocale ??= Locales.Select(locale => locale.ItemSpec).FirstOrDefault();
             HashSet<string> languages = CatalogLanguages(tags.Select(Normalize).Where(tag => tag.Length != 0));
             if (languages.Count == 0)
                 throw new InvalidOperationException("RunicTranslationsCldrSubset found no catalog locale: declare a RunicTranslationProject or RunicTranslationsCldrLocale items.");
@@ -63,8 +61,7 @@ public sealed class CldrLocaleSubset : ITask
 
             ITaskItem runtime = References.FirstOrDefault(reference => string.Equals(Path.GetFileNameWithoutExtension(reference.ItemSpec), "Runic.Translations", StringComparison.OrdinalIgnoreCase))
                 ?? throw new InvalidOperationException("RunicTranslationsCldrSubset needs a reference to Runic.Translations.");
-            string fallback = CldrLocales.DataId(Normalize(baseLocale ?? Languages[0]) is { Length: > 0 } tag ? tag : Languages[0]);
-            byte[] subset = Subset(Inflate(ReadResource(runtime.ItemSpec)), languages, fallback, out int records);
+            byte[] subset = Subset(Inflate(ReadResource(runtime.ItemSpec)), languages, out int records);
             byte[] compressed = Deflate(subset);
             string output = Path.GetFullPath(OutputFile);
             if (!File.Exists(output) || !File.ReadAllBytes(output).AsSpan().SequenceEqual(compressed))
@@ -85,16 +82,14 @@ public sealed class CldrLocaleSubset : ITask
 
     // baseLocale, locales (strings, or objects with a tag) and pseudoLocales; without locales, the locale each source names:
     // the stem of a grouped .rmf2 file and the directories of a direct .mf2 source (an extra tag only adds data).
-    // Returns the base locale.
-    private string? ReadProject(string path, SortedSet<string> tags, bool includeSources)
+    private void ReadProject(string path, SortedSet<string> tags, bool includeSources)
     {
         string config = Path.GetFullPath(path);
         if (new FileInfo(config).Length > 8 * 1024 * 1024) throw new IOException("Translation project exceeds byte limit.");
         using var json = JsonDocument.Parse(File.ReadAllBytes(config), new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
         JsonElement root = json.RootElement;
         if (root.ValueKind != JsonValueKind.Object) throw new InvalidOperationException("runic.json must contain a JSON object.");
-        string? result = root.TryGetProperty("baseLocale", out JsonElement baseLocale) && baseLocale.ValueKind == JsonValueKind.String ? baseLocale.GetString() : null;
-        if (result is not null) tags.Add(result);
+        if (root.TryGetProperty("baseLocale", out JsonElement baseLocale) && baseLocale.ValueKind == JsonValueKind.String) tags.Add(baseLocale.GetString()!);
         bool declared = false;
         foreach (string member in new[] { "locales", "pseudoLocales" })
         {
@@ -106,7 +101,7 @@ public sealed class CldrLocaleSubset : ITask
                 else if (item.ValueKind == JsonValueKind.Object && item.TryGetProperty("tag", out JsonElement tag) && tag.ValueKind == JsonValueKind.String) tags.Add(tag.GetString()!);
             }
         }
-        if (declared || !includeSources) return result;
+        if (declared || !includeSources) return;
         string directory = Path.GetDirectoryName(config)!;
         foreach (ITaskItem source in Sources)
         {
@@ -116,7 +111,6 @@ public sealed class CldrLocaleSubset : ITask
                 foreach (string segment in Path.GetRelativePath(directory, Path.GetDirectoryName(file)!).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
                     tags.Add(segment);
         }
-        return result;
     }
 
     // A BCP 47 tag in canonical case (en_US → en-US, ZH-hant → zh-Hant), or "" when it cannot be one. Extensions are ignored.
@@ -159,10 +153,10 @@ public sealed class CldrLocaleSubset : ITask
     }
 
     /// <summary>
-    /// The resource JSON (<c>{section: {id: record}}</c>) with the records of <paramref name="languages"/> only, after a
-    /// <c>fallback</c> member: the data ID whose lists and relative times a locale outside the subset uses.
+    /// The resource JSON (<c>{section: {id: record}}</c>) with the records of <paramref name="languages"/> only, and CLDR
+    /// root's (<c>list:root</c>, <c>relativeTime:root</c>), whose language-neutral patterns a locale outside the subset uses.
     /// </summary>
-    internal static byte[] Subset(byte[] json, HashSet<string> languages, string fallback, out int records)
+    internal static byte[] Subset(byte[] json, HashSet<string> languages, out int records)
     {
         using var document = JsonDocument.Parse(json);
         using var stream = new MemoryStream();
@@ -170,13 +164,12 @@ public sealed class CldrLocaleSubset : ITask
         using (var writer = new Utf8JsonWriter(stream))
         {
             writer.WriteStartObject();
-            writer.WriteString("fallback", fallback);
             foreach (JsonProperty section in document.RootElement.EnumerateObject())
             {
                 writer.WriteStartObject(section.Name);
                 foreach (JsonProperty record in section.Value.EnumerateObject())
                 {
-                    if (!languages.Contains(CldrLocales.Parse(record.Name).Language)) continue;
+                    if (record.Name != "root" && !languages.Contains(CldrLocales.Parse(record.Name).Language)) continue;
                     record.WriteTo(writer);
                     records++;
                 }

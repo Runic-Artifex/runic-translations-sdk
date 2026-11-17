@@ -31,7 +31,7 @@ internal sealed class CldrSubsetTests
         Assert.Equal("de-CH", GeneratedLocaleData.CreateEntry(CldrLocales.Anchors("de-CH"), subset).NumbersId);
     }
 
-    [Test, DisplayName("a locale outside the CLDR subset formats as one without CLDR data, lists and relative times as the base locale, and is reported once")]
+    [Test, DisplayName("a locale outside the CLDR subset formats as one without CLDR data, lists and relative times with CLDR root's patterns, and is reported once")]
     public void OutsideSubset()
     {
         GeneratedLocaleData.ResourceIndex subset = Subset(Full(), "en", "de");
@@ -41,16 +41,29 @@ internal sealed class CldrSubsetTests
             var anchors = CldrLocales.Anchors(locale);
             GeneratedLocaleData.LocaleEntry full = GeneratedLocaleData.CreateEntry(anchors, null), entry = GeneratedLocaleData.CreateEntry(anchors, subset);
             Assert.True(entry.OutsideSubset, locale + " is inside the subset");
-            // Number and date data as for a locale without CLDR data (tlh); lists and relative times with the subset's
-            // fallback, the base locale, where tlh has none and fails. Plural rules and grouping are code tables, which the
+            // Number and date data as for a locale without CLDR data (tlh); lists and relative times with CLDR root's
+            // language-neutral patterns, where tlh has none and fails. Plural rules and grouping are code tables, which the
             // subset keeps whole.
             Assert.Equal((unknown.NumbersId, unknown.WeekdaysId, unknown.DayPeriodsId), (entry.NumbersId, entry.WeekdaysId, entry.DayPeriodsId), locale);
             Assert.Equal((null as string, null as string), (unknown.ListId, unknown.RelativeTimeId), "tlh");
-            Assert.Equal(("en", "en"), (entry.ListId, entry.RelativeTimeId), locale);
+            Assert.Equal(("root", "root"), (entry.ListId, entry.RelativeTimeId), locale);
             Assert.Equal((full.Cardinal, full.Ordinal, full.Grouping), (entry.Cardinal, entry.Ordinal, entry.Grouping), locale);
             Assert.True(entry.MarkReported(), locale + ": first report");
             Assert.False(entry.MarkReported(), locale + ": second report");
         }
+
+        // Root's patterns have no words of a language: lists join with commas, relative times write a signed number with a
+        // unit symbol, and root's English relative-type texts ("yesterday", "now") are left out, so numeric=auto writes the
+        // number too. Only the disjunction keeps CLDR root's "or".
+        string?[] list = subset.Record("list:root"), relative = subset.Record("relativeTime:root");
+        Assert.Equal("{0}, {1}|{0}, {1}|{0}, {1}|{0}, {1}", string.Join('|', list[..4]), "conjunction");
+        Assert.Equal("{0}, {1}|{0}, {1}|{0}, {1}|{0}, {1}", string.Join('|', list[24..28]), "unit");
+        Assert.Equal("{0}, or {1}", list[14], "disjunction end");
+        int day = 3 * 17;
+        Assert.Equal("-{0} d|+{0} d", relative[day + 5] + "|" + relative[day + 11], "day");
+        for (int unit = 0; unit < 7; unit++)
+            Assert.True(relative[(unit * 17 + 12)..(unit * 17 + 17)].All(text => text is null), "relative-type texts of unit " + unit);
+        Assert.Equal(0, Array.BinarySearch(GeneratedLocaleTables.ListIds, "root", StringComparer.Ordinal) >= 0 ? 1 : 0, "root is no table ID");
 
         // An empty subset (the switch without the build's resource, in a publish without the full data): every locale
         // falls back and is reported.
@@ -98,12 +111,11 @@ internal sealed class CldrSubsetTests
         using (var writer = new Utf8JsonWriter(output))
         {
             writer.WriteStartObject();
-            writer.WriteString("fallback", languages[0]);
             foreach (JsonProperty section in document.RootElement.EnumerateObject())
             {
                 writer.WriteStartObject(section.Name);
                 foreach (JsonProperty record in section.Value.EnumerateObject())
-                    if (languages.Contains(record.Name.Split('-')[0])) record.WriteTo(writer);
+                    if (record.Name == "root" || languages.Contains(record.Name.Split('-')[0])) record.WriteTo(writer);
                 writer.WriteEndObject();
             }
             writer.WriteEndObject();

@@ -229,8 +229,10 @@ data out: an English and German catalog keeps about 1 KB, and the executable shr
 `aot/translations/cldr-subset-resource-bytes`). Plural rules are not affected.
 
 The trade-off: a locale of another language, such as one an overlay or a pack adds at run time, formats numbers with
-CLDR's root formats and dates with .NET's names, as a locale without CLDR data does, and lists and relative times with
-the patterns of the catalog's base locale (where a locale without CLDR data would fail). Its plural rules stay exact.
+CLDR's root formats and dates with .NET's names, as a locale without CLDR data does. Lists and relative times use CLDR
+root's language-neutral patterns, which the subset always keeps: `a, b, c` and `+3 d` / `-1 d`, also for
+`numeric=auto` (root's English "yesterday" and "now" are left out). Only a disjunction keeps root's `a, b, or c`. A
+locale without any CLDR data would fail there instead. Its plural rules stay exact.
 The runtime reports each such locale once, as the warning event 4 of the `Runic-Translations` event source and in an
 attached debugger's output. Name such locales in advance with items:
 

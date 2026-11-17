@@ -15,6 +15,9 @@ const root = resolve(fileURLToPath(import.meta.url), "../../..");
 const budgetsFile = resolve(root, "tests/aot-size/budgets.json");
 const probe = resolve(root, "tests/aot-size/Probe/AotSizeProbe.csproj");
 const reader = resolve(root, "tests/aot-size/MstatReader/MstatReader.csproj");
+// The build's task assembly (CldrLocaleSubset for RunicTranslationsCldrSubset builds): the probe imports the targets
+// from source, which register the task only when the assembly exists as the probe is evaluated, as a package's does.
+const buildTasks = resolve(root, "packages/dotnet/Runic.Translations.Build/Runic.Translations.Build.csproj");
 const output = resolve(root, "artifacts/aot-size");
 const rid = "linux-x64";
 const mstat = resolve(root, `tests/aot-size/Probe/obj/Release/net10.0/${rid}/native/AotSizeProbe.mstat`);
@@ -136,6 +139,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
 
   mkdirSync(output, { recursive: true });
   run("dotnet", ["build", reader, "-c", "Release", "--nologo", "-v:q"]);
+  run("dotnet", ["build", buildTasks, "-c", "Release", "--nologo", "-v:q"]);
   const builds = Object.fromEntries(Object.entries(budgets.builds).map(([name, build]) => [name, publish(name, build, keep)]));
   rmSync(resolve(output, "catalog"), { recursive: true, force: true });
 

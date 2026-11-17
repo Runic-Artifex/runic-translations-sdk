@@ -158,47 +158,60 @@ for (const id of sortedKeys(locales, "locales")) {
       throw new Error(`Day periods for '${id}' must start at 0 and ascend.`);
     dayPeriods[id] = data.dayPeriods.flatMap(([from, name]) => [String(from), name]);
   }
-  // CLDR list patterns as [start, middle, end, 2] for each Intl.ListFormat type and style, 36
-  // patterns in all. Each has {0} before {1}; some add text before, between or after (mi, ti).
-  if (data.listPatterns !== undefined) {
-    if (Object.keys(data.listPatterns).join() !== listTypes.join())
-      throw new Error(`List patterns for '${id}' must list ${listTypes.join(", ")}.`);
-    list[id] = listTypes.flatMap((type) => {
-      if (Object.keys(data.listPatterns[type]).join() !== listStyles.join())
-        throw new Error(`List patterns '${id}/${type}' must list ${listStyles.join(", ")}.`);
-      return listStyles.flatMap((style) => {
-        const patterns = data.listPatterns[type][style];
-        if (!Array.isArray(patterns) || patterns.length !== 4)
-          throw new Error(`List patterns '${id}/${type}/${style}' must be [start, middle, end, 2].`);
-        for (const pattern of patterns) {
-          const first = typeof pattern === "string" ? pattern.indexOf("{0}") : -1, second = first < 0 ? -1 : pattern.indexOf("{1}");
-          if (first < 0 || second < first || /[{}]/.test(pattern.replace("{0}", "").replace("{1}", "")))
-            throw new Error(`List pattern '${id}/${type}/${style}' must contain {0} and then {1}.`);
-        }
-        return patterns;
-      });
-    });
-  }
-  // Relative time as 17 slots per unit: the past patterns by plural category (zero … other), the
-  // future patterns likewise, then the texts of relative-type -2 … 2; absent entries are null.
-  if (data.relativeTime !== undefined) {
-    if (Object.keys(data.relativeTime).join() !== units.join())
-      throw new Error(`Relative time for '${id}' must list ${units.join(", ")}.`);
-    relativeTime[id] = units.flatMap((unit) => {
-      const field = data.relativeTime[unit];
-      const patterns = (direction) => pluralCategories.map((category) => {
-        const pattern = field[direction]?.[category];
-        if (pattern !== undefined && (typeof pattern !== "string" || pattern.split("{0}").length > 2 || /[{}]/.test(pattern.replace("{0}", ""))))
-          throw new Error(`Relative-time pattern '${id}/${unit}/${direction}/${category}' may contain {0} at most once.`);
-        return pattern ?? null;
-      });
-      const past = patterns("past"), future = patterns("future");
-      if (past[5] === null || future[5] === null) throw new Error(`Relative time '${id}/${unit}' needs 'other' patterns.`);
-      for (const key of Object.keys(field.relative ?? {})) if (!offsets.includes(key)) throw new Error(`Unknown relative type '${id}/${unit}/${key}'.`);
-      return [...past, ...future, ...offsets.map((offset) => field.relative?.[offset] ?? null)];
-    });
-  }
+  if (data.listPatterns !== undefined) list[id] = listRecord(id, data.listPatterns);
+  if (data.relativeTime !== undefined) relativeTime[id] = relativeTimeRecord(id, data.relativeTime);
 }
+
+// CLDR list patterns as [start, middle, end, 2] for each Intl.ListFormat type and style, 36
+// patterns in all. Each has {0} before {1}; some add text before, between or after (mi, ti).
+function listRecord(id, listPatterns) {
+  if (Object.keys(listPatterns).join() !== listTypes.join())
+    throw new Error(`List patterns for '${id}' must list ${listTypes.join(", ")}.`);
+  return listTypes.flatMap((type) => {
+    if (Object.keys(listPatterns[type]).join() !== listStyles.join())
+      throw new Error(`List patterns '${id}/${type}' must list ${listStyles.join(", ")}.`);
+    return listStyles.flatMap((style) => {
+      const patterns = listPatterns[type][style];
+      if (!Array.isArray(patterns) || patterns.length !== 4)
+        throw new Error(`List patterns '${id}/${type}/${style}' must be [start, middle, end, 2].`);
+      for (const pattern of patterns) {
+        const first = typeof pattern === "string" ? pattern.indexOf("{0}") : -1, second = first < 0 ? -1 : pattern.indexOf("{1}");
+        if (first < 0 || second < first || /[{}]/.test(pattern.replace("{0}", "").replace("{1}", "")))
+          throw new Error(`List pattern '${id}/${type}/${style}' must contain {0} and then {1}.`);
+      }
+      return patterns;
+    });
+  });
+}
+
+// Relative time as 17 slots per unit: the past patterns by plural category (zero … other), the future patterns
+// likewise, then the texts of relative-type -2 … 2; absent entries are null.
+function relativeTimeRecord(id, data) {
+  if (Object.keys(data).join() !== units.join())
+    throw new Error(`Relative time for '${id}' must list ${units.join(", ")}.`);
+  return units.flatMap((unit) => {
+    const field = data[unit];
+    const patterns = (direction) => pluralCategories.map((category) => {
+      const pattern = field[direction]?.[category];
+      if (pattern !== undefined && (typeof pattern !== "string" || pattern.split("{0}").length > 2 || /[{}]/.test(pattern.replace("{0}", ""))))
+        throw new Error(`Relative-time pattern '${id}/${unit}/${direction}/${category}' may contain {0} at most once.`);
+      return pattern ?? null;
+    });
+    const past = patterns("past"), future = patterns("future");
+    if (past[5] === null || future[5] === null) throw new Error(`Relative time '${id}/${unit}' needs 'other' patterns.`);
+    for (const key of Object.keys(field.relative ?? {})) if (!offsets.includes(key)) throw new Error(`Unknown relative type '${id}/${unit}/${key}'.`);
+    return [...past, ...future, ...offsets.map((offset) => field.relative?.[offset] ?? null)];
+  });
+}
+
+// CLDR root's lists and relative times, for a locale outside a .NET application's CLDR subset
+// (RunicTranslationsCldrSubset): stored as the records "root", which no locale's parent chain reaches, so they are in
+// no ID table. Root's relative-type texts ("yesterday", "now") are English, so they are left out: numeric=auto then
+// writes the number ("-1 d"). Its disjunction keeps CLDR's "or".
+if (!source.root || typeof source.root !== "object") throw new Error("CLDR subset has no root data.");
+list.root = listRecord("root", source.root.listPatterns);
+relativeTime.root = relativeTimeRecord("root", source.root.relativeTime).map((value, index) => index % 17 >= 12 ? null : value);
+const tableIds = (records) => Object.keys(records).filter((id) => id !== "root");
 
 // The 12 fields of a numbering system's formats in a locale: its digits, the decimal, group and minus symbols, the
 // primary and secondary group sizes of the standard decimal pattern and of the percent pattern, and the prefix and
@@ -307,8 +320,8 @@ const stringTables = [
   ["NumberIds", Object.keys(numbers), null, "The data IDs with number formats in <c>GeneratedLocaleData.bin</c>."],
   ["WeekdayIds", Object.keys(weekdays), null, "The data IDs with format-context weekday names (or an empty override) in <c>GeneratedLocaleData.bin</c>."],
   ["DayPeriodIds", Object.keys(dayPeriods), null, "The data IDs with flexible day periods (or an empty override) in <c>GeneratedLocaleData.bin</c>."],
-  ["ListIds", Object.keys(list), null, "The data IDs with list patterns in <c>GeneratedLocaleData.bin</c>."],
-  ["RelativeTimeIds", Object.keys(relativeTime), null, "The data IDs with relative-time data in <c>GeneratedLocaleData.bin</c>."],
+  ["ListIds", tableIds(list), null, "The data IDs with list patterns in <c>GeneratedLocaleData.bin</c>."],
+  ["RelativeTimeIds", tableIds(relativeTime), null, "The data IDs with relative-time data in <c>GeneratedLocaleData.bin</c>."],
   ["RightToLeftScripts", rightToLeftScripts, null, "CLDR's right-to-left scripts (ISO 15924), sorted: a locale is right-to-left when its script, explicit or likely, is one of them."],
 ];
 // Each string once, in ordinal order: the tables hold 16-bit indexes into it.

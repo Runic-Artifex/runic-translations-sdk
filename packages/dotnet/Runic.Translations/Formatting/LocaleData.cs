@@ -184,9 +184,9 @@ internal static partial class GeneratedLocaleData
     /// <summary>
     /// The CLDR data of a tag's <see cref="CldrLocales.Anchors"/>. With a <paramref name="subset"/> each lookup is limited to
     /// the IDs it holds, and the entry says when that loses data. A locale outside the subset then formats numbers with the
-    /// root formats and dates with .NET's names, as a locale without CLDR data does, and lists and relative times with the
-    /// patterns of the subset's fallback (the catalog's base locale), where a locale without CLDR data would fail. Plural
-    /// rules and grouping are code tables, which a subset does not change.
+    /// root formats and dates with .NET's names, as a locale without CLDR data does, and lists and relative times with CLDR
+    /// root's language-neutral patterns (<c>{0}, {1}</c>, <c>-{0} d</c>), the subset's <c>root</c> records, where a locale
+    /// without CLDR data would fail. Plural rules and grouping are code tables, which a subset does not change.
     /// </summary>
     internal static LocaleEntry CreateEntry((string? Data, string? Truncated) anchors, ResourceIndex? subset)
     {
@@ -199,7 +199,7 @@ internal static partial class GeneratedLocaleData
             string? found = CldrLocales.FindFrom(anchors.Data, kept, truncate: false);
             if (string.Equals(found, id, StringComparison.Ordinal)) return found;
             outside = true;
-            return found ?? (fallback ? CldrLocales.FindFrom(subset.Fallback, kept, truncate: false) : null);
+            return found ?? (fallback && Array.BinarySearch(kept, "root", StringComparer.Ordinal) >= 0 ? "root" : null);
         }
         return new LocaleEntry(
             CldrLocales.PluralRuleFrom(anchors, ordinal: false),
@@ -262,12 +262,6 @@ internal static partial class GeneratedLocaleData
             {
                 string section = reader.GetString()!;
                 reader.Read();
-                // A subset names the data ID whose lists and relative times a locale outside it uses.
-                if (reader.TokenType == JsonTokenType.String)
-                {
-                    if (section == "fallback") Fallback = reader.GetString();
-                    continue;
-                }
                 var ids = new List<string>();
                 while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
                 {
@@ -285,9 +279,6 @@ internal static partial class GeneratedLocaleData
                 _ids[sectionIndex] = sorted;
             }
         }
-
-        /// <summary>The data ID of a subset's fallback locale, the catalog's base locale; null in the full data.</summary>
-        internal string? Fallback { get; }
 
         /// <summary>The data IDs of a section (<c>numbers</c>, <c>weekdays</c>, <c>dayPeriods</c>, <c>list</c> or <c>relativeTime</c>), sorted.</summary>
         internal string[] Ids(string section) => _ids[Array.IndexOf(Sections, section)];
