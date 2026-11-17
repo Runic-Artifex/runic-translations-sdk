@@ -69,8 +69,17 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             .Select(static (provider, _) => provider.GlobalOptions.TryGetValue(PseudoLocalesProperty, out string? value) &&
                 string.Equals(value?.Trim(), "true", StringComparison.OrdinalIgnoreCase))
             .WithTrackingName("TranslationPseudoLocales");
+        // The message names of a referenced runic-command-line catalog, compiled only when its packed files change, so the link
+        // can report application messages named after them (RTR0107, the deprecated second override path).
+        IncrementalValueProvider<string> frameworkKeys = inputs
+            .Where(static input => input.Kind is InputKind.PackedProject or InputKind.PackedMf2)
+            .Collect()
+            .Select(static (packed, cancellationToken) => CommandLineFrameworkKeys(packed, cancellationToken))
+            .WithTrackingName("TranslationFrameworkKeys");
         IncrementalValueProvider<LinkResult> link = units.Collect().Combine(projects).WithTrackingName("TranslationCompilation").Combine(runtimeAbi).Combine(pseudoLocales)
-            .Select(static (pair, cancellationToken) => Link(pair.Left.Left.Left, pair.Left.Left.Right, pair.Left.Right, pair.Right, cancellationToken))
+            .Combine(frameworkKeys)
+            .Select(static (pair, cancellationToken) => Link(pair.Left.Left.Left.Left, pair.Left.Left.Left.Right, pair.Left.Left.Right, pair.Left.Right, pair.Right,
+                cancellationToken))
             .WithTrackingName("TranslationLink");
         // runic.json "overrides": each library catalog its package packs (runic/<catalog>/) is compiled with the project's
         // override sources in a step of its own, so editing the application's messages never recompiles library catalogs.
@@ -260,7 +269,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
     // Links the catalog and collects that step's diagnostics. It runs in a cached Select step;
     // the outputs only report, render or validate.
     private static LinkResult Link(ImmutableArray<SourceUnit> units, ImmutableArray<GeneratorInput> projectInputs,
-        RuntimeAbiState runtimeAbi, bool pseudoLocales, CancellationToken cancellationToken)
+        RuntimeAbiState runtimeAbi, bool pseudoLocales, string frameworkKeys, CancellationToken cancellationToken)
     {
         var diagnostics = ImmutableArray.CreateBuilder<Diagnostic>();
         var unreadable = new List<GeneratorInput>();
@@ -320,8 +329,55 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
                 Rmf2ProjectV5EmissionEligibility.Message));
             return new LinkResult(diagnostics.ToImmutable(), null, false);
         }
+        ReportFrameworkKeyMessages(linked, frameworkKeys, sourceTexts, diagnostics);
         return new LinkResult(diagnostics.ToImmutable(), linked, runtimeAbi.SupportsReadableSurface, runtimeAbi.SupportsComposition,
             runtimeAbi.SupportsRuntimeAbiCall);
+    }
+
+    private const string CommandLineCatalog = "runic-command-line";
+
+    // The logical message names of the runic-command-line catalog that a referenced package packs, one per line in ordinal
+    // order, or empty when none is referenced or it does not compile (a string, so the cached link reruns only when they change).
+    private static string CommandLineFrameworkKeys(ImmutableArray<GeneratorInput> packed, CancellationToken cancellationToken)
+    {
+        GeneratorInput[] projects = packed.Where(static input => input.Kind == InputKind.PackedProject && input.Text is not null &&
+            string.Equals(input.Catalog, CommandLineCatalog, StringComparison.Ordinal)).ToArray();
+        if (projects.Length != 1) return "";
+        GeneratorInput library = projects[0];
+        TranslationSource[] sources = packed.Where(input => input.Kind == InputKind.PackedMf2 && input.Text is not null &&
+                string.Equals(input.Owner, library.Path, StringComparison.Ordinal))
+            .OrderBy(static input => input.Path, StringComparer.Ordinal)
+            .Select(static input => new TranslationSource(input.Path, StrictUtf8.GetBytes(input.Text!))).ToArray();
+        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(
+            new TranslationSource(library.Path, StrictUtf8.GetBytes(library.Text!)), sources, CompilerOptions, cancellationToken);
+        if (compilation.Project is not { } catalog) return "";
+        return string.Join("\n", catalog.CanonicalMessages.Concat(catalog.ExtraMessages)
+            .Select(static message => string.Join(".", message.Path)).Distinct(StringComparer.Ordinal).OrderBy(static name => name, StringComparer.Ordinal));
+    }
+
+    // RTR0107: an application message named after a runic-command-line key overrides that framework text through
+    // TranslationCommandTextResolver, the second override path (D061.5). It is deprecated in 0.14 and removed in 0.15, so the
+    // message moves to translations/overrides/runic-command-line/, which the build checks.
+    private static void ReportFrameworkKeyMessages(Rmf2ProjectV5 linked, string frameworkKeys, Dictionary<string, SourceText> sourceTexts,
+        ImmutableArray<Diagnostic>.Builder diagnostics)
+    {
+        if (frameworkKeys.Length == 0 || string.Equals(linked.Id, CommandLineCatalog, StringComparison.Ordinal)) return;
+        var keys = new HashSet<string>(frameworkKeys.Split('\n'), StringComparer.Ordinal);
+        foreach (Rmf2MessageContractV5 message in linked.CanonicalMessages.Concat(linked.ExtraMessages).OrderBy(static message => message.Key, StringComparer.Ordinal))
+        {
+            string name = string.Join(".", message.Path);
+            if (!keys.Contains(name)) continue;
+            Rmf2TranslationV5? source = linked.Locales.OrderBy(locale => string.Equals(locale.Tag, linked.DefaultLocale, StringComparison.Ordinal) ? 0 : 1)
+                .SelectMany(static locale => locale.DirectResources)
+                .FirstOrDefault(translation => string.Equals(translation.Key, message.Key, StringComparison.Ordinal));
+            string text = "Message '" + name + "' is named after a " + CommandLineCatalog + " key, so TranslationCommandTextResolver shows it in place of " +
+                "the framework text. This override path is deprecated and is removed in Runic Translations 0.15. Move the message to translations/overrides/" +
+                CommandLineCatalog + "/<locale>.rmf2 and list { \"catalog\": \"" + CommandLineCatalog + "\", \"from\": \"Runic.Translations.CommandLine\" } " +
+                "in runic.json \"overrides\"; rename it if it is your own text.";
+            var diagnostic = new TranslationDiagnostic("RTR0107", TranslationDiagnosticSeverity.Warning, text,
+                source?.SourceLocation ?? new TextSourceLocation("", 0, 0, 1, 1, 1, 1));
+            diagnostics.Add(CreateDiagnostic(diagnostic, sourceTexts));
+        }
     }
 
     // Links each referenced project's catalog for XAML checks only. The referenced project's own

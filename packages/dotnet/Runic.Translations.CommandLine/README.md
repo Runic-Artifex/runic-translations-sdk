@@ -52,12 +52,16 @@ against, so a key and its German cannot drift apart.
 ## Framework text and your text
 
 Framework text comes from the `runic-command-line` catalog (English and
-German). Your catalog overlays it: it translates your `DescriptionKey` values
-and can override any framework text. Precedence is locale-first: for each
-locale of the requested locale's fallback chain, your message is tried before
-the built-in one, and only then the next locale, so the built-in German beats an
-override your catalog has only in English. A key that neither has returns
-`null`, so Runic.CommandLine writes its English text.
+German). Your catalog translates your `DescriptionKey` values; change framework
+text with an override file, `translations/overrides/runic-command-line/<locale>.rmf2`,
+which the build checks. A message in your catalog named after a framework key
+also overrides that framework text in 0.14, but this second path is deprecated
+and removed in 0.15: the build reports such a message as `RTR0107`, and the
+resolver writes a trace warning once when it uses one. Until then precedence is
+locale-first: for each locale of the requested locale's fallback chain, your
+message is tried before the built-in one, and only then the next locale, so the
+built-in German beats an override your catalog has only in English. A key that
+neither has returns `null`, so Runic.CommandLine writes its English text.
 
 Lead with a context, as above: the resolver follows the context's locale, and
 the context's overlays apply to the framework text, including the build-time

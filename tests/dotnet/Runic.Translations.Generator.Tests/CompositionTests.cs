@@ -232,6 +232,66 @@ internal sealed class CompositionTests
             string.Join("\n", stray.SingleResult.Diagnostics));
     }
 
+    // A referenced Runic.Translations.CommandLine packs runic-command-line; the build passes it to the generator even when
+    // runic.json does not override it.
+    private static TestInput[] CommandLineInputs(string english, string overrides = "") =>
+    [
+        new("C:/repo/translations/runic.json", "Project", """
+            {
+              "schemaVersion": 1,
+              "catalog": "app",
+              "code": { "namespace": "Example.App", "className": "AppText", "visibility": "public" },
+              "baseLocale": "en",
+              "locales": [ "en", "de" ]
+            """ + overrides + "\n}\n"),
+        new("C:/repo/translations/en.rmf2", "Rmf2", english),
+        new("C:/repo/translations/de.rmf2", "Rmf2", english.Replace("Synopsis", "Übersicht", StringComparison.Ordinal).Replace("Greet", "Grüßen", StringComparison.Ordinal)),
+        new("C:/nuget/runic.translations.commandline/0.14.0/runic/runic-command-line/runic.json", "PackedCatalogProject", """
+            {
+              "schemaVersion": 1,
+              "catalog": "runic-command-line",
+              "code": { "namespace": "Runic.Translations.CommandLine.Translations", "className": "CommandLineText", "visibility": "internal" },
+              "baseLocale": "en",
+              "locales": [ "en", "de" ]
+            }
+            """, "runic-command-line", "Runic.Translations.CommandLine"),
+        new("C:/nuget/runic.translations.commandline/0.14.0/runic/runic-command-line/en.rmf2", "PackedCatalogSource",
+            "help {\n  usage = Usage\n  options = Options\n}\n", Owner: "C:/nuget/runic.translations.commandline/0.14.0/runic/runic-command-line/runic.json"),
+        new("C:/nuget/runic.translations.commandline/0.14.0/runic/runic-command-line/de.rmf2", "PackedCatalogSource",
+            "help {\n  usage = Aufruf\n  options = Optionen\n}\n", Owner: "C:/nuget/runic.translations.commandline/0.14.0/runic/runic-command-line/runic.json"),
+    ];
+
+    [Test, DisplayName("an application message named after a runic-command-line key is RTR0107, the deprecated second override path")]
+    public void FrameworkKeyMessagesWarn()
+    {
+        GeneratorRun run = GeneratorTestHost.Run(CommandLineInputs("commands {\n  greet = Greet a person\n}\nhelp {\n  usage = Synopsis\n}\n"));
+        Diagnostic[] reported = run.SingleResult.Diagnostics.Where(static diagnostic => diagnostic.Id == "RTR0107").ToArray();
+        string all = string.Join("\n", run.SingleResult.Diagnostics);
+        Assert.Equal(1, reported.Length, all);
+        Diagnostic warning = reported[0];
+        Assert.Equal(DiagnosticSeverity.Warning, warning.Severity, "severity");
+        Assert.Equal("translations/en.rmf2", warning.Location.GetLineSpan().Path, all);
+        Assert.Equal("4:2", warning.Location.GetLineSpan().StartLinePosition.Line + ":" + warning.Location.GetLineSpan().StartLinePosition.Character, "the name of usage");
+        string message = warning.GetMessage(System.Globalization.CultureInfo.InvariantCulture);
+        Assert.True(message.StartsWith("Message 'help.usage' is named after a runic-command-line key", StringComparison.Ordinal), message);
+        Assert.True(message.Contains("translations/overrides/runic-command-line/<locale>.rmf2", StringComparison.Ordinal), message);
+        Assert.True(warning.Descriptor.HelpLinkUri.EndsWith("#rtr0107", StringComparison.Ordinal), "help link");
+        // A warning only: the catalog is generated as before.
+        Assert.True(run.SingleResult.GeneratedSources.Length > 0, "generated");
+
+        // The same message with runic.json overriding runic-command-line is still the second path.
+        GeneratorRun declared = GeneratorTestHost.Run(CommandLineInputs("help {\n  usage = Synopsis\n}\n",
+            ",\n  \"overrides\": [ { \"catalog\": \"runic-command-line\", \"from\": \"Runic.Translations.CommandLine\" } ]"));
+        Assert.Equal(1, declared.SingleResult.Diagnostics.Count(static diagnostic => diagnostic.Id == "RTR0107"), string.Join("\n", declared.SingleResult.Diagnostics));
+
+        // Only the application's own keys, or no packed runic-command-line: nothing to report.
+        GeneratorRun own = GeneratorTestHost.Run(CommandLineInputs("commands {\n  greet = Greet a person\n}\n"));
+        Assert.Equal(0, own.SingleResult.Diagnostics.Length, string.Join("\n", own.SingleResult.Diagnostics));
+        GeneratorRun unreferenced = GeneratorTestHost.Run(CommandLineInputs("help {\n  usage = Synopsis\n}\n")
+            .Where(static input => input.Kind is not ("PackedCatalogProject" or "PackedCatalogSource")).ToArray());
+        Assert.Equal(0, unreferenced.SingleResult.Diagnostics.Length, string.Join("\n", unreferenced.SingleResult.Diagnostics));
+    }
+
     [Test, DisplayName("runic.json overrides \"from\" may list the library's NuGet and npm packages; the build matches its NuGet package")]
     public void OverridesFromSeveralPackages()
     {

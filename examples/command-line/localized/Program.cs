@@ -12,8 +12,8 @@ return await new CommandApp(GeneratedCommandCatalog.Create())
 {
     Name = "localized",
     Culture = culture,
-    // Finds DescriptionKey values and framework keys in CliText by name; framework keys the catalog
-    // does not define use the built-in English or German text. No key mapping.
+    // Finds DescriptionKey values in CliText by name; framework keys use the built-in English or German
+    // text. No key mapping.
     TextResolver = new TranslationCommandTextResolver(manager),
 }.RunAsync(args);
 

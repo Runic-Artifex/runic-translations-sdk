@@ -127,6 +127,8 @@ internal static class TranslationsDiagnostics
         "RTR0103", "Override does not match the library catalog", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0103");
     internal static readonly DiagnosticDescriptor OverrideSetup = new(
         "RTR0104", "Library catalog to override is not available", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0104");
+    internal static readonly DiagnosticDescriptor FrameworkKeyMessage = new(
+        "RTR0107", "Message overrides command-line framework text through the deprecated second path", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0107");
     internal static readonly DiagnosticDescriptor MessageNotReferenced = new(
         "RTR0100", "Message is not referenced from C# code", "{0}", Category, DiagnosticSeverity.Info, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0100", customTags: WellKnownDiagnosticTags.CompilationEnd);
 
@@ -139,7 +141,7 @@ internal static class TranslationsDiagnostics
         ReadableSurfaceUnsupported, ReadableNameReserved, DocumentContentKind, DocumentVariantStructure, DocumentChildInvalid,
         DocumentLimitExceeded, DocumentStructureMismatch, DocumentBlockEmpty, DocumentHeadingLevel, DocumentLineBreakSpace, XamlDeclaration, XamlKey, XamlInputs, XamlKind,
         XamlPositionalInputs, XamlSourceNotChecked, PluralCategoryUnreachable, PluralCategoryMissing, InputNotDisplayed, BooleanFormatted, MaxLengthExceeded, MessageNotReferenced,
-        UnknownCurrencyOrUnit, UndeclaredRuntimeCurrencyOrUnit, OverrideKeyUnknown, OverrideSetup);
+        UnknownCurrencyOrUnit, UndeclaredRuntimeCurrencyOrUnit, OverrideKeyUnknown, OverrideSetup, FrameworkKeyMessage);
 
     private static readonly object UnknownGate = new();
     private static readonly Dictionary<string, DiagnosticDescriptor> Unknown = new(System.StringComparer.Ordinal);

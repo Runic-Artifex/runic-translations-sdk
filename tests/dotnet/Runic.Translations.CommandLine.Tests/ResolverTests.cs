@@ -209,6 +209,34 @@ internal sealed partial class ResolverTests
         Assert.Equal("Optionen", resolver.Resolve("help.options", CultureInfo.GetCultureInfo("en"), []));
     }
 
+    [Test, DisplayName("framework text from the application's catalog, the deprecated second path, still works and is reported once")]
+    public async Task ApplicationOverrideReportedOnce()
+    {
+        ITranslationSnapshot snapshot = await TestTextCatalog.CreateProvider().GetSnapshotAsync("de");
+        var reports = new List<string>();
+        var resolver = new TranslationCommandTextResolver(snapshot) { TraceWarning = reports.Add };
+        CultureInfo german = CultureInfo.GetCultureInfo("de");
+
+        // The application's own text and the framework's built-in text report nothing.
+        Assert.Equal("Grüßt eine Person", resolver.Resolve("commands.greet", german, []));
+        Assert.Equal("Optionen", resolver.Resolve("help.options", german, []));
+        Assert.Equal(0, reports.Count, string.Join("\n", reports));
+
+        // help.usage and diagnostics.unknown-option come from the application's catalog: one report, naming the first.
+        Assert.Equal("Übersicht", resolver.Resolve("help.usage", german, []));
+        Assert.Equal("Keine solche Option: --bogus", resolver.Resolve("diagnostics.unknown-option", german, ["--bogus"]));
+        Assert.Equal(1, reports.Count, string.Join("\n", reports));
+        Assert.True(reports[0].StartsWith("Runic.Translations.CommandLine: the application's catalog overrides the framework text 'help.usage'", StringComparison.Ordinal), reports[0]);
+        Assert.True(reports[0].Contains("removed in Runic Translations 0.15", StringComparison.Ordinal), reports[0]);
+        Assert.True(reports[0].Contains("translations/overrides/runic-command-line/<locale>.rmf2", StringComparison.Ordinal), reports[0]);
+
+        // An application message for an application key that only looks like a framework group is not a framework key.
+        var quiet = new List<string>();
+        Assert.Equal("disk hat sein Kontingent von 5 überschritten.",
+            new TranslationCommandTextResolver(snapshot) { TraceWarning = quiet.Add }.Resolve("diagnostics.quota-exceeded", german, ["disk", "5"]));
+        Assert.Equal(0, quiet.Count, string.Join("\n", quiet));
+    }
+
     [Test, DisplayName("a manager-backed resolver follows locale switches")]
     public async Task ManagerFollowsLocale()
     {
