@@ -1,8 +1,10 @@
 // The NativeAOT size probe's catalog (tests/aot-size/README.md): `messages` messages in each of `locales`, written as
 // translations/<locale>.rmf2 and runic.json, and a Program.cs that calls every message's accessor, so none is trimmed.
 // The messages repeat a pattern of 20: 14 plain texts, 3 with a string input, 2 plurals and 1 number, in sections of 50.
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+// A plural has a variant for each CLDR category an integer reaches in its locale, as a translator writes it.
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const texts = {
   en: "Open the selected document in a new window", de: "Das ausgewählte Dokument in einem neuen Fenster öffnen",
@@ -12,6 +14,17 @@ const texts = {
   it: "Apri il documento selezionato in una nuova finestra", pt: "Abrir o documento selecionado em uma nova janela",
 };
 export const allLocales = Object.keys(texts);
+
+// The cardinal plural categories an integer reaches in a locale, from the pinned CLDR data the compiler uses
+// (specs/translations/cldr): those whose rule has @integer samples, in CLDR's order, without "other", which is "*".
+// For :integer the compiler asks for exactly these (RTR0095).
+const cldr = JSON.parse(readFileSync(resolve(fileURLToPath(import.meta.url), "../../../specs/translations/cldr/runic-subset-48.2.json"), "utf8"));
+const categoryOrder = ["zero", "one", "two", "few", "many"];
+export function integerPluralCategories(locale) {
+  const rules = cldr.plurals.cardinal[locale];
+  if (!rules) throw new Error(`The pinned CLDR data has no cardinal plural rules for ${locale}.`);
+  return categoryOrder.filter(category => rules[category]?.includes("@integer"));
+}
 
 // The message kind of index i, and the accessor call that formats it.
 function kind(index) {
@@ -29,8 +42,8 @@ function source(locale, messages) {
         case "text": lines.push(`  m${index} = ${text} ${index}`); break;
         case "input": lines.push(`  m${index} =\n    .input {$name :string}\n    {{${text} {$name} ${index}}}`); break;
         case "plural": {
-          const one = locale === "ja" ? "" : `    one {{{$count} ${text} ${index}}}\n`;
-          lines.push(`  m${index} =\n    .input {$count :integer}\n    .match $count\n${one}    * {{{$count} ${text} ${index}}}`);
+          const variants = integerPluralCategories(locale).map(category => `    ${category} {{{$count} ${text} ${index} (${category})}}\n`).join("");
+          lines.push(`  m${index} =\n    .input {$count :integer}\n    .match $count\n${variants}    * {{{$count} ${text} ${index}}}`);
           break;
         }
         default: lines.push(`  m${index} = ${text}: {$amount :number} ${index}`);

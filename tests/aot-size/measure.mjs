@@ -92,7 +92,9 @@ function publish(name, { messages, locales }, keep) {
   console.log(`Publishing the Translations NativeAOT probe ${name} (${messages} messages × ${localeList.join(", ")})…`);
   const started = Date.now();
   run("dotnet", ["publish", probe, "-c", "Release", "-r", rid, "--self-contained", "true", "-p:PublishAot=true",
-    "-p:IlcTreatWarningsAsErrors=true", `-p:AotSizeCatalogDirectory=${catalog}`, "-o", resolve(directory, "bin"), "--nologo", "-v:q"]);
+    "-p:IlcTreatWarningsAsErrors=true",
+    // As a CI (Verification) build: a catalog diagnostic such as RTR0095 fails the publish locally too.
+    "-p:TreatWarningsAsErrors=true", `-p:AotSizeCatalogDirectory=${catalog}`, "-o", resolve(directory, "bin"), "--nologo", "-v:q"]);
   const seconds = Math.round((Date.now() - started) / 1000);
   // Every locale formats every message: the probe must work, not only link.
   for (const locale of localeList) {
