@@ -15,6 +15,7 @@ import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { root, workspace } from "../run.mjs";
 import { TRAIN_FEED_ARTIFACT } from "../train-feed.mjs";
+import { assertNpmSource } from "./npm-inputs.mjs";
 
 export const REPOSITORY = "Runic-Artifex/runic-translations-sdk";
 export const CI_WORKFLOW = ".github/workflows/ci.yml";
@@ -87,8 +88,10 @@ const npmManifest = path => {
 };
 const normalizeRepository = url => (url ?? "").replace(/^git\+/, "").replace(/\.git$/, "").replace(/\/$/, "");
 
-// Exactly the workspace packages at this version, packed from this commit for this repository.
-export function scan(directory, version, source, inventory = workspace) {
+// Exactly the workspace packages at this version, packed from this commit for this repository. A NuGet package names
+// `source` itself; an npm archive names the commit that last changed its inputs, which `npmSource` checks against
+// `source` (npm-inputs.mjs assertNpmSource: an ancestor with the same inputs).
+export function scan(directory, version, source, inventory = workspace, { npmSource = assertNpmSource } = {}) {
   assert.deepEqual(readdirSync(directory).sort(), ["npm", "nuget"], "Artifact directory must contain only npm/ and nuget/");
   const expected = {
     nuget: inventory.nuget.map(entry => ({ name: entry.name, file: `${entry.name}.${version}.nupkg`, read: nuspec })),
@@ -105,7 +108,8 @@ export function scan(directory, version, source, inventory = workspace) {
       assert.equal(metadata.name, name, `${file} declares ${metadata.name}`);
       assert.equal(metadata.version, version, `${file} declares version ${metadata.version}`);
       assert.equal(normalizeRepository(metadata.repository), `https://github.com/${REPOSITORY}`, `${file} names repository ${metadata.repository}`);
-      assert.equal(metadata.source, source, `${file} was packed from ${metadata.source}, not ${source}`);
+      if (registry === "npm") npmSource(name, metadata.source, source, { file });
+      else assert.equal(metadata.source, source, `${file} was packed from ${metadata.source}, not ${source}`);
       packages.push({ registry, name, file: `${registry}/${file}`, sha256: sha256(readFileSync(path)) });
     }
   }

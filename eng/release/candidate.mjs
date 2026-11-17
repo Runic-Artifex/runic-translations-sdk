@@ -112,5 +112,14 @@ export function stampNpmManifest(archive, fields, links) {
   }
   assert.equal(stamped, 1, `${archive} must contain exactly one package/package.json`);
   output.push(Buffer.alloc(1024));
-  writeFileSync(archive, gzipSync(Buffer.concat(output), { level: 9 }));
+  writeFileSync(archive, normalizedGzip(Buffer.concat(output)));
+}
+
+// zlib writes the packing host's operating system into the gzip header (3 on Linux, 10 on Windows); the header's
+// mtime is already 0. "Unknown" (255), as Bun writes it, makes the bytes the same on every host.
+export function normalizedGzip(bytes) {
+  const gzip = gzipSync(bytes, { level: 9 });
+  assert.equal(gzip.readUInt32LE(4), 0, "gzip header mtime must be 0");
+  gzip[9] = 0xff;
+  return gzip;
 }
