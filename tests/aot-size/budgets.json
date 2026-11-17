@@ -1,0 +1,20 @@
+{
+  "builds": {
+    "m200-l2": {
+      "messages": 200,
+      "locales": 2
+    }
+  },
+  "cases": {
+    "aot/translations/reflection-runtime-bytes": {
+      "class": "total",
+      "build": "m200-l2",
+      "margin": 0.1,
+      "note": "mstat bytes of System.Reflection.Runtime.* (the reflection stack behind Delegate.Method and MethodInfo) in the probe with 200 messages × 2 locales; 120,637 before #216, when TranslationHotReload.IsSupported was not constant and linked it (D072.2, T1). The limit is the measured value plus 10 %",
+      "measured": [
+        19173
+      ],
+      "limit": 21091
+    }
+  }
+}

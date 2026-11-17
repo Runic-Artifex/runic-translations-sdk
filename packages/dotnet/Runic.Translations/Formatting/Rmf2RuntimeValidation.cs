@@ -89,7 +89,7 @@ internal static class Rmf2RuntimeValidation
         >= 0x3001 and <= 0xD7FF or >= 0xE000 and <= 0xFDCF or >= 0xFDF0 and <= 0xFFFD ||
         (value >= 0x10000 && value <= 0x10FFFD && (value & 0xFFFF) <= 0xFFFD);
     internal static void Type(TextArgumentType type)
-    { if (!Enum.IsDefined(type)) throw new ArgumentException("Unknown v5 carrier type.", nameof(type)); }
+    { if (!DefinedEnums.IsDefined(type)) throw new ArgumentException("Unknown v5 carrier type.", nameof(type)); }
     internal static T[] Copy<T>(IReadOnlyList<T>? values, int maximum) where T : class
     {
         if (values is null || values.Count == 0) return [];
