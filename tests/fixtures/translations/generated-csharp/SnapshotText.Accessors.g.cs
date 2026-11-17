@@ -23,38 +23,42 @@ public sealed partial class SnapshotText
         __translationManager = (context ?? throw new global::System.ArgumentNullException(nameof(context))).GetManager(SnapshotTextCatalog.CatalogId);
     }
 
+    // Formats message <id> of the current snapshot: the shared body of the plain-text accessors below.
+    [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private string __Format(int id, global::System.ReadOnlySpan<global::Runic.Translations.TextArgument> arguments) =>
+        __translationManager.Current.Format(SnapshotTextKeys.__Key(id), arguments);
+
+    // Formats message <id> of the current snapshot as content: the shared body of the markup and document accessors below.
+    [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private global::Runic.Translations.LocalizedTextContent __FormatContent(int id, global::System.ReadOnlySpan<global::Runic.Translations.TextArgument> arguments) =>
+        __translationManager.Current.FormatContent(SnapshotTextKeys.__Key(id), arguments);
+
     /// <summary>Hello {$name}</summary>
     /// <remarks>Formats <c>greeting</c>.</remarks>
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    public string r_6772656574696e67(string r_6e616d65)
+    public string r_6772656574696e67(string r_6e616d65) => __Format(0, new global::Runic.Translations.TextArgument[]
     {
-        return __translationManager.Current.Format(SnapshotTextKeys.r_6772656574696e67, new global::Runic.Translations.TextArgument[]
-        {
-            global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument("name", new global::Runic.Translations.TextArgument("_", r_6e616d65)),
-        });
-    }
+        global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument("name", r_6e616d65),
+    });
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    public string r_args_r_6772656574696e67(global::System.ReadOnlySpan<global::Runic.Translations.TextArgument> arguments) => __translationManager.Current.Format(SnapshotTextKeys.r_6772656574696e67, arguments);
+    public string r_args_r_6772656574696e67(global::System.ReadOnlySpan<global::Runic.Translations.TextArgument> arguments) => __Format(0, arguments);
 
     /// <summary>Read the {#link}guide{/link}.</summary>
     /// <remarks>Formats <c>help</c>.</remarks>
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    public global::Runic.Translations.LocalizedTextContent r_68656c70 => __translationManager.Current.FormatContent(SnapshotTextKeys.r_68656c70, global::System.ReadOnlySpan<global::Runic.Translations.TextArgument>.Empty);
+    public global::Runic.Translations.LocalizedTextContent r_68656c70 => __FormatContent(1, default);
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    public global::Runic.Translations.LocalizedTextContent r_args_r_68656c70(global::System.ReadOnlySpan<global::Runic.Translations.TextArgument> arguments) => __translationManager.Current.FormatContent(SnapshotTextKeys.r_68656c70, arguments);
+    public global::Runic.Translations.LocalizedTextContent r_args_r_68656c70(global::System.ReadOnlySpan<global::Runic.Translations.TextArgument> arguments) => __FormatContent(1, arguments);
 
     /// <summary>{$count} items</summary>
     /// <remarks>Formats <c>items</c>.</remarks>
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    public string r_6974656d73(long r_636f756e74)
+    public string r_6974656d73(long r_636f756e74) => __Format(2, new global::Runic.Translations.TextArgument[]
     {
-        return __translationManager.Current.Format(SnapshotTextKeys.r_6974656d73, new global::Runic.Translations.TextArgument[]
-        {
-            global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument("count", new global::Runic.Translations.TextArgument("_", r_636f756e74)),
-        });
-    }
+        global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument("count", r_636f756e74),
+    });
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    public string r_args_r_6974656d73(global::System.ReadOnlySpan<global::Runic.Translations.TextArgument> arguments) => __translationManager.Current.Format(SnapshotTextKeys.r_6974656d73, arguments);
+    public string r_args_r_6974656d73(global::System.ReadOnlySpan<global::Runic.Translations.TextArgument> arguments) => __Format(2, arguments);
 
     private static global::Runic.Translations.ITranslationSnapshot? __referenceSnapshot;
 
@@ -89,7 +93,7 @@ public sealed partial class SnapshotText
             },
             global::@Snapshot.@SnapshotTextKeys.r_6772656574696e67, new global::Runic.Translations.TextArgument[]
             {
-                global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument("name", new global::Runic.Translations.TextArgument("_", @name)),
+                global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument("name", @name),
             });
 
         /// <summary>{$count} items</summary>
@@ -103,7 +107,7 @@ public sealed partial class SnapshotText
             },
             global::@Snapshot.@SnapshotTextKeys.r_6974656d73, new global::Runic.Translations.TextArgument[]
             {
-                global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument("count", new global::Runic.Translations.TextArgument("_", @count)),
+                global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument("count", @count),
             });
     }
 }

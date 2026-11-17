@@ -55,6 +55,13 @@ read without reflection and is safe for trimming and NativeAOT. Invalid data,
 which only a mismatched compiler and runtime can produce, fails that locale's
 first snapshot with an `InvalidOperationException`.
 
+The messages' keys, inputs and external-pack contracts are data too: one UTF-8
+line per message in `MessageTable` of `<Class>CatalogData.g.cs` (its key and
+` name:type` per input, with the message ID in a comment), read in one loop when
+a provider is created and when a key is first used. Each accessor is a call to a
+shared formatting body with its message ID, so a message adds about 200 bytes to
+a NativeAOT executable rather than about 550.
+
 `text.Messages` is the readable surface. It names each message by its
 flattened key, as ESM does (`application_title`), and returns
 `LocalizedTextContent<AppTextSlots.key>` for messages with markup; bind their

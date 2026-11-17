@@ -7,7 +7,9 @@ namespace Runic.Translations.Compiler.Generation;
 // Typed generated-code backend over the selected RMF2 project carrier.
 internal static class Rmf2CSharpOutputRendererV5
 {
-    internal static TranslationGeneratedOutput RenderKeys(Rmf2ProjectV5 project, bool readableSurface = true)
+    // rmf2Abi4: the referenced runtime runs RMF2 ABI 4 (see Rmf2RuntimeAbi), so the keys are created in one loop from the
+    // catalog's message table (GeneratedCatalogSupport.CreateKeys) instead of one initializer per key.
+    internal static TranslationGeneratedOutput RenderKeys(Rmf2ProjectV5 project, bool readableSurface = true, bool rmf2Abi4 = true)
     {
         GenerationWriter writer = StartFile(project);
         string visibility = Visibility(project), className = GenerationSupport.CSharpIdentifier(project.ClassName);
@@ -18,8 +20,18 @@ internal static class Rmf2CSharpOutputRendererV5
         {
             writer.Line("/// <summary>Key for <c>" + GenerationSupport.XmlDocumentation(string.Join(".", message.Path)) + "</c>.</summary>");
             if (readableSurface && HasReadable(project, message)) writer.Line(HiddenAttribute);
-            writer.Line("public static global::Runic.Translations.TranslationKey " + Member(message) + " { get; } = new global::Runic.Translations.TranslationKey(" +
+            if (rmf2Abi4) writer.Line("public static global::Runic.Translations.TranslationKey " + Member(message) + " => __keys[" + message.Id + "];");
+            else writer.Line("public static global::Runic.Translations.TranslationKey " + Member(message) + " { get; } = new global::Runic.Translations.TranslationKey(" +
                 GenerationSupport.CSharpString(project.Id) + ", " + message.Id + ", " + GenerationSupport.CSharpString(message.Key) + ");");
+        }
+        if (rmf2Abi4)
+        {
+            string data = className + "CatalogData";
+            writer.Blank();
+            writer.Line("// Every canonical message's key by ID, created on first use from the catalog's message table.");
+            writer.Line("private static readonly global::Runic.Translations.TranslationKey[] __keys = global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateKeys(" +
+                GenerationSupport.CSharpString(project.Id) + ", " + data + ".MessageTable, " + data + ".CanonicalMessageCount);");
+            writer.Line("internal static global::Runic.Translations.TranslationKey __Key(int id) => __keys[id];");
         }
         writer.Unindent(); writer.Line("}");
         return Output(TranslationGeneratedOutputKind.CSharpKeys, project.ClassName + ".Keys.g.cs", writer);
@@ -27,7 +39,9 @@ internal static class Rmf2CSharpOutputRendererV5
 
     // composition: the referenced runtime has the catalog composition surface (TranslationsCompatibility.CompositionVersion),
     // so the accessors get a constructor over an ITranslationContext and the registration class a Registration.
-    internal static TranslationGeneratedOutput RenderAccessors(Rmf2ProjectV5 project, bool readableSurface = true, bool composition = true)
+    // rmf2Abi4: each accessor calls a shared __Format or __FormatContent with its message ID, so its own code is a call,
+    // and creates its arguments with the typed GeneratedCatalogSupport.CreateArgument overloads (RMF2 ABI 4).
+    internal static TranslationGeneratedOutput RenderAccessors(Rmf2ProjectV5 project, bool readableSurface = true, bool composition = true, bool rmf2Abi4 = true)
     {
         GenerationWriter writer = StartFile(project);
         string visibility = Visibility(project), className = GenerationSupport.CSharpIdentifier(project.ClassName);
@@ -53,18 +67,21 @@ internal static class Rmf2CSharpOutputRendererV5
             writer.Unindent(); writer.Line("}");
         }
         var documentation = new Rmf2MessageDocumentationV5(project);
-        foreach (Rmf2MessageContractV5 message in Canonical(project)) WriteAccessor(writer, project, message, readableSurface, documentation);
-        WriteReferences(writer, project, documentation);
+        if (rmf2Abi4) WriteFormatHelpers(writer, project);
+        foreach (Rmf2MessageContractV5 message in Canonical(project)) WriteAccessor(writer, project, message, readableSurface, documentation, rmf2Abi4);
+        WriteReferences(writer, project, documentation, rmf2Abi4);
         writer.Unindent(); writer.Line("}");
         return Output(TranslationGeneratedOutputKind.CSharpAccessors, project.ClassName + ".Accessors.g.cs", writer);
     }
 
-    // deflatedLocaleData: the referenced runtime runs RMF2 ABI 4, so each locale's data is embedded as DEFLATE data
-    // (GeneratedCatalogSupport.ReadDeflatedValues), about a tenth of the JSON; otherwise the JSON itself (ABI 3).
-    internal static int Rmf2RuntimeAbi(bool deflatedLocaleData) =>
-        deflatedLocaleData ? Rmf2ProjectV5.DeflatedLocaleDataRuntimeAbiVersion : Rmf2ProjectV5.RuntimeAbiVersion;
+    // rmf2Abi4: the referenced runtime runs RMF2 ABI 4 (D072.2), so generated C# embeds each locale's data as DEFLATE data
+    // (GeneratedCatalogSupport.ReadDeflatedValues), about a tenth of the JSON, and reads its definitions, keys and
+    // external-pack contracts from one message table instead of code per message; otherwise (ABI 3) the JSON itself and
+    // code per message.
+    internal static int Rmf2RuntimeAbi(bool rmf2Abi4) =>
+        rmf2Abi4 ? Rmf2ProjectV5.CSharpRuntimeAbiVersion : Rmf2ProjectV5.RuntimeAbiVersion;
 
-    internal static TranslationGeneratedOutput RenderCatalogData(Rmf2ProjectV5 project, bool deflatedLocaleData = true)
+    internal static TranslationGeneratedOutput RenderCatalogData(Rmf2ProjectV5 project, bool rmf2Abi4 = true)
     {
         GenerationWriter writer = StartFile(project);
         string className = GenerationSupport.CSharpIdentifier(project.ClassName) + "CatalogData";
@@ -72,20 +89,24 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("internal static class " + className);
         writer.Line("{"); writer.Indent();
         writer.Line("internal const int GeneratedRuntimeAbiVersion = 1;");
-        writer.Line("internal const int RequiredRmf2RuntimeAbiVersion = " + Rmf2RuntimeAbi(deflatedLocaleData) + ";"); writer.Blank();
+        writer.Line("internal const int RequiredRmf2RuntimeAbiVersion = " + Rmf2RuntimeAbi(rmf2Abi4) + ";");
+        if (rmf2Abi4) writer.Line("internal const int CanonicalMessageCount = " + project.CanonicalMessages.Count + ";");
+        writer.Blank();
         writer.Line("internal static global::Runic.Translations.CompiledTranslationCatalog CreateDefinition()");
         writer.Line("{"); writer.Indent();
         writer.Line("return new global::Runic.Translations.CompiledTranslationCatalog("); writer.Indent();
         writer.Line(GenerationSupport.CSharpString(project.Id) + ",");
         writer.Line(GenerationSupport.CSharpString(project.DefaultLocale) + ",");
-        writer.Line("CreateDefinitions(),");
-        WriteLocaleList(writer, project, deflatedLocaleData);
+        writer.Line(rmf2Abi4 ? "global::Runic.Translations.Generated.GeneratedCatalogSupport.ReadDefinitions(MessageTable, CanonicalMessageCount)," : "CreateDefinitions(),");
+        WriteLocaleList(writer, project, rmf2Abi4);
         writer.Line("global::Runic.Translations.UnsupportedLocalePolicy." + project.UnsupportedLocale + ",");
         writer.Line("global::Runic.Translations.MissingTranslationPolicy." + project.MissingKey + ");");
         writer.Unindent(); writer.Unindent(); writer.Line("}"); writer.Blank();
-        WriteDefinitionChunks(writer, table);
-        WriteLocaleData(writer, project, table, deflatedLocaleData);
-        WritePackContractFactory(writer, project, table);
+        if (rmf2Abi4) WriteMessageTable(writer, table);
+        else WriteDefinitionChunks(writer, table);
+        WriteLocaleData(writer, project, table, rmf2Abi4);
+        if (rmf2Abi4) WritePackContractTable(writer, project, table);
+        else WritePackContractFactory(writer, project, table);
         writer.Unindent(); writer.Line("}");
         return Output(TranslationGeneratedOutputKind.CSharpCatalogData, project.ClassName + ".CatalogData.g.cs", writer);
     }
@@ -98,7 +119,7 @@ internal static class Rmf2CSharpOutputRendererV5
     // (TranslationCompiler.CompileRmf2OverlayV5); rendered as Overlays, which needs a runtime with CompositionVersion 2.
     // An empty list still renders the property: runic.json declares overrides whose catalogs did not compile.
     internal static TranslationGeneratedOutput RenderRegistration(Rmf2ProjectV5 project, bool composition = true, bool runtimeAbiCall = true, bool readableSurface = true,
-        IReadOnlyList<Rmf2ProjectV5>? overlays = null, bool deflatedLocaleData = true)
+        IReadOnlyList<Rmf2ProjectV5>? overlays = null, bool rmf2Abi4 = true)
     {
         GenerationWriter writer = StartFile(project);
         string visibility = Visibility(project), className = GenerationSupport.CSharpIdentifier(project.ClassName);
@@ -114,7 +135,7 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("public static string Rmf2MarkupContract => " + GenerationSupport.CSharpString(project.MarkupContract) + ";");
         writer.Line("public const string Rmf2Profile = " + GenerationSupport.CSharpString(Rmf2ProjectV5.Profile) + ";");
         writer.Line("public const int RuntimeAbiVersion = 1;");
-        writer.Line("public const int Rmf2RuntimeAbiVersion = " + Rmf2RuntimeAbi(deflatedLocaleData) + ";");
+        writer.Line("public const int Rmf2RuntimeAbiVersion = " + Rmf2RuntimeAbi(rmf2Abi4) + ";");
         writer.Line("public const int MessageGrammarVersion = 5;");
         writer.Line("public const int GeneratedNameVersion = 1;");
         writer.Line("public const int GeneratorVersion = 1;"); writer.Blank();
@@ -154,7 +175,7 @@ internal static class Rmf2CSharpOutputRendererV5
             writer.Line("if (global::Runic.Translations.Generated.TranslationsCompatibility.RuntimeAbiVersion != 1)"); writer.Indent();
             writer.Line("throw new global::System.InvalidOperationException(\"RTR0024: Generated translation code is incompatible with the referenced runtime ABI.\");"); writer.Unindent();
         }
-        writer.Line("global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2RuntimeAbi(deflatedLocaleData) + ");");
+        writer.Line("global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2RuntimeAbi(rmf2Abi4) + ");");
         // runtime.bidiIsolation: a runtime with the composition surface (0.9.0 and later) also has WithBidiIsolation, whose
         // catalogs decide per locale by default.
         string bidi = !composition ? "" : project.BidiIsolation switch
@@ -210,7 +231,7 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("global::Runic.Translations.TranslationPackLimits? limits = null,");
         writer.Line("global::Runic.Translations.TranslationPackIntegrityVerifier? integrityVerifier = null)"); writer.Unindent();
         writer.Line("{"); writer.Indent();
-        writer.Line("global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2RuntimeAbi(deflatedLocaleData) + ");");
+        writer.Line("global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2RuntimeAbi(rmf2Abi4) + ");");
         writer.Line("var factory = new global::Runic.Translations.ExternalTranslationSnapshotFactory(externalSource, CatalogId, ContractFingerprint, CreateExternalPackContract, limits, integrityVerifier);");
         writer.Line("return CreateProvider(valueFormatter, factory, options);");
         writer.Unindent(); writer.Line("}"); writer.Blank();
@@ -233,7 +254,7 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("global::Runic.Translations.TranslationPackIntegrityVerifier? integrityVerifier = null,");
         writer.Line("global::System.Threading.CancellationToken cancellationToken = default)"); writer.Unindent();
         writer.Line("{"); writer.Indent();
-        writer.Line("global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2RuntimeAbi(deflatedLocaleData) + ");");
+        writer.Line("global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2RuntimeAbi(rmf2Abi4) + ");");
         writer.Line("return global::Runic.Translations.TranslationPackLoader.LoadAsync(source, CreateExternalPackContract(locale), limits, integrityVerifier, cancellationToken);");
         writer.Unindent(); writer.Line("}");
         writer.Unindent(); writer.Line("}");
@@ -389,7 +410,36 @@ internal static class Rmf2CSharpOutputRendererV5
         _ => throw new InvalidOperationException("Unknown functional slot kind '" + kind + "'."),
     };
 
-    private static void WriteAccessor(GenerationWriter writer, Rmf2ProjectV5 project, Rmf2MessageContractV5 message, bool readableSurface, Rmf2MessageDocumentationV5 documentation)
+    // The bodies every accessor shares (RMF2 ABI 4). Not inlined, so each accessor stays a call with its message ID;
+    // only the helpers the catalog's messages use are written.
+    private static void WriteFormatHelpers(GenerationWriter writer, Rmf2ProjectV5 project)
+    {
+        string keys = GenerationSupport.CSharpIdentifier(project.ClassName) + "Keys";
+        Rmf2MessageContractV5[] messages = Canonical(project);
+        const string NoInlining = "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]";
+        const string Arguments = "global::System.ReadOnlySpan<global::Runic.Translations.TextArgument> arguments";
+        if (messages.Any(message => !UsesContent(message)))
+        {
+            writer.Blank();
+            writer.Line("// Formats message <id> of the current snapshot: the shared body of the plain-text accessors below.");
+            writer.Line(NoInlining);
+            writer.Line("private string __Format(int id, " + Arguments + ") =>"); writer.Indent();
+            writer.Line("__translationManager.Current.Format(" + keys + ".__Key(id), arguments);"); writer.Unindent();
+        }
+        if (messages.Any(UsesContent))
+        {
+            writer.Blank();
+            writer.Line("// Formats message <id> of the current snapshot as content: the shared body of the markup and document accessors below.");
+            writer.Line(NoInlining);
+            writer.Line("private global::Runic.Translations.LocalizedTextContent __FormatContent(int id, " + Arguments + ") =>"); writer.Indent();
+            writer.Line("__translationManager.Current.FormatContent(" + keys + ".__Key(id), arguments);"); writer.Unindent();
+        }
+    }
+
+    private static bool UsesContent(Rmf2MessageContractV5 message) => message.Structured || message.Content == Rmf2DocumentProfileV5.Document;
+
+    private static void WriteAccessor(GenerationWriter writer, Rmf2ProjectV5 project, Rmf2MessageContractV5 message, bool readableSurface, Rmf2MessageDocumentationV5 documentation,
+        bool rmf2Abi4)
     {
         bool document = message.Content == Rmf2DocumentProfileV5.Document;
         string member = Member(message), result = document ? "global::Runic.Translations.LocalizedDocumentContent"
@@ -402,6 +452,24 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Blank();
         WriteSummary(writer, message, documentation);
         if (hidden) writer.Line(HiddenAttribute);
+        if (rmf2Abi4)
+        {
+            string call = open + "__" + format + "(" + message.Id + ", ";
+            if (message.Inputs.Count == 0) writer.Line("public " + result + " " + member + " => " + call + "default)" + close + ";");
+            else
+            {
+                var parameters = new List<string>(message.Inputs.Count);
+                foreach (Rmf2InputV5 input in message.Inputs) parameters.Add(ParameterType(input.Type) + " " + Rmf2GeneratedNamesV1.Identifier(input.Name));
+                writer.Line("public " + result + " " + member + "(" + string.Join(", ", parameters) + ") => " + call + "new global::Runic.Translations.TextArgument[]");
+                writer.Line("{"); writer.Indent();
+                foreach (Rmf2InputV5 input in message.Inputs)
+                    writer.Line(TypedArgument(input.Name, Rmf2GeneratedNamesV1.Identifier(input.Name)) + ",");
+                writer.Unindent(); writer.Line("})" + close + ";");
+            }
+            if (readableSurface) writer.Line(HiddenAttribute);
+            writer.Line("public " + result + " r_args_" + member + "(global::System.ReadOnlySpan<global::Runic.Translations.TextArgument> arguments) => " + call + "arguments)" + close + ";");
+            return;
+        }
         if (message.Inputs.Count == 0)
             writer.Line("public " + result + " " + member + " => " + open + "__translationManager.Current." + format + "(" + Key(project, message) + ", global::System.ReadOnlySpan<global::Runic.Translations.TextArgument>.Empty)" + close + ";");
         else
@@ -448,7 +516,7 @@ internal static class Rmf2CSharpOutputRendererV5
     // seconds, the transport's precision. Members use the readable name (the key) where the readable policy allows it and
     // the encoded name otherwise (see ReadableReferences). Every reference is fully qualified, as no key or input name can
     // capture it.
-    private static void WriteReferences(GenerationWriter writer, Rmf2ProjectV5 project, Rmf2MessageDocumentationV5 documentation)
+    private static void WriteReferences(GenerationWriter writer, Rmf2ProjectV5 project, Rmf2MessageDocumentationV5 documentation, bool rmf2Abi4)
     {
         // A nested type cannot share the name of its enclosing class (CS0542).
         if (project.ClassName == ReferencesClass) return;
@@ -537,7 +605,8 @@ internal static class Rmf2CSharpOutputRendererV5
                 writer.Line(keys + "." + Member(message) + ", new global::Runic.Translations.TextArgument[]");
                 writer.Line("{"); writer.Indent();
                 for (int index = 0; index < parameters.Length; index++)
-                    writer.Line("global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(" + GenerationSupport.CSharpString(message.Inputs[index].Name) + ", new global::Runic.Translations.TextArgument(\"_\", " + parameters[index] + ")),");
+                    writer.Line((rmf2Abi4 ? TypedArgument(message.Inputs[index].Name, parameters[index])
+                        : "global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(" + GenerationSupport.CSharpString(message.Inputs[index].Name) + ", new global::Runic.Translations.TextArgument(\"_\", " + parameters[index] + "))") + ",");
                 writer.Unindent(); writer.Line("});");
             }
             writer.Unindent();
@@ -618,6 +687,46 @@ internal static class Rmf2CSharpOutputRendererV5
             }
             writer.Unindent(); writer.Line("}"); writer.Blank();
         }
+    }
+
+    // The message table (RMF2 ABI 4, GeneratedCatalogSupport.ReadDefinitions): one UTF-8 line per message in ID order, its
+    // key and " name:type" per caller input; the canonical messages first, then the permitted locale extras. A UTF-8
+    // literal per line keeps it readable; the C# compiler joins them into one constant, embedded as RVA data.
+    private static void WriteMessageTable(GenerationWriter writer, Rmf2V5DefinitionTable table)
+    {
+        writer.Line("// The message table: one line per message in ID order, its key and \" name:type\" per caller input. The first");
+        writer.Line("// CanonicalMessageCount lines are the canonical messages, the rest the permitted locale extras. The definitions, the keys");
+        writer.Line("// and the external-pack contracts are read from it (GeneratedCatalogSupport).");
+        if (table.Definitions.Count == 0) { writer.Line("internal static global::System.ReadOnlySpan<byte> MessageTable => default;"); writer.Blank(); return; }
+        writer.Line("internal static global::System.ReadOnlySpan<byte> MessageTable =>"); writer.Indent();
+        for (int index = 0; index < table.Definitions.Count; index++)
+        {
+            Rmf2MessageContractV5 contract = table.Definitions[index].Contract;
+            string line = contract.Key + string.Concat(contract.Inputs.Select(input => " " + input.Name + ":" + input.Type)) + "\n";
+            writer.Line(GenerationSupport.CSharpString(line) + "u8" + (index + 1 < table.Definitions.Count ? " +" : ";") + " // " + table.Definitions[index].Id);
+        }
+        writer.Unindent(); writer.Blank();
+    }
+
+    // Each locale's external-pack contract from the message table (RMF2 ABI 4): every canonical message and the permitted
+    // locale extras the locale resolves, by ID.
+    private static void WritePackContractTable(GenerationWriter writer, Rmf2ProjectV5 project, Rmf2V5DefinitionTable table)
+    {
+        string registration = GenerationSupport.CSharpIdentifier(project.ClassName) + "Catalog";
+        writer.Line("internal static global::Runic.Translations.TranslationPackContract CreateExternalPackContract(string locale)");
+        writer.Line("{"); writer.Indent();
+        writer.Line("if (locale is null) throw new global::System.ArgumentNullException(nameof(locale));");
+        foreach (Rmf2LocaleV5 locale in project.Locales.OrderBy(item => item.Tag, StringComparer.Ordinal))
+        {
+            var resolved = locale.ResolvedResources.Select(item => item.Key).ToHashSet(StringComparer.Ordinal);
+            int[] extras = table.Definitions.Where(item => !item.Canonical && resolved.Contains(item.Contract.Key)).Select(item => item.Id).OrderBy(id => id).ToArray();
+            writer.Line("if (global::System.String.Equals(locale, " + GenerationSupport.CSharpString(locale.Tag) + ", global::System.StringComparison.Ordinal))"); writer.Indent();
+            writer.Line("return global::Runic.Translations.Generated.GeneratedCatalogSupport.CreatePackContract(" + GenerationSupport.CSharpString(project.Id) + ", " +
+                GenerationSupport.CSharpString(locale.Tag) + ", " + GenerationSupport.CSharpString(project.CallerFingerprint) + ", MessageTable, CanonicalMessageCount, " +
+                (extras.Length == 0 ? "default" : "new int[] { " + string.Join(", ", extras) + " }") + ", " + registration + ".Rmf2MarkupContract);"); writer.Unindent();
+        }
+        writer.Line("throw new global::System.ArgumentException(\"The locale is not declared by this generated catalog.\", nameof(locale));");
+        writer.Unindent(); writer.Line("}"); writer.Blank();
     }
 
     // Each locale's direct values are UTF-8 JSON data in the assembly, read when a snapshot first needs the locale:
@@ -845,6 +954,10 @@ internal static class Rmf2CSharpOutputRendererV5
             }
         }
     }
+
+    // An RMF2 ABI 4 argument: GeneratedCatalogSupport.CreateArgument(name, value) with the carrier's default format.
+    private static string TypedArgument(string input, string parameter) =>
+        "global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(" + GenerationSupport.CSharpString(input) + ", " + parameter + ")";
 
     private static string Value(Rmf2ValueV5 value) => "new global::Runic.Translations.Generated.CompiledRmf2Value(" + GenerationSupport.CSharpString(value.Kind) + ", " + GenerationSupport.CSharpString(value.Value) + ", " + (value.Canonical is null ? "null" : GenerationSupport.CSharpString(value.Canonical)) + ")";
     private static string Type(string type) => type switch { "string" => "String", "int64" => "Int", "decimal" => "Number", "boolean" => "Bool", "date" => "Date", "time" => "Time", "datetime" => "DateTime", "guid" => "Guid", "list" => "List", _ => throw new InvalidOperationException("Unknown RMF2 carrier '" + type + "'.") };
