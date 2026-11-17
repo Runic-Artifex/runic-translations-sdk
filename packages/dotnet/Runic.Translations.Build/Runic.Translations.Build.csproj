@@ -22,6 +22,9 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Build.Framework" PrivateAssets="all" ExcludeAssets="runtime" />
     <Compile Include="../../../tools/Runic.Translations.Compiler/PathContainment.cs" Link="Shared/PathContainment.cs" />
+    <!-- The CLDR subset task (CldrLocaleSubset) resolves locales as the runtime does, without loading the compiler. -->
+    <Compile Include="../Runic.Translations/Formatting/CldrLocales.cs" Link="Cldr/CldrLocales.cs" />
+    <Compile Include="../Runic.Translations/Formatting/GeneratedLocaleTables.cs" Link="Cldr/GeneratedLocaleTables.cs" />
     <ProjectReference Include="..\..\..\tools\Runic.Translations.Compiler\Runic.Translations.Compiler.csproj" PrivateAssets="all" />
     <ProjectReference Include="..\Runic.Translations.Generator\Runic.Translations.Generator.csproj" PrivateAssets="all" />
     <None Include="../../../specs/translations/THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="/" />

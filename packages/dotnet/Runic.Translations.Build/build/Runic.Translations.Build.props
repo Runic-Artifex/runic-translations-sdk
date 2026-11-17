@@ -4,6 +4,8 @@
     <RunicTranslationsGenerateOnBuild Condition="'$(RunicTranslationsGenerateOnBuild)' == ''">false</RunicTranslationsGenerateOnBuild>
     <RunicTranslationsEmitJson Condition="'$(RunicTranslationsEmitJson)' == ''">false</RunicTranslationsEmitJson>
     <RunicTranslationsEmitEsm Condition="'$(RunicTranslationsEmitEsm)' == ''">false</RunicTranslationsEmitEsm>
+    <!-- Opt-in (D072.6): embed only the catalog languages' CLDR data; see the README's RunicTranslationsCldrSubset. -->
+    <RunicTranslationsCldrSubset Condition="'$(RunicTranslationsCldrSubset)' == ''">false</RunicTranslationsCldrSubset>
 
     <!-- Keep the launcher replaceable for local tools, pinned tool manifests, and package tests. -->
     <RunicTranslationsToolCommand Condition="'$(RunicTranslationsToolCommand)' == ''">dotnet tool run runic-translations --</RunicTranslationsToolCommand>

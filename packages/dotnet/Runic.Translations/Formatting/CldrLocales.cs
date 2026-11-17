@@ -1,10 +1,12 @@
-// Linked into Runic.Translations and Runic.Translations.Compiler; each assembly gets its own internal copy.
+// Linked into Runic.Translations, Runic.Translations.Compiler and Runic.Translations.Build; each assembly gets its own internal copy.
 // The ESM runtime (Rmf2EsmRuntimeV5.js) and eng/cldr-locales.mjs implement the same algorithm.
 using System;
 using System.Collections.Generic;
 
 #if RUNIC_TRANSLATIONS_COMPILER
 namespace Runic.Translations.Compiler;
+#elif RUNIC_TRANSLATIONS_BUILD
+namespace Runic.Translations.Build;
 #else
 namespace Runic.Translations;
 #endif

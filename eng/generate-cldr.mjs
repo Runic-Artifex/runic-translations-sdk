@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { brotliCompressSync, brotliDecompressSync, constants as zlibConstants, deflateRawSync, inflateRawSync } from "node:zlib";
 import {
   csharpRuleBody,
+  encodeRuleSet,
   javascriptRuleFunction,
   parseRuleSet,
   pluralCategories,
@@ -16,6 +17,9 @@ const registryPath = resolve(root, "tools/Runic.Translations.Compiler/Translatio
 const runtimePath = resolve(root, "packages/dotnet/Runic.Translations/Formatting/GeneratedLocaleData.cs");
 const tablesPath = resolve(root, "packages/dotnet/Runic.Translations/Formatting/GeneratedLocaleTables.cs");
 const resourcePath = resolve(root, "packages/dotnet/Runic.Translations/Formatting/GeneratedLocaleData.bin");
+// The tables and selectors as the generator emitted them before they became data (D072.2, T4): the runtime tests
+// compare the data and its interpreter with them for every locale and a sweep of operands.
+const oraclePath = resolve(root, "tests/dotnet/Runic.Translations.Runtime.Tests/Generated/CldrOracle.g.cs");
 const matrixPath = resolve(root, "specs/translations/capabilities-v1.json");
 const formatsSourcePath = resolve(root, "specs/translations/cldr/runic-formats-48.2.json");
 // Currency, unit and compact-notation data for the compiler only: a catalog embeds the entries it uses (D055.4).
@@ -82,7 +86,13 @@ const addRule = (ruleSet) => {
   const key = csharpRuleBody(ruleSet, "");
   if (!ruleIndex.has(key)) {
     ruleIndex.set(key, rules.length);
-    rules.push({ csharp: csharpRuleBody(ruleSet, "        "), javascript: javascriptRuleFunction(ruleSet), categories: ruleSet.map((rule) => rule.category) });
+    rules.push({
+      csharp: csharpRuleBody(ruleSet, "        "),
+      javascript: javascriptRuleFunction(ruleSet),
+      bytes: encodeRuleSet(ruleSet),
+      source: ruleSet.filter((rule) => rule.condition !== null).map((rule) => `${rule.category}: ${rule.source}`).join("; ") || "other",
+      categories: ruleSet.map((rule) => rule.category),
+    });
   }
   return ruleIndex.get(key);
 };
@@ -148,47 +158,60 @@ for (const id of sortedKeys(locales, "locales")) {
       throw new Error(`Day periods for '${id}' must start at 0 and ascend.`);
     dayPeriods[id] = data.dayPeriods.flatMap(([from, name]) => [String(from), name]);
   }
-  // CLDR list patterns as [start, middle, end, 2] for each Intl.ListFormat type and style, 36
-  // patterns in all. Each has {0} before {1}; some add text before, between or after (mi, ti).
-  if (data.listPatterns !== undefined) {
-    if (Object.keys(data.listPatterns).join() !== listTypes.join())
-      throw new Error(`List patterns for '${id}' must list ${listTypes.join(", ")}.`);
-    list[id] = listTypes.flatMap((type) => {
-      if (Object.keys(data.listPatterns[type]).join() !== listStyles.join())
-        throw new Error(`List patterns '${id}/${type}' must list ${listStyles.join(", ")}.`);
-      return listStyles.flatMap((style) => {
-        const patterns = data.listPatterns[type][style];
-        if (!Array.isArray(patterns) || patterns.length !== 4)
-          throw new Error(`List patterns '${id}/${type}/${style}' must be [start, middle, end, 2].`);
-        for (const pattern of patterns) {
-          const first = typeof pattern === "string" ? pattern.indexOf("{0}") : -1, second = first < 0 ? -1 : pattern.indexOf("{1}");
-          if (first < 0 || second < first || /[{}]/.test(pattern.replace("{0}", "").replace("{1}", "")))
-            throw new Error(`List pattern '${id}/${type}/${style}' must contain {0} and then {1}.`);
-        }
-        return patterns;
-      });
-    });
-  }
-  // Relative time as 17 slots per unit: the past patterns by plural category (zero … other), the
-  // future patterns likewise, then the texts of relative-type -2 … 2; absent entries are null.
-  if (data.relativeTime !== undefined) {
-    if (Object.keys(data.relativeTime).join() !== units.join())
-      throw new Error(`Relative time for '${id}' must list ${units.join(", ")}.`);
-    relativeTime[id] = units.flatMap((unit) => {
-      const field = data.relativeTime[unit];
-      const patterns = (direction) => pluralCategories.map((category) => {
-        const pattern = field[direction]?.[category];
-        if (pattern !== undefined && (typeof pattern !== "string" || pattern.split("{0}").length > 2 || /[{}]/.test(pattern.replace("{0}", ""))))
-          throw new Error(`Relative-time pattern '${id}/${unit}/${direction}/${category}' may contain {0} at most once.`);
-        return pattern ?? null;
-      });
-      const past = patterns("past"), future = patterns("future");
-      if (past[5] === null || future[5] === null) throw new Error(`Relative time '${id}/${unit}' needs 'other' patterns.`);
-      for (const key of Object.keys(field.relative ?? {})) if (!offsets.includes(key)) throw new Error(`Unknown relative type '${id}/${unit}/${key}'.`);
-      return [...past, ...future, ...offsets.map((offset) => field.relative?.[offset] ?? null)];
-    });
-  }
+  if (data.listPatterns !== undefined) list[id] = listRecord(id, data.listPatterns);
+  if (data.relativeTime !== undefined) relativeTime[id] = relativeTimeRecord(id, data.relativeTime);
 }
+
+// CLDR list patterns as [start, middle, end, 2] for each Intl.ListFormat type and style, 36
+// patterns in all. Each has {0} before {1}; some add text before, between or after (mi, ti).
+function listRecord(id, listPatterns) {
+  if (Object.keys(listPatterns).join() !== listTypes.join())
+    throw new Error(`List patterns for '${id}' must list ${listTypes.join(", ")}.`);
+  return listTypes.flatMap((type) => {
+    if (Object.keys(listPatterns[type]).join() !== listStyles.join())
+      throw new Error(`List patterns '${id}/${type}' must list ${listStyles.join(", ")}.`);
+    return listStyles.flatMap((style) => {
+      const patterns = listPatterns[type][style];
+      if (!Array.isArray(patterns) || patterns.length !== 4)
+        throw new Error(`List patterns '${id}/${type}/${style}' must be [start, middle, end, 2].`);
+      for (const pattern of patterns) {
+        const first = typeof pattern === "string" ? pattern.indexOf("{0}") : -1, second = first < 0 ? -1 : pattern.indexOf("{1}");
+        if (first < 0 || second < first || /[{}]/.test(pattern.replace("{0}", "").replace("{1}", "")))
+          throw new Error(`List pattern '${id}/${type}/${style}' must contain {0} and then {1}.`);
+      }
+      return patterns;
+    });
+  });
+}
+
+// Relative time as 17 slots per unit: the past patterns by plural category (zero … other), the future patterns
+// likewise, then the texts of relative-type -2 … 2; absent entries are null.
+function relativeTimeRecord(id, data) {
+  if (Object.keys(data).join() !== units.join())
+    throw new Error(`Relative time for '${id}' must list ${units.join(", ")}.`);
+  return units.flatMap((unit) => {
+    const field = data[unit];
+    const patterns = (direction) => pluralCategories.map((category) => {
+      const pattern = field[direction]?.[category];
+      if (pattern !== undefined && (typeof pattern !== "string" || pattern.split("{0}").length > 2 || /[{}]/.test(pattern.replace("{0}", ""))))
+        throw new Error(`Relative-time pattern '${id}/${unit}/${direction}/${category}' may contain {0} at most once.`);
+      return pattern ?? null;
+    });
+    const past = patterns("past"), future = patterns("future");
+    if (past[5] === null || future[5] === null) throw new Error(`Relative time '${id}/${unit}' needs 'other' patterns.`);
+    for (const key of Object.keys(field.relative ?? {})) if (!offsets.includes(key)) throw new Error(`Unknown relative type '${id}/${unit}/${key}'.`);
+    return [...past, ...future, ...offsets.map((offset) => field.relative?.[offset] ?? null)];
+  });
+}
+
+// CLDR root's lists and relative times, for a locale outside a .NET application's CLDR subset
+// (RunicTranslationsCldrSubset): stored as the records "root", which no locale's parent chain reaches, so they are in
+// no ID table. Root's relative-type texts ("yesterday", "now") are English, so they are left out: numeric=auto then
+// writes the number ("-1 d"). Its disjunction keeps CLDR's "or".
+if (!source.root || typeof source.root !== "object") throw new Error("CLDR subset has no root data.");
+list.root = listRecord("root", source.root.listPatterns);
+relativeTime.root = relativeTimeRecord("root", source.root.relativeTime).map((value, index) => index % 17 >= 12 ? null : value);
+const tableIds = (records) => Object.keys(records).filter((id) => id !== "root");
 
 // The 12 fields of a numbering system's formats in a locale: its digits, the decimal, group and minus symbols, the
 // primary and secondary group sizes of the standard decimal pattern and of the percent pattern, and the prefix and
@@ -285,57 +308,93 @@ const wrap = (items, indent) => {
 };
 const csArray = (type, values, indent = "        ") =>
   values.length === 0 ? "[]" : `\n    [\n${wrap(values.map((value) => (type === "string" ? csString(value) : String(value))), indent)}\n    ]`;
-const keysAndValues = (name, table, valueType = "string") =>
-  `    internal static readonly string[] ${name}Keys =${csArray("string", Object.keys(table))};\n` +
-  `    internal static readonly ${valueType}[] ${name}Values =${csArray(valueType, Object.values(table))};`;
+// The string tables of GeneratedLocaleTables, each sorted by key in ordinal order. `values` is a parallel array of the
+// keys' values; a byte table stores small numbers. The summaries document the generated fields.
+const stringTables = [
+  ["Likely", likely, "string", "CLDR likelySubtags of the languages with CLDR data, without entries that shorter keys imply."],
+  ["Parent", parents, "string", "CLDR parentLocales as data IDs, without the parents the default rules give; <c>root</c> ends a chain."],
+  ["Alias", aliases, "string", "Deprecated and legacy language codes and their replacements: <c>iw</c> → <c>he</c>, <c>sh</c> → <c>sr-Latn</c>."],
+  ["Cardinal", cardinal, "byte", "The cardinal plural rule set of each CLDR plural locale."],
+  ["Ordinal", ordinal, "byte", "The ordinal plural rule set of each CLDR ordinal locale."],
+  ["Grouping", grouping, "byte", "CLDR <c>minimumGroupingDigits</c> where it differs from the parent locale's (1 at the root)."],
+  ["NumberIds", Object.keys(numbers), null, "The data IDs with number formats in <c>GeneratedLocaleData.bin</c>."],
+  ["WeekdayIds", Object.keys(weekdays), null, "The data IDs with format-context weekday names (or an empty override) in <c>GeneratedLocaleData.bin</c>."],
+  ["DayPeriodIds", Object.keys(dayPeriods), null, "The data IDs with flexible day periods (or an empty override) in <c>GeneratedLocaleData.bin</c>."],
+  ["ListIds", tableIds(list), null, "The data IDs with list patterns in <c>GeneratedLocaleData.bin</c>."],
+  ["RelativeTimeIds", tableIds(relativeTime), null, "The data IDs with relative-time data in <c>GeneratedLocaleData.bin</c>."],
+  ["RightToLeftScripts", rightToLeftScripts, null, "CLDR's right-to-left scripts (ISO 15924), sorted: a locale is right-to-left when its script, explicit or likely, is one of them."],
+];
+// Each string once, in ordinal order: the tables hold 16-bit indexes into it.
+const stringPool = [...new Set(stringTables.flatMap(([, table, type]) =>
+  type === null ? table : [...Object.keys(table), ...(type === "string" ? Object.values(table) : [])]))].sort(ordinalSort);
+if (stringPool.length > 65535 || stringPool.some((value) => !/^[A-Za-z0-9-]+$/.test(value)))
+  throw new Error("The CLDR table strings must be ASCII tags, at most 65,535 of them.");
+const poolIndex = new Map(stringPool.map((value, index) => [value, index]));
+const indexBytes = (values) => values.flatMap((value) => [poolIndex.get(value) & 255, poolIndex.get(value) >> 8]);
+const byteSpan = (bytes, indent = "        ") => bytes.length === 0 ? "[]" : `\n    [\n${wrap(bytes.map(String), indent)}\n    ]`;
+const tableFields = stringTables.map(([name, table, type, summary]) => {
+  const doc = `    /// <summary>${summary}</summary>\n`;
+  if (type === null) return `${doc}    internal static readonly string[] ${name} = Table(${byteSpan(indexBytes(table)).replace(/\n {4}\]$/, "\n    ]")});`;
+  const keys = `    internal static readonly string[] ${name}Keys = Table(${byteSpan(indexBytes(Object.keys(table)))});`;
+  const values = type === "string"
+    ? `    internal static readonly string[] ${name}Values = Table(${byteSpan(indexBytes(Object.values(table)))});`
+    : `    internal static readonly byte[] ${name}Values =${csArray("byte", Object.values(table))};`;
+  return `${doc}${keys}\n${values}`;
+}).join("\n");
 
 const tables = `// <auto-generated by eng/generate-cldr.mjs from CLDR ${source.source.cldrVersion} />
-// Linked into Runic.Translations and Runic.Translations.Compiler; each assembly gets its own internal copy.
+// Linked into Runic.Translations, Runic.Translations.Compiler and Runic.Translations.Build; each assembly gets its own internal copy.
 #if RUNIC_TRANSLATIONS_COMPILER
 namespace Runic.Translations.Compiler;
+#elif RUNIC_TRANSLATIONS_BUILD
+namespace Runic.Translations.Build;
 #else
 namespace Runic.Translations;
 #endif
 
 /// <summary>Pinned CLDR locale tables, each sorted by key in ordinal order.</summary>
+/// <remarks>
+/// The tables are data, not code (D072.2, T4): every string once, in ordinal order and separated by spaces, and each
+/// table as 16-bit little-endian indexes into them. Array initializers of string literals compiled to 38 KB of
+/// NativeAOT code; the data is about 10 KB, and the first use of a table decodes every table in some microseconds.
+/// </remarks>
 internal static class GeneratedLocaleTables
 {
     internal const string CldrVersion = ${csString(source.source.cldrVersion)};
     /// <summary>The number of plural rule sets; rule 0 is the root rule (<c>other</c> only).</summary>
     internal const int PluralRuleCount = ${rules.length};
-    /// <summary>CLDR likelySubtags of the languages with CLDR data, without entries that shorter keys imply.</summary>
-${keysAndValues("Likely", likely)}
-    /// <summary>CLDR parentLocales as data IDs, without the parents the default rules give; <c>root</c> ends a chain.</summary>
-${keysAndValues("Parent", parents)}
-    /// <summary>Deprecated and legacy language codes and their replacements: <c>iw</c> → <c>he</c>, <c>sh</c> → <c>sr-Latn</c>.</summary>
-${keysAndValues("Alias", aliases)}
-    /// <summary>The cardinal plural rule set of each CLDR plural locale.</summary>
-${keysAndValues("Cardinal", cardinal, "byte")}
-    /// <summary>The ordinal plural rule set of each CLDR ordinal locale.</summary>
-${keysAndValues("Ordinal", ordinal, "byte")}
-    /// <summary>CLDR <c>minimumGroupingDigits</c> where it differs from the parent locale's (1 at the root).</summary>
-${keysAndValues("Grouping", grouping, "byte")}
-    /// <summary>The data IDs with number formats in <c>GeneratedLocaleData.bin</c>.</summary>
-    internal static readonly string[] NumberIds =${csArray("string", Object.keys(numbers))};
-    /// <summary>The data IDs with format-context weekday names (or an empty override) in <c>GeneratedLocaleData.bin</c>.</summary>
-    internal static readonly string[] WeekdayIds =${csArray("string", Object.keys(weekdays))};
-    /// <summary>The data IDs with flexible day periods (or an empty override) in <c>GeneratedLocaleData.bin</c>.</summary>
-    internal static readonly string[] DayPeriodIds =${csArray("string", Object.keys(dayPeriods))};
-    /// <summary>The data IDs with list patterns in <c>GeneratedLocaleData.bin</c>.</summary>
-    internal static readonly string[] ListIds =${csArray("string", Object.keys(list))};
-    /// <summary>The data IDs with relative-time data in <c>GeneratedLocaleData.bin</c>.</summary>
-    internal static readonly string[] RelativeTimeIds =${csArray("string", Object.keys(relativeTime))};
-    /// <summary>CLDR's right-to-left scripts (ISO 15924), sorted: a locale is right-to-left when its script, explicit or likely, is one of them.</summary>
-    internal static readonly string[] RightToLeftScripts =${csArray("string", rightToLeftScripts)};
+    // Initialized first: the tables below index it.
+    private static readonly string[] s_strings = Strings(${csString(stringPool.join(" "))}u8, ${stringPool.length});
+${tableFields}
+
+    private static string[] Strings(System.ReadOnlySpan<byte> text, int count)
+    {
+        string[] result = new string[count];
+        for (int index = 0; index < count; index++)
+        {
+            int end = System.MemoryExtensions.IndexOf(text, (byte)' ');
+            if (end < 0) end = text.Length;
+            result[index] = System.Text.Encoding.UTF8.GetString(text[..end]);
+            text = end < text.Length ? text[(end + 1)..] : default;
+        }
+        return result;
+    }
+
+    private static string[] Table(System.ReadOnlySpan<byte> indexes)
+    {
+        string[] result = new string[indexes.Length / 2];
+        for (int index = 0; index < result.Length; index++) result[index] = s_strings[indexes[2 * index] | (indexes[(2 * index) + 1] << 8)];
+        return result;
+    }
 }
 `;
 
-const ruleCases = rules.map((_, index) => `        ${index} => Rule${index}(in operands),`).join("\n");
-const ruleMethods = rules.map((rule, index) => `
-    private static string Rule${index}(in PluralOperands o)
-    {
-${rule.csharp}
-    }`).join("\n");
+// The plural rule bytecode (encodeRuleSet): a 16-bit little-endian offset per rule set, then the rule sets.
+const ruleBytes = [];
+const ruleOffsets = [];
+for (const rule of rules) { ruleOffsets.push(rules.length * 2 + ruleBytes.length); ruleBytes.push(...rule.bytes); }
+if (rules.length * 2 + ruleBytes.length > 65535) throw new Error("The plural rule bytecode exceeds 64 KB.");
+const ruleLines = rules.map((rule, index) => `        ${rule.bytes.join(", ")}, // ${index}: ${rule.source}`.replace(/^ {8}, /, "        "));
 const runtime = `// <auto-generated by eng/generate-cldr.mjs from CLDR ${source.source.cldrVersion} />
 #nullable enable
 namespace Runic.Translations;
@@ -344,7 +403,41 @@ internal static partial class GeneratedLocaleData
 {
     internal const string CldrVersion = ${csString(source.source.cldrVersion)};
 
-    /// <summary>Applies a pinned CLDR plural rule set (an index from <see cref="CldrLocales.PluralRule"/>) to the operands of a visible decimal.</summary>
+    /// <summary>
+    /// The bytecode of the pinned CLDR plural rule sets, which <see cref="ApplyPluralRule"/> interprets: a 16-bit
+    /// little-endian offset per rule set, then each rule set (eng/cldr-plural-rules.mjs, encodeRuleSet).
+    /// </summary>
+    private static System.ReadOnlySpan<byte> PluralRules =>
+    [
+${wrap(ruleOffsets.flatMap((offset) => [String(offset & 255), String(offset >> 8)]), "        ")},
+${ruleLines.join("\n")}
+    ];
+}
+`;
+
+// The test oracle: the tables and selectors as code, as eng/generate-cldr.mjs emitted them before D072.2 (T4).
+const oracleArrays = stringTables.map(([name, table, type]) => type === null
+  ? `    internal static readonly string[] ${name} =${csArray("string", table)};`
+  : `    internal static readonly string[] ${name}Keys =${csArray("string", Object.keys(table))};\n` +
+    `    internal static readonly ${type}[] ${name}Values =${csArray(type, Object.values(table))};`).join("\n");
+const ruleCases = rules.map((_, index) => `        ${index} => Rule${index}(in operands),`).join("\n");
+const ruleMethods = rules.map((rule, index) => `
+    private static string Rule${index}(in PluralOperands o)
+    {
+${rule.csharp}
+    }`).join("\n");
+const oracle = `// <auto-generated by eng/generate-cldr.mjs from CLDR ${source.source.cldrVersion} />
+#nullable enable
+namespace Runic.Translations.Runtime.Tests;
+
+/// <summary>
+/// The CLDR tables and plural selectors as compiled code, generated from the same pinned data as the runtime's tables
+/// and plural rule bytecode: CldrDataEquivalenceTests compares the two for every locale and a sweep of operands.
+/// </summary>
+internal static class CldrOracle
+{
+${oracleArrays}
+
     internal static string ApplyPluralRule(int rule, in PluralOperands operands) => rule switch
     {
 ${ruleCases}
@@ -427,6 +520,7 @@ await Promise.all([
   emit(registryPath, registry),
   emit(runtimePath, runtime),
   emit(tablesPath, tables),
+  emit(oraclePath, oracle),
   emitResource(resourcePath, resource, resourceJson, inflateRawSync),
   emitResource(formatResourcePath, formatResource, formatResourceJson, brotliDecompressSync),
   emit(matrixPath, matrix),
