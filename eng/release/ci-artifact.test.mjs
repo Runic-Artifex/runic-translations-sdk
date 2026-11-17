@@ -3,7 +3,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ARTIFACT, CI_WORKFLOW, REPOSITORY, createRelease, githubPrerelease, releaseNotes, findCiPackages, prepare, refuseTrainFeed, releaseCheck, selectArtifact, selectCiRun, verify } from "./ci-artifact.mjs";
+import { ARTIFACT, CI_WORKFLOW, REPOSITORY, createRelease, githubPrerelease, releaseNotes, findCiPackages, prepare, refuseTrainFeed, releaseCheck, selectArtifact, scan, selectCiRun, verify } from "./ci-artifact.mjs";
 
 const sha = "a".repeat(40);
 const run = (id, extra = {}) => ({ id, head_sha: sha, event: "push", head_branch: "main", path: CI_WORKFLOW,
@@ -80,6 +80,10 @@ with tarfile.open(d+'/npm/runic-artifex-translations-svelte-'+v+'.tgz','w:gz') a
     expect(() => verify(directory, manifest, sha, version, "42", inventory)).toThrow();
     pack(version, "b".repeat(40));
     expect(() => prepare(directory, version, sha, "42", inventory)).toThrow("packed from");
+    // An npm archive names the commit that last changed its inputs; scan hands it to the npm source check.
+    const checked = [];
+    expect(scan(directory, version, sha, inventory, { npmSource: (...args) => checked.push(args) })).toHaveLength(2);
+    expect(checked).toEqual([["@runic-artifex/translations-svelte", "b".repeat(40), sha, { file: `runic-artifex-translations-svelte-${version}.tgz` }]]);
     pack();
     writeFileSync(join(directory, "npm", "stale.tgz"), "stale");
     expect(() => prepare(directory, version, sha, "42", inventory)).toThrow("exactly");

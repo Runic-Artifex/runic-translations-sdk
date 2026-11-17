@@ -350,6 +350,36 @@ failed or interrupted pack keeps the previous set. The version and `gitHead` are
 written into the packed npm archives; tracked `package.json` files are not modified.
 It does not run `bun run verify-editor-packed`, which CI runs separately.
 
+### npm archive source commit
+
+A packed npm archive's `gitHead` is the commit that **last changed the package's
+inputs**, not the commit the build ran on (D069.2). Bun packs with fixed mtimes,
+modes and entry order, and the stamped archive is re-gzipped with a zero mtime and
+no host operating system in its header, so the bytes depend only on those inputs and
+the stamped version. A commit outside them (a workflow, a .NET project, the editor,
+a document) leaves every npm archive and its integrity unchanged, so runic-sdk's
+template locks and train candidates stay valid while `main` moves.
+
+`eng/release/npm-inputs.mjs` defines the inputs of each package: its directory, the
+directories of the workspace packages it depends on, transitively (the SvelteKit
+package includes the Svelte one), and the shared build inputs: the workspace
+`package.json` and `bun.lock`, the toolchain (`flake.nix`, `flake.lock`,
+`nix/toolchain`, `.node-version`, `global.json`), `eng/typescript`,
+`eng/workspace.json`, `eng/run.mjs` and the packing code
+(`eng/release/candidate.mjs`, `readme-links.mjs`, `npm-inputs.mjs`). The set is
+deliberately wide: a missing input would let two different archives share a
+`gitHead`. A package that starts reading a file outside these paths adds it to the
+module. Packing runs `git log -1 -- <inputs>` and needs the full history (the
+packing and release jobs check out with `fetch-depth: 0`); in CI it refuses a
+package whose inputs have uncommitted changes.
+
+The release check (`ci-artifact.mjs` `scan`, run by `prepare`, `verify` and
+`describe`) accepts an npm archive whose `gitHead` is the release commit or an
+ancestor of it with the same inputs, and refuses any other commit. NuGet packages
+still name the release commit. In the SBOM, an npm component's
+`runic:source-commit` is this `gitHead`; the document's own `runic:source-commit`
+and npm's provenance attestation name the release commit.
+
 Packed READMEs, and npm `homepage` fields, link to the release tag `v<version>`
 instead of `main`. This repository's `blob/main` and `tree/main` links are
 rewritten, relative links resolve against the tag, and a remaining main-branch
