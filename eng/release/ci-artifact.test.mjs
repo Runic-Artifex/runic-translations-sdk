@@ -316,7 +316,9 @@ test("publishing needs the train gate (row P-tr), and every managed CI job can b
   expect(reusable).toBe("Runic-Artifex/runic-sdk/.github/workflows/train-compat.yml");
   expect(sha).toMatch(/^[0-9a-f]{40}$/);
   expect(train.with).toEqual({ row: "P-tr", cli: "published:${{ needs.candidate.outputs.command-line-version }}",
-    translations: "run:${{ needs.candidate.outputs.ci-run-id }}", sdk: "run", "gate-ref": sha });
+    translations: "run:${{ needs.candidate.outputs.ci-run-id }}", sdk: train.with.sdk, "gate-ref": sha });
+  // runic-sdk's run is selected by commit, never "the newest" (runic-sdk eng/train/README.md, "Run selection by commit").
+  expect(train.with.sdk).toMatch(/^run@[0-9a-f]{40}$/);
   expect(train.permissions).toEqual({ contents: "read", actions: "read" });
   expect(candidate.outputs["command-line-version"]).toBe("${{ steps.command-line.outputs.version }}");
 
