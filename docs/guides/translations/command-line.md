@@ -192,6 +192,7 @@ from that release's `CommandTextKeys`.
 
 | Runic.Translations.CommandLine | Runic.CommandLine |
 | --- | --- |
+| 0.14.x | 0.13.x |
 | 0.13.x | 0.13.x |
 | 0.12.x | 0.13.x |
 | 0.11.x | 0.13.x |

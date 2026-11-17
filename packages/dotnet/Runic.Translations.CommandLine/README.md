@@ -35,6 +35,7 @@ covers every key of it, and patches add no keys. Use the pair from one row:
 
 | Runic.Translations.CommandLine | Runic.CommandLine |
 | --- | --- |
+| 0.14.x | 0.13.x |
 | 0.13.x | 0.13.x |
 | 0.12.x | 0.13.x |
 | 0.11.x | 0.13.x |
