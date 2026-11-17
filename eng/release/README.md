@@ -298,9 +298,15 @@ publishable run.
 
 **The gate.** Publish preview's `train` job calls runic-sdk's
 `train-compat.yml` (row **P-tr**: Command Line `published:<RunicCommandLineVersion>`,
-Translations `run:<the CI run being published>`, SDK `run`), pinned to a
-runic-sdk commit, and `publish` needs it; a dry run runs it too. See
-runic-sdk's `eng/train/README.md`.
+Translations `run:<the CI run being published>`, SDK `run@<runic-sdk commit>`:
+the newest green runic-sdk `main` run at or after that commit, never simply the
+newest), pinned to a runic-sdk commit, and `publish` needs it; a dry run runs it
+too. Before building, the gate refuses the publish if Translations `main` moved
+since the commit runic-sdk's train feed served, unless every package is
+byte-identical. A release pull request moves the pin (the `uses` SHA, `gate-ref`
+and `sdk: run@`) itself, and during a train `main` stays frozen from the release
+pull request until the publish. See runic-sdk's `eng/train/README.md`,
+"Choreography".
 
 ## Verifying a release
 

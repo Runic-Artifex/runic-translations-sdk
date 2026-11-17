@@ -116,21 +116,24 @@ jobs:
 
   # The train compatibility gate (runic-sdk eng/train/README.md, "Publish workflows", row P-tr): restores, builds and
   # runs consumers of the published Command Line release of this train, exactly these Translations candidates (this CI
-  # run's artifact) and runic-sdk's newest main run, with warnings as errors. Publishing needs it; a dry run runs it too.
-  # Pinned to runic-sdk main after the 0.21 train (v0.21.0, which includes #1075's run selection); the coordinator moves
-  # the SHA when the gate changes.
+  # run's artifact) and runic-sdk's newest green main run at or after the pinned commit (`run@`, never "the newest";
+  # H2), with warnings as errors. Before building, the gate refuses to publish if Translations main moved since the
+  # commit runic-sdk's train feed served (H5; runic-sdk eng/train/README.md, "Choreography"). Publishing needs it; a
+  # dry run runs it too. A release pull request moves the pin itself (step 2 of the choreography): the uses SHA,
+  # gate-ref and sdk's run@ name one runic-sdk main commit.
+  # Transitional: uses/gate-ref name runic-sdk#1104's commit and sdk names main before it; repin all three to its merge commit.
   train:
     needs: candidate
     permissions:
       contents: read
       actions: read
-    uses: Runic-Artifex/runic-sdk/.github/workflows/train-compat.yml@8493a7bbc727738c999845229f3ae4633671d915 # runic-sdk main after the 0.21 train (v0.21.0)
+    uses: Runic-Artifex/runic-sdk/.github/workflows/train-compat.yml@d97d4f1a4b5f7308f51fca0ac35aa8260d5b11e3 # runic-sdk#1104 (run@<commit>, movement check)
     with:
       row: P-tr
       cli: published:${{ needs.candidate.outputs.command-line-version }}
       translations: run:${{ needs.candidate.outputs.ci-run-id }}
-      sdk: run
-      gate-ref: 8493a7bbc727738c999845229f3ae4633671d915
+      sdk: run@a4a9eab8916ee3bef3d4691595c3feca07d5d15b
+      gate-ref: d97d4f1a4b5f7308f51fca0ac35aa8260d5b11e3
     secrets:
       # Only if GitHub refuses this job's token for the other repositories' artifacts (D061.12).
       RUNIC_TRAIN_TOKEN: ${{ secrets.RUNIC_TRAIN_TOKEN }}
