@@ -30,6 +30,8 @@
   <ItemGroup>
     <!-- Pinned CLDR list patterns and relative time, deflated (eng/generate-cldr.mjs). -->
     <EmbeddedResource Include="Formatting/GeneratedLocaleData.bin" LogicalName="Runic.Translations.GeneratedLocaleData.bin" />
+    <!-- Removes the Hot Reload test override from trimmed and NativeAOT publishes (TranslationHotReload.IsOverrideSupported). -->
+    <EmbeddedResource Include="Properties/ILLink.Substitutions.xml" LogicalName="ILLink.Substitutions.xml" />
   </ItemGroup>
 
   <ItemGroup>

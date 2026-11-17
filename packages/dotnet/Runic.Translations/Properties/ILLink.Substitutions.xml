@@ -1,0 +1,11 @@
+<linker>
+  <!-- TranslationHotReload.SupportedOverride is a test hook. A trimmed or NativeAOT publish removes it unless it sets the
+       Runic.Translations.HotReloadTestOverride switch to true, so TranslationHotReload.IsSupported folds to
+       MetadataUpdater.IsSupported, which the SDK turns off there, and the trimmer drops Hot Reload's tracking and the
+       reflection it needs. featuredefault applies the stub when the switch is not set at all. -->
+  <assembly fullname="Runic.Translations" feature="Runic.Translations.HotReloadTestOverride" featurevalue="false" featuredefault="true">
+    <type fullname="Runic.Translations.TranslationHotReload">
+      <method signature="System.Boolean get_IsOverrideSupported()" body="stub" value="false" />
+    </type>
+  </assembly>
+</linker>

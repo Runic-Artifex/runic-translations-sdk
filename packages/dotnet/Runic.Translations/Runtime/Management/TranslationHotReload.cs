@@ -36,14 +36,32 @@ internal static class TranslationHotReload
     private static HashSet<string>? _resetCatalogs;
     private static bool _contractsChanged;
 
-    /// <summary>Whether Hot Reload can update this process, so generated data may change after start-up.</summary>
-    internal static bool IsSupported => SupportedOverrideValue.Value ?? MetadataUpdater.IsSupported;
+    /// <summary>
+    /// Whether Hot Reload can update this process, so generated data may change after start-up. A trimmed or NativeAOT
+    /// publish folds it to <see langword="false"/>: <see cref="MetadataUpdater.IsSupported"/> is a feature switch that
+    /// the SDK turns off there, and so is <see cref="IsOverrideSupported"/>. The trimmer then removes the tracking and the
+    /// reflection with which a catalog finds its generated types (<c>Delegate.Method</c>), about 350 KB of a NativeAOT
+    /// executable.
+    /// </summary>
+    internal static bool IsSupported => IsOverrideSupported && SupportedOverrideValue.Value is bool supported ? supported : MetadataUpdater.IsSupported;
+
+    /// <summary>The feature switch of <see cref="SupportedOverride"/>.</summary>
+    internal const string OverrideFeatureSwitch = "Runic.Translations.HotReloadTestOverride";
+
+    /// <summary>
+    /// Whether <see cref="SupportedOverride"/> exists in this build: on unless the <see cref="OverrideFeatureSwitch"/>
+    /// switch turns it off. Runic.Translations embeds an ILLink substitution that removes it from every trimmed or
+    /// NativeAOT publish that does not set the switch, so <see cref="IsSupported"/> stays constant there.
+    /// </summary>
+    [FeatureSwitchDefinition(OverrideFeatureSwitch)]
+    internal static bool IsOverrideSupported => !AppContext.TryGetSwitch(OverrideFeatureSwitch, out bool enabled) || enabled;
 
     private static readonly System.Threading.AsyncLocal<bool?> SupportedOverrideValue = new();
 
     /// <summary>
     /// Tests set this to exercise the handler in a process that Hot Reload does not update. It applies to the setting
-    /// code's async flow only, so objects that tests running in parallel create stay untracked.
+    /// code's async flow only, so objects that tests running in parallel create stay untracked. A trimmed or NativeAOT
+    /// publish ignores it unless it sets the <see cref="OverrideFeatureSwitch"/> switch to <see langword="true"/>.
     /// </summary>
     internal static bool? SupportedOverride
     {

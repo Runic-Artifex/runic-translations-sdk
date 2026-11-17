@@ -243,6 +243,9 @@ function testNativeAot() {
     ""].join("\n"));
   rmSync(tray, { recursive: true, force: true });
   rmSync(example, { recursive: true, force: true });
+
+  // The NativeAOT size budgets of a generated catalog (tests/aot-size/README.md).
+  run("bun", ["tests/aot-size/measure.mjs"]);
 }
 
 function testWeb() {
