@@ -990,8 +990,8 @@ key and typed arguments, so it survives changes to the base text.
 
 RMF2 resource syntax remains version **1**; the markup contract is version
 **2**. The supported execution contract is **rmf2-execution-v2**: normalized AST
-and resolved locale artifact **5**, .NET RMF2 ABI requirement **3**, and ESM ABI
-**4**. The generator, CLI/MSBuild integration, and Vite plugin use that contract
+and resolved locale artifact **5**, .NET RMF2 ABI requirement **4** (**3** for a
+referenced runtime before 0.14), and ESM ABI **4**. The generator, CLI/MSBuild integration, and Vite plugin use that contract
 for both direct `.mf2` and grouped `.rmf2` sources.
 
 Artifact 5 includes the trusted markup registry, slot requirements, and

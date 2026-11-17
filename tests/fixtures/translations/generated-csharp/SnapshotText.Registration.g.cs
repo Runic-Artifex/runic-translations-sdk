@@ -14,7 +14,7 @@ public static class SnapshotTextCatalog
     public static string Rmf2MarkupContract => "{\"version\":2,\"contracts\":{\"runic:link\":{\"kind\":\"paired\",\"placement\":\"inline\",\"children\":\"inline\",\"interactive\":true,\"plainText\":\"children\",\"options\":{}}},\"messages\":{\"greeting\":{\"slots\":{},\"structured\":false,\"contentLocales\":{\"de\":\"de\",\"en\":\"en\"},\"content\":\"inline\",\"skeletons\":[]},\"help\":{\"slots\":{\"link\":{\"kind\":\"runic:link\",\"min\":1,\"max\":1}},\"structured\":true,\"contentLocales\":{\"de\":\"de\",\"en\":\"en\"},\"content\":\"inline\",\"skeletons\":[]},\"items\":{\"slots\":{},\"structured\":false,\"contentLocales\":{\"de\":\"de\",\"en\":\"en\"},\"content\":\"inline\",\"skeletons\":[]}}}";
     public const string Rmf2Profile = "rmf2-execution-v2";
     public const int RuntimeAbiVersion = 1;
-    public const int Rmf2RuntimeAbiVersion = 3;
+    public const int Rmf2RuntimeAbiVersion = 4;
     public const int MessageGrammarVersion = 5;
     public const int GeneratedNameVersion = 1;
     public const int GeneratorVersion = 1;
@@ -37,7 +37,7 @@ public static class SnapshotTextCatalog
         global::Runic.Translations.TranslationOptions? options = null)
     {
         global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRuntimeAbi(1);
-        global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(3);
+        global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(4);
         return new global::Runic.Translations.CompiledTranslationProvider(SnapshotTextCatalogData.CreateDefinition().WithOptions(options), valueFormatter, snapshotFactory);
     }
 
@@ -89,7 +89,7 @@ public static class SnapshotTextCatalog
         global::Runic.Translations.TranslationPackLimits? limits = null,
         global::Runic.Translations.TranslationPackIntegrityVerifier? integrityVerifier = null)
     {
-        global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(3);
+        global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(4);
         var factory = new global::Runic.Translations.ExternalTranslationSnapshotFactory(externalSource, CatalogId, ContractFingerprint, CreateExternalPackContract, limits, integrityVerifier);
         return CreateProvider(valueFormatter, factory, options);
     }
@@ -114,7 +114,7 @@ public static class SnapshotTextCatalog
         global::Runic.Translations.TranslationPackIntegrityVerifier? integrityVerifier = null,
         global::System.Threading.CancellationToken cancellationToken = default)
     {
-        global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(3);
+        global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(4);
         return global::Runic.Translations.TranslationPackLoader.LoadAsync(source, CreateExternalPackContract(locale), limits, integrityVerifier, cancellationToken);
     }
 }

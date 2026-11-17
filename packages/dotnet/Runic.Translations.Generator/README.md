@@ -45,9 +45,10 @@ context. Both need a `Runic.Translations` runtime that declares
 `TranslationsCompatibility.CompositionVersion`; with an older runtime they are
 not generated. See [Catalogs from libraries](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/composition.md).
 
-The generated catalog embeds each locale's messages as UTF-8 data in the
-assembly and reads a locale when a manager or provider first needs it, with the
-locales it falls back to. A process that formats English never reads German,
+The generated catalog embeds each locale's messages as compressed UTF-8 data
+(DEFLATE, about a tenth of the JSON) in the assembly and reads a locale when a
+manager or provider first needs it, with the locales it falls back to. It
+inflates each locale once, into a pooled buffer that it returns after reading. A process that formats English never reads German,
 and the JIT compiles no per-message code, so a large catalog stays cheap to
 start in small processes such as a tray or a background service. The data is
 read without reflection and is safe for trimming and NativeAOT. Invalid data,

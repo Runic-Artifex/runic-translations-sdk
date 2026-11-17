@@ -16,12 +16,12 @@ internal static class TranslationOutputRenderer
     internal static TranslationGeneratedOutput RenderRmf2V5CSharpAccessors(Rmf2ProjectV5 project, bool readableSurface = true, bool composition = true) =>
         Rmf2CSharpOutputRendererV5.RenderAccessors(RequireProject(project), readableSurface, composition);
 
-    internal static TranslationGeneratedOutput RenderRmf2V5CSharpCatalogData(Rmf2ProjectV5 project) =>
-        Rmf2CSharpOutputRendererV5.RenderCatalogData(RequireProject(project));
+    internal static TranslationGeneratedOutput RenderRmf2V5CSharpCatalogData(Rmf2ProjectV5 project, bool deflatedLocaleData = true) =>
+        Rmf2CSharpOutputRendererV5.RenderCatalogData(RequireProject(project), deflatedLocaleData);
 
     internal static TranslationGeneratedOutput RenderRmf2V5CSharpRegistration(Rmf2ProjectV5 project, bool composition = true, bool runtimeAbiCall = true,
-        bool readableSurface = true, IReadOnlyList<Rmf2ProjectV5>? overlays = null) =>
-        Rmf2CSharpOutputRendererV5.RenderRegistration(RequireProject(project), composition, runtimeAbiCall, readableSurface, overlays);
+        bool readableSurface = true, IReadOnlyList<Rmf2ProjectV5>? overlays = null, bool deflatedLocaleData = true) =>
+        Rmf2CSharpOutputRendererV5.RenderRegistration(RequireProject(project), composition, runtimeAbiCall, readableSurface, overlays, deflatedLocaleData);
 
     internal static TranslationGeneratedOutput RenderRmf2V5CSharpReadable(Rmf2ProjectV5 project) =>
         Rmf2CSharpOutputRendererV5.RenderReadable(RequireProject(project));

@@ -42,6 +42,12 @@ export function measurement(executableBytes, records) {
 
 // The value of each metric; `builds` maps a build name of budgets.json to its measurement.
 export const metrics = {
+  // The executable without the catalog's own records: the runtime, the framework and what they need.
+  "aot/translations/fixed-bytes": (entry, builds) => [builds[entry.build].executableBytes - builds[entry.build].catalogBytes],
+  // The catalog's records (locale data and generated code) at two message counts in two locales.
+  "aot/translations/per-message-bytes": (entry, builds) => entry.builds.map(name => builds[name].catalogBytes),
+  // The catalog's locale data at two locale counts with the same messages.
+  "aot/translations/per-locale-message-bytes": (entry, builds) => entry.builds.map(name => builds[name].catalogDataBytes),
   "aot/translations/reflection-runtime-bytes": (entry, builds) => [builds[entry.build].reflectionRuntimeBytes],
 };
 
@@ -65,7 +71,7 @@ export function check(name, entry, values, updating) {
 // The limit --update records: the measured value plus the entry's margin, and its noise.
 function updatedLimit(entry, values) {
   const large = values.at(-1);
-  return entry.fixedLimit ? entry.limit : Math.ceil(large * (1 + (entry.margin ?? 0)) + (entry.noise ?? 0));
+  return Math.ceil(large * (1 + (entry.margin ?? 0)) + (entry.noise ?? 0));
 }
 
 function run(command, args, options = {}) {

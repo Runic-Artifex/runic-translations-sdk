@@ -42,10 +42,11 @@ internal sealed class GeneratorTests
         Diagnostic[] errors = run.Compilation.GetDiagnostics().Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToArray();
         Assert.Equal(0, errors.Length, string.Join(Environment.NewLine, errors.Select(static error => error.ToString())));
         string generated = Serialize(run);
-        Assert.True(generated.Contains("EnsureRmf2RuntimeAbi(3)", StringComparison.Ordinal), "RMF2 ABI 3 guard missing");
-        Assert.True(generated.Contains("Rmf2RuntimeAbiVersion = 3", StringComparison.Ordinal), "RMF2 ABI 3 marker missing");
+        Assert.True(generated.Contains("EnsureRmf2RuntimeAbi(4)", StringComparison.Ordinal), "RMF2 ABI 4 guard missing");
+        Assert.True(generated.Contains("Rmf2RuntimeAbiVersion = 4", StringComparison.Ordinal), "RMF2 ABI 4 marker missing");
+        Assert.True(generated.Contains("RequiredRmf2RuntimeAbiVersion = 4", StringComparison.Ordinal), "RMF2 ABI 4 catalog data marker missing");
         Assert.True(generated.Contains("RuntimeAbiVersion = 1", StringComparison.Ordinal), "base generated ABI marker missing");
-        Assert.True(generated.Contains("GeneratedCatalogSupport.CreateDeferredLocale(\"en\", null, static () => global::Runic.Translations.Generated.GeneratedCatalogSupport.ReadValues(Locale0Data))", StringComparison.Ordinal), "deferred v5 locale data missing");
+        Assert.True(generated.Contains("GeneratedCatalogSupport.CreateDeferredLocale(\"en\", null, static () => global::Runic.Translations.Generated.GeneratedCatalogSupport.ReadDeflatedValues(Locale0Data, Locale0Length))", StringComparison.Ordinal), "deferred v5 locale data missing");
         Assert.True(!generated.Contains("C:/repo", StringComparison.OrdinalIgnoreCase), "absolute path leaked into generated source");
     }
 
@@ -82,6 +83,34 @@ internal sealed class GeneratorTests
         Assert.True(composition.Contains("TranslationsCompatibility.RuntimeAbiVersion != 1", StringComparison.Ordinal) &&
             !composition.Contains("EnsureRuntimeAbi", StringComparison.Ordinal), "EnsureRuntimeAbi emitted for a runtime without the version rule");
     }
+
+    [Test, DisplayName("generated C# deflates each locale's JSON for RMF2 ABI 4 and embeds it as is for a runtime before 0.14")]
+    public void DeflatedLocaleDataRoundTrips()
+    {
+        TestInput[] inputs =
+        [
+            ProjectInput(Project.Replace("\"locales\": [ \"en\" ]", "\"locales\": [ \"en\", \"de\" ]", StringComparison.Ordinal)),
+            MessageInput(),
+            MessageInput("filesDeleted =\n  .input {$folder :string}\n  .input {$count :integer}\n  .match $count\n  one {{Grüß dich: eine Datei aus {$folder} gelöscht.}}\n  * {{Grüß dich: {$count} Dateien aus {$folder} gelöscht.}}\n",
+                "C:/repo/translations/de.rmf2"),
+        ];
+        string current = CatalogData(GeneratorTestHost.Run(inputs));
+        string earlier = CatalogData(GeneratorTestHost.Run(RuntimeReferenceMode.Rmf2V3, inputs));
+        Assert.True(current.Contains("RequiredRmf2RuntimeAbiVersion = 4", StringComparison.Ordinal) && !current.Contains("u8;", StringComparison.Ordinal),
+            "The current runtime does not get deflated data.");
+        Assert.True(earlier.Contains("RequiredRmf2RuntimeAbiVersion = 3", StringComparison.Ordinal) && earlier.Contains("ReadValues(Locale0Data)", StringComparison.Ordinal) &&
+            !earlier.Contains("ReadDeflatedValues", StringComparison.Ordinal), "A runtime before 0.14 does not get the JSON and ABI 3.");
+        // The u8 literals of the ABI 3 output, as the compiler reads them.
+        string json = string.Concat(Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(earlier).GetRoot().DescendantNodes()
+            .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.PropertyDeclarationSyntax>()
+            .Where(static property => property.Identifier.ValueText.StartsWith("Locale", StringComparison.Ordinal) && property.Identifier.ValueText.EndsWith("Data", StringComparison.Ordinal))
+            .Select(static property => ((Microsoft.CodeAnalysis.CSharp.Syntax.LiteralExpressionSyntax)property.ExpressionBody!.Expression).Token.ValueText + "\n"));
+        Assert.True(json.Contains("Grüß dich", StringComparison.Ordinal), "The ABI 3 output lacks the German text.");
+        Assert.Equal(json, GeneratedLocaleData.Inflate(current), "inflated locale data");
+    }
+
+    private static string CatalogData(GeneratorRun run) =>
+        run.SingleResult.GeneratedSources.Single(static item => item.HintName == "AppText.CatalogData.g.cs").SourceText.ToString();
 
     [Test, DisplayName("generated C# executes the selected semantic surface")]
     public void GeneratedExecution()
@@ -220,7 +249,7 @@ internal sealed class GeneratorTests
             "Currency 'CHF' is not in the catalog's runic.json formats.currencies.", Execute(run, "Example.Localization.FormatsProbe", "Run"), "generated currency, unit and compact execution");
         string generated = Serialize(run);
         Assert.True(generated.Contains("Formats => ", StringComparison.Ordinal) && !generated.Contains("Locale0Formats", StringComparison.Ordinal) &&
-            generated.Contains("ReadValues(Locale0Data, Formats)", StringComparison.Ordinal) && generated.Contains("ReadValues(Locale1Data, Formats)", StringComparison.Ordinal), "The catalog embeds its format data once.");
+            generated.Contains("ReadDeflatedValues(Locale0Data, Locale0Length, Formats)", StringComparison.Ordinal) && generated.Contains("ReadDeflatedValues(Locale1Data, Locale1Length, Formats)", StringComparison.Ordinal), "The catalog embeds its format data once.");
         Assert.True(!generated.Contains("\\\"ja\\\"", StringComparison.Ordinal), "A language the catalog does not declare was embedded.");
 
         GeneratorRun plain = GeneratorTestHost.RunWithConsumer("namespace Example.Localization; public static class Plain { }", ProjectInput(),
@@ -423,8 +452,8 @@ internal sealed class GeneratorTests
         SyntaxTree data = run.SingleResult.GeneratedSources.Single(static item => item.HintName == "AppText.CatalogData.g.cs").SyntaxTree;
         string text = data.ToString();
         Assert.True(!text.Contains("CompiledRmf2Message(", StringComparison.Ordinal), "Locale messages are still constructed in code.");
-        Assert.True(text.Contains("CreateDeferredLocale(\"de\", \"en\", static () => global::Runic.Translations.Generated.GeneratedCatalogSupport.ReadValues(Locale0Data))", StringComparison.Ordinal), "German is not deferred data.");
-        Assert.True(text.Contains("Grüß", StringComparison.Ordinal), "German text is not kept as UTF-8.");
+        Assert.True(text.Contains("CreateDeferredLocale(\"de\", \"en\", static () => global::Runic.Translations.Generated.GeneratedCatalogSupport.ReadDeflatedValues(Locale0Data, Locale0Length))", StringComparison.Ordinal), "German is not deferred data.");
+        Assert.True(!text.Contains("Grüß", StringComparison.Ordinal) && GeneratedLocaleData.Inflate(text).Contains("Grüß", StringComparison.Ordinal), "German text is not deflated UTF-8.");
         foreach (var method in data.GetRoot().DescendantNodes().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>())
         {
             int statements = method.Body?.Statements.Count ?? 1;

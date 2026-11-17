@@ -59,7 +59,12 @@ internal static class Rmf2CSharpOutputRendererV5
         return Output(TranslationGeneratedOutputKind.CSharpAccessors, project.ClassName + ".Accessors.g.cs", writer);
     }
 
-    internal static TranslationGeneratedOutput RenderCatalogData(Rmf2ProjectV5 project)
+    // deflatedLocaleData: the referenced runtime runs RMF2 ABI 4, so each locale's data is embedded as DEFLATE data
+    // (GeneratedCatalogSupport.ReadDeflatedValues), about a tenth of the JSON; otherwise the JSON itself (ABI 3).
+    internal static int Rmf2RuntimeAbi(bool deflatedLocaleData) =>
+        deflatedLocaleData ? Rmf2ProjectV5.DeflatedLocaleDataRuntimeAbiVersion : Rmf2ProjectV5.RuntimeAbiVersion;
+
+    internal static TranslationGeneratedOutput RenderCatalogData(Rmf2ProjectV5 project, bool deflatedLocaleData = true)
     {
         GenerationWriter writer = StartFile(project);
         string className = GenerationSupport.CSharpIdentifier(project.ClassName) + "CatalogData";
@@ -67,19 +72,19 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("internal static class " + className);
         writer.Line("{"); writer.Indent();
         writer.Line("internal const int GeneratedRuntimeAbiVersion = 1;");
-        writer.Line("internal const int RequiredRmf2RuntimeAbiVersion = " + Rmf2ProjectV5.RuntimeAbiVersion + ";"); writer.Blank();
+        writer.Line("internal const int RequiredRmf2RuntimeAbiVersion = " + Rmf2RuntimeAbi(deflatedLocaleData) + ";"); writer.Blank();
         writer.Line("internal static global::Runic.Translations.CompiledTranslationCatalog CreateDefinition()");
         writer.Line("{"); writer.Indent();
         writer.Line("return new global::Runic.Translations.CompiledTranslationCatalog("); writer.Indent();
         writer.Line(GenerationSupport.CSharpString(project.Id) + ",");
         writer.Line(GenerationSupport.CSharpString(project.DefaultLocale) + ",");
         writer.Line("CreateDefinitions(),");
-        WriteLocaleList(writer, project);
+        WriteLocaleList(writer, project, deflatedLocaleData);
         writer.Line("global::Runic.Translations.UnsupportedLocalePolicy." + project.UnsupportedLocale + ",");
         writer.Line("global::Runic.Translations.MissingTranslationPolicy." + project.MissingKey + ");");
         writer.Unindent(); writer.Unindent(); writer.Line("}"); writer.Blank();
         WriteDefinitionChunks(writer, table);
-        WriteLocaleData(writer, project, table);
+        WriteLocaleData(writer, project, table, deflatedLocaleData);
         WritePackContractFactory(writer, project, table);
         writer.Unindent(); writer.Line("}");
         return Output(TranslationGeneratedOutputKind.CSharpCatalogData, project.ClassName + ".CatalogData.g.cs", writer);
@@ -93,7 +98,7 @@ internal static class Rmf2CSharpOutputRendererV5
     // (TranslationCompiler.CompileRmf2OverlayV5); rendered as Overlays, which needs a runtime with CompositionVersion 2.
     // An empty list still renders the property: runic.json declares overrides whose catalogs did not compile.
     internal static TranslationGeneratedOutput RenderRegistration(Rmf2ProjectV5 project, bool composition = true, bool runtimeAbiCall = true, bool readableSurface = true,
-        IReadOnlyList<Rmf2ProjectV5>? overlays = null)
+        IReadOnlyList<Rmf2ProjectV5>? overlays = null, bool deflatedLocaleData = true)
     {
         GenerationWriter writer = StartFile(project);
         string visibility = Visibility(project), className = GenerationSupport.CSharpIdentifier(project.ClassName);
@@ -109,7 +114,7 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("public static string Rmf2MarkupContract => " + GenerationSupport.CSharpString(project.MarkupContract) + ";");
         writer.Line("public const string Rmf2Profile = " + GenerationSupport.CSharpString(Rmf2ProjectV5.Profile) + ";");
         writer.Line("public const int RuntimeAbiVersion = 1;");
-        writer.Line("public const int Rmf2RuntimeAbiVersion = " + Rmf2ProjectV5.RuntimeAbiVersion + ";");
+        writer.Line("public const int Rmf2RuntimeAbiVersion = " + Rmf2RuntimeAbi(deflatedLocaleData) + ";");
         writer.Line("public const int MessageGrammarVersion = 5;");
         writer.Line("public const int GeneratedNameVersion = 1;");
         writer.Line("public const int GeneratorVersion = 1;"); writer.Blank();
@@ -149,7 +154,7 @@ internal static class Rmf2CSharpOutputRendererV5
             writer.Line("if (global::Runic.Translations.Generated.TranslationsCompatibility.RuntimeAbiVersion != 1)"); writer.Indent();
             writer.Line("throw new global::System.InvalidOperationException(\"RTR0024: Generated translation code is incompatible with the referenced runtime ABI.\");"); writer.Unindent();
         }
-        writer.Line("global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2ProjectV5.RuntimeAbiVersion + ");");
+        writer.Line("global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2RuntimeAbi(deflatedLocaleData) + ");");
         // runtime.bidiIsolation: a runtime with the composition surface (0.9.0 and later) also has WithBidiIsolation, whose
         // catalogs decide per locale by default.
         string bidi = !composition ? "" : project.BidiIsolation switch
@@ -205,7 +210,7 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("global::Runic.Translations.TranslationPackLimits? limits = null,");
         writer.Line("global::Runic.Translations.TranslationPackIntegrityVerifier? integrityVerifier = null)"); writer.Unindent();
         writer.Line("{"); writer.Indent();
-        writer.Line("global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2ProjectV5.RuntimeAbiVersion + ");");
+        writer.Line("global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2RuntimeAbi(deflatedLocaleData) + ");");
         writer.Line("var factory = new global::Runic.Translations.ExternalTranslationSnapshotFactory(externalSource, CatalogId, ContractFingerprint, CreateExternalPackContract, limits, integrityVerifier);");
         writer.Line("return CreateProvider(valueFormatter, factory, options);");
         writer.Unindent(); writer.Line("}"); writer.Blank();
@@ -228,7 +233,7 @@ internal static class Rmf2CSharpOutputRendererV5
         writer.Line("global::Runic.Translations.TranslationPackIntegrityVerifier? integrityVerifier = null,");
         writer.Line("global::System.Threading.CancellationToken cancellationToken = default)"); writer.Unindent();
         writer.Line("{"); writer.Indent();
-        writer.Line("global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2ProjectV5.RuntimeAbiVersion + ");");
+        writer.Line("global::Runic.Translations.Generated.TranslationsCompatibility.EnsureRmf2RuntimeAbi(" + Rmf2RuntimeAbi(deflatedLocaleData) + ");");
         writer.Line("return global::Runic.Translations.TranslationPackLoader.LoadAsync(source, CreateExternalPackContract(locale), limits, integrityVerifier, cancellationToken);");
         writer.Unindent(); writer.Line("}");
         writer.Unindent(); writer.Line("}");
@@ -574,7 +579,7 @@ internal static class Rmf2CSharpOutputRendererV5
 
     private const int ChunkSize = 32;
 
-    private static void WriteLocaleList(GenerationWriter writer, Rmf2ProjectV5 project)
+    private static void WriteLocaleList(GenerationWriter writer, Rmf2ProjectV5 project, bool deflatedLocaleData)
     {
         writer.Line("new global::Runic.Translations.CompiledTranslationLocale[]"); writer.Line("{"); writer.Indent();
         int index = 0;
@@ -584,7 +589,10 @@ internal static class Rmf2CSharpOutputRendererV5
         {
             writer.Line("global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateDeferredLocale(" + GenerationSupport.CSharpString(locale.Tag) + ", " +
                 (locale.FallbackTag is null ? "null" : GenerationSupport.CSharpString(locale.FallbackTag)) +
-                ", static () => global::Runic.Translations.Generated.GeneratedCatalogSupport.ReadValues(Locale" + index++ + "Data" + formats + ")),");
+                (deflatedLocaleData
+                    ? ", static () => global::Runic.Translations.Generated.GeneratedCatalogSupport.ReadDeflatedValues(Locale" + index + "Data, Locale" + index + "Length" + formats + ")),"
+                    : ", static () => global::Runic.Translations.Generated.GeneratedCatalogSupport.ReadValues(Locale" + index + "Data" + formats + ")),"));
+            index++;
         }
         writer.Unindent(); writer.Line("},");
     }
@@ -615,7 +623,7 @@ internal static class Rmf2CSharpOutputRendererV5
     // Each locale's direct values are UTF-8 JSON data in the assembly, read when a snapshot first needs the locale:
     // [[id, {"contentLocale": ..., "ast": ...}], ...] with ASTs in the normalized v5 form. Data instead of code keeps the
     // JIT out of catalog creation, and a process builds only the locales it formats.
-    private static void WriteLocaleData(GenerationWriter writer, Rmf2ProjectV5 project, Rmf2V5DefinitionTable table)
+    private static void WriteLocaleData(GenerationWriter writer, Rmf2ProjectV5 project, Rmf2V5DefinitionTable table, bool deflatedLocaleData)
     {
         if (CatalogFormatData(project) is { } formats)
         {
@@ -644,12 +652,50 @@ internal static class Rmf2CSharpOutputRendererV5
                 }
                 json.WriteEndArray();
             }
-            // Text stays readable UTF-8; the C# literal escapes what a string literal cannot hold.
-            writer.Line("private static global::System.ReadOnlySpan<byte> Locale" + index + "Data => " +
-                GenerationSupport.CSharpString(System.Text.Encoding.UTF8.GetString(stream.ToArray())) + "u8;");
+            byte[] utf8Json = stream.ToArray();
+            if (deflatedLocaleData)
+            {
+                // A property, not a constant, for both: .NET Hot Reload updates their bodies after a text-only edit.
+                writer.Line("// " + GenerationSupport.CSharpString(locale.Tag) + ": the compiler's locale JSON as DEFLATE data, inflated on the locale's first use.");
+                writer.Line("private static int Locale" + index + "Length => " + utf8Json.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) + ";");
+                WriteBytes(writer, "Locale" + index + "Data", Deflate(utf8Json));
+            }
+            else
+            {
+                // Text stays readable UTF-8; the C# literal escapes what a string literal cannot hold.
+                writer.Line("private static global::System.ReadOnlySpan<byte> Locale" + index + "Data => " +
+                    GenerationSupport.CSharpString(System.Text.Encoding.UTF8.GetString(utf8Json)) + "u8;");
+            }
             writer.Blank();
             index++;
         }
+    }
+
+    // Raw DEFLATE (RFC 1951) at the smallest size. The output is deterministic for one .NET version's zlib; a different
+    // zlib may compress the same JSON to other bytes, which inflate to the same JSON.
+    internal static byte[] Deflate(byte[] data)
+    {
+        using var output = new System.IO.MemoryStream();
+        using (var deflater = new System.IO.Compression.DeflateStream(output, System.IO.Compression.CompressionLevel.SmallestSize, leaveOpen: true))
+            deflater.Write(data, 0, data.Length);
+        return output.ToArray();
+    }
+
+    // A ReadOnlySpan<byte> property over a constant byte array, which the C# compiler embeds as RVA data: no allocation
+    // and no copy at run time. 32 bytes per line.
+    private static void WriteBytes(GenerationWriter writer, string name, byte[] bytes)
+    {
+        writer.Line("private static global::System.ReadOnlySpan<byte> " + name + " => new byte[]");
+        writer.Line("{"); writer.Indent();
+        var line = new System.Text.StringBuilder();
+        for (int offset = 0; offset < bytes.Length; offset += 32)
+        {
+            line.Clear();
+            for (int index = offset; index < Math.Min(bytes.Length, offset + 32); index++)
+                line.Append("0x").Append(bytes[index].ToString("X2", System.Globalization.CultureInfo.InvariantCulture)).Append(',');
+            writer.Line(line.ToString());
+        }
+        writer.Unindent(); writer.Line("};");
     }
 
     // The CLDR currency, unit and compact data of the catalog's messages for its languages (D055.4), as the ESM runtime

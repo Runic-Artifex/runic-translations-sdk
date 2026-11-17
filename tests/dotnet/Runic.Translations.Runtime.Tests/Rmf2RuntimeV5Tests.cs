@@ -392,13 +392,19 @@ internal sealed class Rmf2RuntimeV5Tests
         Assert.False(Rmf2MarkupContract.AcceptsInteger("7", 1, 6), "Integer above maximum accepted");
         Assert.False(Rmf2MarkupContract.AcceptsInteger("0", 1, 6), "Integer below minimum accepted");
     }
-    [Test, DisplayName("v5 immutable arrays and compatibility checks require ABI 3")]
+    [Test, DisplayName("v5 immutable arrays and compatibility checks run ABI 3 and 4")]
     public void Compatibility()
     {
-        Assert.Equal(3, TranslationsCompatibility.Rmf2RuntimeAbiVersion); Assert.Equal(1, TranslationsCompatibility.RuntimeAbiVersion);
+        Assert.Equal(4, TranslationsCompatibility.Rmf2RuntimeAbiVersion); Assert.Equal(3, TranslationsCompatibility.MinimumRmf2RuntimeAbiVersion);
+        Assert.Equal(1, TranslationsCompatibility.RuntimeAbiVersion);
         Assert.False(TranslationsCompatibility.SupportsRmf2RuntimeAbi(2), "Retired ABI 2 must not remain accepted"); Assert.True(TranslationsCompatibility.SupportsRmf2RuntimeAbi(3), "ABI 3 is supported");
+        Assert.True(TranslationsCompatibility.SupportsRmf2RuntimeAbi(4), "ABI 4 (deflated locale data) is supported");
         TranslationsCompatibility.EnsureRmf2RuntimeAbi(3);
-        foreach (int version in new[] { -1, 0, 1, 2, 4, int.MaxValue }) Assert.Throws<NotSupportedException>(() => TranslationsCompatibility.EnsureRmf2RuntimeAbi(version));
+        TranslationsCompatibility.EnsureRmf2RuntimeAbi(4);
+        foreach (int version in new[] { -1, 0, 1, 2, 5, int.MaxValue }) Assert.Throws<NotSupportedException>(() => TranslationsCompatibility.EnsureRmf2RuntimeAbi(version));
+        // A catalog generated for a later runtime names both sides of the mismatch and what to do.
+        Assert.Throws<NotSupportedException>(() => TranslationsCompatibility.EnsureRmf2RuntimeAbi(5),
+            "the generated catalog needs RMF2 runtime ABI 5, and this Runic.Translations runs versions 3 to 4. Reference Runic.Translations and Runic.Translations.Build of the same version");
         CompiledRmf2Node[] nodes = [new("original")]; var message = Simple([], [], nodes); nodes[0] = new("changed");
         message.Variants.ToArray()[0] = new([], [new("changed")]);
         Assert.Equal("original", message.Format([], "en"));

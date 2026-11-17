@@ -1,1 +1,5 @@
 #nullable enable
+*REMOVED*const Runic.Translations.Generated.TranslationsCompatibility.Rmf2RuntimeAbiVersion = 3 -> int
+const Runic.Translations.Generated.TranslationsCompatibility.Rmf2RuntimeAbiVersion = 4 -> int
+static Runic.Translations.Generated.GeneratedCatalogSupport.ReadDeflatedValues(System.ReadOnlySpan<byte> deflatedUtf8Json, int length) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTranslationValue>!
+static Runic.Translations.Generated.GeneratedCatalogSupport.ReadDeflatedValues(System.ReadOnlySpan<byte> deflatedUtf8Json, int length, System.ReadOnlySpan<byte> formatData) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTranslationValue>!

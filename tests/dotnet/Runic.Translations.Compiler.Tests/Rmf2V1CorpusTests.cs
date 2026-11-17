@@ -265,8 +265,10 @@ internal sealed class Rmf2V1CorpusTests
     // namespaced options and an artifact's formatData, and carries stubs for the formatters it leaves out, in both digests (ESM only), after merging T1c (#142) and the web overlays (#143).
     // Re-pinned for the TK review: an artifact's number records (formatData.numbers), the strict format data rules and the
     // marked function and option entries that a catalog without the formatters leaves out, in both digests (ESM only).
-    private const string EncodedOutputDigest = "b724b53e615443aa589b22104bbbf8027b9fdff2edd355e62ae3222fc7da3497";
-    private const string HiddenEncodedOutputDigest = "bcdac246e170d76ee8c735c2b5faa0fbda30e8d0383ebc070813e6c861cef1ad";
+    // Re-pinned for D072.2 T2: the C# CatalogData embeds each locale's JSON as DEFLATE data with its length, read with
+    // GeneratedCatalogSupport.ReadDeflatedValues, and the C# requires RMF2 runtime ABI 4, in both digests (C# only).
+    private const string EncodedOutputDigest = "97af6dacf707433904cc3a0ff88208264274badf477b33ee07cc866718ac9f61";
+    private const string HiddenEncodedOutputDigest = "3f41883c0d6d4a75ffd2448064be44758345ca92954fa481bcaa0ed848a1f844";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

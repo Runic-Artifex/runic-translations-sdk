@@ -20,8 +20,12 @@ public static class TranslationsCompatibility
     /// <summary>The oldest base ABI this runtime still runs.</summary>
     public const int MinimumRuntimeAbiVersion = 1;
 
-    /// <summary>The ABI for v5 typed expression evaluation and RMF2 markup contract v2.</summary>
-    public const int Rmf2RuntimeAbiVersion = 3;
+    /// <summary>
+    /// The ABI for v5 typed expression evaluation and RMF2 markup contract v2. Version 4 adds locale data embedded as
+    /// DEFLATE data (<see cref="GeneratedCatalogSupport.ReadDeflatedValues(System.ReadOnlySpan{byte}, int)"/>); this
+    /// runtime still runs version 3 code, which embeds the JSON itself.
+    /// </summary>
+    public const int Rmf2RuntimeAbiVersion = 4;
 
     /// <summary>The oldest RMF2 ABI this runtime still runs; earlier ones predate the RMF2 v5 carrier.</summary>
     public const int MinimumRmf2RuntimeAbiVersion = 3;
@@ -61,6 +65,7 @@ public static class TranslationsCompatibility
     public static void EnsureRmf2RuntimeAbi(int requiredVersion)
     {
         if (!SupportsRmf2RuntimeAbi(requiredVersion))
-            throw new System.NotSupportedException("The generated RMF2 message requires an unsupported runtime ABI.");
+            throw new System.NotSupportedException(string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"The generated RMF2 message requires an unsupported runtime ABI: the generated catalog needs RMF2 runtime ABI {requiredVersion}, and this Runic.Translations runs versions {MinimumRmf2RuntimeAbiVersion} to {Rmf2RuntimeAbiVersion}. Reference Runic.Translations and Runic.Translations.Build of the same version, and rebuild the project or library that contains the catalog."));
     }
 }

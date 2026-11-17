@@ -26,7 +26,7 @@ public sealed class Rmf2ProjectCompilation
 {
     internal const string CurrentExecutionProfile = "rmf2-execution-v2";
     internal const int CurrentMessageGrammarVersion = 5;
-    internal const int CurrentRuntimeAbiVersion = 3;
+    internal const int CurrentRuntimeAbiVersion = Rmf2ProjectV5.DeflatedLocaleDataRuntimeAbiVersion;
 
     /// <summary>The semantic execution profile of this compilation, such as <c>rmf2-execution-v2</c>.</summary>
     public string ExecutionProfile { get; } = CurrentExecutionProfile;
@@ -97,7 +97,11 @@ internal sealed record Rmf2ProjectV5(string Id, string CodeNamespace, string Cla
 {
     internal const string Profile = "rmf2-execution-v2";
     internal const int MessageGrammarVersion = 5;
+    // The RMF2 runtime ABI of the ESM runtime, the web module manifest and the caller contract.
     internal const int RuntimeAbiVersion = 3;
+    // The .NET RMF2 runtime ABI of generated C#: 4 embeds each locale's data as DEFLATE data
+    // (GeneratedCatalogSupport.ReadDeflatedValues); 3, for a referenced runtime before 0.14, embeds the JSON itself.
+    internal const int DeflatedLocaleDataRuntimeAbiVersion = 4;
     internal const int MarkupContractVersion = 2;
 
     // code.referenceFallbackText in runic.json: generated C# reference factories carry the base-locale text.

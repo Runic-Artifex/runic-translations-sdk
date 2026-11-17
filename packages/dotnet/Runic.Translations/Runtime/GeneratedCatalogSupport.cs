@@ -33,6 +33,26 @@ public static class GeneratedCatalogSupport
     public static IReadOnlyList<CompiledTranslationValue> ReadValues(ReadOnlySpan<byte> utf8Json, ReadOnlySpan<byte> formatData) =>
         CompiledTranslationLocale.ReadRmf2Values(utf8Json, Rmf2FormatData.Parse(formatData));
 
+    /// <summary>
+    /// Reads the direct values that a generated catalog embeds for one locale as raw DEFLATE data (RFC 1951) of the
+    /// compiler's UTF-8 JSON (RMF2 runtime ABI 4). The JSON is inflated into a pooled buffer, read as
+    /// <see cref="ReadValues(ReadOnlySpan{byte})"/> reads it, and the buffer returned: the generated catalog calls this once
+    /// per locale, on the locale's first use.
+    /// </summary>
+    /// <param name="deflatedUtf8Json">The DEFLATE data.</param>
+    /// <param name="length">The length of the inflated JSON in bytes, which the data must match exactly.</param>
+    /// <exception cref="TranslationPackException">The data does not inflate to <paramref name="length"/> bytes, or is not in the compiler's form.</exception>
+    public static IReadOnlyList<CompiledTranslationValue> ReadDeflatedValues(ReadOnlySpan<byte> deflatedUtf8Json, int length) =>
+        DeflatedLocaleData.Read(deflatedUtf8Json, length, null);
+
+    /// <summary>
+    /// Reads the direct values that a generated catalog embeds for one locale as raw DEFLATE data, with the pinned CLDR
+    /// currency, unit and compact-notation data the compiler selected for them; see <see cref="ReadDeflatedValues(ReadOnlySpan{byte}, int)"/>.
+    /// </summary>
+    /// <exception cref="TranslationPackException">The data does not inflate to <paramref name="length"/> bytes, or is not in the compiler's form.</exception>
+    public static IReadOnlyList<CompiledTranslationValue> ReadDeflatedValues(ReadOnlySpan<byte> deflatedUtf8Json, int length, ReadOnlySpan<byte> formatData) =>
+        DeflatedLocaleData.Read(deflatedUtf8Json, length, Rmf2FormatData.Parse(formatData));
+
     /// <summary>Copies a closed argument carrier under an NFC RMF2 input name.</summary>
     public static TextArgument CreateArgument(string name, TextArgument value) => TextArgument.CreateRmf2(name, value);
 
