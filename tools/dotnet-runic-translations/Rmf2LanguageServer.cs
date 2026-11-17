@@ -858,11 +858,7 @@ internal sealed partial class Rmf2LanguageServer
         return false;
     }
     private const string MixedWorkspaceRefusal = "Rename refused: this workspace contains application or legacy sources whose references Runic cannot safely rewrite. Use the native language refactor, or explicitly choose Rename Resource in Resource Sources and update call sites separately.";
-    private static bool IsWithin(string root, string path)
-    {
-        string relative = Path.GetRelativePath(root, path);
-        return !Path.IsPathRooted(relative) && relative != ".." && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
-    }
+    private static bool IsWithin(string root, string path) => PathContainment.IsWithin(root, path);
     // TranslationSource uses portable separators, including on Windows. Buffer overlays
     // must use the same key as disk sources or the workspace receives duplicates.
     private static string LocalPath(string uri) => new Uri(uri).LocalPath.Replace('\\', '/');

@@ -319,11 +319,7 @@ internal static class TranslationLocaleChanges
     }
 
     /// <summary>Whether <paramref name="path"/> lies inside <paramref name="directory"/>.</summary>
-    internal static bool IsWithin(string path, string directory)
-    {
-        string relative = Path.GetRelativePath(directory, path);
-        return !Path.IsPathRooted(relative) && relative != ".." && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) && !relative.StartsWith("../", StringComparison.Ordinal);
-    }
+    internal static bool IsWithin(string path, string directory) => PathContainment.IsWithin(directory, path);
 
     private static TranslationDiagnostic[] Errors(Rmf2ProjectCompilation compilation) =>
         compilation.Diagnostics.Where(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error && diagnostic.Id != "RTR0010").ToArray();
@@ -483,7 +479,7 @@ internal static class TranslationLocaleChanges
         {
             string full = sources.FullPath(root);
             string relative = Path.GetRelativePath(full, path);
-            if (relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative)) continue;
+            if (!PathContainment.IsWithinRelative(relative)) continue;
             string[] segments = relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             return segments.Length > 1 ? (segments[0], Path.Combine(full, segments[0])) : null;
         }

@@ -1851,8 +1851,9 @@ internal sealed class EditorWorkspace : IDisposable
         if (_disposed) return;
         bool relevant = fullPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase) || IsSourcePath(fullPath);
         if (!relevant && !membershipChanged) return;
-        string relativePath = NormalizeRelativePath(Path.GetRelativePath(_root, fullPath));
-        if (relativePath == ".." || relativePath.StartsWith("../", StringComparison.Ordinal)) return;
+        string? within = PathContainment.RelativeWithin(_root, fullPath);
+        if (within is null) return;
+        string relativePath = NormalizeRelativePath(within);
         if (relativePath.StartsWith(".runic-translations/", StringComparison.Ordinal)) return;
         if (membershipChanged || string.Equals(Path.GetFileName(fullPath), "runic.json", StringComparison.OrdinalIgnoreCase))
             Volatile.Write(ref _discoveredProjects, null);
@@ -2147,9 +2148,10 @@ internal sealed class EditorWorkspace : IDisposable
             var after = sources.ToDictionary(static source => source.Path, StringComparer.Ordinal);
             foreach (TranslationImportSourceWrite write in plan.Writes)
             {
-                string relative = NormalizeRelativePath(Path.GetRelativePath(_root, write.FullPath));
-                if (relative == ".." || relative.StartsWith("../", StringComparison.Ordinal) || Path.IsPathRooted(relative))
+                string? within = PathContainment.RelativeWithin(_root, write.FullPath);
+                if (within is null)
                     return (Refused(EditorNotice.Create("ui_backend_source_outside_project", ("path", write.DisplayPath))), null);
+                string relative = NormalizeRelativePath(within);
                 edits.Add(write.OriginalBytes is null
                     ? new TranslationWorkspaceEdit(relative, TranslationWorkspaceEditKind.Create, null, write.Bytes)
                     : new TranslationWorkspaceEdit(relative, TranslationWorkspaceEditKind.Replace, WorkspaceRevision(write.OriginalBytes), write.Bytes));

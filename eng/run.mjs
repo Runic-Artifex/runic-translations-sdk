@@ -11,8 +11,12 @@ export const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const workspace = JSON.parse(readFileSync(resolve(root, "eng/workspace.json"), "utf8"));
 export const configuration = process.env.CONFIGURATION ?? "Release";
 
+// The eng scripts run with Bun. On Windows, npm and npx are .cmd shims: Bun starts those, while Node (since 20.12.2,
+// CVE-2024-27980) refuses a .cmd without a shell with EINVAL. So the shims are started only under Bun.
 function executable(command) {
-  return process.platform === "win32" && ["npm", "npx"].includes(command) ? `${command}.cmd` : command;
+  if (process.platform !== "win32" || !["npm", "npx"].includes(command)) return command;
+  if (!process.versions.bun) throw new Error(`eng/run.mjs starts ${command} on Windows only under Bun; run the script with bun.`);
+  return `${command}.cmd`;
 }
 
 export function run(command, args, cwd = root, environment = {}) {

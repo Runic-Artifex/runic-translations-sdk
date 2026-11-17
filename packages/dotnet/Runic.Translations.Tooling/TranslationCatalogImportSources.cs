@@ -142,9 +142,7 @@ internal static class ImportMapping
     /// <summary>A source path relative to the base directory (the working directory of the command line), or absolute when it lies outside it.</summary>
     internal static string Display(string fullPath, string baseDirectory)
     {
-        string relative = Path.GetRelativePath(baseDirectory, fullPath);
-        return (relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) || Path.IsPathRooted(relative)
-            ? fullPath : relative).Replace('\\', '/');
+        return PathContainment.RelativeWithin(baseDirectory, fullPath) ?? fullPath.Replace('\\', '/');
     }
 }
 
@@ -662,10 +660,7 @@ internal sealed record ImportManifest(string BaseLocale, IReadOnlyList<string> L
         foreach ((string path, IReadOnlyList<string> prefix) in Roots)
         {
             string relative = System.IO.Path.GetRelativePath(path, directory);
-            if (relative == "." || System.IO.Path.IsPathRooted(relative) || relative == ".." ||
-                relative.StartsWith(".." + System.IO.Path.DirectorySeparatorChar, StringComparison.Ordinal) ||
-                relative.StartsWith(".." + System.IO.Path.AltDirectorySeparatorChar, StringComparison.Ordinal))
-                continue;
+            if (relative == "." || !PathContainment.IsWithinRelative(relative)) continue;
             return prefix.Concat(relative.Split(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar)).ToArray();
         }
         return null;

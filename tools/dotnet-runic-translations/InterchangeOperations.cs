@@ -126,8 +126,8 @@ internal static class InterchangeOperations
     // A path below the working directory is shown relative to it, any other one in full.
     internal static string Display(string fullPath)
     {
-        string relative = InputFiles.DisplayPath(fullPath, Path.GetFullPath(Environment.CurrentDirectory));
-        return relative == ".." || relative.StartsWith("../", StringComparison.Ordinal) ? fullPath.Replace('\\', '/') : relative;
+        string current = Path.GetFullPath(Environment.CurrentDirectory);
+        return PathContainment.IsWithin(current, fullPath) ? InputFiles.DisplayPath(fullPath, current) : fullPath.Replace('\\', '/');
     }
 
     internal static int Import(string projectPath, string source, string? policyName, bool writeReview, bool dryRun, ToolOperationResult result, string? failOn = null)
@@ -330,9 +330,7 @@ internal static class InterchangeOperations
         string full = Path.GetFullPath(path, Environment.CurrentDirectory);
         foreach (string root in inputs.SourceRoots ?? [])
         {
-            string relative = Path.GetRelativePath(root, full);
-            if (!Path.IsPathRooted(relative) && relative != ".." && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) &&
-                !relative.StartsWith("../", StringComparison.Ordinal)) return;
+            if (PathContainment.IsWithin(root, full)) return;
         }
         throw new ToolOutputException($"RTR0020: the imported translation path '{path}' is outside every source root.");
     }

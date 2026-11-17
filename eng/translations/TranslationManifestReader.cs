@@ -25,10 +25,7 @@ internal sealed record TranslationManifestLayout(IReadOnlyList<string> SourceRoo
     internal bool IsOverrideSource(string fullPath)
     {
         if (OverridesRoot is null) return false;
-        string relative = Path.GetRelativePath(OverridesRoot, fullPath);
-        return !Path.IsPathRooted(relative) && relative != ".." && relative != "." &&
-            !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) &&
-            !relative.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
+        return PathContainment.IsBelow(OverridesRoot, fullPath);
     }
 }
 

@@ -316,6 +316,13 @@ jobs:
       - name: Run the localized formatting tests and conformance corpus
         shell: bash
         run: bash eng/ci/localized-formatting.sh
+      # Windows path rules (WIN-04): the path containment and RMF2 workspace cases, which attribute files to source
+      # roots. Linux runs them in the full suite.
+      - name: Run the path containment and RMF2 workspace tests
+        shell: bash
+        run: >-
+          dotnet run --project tests/dotnet/Runic.Translations.Authoring.Tests --configuration Release --
+          --treenode-filter "/*/*/(PathContainmentTests)|(Rmf2AuthoringTests)/*" --minimum-expected-tests 41
   formatting-macos:
     name: Localized formatting / macOS
     needs: train-feed

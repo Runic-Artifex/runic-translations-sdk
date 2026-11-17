@@ -119,13 +119,7 @@ internal static class InputFiles
         }
     }
 
-    private static bool IsWithin(string root, string path)
-    {
-        string relative = Path.GetRelativePath(root, path);
-        return !Path.IsPathRooted(relative) && relative != ".." &&
-            !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) &&
-            !relative.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal);
-    }
+    private static bool IsWithin(string root, string path) => PathContainment.IsWithin(root, path);
 
     private static ToolDiagnosticException TooLarge(string displayPath) => new(
         $"{NormalizePath(displayPath)}(1,1,1,1): error RTR0022: Document exceeds the configured byte limit of {MaximumDocumentBytes} bytes.");
