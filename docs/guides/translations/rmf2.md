@@ -776,7 +776,10 @@ With protocol 1, `runic.extractGroup` and `runic.inlineResource` return
 `WorkspaceEdit` results and the client applies them; with protocol 2 the server
 applies command edits through `workspace/applyEdit`. Extract and Inline code
 actions are resolved against the document revision they were offered for.
-File-changing commands and actions require client create/delete capabilities. A separate reader processes cancellation while one worker owns
+File-changing commands and actions require client create/delete capabilities
+with protocol 1; protocol 2 needs only `create` and empties an inlined file for a
+client without `delete`, such as Visual Studio 2026 (see the
+[language server guide](language-server.md#client-compatibility)). A separate reader processes cancellation while one worker owns
 request state; cancelled and stale requests return protocol errors rather than
 obsolete edits. A bounded cache reuses byte-identical syntax across workspace
 requests. New unsaved RMF2 files participate in their configured source roots.

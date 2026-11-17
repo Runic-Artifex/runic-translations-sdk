@@ -39,8 +39,14 @@ internal sealed partial class Rmf2LanguageServer
     private int _protocol = 1;
     // Client capabilities that revision 2 uses when the client advertises them, and degrades without.
     private bool _applyEditSupport;
-    private bool _showMessageRequestSupport;
     private bool _watchedFilesRegistration;
+    // Resource operations of the client's workspace edits, each on its own: Visual Studio 2026 applies `create` and
+    // `rename` but not `delete` (SPIKE-VS-0). Revision 1 keeps 0.13's combined check (_fileOperations).
+    private bool _createFiles;
+    private bool _deleteFiles;
+    // Whether the client resolves code actions (textDocument.codeAction.resolveSupport). Visual Studio lists no `edit`
+    // among the properties yet resolves it, so any resolveSupport counts; without it refactor actions carry their edit.
+    private bool _codeActionResolve;
     // Server-to-client requests awaiting their response, by the JSON text of their ID. The reader thread completes
     // them, so the worker can wait for a response while the reader keeps reading.
     private readonly Dictionary<string, TaskCompletionSource<JsonObject>> _clientRequests = new(StringComparer.Ordinal);
@@ -109,6 +115,8 @@ internal sealed partial class Rmf2LanguageServer
     private long _processedRevision;
     private sealed class ContentModifiedException : Exception { }
     private sealed class MethodNotFoundException(string method) : Exception("Unknown method '" + method + "'.") { }
+    // The client answered a server-to-client request with an error.
+    private sealed class ClientRequestFailedException(string message) : InvalidOperationException(message) { }
     // The requests this server answers. Under protocol 2 any other request is answered with MethodNotFound.
     private static readonly HashSet<string> RequestMethods = new(StringComparer.Ordinal) {
         "initialize", "shutdown", "codeAction/resolve", "workspace/executeCommand",
@@ -178,6 +186,7 @@ internal sealed partial class Rmf2LanguageServer
             }
             return 0;
         });
+        _enqueueWatchedFiles = changes => Enqueue(new JsonObject { ["jsonrpc"] = "2.0", ["method"] = "workspace/didChangeWatchedFiles", ["params"] = new JsonObject { ["changes"] = changes } }, "workspace/didChangeWatchedFiles");
         try
         {
             while (Read() is { } request)
@@ -205,7 +214,29 @@ internal sealed partial class Rmf2LanguageServer
                     if (observed) _requestCancelled?.Invoke(target!);
                     continue;
                 }
-                var source = new CancellationTokenSource();
+                Enqueue(request, method);
+                if (method == "exit") break;
+            }
+        }
+        finally
+        {
+            // No response can arrive any more: a request the worker is waiting on fails instead of hanging.
+            FailClientRequests();
+            StopFileWatching();
+            lock (_enqueueGate) queue.CompleteAdding();
+            worker.GetAwaiter().GetResult();
+        }
+        return worker.GetAwaiter().GetResult();
+
+        // Queues a message for the worker with its state revision. The reader and the server's own file watcher
+        // (StartFileWatching) both queue messages, so a revision is assigned and queued as one step: the queue stays
+        // in revision order.
+        void Enqueue(JsonObject request, string method)
+        {
+            var source = new CancellationTokenSource();
+            lock (_enqueueGate)
+            {
+                if (queue.IsAddingCompleted) { source.Dispose(); throw new IOException("Language server stopped."); }
                 long revision;
                 lock (_revisionGate) {
                     if (method is "textDocument/didOpen" or "textDocument/didChange" or "textDocument/didClose" or "workspace/didChangeWatchedFiles" or "workspace/didChangeConfiguration") _latestRevision++;
@@ -214,16 +245,8 @@ internal sealed partial class Rmf2LanguageServer
                 }
                 while (!queue.TryAdd((request, source, revision), 100))
                     if (worker.IsCompleted) { source.Dispose(); worker.GetAwaiter().GetResult(); throw new IOException("Language server worker stopped."); }
-                if (method == "exit") break;
             }
         }
-        finally
-        {
-            // No response can arrive any more: a request the worker is waiting on fails instead of hanging.
-            FailClientRequests();
-            queue.CompleteAdding(); worker.GetAwaiter().GetResult();
-        }
-        return worker.GetAwaiter().GetResult();
     }
 
     // Sends a server-to-client request. The returned task completes with the client's response message.
@@ -257,7 +280,7 @@ internal sealed partial class Rmf2LanguageServer
         catch (AggregateException failure) when (failure.InnerException is IOException closed) { throw closed; }
         JsonObject message = response.Result;
         if (message["error"] is JsonObject error)
-            throw new InvalidOperationException($"The client failed {method}: {error["message"]?.GetValue<string>() ?? "no message"}");
+            throw new ClientRequestFailedException($"The client failed {method}: {error["message"]?.GetValue<string>() ?? "no message"}");
         return message["result"];
     }
 
@@ -295,10 +318,16 @@ internal sealed partial class Rmf2LanguageServer
         Task<JsonObject> response = StartClientRequest("client/registerCapability", new JsonObject { ["registrations"] = new JsonArray(new JsonObject {
             ["id"] = "runic.watchedFiles", ["method"] = "workspace/didChangeWatchedFiles", ["registerOptions"] = new JsonObject { ["watchers"] = watchers },
         }) }, out _);
-        // Nothing waits for the answer; a refusal only means the client keeps forwarding events itself.
+        // Nothing waits for the answer. After a refusal the server watches the workspace itself.
         response.ContinueWith(task => {
             if (task.IsCompletedSuccessfully && task.Result["error"] is JsonObject error)
-                Console.Error.WriteLine("runic-rmf2: the client refused the watched-file registration: " + error["message"]?.GetValue<string>());
+            {
+                Console.Error.WriteLine("runic-rmf2: the client refused the watched-file registration (" + error["message"]?.GetValue<string>() + "); the server watches the workspace itself.");
+                StartFileWatching();
+                // Changes made before the watchers started would be missed: rescan once now.
+                try { _enqueueWatchedFiles?.Invoke(new JsonArray()); }
+                catch (Exception failure) when (failure is IOException or InvalidOperationException or ObjectDisposedException) { }
+            }
         }, TaskScheduler.Default);
     }
     private JsonNode? Handle(string method, JsonObject args)
@@ -314,7 +343,10 @@ internal sealed partial class Rmf2LanguageServer
                 foreach (var folder in folders) _workspaceRoots.Add(LocalPath(folder!["uri"]!.GetValue<string>()));
             else if (args["rootUri"] is JsonValue rootUri) _workspaceRoots.Add(LocalPath(rootUri.GetValue<string>()));
             RefreshProjectIndex(rescanWorkspace: true);
-            _fileOperations = args["capabilities"]?["workspace"]?["workspaceEdit"]?["resourceOperations"] is JsonArray operations && operations.Any(v => v?.GetValue<string>() == "create") && operations.Any(v => v?.GetValue<string>() == "delete");
+            var resourceOperations = args["capabilities"]?["workspace"]?["workspaceEdit"]?["resourceOperations"] as JsonArray;
+            _createFiles = resourceOperations?.Any(v => v is JsonValue value && value.TryGetValue(out string? text) && text == "create") == true;
+            _deleteFiles = resourceOperations?.Any(v => v is JsonValue value && value.TryGetValue(out string? text) && text == "delete") == true;
+            _fileOperations = _createFiles && _deleteFiles;
             var encodings = args["capabilities"]?["general"]?["positionEncodings"] as JsonArray;
             _encoding = encodings?.Select(v => v!.GetValue<string>()).FirstOrDefault(v => v is "utf-8" or "utf-16" or "utf-32") ?? "utf-16";
             // A client that asks for a newer revision than this server knows gets the latest one, and sees which in
@@ -322,7 +354,7 @@ internal sealed partial class Rmf2LanguageServer
             _protocol = args["initializationOptions"]?["runicProtocol"] is JsonValue requested && requested.TryGetValue(out int revision) && revision >= 2 ? LatestProtocol : 1;
             JsonNode? clientCapabilities = args["capabilities"];
             _applyEditSupport = clientCapabilities?["workspace"]?["applyEdit"] is JsonValue applyEdit && applyEdit.TryGetValue(out bool canApply) && canApply;
-            _showMessageRequestSupport = clientCapabilities?["window"]?["showMessage"] is JsonObject;
+            _codeActionResolve = clientCapabilities?["textDocument"]?["codeAction"]?["resolveSupport"] is JsonObject;
             _watchedFilesRegistration = clientCapabilities?["workspace"]?["didChangeWatchedFiles"]?["dynamicRegistration"] is JsonValue dynamic && dynamic.TryGetValue(out bool canRegister) && canRegister;
             if (_protocol >= 2) return Protocol2Capabilities();
             return new JsonObject { ["capabilities"] = new JsonObject {
@@ -338,7 +370,9 @@ internal sealed partial class Rmf2LanguageServer
         if (method == "shutdown") { _shutdown = true; return null; }
         if (method == "initialized")
         {
-            if (_protocol >= 2 && _watchedFilesRegistration) RegisterWatchedFiles();
+            // A client that cannot register watchers gets the server's own (Visual Studio 2026 has no dynamic
+            // didChangeWatchedFiles registration, SPIKE-VS-0).
+            if (_protocol >= 2) { if (_watchedFilesRegistration) RegisterWatchedFiles(); else StartFileWatching(); }
             return null;
         }
         if (method == "$/cancelRequest") return null;
@@ -418,13 +452,15 @@ internal sealed partial class Rmf2LanguageServer
                 return ApplyCommandEdit("Rename slot", WorkspaceEdit(workspace.RenameSlot(sourcePath, arguments[1]!.GetValue<string>(), arguments[2]!.GetValue<string>(), arguments[3]!.GetValue<string>())));
             if (command == "runic.renameInput")
                 return ApplyCommandEdit("Rename input", WorkspaceEdit(workspace.RenameInput(sourcePath, arguments[1]!.GetValue<string>(), arguments[2]!.GetValue<string>(), arguments[3]!.GetValue<string>())));
-            if (!_fileOperations) throw new InvalidOperationException("The client does not support the required file operations.");
+            // Protocol 2 needs only the operations a command uses, and empties an inlined file for a client without
+            // `delete` (Visual Studio 2026), as the Inline Resource code action does.
+            if (_protocol < 2 ? !_fileOperations : !_createFiles) throw new InvalidOperationException("The client does not support the required file operations.");
             var plan = command switch {
                 "runic.extractGroup" => workspace.Extract(sourcePath, arguments[1]!.AsArray().Select(v => v!.GetValue<string>()).ToArray()),
                 "runic.inlineResource" => workspace.Inline(sourcePath, LocalPath(arguments[1]!.GetValue<string>())),
                 _ => throw new ArgumentException("Unknown RMF2 workspace command."),
             };
-            return ApplyCommandEdit(command == "runic.extractGroup" ? "Extract group" : "Inline resource", WorkspaceEdit(plan));
+            return ApplyCommandEdit(command == "runic.extractGroup" ? "Extract group" : "Inline resource", WorkspaceEdit(plan, emptyInsteadOfDelete: _protocol >= 2 && !_deleteFiles));
         }
         var document = args["textDocument"] as JsonObject;
         if (document is null) return null;
@@ -1161,7 +1197,10 @@ internal sealed partial class Rmf2LanguageServer
             if (candidate is not null && PathComparer.Equals(candidate, projectDirectory)) yield return uri;
         }
     }
-    private JsonObject WorkspaceEdit(TranslationWorkspaceTransactionPlan plan)
+    // emptyInsteadOfDelete: a deleted file is emptied by a text edit instead, for a client without the `delete`
+    // resource operation (protocol 2 Inline Resource in Visual Studio 2026). Nothing is lost if the client applies only
+    // part of the edit, and the empty resource contributes nothing to the catalog until the user deletes it.
+    private JsonObject WorkspaceEdit(TranslationWorkspaceTransactionPlan plan, bool emptyInsteadOfDelete = false)
     {
         if (!_configurationSync && plan.Edits.Any(edit => Path.GetFileName(edit.RelativePath) == "runic.json"))
             throw new TranslationAuthoringException("Refactor refused: this client does not synchronize unsaved runic.json buffers. Use the Translations Editor or VS Code for configuration-changing transactions.");
@@ -1173,11 +1212,12 @@ internal sealed partial class Rmf2LanguageServer
             TryGetBuffer(path, out string? openUri, out Buffer? buffer);
             string uri = openUri ?? new Uri(path).AbsoluteUri;
             if (edit.Kind == TranslationWorkspaceEditKind.Create) edits.Add((JsonNode)new JsonObject { ["kind"] = "create", ["uri"] = uri });
-            if (edit.Kind == TranslationWorkspaceEditKind.Delete) { edits.Add((JsonNode)new JsonObject { ["kind"] = "delete", ["uri"] = uri }); continue; }
+            if (edit.Kind == TranslationWorkspaceEditKind.Delete && !emptyInsteadOfDelete) { edits.Add((JsonNode)new JsonObject { ["kind"] = "delete", ["uri"] = uri }); continue; }
             string before = edit.Kind == TranslationWorkspaceEditKind.Create ? "" : buffer?.Text ?? File.ReadAllText(path, Utf8);
+            string after = edit.Kind == TranslationWorkspaceEditKind.Delete ? "" : Utf8.GetString(edit.GetUtf8Bytes()!);
             edits.Add((JsonNode)new JsonObject {
                 ["textDocument"] = new JsonObject { ["uri"] = uri, ["version"] = buffer is null ? null : JsonValue.Create(buffer.Version) },
-                ["edits"] = new JsonArray(new JsonObject { ["range"] = new JsonObject { ["start"] = Position(before, 0), ["end"] = Position(before, before.Length) }, ["newText"] = Utf8.GetString(edit.GetUtf8Bytes()!) }),
+                ["edits"] = new JsonArray(new JsonObject { ["range"] = new JsonObject { ["start"] = Position(before, 0), ["end"] = Position(before, before.Length) }, ["newText"] = after }),
             });
         }
         return new JsonObject { ["documentChanges"] = edits };

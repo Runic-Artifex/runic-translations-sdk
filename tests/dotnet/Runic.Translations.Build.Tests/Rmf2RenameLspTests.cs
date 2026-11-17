@@ -126,22 +126,46 @@ internal sealed class Rmf2RenameLspTests
         }
     }
 
-    [Test, DisplayName("LSP keeps the mixed-workspace refusal for clients without showMessageRequest and for protocol 1")]
+    [Test, DisplayName("LSP protocol 2 asks Visual Studio 2026 before a mixed-workspace resource rename, although it advertises no window capabilities")]
+    public void VisualStudioConfirmation()
+    {
+        var (temporary, englishUri, germanUri) = CreateRenameProject(application: true);
+        using (temporary)
+        {
+            JsonObject capabilities = VisualStudioCapabilities();
+            Assert.True(capabilities["window"] is null, "The captured Visual Studio capabilities gained a window block.");
+            using Session session = new(_ => { }, _ => { });
+            // Visual Studio shows the request as an InfoBar and answers with the chosen action.
+            session.OnServerRequest = _ => new JsonObject { ["result"] = new JsonObject { ["title"] = "Rename in resource sources" } };
+            session.Request("initialize", Initialize(temporary.Path, capabilities, protocol: 2));
+            Open(session, englishUri, English);
+            JsonNode prepared = session.Request("textDocument/prepareRename", new JsonObject { ["textDocument"] = Document(englishUri), ["position"] = At(English, "title") });
+            Assert.Equal("title", prepared["result"]!["placeholder"]!.GetValue<string>());
+            JsonNode response = session.Request("textDocument/rename", RenameArgs(englishUri, At(English, "title"), "heading"));
+            Assert.Equal("window/showMessageRequest", session.ServerRequests.Single()["method"]!.GetValue<string>());
+            Assert.Contains("heading = Hallo {$name}", EditedText(response, germanUri));
+        }
+    }
+
+    [Test, DisplayName("LSP keeps the mixed-workspace refusal for clients that fail showMessageRequest and for protocol 1")]
     public void MixedWorkspaceRefusal()
     {
         var (temporary, englishUri, _) = CreateRenameProject(application: true);
         using (temporary)
         {
+            // Protocol 2 asks whether or not the client advertises window.showMessage; a client that answers with an
+            // error, as one without the request does (MethodNotFound), gets the refusal.
             JsonObject capabilities = FullClientCapabilities();
             capabilities.Remove("window");
             using (Session session = new(_ => { }, _ => { }))
             {
+                session.OnServerRequest = _ => new JsonObject { ["error"] = new JsonObject { ["code"] = -32601, ["message"] = "Unhandled method window/showMessageRequest" } };
                 session.Request("initialize", Initialize(temporary.Path, capabilities, protocol: 2));
                 Open(session, englishUri, English);
                 JsonNode refused = session.Request("textDocument/rename", RenameArgs(englishUri, At(English, "title"), "heading"));
                 Assert.Equal(-32803, refused["error"]!["code"]!.GetValue<int>(), refused.ToJsonString());
                 Assert.Contains("Rename refused: this workspace contains application", refused["error"]!["message"]!.GetValue<string>());
-                Assert.Equal(0, session.ServerRequests.Count);
+                Assert.Equal("window/showMessageRequest", session.ServerRequests.Single()["method"]!.GetValue<string>());
             }
             // Protocol 1 refuses as 0.13 did, even when the client could answer a question, and F2 on an input
             // stays refused.

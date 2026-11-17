@@ -63,14 +63,16 @@ internal sealed partial class Rmf2LanguageServer
     }
 
     // textDocument/rename under protocol 2. A resource rename in a workspace that contains application sources asks
-    // the user with window/showMessageRequest instead of refusing, because Runic does not rewrite call sites; a client
-    // without that request keeps the refusal. Declining returns no edit.
+    // the user with window/showMessageRequest instead of refusing, because Runic does not rewrite call sites. The
+    // server asks whether or not the client advertises window.showMessage: Visual Studio 2026 advertises no `window`
+    // capabilities yet shows the request as an InfoBar (SPIKE-VS-0). A client that answers with an error (such as
+    // MethodNotFound) gets the refusal, as in revision 1; declining, or answering null, returns no edit.
     private JsonObject? StandardRename(string uri, Rmf2ResourceNode? entry, int atByte, string newName)
     {
         RenameTarget target = RenameTargetAt(entry, atByte)
             ?? throw new InvalidOperationException("Rename requires a resource name, an MF2 variable or a slot reference.");
         string path = LocalPath(uri);
-        bool mixed = target.Kind == RenameKind.Resource && RequireResourceOnlyWorkspace(path, allowMixed: _showMessageRequestSupport);
+        bool mixed = target.Kind == RenameKind.Resource && RequireResourceOnlyWorkspace(path, allowMixed: true);
         var workspace = Workspace(path);
         // Clients put the whole selected token in the rename box; `$name` and `name` rename the same variable.
         if (target.Kind is RenameKind.Local or RenameKind.Input && newName.StartsWith('$')) newName = newName[1..];
@@ -80,7 +82,7 @@ internal sealed partial class Rmf2LanguageServer
             RenameKind.Input => workspace.RenameInput(path, entry!.Key, target.Name, newName),
             _ => workspace.RenameSlot(path, entry!.Key, target.Name, newName),
         };
-        if (!_fileOperations && plan.Edits.Any(edit => edit.Kind != TranslationWorkspaceEditKind.Replace)) throw new InvalidOperationException("Rename requires client file-operation support.");
+        if (!SupportsResourceOperations(plan)) throw new InvalidOperationException("Rename requires client file-operation support.");
         JsonObject edit = WorkspaceEdit(plan);
         if (mixed && !ConfirmResourceSourceRename(string.Join('_', workspace.LogicalPath(path, entry!)), newName)) return null;
         return edit;
@@ -88,11 +90,16 @@ internal sealed partial class Rmf2LanguageServer
 
     private bool ConfirmResourceSourceRename(string key, string newName)
     {
-        JsonNode? choice = ClientRequest("window/showMessageRequest", new JsonObject {
-            ["type"] = 2,
-            ["message"] = $"This workspace contains application sources (C#, TypeScript, Svelte and others). Runic renames '{key}' to '{newName}' in resource sources only; it does not update call sites. Rename in resource sources?",
-            ["actions"] = new JsonArray(new JsonObject { ["title"] = RenameInResourceSources }, new JsonObject { ["title"] = "Cancel" }),
-        });
+        JsonNode? choice;
+        try
+        {
+            choice = ClientRequest("window/showMessageRequest", new JsonObject {
+                ["type"] = 2,
+                ["message"] = $"This workspace contains application sources (C#, TypeScript, Svelte and others). Runic renames '{key}' to '{newName}' in resource sources only; it does not update call sites. Rename in resource sources?",
+                ["actions"] = new JsonArray(new JsonObject { ["title"] = RenameInResourceSources }, new JsonObject { ["title"] = "Cancel" }),
+            });
+        }
+        catch (ClientRequestFailedException) { throw new TranslationAuthoringException(MixedWorkspaceRefusal); }
         return choice is JsonObject action && action["title"] is JsonValue title && title.TryGetValue(out string? text) && text == RenameInResourceSources;
     }
 
@@ -102,12 +109,28 @@ internal sealed partial class Rmf2LanguageServer
         only is null || only.Any(value => value is JsonValue text && text.TryGetValue(out string? requested) &&
             (requested.Length == 0 || kind == requested || kind.StartsWith(requested + ".", StringComparison.Ordinal)));
 
-    // Unresolved refactor actions: the edit is built by codeAction/resolve, against the revision they were offered for.
-    // Both refactorings create or delete files, so a client without those resource operations is not offered them.
+    // Refactor actions. A client that resolves code actions gets them unresolved: codeAction/resolve builds the edit
+    // against the revision they were offered for. Visual Studio 2026 lists no `edit` in resolveSupport.properties yet
+    // resolves it (SPIKE-VS-0), so any resolveSupport counts. A client without resolveSupport gets the edit inline.
+    // Extract Group creates a file, so it needs the `create` resource operation. Inline Resource deletes the inlined
+    // file, or, for a client without `delete` (Visual Studio 2026), empties it and says so in its title.
     private IEnumerable<JsonObject> RefactorActions(string uri, Buffer buffer, int from, int to, JsonArray? only)
     {
+        foreach (JsonObject action in UnresolvedRefactorActions(uri, buffer, from, to, only))
+        {
+            if (_codeActionResolve) { yield return action; continue; }
+            // Building one action's edit can fail (an invalid catalog); that action is left out, not the request.
+            JsonObject? resolved = null;
+            try { resolved = ResolveRefactor(action, uri, action["data"]!); }
+            catch (Exception error) when (error is TranslationAuthoringException or InvalidOperationException or IOException or ArgumentException) { }
+            if (resolved is not null) yield return resolved;
+        }
+    }
+
+    private IEnumerable<JsonObject> UnresolvedRefactorActions(string uri, Buffer buffer, int from, int to, JsonArray? only)
+    {
         string path = LocalPath(uri);
-        if (!_fileOperations || !Path.GetExtension(path).Equals(".rmf2", StringComparison.OrdinalIgnoreCase)) yield break;
+        if (!_createFiles || !Path.GetExtension(path).Equals(".rmf2", StringComparison.OrdinalIgnoreCase)) yield break;
         string revision = Rmf2DiagnosticActions.Revision(buffer.Encoded);
         JsonObject Data(string refactor) => new() { ["uri"] = uri, ["version"] = buffer.Version, ["revision"] = revision, ["refactor"] = refactor };
         string fileName = Path.GetFileName(path);
@@ -131,7 +154,9 @@ internal sealed partial class Rmf2LanguageServer
                 if (!File.Exists(destination) && !TryGetBuffer(destination, out _, out _)) continue;
                 JsonObject data = Data("inlineResource");
                 data["destination"] = ClientUri(destination);
-                yield return new JsonObject { ["title"] = $"Inline into {Path.GetRelativePath(directory, destination).Replace('\\', '/')}", ["kind"] = "refactor.inline", ["data"] = data };
+                string title = $"Inline into {Path.GetRelativePath(directory, destination).Replace('\\', '/')}";
+                if (!_deleteFiles) title += $" (leaves {fileName} empty)";
+                yield return new JsonObject { ["title"] = title, ["kind"] = "refactor.inline", ["data"] = data };
             }
     }
 
@@ -148,7 +173,7 @@ internal sealed partial class Rmf2LanguageServer
     // codeAction/resolve of a refactor action whose revision evidence the caller has checked.
     private JsonObject ResolveRefactor(JsonObject action, string uri, JsonNode data)
     {
-        if (!_fileOperations) throw new InvalidOperationException("The client does not support the required file operations.");
+        if (!_createFiles) throw new InvalidOperationException("The client does not support the required file operations.");
         string path = LocalPath(uri);
         var workspace = Workspace(path);
         TranslationWorkspaceTransactionPlan plan = data["refactor"]!.GetValue<string>() switch {
@@ -157,9 +182,15 @@ internal sealed partial class Rmf2LanguageServer
             _ => throw new ArgumentException("Unknown Runic refactoring."),
         };
         JsonObject resolved = action.DeepClone().AsObject();
-        resolved["edit"] = WorkspaceEdit(plan);
+        resolved["edit"] = WorkspaceEdit(plan, emptyInsteadOfDelete: !_deleteFiles);
         return resolved;
     }
+
+    // Whether the client can apply a protocol 2 plan's file creations and deletions. A deletion it cannot apply is
+    // sent as an edit that empties the file (WorkspaceEdit's emptyInsteadOfDelete), which only Inline Resource does.
+    private bool SupportsResourceOperations(TranslationWorkspaceTransactionPlan plan) =>
+        (_createFiles || plan.Edits.All(edit => edit.Kind != TranslationWorkspaceEditKind.Create)) &&
+        (_deleteFiles || plan.Edits.All(edit => edit.Kind != TranslationWorkspaceEditKind.Delete));
 
     // Protocol 2: the server applies a runic.* command's edit with workspace/applyEdit and answers null, as LSP expects
     // of commands. Protocol 1, and a client without applyEdit, receive the WorkspaceEdit as the result.

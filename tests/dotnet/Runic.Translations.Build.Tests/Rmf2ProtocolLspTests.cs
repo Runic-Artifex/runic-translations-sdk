@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Text.Json.Nodes;
 using Runic.Translations.Tool;
 using TUnit.Core;
@@ -15,7 +16,7 @@ internal sealed class Rmf2ProtocolLspTests
     internal const string Project = """{"schemaVersion":1,"catalog":"app","code":{"namespace":"Example","className":"Text"},"baseLocale":"en","locales":["en","de"]}""";
 
     // The capabilities Translations 0.13 advertised, byte for byte.
-    private const string Protocol1Capabilities = """{"positionEncoding":"utf-16","textDocumentSync":2,"documentSymbolProvider":true,"semanticTokensProvider":{"legend":{"tokenTypes":["namespace","property","variable","function","keyword","string","comment","type"],"tokenModifiers":[]},"full":true},"referencesProvider":true,"foldingRangeProvider":true,"hoverProvider":true,"definitionProvider":true,"documentFormattingProvider":true,"renameProvider":true,"codeActionProvider":{"codeActionKinds":["quickfix"],"resolveProvider":true},"executeCommandProvider":{"commands":["runic.extractGroup","runic.inlineResource","runic.markReviewed","runic.preview","runic.renameInput","runic.renameSlot","runic.renameResource","runic.renderPreview"]},"completionProvider":{"triggerCharacters":["$",":","#","/","="]}}""";
+    internal const string Protocol1Capabilities = """{"positionEncoding":"utf-16","textDocumentSync":2,"documentSymbolProvider":true,"semanticTokensProvider":{"legend":{"tokenTypes":["namespace","property","variable","function","keyword","string","comment","type"],"tokenModifiers":[]},"full":true},"referencesProvider":true,"foldingRangeProvider":true,"hoverProvider":true,"definitionProvider":true,"documentFormattingProvider":true,"renameProvider":true,"codeActionProvider":{"codeActionKinds":["quickfix"],"resolveProvider":true},"executeCommandProvider":{"commands":["runic.extractGroup","runic.inlineResource","runic.markReviewed","runic.preview","runic.renameInput","runic.renameSlot","runic.renameResource","runic.renderPreview"]},"completionProvider":{"triggerCharacters":["$",":","#","/","="]}}""";
 
     // Every client capability protocol 2 can use, so a protocol 1 session shows that it ignores them.
     internal static JsonObject FullClientCapabilities() => new() {
@@ -25,8 +26,16 @@ internal sealed class Rmf2ProtocolLspTests
             ["didChangeWatchedFiles"] = new JsonObject { ["dynamicRegistration"] = true },
         },
         ["window"] = new JsonObject { ["showMessage"] = new JsonObject() },
-        ["textDocument"] = new JsonObject { ["rename"] = new JsonObject { ["prepareSupport"] = true } },
+        ["textDocument"] = new JsonObject { ["rename"] = new JsonObject { ["prepareSupport"] = true },
+            ["codeAction"] = new JsonObject { ["dataSupport"] = true, ["resolveSupport"] = new JsonObject { ["properties"] = new JsonArray("edit") } } },
     };
+
+    // The client capabilities Visual Studio 2026 18.12.0 sent in its initialize request, captured by SPIKE-VS-0
+    // (Fixtures/vs-18.12-lsp-initialize-request.json): create and rename but no delete, no `window` block, no dynamic
+    // watched-file registration and no `edit` in codeAction.resolveSupport.
+    internal static JsonObject VisualStudioCapabilities() =>
+        JsonNode.Parse(File.ReadAllText(RepositoryPaths.Resolve("tests", "dotnet", "Runic.Translations.Build.Tests", "Fixtures", "vs-18.12-lsp-initialize-request.json")))!
+            ["params"]!["capabilities"]!.DeepClone().AsObject();
 
     internal static JsonObject Initialize(string root, JsonObject capabilities, int? protocol)
     {
@@ -148,6 +157,87 @@ internal sealed class Rmf2ProtocolLspTests
             Open(session, englishUri, "title = Hello {$name}\n");
             Flush(session, englishUri);
             Assert.Equal(0, session.ServerRequests.Count, "A client without dynamic registration received a registration.");
+        }
+    }
+
+    private static JsonArray? LatestDiagnostics(Session session, string uri) =>
+        session.Publications.LastOrDefault(frame => frame["method"]?.GetValue<string>() == "textDocument/publishDiagnostics" &&
+            frame["params"]!["uri"]!.GetValue<string>() == uri)?["params"]!["diagnostics"]!.AsArray();
+
+    // Waits until the server has published diagnostics for a file that an external change broke.
+    private static void WaitForDiagnostics(Session session, string openUri, string uri)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+        while (LatestDiagnostics(session, uri) is not { Count: > 0 })
+        {
+            if (DateTime.UtcNow > deadline) throw new TimeoutException("The server did not pick up the external change of " + uri);
+            Thread.Sleep(50);
+            Flush(session, openUri);
+        }
+    }
+
+    private const string BrokenGerman = "title = Hallo {$name\n";
+
+    [Test, DisplayName("LSP protocol 2 watches the workspace itself for Visual Studio 2026, which cannot register watchers")]
+    public void ServerFileWatching()
+    {
+        var (temporary, englishUri, germanUri) = CreateProject();
+        using (temporary)
+        {
+            using Session session = new(_ => { }, _ => { });
+            JsonNode initialize = session.Request("initialize", Initialize(temporary.Path, VisualStudioCapabilities(), protocol: 2));
+            Assert.Equal(2, initialize["result"]!["capabilities"]!["experimental"]!["runic"]!["protocol"]!.GetValue<int>());
+            session.Notify("initialized", new JsonObject());
+            Open(session, englishUri, "title = Hello {$name}\n");
+            Flush(session, englishUri);
+            Assert.True(LatestDiagnostics(session, germanUri) is not { Count: > 0 }, "The saved German resource already had diagnostics.");
+
+            // An external edit of a closed resource reaches the diagnostics without a client notification.
+            File.WriteAllText(temporary.Resolve("de.rmf2"), BrokenGerman);
+            WaitForDiagnostics(session, englishUri, germanUri);
+            Assert.Equal(0, session.ServerRequests.Count, "A client without dynamic registration received a registration.");
+        }
+    }
+
+    [Test, DisplayName("LSP protocol 2 watches the workspace itself when the client refuses the watcher registration")]
+    public void RefusedRegistration()
+    {
+        var (temporary, englishUri, germanUri) = CreateProject();
+        using (temporary)
+        {
+            using Session session = new(_ => { }, _ => { });
+            session.OnServerRequest = _ => new JsonObject { ["error"] = new JsonObject { ["code"] = -32601, ["message"] = "no" } };
+            session.Request("initialize", Initialize(temporary.Path, FullClientCapabilities(), protocol: 2));
+            session.Notify("initialized", new JsonObject());
+            Open(session, englishUri, "title = Hello {$name}\n");
+            Flush(session, englishUri);
+            Assert.Equal("client/registerCapability", session.ServerRequests.Single()["method"]!.GetValue<string>());
+            File.WriteAllText(temporary.Resolve("de.rmf2"), BrokenGerman);
+            WaitForDiagnostics(session, englishUri, germanUri);
+        }
+    }
+
+    [Test, DisplayName("LSP without the runicProtocol opt-in gives Visual Studio 2026 the protocol 1 behaviour, without server file watching")]
+    public void VisualStudioProtocol1()
+    {
+        var (temporary, englishUri, germanUri) = CreateProject();
+        using (temporary)
+        {
+            using Session session = new(_ => { }, _ => { });
+            JsonNode initialize = session.Request("initialize", Initialize(temporary.Path, VisualStudioCapabilities(), protocol: null));
+            Assert.Equal(Protocol1Capabilities, initialize["result"]!["capabilities"]!.ToJsonString());
+            session.Notify("initialized", new JsonObject());
+            Open(session, englishUri, "title = Hello {$name}\n");
+            Flush(session, englishUri);
+            // Revision 1 clients forward file events themselves (FilesToWatch in Visual Studio).
+            File.WriteAllText(temporary.Resolve("de.rmf2"), BrokenGerman);
+            Thread.Sleep(Rmf2LanguageServer.WatchDelay * 5);
+            Flush(session, englishUri);
+            Assert.True(LatestDiagnostics(session, germanUri) is not { Count: > 0 }, "Protocol 1 watched files itself.");
+            session.Notify("workspace/didChangeWatchedFiles", new JsonObject { ["changes"] = new JsonArray(new JsonObject { ["uri"] = germanUri, ["type"] = 2 }) });
+            Flush(session, englishUri);
+            Assert.True(LatestDiagnostics(session, germanUri) is { Count: > 0 }, "A forwarded change was not picked up.");
+            Assert.Equal(0, session.ServerRequests.Count);
         }
     }
 }
