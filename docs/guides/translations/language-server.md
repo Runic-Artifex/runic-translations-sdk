@@ -85,8 +85,9 @@ of obsolete results.
 | Runic requests | `runic/documentInfo` (project, catalog, base locale and locale of a file), `runic/message` (the resource at the cursor and its inputs, slots and locales), `runic/libraryCatalogs` and `runic/libraryDocument` (installed library catalogs, for [override sources](composition.md)) |
 
 Edits that create or delete files need the client's `create` and `delete`
-resource operations; without them, the server refuses such commands and offers
-no Extract or Inline actions. Edits that change `runic.json` need
+resource operations; without them, revision 1 refuses such commands and offers
+no Extract or Inline actions. Revision 2 needs only `create`, and replaces a
+deletion the client cannot apply (see [Client compatibility](#client-compatibility)). Edits that change `runic.json` need
 `initializationOptions.runicConfigurationSync: true`, by which the client
 promises to send its unsaved `runic.json` buffers; without it the server refuses
 such refactors rather than overwrite unsaved configuration. A client that does
@@ -107,16 +108,35 @@ Revision 2 adds:
 | --- | --- |
 | Negotiation | `capabilities.experimental.runic` is `{ "protocol": 2, "commands": [...], "requests": [...] }`, listing the `runic.*` commands and `runic/*` requests; `serverInfo.version` is the tool's version (`0.14.0`) |
 | Rename (F2) | `renameProvider.prepareProvider`. `prepareRename` returns the name and its range for a resource or group name, an MF2 local or caller input (without its `$`) and a slot reference (`ref=` of `#link`, `#action` or `#icon`), and `null` elsewhere. `rename` renames inputs and slots in every locale's resource, and updates slot contracts in `runic.json` |
-| Rename in a mixed workspace | A resource rename in a workspace that contains application sources (`.cs`, `.ts`, `.svelte` and others) asks with `window/showMessageRequest` whether to rename in resource sources only, since Runic does not update call sites. Declining returns no edit. A client without `window.showMessage` gets the refusal, as in revision 1 |
-| Refactor code actions | `refactor.extract` on a group's name: "Extract group 'shop' to shop/en.rmf2". `refactor.inline` in a resource: one "Inline into ../en.rmf2" per resource of the same locale in an ancestor directory of its source root. Both are resolved with `codeAction/resolve` against the document version and source revision they were offered for, like quick fixes, and answer `ContentModified` when the document changed since |
-| Commands | `runic.renameResource`, `runic.renameInput`, `runic.renameSlot`, `runic.extractGroup` and `runic.inlineResource` apply their edit through `workspace/applyEdit` and return `null`. A client without `workspace.applyEdit` receives the `WorkspaceEdit`, as in revision 1. A refused edit fails the command with the client's `failureReason` |
-| File watchers | With `workspace.didChangeWatchedFiles.dynamicRegistration`, the server registers watchers for `runic.json`, `*.rmf2`, `*.mf2`, `*.review.json` and the restore and install state of library catalogs (`obj/project.assets.json` and the npm, pnpm, Yarn and Bun lock and state files); otherwise the client forwards these events itself. Source roots outside the workspace folders are not covered by the registration |
+| Rename in a mixed workspace | A resource rename in a workspace that contains application sources (`.cs`, `.ts`, `.svelte` and others) asks with `window/showMessageRequest` whether to rename in resource sources only, since Runic does not update call sites. The server asks whether or not the client advertises `window.showMessage`, because Visual Studio 2026 advertises no `window` capabilities but shows the request. Declining, or answering `null`, returns no edit. A client that answers the request with an error (such as `MethodNotFound`) gets the refusal, as in revision 1. A client that never answers leaves the rename waiting until the client cancels it |
+| Refactor code actions | `refactor.extract` on a group's name: "Extract group 'shop' to shop/en.rmf2". `refactor.inline` in a resource: one "Inline into ../en.rmf2" per resource of the same locale in an ancestor directory of its source root. A client with `textDocument.codeAction.resolveSupport` gets them without their edit, whatever properties it lists, and resolves them with `codeAction/resolve` against the document version and source revision they were offered for, like quick fixes; they answer `ContentModified` when the document changed since. A client without `resolveSupport` gets the edit in the action. Extract needs the client's `create` resource operation. Inline deletes the inlined file; for a client without `delete` it empties the file instead and says so in the title: "Inline into ../en.rmf2 (leaves en.rmf2 empty)". An empty resource adds nothing to the catalog; delete it when convenient |
+| Commands | `runic.renameResource`, `runic.renameInput`, `runic.renameSlot`, `runic.extractGroup` and `runic.inlineResource` apply their edit through `workspace/applyEdit` and return `null`. A client without `workspace.applyEdit` receives the `WorkspaceEdit`, as in revision 1. A refused edit fails the command with the client's `failureReason`. Like the code action, `runic.inlineResource` empties the inlined file for a client without `delete` |
+| File watchers | With `workspace.didChangeWatchedFiles.dynamicRegistration`, the server registers watchers for `runic.json`, `*.rmf2`, `*.mf2`, `*.review.json` and the restore and install state of library catalogs (`obj/project.assets.json` and the npm, pnpm, Yarn and Bun lock and state files). A client without dynamic registration, or one that refuses it, gets the server's own watcher for the same files in its workspace folders (`rootUri`), with changes collected for 200 ms and handled as one `workspace/didChangeWatchedFiles`; events the client still forwards are handled as well. Source roots outside the workspace folders are not covered by either |
 | Errors | `MethodNotFound` (-32601) for an unknown request, `InvalidParams` (-32602) for malformed parameters, `RequestFailed` (-32803) for a request that cannot be carried out (revision 1 answers `null` and -32602) |
 
 **Transition.** Revision 1 stays for one minor release, so an editor extension
 from runic-editors 0.21 keeps working with the 0.14 tool. An extension that sends
 `runicProtocol: 2` to a 0.13 tool finds no `experimental.runic` and uses
 revision 1. Translations 0.15 is planned to remove revision 1's command results.
+
+## Client compatibility
+
+Revision 2 degrades by what the client advertises, and works around what
+Visual Studio 2026 does differently from what it advertises. Measured with
+Visual Studio 18.12.0's LSP client:
+
+| Client capability | VS Code | Visual Studio 2026 (18.12) | Revision 2 |
+| --- | --- | --- | --- |
+| `workspace.applyEdit` | yes | yes | Commands apply their edit; without it they return the `WorkspaceEdit` |
+| `workspaceEdit.resourceOperations` | `create`, `rename`, `delete` | `create`, `rename` | Extract needs `create`. Without `delete`, Inline empties the inlined file instead of deleting it |
+| `window.showMessage` (`showMessageRequest`) | yes | not advertised, but shown as an InfoBar | Always asked in a mixed workspace; an error answer refuses the rename |
+| `textDocument.rename.prepareSupport` | yes | yes | `prepareRename` |
+| `codeAction.resolveSupport` | `edit` listed | listed without `edit`, but resolved | Any `resolveSupport` gets unresolved refactor actions; none gets the edit inline |
+| `didChangeWatchedFiles.dynamicRegistration` | yes | no | The server registers its watchers, or watches the workspace itself |
+| `workspaceEdit.changeAnnotationSupport` | yes | no | Not used |
+
+Visual Studio opens the documents an edit changes and leaves them unsaved, so
+after Extract or Inline save the changed files (File > Save All).
 
 ## Other editors
 
