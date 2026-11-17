@@ -17,8 +17,8 @@ Each publish takes well under a minute with a warm NuGet cache and needs the Nat
   `Program.cs` formats every message, so nothing of the catalog is trimmed. `measure.mjs` publishes it for linux-x64
   with an mstat file, runs it in every locale and checks that it prints every message.
 - **The records** come from `MstatReader`, which prints one line per mstat record: kind, size, owning assembly and name.
-  The probe's own records (owner `AotSizeProbe`) are its catalog: `RvaFields` are the embedded locale data, `Methods`
-  the generated code. `DeduplicatedMethods` records carry node IDs, not sizes, and are left out.
+  The probe's own records (owner `AotSizeProbe`) are its catalog: `RvaFields` are the embedded locale data and the
+  message table, `Methods` the generated code. `DeduplicatedMethods` records carry node IDs, not sizes, and are left out.
 - **The budgets** in `budgets.json` name a build from `builds` (or two, for a growth class) and a limit. A `total` is
   checked against its limit. An `O(n)` has a value at each of its two `sizes`: the larger may be at most the smaller
   times their ratio, plus the `margin`, and at most the limit. `--update` sets the limit to the measured value plus the
@@ -29,7 +29,7 @@ Each publish takes well under a minute with a warm NuGet cache and needs the Nat
 | --- | --- |
 | `aot/translations/fixed-bytes` | The executable of `m200-l2` less the catalog's own records: the runtime, the framework and their metadata. |
 | `aot/translations/per-message-bytes` | The catalog's own records (locale data and generated code) at 200 and 800 messages in 2 locales, `O(n)`. |
-| `aot/translations/per-locale-message-bytes` | The catalog's locale data (`RvaFields`) for 200 messages in 2 and 10 locales, `O(n)`. |
+| `aot/translations/per-locale-message-bytes` | The catalog's `RvaFields` for 200 messages in 2 and 10 locales, `O(n)`: the locale data and the message table, which does not grow with the locales. |
 | `aot/translations/cldr-subset-resource-bytes` | mstat bytes of the embedded resources of `m200-l2-cldr-subset`, the probe built with `RunicTranslationsCldrSubset`: the English and German CLDR subset, without Runic.Translations' full `GeneratedLocaleData.bin`, which the publish drops. |
 | `aot/translations/reflection-runtime-bytes` | mstat bytes of `System.Reflection.Runtime.*`, the reflection stack behind `Delegate.Method` and `MethodInfo`. Hot Reload's tracking needs it, so it stays out only while `TranslationHotReload.IsSupported` folds to a constant in a trimmed publish. |
 

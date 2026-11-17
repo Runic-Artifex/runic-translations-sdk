@@ -811,10 +811,21 @@ an artifact or pack with another markup contract version is rejected as
 constant is not a compatibility check. Missing or unknown ABI markers are
 rejected.
 
-RMF2 ABI **4** (Runic Translations 0.14) changes only how generated C# embeds a
-locale: as raw DEFLATE data (RFC 1951) of the same UTF-8 JSON, with its inflated
-length, read by `GeneratedCatalogSupport.ReadDeflatedValues(data, length)` on
-the locale's first use. The runtime's `Rmf2RuntimeAbiVersion` is **4** and its
+RMF2 ABI **4** (Runic Translations 0.14) changes only how generated C# stores a
+catalog, not what it means. It embeds a locale as raw DEFLATE data (RFC 1951) of
+the same UTF-8 JSON, with its inflated length, read by
+`GeneratedCatalogSupport.ReadDeflatedValues(data, length)` on the locale's first
+use. It describes the messages in one UTF-8 message table instead of code per
+message: one line per message in ID order, the key followed by ` name:type` for
+each caller input in ordinal order (`type` being the RMF2 carrier name, such as
+`string` or `int64`), each line ending in `\n`; the canonical messages come
+first, then the permitted locale extras. `GeneratedCatalogSupport.ReadDefinitions`
+reads the definitions from it, `CreateKeys` the keys of the canonical messages on
+their first use, and `CreatePackContract` a locale's external-pack contract (the
+canonical messages and the extras the locale defines, by ID). The accessors share
+one formatting body per result kind and create their arguments with the typed
+`GeneratedCatalogSupport.CreateArgument(name, value)` overloads, which equal
+`CreateArgument(name, new TextArgument("_", value))`. The runtime's `Rmf2RuntimeAbiVersion` is **4** and its
 `MinimumRmf2RuntimeAbiVersion` stays **3**, so it runs both. The source
 generator emits ABI 4 when the referenced runtime runs it and ABI 3, with the
 JSON as is, otherwise. ESM output, external packs and the caller contract keep

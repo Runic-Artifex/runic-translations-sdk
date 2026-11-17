@@ -22,8 +22,11 @@ public static class TranslationsCompatibility
 
     /// <summary>
     /// The ABI for v5 typed expression evaluation and RMF2 markup contract v2. Version 4 adds locale data embedded as
-    /// DEFLATE data (<see cref="GeneratedCatalogSupport.ReadDeflatedValues(System.ReadOnlySpan{byte}, int)"/>); this
-    /// runtime still runs version 3 code, which embeds the JSON itself.
+    /// DEFLATE data (<see cref="GeneratedCatalogSupport.ReadDeflatedValues(System.ReadOnlySpan{byte}, int)"/>) and a
+    /// message table that the definitions, keys and external-pack contracts are read from
+    /// (<see cref="GeneratedCatalogSupport.ReadDefinitions"/>, <see cref="GeneratedCatalogSupport.CreateKeys"/>), with
+    /// typed argument factories; this runtime still runs version 3 code, which embeds the JSON itself and has code per
+    /// message.
     /// </summary>
     public const int Rmf2RuntimeAbiVersion = 4;
 

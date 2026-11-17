@@ -23,7 +23,8 @@ const rid = "linux-x64";
 const mstat = resolve(root, `tests/aot-size/Probe/obj/Release/net10.0/${rid}/native/AotSizeProbe.mstat`);
 
 // The measurements of one build from its executable size and its mstat records (MstatReader: kind, size, owner, name).
-// The probe's own records (owner AotSizeProbe) are its generated catalog: the locale data (RvaFields) and the code.
+// The probe's own records (owner AotSizeProbe) are its generated catalog: the locale data and the message table
+// (RvaFields), and the code.
 export function measurement(executableBytes, records) {
   const result = { executableBytes, reflectionRuntimeBytes: 0, resourceBytes: 0, catalogDataBytes: 0, catalogCodeBytes: 0, catalogBytes: 0 };
   for (const line of records.split("\n")) {
@@ -51,7 +52,8 @@ export const metrics = {
   "aot/translations/fixed-bytes": (entry, builds) => [builds[entry.build].executableBytes - builds[entry.build].catalogBytes],
   // The catalog's records (locale data and generated code) at two message counts in two locales.
   "aot/translations/per-message-bytes": (entry, builds) => entry.builds.map(name => builds[name].catalogBytes),
-  // The catalog's locale data at two locale counts with the same messages.
+  // The catalog's RvaFields at two locale counts with the same messages: the locale data, and the message table, which
+  // does not grow with the locales.
   "aot/translations/per-locale-message-bytes": (entry, builds) => entry.builds.map(name => builds[name].catalogDataBytes),
   "aot/translations/reflection-runtime-bytes": (entry, builds) => [builds[entry.build].reflectionRuntimeBytes],
   // The embedded resources with RunicTranslationsCldrSubset: the subset of the catalog's languages, without the full data.

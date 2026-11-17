@@ -28,9 +28,10 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
     private const string ProjectDirectoryProperty = "build_property.ProjectDir";
     private const string PseudoLocalesProperty = "build_property.RunicTranslationsPseudoLocales";
     private const string RuntimeAssemblyName = "Runic.Translations";
-    // The RMF2 ABI of generated C#: 4 embeds each locale's data as DEFLATE data. A referenced runtime that does not run
-    // it (before 0.14) but runs ABI 3 gets the locale JSON itself and an ABI 3 requirement, as before.
-    private const int RequiredRmf2Version = Rmf2ProjectV5.DeflatedLocaleDataRuntimeAbiVersion;
+    // The RMF2 ABI of generated C#: 4 embeds each locale's data as DEFLATE data and reads the definitions, keys and
+    // pack contracts from one message table. A referenced runtime that does not run it (before 0.14) but runs ABI 3 gets
+    // the locale JSON itself, code per message and an ABI 3 requirement, as before.
+    private const int RequiredRmf2Version = Rmf2ProjectV5.CSharpRuntimeAbiVersion;
     private const int EarliestRmf2Version = Rmf2ProjectV5.RuntimeAbiVersion;
     private const string CompatibilityNamespace = "Runic.Translations.Generated";
     private const string CompatibilityType = "TranslationsCompatibility";
@@ -335,7 +336,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         }
         ReportFrameworkKeyMessages(linked, frameworkKeys, sourceTexts, diagnostics);
         return new LinkResult(diagnostics.ToImmutable(), linked, runtimeAbi.SupportsReadableSurface, runtimeAbi.SupportsComposition,
-            runtimeAbi.SupportsRuntimeAbiCall, runtimeAbi.SupportsDeflatedLocaleData);
+            runtimeAbi.SupportsRuntimeAbiCall, runtimeAbi.SupportsRmf2Abi4);
     }
 
     private const string CommandLineCatalog = "runic-command-line";
@@ -496,15 +497,15 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         foreach (Diagnostic diagnostic in overlays.Diagnostics) context.ReportDiagnostic(diagnostic);
         if (result.Project is not { } linked) return;
         bool readableSurface = result.ReadableSurface, composition = result.Composition, runtimeAbiCall = result.RuntimeAbiCall,
-            deflatedLocaleData = result.DeflatedLocaleData;
+            rmf2Abi4 = result.Rmf2Abi4;
 
         var outputs = new List<TranslationGeneratedOutput>(5)
         {
-            TranslationOutputRenderer.RenderRmf2V5CSharpKeys(linked, readableSurface),
-            TranslationOutputRenderer.RenderRmf2V5CSharpAccessors(linked, readableSurface, composition),
-            TranslationOutputRenderer.RenderRmf2V5CSharpCatalogData(linked, deflatedLocaleData),
+            TranslationOutputRenderer.RenderRmf2V5CSharpKeys(linked, readableSurface, rmf2Abi4),
+            TranslationOutputRenderer.RenderRmf2V5CSharpAccessors(linked, readableSurface, composition, rmf2Abi4),
+            TranslationOutputRenderer.RenderRmf2V5CSharpCatalogData(linked, rmf2Abi4),
             TranslationOutputRenderer.RenderRmf2V5CSharpRegistration(linked, composition, runtimeAbiCall, readableSurface,
-                composition && overlays.Declared ? overlays.Overlays : null, deflatedLocaleData),
+                composition && overlays.Declared ? overlays.Overlays : null, rmf2Abi4),
         };
         // The readable surface needs the typed slot types of a runtime that declares
         // TypedSlotBindingsVersion. Without it, keep the encoded files and explain the gap.
@@ -652,9 +653,9 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
     internal sealed class LinkResult
     {
         internal LinkResult(ImmutableArray<Diagnostic> diagnostics, Rmf2ProjectV5? project, bool readableSurface, bool composition = false,
-            bool runtimeAbiCall = false, bool deflatedLocaleData = false)
+            bool runtimeAbiCall = false, bool rmf2Abi4 = false)
         {
-            DeflatedLocaleData = deflatedLocaleData;
+            Rmf2Abi4 = rmf2Abi4;
             Diagnostics = diagnostics;
             Project = project;
             ReadableSurface = readableSurface;
@@ -676,8 +677,8 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         internal bool Composition { get; }
         /// <summary>Whether the referenced runtime declares the version rule (MinimumRuntimeAbiVersion, EnsureRuntimeAbi).</summary>
         internal bool RuntimeAbiCall { get; }
-        /// <summary>Whether the referenced runtime runs RMF2 ABI 4, so locale data is embedded as DEFLATE data.</summary>
-        internal bool DeflatedLocaleData { get; }
+        /// <summary>Whether the referenced runtime runs RMF2 ABI 4: locale data embedded as DEFLATE data, and definitions, keys and pack contracts read from a message table.</summary>
+        internal bool Rmf2Abi4 { get; }
         internal XamlCatalog? XamlCatalog { get; }
     }
 
@@ -759,8 +760,8 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
         // this generator's ABIs is compatible.
         internal bool SupportsBase => MinimumVersion <= 1 && Version >= 1;
         internal bool IsCompatible => SupportsBase && Rmf2Version >= 0 && (RunsRmf2(RequiredRmf2Version) || RunsRmf2(EarliestRmf2Version));
-        // GeneratedCatalogSupport.ReadDeflatedValues, RMF2 ABI 4.
-        internal bool SupportsDeflatedLocaleData => RunsRmf2(RequiredRmf2Version);
+        // GeneratedCatalogSupport.ReadDeflatedValues, ReadDefinitions, CreateKeys and the typed CreateArgument: RMF2 ABI 4.
+        internal bool SupportsRmf2Abi4 => RunsRmf2(RequiredRmf2Version);
         private bool RunsRmf2(int version) => MinimumRmf2Version <= version && Rmf2Version >= version;
         internal bool SupportsReadableSurface => TypedSlotBindingsVersion >= 1;
         internal bool SupportsComposition => CompositionVersion >= 1;
