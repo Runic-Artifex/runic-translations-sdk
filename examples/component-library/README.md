@@ -191,6 +191,14 @@ dotnet run --project app/Shop.csproj
 (cd web && bun install && bun run dev)                         # web/bun.lock pins the third-party packages
 ```
 
+`web/bun.lock` locks only the third-party packages. `@acme/widgets` and the
+`@runic-artifex/*` packages come from the current commit: CI installs them from
+the packed candidates, and `bun eng/verify-examples.mjs` checks that the rest of
+the install matches the committed lock exactly. `bun install` in `web/`
+therefore adds their entries; it is not stale, and those lines are not
+committed. After changing a third-party version, update the lock with
+`RUNIC_UPDATE_EXAMPLE_LOCKS=1 bun eng/verify-examples.mjs`.
+
 There is no leg with a library built by the previous release: Runic
 Translations 0.8 packs no catalogs and generates no `Registration`, so its
 libraries cannot be overridden. `verify-packages` checks separately that a

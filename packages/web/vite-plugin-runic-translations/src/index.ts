@@ -14,7 +14,8 @@ import {
 } from "./edit.js";
 import { localUserCheckAvailable } from "./local-user.js";
 import {
-  classify, devClientCode, devClientId, devClientSpecifier, hasMessagesAnchor, messageModulePattern, selfAccepting, withMarkers, withoutSourceHash,
+  classify, devClientCode, devClientId, devClientSpecifier, hasMessagesAnchor, messageModulePattern, modulesOfFiles, selfAccepting, viteFilePath, withMarkers,
+  withoutSourceHash,
   type CatalogSnapshot, type Classification,
 } from "./hmr.js";
 
@@ -279,8 +280,8 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       sourceFiles = new Set([...explicitSources, ...nextProject.sourceFiles]);
       sourceRoots = nextProject.sourceRoots;
       watchRoots = nextProject.watchRoots;
-      server?.watcher.add([...watchRoots]);
-      server?.watcher.add([...sourceFiles]);
+      server?.watcher.add(vitePaths(watchRoots));
+      server?.watcher.add(vitePaths(sourceFiles));
     }
     catalog = document.catalog;
     generatedPaths = nextGeneratedPaths;
@@ -427,7 +428,7 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       dependencyPaths = paths;
       dependencySnapshots = server ? snapshots : undefined;
       dependencySettingsKey = settingsKey(settings);
-      server?.watcher.add(dependencyWatchPaths(settings));
+      server?.watcher.add(vitePaths(dependencyWatchPaths(settings)));
       return before;
     });
     dependencyRegeneration = next;
@@ -542,12 +543,9 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
     const { update } = change;
     if (update.kind === "none") return [];
     if (update.kind === "in-place") {
-      const seen = new Set<unknown>(), modules: unknown[] = [];
-      for (const file of update.modules)
-        for (const module of graph.getModulesByFile(file) ?? []) {
-          graph.invalidateModule(module, seen, timestamp, true);
-          modules.push(module);
-        }
+      // The snapshot's paths are native; Vite's module graph keys files by their Vite path (translations#210).
+      const seen = new Set<unknown>(), modules = modulesOfFiles(graph, update.modules);
+      for (const module of modules) graph.invalidateModule(module, seen, timestamp, true);
       return modules;
     }
     invalidate(graph, change, timestamp);
@@ -583,8 +581,7 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
     const invalidateModule = (module: Module) => timestamp === undefined
       ? graph.invalidateModule(module)
       : graph.invalidateModule(module, seen, timestamp, true);
-    for (const generated of change.generatedPaths)
-      for (const module of graph.getModulesByFile(generated) ?? []) invalidateModule(module);
+    for (const module of modulesOfFiles(graph, change.generatedPaths)) invalidateModule(module);
     for (const module of modules) invalidateModule(module);
     return modules;
   }
@@ -600,7 +597,7 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       const timer = setTimeout(() => {
         if (latestEvents.get(path) !== event || !server || fingerprint(path) === before) return;
         latestEvents.delete(path);
-        server.watcher.emit("change", path);
+        server.watcher.emit("change", viteFilePath(path));
       }, Math.max(0, arrived + watcherThrottle - Date.now()));
       timer.unref?.();
     });
@@ -695,7 +692,7 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
 
     configureServer(value) {
       server = value;
-      if (compiler) server.watcher.add([...watchRoots]);
+      if (compiler) server.watcher.add(vitePaths(watchRoots));
       if (compiler && options.persistentCompiler !== false) {
         const logger = (value as Partial<ViteDevServer>).config?.logger;
         service = new PersistentCompiler({
@@ -734,7 +731,7 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       server.watcher.on("add", membershipChanged);
       server.watcher.on("unlink", membershipChanged);
       server.watcher.on("change", configChanged);
-      if (options.dependencies === "auto") server.watcher.add(dependencyWatchPaths(applicationSettings()));
+      if (options.dependencies === "auto") server.watcher.add(vitePaths(dependencyWatchPaths(applicationSettings())));
       if (editing !== false) mountEditing(value);
       const currentService = service;
       const cleanup = () => {
@@ -776,11 +773,11 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
       const nextProject = await compile();
       await regenerateDependencies();
       await refresh(nextProject);
-      for (const dependency of dependencyCatalogs) this.addWatchFile(dependency.project);
-      if (compiler) this.addWatchFile(compiler.project);
-      if (!compiler) this.addWatchFile(manifestPath);
-      for (const path of sourceFiles) this.addWatchFile(path);
-      if (!compiler) for (const path of generatedPaths) this.addWatchFile(path);
+      for (const dependency of dependencyCatalogs) this.addWatchFile(viteFilePath(dependency.project));
+      if (compiler) this.addWatchFile(viteFilePath(compiler.project));
+      if (!compiler) this.addWatchFile(viteFilePath(manifestPath));
+      for (const path of sourceFiles) this.addWatchFile(viteFilePath(path));
+      if (!compiler) for (const path of generatedPaths) this.addWatchFile(viteFilePath(path));
     },
 
     async resolveId(id, importer) {
@@ -802,8 +799,8 @@ export function runicTranslations(options: RunicTranslationsOptions = {}): Plugi
               .resolve(id, importer, { skipSelf: true }))?.id.replace(/[?#].*$/, "");
           const redirected = resolved ? await redirect(resolved) : undefined;
           if (redirected?.error) this.error(redirected.error);
-          if (redirected?.target) return redirected.target;
-        } else warnUndiscoveredCopy(from);
+          if (redirected?.target) return viteFilePath(redirected.target);
+        } else warnUndiscoveredCopy(normalize(from)); // native separators: Vite's IDs use forward slashes on Windows
       }
       return null;
     },
@@ -1319,6 +1316,11 @@ function withoutPseudoLocales(code: string): string {
 function isGenerated(path: string, manifestPath: string): boolean {
   const root = dirname(manifestPath);
   return path === manifestPath || path.startsWith(root + sep);
+}
+
+// Native paths as Vite's watcher and module graph take them.
+function vitePaths(paths: Iterable<string>): string[] {
+  return [...paths].map(path => viteFilePath(path));
 }
 
 function toVitePath(path: string): string {
