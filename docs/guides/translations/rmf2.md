@@ -734,9 +734,9 @@ runic-translations lsp
 ```
 
 `runic-translations lsp` is the [language server](language-server.md) the editor
-extensions run; it is hidden from help and, with its protocol subset and custom
-methods, outside the 1.0 compatibility rules until the production language
-server (2.0). The workspace it shares with the
+extensions run, and any other LSP client can run it too. It is hidden from help
+and, with its protocol subset and custom methods, outside the 1.0 compatibility
+rules for now; the production language server is 1.0 scope. The workspace it shares with the
 Translations Editor is internal to the tool and the editor; it accepts unsaved
 buffers and revisions. Rename, format,
 extract-group, and inline-resource produce validated transaction plans. Extracting
@@ -747,7 +747,12 @@ locale add/remove/fallback operations validate the complete fallback graph.
 
 The stdio LSP implements incremental changes, UTF-8/16/32 position negotiation,
 recoverable diagnostics, flat document symbols, folding, formatting, contract-aware
-completion/hover, logical definitions, and versioned resource rename edits.
+completion/hover, logical definitions, and versioned rename edits. With
+[protocol 2](language-server.md#protocol-revisions), which a client requests with
+`initializationOptions.runicProtocol: 2`, every refactoring is standard LSP: F2
+(with `prepareRename`) renames resources, MF2 locals, caller inputs and slot
+references, and Extract Group and Inline Resource are `refactor.extract` and
+`refactor.inline` code actions.
 The compiler-owned language service (internal) supplies registered custom tags and aliases,
 missing markup options, enum values and literal-only/default/required constraints
 in completion details and hover. Standalone tags do not offer closing tags.
@@ -759,15 +764,19 @@ Definitions return explicit declarations; an implicitly used input has no
 declaration target unless another translation declares it. Application call-site
 navigation remains owned by native language services; Runic's resource
 references are intentionally scoped to catalog sources. Standard resource F2
-therefore refuses a workspace containing application or other non-resource sources (or
-unindexable links) instead of returning a partial edit. The explicit
+therefore never returns a partial edit unasked in a workspace containing
+application or other non-resource sources: with protocol 2 the server asks
+whether to rename in resource sources only (`window/showMessageRequest`), and
+otherwise it refuses, as it does for unindexable links. The explicit
 resource-source transaction is the opt-in boundary; callers must update native
 application call sites separately.
 Local-variable rename uses parsed symbol locations and rejects capture of an
 existing variable. Quoted literals and ordinary message text are preserved.
-`runic.extractGroup` and `runic.inlineResource` return `WorkspaceEdit` results;
-the client applies them. File-changing commands require client create/delete
-capabilities. A separate reader processes cancellation while one worker owns
+With protocol 1, `runic.extractGroup` and `runic.inlineResource` return
+`WorkspaceEdit` results and the client applies them; with protocol 2 the server
+applies command edits through `workspace/applyEdit`. Extract and Inline code
+actions are resolved against the document revision they were offered for.
+File-changing commands and actions require client create/delete capabilities. A separate reader processes cancellation while one worker owns
 request state; cancelled and stale requests return protocol errors rather than
 obsolete edits. A bounded cache reuses byte-identical syntax across workspace
 requests. New unsaved RMF2 files participate in their configured source roots.
@@ -777,7 +786,8 @@ Refactors validate the complete catalog.
 executes the verified .NET plan with inert functional bindings. Hover adds
 compiled input types and content/fallback locales when validation succeeds.
 Explicit `runic.renameInput`, `runic.renameSlot` and `runic.renameResource`
-commands return resource-source transactions.
+commands perform the same resource-source transactions as F2 on an input, a slot
+or a resource.
 
 Document messages get block-aware tooling. Completion offers block tags at the
 root of a document message, inline markup at the root of an inline message (a
