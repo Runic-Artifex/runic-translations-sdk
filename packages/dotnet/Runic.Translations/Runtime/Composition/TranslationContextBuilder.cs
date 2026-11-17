@@ -161,9 +161,7 @@ public sealed class TranslationContextBuilder
                 if (provider is not CompiledTranslationProvider { UsesDefaultSnapshotFactory: true } generated)
                     throw new InvalidOperationException(
                         $"Catalog '{registration.CatalogId}' has overlays, but its provider factory does not create a generated catalog provider.");
-                var overlaid = new OverlayTranslationProvider(generated.Catalog, registration.LinkMarkupContract(), generated.ValueFormatter, overlays);
-                provider = overlaid;
-                supported = overlaid.SupportedLocales;
+                (provider, supported) = OverlayComposition.Compose(generated, registration, overlays);
             }
 
             entries[index] = new TranslationContextEntry(registration, provider, supported);

@@ -23,7 +23,7 @@ const mstat = resolve(root, `tests/aot-size/Probe/obj/Release/net10.0/${rid}/nat
 // The probe's own records (owner AotSizeProbe) are its generated catalog: the locale data and the message table
 // (RvaFields), and the code.
 export function measurement(executableBytes, records) {
-  const result = { executableBytes, reflectionRuntimeBytes: 0, catalogDataBytes: 0, catalogCodeBytes: 0, catalogBytes: 0 };
+  const result = { executableBytes, reflectionRuntimeBytes: 0, catalogDataBytes: 0, catalogCodeBytes: 0, catalogBytes: 0, overlayProviderBytes: 0, largeStringBytes: 0 };
   for (const line of records.split("\n")) {
     const [kind, size, owner, name = ""] = line.split("\t");
     const bytes = Number(size);
@@ -32,6 +32,10 @@ export function measurement(executableBytes, records) {
     // System.Reflection.Runtime is the reflection stack in System.Private.CoreLib and System.Private.Reflection.Execution
     // that Delegate.Method, MethodInfo and Type members need.
     if (name.startsWith("System.Reflection.Runtime.")) result.reflectionRuntimeBytes += bytes;
+    // The overlay composition, which only an application that creates an overlay needs.
+    if (name.includes("Runic.Translations.OverlayTranslationProvider")) result.overlayProviderBytes += bytes;
+    // Frozen strings of 4 KB or more: a catalog's markup contract as a UTF-16 literal would be one.
+    if (kind === "FrozenObjects" && name === "System.String" && bytes >= 4096) result.largeStringBytes += bytes;
     if (owner === "AotSizeProbe") {
       result.catalogBytes += bytes;
       if (kind === "RvaFields") result.catalogDataBytes += bytes;
@@ -51,6 +55,8 @@ export const metrics = {
   // does not grow with the locales.
   "aot/translations/per-locale-message-bytes": (entry, builds) => entry.builds.map(name => builds[name].catalogDataBytes),
   "aot/translations/reflection-runtime-bytes": (entry, builds) => [builds[entry.build].reflectionRuntimeBytes],
+  "aot/translations/overlay-provider-bytes": (entry, builds) => [builds[entry.build].overlayProviderBytes],
+  "aot/translations/large-string-bytes": (entry, builds) => [builds[entry.build].largeStringBytes],
 };
 
 // Checks one metric. A "total" has one value and its limit. An "O(n)" has a value at each of its two sizes: the larger

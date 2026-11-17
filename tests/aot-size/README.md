@@ -14,7 +14,7 @@ Each publish takes well under a minute with a warm NuGet cache and needs the Nat
 - **The probe** (`Probe/AotSizeProbe.csproj`) is a console application with a generated catalog that `fixture.mjs`
   writes to `artifacts/aot-size/catalog`: `messages` messages in the first `locales` of en, de, fr, pl, ar, ja, ru, es,
   it and pt, in a pattern of 14 plain texts, 3 with a string input, 2 plurals and a number per 20 messages. Its
-  `Program.cs` formats every message, so nothing of the catalog is trimmed. `measure.mjs` publishes it for linux-x64
+  `Program.cs` registers the catalog in a translation context, as Runic applications do, and formats every message, so nothing of the catalog is trimmed. `measure.mjs` publishes it for linux-x64
   with an mstat file, runs it in every locale and checks that it prints every message.
 - **The records** come from `MstatReader`, which prints one line per mstat record: kind, size, owning assembly and name.
   The probe's own records (owner `AotSizeProbe`) are its catalog: `RvaFields` are the embedded locale data and the
@@ -31,6 +31,8 @@ Each publish takes well under a minute with a warm NuGet cache and needs the Nat
 | `aot/translations/per-message-bytes` | The catalog's own records (locale data and generated code) at 200 and 800 messages in 2 locales, `O(n)`. |
 | `aot/translations/per-locale-message-bytes` | The catalog's `RvaFields` for 200 messages in 2 and 10 locales, `O(n)`: the locale data and the message table, which does not grow with the locales. |
 | `aot/translations/reflection-runtime-bytes` | mstat bytes of `System.Reflection.Runtime.*`, the reflection stack behind `Delegate.Method` and `MethodInfo`. Hot Reload's tracking needs it, so it stays out only while `TranslationHotReload.IsSupported` folds to a constant in a trimmed publish. |
+| `aot/translations/overlay-provider-bytes` | mstat bytes of `OverlayTranslationProvider`, which a context without overlays must not link (runic-sdk#1109). Limit 0. |
+| `aot/translations/large-string-bytes` | mstat bytes of frozen strings of 4 KB or more, such as a markup contract kept as a UTF-16 literal (runic-sdk#1109). Limit 0. |
 
 To see why something is in the executable, publish with `--keep` and `-p:IlcGenerateDgmlFile=true` (add it to the
 `dotnet publish` arguments in `measure.mjs`), then search the scan graph for the shortest path from a root.

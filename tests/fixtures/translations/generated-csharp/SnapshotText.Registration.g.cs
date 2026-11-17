@@ -11,7 +11,7 @@ public static class SnapshotTextCatalog
     public const string DefaultLocale = "en";
     public const string ContractFingerprint = "sha256:a687dec2a95d67bc25c81e59a6874d63eed871ee966b9f9f5376e01fc9f70904";
     public static string SourceHash => "sha256:86c4b806aad0cbaa3185843c235ac4cdcec676b64e486a55ebe6960172ad32ce";
-    public static string Rmf2MarkupContract => "{\"version\":2,\"contracts\":{\"runic:link\":{\"kind\":\"paired\",\"placement\":\"inline\",\"children\":\"inline\",\"interactive\":true,\"plainText\":\"children\",\"options\":{}}},\"messages\":{\"greeting\":{\"slots\":{},\"structured\":false,\"contentLocales\":{\"de\":\"de\",\"en\":\"en\"},\"content\":\"inline\",\"skeletons\":[]},\"help\":{\"slots\":{\"link\":{\"kind\":\"runic:link\",\"min\":1,\"max\":1}},\"structured\":true,\"contentLocales\":{\"de\":\"de\",\"en\":\"en\"},\"content\":\"inline\",\"skeletons\":[]},\"items\":{\"slots\":{},\"structured\":false,\"contentLocales\":{\"de\":\"de\",\"en\":\"en\"},\"content\":\"inline\",\"skeletons\":[]}}}";
+    public static string Rmf2MarkupContract => global::Runic.Translations.Generated.GeneratedCatalogSupport.ReadDeflatedText(SnapshotTextCatalogData.MarkupContractData, SnapshotTextCatalogData.MarkupContractLength);
     public const string Rmf2Profile = "rmf2-execution-v2";
     public const int RuntimeAbiVersion = 1;
     public const int Rmf2RuntimeAbiVersion = 4;

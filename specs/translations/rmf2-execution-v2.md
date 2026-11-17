@@ -825,7 +825,10 @@ their first use, and `CreatePackContract` a locale's external-pack contract (the
 canonical messages and the extras the locale defines, by ID). The accessors share
 one formatting body per result kind and create their arguments with the typed
 `GeneratedCatalogSupport.CreateArgument(name, value)` overloads, which equal
-`CreateArgument(name, new TextArgument("_", value))`. The runtime's `Rmf2RuntimeAbiVersion` is **4** and its
+`CreateArgument(name, new TextArgument("_", value))`. `XCatalog.Rmf2MarkupContract`
+returns the same JSON as before, inflated with
+`GeneratedCatalogSupport.ReadDeflatedText(data, length)` from DEFLATE data
+instead of a string literal. The runtime's `Rmf2RuntimeAbiVersion` is **4** and its
 `MinimumRmf2RuntimeAbiVersion` stays **3**, so it runs both. The source
 generator emits ABI 4 when the referenced runtime runs it and ABI 3, with the
 JSON as is, otherwise. ESM output, external packs and the caller contract keep
