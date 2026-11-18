@@ -1,4 +1,4 @@
-import type { UiText } from "./ui-text";
+import type { UiMessage, UiNotice, UiText } from "./ui-text";
 import type {
   EditorDiagnostic,
   EditorReviewEntry,
@@ -145,6 +145,23 @@ export function rowDiagnostics(diagnostics: readonly EditorDiagnostic[], key: st
   return diagnostics.filter((diagnostic) => diagnostic.key === key && diagnostic.locale === locale);
 }
 
+/** The editor's hint for a stale review state: confirm it or mark it for review in the workflow panel. */
+export const staleReviewHint: UiNotice = { code: "ui_quality_stale", args: [] };
+
+/** Whether `diagnostic` is RTR0090 about a message's review state in a locale. */
+export function staleReviewDiagnostic(diagnostic: Pick<EditorDiagnostic, "id" | "key" | "locale">): boolean {
+  return diagnostic.id === "RTR0090" && diagnostic.key !== undefined && diagnostic.locale !== undefined;
+}
+
+/**
+ * The text the editor shows for a diagnostic. A stale review state's diagnostic (RTR0090) tells the command-line user
+ * to run `review mark`; the editor shows its own hint instead, everywhere it lists the diagnostic (the workflow's
+ * quality checks, the diagnostics in the rail, the repair dialog), and keeps the diagnostic unchanged (#225 P20).
+ */
+export function diagnosticText(diagnostic: Pick<EditorDiagnostic, "id" | "key" | "locale" | "message" | "notice">): UiMessage {
+  return staleReviewDiagnostic(diagnostic) ? staleReviewHint : diagnostic.notice ?? diagnostic.message;
+}
+
 export function qualityIssues(
   rows: TranslationRow[],
   sourceLocale: string,
@@ -157,9 +174,7 @@ export function qualityIssues(
   const keys = new Set(rows.map((row) => row.key));
   for (const diagnostic of diagnostics) {
     if (diagnostic.locale !== locale || diagnostic.key === undefined || !keys.has(diagnostic.key)) continue;
-    // A stale review state's diagnostic tells the command-line user to run `review mark`; the editor shows its own
-    // hint (confirm or mark for review in the workflow panel) and keeps the diagnostic unchanged (#225 P20).
-    const message = diagnostic.id === "RTR0090" && ui !== undefined ? ui.text("ui_quality_stale") : diagnostic.message;
+    const message = staleReviewDiagnostic(diagnostic) && ui !== undefined ? ui.text(staleReviewHint.code) : diagnostic.message;
     result.push({ kind: "diagnostic", key: diagnostic.key, locale, code: diagnostic.id, message, diagnostic });
   }
   for (const row of rows) {

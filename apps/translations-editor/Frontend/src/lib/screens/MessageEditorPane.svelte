@@ -1,4 +1,9 @@
 <script lang="ts">
+  import ArrowDownIcon from "@lucide/svelte/icons/arrow-down";
+  import { stepTitle } from "#lib/command-palette.js";
+  import { Button } from "#lib/components/ui/button/index.js";
+  import * as Kbd from "#lib/components/ui/kbd/index.js";
+  import { Spinner } from "#lib/components/ui/spinner/index.js";
   import type { EditorCatalog, WorkspaceSnapshot } from "#lib/contracts.js";
   import type { EditorLabels } from "#lib/editor-labels.js";
   import EditorModeSwitcher from "#lib/EditorModeSwitcher.svelte";
@@ -11,9 +16,11 @@
   import type { MessageDraftStore } from "#lib/state/message-draft-store.svelte.js";
   import type { MessageEditingController } from "#lib/state/message-editing.svelte.js";
   import type { MutationKind } from "#lib/state/mutation-controller.svelte.js";
+  import type { NextMessageController } from "#lib/state/next-message.svelte.js";
   import type { ReviewStore } from "#lib/state/review-store.svelte.js";
   import type { SelectionController } from "#lib/state/selection-controller.svelte.js";
   import type { WorkspaceView } from "#lib/state/workspace-view.svelte.js";
+  import { shortcutLabel } from "#lib/shortcut-labels.js";
   import TranslationEditor from "#lib/TranslationEditor.svelte";
   import { displayNotice, getUiText, notice, type UiMessage } from "#lib/ui-text.js";
 
@@ -29,6 +36,7 @@
     messageDrafts,
     diagnostics,
     history,
+    next,
     labels,
     clientError,
     editingBlocked,
@@ -37,6 +45,7 @@
     onmutation,
     onterminology,
     onreport,
+    onsaveandnext,
   }: {
     snapshot: WorkspaceSnapshot;
     /** The open catalog. */
@@ -51,6 +60,7 @@
     messageDrafts: Pick<MessageDraftStore, "pending">;
     diagnostics: Pick<DiagnosticsStore, "latest">;
     history: Pick<HistoryController, "revision">;
+    next: Pick<NextMessageController, "saveAndNextOffered" | "saveAndNextKind" | "notice" | "running">;
     labels: EditorLabels;
     clientError: UiMessage | undefined;
     /** Whether an operation in progress keeps the editor from changing. */
@@ -62,8 +72,11 @@
     onmutation(kind: MutationKind): void;
     onterminology(): void;
     onreport(): void;
+    /** Saves, then selects the next message of the same kind (Ctrl+Enter). */
+    onsaveandnext(): void;
   } = $props();
   const ui = getUiText();
+  const saveAndNextLabel = $derived(stepTitle("save_and_next", next.saveAndNextKind, ui));
 </script>
 
 <!-- The selected message: its heading, review workflow, editor mode and the translation editor. -->
@@ -138,3 +151,27 @@
   onformatraw={() => editing.formatRaw()}
   revision={history.revision}
 />
+
+<!-- Save and next (D074.1): shown while the selected message was missing or outdated when it was selected. The one save,
+     then the next message of the same kind; a blocked save stays and says why. -->
+{#if next.saveAndNextOffered && selection.mode === "translation" || next.notice !== undefined}
+  <div class="mx-auto mt-3 flex w-full max-w-[1000px] flex-wrap items-center justify-end gap-x-3 gap-y-2" data-testid="save-and-next-bar">
+    {#if next.notice !== undefined}
+      <p class="mr-auto min-w-0 text-xs text-muted-foreground" role="status" data-testid="workbench-notice">{displayNotice(next.notice, ui)}</p>
+    {/if}
+    {#if next.saveAndNextOffered && selection.mode === "translation"}
+      <Button
+        size="sm"
+        disabled={editingBlocked || next.running}
+        onclick={onsaveandnext}
+        aria-keyshortcuts="Control+Enter Meta+Enter"
+        title={`${saveAndNextLabel} (${shortcutLabel("Mod+Enter")})`}
+        data-testid="save-and-next"
+      >
+        {#if next.running}<Spinner data-icon="inline-start" />{:else}<ArrowDownIcon data-icon="inline-start" />{/if}
+        {saveAndNextLabel}
+        <Kbd.Root class="hidden sm:inline-flex">{shortcutLabel("Mod+Enter")}</Kbd.Root>
+      </Button>
+    {/if}
+  </div>
+{/if}

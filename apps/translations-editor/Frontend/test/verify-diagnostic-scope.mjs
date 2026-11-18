@@ -129,6 +129,9 @@ assert.deepEqual([...section("blocking").matchAll(/data-severity="(\w+)"/g)].map
 const other = section("other");
 assert.match(other, /<button[^>]*aria-expanded="false"[^>]*aria-controls="([^"]+)-other"[^>]*>[\s\S]*\[ui_validation_other_warnings_heading count=3\]/, "The other warnings are a collapsed disclosure button.");
 assert.match(other, /<div[^>]*id="[^"]+-other"[^>]*hidden/, "Other warnings are collapsed.");
+// D074.1: a disclosure is neither paint nor a state; it is ink inside the error-coloured panel.
+assert.match(other, /<button[^>]*class="[^"]*\btext-foreground\b[^"]*"[^>]*data-testid="diagnostics-other-toggle"/, "The other-warnings disclosure is not ink.");
+assert.doesNotMatch(/<button[^>]*data-testid="diagnostics-other-toggle"[^>]*>/.exec(other)?.[0] ?? "", /(?:^|[\s"])text-(?:destructive|warning|paint)\b/, "The other-warnings disclosure is coloured as a state.");
 assert.doesNotMatch(other, /RTR0010|RTR0094/, "Collapsed issues are not rendered.");
 assert.match(text(scoped), /Diagnostics · \[ui_count_errors count=3\] · \[ui_count_warnings count=4\] · \[ui_validation_message_counts errors=\[ui_count_errors count=1\] warnings=\[ui_count_warnings count=1\]\]/,
   "The summary keeps the project counts and adds this message's.");
@@ -146,6 +149,30 @@ const warningsOnly = html({ ...base, diagnostics: diagnostics.filter((item) => i
   selection: { key: "notes_deleteConfirm", locale: "de" } });
 assert.doesNotMatch(warningsOnly, /data-testid="diagnostics-blocking"/);
 assert.match(warningsOnly, /\[ui_validation_other_warnings_heading count=3\]/);
+
+// A stale review state (RTR0090) tells command-line users to run `review mark`. The validation area shows the editor's
+// own hint instead, in the selected message's list and without a selection (the repair dialog); the other warnings
+// render through the same row snippet once expanded (the hosted E2E stage 280 checks them). The diagnostic itself is
+// unchanged (#225 P20, D074.1).
+const reviewMark = "The 'de' translation of 'notes.title' (approved) predates a change to its source; review it, then record it with runic-translations review mark --key notes.title --locale de --state <state>.";
+const staleReview = (locale) => diagnostic("RTR0090", "warning", { key: "notes_title", locale, messagePath: ["notes", "title"], line: 3, column: 11, message: reviewMark });
+const staleDiagnostics = [staleReview("de"), staleReview("fr")];
+const frozen = JSON.stringify(staleDiagnostics);
+for (const [label, props] of [
+  ["selected message", { selection: { key: "notes_title", locale: "de" } }],
+  ["no selection (repair dialog)", {}],
+]) {
+  const markup = html({ ...base, diagnostics: staleDiagnostics, errorCount: 0, warningCount: 2, ...props });
+  assert.doesNotMatch(markup, /review mark/, `The validation area shows the command-line hint for RTR0090 (${label}).`);
+}
+assert.equal(JSON.stringify(staleDiagnostics), frozen, "Rendering changed the RTR0090 diagnostic.");
+const staleSelected = html({ ...base, diagnostics: staleDiagnostics, errorCount: 0, warningCount: 2, selection: { key: "notes_title", locale: "de" } });
+assert.match(text(staleSelected), /RTR0090 \[ui_quality_stale\]/, "The selected message's RTR0090 shows the editor's hint.");
+const { diagnosticText, staleReviewHint } = await import("../src/lib/review-model.ts");
+assert.deepEqual(diagnosticText(staleReview("de")), staleReviewHint);
+assert.equal(diagnosticText({ id: "RTR0090", severity: "warning", message: "The library text changed.", notice: undefined }), "The library text changed.",
+  "An RTR0090 that is not about a message's review state keeps its own text.");
+assert.equal(diagnosticText(diagnostic("RTR0096", "warning", { message: "plain" })), "plain");
 
 const source = await readFile(new URL("../src/lib/ValidationPanel.svelte", import.meta.url), "utf8");
 const warnings = compile(source, { generate: "server" }).warnings.filter((warning) => warning.code.startsWith("a11y_"));

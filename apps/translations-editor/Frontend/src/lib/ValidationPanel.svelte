@@ -12,6 +12,7 @@
     errorsFirst, groupDiagnostics, messageDisplayName, placeDiagnostics,
     type DiagnosticSelection, type DiagnosticSources, type PlacedDiagnostic,
   } from "#lib/diagnostic-scope.js";
+  import { diagnosticText } from "#lib/review-model.js";
   import { getUiText, displayNotice } from "#lib/ui-text.js";
 
   interface Props {
@@ -101,7 +102,7 @@
     {@const where = place(item, inSelection)}
     <Button
       variant="ghost"
-      class="grid h-auto w-full grid-cols-[auto_minmax(0,1fr)] items-start justify-start gap-x-3 gap-y-1 rounded-none px-4 py-3 text-left whitespace-normal md:grid-cols-[auto_minmax(0,1fr)_auto]"
+      class="grid h-auto w-full grid-cols-[auto_minmax(0,1fr)] items-start justify-start gap-x-3 gap-y-1 rounded-none px-4 py-3 text-left whitespace-normal @md:grid-cols-[auto_minmax(0,1fr)_auto]"
       title={filePosition(diagnostic)}
       data-severity={diagnostic.severity}
       onclick={() => onselect(diagnostic)}
@@ -112,11 +113,11 @@
         <TriangleAlertIcon class="mt-0.5 size-4 text-warning" aria-hidden="true" />
       {/if}
       <span class="min-w-0 text-xs leading-5 text-muted-foreground">
-        <strong class={["mr-2 font-mono", diagnostic.severity === "error" ? "text-destructive" : diagnostic.severity === "warning" ? "text-warning" : "text-foreground"]}>{diagnostic.id}</strong>{displayNotice(diagnostic.notice ?? diagnostic.message, ui)}
+        <strong class={["mr-2 font-mono", diagnostic.severity === "error" ? "text-destructive" : diagnostic.severity === "warning" ? "text-warning" : "text-foreground"]}>{diagnostic.id}</strong>{displayNotice(diagnosticText(diagnostic), ui)}
       </span>
-      <span class="col-start-2 grid min-w-0 gap-0.5 text-[0.65rem] text-muted-foreground md:col-start-auto md:text-right" data-testid="diagnostic-place">
+      <span class="col-start-2 grid min-w-0 gap-0.5 text-[0.65rem] text-muted-foreground @md:col-start-auto @md:text-right" data-testid="diagnostic-place">
         {#if where !== undefined}<span class="font-medium text-foreground/80">{where}</span>{/if}
-        <code class="break-all md:whitespace-nowrap">{diagnostic.path}:{diagnostic.line}:{diagnostic.column}</code>
+        <code class="break-all @md:whitespace-nowrap">{diagnostic.path}:{diagnostic.line}:{diagnostic.column}</code>
       </span>
     </Button>
     {#if onfix !== undefined && diagnostic.quickFixes !== undefined}
@@ -131,7 +132,7 @@
 
 <Alert.Root
   variant={invalid ? "destructive" : "default"}
-  class="mx-auto mt-7 max-w-[1000px] gap-0 overflow-hidden p-0"
+  class="@container gap-0 overflow-hidden p-0"
   aria-live="polite"
 >
   <header class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
@@ -191,7 +192,8 @@
           <h3>
             <Button
               variant="ghost"
-              class="h-auto w-full justify-start gap-2 rounded-none px-4 py-3 text-left text-xs font-semibold"
+              class="h-auto w-full justify-start gap-2 rounded-none px-4 py-3 text-left text-xs font-semibold text-foreground hover:text-foreground"
+              data-testid="diagnostics-other-toggle"
               aria-expanded={otherExpanded}
               aria-controls="{ids}-other"
               onclick={() => otherExpanded = !otherExpanded}

@@ -146,7 +146,16 @@ blocking flags):
   document's unsaved step first, else the host's saved-change history.
 - `WorkspaceView` derives what the catalog shows for the selected locale
   (coverage, quality findings, the message list and its filters, the selected
-  message's review) and applies the review actions.
+  message's review) and applies the review actions. It also keeps the message
+  keys in tree order and finds the message before or after the selection among
+  the listed messages of a kind (`next-message.ts`: missing, outdated, needs
+  review).
+- `NextMessageController` runs Next and Previous (Alt+↓, Alt+↑, the toolbar
+  button and the palette): the kind follows the list's filter, the steps follow
+  the tree and wrap at the end. Its Save and next (Ctrl+Enter) runs the one
+  save through `WorkspaceController.saveAll`, which reports the save's outcome,
+  and then steps through the kind the selected message had when it was selected;
+  a blocked save keeps the selection and reports why.
 - `PreferencesController` keeps the interface locale, theme, density and simulations;
   `ProjectWizardController`, `MutationController`, `InterchangeController`,
   `LibraryController` and `AboutController` own their dialogs' state and host
@@ -158,11 +167,16 @@ arguments, so the frontend checks exercise them without a host.
 The components are split by screen and area. `Frontend/src/lib/screens/` holds
 the start screens (`LoadingScreen`, `FatalScreen`,
 `TransactionRecoveryScreen`, `WelcomeScreen`), the `WorkspaceNotices` about
-files on disk, and the workspace: `WorkspaceShell` lays out the sidebar
-(`WorkspaceSidebar`) and the inset with the toolbar, the
-`MessageEditorPane` (heading, review workflow, mode switch, translation
-editor), the `PreviewSection` (the rendered preview and the artifact panel)
-and the `ValidationArea`. `Frontend/src/lib/dialogs/` holds one component per
+files on disk, and the workspace: `WorkspaceShell` lays out the workbench
+(D074.1), the sidebar (`WorkspaceSidebar`: project, catalogs, languages and the
+message tree) and the inset with the toolbar over two panes: the editor column
+with the `MessageEditorPane` (heading, the stale-review callout and the review
+workflow, mode switch, translation editor with the source panel, and Save and
+next), and the rail, an `aside`, with the `PreviewSection` (the rendered
+preview and the artifact panel) and the `ValidationArea`. The shell's CSS
+places the rail beside the editor column from a window width of 1100 px, each
+scrolling on its own, and under it below; the sidebar's own breakpoint (768 px)
+moves it behind the toolbar's navigation toggle. `Frontend/src/lib/dialogs/` holds one component per
 dialog: project wizard, structural changes (`MutationDialog`), repair, open
 project, external change, About and diagnostics, terminology and quality
 report; the interchange and library dialogs are `InterchangeDialog` and

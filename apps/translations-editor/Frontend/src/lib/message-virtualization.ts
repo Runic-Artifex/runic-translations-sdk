@@ -129,6 +129,19 @@ export function buildMessageTree(items: readonly MessageListItem[]): MessageTree
   return { roots, messages, groupCount: groups.size };
 }
 
+/** The keys of every message of the tree in the order the tree shows them with every group expanded. */
+export function messageTreeKeys(tree: MessageTree): string[] {
+  const keys: string[] = [];
+  const visit = (nodes: readonly MessageTreeNode[]): void => {
+    for (const node of nodes) {
+      if (node.kind === "group") visit(node.children);
+      else keys.push(node.item.key);
+    }
+  };
+  visit(tree.roots);
+  return keys;
+}
+
 /** The rows a translator sees: every top-level node, and the children of each expanded group, depth first. */
 export function visibleMessageRows(tree: MessageTree, collapsed: ReadonlySet<string>): MessageTreeRow[] {
   const rows: MessageTreeRow[] = [];

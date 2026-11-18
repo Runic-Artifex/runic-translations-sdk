@@ -100,6 +100,44 @@
      text, placeholders as chips as in the source panel. -->
 {#snippet diffParts(parts: SourceDiffPart[])}{#each parts as part, index (index)}{#if part.kind === "text"}{#if part.change === "same"}{part.text}{:else if part.change === "removed"}<del class="rounded-sm bg-destructive/15 px-0.5 text-destructive decoration-destructive/70" data-change="removed"><span class="sr-only">{`${ui.text("ui_workflow_source_removed")} `}</span>{part.text}</del>{:else}<ins class="rounded-sm bg-success/15 px-0.5 font-medium text-success no-underline" data-change="added"><span class="sr-only">{`${ui.text("ui_workflow_source_added")} `}</span>{part.text}</ins>{/if}{:else if part.change === "same"}<span class={chip} data-placeholder={part.kind}>{part.syntax}</span>{:else if part.change === "removed"}<del class="{chip} ring-2 ring-destructive/60" data-placeholder={part.kind} data-change="removed"><span class="sr-only">{`${ui.text("ui_workflow_source_removed")} `}</span>{part.syntax}</del>{:else}<ins class="{chip} no-underline ring-2 ring-success/60" data-placeholder={part.kind} data-change="added"><span class="sr-only">{`${ui.text("ui_workflow_source_added")} `}</span>{part.syntax}</ins>{/if}{/each}{/snippet}
 
+{#if stale}
+  <!-- The source text changed since the state was recorded: confirm it or mark it for review (#225 P20). The callout
+     takes the workflow's place at the top of the editor column (D074.1); the workflow follows it, collapsed. -->
+  <section class="mx-auto mb-3 flex w-full max-w-[1000px] flex-col gap-2 rounded-pane border border-warning/60 bg-warning/10 px-4 py-3" role="group" aria-label={ui.text("ui_workflow_source_changed")} data-testid="workflow-stale">
+    <h3 class="flex items-center gap-2 text-sm font-semibold"><StateMark state="outdated" />{ui.text("ui_workflow_source_changed")}</h3>
+    {#if sourceDiff === undefined}
+      <p class="text-sm">{ui.text("ui_workflow_stale_explanation", { state: stateLabel })}</p>
+    {:else}
+      <p class="text-sm">{ui.text("ui_workflow_stale_diff_explanation", { state: stateLabel })}</p>
+      <dl class="grid gap-2 rounded-lg border bg-muted/30 px-3 py-2" data-testid="workflow-source-diff" data-syntax={sourceDiff.syntax ? "true" : undefined}>
+        <div class="grid gap-0.5" data-testid="workflow-source-before">
+          <dt class="text-xs text-muted-foreground">{ui.text("ui_workflow_source_before")}</dt>
+          <dd class={["leading-7 whitespace-pre-wrap", sourceDiff.syntax ? "font-mono text-xs" : "text-sm"]} lang={sourceLocale || undefined} dir={sourceDirection}>{@render diffParts(sourceDiff.before)}</dd>
+        </div>
+        <div class="grid gap-0.5" data-testid="workflow-source-now">
+          <dt class="text-xs text-muted-foreground">{ui.text("ui_workflow_source_now")}</dt>
+          <dd class={["leading-7 whitespace-pre-wrap", sourceDiff.syntax ? "font-mono text-xs" : "text-sm"]} lang={sourceLocale || undefined} dir={sourceDirection}>{@render diffParts(sourceDiff.after)}</dd>
+        </div>
+      </dl>
+      {#if !sourceDiff.changed}
+        <p class="text-xs text-muted-foreground" data-testid="workflow-source-same">{ui.text("ui_workflow_source_same_text")}</p>
+      {/if}
+    {/if}
+    <div class="flex flex-wrap gap-2">
+      <Button size="sm" {disabled} title={ui.text("ui_workflow_confirm_translation_title")} data-testid="workflow-confirm" onclick={() => { if (!disabled) onconfirm(); }}>
+        <CircleCheckBigIcon data-icon="inline-start" />
+        {ui.text("ui_workflow_confirm_translation")}
+      </Button>
+      {#if reviewState !== "needs-review"}
+        <Button variant="outline" size="sm" {disabled} data-testid="workflow-mark-needs-review" onclick={() => { if (!disabled) onstatechange("needs-review"); }}>
+          <FlagIcon data-icon="inline-start" />
+          {ui.text("ui_workflow_mark_needs_review")}
+        </Button>
+      {/if}
+    </div>
+  </section>
+{/if}
+
 <Collapsible.Root bind:open class="group/workflow mx-auto mb-4 w-full max-w-[1000px]">
   <Card.Root size="sm" class="gap-0 py-0 shadow-none">
     <Card.Header class="p-0">
@@ -114,42 +152,6 @@
         <ChevronDownIcon class="size-4 shrink-0 transition-transform group-data-[state=open]/workflow:rotate-180" aria-hidden="true" />
       </Collapsible.Trigger>
     </Card.Header>
-
-    {#if stale}
-      <!-- The source text changed since the state was recorded: confirm it or mark it for review (#225 P20). -->
-      <div class="flex flex-col gap-2 border-t px-4 py-3" role="group" aria-label={ui.text("ui_workflow_source_changed")} data-testid="workflow-stale">
-        {#if sourceDiff === undefined}
-          <p class="text-sm">{ui.text("ui_workflow_stale_explanation", { state: stateLabel })}</p>
-        {:else}
-          <p class="text-sm">{ui.text("ui_workflow_stale_diff_explanation", { state: stateLabel })}</p>
-          <dl class="grid gap-2 rounded-lg border bg-muted/30 px-3 py-2" data-testid="workflow-source-diff" data-syntax={sourceDiff.syntax ? "true" : undefined}>
-            <div class="grid gap-0.5" data-testid="workflow-source-before">
-              <dt class="text-xs text-muted-foreground">{ui.text("ui_workflow_source_before")}</dt>
-              <dd class={["leading-7 whitespace-pre-wrap", sourceDiff.syntax ? "font-mono text-xs" : "text-sm"]} lang={sourceLocale || undefined} dir={sourceDirection}>{@render diffParts(sourceDiff.before)}</dd>
-            </div>
-            <div class="grid gap-0.5" data-testid="workflow-source-now">
-              <dt class="text-xs text-muted-foreground">{ui.text("ui_workflow_source_now")}</dt>
-              <dd class={["leading-7 whitespace-pre-wrap", sourceDiff.syntax ? "font-mono text-xs" : "text-sm"]} lang={sourceLocale || undefined} dir={sourceDirection}>{@render diffParts(sourceDiff.after)}</dd>
-            </div>
-          </dl>
-          {#if !sourceDiff.changed}
-            <p class="text-xs text-muted-foreground" data-testid="workflow-source-same">{ui.text("ui_workflow_source_same_text")}</p>
-          {/if}
-        {/if}
-        <div class="flex flex-wrap gap-2">
-          <Button size="sm" {disabled} title={ui.text("ui_workflow_confirm_translation_title")} data-testid="workflow-confirm" onclick={() => { if (!disabled) onconfirm(); }}>
-            <CircleCheckBigIcon data-icon="inline-start" />
-            {ui.text("ui_workflow_confirm_translation")}
-          </Button>
-          {#if reviewState !== "needs-review"}
-            <Button variant="outline" size="sm" {disabled} data-testid="workflow-mark-needs-review" onclick={() => { if (!disabled) onstatechange("needs-review"); }}>
-              <FlagIcon data-icon="inline-start" />
-              {ui.text("ui_workflow_mark_needs_review")}
-            </Button>
-          {/if}
-        </div>
-      </div>
-    {/if}
 
     <Collapsible.Content>
       <Card.Content class="grid grid-cols-1 gap-4 border-t py-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(17rem,1fr)]">
