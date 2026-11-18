@@ -3954,11 +3954,6 @@ ui {
 }
 ui {
   toolbar {
-    redo = Redo
-  }
-}
-ui {
-  toolbar {
     redo_saved_change = Redo saved change
   }
 }
@@ -3977,11 +3972,6 @@ ui {
       .input {$message :string}
       {{Redo: {$change} in {$message}}}
 
-  }
-}
-ui {
-  toolbar {
-    undo = Undo
   }
 }
 ui {

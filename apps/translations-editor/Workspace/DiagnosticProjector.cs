@@ -92,8 +92,4 @@ internal sealed class DiagnosticProjector
         }
         return result;
     }
-
-    private static ValidationResult MalformedValidation(string path) => new(
-        false,
-        [new EditorDiagnostic("JSON", "error", string.Empty, path, 1, 1, 1, 1, EditorNotice.Create("ui_backend_invalid_json"))]);
 }

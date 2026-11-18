@@ -3954,11 +3954,6 @@ ui {
 }
 ui {
   toolbar {
-    redo = Wiederholen
-  }
-}
-ui {
-  toolbar {
     redo_saved_change = Gespeicherte Änderung wiederholen
   }
 }
@@ -3977,11 +3972,6 @@ ui {
       .input {$message :string}
       {{Wiederholen: {$change} in {$message}}}
 
-  }
-}
-ui {
-  toolbar {
-    undo = Rückgängig
   }
 }
 ui {

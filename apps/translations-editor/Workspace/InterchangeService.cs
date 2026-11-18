@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text.Json;
 using Runic.Translations.Tooling;
 using Runic.Translations.Authoring;
 using Runic.Translations.Compiler;
@@ -559,27 +558,5 @@ internal sealed class InterchangeService
         if (string.Equals(import.TargetLocale, catalog.SourceLocale, StringComparison.Ordinal))
             refusals.Add(new EditorInterchangeRefusal("EDITOR-TARGET-DEFAULT-LOCALE",
                 EditorNotice.Create("ui_backend_refusal_9", ("value1", catalog.SourceLocale!))));
-    }
-
-    private static void Flatten(JsonElement node, string prefix, Dictionary<string, string> values)
-    {
-        foreach (System.Text.Json.JsonProperty property in node.EnumerateObject())
-        {
-            string key = prefix.Length == 0 ? property.Name : prefix + "." + property.Name;
-            if (property.Value.ValueKind == JsonValueKind.String)
-            {
-                values[key] = property.Value.GetString() ?? string.Empty;
-                continue;
-            }
-            if (property.Value.ValueKind == JsonValueKind.Object)
-            {
-                if (property.Value.TryGetProperty("$value", out JsonElement leaf) && leaf.ValueKind == JsonValueKind.String)
-                {
-                    values[key] = leaf.GetString() ?? string.Empty;
-                    continue;
-                }
-                Flatten(property.Value, key, values);
-            }
-        }
     }
 }
