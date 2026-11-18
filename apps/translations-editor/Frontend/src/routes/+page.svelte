@@ -12,10 +12,11 @@
   import { draftField, isTextEditingTarget } from "#lib/draft-fields.js";
   import { createEditorBridge } from "#lib/editor-bridge.js";
   import { editorShortcut } from "#lib/editor-keyboard.js";
-  import { editorLabels } from "#lib/editor-labels.js";
+  import { editorLabels, type EditorLabels } from "#lib/editor-labels.js";
   import InterchangeDialog from "#lib/InterchangeDialog.svelte";
   import LibraryCatalogDialog from "#lib/LibraryCatalogDialog.svelte";
   import { localeDisplayName } from "#lib/locale-text.js";
+  import { projectUiText } from "#lib/project-kind.js";
   import {
     clearLocalEditorState,
     configureLocalEditorState,
@@ -85,7 +86,8 @@
     preview: (): PreviewController => previewController,
     refreshPreview: () => selection.refreshPreview(),
   });
-  const ui = createUiText(() => preferences.uiLocale);
+  // The interface text in the project's wording: a content-editing project (D074.2) speaks of texts, not translations.
+  const ui = projectUiText(createUiText(() => preferences.uiLocale), () => view.projectKind);
   setUiText(ui);
   const localeName = (tag: string): string => localeDisplayName(tag, preferences.uiLocale);
 
@@ -138,7 +140,7 @@
     },
   });
   const recovery = new RecoveryController({ bridge, workspace, drafts: draftStore, review, selection, feedback, historyBusy });
-  const view = new WorkspaceView({
+  const view: WorkspaceView = new WorkspaceView({
     snapshot, selection, drafts: draftStore, review, diagnostics: diagnosticsStore, ui, localeName,
     samples: () => previewController.samples,
     reviewBlocked: () => reviewMutationBlocked,
@@ -206,7 +208,7 @@
 
   let uiLocale = $derived(preferences.uiLocale);
   let uiDirection = $derived(preferences.uiDirection);
-  let labels = $derived(editorLabels(uiLocale));
+  let labels: EditorLabels = $derived(editorLabels(uiLocale, view.projectKind));
   $effect(() => {
     document.documentElement.lang = uiLocale;
     document.documentElement.dir = uiDirection;
@@ -298,6 +300,7 @@
         pseudoLocalization: preferences.pseudoLocalization,
         uiDirection,
         artifactPreviewOpen,
+        projectKind: view.projectKind,
       },
       ui,
     );
@@ -356,7 +359,7 @@
 
   function handleKeyboard(event: KeyboardEvent): void {
     const shortcut = editorShortcut(event, isTextEditingTarget(event.target), draftField(event.target) !== undefined,
-      { widgetTarget: stepWidgetTarget(event.target) });
+      { widgetTarget: stepWidgetTarget(event.target), messageSteps: !view.contentProject });
     if (shortcut === undefined) return;
     event.preventDefault();
     if (shortcut === "undo") undo();

@@ -24,6 +24,8 @@
     sourceLocale: string;
     sourceLocaleName: string;
     sourceEntry: ResourceEntry | undefined;
+    /** Whether the source panel can show: a content-editing project (D074.2) has no other language. */
+    showSource?: boolean;
     authoring?: EditorMessageProjection;
     authoringBusy?: boolean;
     onoperation?: (operation: EditorMessageOperation) => void;
@@ -56,6 +58,7 @@
     sourceLocale,
     sourceLocaleName,
     sourceEntry,
+    showSource = true,
     authoring,
     authoringBusy = false,
     onoperation,
@@ -92,7 +95,7 @@
   });
 </script>
 
-{#if mode === "translation" && sourceLocale !== "" && sourceLocale !== locale}
+{#if showSource && mode === "translation" && sourceLocale !== "" && sourceLocale !== locale}
   <div class="mx-auto mt-4 w-full max-w-[1000px]">
     <SourceTextPanel entry={sourceEntry} locale={sourceLocale} localeName={sourceLocaleName} />
   </div>

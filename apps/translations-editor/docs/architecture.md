@@ -149,13 +149,23 @@ blocking flags):
   message's review) and applies the review actions. It also keeps the message
   keys in tree order and finds the message before or after the selection among
   the listed messages of a kind (`next-message.ts`: missing, outdated, needs
-  review).
+  review, or any text). Its `projectKind` is the one place the project's kind
+  is derived from the snapshot (D074.2, `project-kind.ts`): a catalog with one
+  real locale, the base locale (configured pseudo-locales don't count), is a
+  content-editing project. There the view drops the translation filters and
+  states and the review of the selection, Next steps through every text, and the
+  components leave out the translation-only parts. The page wraps the interface
+  text in `projectUiText`, which swaps the translation wording for the content
+  wording (`contentWording`) while the project is a content-editing one, and
+  passes the kind to the labels, the palette and the keyboard shortcuts. A
+  second language changes the snapshot, and with it the kind, without a restart.
 - `NextMessageController` runs Next and Previous (Alt+↓, Alt+↑, the toolbar
-  button and the palette): the kind follows the list's filter, the steps follow
-  the tree and wrap at the end. Its Save and next (Ctrl+Enter) runs the one
+  button and the palette; none of them in a content-editing project): the kind
+  follows the list's filter, the steps follow the tree and wrap at the end. Its Save and next (Ctrl+Enter) runs the one
   save through `WorkspaceController.saveAll`, which reports the save's outcome,
-  and then steps through the kind the selected message had when it was selected;
-  a blocked save keeps the selection and reports why.
+  and then steps through the kind the selected message had when it was selected
+  (in a content-editing project, to the next text); a blocked save keeps the
+  selection and reports why.
 - `PreferencesController` keeps the interface locale, theme, density and simulations;
   `ProjectWizardController`, `MutationController`, `InterchangeController`,
   `LibraryController` and `AboutController` own their dialogs' state and host

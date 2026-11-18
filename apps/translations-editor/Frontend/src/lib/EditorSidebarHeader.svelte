@@ -21,6 +21,7 @@
   let {
     catalogId,
     localeCount,
+    summary,
     root,
     success,
     reloadLabel,
@@ -32,6 +33,8 @@
   }: {
     catalogId: string;
     localeCount: number;
+    /** The line under the project's name in place of its number of locales, such as "German · 13 texts". */
+    summary?: string;
     root: string;
     success: boolean;
     reloadLabel: string;
@@ -71,8 +74,8 @@
               {/if}
               <span class="grid min-w-0 flex-1 text-left leading-tight">
                 <span class="truncate font-semibold">{catalogId}</span>
-                <span class="truncate text-xs text-muted-foreground">
-                  {ui.text("ui_count_project_locales", { count: localeCount })}
+                <span class="truncate text-xs text-muted-foreground" data-testid="project-summary">
+                  {summary ?? ui.text("ui_count_project_locales", { count: localeCount })}
                 </span>
               </span>
               <ChevronsUpDownIcon class="ml-auto" aria-hidden="true" />

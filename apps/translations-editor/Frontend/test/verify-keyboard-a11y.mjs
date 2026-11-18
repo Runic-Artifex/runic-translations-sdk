@@ -186,8 +186,9 @@ const page = pageFiles.map(([, text]) => text).join("\n");
 assert.match(page, /<svelte:window onkeydown=\{handleKeyboard\}/,
   "Owned keyboard dispatch is not installed on the Editor window.");
 // Ctrl+Z in a draft field undoes the unsaved edit, not the field's browser history, and so does the browser's own undo.
-assert.match(page, /editorShortcut\(event, isTextEditingTarget\(event\.target\), draftField\(event\.target\) !== undefined,\s*\{ widgetTarget: stepWidgetTarget\(event\.target\) \}\)/,
-  "Keyboard dispatch does not tell draft fields from other text fields, or widgets from the rest.");
+// A content-editing project (D074.2) hides Next and Previous, so their keys are not bound there.
+assert.match(page, /editorShortcut\(event, isTextEditingTarget\(event\.target\), draftField\(event\.target\) !== undefined,\s*\{ widgetTarget: stepWidgetTarget\(event\.target\), messageSteps: !view\.contentProject \}\)/,
+  "Keyboard dispatch does not tell draft fields from other text fields, widgets from the rest, or whether Next is shown.");
 assert.match(page, /function stepWidgetTarget[\s\S]*?closest\('select, \[role="combobox"\], \[role="listbox"\], \[role="menu"\], \[role="menubar"\], \[role="dialog"\], \[role="alertdialog"\]'\)/,
   "The message steps do not leave selects, comboboxes, listboxes, menus and dialogs alone.");
 assert.match(page, /shortcut === "save-and-next"[\s\S]*?saveAndNext\(\)[\s\S]*?shortcut === "next-message"\) stepMessage\("next"\)[\s\S]*?shortcut === "previous-message"\) stepMessage\("previous"\)/,

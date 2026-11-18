@@ -37,8 +37,12 @@ export class NextMessageController {
     if (this.kind !== "missing") return this.kind;
     return entry.missing ? "missing" : entry.stale ? "stale" : "missing";
   });
-  /** Whether the composer offers Save and next: the selected message was missing or outdated when it was selected. */
+  /**
+   * Whether the composer offers Save and next: the selected message was missing or outdated when it was selected; in a
+   * content-editing project always, to the next text in tree order (D074.2).
+   */
   saveAndNextOffered = $derived.by(() => {
+    if (this.kind === "text") return true;
     const entry = this.#entryState();
     return entry.missing || entry.stale;
   });
@@ -124,7 +128,8 @@ export class NextMessageController {
   }
 }
 
-/** "No other message is missing in German.", and the same for outdated and to-review messages. */
+/** "No other message is missing in German.", the same for outdated and to-review messages, and "There is no other text." */
 export function noneNotice(kind: NextMessageKind, locale: string): UiMessage {
+  if (kind === "text") return notice("ui_workbench_none_text");
   return notice(kind === "missing" ? "ui_workbench_none_missing" : kind === "stale" ? "ui_workbench_none_stale" : "ui_workbench_none_needs_review", { locale });
 }

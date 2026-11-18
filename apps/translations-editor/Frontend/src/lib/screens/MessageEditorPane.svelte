@@ -77,6 +77,8 @@
   } = $props();
   const ui = getUiText();
   const saveAndNextLabel = $derived(stepTitle("save_and_next", next.saveAndNextKind, ui));
+  // A content-editing project (D074.2): no review workflow, no source panel, no Copy source; the developers' note.
+  const content = $derived(view.contentProject);
 </script>
 
 <!-- The selected message: its heading, review workflow, editor mode and the translation editor. -->
@@ -84,6 +86,7 @@
   messageKey={row.key}
   messagePath={row.path}
   description={row.description}
+  descriptionLabel={content ? ui.text("ui_content_developer_note") : undefined}
   tags={row.tags}
   locale={selection.selectedLocale}
   overrideLayer={overrideLayer(snapshot, selection.currentDocument?.layer)}
@@ -93,6 +96,9 @@
   ondelete={() => onmutation("delete-key")}
 />
 
+<!-- The review workflow and the stale-review confirmation belong to translation projects. A review file of a
+     content-editing project stays on disk untouched; the editor does not show it. -->
+{#if !content}
 <ReviewWorkflow
   state={view.currentReviewState}
   notTranslated={selection.currentCell?.entry === undefined && (view.currentReview === undefined || view.currentReview.implicit === true)}
@@ -117,6 +123,7 @@
   onsuggestion={(value) => editing.applySuggestion(value)}
   onfix={(diagnostic, fix) => void editing.applyDiagnosticFix(diagnostic, fix)}
 />
+{/if}
 
 <EditorModeSwitcher
   mode={selection.mode}
@@ -129,7 +136,8 @@
   identity={`${selection.selectedDocumentPath}\u0000${selection.selectedKey}\u0000${selection.selectedLocale}`}
   mode={selection.mode}
   locale={selection.selectedLocale}
-  label={selection.mode === "translation" ? localeName(selection.selectedLocale) : selection.currentDocument?.path ?? ui.text("ui_page_resource_document")}
+  label={selection.mode === "translation" ? content ? ui.text("ui_content_text") : localeName(selection.selectedLocale) : selection.currentDocument?.path ?? ui.text("ui_page_resource_document")}
+  showSource={!content}
   value={selection.mode === "translation" && selection.currentStarter !== undefined ? selection.currentStarter.text : selection.editorText}
   resourceValue={selection.currentStarter?.text ?? selection.currentCell?.entry?.value ?? ""}
   sourceLocale={catalog.defaultLocale}
@@ -141,7 +149,7 @@
   maxLength={selection.currentStarter !== undefined ? selection.currentStarter.maxLength : selection.currentCell?.entry?.maxLength}
   lengthWarning={view.currentQuality.find((issue) => issue.code === "RTR0098")?.message}
   starterLoading={selection.starterLoading}
-  oncopysource={selection.currentStarter !== undefined && selection.sourceAuthoring?.supported === true ? () => editing.copySource() : undefined}
+  oncopysource={!content && selection.currentStarter !== undefined && selection.sourceAuthoring?.supported === true ? () => editing.copySource() : undefined}
   sourceSelection={selection.sourceSelection}
   missing={selection.currentCell?.entry === undefined}
   invalid={clientError !== undefined || diagnostics.latest?.success === false}
@@ -153,7 +161,8 @@
 />
 
 <!-- Save and next (D074.1): shown while the selected message was missing or outdated when it was selected. The one save,
-     then the next message of the same kind; a blocked save stays and says why. -->
+     then the next message of the same kind; a blocked save stays and says why. In a content-editing project (D074.2)
+     it is always shown and goes to the next text in tree order. -->
 {#if next.saveAndNextOffered && selection.mode === "translation" || next.notice !== undefined}
   <div class="mx-auto mt-3 flex w-full max-w-[1000px] flex-wrap items-center justify-end gap-x-3 gap-y-2" data-testid="save-and-next-bar">
     {#if next.notice !== undefined}

@@ -15,6 +15,7 @@
   import type { WorkspaceController } from "#lib/state/workspace-controller.svelte.js";
   import type { WorkspaceView } from "#lib/state/workspace-view.svelte.js";
   import WorkspacePanel from "#lib/WorkspacePanel.svelte";
+  import { getUiText } from "#lib/ui-text.js";
 
   let {
     snapshot,
@@ -25,6 +26,7 @@
     preview,
     labels,
     reviewBlocked,
+    localeName,
     languagesOpen = $bindable(true),
     messagesOpen = $bindable(true),
     searchInput = $bindable(null),
@@ -45,6 +47,7 @@
     labels: EditorLabels;
     /** Whether review data cannot change now: the list's bulk review actions are disabled. */
     reviewBlocked: boolean;
+    localeName(tag: string): string;
     languagesOpen?: boolean;
     messagesOpen?: boolean;
     searchInput?: HTMLInputElement | null;
@@ -57,12 +60,18 @@
   } = $props();
 
   const markVisible = (state: EditorReviewState) => view.markVisible(state);
+  const ui = getUiText();
+  // A content-editing project (D074.2) names its language and its number of texts: "German · 13 texts".
+  const summary = $derived(view.contentProject && snapshot.catalog !== undefined
+    ? ui.text("ui_content_project_summary", { language: localeName(snapshot.catalog.defaultLocale), count: selection.rows.length })
+    : undefined);
 </script>
 
 <Sidebar.Root collapsible="offcanvas">
   <EditorSidebarHeader
     catalogId={snapshot.catalog?.id ?? ""}
     localeCount={snapshot.catalog?.locales.length ?? 0}
+    {summary}
     root={snapshot.root}
     success={snapshot.success}
     reloadLabel={labels.reload}
@@ -86,9 +95,10 @@
     {onopenlibrary}
   />
 
-  <SidebarSectionPanels bind:languagesOpen bind:messagesOpen>
+  <SidebarSectionPanels bind:languagesOpen bind:messagesOpen singleLanguage={view.contentProject}>
     {#snippet languages()}
       <LocaleSwitcher
+        content={view.contentProject}
         locales={view.localeSummaries}
         selectedLocale={selection.selectedLocale}
         onselect={(locale) => selection.selectLocale(locale)}
@@ -107,11 +117,12 @@
         selectedKey={selection.selectedKey}
         visibleCount={view.visibleRows.length}
         catalogKey={catalogViewKey(snapshot)}
-        filterKey={selection.filter === "all" && selection.query.trim() === "" ? "" : `${selection.filter}\n${selection.query.trim()}`}
+        filterKey={view.filter === "all" && selection.query.trim() === "" ? "" : `${view.filter}\n${selection.query.trim()}`}
         groupCounts={view.messageGroupCounts}
         rowHeight={messageRowHeight(preferences.density)}
         selectedHidden={view.selectedHiddenByFilter}
         onclearfilter={() => selection.clearFilter()}
+        translationStates={!view.contentProject}
         reviewActionsDisabled={reviewBlocked}
         noResultsLabel={labels.noResults}
         labels={{
@@ -139,7 +150,7 @@
         {#snippet toolbar()}
           <MessageToolbar
             bind:query={selection.query}
-            bind:filter={selection.filter}
+            bind:filter={() => view.filter, (filter) => selection.filter = filter}
             bind:inputRef={searchInput}
             placeholder={labels.search}
             options={view.filterOptions}

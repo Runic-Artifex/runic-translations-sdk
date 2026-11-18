@@ -10,6 +10,7 @@
     messageKey,
     messagePath = [],
     description,
+    descriptionLabel,
     tags,
     locale,
     overrideLayer,
@@ -23,6 +24,8 @@
     /** The logical path (`["common", "cancel"]`), shown as the title `common.cancel`. */
     messagePath?: readonly string[];
     description?: string;
+    /** A heading for the description, such as "Note from the developers" in a content-editing project (D074.2). */
+    descriptionLabel?: string;
     tags: string[];
     locale: string;
     /** A library override layer the message's document belongs to; absent for the catalog's own (base) layer. */
@@ -46,7 +49,14 @@
         <code class="font-mono">{messageKey}</code>
       </p>
     {/if}
-    {#if description}<p class="mt-2 max-w-2xl text-sm text-muted-foreground">{description}</p>{/if}
+    {#if description && descriptionLabel}
+      <section class="mt-3 max-w-2xl" aria-labelledby="developer-note-heading" data-testid="developer-note">
+        <h3 id="developer-note-heading" class="text-xs font-semibold text-muted-foreground">{descriptionLabel}</h3>
+        <p class="mt-1 text-sm">{description}</p>
+      </section>
+    {:else if description}
+      <p class="mt-2 max-w-2xl text-sm text-muted-foreground">{description}</p>
+    {/if}
     {#if tags.length > 0}
       <div class="mt-3 flex flex-wrap gap-1.5">
         {#each tags as tag (tag)}<Badge variant="outline">{tag}</Badge>{/each}

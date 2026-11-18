@@ -3,6 +3,7 @@ import type { ThemeMode } from "./appearance";
 import type { EditorReviewState } from "./contracts";
 import type { EditorBridge } from "./editor-bridge";
 import type { NextMessageKind } from "./next-message";
+import type { ProjectKind } from "./project-kind";
 import type { UiDirection } from "./simulation";
 import { shortcutLabel, type ShortcutPlatform } from "./shortcut-labels";
 
@@ -90,7 +91,19 @@ export interface EditorPaletteState {
   readonly artifactPreviewOpen: boolean;
   /** Whose shortcut notation the keybindings use (⌘ on macOS, Ctrl elsewhere); detected from the window when absent. */
   readonly shortcutPlatform?: ShortcutPlatform;
+  /**
+   * A content-editing project (D074.2) has no review workflow, no Next missing and no language list to toggle: those
+   * commands are left out, like the controls they stand for. A translation project when absent.
+   */
+  readonly projectKind?: ProjectKind;
 }
+
+/** The commands of controls a content-editing project does not show; the review group goes as a whole. */
+const translationOnlyCommands: ReadonlySet<string> = new Set([
+  "document.next-message",
+  "document.previous-message",
+  "view.toggle-languages",
+]);
 
 const paletteGroupLabels: Record<PaletteCommandGroupId, string> = {
   workspace: "Workspace",
@@ -102,9 +115,9 @@ const paletteGroupLabels: Record<PaletteCommandGroupId, string> = {
 
 /** The titles of the message steps for each kind, in English when no interface text is given. */
 const stepTitles: Record<"next" | "previous" | "save_and_next", Record<NextMessageKind, string>> = {
-  next: { missing: "Next missing", stale: "Next outdated", "needs-review": "Next to review" },
-  previous: { missing: "Previous missing", stale: "Previous outdated", "needs-review": "Previous to review" },
-  save_and_next: { missing: "Save and next missing", stale: "Save and next outdated", "needs-review": "Save and next to review" },
+  next: { missing: "Next missing", stale: "Next outdated", "needs-review": "Next to review", text: "Next text" },
+  previous: { missing: "Previous missing", stale: "Previous outdated", "needs-review": "Previous to review", text: "Previous text" },
+  save_and_next: { missing: "Save and next missing", stale: "Save and next outdated", "needs-review": "Save and next to review", text: "Save and next text" },
 };
 
 /** The title of a message step: "Next missing", "Previous outdated", "Save and next to review". */
@@ -415,7 +428,9 @@ export function buildEditorCommandPalette(
     run: actions.createDiagnosticBundle,
   });
 
-  return commands;
+  return state.projectKind === "content"
+    ? commands.filter((command) => command.group !== "review" && !translationOnlyCommands.has(command.id))
+    : commands;
 }
 
 export function filterCommands(
