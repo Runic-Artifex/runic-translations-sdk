@@ -37,7 +37,7 @@ export interface EditorProjectMock extends MockTypedView<EditorProjectMockState,
 const spec: MockTypedViewSpec = {
   kind: "editorProject",
   route: "editorProject",
-  contract: "Runic.Translations.Editor.EditorProjectViewModel:038EF687035CE7BA203C5B35C0FC6FE8C52706385336A981E5058A8BA7500500",
+  contract: "Runic.Translations.Editor.EditorProjectViewModel:78549E3CAAA6442CF554AC0FFCB1EC1047FE6861A0E946E89313A8C172321EF9",
   fields: {
     previewProjectResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     createProjectResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },

@@ -37,7 +37,7 @@ export interface EditorLocalStateMock extends MockTypedView<EditorLocalStateMock
 const spec: MockTypedViewSpec = {
   kind: "editorLocalState",
   route: "editorLocalState",
-  contract: "Runic.Translations.Editor.EditorLocalStateViewModel:038EF687035CE7BA203C5B35C0FC6FE8C52706385336A981E5058A8BA7500500",
+  contract: "Runic.Translations.Editor.EditorLocalStateViewModel:78549E3CAAA6442CF554AC0FFCB1EC1047FE6861A0E946E89313A8C172321EF9",
   fields: {
     loadLocalStateResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     saveLocalStateResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
