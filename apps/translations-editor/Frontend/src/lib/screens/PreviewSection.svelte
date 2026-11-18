@@ -101,7 +101,7 @@
   {#if preview.ast !== undefined && previewInputEntries(preview.ast).length > 0}
     <div class="sample-inputs">
       {#each previewInputEntries(preview.ast) as [name, descriptor] (name)}
-        <label><span>{name}<small>{descriptor.type}</small></span><input value={previewSampleOr(preview.samples, name, "")} oninput={(event) => preview.updateSample(name, event.currentTarget.value)} /></label>
+        <label><span><span class="placeholder-chip">{`{$${name}}`}</span><small>{descriptor.type}</small></span><input value={previewSampleOr(preview.samples, name, "")} oninput={(event) => preview.updateSample(name, event.currentTarget.value)} /></label>
       {/each}
     </div>
   {/if}
@@ -137,21 +137,21 @@
 />
 
 <style>
-  .message-preview { max-width: 1000px; margin: 1.2rem auto 0; border: 1px solid var(--border); border-radius: .65rem; color: var(--card-foreground); background: color-mix(in oklch, var(--card) 94%, var(--primary)); overflow: hidden; }
-  .message-preview > header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem .9rem; background: color-mix(in oklch, var(--muted) 82%, var(--primary)); }
+  .message-preview { max-width: 1000px; margin: 1.2rem auto 0; border: 1px solid var(--border); border-radius: var(--radius-pane); color: var(--card-foreground); background: var(--card); overflow: hidden; }
+  .message-preview > header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem 1rem; border-bottom: 1px solid var(--border); }
   .message-preview > header > div { display: grid; gap: .15rem; }
-  .message-preview header strong { color: var(--foreground); font-size: .68rem; }
-  .message-preview header span { color: var(--muted-foreground); font-size: .56rem; }
-  .preview-state { border: 1px solid color-mix(in oklch, var(--primary) 45%, var(--border)); border-radius: 1rem; padding: .23rem .5rem; color: var(--primary) !important; background: color-mix(in oklch, var(--primary) 12%, transparent); font: .53rem ui-monospace, monospace !important; }
-  .sample-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .55rem; border-top: 1px solid var(--border); padding: .7rem .9rem; }
-  .sample-inputs label { display: grid; gap: .3rem; color: var(--muted-foreground); font-size: .58rem; }
-  .sample-inputs label > span { display: flex; justify-content: space-between; }
-  .sample-inputs small { color: var(--muted-foreground); font: .52rem ui-monospace, monospace; }
-  .sample-inputs input { min-width: 0; border: 1px solid var(--input); border-radius: .35rem; padding: .46rem .5rem; color: var(--foreground); background: var(--background); font: .62rem ui-monospace, monospace; }
-  .preview-canvas { min-height: 5rem; border-top: 1px solid var(--border); padding: 1rem; color: var(--foreground); background: radial-gradient(circle at 90% 0, color-mix(in oklch, var(--primary) 13%, transparent), transparent 45%), var(--background); font-size: .9rem; line-height: 1.7; }
+  .message-preview header strong { color: var(--foreground); font-size: var(--ui-text); font-weight: 620; }
+  .message-preview header span { color: var(--muted-foreground); font-size: var(--ui-text-xs); }
+  .preview-state { border: 1px solid var(--border); border-radius: var(--radius-control); padding: .1rem .45rem; color: var(--muted-foreground) !important; font: var(--ui-text-xs) var(--font-mono) !important; white-space: nowrap; }
+  .sample-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .6rem; border-top: 1px solid var(--border); padding: .75rem 1rem; }
+  .sample-inputs label { display: grid; gap: .3rem; color: var(--muted-foreground); font-size: var(--ui-text-xs); }
+  .sample-inputs label > span { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+  .sample-inputs small { color: var(--muted-foreground); font: var(--ui-text-xs) var(--font-mono); }
+  .sample-inputs input { min-width: 0; border: 1px solid var(--field-border); border-radius: var(--radius-control); padding: .35rem .5rem; color: var(--foreground); background: var(--background); font: var(--ui-text) var(--font-mono); }
+  .preview-canvas { min-height: 5rem; border-top: 1px solid var(--border); padding: 1rem; color: var(--foreground); background: var(--background); font-size: var(--message-text); line-height: 1.6; }
   .preview-canvas p { margin: 0; white-space: pre-wrap; }
-  .preview-placeholder { color: var(--muted-foreground); font-size: .65rem; }
-  .preview-error { color: var(--destructive); font-size: .65rem; }
+  .preview-placeholder { color: var(--muted-foreground); font-size: var(--ui-text); }
+  .preview-error { color: var(--destructive); font-size: var(--ui-text); }
   .safe-content { display: block; }
-  .safe-note { margin: 0; border-top: 1px solid var(--border); padding: .55rem .9rem; color: var(--muted-foreground); font-size: .55rem; }
+  .safe-note { margin: 0; border-top: 1px solid var(--border); padding: .55rem 1rem; color: var(--muted-foreground); font-size: var(--ui-text-xs); }
 </style>

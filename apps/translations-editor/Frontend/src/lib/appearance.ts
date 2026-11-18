@@ -1,8 +1,9 @@
 export const themeModes = ["system", "light", "dark"] as const;
-export const themePalettes = ["runic", "moss", "fjord", "ember"] as const;
+/** How much room the interface takes: spacing, the message tree's rows and the interface text. */
+export const densities = ["comfortable", "compact"] as const;
 
 export type ThemeMode = typeof themeModes[number];
-export type ThemePalette = typeof themePalettes[number];
+export type Density = typeof densities[number];
 
 export interface DesktopAppearance {
   colorScheme: 0 | 1 | 2;
@@ -11,11 +12,11 @@ export interface DesktopAppearance {
   reducedMotion: boolean | null;
 }
 let nativeAppearance: DesktopAppearance | null = null;
-let applied: { mode: ThemeMode; palette: ThemePalette } | null = null;
+let applied: ThemeMode | null = null;
 
 export function setDesktopAppearance(value: DesktopAppearance | null): void {
   nativeAppearance = value;
-  if (applied) applyAppearance(applied.mode, applied.palette);
+  if (applied) applyAppearance(applied);
 }
 
 // One request at a time. Remount/reload obtains a fresh value; failures restore browser preferences.
@@ -44,47 +45,61 @@ function isDesktopAppearance(value: unknown): value is DesktopAppearance {
 }
 
 const modeKey = "runic-translations.theme-mode";
-const paletteKey = "runic-translations.theme-palette";
+export const densityKey = "runic-translations.density";
 
-export function readAppearance(read: (key: string) => string | null = () => null): { mode: ThemeMode; palette: ThemePalette } {
+/**
+ * The stored appearance. Earlier versions also stored a colour palette; the palettes are gone (D074), so that value is
+ * not read, and the native store drops it when it loads.
+ */
+export function readAppearance(read: (key: string) => string | null = () => null): { mode: ThemeMode; density: Density } {
   const storedMode = read(modeKey);
-  const storedPalette = read(paletteKey);
+  const storedDensity = read(densityKey);
   return {
     mode: isThemeMode(storedMode) ? storedMode : "dark",
-    palette: isThemePalette(storedPalette) ? storedPalette : "runic",
+    density: isDensity(storedDensity) ? storedDensity : "comfortable",
   };
 }
 
-export function applyAppearance(mode: ThemeMode, palette: ThemePalette): void {
+/**
+ * Applies a theme mode: the `dark` class for the components' dark variants, and `data-scheme`, which makes the brand
+ * tokens follow the editor's choice instead of the system's preference.
+ */
+export function applyAppearance(mode: ThemeMode): void {
   if (typeof document === "undefined") return;
-  applied = { mode, palette };
+  applied = mode;
   const systemDark = nativeAppearance?.colorScheme === 2 || (nativeAppearance?.colorScheme !== 1 && matchMedia("(prefers-color-scheme: dark)").matches);
   const dark = mode === "dark" || (mode === "system" && systemDark);
   document.documentElement.dataset.highContrast = String(nativeAppearance?.highContrast ?? matchMedia("(prefers-contrast: more)").matches);
   document.documentElement.dataset.reducedMotion = String(nativeAppearance?.reducedMotion ?? matchMedia("(prefers-reduced-motion: reduce)").matches);
-  // Palette selection remains explicit. Accent is exposed separately for native-aware controls.
+  // The brand's colours stay; the desktop's accent colour is exposed separately for native-aware controls.
   const accent = nativeAppearance?.accentColor;
   if (accent) document.documentElement.style.setProperty("--desktop-accent", `rgb(${[accent.red, accent.green, accent.blue].map(c => Math.round(c * 255)).join(" ")})`);
   else document.documentElement.style.removeProperty("--desktop-accent");
   document.documentElement.classList.toggle("dark", dark);
-  document.documentElement.dataset.theme = palette;
+  document.documentElement.dataset.scheme = dark ? "dark" : "light";
   document.documentElement.style.colorScheme = dark ? "dark" : "light";
 }
 
-export function saveAppearance(
-  mode: ThemeMode,
-  palette: ThemePalette,
-  write: (key: string, value: string) => void = () => undefined,
-): void {
+export function saveAppearance(mode: ThemeMode, write: (key: string, value: string) => void = () => undefined): void {
   write(modeKey, mode);
-  write(paletteKey, palette);
-  applyAppearance(mode, palette);
+  applyAppearance(mode);
+}
+
+/** Applies a density as `data-density` on the root; the stylesheet derives spacing, row height and text size from it. */
+export function applyDensity(density: Density): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.dataset.density = density;
+}
+
+/** The height of one row of the message tree in pixels (`--tree-row` in the stylesheet), for the virtualized tree. */
+export function messageRowHeight(density: Density): number {
+  return density === "compact" ? 28 : 32;
 }
 
 function isThemeMode(value: string | null): value is ThemeMode {
   return themeModes.some((mode) => mode === value);
 }
 
-function isThemePalette(value: string | null): value is ThemePalette {
-  return themePalettes.some((palette) => palette === value);
+function isDensity(value: string | null): value is Density {
+  return densities.some((density) => density === value);
 }

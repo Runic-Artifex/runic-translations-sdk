@@ -34,18 +34,18 @@
 </main>
 
 <style>
-  .eyebrow { margin: 0; color: var(--primary); font-size: .64rem; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
-  .mark { width: 4rem; height: 4rem; border-radius: 1rem; background: url("/brand/icon.png") center / cover no-repeat; box-shadow: 0 1rem 3rem color-mix(in oklch, var(--foreground) 22%, transparent); }
+  .eyebrow { margin: 0; color: var(--muted-foreground); font-size: var(--ui-text-xs); font-weight: 560; }
+  .mark { width: 4rem; height: 4rem; border-radius: 22%; background: url("/brand/icon.png") center / cover no-repeat; }
   .mark span { display: none; }
-  .primary { border: 1px solid var(--primary); border-radius: .45rem; padding: .58rem .85rem; color: var(--primary-foreground); background: var(--primary); font-weight: 750; cursor: pointer; box-shadow: 0 .35rem 1rem color-mix(in oklch, var(--foreground) 16%, transparent); }
-  .primary:hover:not(:disabled) { filter: brightness(1.08); }
-  .primary:disabled { cursor: not-allowed; filter: grayscale(.5); opacity: .42; }
-  .fatal-shell { display: grid; place-content: center; place-items: center; height: 100vh; padding: 2rem; color: var(--muted-foreground); text-align: center; background: radial-gradient(circle at center, color-mix(in oklch, var(--primary) 10%, var(--background)), var(--background) 65%); }
+  .primary { border: 1px solid var(--primary); border-radius: var(--radius-control); padding: .5rem .9rem; color: var(--primary-foreground); background: var(--primary); font-weight: 560; cursor: pointer; }
+  .primary:hover:not(:disabled) { background: color-mix(in srgb, var(--primary) 85%, var(--background)); }
+  .primary:disabled { cursor: not-allowed; opacity: .5; }
+  .fatal-shell { display: grid; place-content: center; place-items: center; height: 100vh; padding: 2rem; color: var(--muted-foreground); text-align: center; background: var(--background); }
   .fatal-shell { max-width: none; }
   .fatal-shell .mark { margin-bottom: 2rem; }
-  .fatal-shell h1 { max-width: 36rem; margin: .8rem 0; color: var(--foreground); font-family: Georgia, serif; font-size: 2.6rem; font-weight: 500; }
-  .fatal-shell > p:not(.eyebrow) { max-width: 44rem; margin: 0 0 1.5rem; }
-  .recovery-actions { display: flex; gap: .7rem; }
-  .secondary { border: 1px solid var(--border); border-radius: .45rem; padding: .58rem .85rem; color: var(--secondary-foreground); background: var(--secondary); cursor: pointer; }
-  .secondary:hover:not(:disabled) { border-color: var(--ring); color: var(--accent-foreground); background: var(--accent); }
+  .fatal-shell h1 { max-width: 36rem; margin: .8rem 0; color: var(--foreground); font-size: 2.25rem; font-weight: 620; line-height: 1.1; letter-spacing: -.02em; }
+  .fatal-shell > p:not(.eyebrow) { max-width: 44rem; margin: 0 0 1.5rem; font-size: 1rem; line-height: 1.55; }
+  .recovery-actions { display: flex; gap: .6rem; }
+  .secondary { border: 1px solid var(--field-border); border-radius: var(--radius-control); padding: .5rem .9rem; color: var(--foreground); background: var(--card); cursor: pointer; }
+  .secondary:hover:not(:disabled) { border-color: var(--foreground); }
 </style>

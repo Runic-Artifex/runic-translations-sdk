@@ -39,9 +39,9 @@
   .text { white-space: pre-wrap; }
   .bold { font-weight: bold; }
   .italic { font-style: italic; }
-  .link { text-decoration: underline; color: var(--primary); }
+  .link { text-decoration: underline; color: var(--paint); }
   button, .custom { border: 1px solid var(--border); border-radius: 0.3em; padding: 0.1em 0.3em; }
   button { color: inherit; background: var(--muted); }
   small { font-size: 0.7em; color: var(--muted-foreground); }
-  code { font-family: monospace; }
+  code { font-family: var(--font-mono); }
 </style>

@@ -100,61 +100,63 @@
 </main>
 
 <style>
-  .eyebrow { margin: 0; color: var(--primary); font-size: .64rem; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
-  .mark { width: 4rem; height: 4rem; border-radius: 1rem; background: url("/brand/icon.png") center / cover no-repeat; box-shadow: 0 1rem 3rem color-mix(in oklch, var(--foreground) 22%, transparent); }
+  .eyebrow { margin: 0; color: var(--muted-foreground); font-size: var(--ui-text-xs); font-weight: 560; }
+  .mark { width: 4rem; height: 4rem; border-radius: 22%; background: url("/brand/icon.png") center / cover no-repeat; }
   .mark span { display: none; }
-  .mark.small { width: 2.25rem; height: 2.25rem; border-radius: .65rem; box-shadow: 0 .35rem 1rem color-mix(in oklch, var(--foreground) 16%, transparent); }
+  .mark.small { width: 2.25rem; height: 2.25rem; }
 
-  .status-dot { width: .5rem; height: .5rem; border-radius: 50%; background: var(--chart-2); box-shadow: 0 0 .6rem color-mix(in oklch, var(--chart-2) 55%, transparent); }
-  .status-dot.warning { background: var(--primary); box-shadow: 0 0 .6rem color-mix(in oklch, var(--primary) 55%, transparent); }
-  .primary { border: 1px solid var(--primary); border-radius: .45rem; padding: .58rem .85rem; color: var(--primary-foreground); background: var(--primary); font-weight: 750; cursor: pointer; box-shadow: 0 .35rem 1rem color-mix(in oklch, var(--foreground) 16%, transparent); }
-  .primary:hover:not(:disabled) { filter: brightness(1.08); }
-  .primary:disabled { cursor: not-allowed; filter: grayscale(.5); opacity: .42; }
+  /* A catalog's state: a filled square when it compiles, a hollow one in the error colour when it does not. The
+     health text next to it names the state. */
+  .status-dot { width: .5625rem; height: .5625rem; border: 1.5px solid var(--rune-done); background: var(--rune-done); }
+  .status-dot.warning { border-color: var(--destructive); background: transparent; }
+  .primary { border: 1px solid var(--primary); border-radius: var(--radius-control); padding: .5rem .9rem; color: var(--primary-foreground); background: var(--primary); font-weight: 560; cursor: pointer; }
+  .primary:hover:not(:disabled) { background: color-mix(in srgb, var(--primary) 85%, var(--background)); }
+  .primary:disabled { cursor: not-allowed; opacity: .5; }
 
-  .welcome-shell { width: 100vw; min-height: 100vh; overflow-y: auto; background: radial-gradient(circle at 70% -10%, color-mix(in oklch, var(--primary) 12%, transparent), transparent 42%), var(--background); }
-  .welcome-brand { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .8rem; border-bottom: 1px solid var(--border); padding: 1rem 1.5rem; background: color-mix(in oklch, var(--card) 94%, transparent); }
-  .welcome-brand h1 { margin: .1rem 0 0; color: var(--foreground); font-family: Georgia, serif; font-size: 1.35rem; font-weight: 500; }
-  .welcome-brand select { border: 1px solid var(--input); border-radius: .4rem; padding: .35rem .5rem; background: var(--secondary); }
+  .welcome-shell { width: 100vw; min-height: 100vh; overflow-y: auto; background: var(--background); }
+  .welcome-brand { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .8rem; border-bottom: 1px solid var(--border); padding: .75rem 1.5rem; background: var(--card); }
+  .welcome-brand h1 { margin: .1rem 0 0; color: var(--foreground); font-size: 1.0625rem; font-weight: 620; }
+  .welcome-brand select { border: 1px solid var(--field-border); border-radius: var(--radius-control); padding: .3rem .5rem; color: var(--foreground); background: var(--background); font: var(--ui-text-xs) var(--font-mono); }
   .welcome-content { width: min(880px, calc(100% - 3rem)); margin: 0 auto; padding: 4rem 0; }
   .welcome-heading { margin-bottom: 1.6rem; }
-  .welcome-heading h2 { margin: .55rem 0; color: var(--foreground); font-family: Georgia, serif; font-size: clamp(2rem, 4vw, 3.2rem); font-weight: 500; letter-spacing: -.035em; }
-  .welcome-heading > p:last-child { max-width: 42rem; margin: 0; color: var(--muted-foreground); font-size: .78rem; line-height: 1.6; }
-  .catalog-choices { display: grid; gap: .65rem; margin: 1.4rem 0; }
-  .catalog-choice { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: .9rem; width: 100%; border: 1px solid var(--border); border-radius: .65rem; padding: 1rem; color: var(--card-foreground); text-align: left; background: var(--card); cursor: pointer; }
-  .catalog-choice:hover { border-color: var(--ring); background: var(--accent); }
+  .welcome-heading h2 { margin: .5rem 0; color: var(--foreground); font-size: clamp(1.875rem, 3.5vw, 2.25rem); font-weight: 620; line-height: 1.1; letter-spacing: -.02em; }
+  .welcome-heading > p:last-child { max-width: 42rem; margin: 0; color: var(--muted-foreground); font-size: 1rem; line-height: 1.55; }
+  .catalog-choices { display: grid; gap: .6rem; margin: 1.4rem 0; }
+  .catalog-choice { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: .9rem; width: 100%; border: 1px solid var(--border); border-radius: var(--radius-pane); padding: .9rem 1rem; color: var(--card-foreground); text-align: left; background: var(--card); cursor: pointer; }
+  .catalog-choice:hover { border-color: var(--foreground); }
   .catalog-choice > span:nth-child(2) { display: grid; gap: .2rem; min-width: 0; }
-  .catalog-choice strong { color: var(--foreground); font-size: .82rem; }
-  .catalog-choice small { overflow: hidden; color: var(--muted-foreground); font: .58rem ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
-  .catalog-metrics { color: var(--muted-foreground); font-size: .6rem; line-height: 1.55; text-align: right; }
-  .health { min-width: 4.5rem; border-radius: 1rem; padding: .25rem .45rem; color: var(--chart-2); background: color-mix(in oklch, var(--chart-2) 13%, transparent); font-size: .56rem; text-align: center; }
-  .health.error { color: var(--destructive); background: color-mix(in oklch, var(--destructive) 13%, transparent); }
-  .open-workspace-card { display: grid; gap: .45rem; margin-top: 1.2rem; border: 1px solid var(--border); border-radius: .65rem; padding: 1rem; background: var(--card); }
-  .open-workspace-card label { color: var(--foreground); font-size: .66rem; font-weight: 650; }
+  .catalog-choice strong { color: var(--foreground); font-size: 1rem; font-weight: 620; }
+  .catalog-choice small { overflow: hidden; color: var(--muted-foreground); font: var(--ui-text-xs) var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+  .catalog-metrics { color: var(--muted-foreground); font-size: var(--ui-text-xs); line-height: 1.55; text-align: right; }
+  .health { min-width: 4.5rem; border: 1px solid var(--border); border-radius: var(--radius-control); padding: .15rem .45rem; color: var(--muted-foreground); font-size: var(--ui-text-xs); text-align: center; }
+  .health.error { border-color: color-mix(in srgb, var(--destructive) 50%, var(--border)); color: var(--destructive); }
+  .open-workspace-card { display: grid; gap: .45rem; margin-top: 1.2rem; border: 1px solid var(--border); border-radius: var(--radius-pane); padding: 1rem; background: var(--card); }
+  .open-workspace-card label { color: var(--foreground); font-size: var(--ui-text); font-weight: 600; }
   .open-workspace-card > div { display: grid; grid-template-columns: 1fr auto auto; gap: .6rem; }
-  .open-workspace-card input { min-width: 0; border: 1px solid var(--input); border-radius: .45rem; outline: 0; padding: .68rem .75rem; color: var(--foreground); background: var(--background); font-size: .75rem; }
-  .open-workspace-card input:focus { border-color: var(--ring); }
-  .open-workspace-card small { color: var(--muted-foreground); font-size: .58rem; }
-  .welcome-actions { display: flex; gap: .65rem; margin-top: .8rem; }
-  .repair-list { margin-top: 1.5rem; border: 1px solid color-mix(in oklch, var(--destructive) 42%, var(--border)); border-radius: .65rem; background: color-mix(in oklch, var(--destructive) 5%, var(--card)); overflow: hidden; }
-  .repair-list > header { padding: .8rem 1rem; background: color-mix(in oklch, var(--destructive) 10%, var(--card)); }
-  .repair-list > header > div { display: flex; justify-content: space-between; }
-  .repair-list strong { color: var(--destructive); font-size: .7rem; }
-  .repair-list header span { color: color-mix(in oklch, var(--destructive) 70%, var(--muted-foreground)); font-size: .6rem; }
-  .repair-list > button { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .7rem; width: 100%; border: 0; border-top: 1px solid color-mix(in oklch, var(--destructive) 28%, var(--border)); padding: .7rem 1rem; text-align: left; background: transparent; cursor: pointer; }
-  .repair-list > button:hover { background: color-mix(in oklch, var(--destructive) 9%, var(--card)); }
-  .repair-list > button > span { display: grid; place-items: center; width: 1.3rem; height: 1.3rem; border-radius: 50%; color: var(--destructive); background: color-mix(in oklch, var(--destructive) 16%, transparent); font-weight: 800; }
-  .repair-list code { color: var(--foreground); font: .62rem ui-monospace, monospace; }
-  .repair-list small { color: var(--muted-foreground); font-size: .58rem; }
-  .recent-projects { margin-top: 1.5rem; border: 1px solid var(--border); border-radius: .65rem; background: var(--card); overflow: hidden; }
-  .recent-projects > header { display: flex; justify-content: space-between; padding: .75rem 1rem; background: var(--muted); }
-  .recent-projects header strong { color: var(--foreground); font-size: .68rem; }
-  .recent-projects header span { color: var(--muted-foreground); font-size: .56rem; }
-  .recent-projects > button { display: grid; grid-template-columns: 1fr auto; align-items: center; width: 100%; border: 0; border-top: 1px solid var(--border); padding: .7rem 1rem; color: var(--foreground); text-align: left; background: transparent; cursor: pointer; }
-  .recent-projects > button:hover { background: var(--accent); }
+  .open-workspace-card input { min-width: 0; border: 1px solid var(--field-border); border-radius: var(--radius-control); padding: .5rem .7rem; color: var(--foreground); background: var(--background); font: var(--ui-text) var(--font-mono); }
+  .open-workspace-card input:focus-visible { border-color: var(--ring); }
+  .open-workspace-card small { color: var(--muted-foreground); font-size: var(--ui-text-xs); }
+  .welcome-actions { display: flex; gap: .6rem; margin-top: .8rem; }
+  .repair-list { margin-top: 1.5rem; border: 1px solid color-mix(in srgb, var(--destructive) 45%, var(--border)); border-radius: var(--radius-pane); background: var(--card); overflow: hidden; }
+  .repair-list > header { padding: .75rem 1rem; }
+  .repair-list > header > div { display: flex; justify-content: space-between; gap: 1rem; }
+  .repair-list strong { color: var(--destructive); font-size: var(--ui-text); font-weight: 620; }
+  .repair-list header span { color: var(--muted-foreground); font-size: var(--ui-text-xs); }
+  .repair-list > button { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .7rem; width: 100%; border: 0; border-top: 1px solid var(--border); padding: .65rem 1rem; color: var(--foreground); text-align: left; background: transparent; cursor: pointer; }
+  .repair-list > button:hover { background: var(--muted); }
+  .repair-list > button > span { display: grid; place-items: center; width: 1.3rem; height: 1.3rem; border: 1.5px solid var(--destructive); color: var(--destructive); font-weight: 700; }
+  .repair-list code { color: var(--foreground); font: var(--ui-text-xs) var(--font-mono); }
+  .repair-list small { color: var(--muted-foreground); font-size: var(--ui-text-xs); }
+  .recent-projects { margin-top: 1.5rem; border: 1px solid var(--border); border-radius: var(--radius-pane); background: var(--card); overflow: hidden; }
+  .recent-projects > header { display: flex; justify-content: space-between; gap: 1rem; padding: .7rem 1rem; }
+  .recent-projects header strong { color: var(--foreground); font-size: var(--ui-text); font-weight: 620; }
+  .recent-projects header span { color: var(--muted-foreground); font-size: var(--ui-text-xs); }
+  .recent-projects > button { display: grid; grid-template-columns: 1fr auto; align-items: center; width: 100%; border: 0; border-top: 1px solid var(--border); padding: .65rem 1rem; color: var(--foreground); text-align: left; background: transparent; cursor: pointer; }
+  .recent-projects > button:hover { background: var(--muted); }
   .recent-projects button > span { display: grid; gap: .2rem; min-width: 0; }
-  .recent-projects code { overflow: hidden; color: var(--muted-foreground); font: .57rem ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
-  .recent-projects small { color: var(--muted-foreground); font-size: .55rem; }
-  .secondary { border: 1px solid var(--border); border-radius: .45rem; padding: .58rem .85rem; color: var(--secondary-foreground); background: var(--secondary); cursor: pointer; }
-  .secondary:hover:not(:disabled) { border-color: var(--ring); color: var(--accent-foreground); background: var(--accent); }
-  .project-error { margin: 1rem 0 0; border: 1px solid color-mix(in oklch, var(--destructive) 45%, var(--border)); border-radius: .45rem; padding: .7rem .8rem; color: var(--destructive); background: color-mix(in oklch, var(--destructive) 10%, transparent); font-size: .67rem; }
+  .recent-projects code { overflow: hidden; color: var(--muted-foreground); font: var(--ui-text-xs) var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+  .recent-projects small { color: var(--muted-foreground); font-size: var(--ui-text-xs); }
+  .secondary { border: 1px solid var(--field-border); border-radius: var(--radius-control); padding: .5rem .9rem; color: var(--foreground); background: var(--card); cursor: pointer; }
+  .secondary:hover:not(:disabled) { border-color: var(--foreground); }
+  .project-error { margin: 1rem 0 0; border: 1px solid color-mix(in srgb, var(--destructive) 45%, var(--border)); border-radius: var(--radius-control); padding: .65rem .8rem; color: var(--destructive); background: var(--card); font-size: var(--ui-text); }
 </style>

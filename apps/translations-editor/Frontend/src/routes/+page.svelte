@@ -518,15 +518,9 @@
 
 <style>
   :global(*) { box-sizing: border-box; }
-  :global(:root) {
-    font-family: Inter, "Segoe UI", system-ui, sans-serif;
-    color: var(--foreground);
-    background: var(--background);
-    font-synthesis: none;
-  }
+  /* The font, colours and form-control resets come from layout.css (the brand tokens and Tailwind's preflight), so the
+     components' own colour utilities apply. */
   :global(body) { margin: 0; min-width: 0; min-height: 100vh; overflow: hidden; }
-  :global(button), :global(input), :global(textarea), :global(select) { font: inherit; }
-  :global(button), :global(select) { color: inherit; }
   :global(button:focus-visible), :global(input:focus-visible), :global(textarea:focus-visible), :global(select:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
   :global(::selection) { color: var(--primary-foreground); background: var(--primary); }
 </style>

@@ -56,7 +56,7 @@ assert.doesNotMatch(within, /data-testid="length-limit"/);
 const rtr0098 = "The 'de' text of 'common.save' is 18 characters long, more than its @maxLength of 12; placeholder values are not counted.";
 const over = html(TranslationEditor, props({ maxLength: 12, lengthWarning: rtr0098 }));
 assert.match(counter(over)[0], /data-over-limit="true"/);
-assert.match(counter(over)[0], /text-amber-700/);
+assert.match(counter(over)[0], /text-warning/);
 assert.equal(counter(over)[1].trim(), "[ui_count_characters_limit count=18 limit=12]");
 const warning = /<p[^>]*data-testid="length-limit"[^>]*>([^<]*)<\/p>/.exec(over);
 assert.equal(warning?.[1].trim(), rtr0098);
@@ -93,7 +93,11 @@ const workflow = (notTranslated) => html(ReviewWorkflow, {
   note: "", qualityIssues: [], suggestions: [], onstatechange() {}, onnotechange() {}, ondiscard() {}, onterminology() {},
   onreport() {}, onqualityfilter() {}, onsuggestion() {},
 });
-const badge = (markup) => /data-testid="workflow-state"[^>]*>([^<]*)</.exec(markup)?.[1].trim();
+// The badge's text follows its state mark (a hollow square for a missing translation; a draft has none).
+const badgeMatch = (markup) => /data-testid="workflow-state"[^>]*>((?:<!--[^]*?-->|<span[^>]*><\/span>)*)([^<]*)</.exec(markup);
+const badge = (markup) => badgeMatch(markup)?.[2].trim();
 assert.equal(badge(workflow(true)), "[ui_resource_not_translated]");
+assert.match(badgeMatch(workflow(true))[1], /data-state-mark="missing"/);
 assert.equal(badge(workflow(false)), "[ui_workflow_draft]");
+assert.doesNotMatch(badgeMatch(workflow(false))[1], /data-state-mark/);
 console.log("PASS: the counter shows the text against @maxLength as RTR0098 counts it, per variant too, and explains a text over the limit at the field.");

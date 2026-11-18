@@ -109,10 +109,10 @@
       {#if diagnostic.severity === "error"}
         <AlertCircleIcon class="mt-0.5 size-4 text-destructive" aria-hidden="true" />
       {:else}
-        <TriangleAlertIcon class="mt-0.5 size-4 text-primary" aria-hidden="true" />
+        <TriangleAlertIcon class="mt-0.5 size-4 text-warning" aria-hidden="true" />
       {/if}
       <span class="min-w-0 text-xs leading-5 text-muted-foreground">
-        <strong class="mr-2 font-mono text-foreground">{diagnostic.id}</strong>{displayNotice(diagnostic.notice ?? diagnostic.message, ui)}
+        <strong class={["mr-2 font-mono", diagnostic.severity === "error" ? "text-destructive" : diagnostic.severity === "warning" ? "text-warning" : "text-foreground"]}>{diagnostic.id}</strong>{displayNotice(diagnostic.notice ?? diagnostic.message, ui)}
       </span>
       <span class="col-start-2 grid min-w-0 gap-0.5 text-[0.65rem] text-muted-foreground md:col-start-auto md:text-right" data-testid="diagnostic-place">
         {#if where !== undefined}<span class="font-medium text-foreground/80">{where}</span>{/if}
@@ -141,7 +141,7 @@
       {:else if invalid}
         <AlertCircleIcon class="size-5 shrink-0" aria-hidden="true" />
       {:else}
-        <CheckCircle2Icon class="size-5 shrink-0 text-primary" aria-hidden="true" />
+        <CheckCircle2Icon class="size-5 shrink-0 text-success" aria-hidden="true" />
       {/if}
       <div class="min-w-0">
         <Alert.Title class="text-xs font-semibold">
@@ -155,7 +155,7 @@
         </Alert.Description>
       </div>
     </div>
-    <Badge variant="outline" class="font-mono text-[0.65rem]">{ui.text("ui_validation_compiler")} · {ui.text("ui_validation_schema")} v{schemaVersion}</Badge>
+    <Badge variant="outline" class="font-mono text-[0.7rem]">{ui.text("ui_validation_compiler")} · {ui.text("ui_validation_schema")} v{schemaVersion}</Badge>
   </header>
 
   {#if clientError}

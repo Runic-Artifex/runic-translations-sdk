@@ -45,6 +45,8 @@
   import MoreHorizontalIcon from "@lucide/svelte/icons/more-horizontal";
   import PlusIcon from "@lucide/svelte/icons/plus";
   import { Badge } from "#lib/components/ui/badge/index.js";
+  import StateMark from "#lib/StateMark.svelte";
+  import { messageStateMark } from "#lib/state-mark.js";
   import { Button, buttonVariants } from "#lib/components/ui/button/index.js";
   import * as Collapsible from "#lib/components/ui/collapsible/index.js";
   import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
@@ -83,6 +85,7 @@
     catalogKey = "",
     filterKey = "",
     groupCounts = ["missing", "stale", "needsReview"],
+    rowHeight = messageVirtualRowHeight,
     selectedHidden = false,
     reviewActionsDisabled = false,
     noResultsLabel,
@@ -104,6 +107,8 @@
     filterKey?: string;
     /** The counts a group row names besides its number of messages, for the current filter. */
     groupCounts?: readonly MessageGroupCountKind[];
+    /** The height of one row in pixels, set by the density. */
+    rowHeight?: number;
     /** The selected message exists but the search or filter hides it. */
     selectedHidden?: boolean;
     reviewActionsDisabled?: boolean;
@@ -136,7 +141,7 @@
   let focusIndex = $derived(
     (activeId === undefined ? undefined : rowIndex.get(activeId)) ?? rowIndex.get(messageRowId(selectedKey)) ?? 0,
   );
-  let viewport = $derived(virtualMessageWindow(rows.length, scrollTop, viewportHeight));
+  let viewport = $derived(virtualMessageWindow(rows.length, scrollTop, viewportHeight, rowHeight));
   // The viewport's rows, plus the focus row so the tree always keeps one tab stop.
   let renderedRows = $derived.by(() => {
     const rendered: { row: MessageTreeRow; index: number }[] = [];
@@ -242,7 +247,7 @@
 
   function scrollToRow(index: number): void {
     if (scroller === null) return;
-    const next = scrollTopForRow(index, scroller.scrollTop, scroller.clientHeight);
+    const next = scrollTopForRow(index, scroller.scrollTop, scroller.clientHeight, rowHeight);
     if (next !== scroller.scrollTop) {
       scroller.scrollTop = next;
       scrollTop = next;
@@ -378,15 +383,16 @@
               role="tree"
               aria-label={labels.messages}
               data-testid="message-tree"
-              style:height={`${rows.length * messageVirtualRowHeight}px`}
+              style:height={`${rows.length * rowHeight}px`}
             >
               {#each renderedRows as { row, index } (row.id)}
                 {@const indent = `${(row.level - 1) * 1 + 0.5}rem`}
                 {#if row.kind === "group"}
                   <div
                     role="treeitem"
-                    class="absolute inset-x-0 flex h-8 cursor-default select-none items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-                    style:top={`${index * messageVirtualRowHeight}px`}
+                    class="absolute inset-x-0 flex cursor-default select-none items-center gap-1.5 rounded-md px-2 text-xs font-semibold text-foreground hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                    style:top={`${index * rowHeight}px`}
+                    style:height={`${rowHeight}px`}
                     style:padding-inline-start={indent}
                     data-row-id={row.id}
                     data-group={row.groupId}
@@ -415,8 +421,9 @@
                   {@const status = row.item.stale ? labels.stale : row.item.needsReview ? labels.review : structureLabel}
                   <div
                     role="treeitem"
-                    class={cn("absolute inset-x-0 flex h-8 cursor-default items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring", selectedKey === row.key && "bg-sidebar-accent")}
-                    style:top={`${index * messageVirtualRowHeight}px`}
+                    class={cn("absolute inset-x-0 flex cursor-default items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring", selectedKey === row.key && "tree-current")}
+                    style:top={`${index * rowHeight}px`}
+                    style:height={`${rowHeight}px`}
                     style:padding-inline-start={indent}
                     data-row-id={row.id}
                     data-message-key={row.key}
@@ -431,8 +438,8 @@
                     onclick={() => activate(row)}
                     onkeydown={handleTreeKeydown}
                   >
-                    <Badge variant={row.item.missing ? "outline" : structureLabel !== undefined ? "default" : "secondary"} class="size-2 shrink-0 p-0" title={row.item.missing ? labels.missingTranslation : structureLabel ?? labels.translated}></Badge>
-                    <span class="truncate font-mono">{row.label}</span>
+                    <StateMark state={messageStateMark(row.item)} />
+                    <span class="truncate font-mono text-[0.92em]">{row.label}</span>
                     {#if status !== undefined}
                       <span class="ml-auto text-xs text-muted-foreground">{status}</span>
                     {/if}

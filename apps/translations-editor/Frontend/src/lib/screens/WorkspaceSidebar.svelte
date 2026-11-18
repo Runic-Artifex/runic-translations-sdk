@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { messageRowHeight } from "#lib/appearance.js";
   import * as Sidebar from "#lib/components/ui/sidebar/index.js";
   import type { EditorDocument, EditorReviewState, WorkspaceSnapshot } from "#lib/contracts.js";
   import type { EditorLabels } from "#lib/editor-labels.js";
@@ -108,6 +109,7 @@
         catalogKey={catalogViewKey(snapshot)}
         filterKey={selection.filter === "all" && selection.query.trim() === "" ? "" : `${selection.filter}\n${selection.query.trim()}`}
         groupCounts={view.messageGroupCounts}
+        rowHeight={messageRowHeight(preferences.density)}
         selectedHidden={view.selectedHiddenByFilter}
         onclearfilter={() => selection.clearFilter()}
         reviewActionsDisabled={reviewBlocked}
@@ -152,12 +154,12 @@
     locale={preferences.uiLocale}
     locales={preferences.locales}
     themeMode={preferences.themeMode}
-    themePalette={preferences.themePalette}
+    density={preferences.density}
     pseudoLocalization={preferences.pseudoLocalization}
     uiDirection={preferences.uiDirection}
     onlocalechange={(locale) => preferences.changeUiLocale(locale)}
     onthememodechange={(mode) => preferences.changeThemeMode(mode)}
-    onthemepalettechange={(palette) => preferences.changeThemePalette(palette)}
+    ondensitychange={(density) => preferences.changeDensity(density)}
     ontogglepseudo={() => preferences.togglePseudoLocalization()}
     ontoggledirection={() => preferences.toggleUiDirection()}
     {onabout}

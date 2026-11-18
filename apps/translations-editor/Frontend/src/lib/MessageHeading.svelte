@@ -39,7 +39,7 @@
 
 <header class="mx-auto mb-6 flex max-w-[1000px] flex-col items-start justify-between gap-4 xl:flex-row xl:gap-8">
   <div class="min-w-0">
-    <h2 class="break-words font-serif text-3xl tracking-tight sm:text-4xl" data-testid="message-title">{dottedPath}</h2>
+    <h2 class="text-title break-words" data-testid="message-title">{dottedPath}</h2>
     {#if dottedPath !== messageKey}
       <p class="mt-1 flex flex-wrap items-baseline gap-1.5 text-xs text-muted-foreground" data-testid="message-code-identifier">
         <span>{ui.text("ui_message_heading_code_identifier")}</span>

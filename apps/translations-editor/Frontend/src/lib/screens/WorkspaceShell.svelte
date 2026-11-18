@@ -177,7 +177,7 @@
           <Empty.Media variant="icon" class="text-primary">
             <MessageSquareTextIcon aria-hidden="true" />
           </Empty.Media>
-          <Empty.Title class="font-serif font-medium">{labels.noSelection}</Empty.Title>
+          <Empty.Title class="font-[620]">{labels.noSelection}</Empty.Title>
           <Empty.Description>{ui.text("ui_page_empty_selection_description")}</Empty.Description>
         </Empty.Header>
       </Empty.Root>

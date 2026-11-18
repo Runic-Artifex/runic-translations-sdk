@@ -20,6 +20,8 @@ const settle = () => new Promise(resolveSettle => setTimeout(resolveSettle, 0));
 
 const persisted = new Map([
   ["runic-translations.theme-mode", "dark"],
+  // A colour palette an earlier version stored (removed by D074): never taken over, so the next write drops it.
+  ["runic-translations.theme-palette", "moss"],
   ["runic.sidebar.languages-share", "0.500"],
   ["runic-translations:recent:1", '[{"root":"/private/customer","catalogId":"product"}]'],
   ["runic-translations:drafts:1:/private/customer\nproduct", '{"documents":{"de.json":{"content":"secret translation"}}}'],
@@ -51,15 +53,21 @@ assert.deepEqual(
   "The local-state inventory must count only editor-owned state.",
 );
 assert.ok(summary.bytes > 0, "The local-state inventory must provide a bounded size signal.");
+assert.equal(localState.getLocalEditorState("runic-translations.theme-palette"), null,
+  "A stored palette from an earlier version must not be loaded.");
 assert.equal(JSON.stringify(summary).includes("private"), false,
   "The local-state inspection surface must never reveal a workspace path or draft content.");
 
 localState.setLocalEditorState("runic-translations.theme-mode", "light");
-localState.setLocalEditorState("runic-translations.theme-palette", "fjord");
+localState.setLocalEditorState("runic-translations.density", "compact");
 await localState.flushLocalEditorState();
 assert.equal(persisted.get("runic-translations.theme-mode"), "light",
   "Queued writes must atomically publish the newest complete native projection.");
-assert.equal(persisted.get("runic-translations.theme-palette"), "fjord");
+assert.equal(persisted.get("runic-translations.density"), "compact", "The density is editor-owned state.");
+assert.equal(persisted.has("runic-translations.theme-palette"), false,
+  "The next write must leave a stored palette out of the native record.");
+assert.throws(() => localState.setLocalEditorState("runic-translations.theme-palette", "fjord"), /not owned/,
+  "The editor no longer stores a colour palette.");
 assert.ok(saves >= 2, "Each changed projection must be sent through the native bridge.");
 localState.setLocalEditorState("runic-translations:message-tree:1", '{"version":1,"catalogs":[]}');
 await localState.flushLocalEditorState();
@@ -105,7 +113,7 @@ assert.deepEqual(localState.inspectLocalEditorState(), {
 
     connected = false;
     interrupted.setLocalEditorState("runic-translations.ui-locale", "de");
-    interrupted.setLocalEditorState("runic-translations.theme-palette", "moss");
+    interrupted.setLocalEditorState("runic-translations.density", "compact");
     // Nothing awaits these writes, as in the page; let both fail before anything observes the queue.
     for (let turn = 0; turn < 6; turn++) await settle();
     assert.deepEqual(unhandled, [], "An interrupted native write must not surface as an unhandled rejection.");
@@ -121,7 +129,7 @@ assert.deepEqual(localState.inspectLocalEditorState(), {
     interrupted.resumeLocalEditorState();
     await interrupted.flushLocalEditorState();
     assert.deepEqual(written, [
-      "runic-translations.theme-mode=dark,runic-translations.theme-palette=moss,runic-translations.ui-locale=de",
+      "runic-translations.density=compact,runic-translations.theme-mode=dark,runic-translations.ui-locale=de",
     ], "A reconnect must write the interrupted change again, as one complete replacement.");
     interrupted.resumeLocalEditorState();
     await interrupted.flushLocalEditorState();
@@ -135,7 +143,7 @@ assert.deepEqual(localState.inspectLocalEditorState(), {
     interrupted.setLocalEditorState("runic-translations.theme-mode", "light");
     await interrupted.flushLocalEditorState();
     assert.equal(written.at(-1),
-      "runic-translations.theme-mode=light,runic-translations.theme-palette=moss,runic-translations.ui-locale=en",
+      "runic-translations.density=compact,runic-translations.theme-mode=light,runic-translations.ui-locale=en",
       "The next change must include the change whose write failed.");
 
     // A failed load leaves the native record unknown: no write may replace it with this session's values alone,

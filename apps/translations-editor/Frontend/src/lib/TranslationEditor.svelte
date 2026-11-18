@@ -108,12 +108,12 @@
         {label}
       </Field.Label>
       {#if limit === undefined}
-        <span class="shrink-0 text-[0.65rem] tabular-nums text-muted-foreground" data-testid="character-count">
+        <span class="shrink-0 font-mono text-xs tabular-nums text-muted-foreground" data-testid="character-count">
           {ui.text("ui_count_characters", { count: value.length })}
         </span>
       {:else}
         <span
-          class={["shrink-0 text-[0.65rem] tabular-nums", limit.over ? "font-semibold text-amber-700 dark:text-amber-300" : "text-muted-foreground"]}
+          class={["shrink-0 font-mono text-xs tabular-nums", limit.over ? "font-semibold text-warning" : "text-muted-foreground"]}
           data-testid="character-count"
           data-over-limit={limit.over}
           title={ui.text("ui_count_characters_limit_title", { count: limit.length, limit: limit.limit })}
@@ -123,7 +123,7 @@
       {/if}
     </div>
     {#if limit?.over}
-      <p class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200" role="status" data-testid="length-limit">
+      <p class="rounded-md border border-warning/60 bg-warning/10 px-3 py-2 text-xs text-foreground" role="status" data-testid="length-limit">
         {lengthWarning ?? ui.text("ui_translation_editor_over_limit", { limit: limit.limit })}
       </p>
     {/if}

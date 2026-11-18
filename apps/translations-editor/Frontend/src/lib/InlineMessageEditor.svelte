@@ -285,7 +285,7 @@
     <DropdownMenu.Content align="start" class="w-52">
       <DropdownMenu.Label>{ui.text("ui_inline_insert")}</DropdownMenu.Label>
       <DropdownMenu.Item onclick={() => editTextAt(index, position)}>
-        <span class="grid size-4 place-items-center font-serif text-base" aria-hidden="true">T</span>
+        <span class="grid size-4 place-items-center text-base font-semibold" aria-hidden="true">T</span>
         {ui.text("ui_inline_text")}
       </DropdownMenu.Item>
       <DropdownMenu.Sub>
@@ -311,7 +311,7 @@
   </DropdownMenu.Root>
 {/snippet}
 
-<div class="overflow-hidden rounded-2xl border bg-card/70 shadow-inner focus-within:ring-2 focus-within:ring-ring">
+<div class="overflow-hidden rounded-pane border border-(--field-border) bg-card focus-within:border-ring focus-within:ring-1 focus-within:ring-ring">
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
     class="flex min-h-32 cursor-text flex-wrap content-start items-start gap-x-1 gap-y-2 px-4 py-3"
@@ -329,7 +329,7 @@
         <textarea
           {@attach registerTextarea(index)}
           class={[
-            "field-sizing-content min-h-7 max-w-full min-w-[3ch] flex-none resize-none overflow-hidden rounded-sm bg-transparent p-0 font-sans text-base leading-7 outline-none transition-[width,background-color,box-shadow] placeholder:text-muted-foreground",
+            "field-sizing-content min-h-7 max-w-full min-w-[3ch] flex-none resize-none overflow-hidden rounded-sm bg-transparent p-0 font-sans text-message leading-7 outline-none transition-[width,background-color,box-shadow] placeholder:text-muted-foreground",
             slot.text === "" && "min-w-[8ch]",
             dropSlot === index && "bg-primary/10 ring-2 ring-primary/50",
           ]}
@@ -358,7 +358,7 @@
         <Button
           variant="secondary"
           size="sm"
-          class="h-7 shrink-0 rounded-full px-2 font-mono text-xs"
+          class="placeholder-chip h-7 shrink-0 px-2"
           aria-label={ui.text("ui_inline_variable_settings", { name: slot.token })}
           title={ui.text("ui_inline_variable_inspect", { name: slot.token })}
           draggable="true"

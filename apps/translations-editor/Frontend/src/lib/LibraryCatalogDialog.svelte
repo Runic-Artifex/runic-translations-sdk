@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { EditorLibraryMessage, EditorLibrarySummary, EditorLibraryView } from "#lib/contracts.js";
+  import AlertCircleIcon from "@lucide/svelte/icons/alert-circle";
+  import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
   import AppDialog from "#lib/AppDialog.svelte";
   import * as Alert from "#lib/components/ui/alert/index.js";
   import { Badge } from "#lib/components/ui/badge/index.js";
@@ -213,8 +215,8 @@
       {#if library.diagnostics.length > 0}
         <section class="grid gap-1" aria-label={ui.text("ui_library_diagnostics")}>
           {#each library.diagnostics as diagnostic, index (`${diagnostic.path}:${diagnostic.line}:${index}`)}
-            <p class={diagnostic.severity === "error" ? "text-destructive text-xs" : "text-xs"} data-diagnostic={diagnostic.id}>
-              <code>{diagnostic.id}</code> {diagnostic.path}:{diagnostic.line} {diagnostic.message}
+            <p class={diagnostic.severity === "error" ? "text-destructive text-xs" : diagnostic.severity === "warning" ? "text-warning text-xs" : "text-xs"} data-diagnostic={diagnostic.id}>
+              {#if diagnostic.severity === "error"}<AlertCircleIcon class="mr-1 inline size-3.5 align-[-0.15em]" aria-hidden="true" />{:else if diagnostic.severity === "warning"}<TriangleAlertIcon class="mr-1 inline size-3.5 align-[-0.15em]" aria-hidden="true" />{/if}<code>{diagnostic.id}</code> {diagnostic.path}:{diagnostic.line} {diagnostic.message}
             </p>
           {/each}
         </section>

@@ -6,18 +6,21 @@ const { PreferencesController } = await import("../src/lib/state/preferences-con
 
 const keys = {
   mode: "runic-translations.theme-mode",
-  palette: "runic-translations.theme-palette",
+  density: "runic-translations.density",
+  retiredPalette: "runic-translations.theme-palette",
   locale: "runic-translations.ui-locale",
   pseudo: "runic-translations.pseudo-localization",
   direction: "runic-translations.ui-direction",
 };
 
-// `storage` is a plain map; `windowRequests` records the locales sent to the window; `applied` records appearance applies.
+// `storage` is a plain map; `windowRequests` records the locales sent to the window; `applied` records theme applies,
+// `densities` density applies.
 function createController(options = {}) {
   const values = new Map(Object.entries(options.stored ?? {}));
   const log = [];
   const windowRequests = [];
   const applied = [];
+  const densities = [];
   const preview = { pseudoLocale: options.pseudoLocale ?? "en-XA" };
   const controller = new PreferencesController({
     initialLocale: options.initialLocale ?? "en",
@@ -29,9 +32,10 @@ function createController(options = {}) {
     windowLocale: { request: (locale) => windowRequests.push(locale) },
     preview: () => preview,
     refreshPreview: () => log.push("refresh"),
-    applyAppearance: (mode, palette) => applied.push([mode, palette]),
+    applyAppearance: (mode) => applied.push(mode),
+    applyDensity: (density) => densities.push(density),
   });
-  return { controller, values, log, windowRequests, preview, applied };
+  return { controller, values, log, windowRequests, preview, applied, densities };
 }
 
 // The interface locale starts as the one the host negotiated, and the defaults apply before anything is restored.
@@ -39,7 +43,8 @@ function createController(options = {}) {
   const { controller, applied } = createController({ initialLocale: "de-CH" });
   assert.equal(controller.uiLocale, "de-CH");
   assert.equal(controller.themeMode, "dark");
-  assert.equal(controller.themePalette, "runic");
+  assert.equal(controller.density, "comfortable");
+  assert.equal("themePalette" in controller, false, "The colour palettes are gone.");
   assert.equal(controller.pseudoLocalization, false);
   assert.equal(controller.uiDirection, "ltr");
   assert.deepEqual(applied, [], "Nothing is applied until the preferences are restored.");
@@ -47,13 +52,14 @@ function createController(options = {}) {
 
 // restore() reads the stored appearance and simulation, applies the appearance and reads nothing else into storage.
 {
-  const { controller, applied, values } = createController({
-    stored: { [keys.mode]: "light", [keys.palette]: "moss", [keys.pseudo]: "true", [keys.direction]: "rtl" },
+  const { controller, applied, densities, values } = createController({
+    stored: { [keys.mode]: "light", [keys.density]: "compact", [keys.pseudo]: "true", [keys.direction]: "rtl" },
   });
   controller.restore();
   assert.equal(controller.themeMode, "light");
-  assert.equal(controller.themePalette, "moss");
-  assert.deepEqual(applied, [["light", "moss"]]);
+  assert.equal(controller.density, "compact");
+  assert.deepEqual(applied, ["light"]);
+  assert.deepEqual(densities, ["compact"]);
   assert.equal(controller.pseudoLocalization, true);
   assert.equal(controller.uiDirection, "rtl");
   assert.equal(values.size, 4, "Restoring does not write the preferences back.");
@@ -61,13 +67,14 @@ function createController(options = {}) {
 
 // restore() falls back to the defaults for values that are not recognised.
 {
-  const { controller, applied } = createController({
-    stored: { [keys.mode]: "neon", [keys.palette]: "chrome", [keys.pseudo]: "yes", [keys.direction]: "up" },
+  const { controller, applied, densities } = createController({
+    stored: { [keys.mode]: "neon", [keys.density]: "cosy", [keys.pseudo]: "yes", [keys.direction]: "up" },
   });
   controller.restore();
   assert.equal(controller.themeMode, "dark");
-  assert.equal(controller.themePalette, "runic");
-  assert.deepEqual(applied, [["dark", "runic"]]);
+  assert.equal(controller.density, "comfortable");
+  assert.deepEqual(applied, ["dark"]);
+  assert.deepEqual(densities, ["comfortable"]);
   assert.equal(controller.pseudoLocalization, false);
   assert.equal(controller.uiDirection, "ltr");
 }
@@ -100,23 +107,34 @@ function createController(options = {}) {
   assert.deepEqual(windowRequests, ["de-CH"]);
 }
 
-// changeThemeMode() writes both appearance keys, with the current palette.
+// A palette stored by an earlier version is ignored: the theme and density restore as without it.
+{
+  const { controller, applied, densities } = createController({ stored: { [keys.mode]: "light", [keys.retiredPalette]: "moss" } });
+  controller.restore();
+  assert.equal(controller.themeMode, "light");
+  assert.deepEqual(applied, ["light"]);
+  assert.deepEqual(densities, ["comfortable"]);
+}
+
+// changeThemeMode() writes the theme mode only; no palette is written any more.
 {
   const { controller, values } = createController();
   controller.changeThemeMode("light");
   assert.equal(controller.themeMode, "light");
   assert.equal(values.get(keys.mode), "light");
-  assert.equal(values.get(keys.palette), "runic");
+  assert.equal(values.has(keys.retiredPalette), false);
 }
 
-// changeThemePalette() writes both appearance keys, with the current mode.
+// changeDensity() stores the density under its key and applies it.
 {
-  const { controller, values } = createController();
-  controller.changeThemeMode("system");
-  controller.changeThemePalette("ember");
-  assert.equal(controller.themePalette, "ember");
-  assert.equal(values.get(keys.mode), "system");
-  assert.equal(values.get(keys.palette), "ember");
+  const { controller, values, densities } = createController();
+  controller.changeDensity("compact");
+  assert.equal(controller.density, "compact");
+  assert.equal(values.get(keys.density), "compact");
+  assert.deepEqual(densities, ["compact"]);
+  controller.changeDensity("comfortable");
+  assert.equal(values.get(keys.density), "comfortable");
+  assert.deepEqual(densities, ["compact", "comfortable"]);
 }
 
 // togglePseudoLocalization() flips the simulation, saves it and previews the message again.
@@ -186,13 +204,13 @@ function createController(options = {}) {
   const { controller, applied } = createController({ stored: { [keys.mode]: "dark" } });
   controller.restore();
   controller.systemThemeChanged();
-  assert.deepEqual(applied, [["dark", "runic"]], "A fixed theme ignores a system change.");
+  assert.deepEqual(applied, ["dark"], "A fixed theme ignores a system change.");
 }
 {
-  const { controller, applied } = createController({ stored: { [keys.mode]: "system", [keys.palette]: "fjord" } });
+  const { controller, applied } = createController({ stored: { [keys.mode]: "system" } });
   controller.restore();
   controller.systemThemeChanged();
-  assert.deepEqual(applied, [["system", "fjord"], ["system", "fjord"]]);
+  assert.deepEqual(applied, ["system", "system"]);
 }
 
-console.log("PASS: preferences restore and save the appearance, locale and simulation under their storage keys");
+console.log("PASS: preferences restore and save the theme, density, locale and simulation under their storage keys, ignoring a stored palette");

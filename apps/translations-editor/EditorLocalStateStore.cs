@@ -20,7 +20,8 @@ internal static class EditorLocalStateStore
     private static readonly HashSet<string> ExactKeys = new(StringComparer.Ordinal)
     {
         "runic-translations.theme-mode",
-        "runic-translations.theme-palette",
+        // Comfortable or compact.
+        "runic-translations.density",
         "runic-translations.pseudo-localization",
         "runic-translations.ui-direction",
         "runic-translations.ui-locale",
@@ -32,6 +33,12 @@ internal static class EditorLocalStateStore
         "runic.sidebar.languages-share",
         // Collapsed message groups of the most recent catalogs (one bounded record, not one entry per catalog).
         "runic-translations:message-tree:1",
+    };
+    // Keys earlier versions wrote that this one no longer owns: the colour palette (removed by D074). Loading drops
+    // them instead of rejecting the record, and the next save writes the record without them.
+    private static readonly HashSet<string> RetiredKeys = new(StringComparer.Ordinal)
+    {
+        "runic-translations.theme-palette",
     };
 
     internal static EditorLocalStateSnapshot Load()
@@ -63,6 +70,7 @@ internal static class EditorLocalStateStore
                     throw new InvalidDataException("A local editor-state entry is invalid.");
                 string stateKey = key.GetString()!;
                 string stateValue = value.GetString()!;
+                if (RetiredKeys.Contains(stateKey)) continue;
                 ValidateEntry(stateKey, stateValue);
                 if (!keys.Add(stateKey)) throw new InvalidDataException("The local editor-state record contains duplicate keys.");
                 values.Add(new EditorLocalStateEntry(stateKey, stateValue));

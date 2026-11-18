@@ -1,16 +1,11 @@
+// The appearance: light, dark or system, applied as the `dark` class and the brand tokens' `data-scheme`, and the
+// semantic tokens mapped onto the brand tokens (D074).
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 
 const stored = new Map();
 const classes = new Set();
 let systemDark = false;
-
-globalThis.localStorage = {
-  getItem: (key) => stored.get(key) ?? null,
-  setItem: (key, value) => stored.set(key, String(value)),
-  removeItem: (key) => stored.delete(key),
-  clear: () => stored.clear(),
-};
 
 globalThis.document = {
   documentElement: {
@@ -30,111 +25,123 @@ globalThis.document = {
 globalThis.matchMedia = () => ({ matches: systemDark });
 const read = (key) => stored.get(key) ?? null;
 const write = (key, value) => stored.set(key, String(value));
+const root = document.documentElement;
 
-const {
-  applyAppearance,
-  setDesktopAppearance,
-  readAppearance,
-  saveAppearance,
-  themeModes,
-  themePalettes,
-} = await import("../src/lib/appearance.ts");
+const { applyAppearance, setDesktopAppearance, readAppearance, saveAppearance, themeModes } = await import("../src/lib/appearance.ts");
 
-assert.deepEqual(readAppearance(read), { mode: "dark", palette: "runic" });
+assert.deepEqual(readAppearance(read), { mode: "dark", density: "comfortable" });
 
-for (const palette of themePalettes) {
-  for (const mode of themeModes) {
-    systemDark = false;
-    saveAppearance(mode, palette, write);
-    assert.deepEqual(readAppearance(read), { mode, palette });
-    assert.equal(document.documentElement.dataset.theme, palette);
-    assert.equal(document.documentElement.style.colorScheme, mode === "dark" ? "dark" : "light");
-    assert.equal(document.documentElement.classList.contains("dark"), mode === "dark");
+for (const mode of themeModes) {
+  systemDark = false;
+  saveAppearance(mode, write);
+  assert.equal(readAppearance(read).mode, mode);
+  assert.equal(root.style.colorScheme, mode === "dark" ? "dark" : "light");
+  assert.equal(root.dataset.scheme, mode === "dark" ? "dark" : "light", "The brand tokens follow the chosen scheme.");
+  assert.equal(classes.has("dark"), mode === "dark");
+  assert.equal(root.dataset.theme, undefined, "No palette is set on the root.");
 
-    if (mode === "system") {
-      systemDark = true;
-      applyAppearance(mode, palette);
-      assert.equal(document.documentElement.classList.contains("dark"), true);
-      assert.equal(document.documentElement.style.colorScheme, "dark");
-    }
+  if (mode === "system") {
+    systemDark = true;
+    applyAppearance(mode);
+    assert.equal(classes.has("dark"), true);
+    assert.equal(root.dataset.scheme, "dark");
+    assert.equal(root.style.colorScheme, "dark");
   }
 }
 
 stored.set("runic-translations.theme-mode", "sepia");
-stored.set("runic-translations.theme-palette", "unknown");
-assert.deepEqual(readAppearance(read), { mode: "dark", palette: "runic" });
+stored.set("runic-translations.theme-palette", "moss");
+assert.deepEqual(readAppearance(read), { mode: "dark", density: "comfortable" },
+  "An unknown mode falls back to dark; a palette stored by an earlier version is ignored.");
 
 setDesktopAppearance({ colorScheme: 1, accentColor: { red: 0.5, green: 0, blue: 1 }, highContrast: true, reducedMotion: true });
 systemDark = true;
-applyAppearance("system", "fjord");
+applyAppearance("system");
 assert.equal(classes.has("dark"), false, "native light preference overrides stale browser dark preference");
-assert.equal(document.documentElement.dataset.highContrast, "true");
-assert.equal(document.documentElement.dataset.reducedMotion, "true");
-assert.equal(document.documentElement.style["--desktop-accent"], "rgb(128 0 255)");
-applyAppearance("dark", "moss");
+assert.equal(root.dataset.scheme, "light");
+assert.equal(root.dataset.highContrast, "true");
+assert.equal(root.dataset.reducedMotion, "true");
+assert.equal(root.style["--desktop-accent"], "rgb(128 0 255)");
+applyAppearance("dark");
 assert.equal(classes.has("dark"), true, "explicit mode wins over native preference");
-assert.equal(document.documentElement.dataset.theme, "moss");
 setDesktopAppearance(null);
-applyAppearance("system", "fjord");
+applyAppearance("system");
 assert.equal(classes.has("dark"), true, "backend loss restores browser preference");
+assert.equal(root.dataset.scheme, "dark");
 
+// The stylesheet: the brand tokens, each semantic token mapped onto them once for both schemes, no palettes.
 const css = await readFile(new URL("../src/routes/layout.css", import.meta.url), "utf8");
-const requiredTokens = [
-  "background",
-  "foreground",
-  "card",
-  "card-foreground",
-  "popover",
-  "popover-foreground",
-  "primary",
-  "primary-foreground",
-  "secondary",
-  "secondary-foreground",
-  "muted",
-  "muted-foreground",
-  "accent",
-  "accent-foreground",
-  "border",
-  "input",
-  "ring",
-  "chart-1",
-  "chart-2",
-  "chart-3",
-  "chart-4",
-  "chart-5",
-  "sidebar",
-  "sidebar-foreground",
-  "sidebar-primary",
-  "sidebar-primary-foreground",
-  "sidebar-accent",
-  "sidebar-accent-foreground",
-  "sidebar-border",
-  "sidebar-ring",
-];
+const tokens = await readFile(new URL("../src/lib/brand/tokens.css", import.meta.url), "utf8");
+const html = await readFile(new URL("../src/app.html", import.meta.url), "utf8");
+assert.match(tokens, /^\/\* Generated by @runic-artifex\/brand\./, "tokens.css is the copy runic-brand generates.");
+assert.match(css, /@import "\.\.\/lib\/brand\/tokens\.css";/, "The global stylesheet imports the brand tokens.");
+assert.match(html, /<html[^>]*data-scheme="dark"/, "The first paint uses the default scheme's brand tokens.");
+assert.doesNotMatch(html, /data-theme=/, "No palette is set before the preferences load.");
 
-const selectors = [
-  ":root",
-  ".dark",
-  ...themePalettes.filter((palette) => palette !== "runic").flatMap((palette) => [
-    `:root:not(.dark)[data-theme="${palette}"]`,
-    `.dark[data-theme="${palette}"]`,
-  ]),
-];
-
-for (const selector of selectors) {
-  const block = cssBlock(css, selector);
-  for (const token of requiredTokens) {
-    assert.match(block, new RegExp(`--${token}:`), `${selector} does not define --${token}`);
+const brandTokens = ["stone", "raised", "sunk", "ink", "ink-soft", "groove", "paint", "error", "warning", "done"];
+for (const token of brandTokens) {
+  for (const scheme of [":root {", ":root[data-scheme='dark'] {"]) {
+    assert.match(cssBlock(tokens, scheme), new RegExp(`--rune-${token}: #`), `tokens.css ${scheme} does not define --rune-${token}`);
   }
 }
+for (const [, used] of css.matchAll(/var\(--rune-([a-z-]+)\)/g)) {
+  assert.ok(tokens.includes(`--rune-${used}:`), `layout.css uses --rune-${used}, which tokens.css does not define.`);
+}
 
-console.log(`PASS: ${themeModes.length * themePalettes.length} appearance combinations persist and every palette defines the complete semantic token contract.`);
+const semantic = {
+  background: "stone", foreground: "ink", card: "raised", "card-foreground": "ink", popover: "raised",
+  "popover-foreground": "ink", primary: "ink", "primary-foreground": "stone", secondary: "sunk",
+  "secondary-foreground": "ink", muted: "sunk", "muted-foreground": "ink-soft", accent: "sunk",
+  "accent-foreground": "ink", destructive: "error", warning: "warning", success: "done", paint: "paint",
+  border: "groove", ring: "paint", sidebar: "stone", "sidebar-foreground": "ink", "sidebar-primary": "ink",
+  "sidebar-primary-foreground": "stone", "sidebar-accent": "sunk", "sidebar-accent-foreground": "ink",
+  "sidebar-border": "groove", "sidebar-ring": "paint",
+};
+const rootBlock = cssBlock(css, ":root");
+for (const [token, brand] of Object.entries(semantic)) {
+  assert.match(rootBlock, new RegExp(`--${token}: var\\(--rune-${brand}\\);`), `--${token} is not mapped onto --rune-${brand}.`);
+}
+for (const token of ["input", "chart-1", "chart-2", "chart-3", "chart-4", "chart-5"]) {
+  assert.match(rootBlock, new RegExp(`--${token}: [^;]*var\\(--rune-`), `--${token} is not derived from the brand tokens.`);
+}
+assert.doesNotMatch(css, /oklch\(/, "Colours come from the brand tokens, not from literal values.");
+assert.doesNotMatch(css, /data-theme/, "The palette selectors are gone.");
+assert.doesNotMatch(css, /^\.dark \{/m, "One mapping serves both schemes; the brand tokens switch.");
+
+// Fonts: the two brand faces, bundled; no Inter, no serif headline face, nothing from a font service.
+assert.match(css, /@import "@fontsource-variable\/schibsted-grotesk";/);
+assert.match(css, /@import "@fontsource-variable\/spline-sans-mono";/);
+assert.match(css, /--font-sans: var\(--rune-font-sans\);/);
+assert.match(css, /--font-mono: var\(--rune-font-mono\);/);
+const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+const dependencies = { ...packageJson.dependencies, ...packageJson.devDependencies };
+assert.equal(dependencies["@fontsource-variable/schibsted-grotesk"], "5.3.0");
+assert.equal(dependencies["@fontsource-variable/spline-sans-mono"], "5.3.0");
+assert.equal(dependencies["@fontsource-variable/inter"], undefined, "Inter is no longer bundled.");
+// The brand tokens (a generated copy) name their own fallback stacks.
+for (const file of (await sourceFiles(new URL("../src/", import.meta.url))).filter((url) => !url.pathname.includes("/lib/brand/"))) {
+  const source = await readFile(file, "utf8");
+  assert.doesNotMatch(source, /font-serif|Georgia|\bInter\b|ui-monospace|Cormorant|Newsreader|fonts\.googleapis/,
+    `${file.pathname} uses a font outside the brand.`);
+}
+
+console.log(`PASS: ${themeModes.length} theme modes set the brand tokens' scheme, every semantic token maps onto a brand token, and only the two brand fonts are bundled.`);
 
 function cssBlock(source, selector) {
-  const start = source.indexOf(`${selector} {`);
-  assert.notEqual(start, -1, `Missing theme selector ${selector}`);
+  const start = source.indexOf(`${selector} {`) === -1 ? source.indexOf(selector) : source.indexOf(`${selector} {`);
+  assert.notEqual(start, -1, `Missing selector ${selector}`);
   const bodyStart = source.indexOf("{", start) + 1;
   const end = source.indexOf("}", bodyStart);
-  assert.notEqual(end, -1, `Unclosed theme selector ${selector}`);
+  assert.notEqual(end, -1, `Unclosed selector ${selector}`);
   return source.slice(bodyStart, end);
+}
+
+async function sourceFiles(directory) {
+  const files = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const url = new URL(entry.name + (entry.isDirectory() ? "/" : ""), directory);
+    if (entry.isDirectory()) files.push(...await sourceFiles(url));
+    else if (/\.(svelte|ts|css|html)$/.test(entry.name)) files.push(url);
+  }
+  return files;
 }
