@@ -1,4 +1,4 @@
-import { applyAppearance, readAppearance, saveAppearance, type ThemeMode, type ThemePalette } from "../appearance";
+import { applyAppearance, applyDensity, densityKey, readAppearance, saveAppearance, type Density, type ThemeMode } from "../appearance";
 import { isPseudoLocale, readUiSimulation, saveUiSimulation, type UiDirection } from "../simulation";
 import { matchUiLocale, uiLocaleStateKey } from "../ui-locale";
 import type { PreviewController } from "./preview-controller.svelte";
@@ -15,17 +15,18 @@ export interface PreferencesControllerOptions {
   preview: () => Pick<PreviewController, "pseudoLocale">;
   /** Previews the selected message again, after the pseudo-locale simulation changed. */
   refreshPreview: () => void;
-  applyAppearance?: (mode: ThemeMode, palette: ThemePalette) => void;
+  applyAppearance?: (mode: ThemeMode) => void;
+  applyDensity?: (density: Density) => void;
 }
 
 /**
- * The user's preferences of the editor itself, kept in the native editor state: the interface locale, the theme and
- * its palette, and the simulations of pseudo-localization and a right-to-left interface.
+ * The user's preferences of the editor itself, kept in the native editor state: the interface locale, the theme, the
+ * density, and the simulations of pseudo-localization and a right-to-left interface.
  */
 export class PreferencesController {
   uiLocale = $state("");
   themeMode = $state<ThemeMode>("dark");
-  themePalette = $state<ThemePalette>("runic");
+  density = $state<Density>("comfortable");
   pseudoLocalization = $state(false);
   uiDirection = $state<UiDirection>("ltr");
 
@@ -42,15 +43,20 @@ export class PreferencesController {
   }
 
   #apply(): void {
-    (this.#options.applyAppearance ?? applyAppearance)(this.themeMode, this.themePalette);
+    (this.#options.applyAppearance ?? applyAppearance)(this.themeMode);
   }
 
-  /** Reads the stored appearance and simulation, and applies the appearance. */
+  #applyDensity(): void {
+    (this.#options.applyDensity ?? applyDensity)(this.density);
+  }
+
+  /** Reads the stored appearance (theme and density) and simulation, and applies the appearance. */
   restore(): void {
     const appearance = readAppearance((key) => this.#options.storage.get(key));
     this.themeMode = appearance.mode;
-    this.themePalette = appearance.palette;
+    this.density = appearance.density;
     this.#apply();
+    this.#applyDensity();
     const simulation = readUiSimulation((key) => this.#options.storage.get(key));
     this.pseudoLocalization = simulation.pseudoLocalization;
     this.uiDirection = simulation.direction;
@@ -80,12 +86,14 @@ export class PreferencesController {
 
   changeThemeMode(mode: ThemeMode): void {
     this.themeMode = mode;
-    saveAppearance(this.themeMode, this.themePalette, (key, value) => this.#options.storage.set(key, value));
+    saveAppearance(this.themeMode, (key, value) => this.#options.storage.set(key, value));
   }
 
-  changeThemePalette(palette: ThemePalette): void {
-    this.themePalette = palette;
-    saveAppearance(this.themeMode, this.themePalette, (key, value) => this.#options.storage.set(key, value));
+  /** The user chose a density: it is stored and set on the root. */
+  changeDensity(density: Density): void {
+    this.density = density;
+    this.#options.storage.set(densityKey, density);
+    this.#applyDensity();
   }
 
   togglePseudoLocalization(): void {

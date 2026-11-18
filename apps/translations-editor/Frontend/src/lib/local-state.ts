@@ -14,7 +14,8 @@ export interface LocalStateSummary {
 
 const exactKeys = new Set([
   "runic-translations.theme-mode",
-  "runic-translations.theme-palette",
+  // Comfortable or compact (appearance.ts `densityKey`).
+  "runic-translations.density",
   "runic-translations.pseudo-localization",
   "runic-translations.ui-direction",
   "runic-translations.ui-locale",
@@ -27,6 +28,9 @@ const exactKeys = new Set([
   // Collapsed message groups of the most recent catalogs (message-virtualization.ts `messageTreeStateKey`).
   "runic-translations:message-tree:1",
 ]);
+// Keys earlier versions stored and this one no longer reads: the colour palette (removed by D074). The native store
+// drops them when it loads; a projection never takes them over, so the next write leaves them out.
+const retiredKeys = new Set(["runic-translations.theme-palette"]);
 // Recovery copies of unsaved work, per workspace and catalog: document drafts and review changes.
 const draftPrefixes = ["runic-translations:drafts:1:", "runic-translations:review-drafts:1:"];
 const isDraftKey = (key: string): boolean => draftPrefixes.some((prefix) => key.startsWith(prefix));
@@ -67,7 +71,7 @@ export async function loadLocalEditorState(): Promise<boolean> {
     // atomic replacement behind this initialization.
     const pending = new Map([...values].filter(([key]) => pendingKeys.has(key)));
     values.clear();
-    for (const entry of state.entries) values.set(entry.key, entry.value);
+    for (const entry of state.entries) if (!retiredKeys.has(entry.key)) values.set(entry.key, entry.value);
     for (const [key, value] of pending) values.set(key, value);
     pendingKeys.clear();
     recovered = state.recovered;

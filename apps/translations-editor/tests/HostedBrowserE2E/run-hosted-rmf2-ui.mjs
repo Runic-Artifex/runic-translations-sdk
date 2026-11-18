@@ -43,6 +43,14 @@ const runDriver = (argumentsValue) => new Promise((resolveRun, reject) => {
 });
 try {
   await runDriver(["--prepare", workspace]);
+  // The editor state an earlier version left: a colour palette, which this version no longer owns (D074). The host
+  // drops it on load instead of quarantining the record; the density-setting stage checks that.
+  const stateDirectory = join(state, "RunicArtifex", "Runic.Translations.Editor");
+  await mkdir(stateDirectory, { recursive: true });
+  await writeFile(join(stateDirectory, "editor-state-v1.json"), JSON.stringify({
+    $schema: "runic.translations.editor-local-state/1",
+    entries: [{ key: "runic-translations.theme-mode", value: "dark" }, { key: "runic-translations.theme-palette", value: "moss" }],
+  }));
   const ready = new Promise((resolveReady, reject) => {
     host = spawn("dotnet", [assembly, "serve", "--workspace", workspace], {
       cwd: dirname(assembly), env: childEnvironment, stdio: ["ignore", "pipe", "pipe"],

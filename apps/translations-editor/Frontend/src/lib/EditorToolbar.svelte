@@ -52,7 +52,7 @@
 
 </script>
 
-<header class="flex min-h-16 items-center gap-2 border-b bg-background/80 px-3 backdrop-blur-md sm:px-4 xl:gap-4 xl:px-6">
+<header class="flex min-h-14 items-center gap-2 border-b bg-card px-3 sm:px-4 xl:gap-4 xl:px-6">
   <Sidebar.Trigger class="shrink-0 md:hidden" aria-label={ui.text("ui_toolbar_open_navigation")} />
   <div class="min-w-0 flex-1"></div>
 

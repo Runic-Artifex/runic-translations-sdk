@@ -10,6 +10,8 @@
   import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
   import Undo2Icon from "@lucide/svelte/icons/undo-2";
   import { Badge } from "#lib/components/ui/badge/index.js";
+  import StateMark from "#lib/StateMark.svelte";
+  import { reviewStateMark } from "#lib/state-mark.js";
   import { Button } from "#lib/components/ui/button/index.js";
   import * as Card from "#lib/components/ui/card/index.js";
   import * as Collapsible from "#lib/components/ui/collapsible/index.js";
@@ -90,12 +92,13 @@
   let badgeLabel = $derived(notTranslated ? ui.text("ui_resource_not_translated") : stateLabel);
   let open = $state(false);
   let sourceDirection = $derived(localeDirection(sourceLocale));
-  const chip = "mx-0.5 inline-flex h-6 items-center rounded-full bg-secondary px-2 align-baseline font-mono text-xs text-secondary-foreground";
+  let mark = $derived(reviewStateMark(reviewState, notTranslated, stale));
+  const chip = "placeholder-chip mx-0.5 align-baseline";
 </script>
 
 <!-- The compared base text (#225 P20): removed words struck through in the recorded text, added ones marked in the current
      text, placeholders as chips as in the source panel. -->
-{#snippet diffParts(parts: SourceDiffPart[])}{#each parts as part, index (index)}{#if part.kind === "text"}{#if part.change === "same"}{part.text}{:else if part.change === "removed"}<del class="rounded-sm bg-destructive/15 px-0.5 text-destructive decoration-destructive/70" data-change="removed"><span class="sr-only">{`${ui.text("ui_workflow_source_removed")} `}</span>{part.text}</del>{:else}<ins class="rounded-sm bg-primary/15 px-0.5 font-medium no-underline" data-change="added"><span class="sr-only">{`${ui.text("ui_workflow_source_added")} `}</span>{part.text}</ins>{/if}{:else if part.change === "same"}<span class={chip} data-placeholder={part.kind}>{part.syntax}</span>{:else if part.change === "removed"}<del class="{chip} ring-2 ring-destructive/60" data-placeholder={part.kind} data-change="removed"><span class="sr-only">{`${ui.text("ui_workflow_source_removed")} `}</span>{part.syntax}</del>{:else}<ins class="{chip} no-underline ring-2 ring-primary/60" data-placeholder={part.kind} data-change="added"><span class="sr-only">{`${ui.text("ui_workflow_source_added")} `}</span>{part.syntax}</ins>{/if}{/each}{/snippet}
+{#snippet diffParts(parts: SourceDiffPart[])}{#each parts as part, index (index)}{#if part.kind === "text"}{#if part.change === "same"}{part.text}{:else if part.change === "removed"}<del class="rounded-sm bg-destructive/15 px-0.5 text-destructive decoration-destructive/70" data-change="removed"><span class="sr-only">{`${ui.text("ui_workflow_source_removed")} `}</span>{part.text}</del>{:else}<ins class="rounded-sm bg-success/15 px-0.5 font-medium text-success no-underline" data-change="added"><span class="sr-only">{`${ui.text("ui_workflow_source_added")} `}</span>{part.text}</ins>{/if}{:else if part.change === "same"}<span class={chip} data-placeholder={part.kind}>{part.syntax}</span>{:else if part.change === "removed"}<del class="{chip} ring-2 ring-destructive/60" data-placeholder={part.kind} data-change="removed"><span class="sr-only">{`${ui.text("ui_workflow_source_removed")} `}</span>{part.syntax}</del>{:else}<ins class="{chip} no-underline ring-2 ring-success/60" data-placeholder={part.kind} data-change="added"><span class="sr-only">{`${ui.text("ui_workflow_source_added")} `}</span>{part.syntax}</ins>{/if}{/each}{/snippet}
 
 <Collapsible.Root bind:open class="group/workflow mx-auto mb-4 w-full max-w-[1000px]">
   <Card.Root size="sm" class="gap-0 py-0 shadow-none">
@@ -103,8 +106,8 @@
       <Collapsible.Trigger class="flex min-h-12 w-full items-center gap-2 rounded-2xl px-4 py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <ListChecksIcon class="size-4 shrink-0" aria-hidden="true" />
         <span class="font-medium">{ui.text("ui_workflow_title")}</span>
-        <Badge variant="secondary" data-testid="workflow-state">{badgeLabel}</Badge>
-        {#if stale}<Badge variant="destructive">{ui.text("ui_workflow_source_changed")}</Badge>{/if}
+        <Badge variant="outline" data-testid="workflow-state">{#if mark !== undefined && !stale}<StateMark state={mark} />{/if}{badgeLabel}</Badge>
+        {#if stale}<Badge variant="outline" class="border-warning/60 text-warning"><StateMark state="outdated" />{ui.text("ui_workflow_source_changed")}</Badge>{/if}
         <span class="ml-auto hidden min-w-0 truncate text-xs text-muted-foreground sm:block">
           {dirty ? ui.text("ui_workflow_unsaved_changes") : message}
         </span>
@@ -208,13 +211,13 @@
           <strong class="text-sm font-medium">{ui.text("ui_workflow_quality_checks")}</strong>
           {#if qualityIssues.length === 0}
             <div class="flex items-center gap-2 text-sm text-muted-foreground">
-              <CheckCircle2Icon class="text-primary" />
+              <CheckCircle2Icon class="text-success" />
               {ui.text("ui_workflow_no_issues")}
             </div>
           {:else}
             {#each qualityIssues as issue (`${issue.kind}:${issue.code ?? ""}:${issue.message}`)}
               <Button variant="outline" size="xs" class="h-auto justify-start whitespace-normal" {disabled} onclick={() => { if (!disabled) onqualityfilter(); }}>
-                <TriangleAlertIcon class="text-primary" data-icon="inline-start" />
+                <TriangleAlertIcon class="text-warning" data-icon="inline-start" />
                 <span class="text-left">{#if issue.code !== undefined}<strong class="mr-1 font-mono">{issue.code}</strong>{/if}{issue.message}</span>
               </Button>
               {#if onfix !== undefined && issue.diagnostic?.quickFixes !== undefined && issue.diagnostic.quickFixes.length > 0}

@@ -90,7 +90,7 @@
       <Button variant="outline" disabled={busy} onclick={onexportxliff}>{ui.text("ui_interchange_export_xliff")}</Button>
       {#if xliffExport !== undefined}
         <section class="grid gap-2" aria-live="polite">
-          <p class={xliffExport.ok ? "text-sm text-emerald-700 dark:text-emerald-400" : "text-sm text-destructive"}>{(xliffExport.message === undefined ? undefined : displayNotice(xliffExport.message, ui)) ?? (xliffExport.ok ? ui.text("ui_count_exported_files", { count: xliffExport.documents.length }) : ui.text("ui_interchange_xliff_export_failed"))}</p>
+          <p class={xliffExport.ok ? "text-sm text-success" : "text-sm text-destructive"}>{(xliffExport.message === undefined ? undefined : displayNotice(xliffExport.message, ui)) ?? (xliffExport.ok ? ui.text("ui_count_exported_files", { count: xliffExport.documents.length }) : ui.text("ui_interchange_xliff_export_failed"))}</p>
           {#if xliffExport.documents.length > 0}
             <ul class="text-sm">{#each xliffExport.documents as file (file.path)}<li><code>{file.path}</code> <span class="text-muted-foreground">· {file.locale} · {file.byteCount} {ui.text("ui_interchange_bytes")}</span></li>{/each}</ul>
           {/if}
@@ -132,7 +132,7 @@
         <Input id="review-export-path" bind:value={reviewPath} placeholder="interchange/review.json (default)" autocomplete="off" />
       </Field.Field>
       <Button variant="outline" disabled={busy} onclick={onexportreview}>{ui.text("ui_interchange_export_review_json")}</Button>
-      {#if reviewExport !== undefined}<p class={reviewExport.ok ? "text-sm text-emerald-700 dark:text-emerald-400" : "text-sm text-destructive"}>{(reviewExport.message === undefined ? undefined : displayNotice(reviewExport.message, ui)) ?? (reviewExport.ok ? ui.text("ui_count_exported_reviews", { count: reviewExport.entryCount, path: reviewExport.path ?? "" }) : ui.text("ui_interchange_review_export_failed"))}</p>{/if}
+      {#if reviewExport !== undefined}<p class={reviewExport.ok ? "text-sm text-success" : "text-sm text-destructive"}>{(reviewExport.message === undefined ? undefined : displayNotice(reviewExport.message, ui)) ?? (reviewExport.ok ? ui.text("ui_count_exported_reviews", { count: reviewExport.entryCount, path: reviewExport.path ?? "" }) : ui.text("ui_interchange_review_export_failed"))}</p>{/if}
       <Field.Field>
         <Field.Label for="review-import-path">{ui.text("ui_interchange_review_file_to_import")}</Field.Label>
         <Input id="review-import-path" bind:value={reviewImportPath} placeholder="interchange/review.json" autocomplete="off" />

@@ -94,7 +94,7 @@
     max-width: 1000px;
     margin: 0.8rem auto 0;
     border: 1px solid var(--border);
-    border-radius: 0.65rem;
+    border-radius: var(--radius-pane);
     overflow: hidden;
     background: var(--card);
   }
@@ -103,19 +103,18 @@
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    padding: 0.7rem 0.9rem;
+    padding: 0.75rem 1rem;
     border-block-end: 1px solid var(--border);
-    background: color-mix(in oklch, var(--muted) 82%, var(--primary));
   }
   .artifact-preview > header > div { display: grid; gap: 0.15rem; min-width: 0; }
-  .artifact-preview strong { color: var(--foreground); font-size: 0.68rem; }
+  .artifact-preview strong { color: var(--foreground); font-size: var(--ui-text); font-weight: 620; }
   .artifact-preview > header span:not(.artifact-element-label):not(.artifact-attributes) {
     color: var(--muted-foreground);
-    font-size: 0.56rem;
+    font-size: var(--ui-text-xs);
   }
   .artifact-close {
     border: 1px solid var(--border);
-    border-radius: 50%;
+    border-radius: var(--radius-control);
     inline-size: 1.5rem;
     block-size: 1.5rem;
     color: var(--muted-foreground);
@@ -134,26 +133,26 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.6rem;
-    padding: 0.45rem 0.9rem;
+    padding: 0.45rem 1rem;
     border-block-end: 1px solid var(--border);
-    background: color-mix(in oklch, var(--background) 60%, var(--card));
+    background: var(--muted);
   }
-  .artifact-column-header small { color: var(--muted-foreground); font-size: 0.55rem; }
+  .artifact-column-header small { color: var(--muted-foreground); font-size: var(--ui-text-xs); }
   .artifact-canvas {
     min-height: 4rem;
-    padding: 0.9rem;
-    font-size: 0.85rem;
-    line-height: 1.7;
+    padding: 1rem;
+    font-size: var(--message-text);
+    line-height: 1.6;
     text-align: start;
-    background: radial-gradient(circle at 90% 0, color-mix(in oklch, var(--primary) 10%, transparent), transparent 45%), var(--background);
+    background: var(--background);
   }
   .artifact-canvas p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-  .artifact-placeholder { color: var(--muted-foreground); font-size: 0.65rem; }
+  .artifact-placeholder { color: var(--muted-foreground); font-size: var(--ui-text); }
   .artifact-note {
     margin: 0;
-    padding: 0.55rem 0.9rem;
+    padding: 0.55rem 1rem;
     border-block-start: 1px solid var(--border);
     color: var(--muted-foreground);
-    font-size: 0.55rem;
+    font-size: var(--ui-text-xs);
   }
 </style>

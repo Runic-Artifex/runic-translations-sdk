@@ -3,14 +3,15 @@
   import LanguagesIcon from "@lucide/svelte/icons/languages";
   import MonitorIcon from "@lucide/svelte/icons/monitor";
   import MoonIcon from "@lucide/svelte/icons/moon";
-  import PaletteIcon from "@lucide/svelte/icons/palette";
+  import Rows3Icon from "@lucide/svelte/icons/rows-3";
+  import Rows4Icon from "@lucide/svelte/icons/rows-4";
   import Settings2Icon from "@lucide/svelte/icons/settings-2";
   import SunIcon from "@lucide/svelte/icons/sun";
   import ChevronsUpDownIcon from "@lucide/svelte/icons/chevrons-up-down";
   import { Badge } from "#lib/components/ui/badge/index.js";
   import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
   import * as Sidebar from "#lib/components/ui/sidebar/index.js";
-  import type { ThemeMode, ThemePalette } from "#lib/appearance.js";
+  import type { Density, ThemeMode } from "#lib/appearance.js";
   import type { UiDirection } from "#lib/simulation.js";
   import { getUiText } from "#lib/ui-text.js";
   import { uiLocaleName } from "#lib/ui-locale.js";
@@ -19,12 +20,12 @@
     locale,
     locales,
     themeMode,
-    themePalette,
+    density,
     pseudoLocalization,
     uiDirection,
     onlocalechange,
     onthememodechange,
-    onthemepalettechange,
+    ondensitychange,
     ontogglepseudo,
     ontoggledirection,
     onabout,
@@ -33,12 +34,12 @@
     /** The editor catalog's locales, listed by their own names. */
     locales: readonly string[];
     themeMode: ThemeMode;
-    themePalette: ThemePalette;
+    density: Density;
     pseudoLocalization: boolean;
     uiDirection: UiDirection;
     onlocalechange: (locale: string) => void;
     onthememodechange: (mode: ThemeMode) => void;
-    onthemepalettechange: (palette: ThemePalette) => void;
+    ondensitychange: (density: Density) => void;
     ontogglepseudo: () => void;
     ontoggledirection: () => void;
     onabout: () => void;
@@ -47,9 +48,9 @@
   const ui = getUiText();
 
   const modeNames: Record<ThemeMode, string> = $derived({ system: ui.text("ui_settings_system"), light: ui.text("ui_settings_light"), dark: ui.text("ui_settings_dark") });
-  const paletteNames: Record<ThemePalette, string> = $derived({ runic: ui.text("ui_settings_runic_gold"), moss: ui.text("ui_settings_moss"), fjord: ui.text("ui_settings_fjord"), ember: ui.text("ui_settings_ember") });
+  const densityNames: Record<Density, string> = $derived({ comfortable: ui.text("ui_settings_comfortable"), compact: ui.text("ui_settings_compact") });
   let localeName = $derived(uiLocaleName(locale));
-  let appearanceName = $derived(`${paletteNames[themePalette]} · ${modeNames[themeMode]}`);
+  let appearanceName = $derived(`${modeNames[themeMode]} · ${densityNames[density]}`);
 </script>
 
 <Sidebar.Footer class="border-t border-sidebar-border p-2">
@@ -78,12 +79,10 @@
             <DropdownMenu.RadioItem value="dark"><MoonIcon />{ui.text("ui_settings_dark")}</DropdownMenu.RadioItem>
           </DropdownMenu.RadioGroup>
           <DropdownMenu.Separator />
-          <DropdownMenu.Label>{ui.text("ui_settings_color_theme")}</DropdownMenu.Label>
-          <DropdownMenu.RadioGroup value={themePalette} onValueChange={(value) => onthemepalettechange(value as ThemePalette)}>
-            <DropdownMenu.RadioItem value="runic"><PaletteIcon />{ui.text("ui_settings_runic_gold")}</DropdownMenu.RadioItem>
-            <DropdownMenu.RadioItem value="moss"><PaletteIcon />{ui.text("ui_settings_moss")}</DropdownMenu.RadioItem>
-            <DropdownMenu.RadioItem value="fjord"><PaletteIcon />{ui.text("ui_settings_fjord")}</DropdownMenu.RadioItem>
-            <DropdownMenu.RadioItem value="ember"><PaletteIcon />{ui.text("ui_settings_ember")}</DropdownMenu.RadioItem>
+          <DropdownMenu.Label>{ui.text("ui_settings_density")}</DropdownMenu.Label>
+          <DropdownMenu.RadioGroup value={density} onValueChange={(value) => ondensitychange(value as Density)} data-testid="settings-density">
+            <DropdownMenu.RadioItem value="comfortable"><Rows3Icon />{ui.text("ui_settings_comfortable")}</DropdownMenu.RadioItem>
+            <DropdownMenu.RadioItem value="compact"><Rows4Icon />{ui.text("ui_settings_compact")}</DropdownMenu.RadioItem>
           </DropdownMenu.RadioGroup>
           <DropdownMenu.Separator />
           <DropdownMenu.Label>{ui.text("ui_settings_localization_simulation")}</DropdownMenu.Label>

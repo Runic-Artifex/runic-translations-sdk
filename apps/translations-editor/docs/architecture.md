@@ -147,7 +147,7 @@ blocking flags):
 - `WorkspaceView` derives what the catalog shows for the selected locale
   (coverage, quality findings, the message list and its filters, the selected
   message's review) and applies the review actions.
-- `PreferencesController` keeps the interface locale, theme and simulations;
+- `PreferencesController` keeps the interface locale, theme, density and simulations;
   `ProjectWizardController`, `MutationController`, `InterchangeController`,
   `LibraryController` and `AboutController` own their dialogs' state and host
   calls; `EditorFeedback` holds the error and operation notices.

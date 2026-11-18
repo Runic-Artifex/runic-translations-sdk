@@ -34,21 +34,21 @@
 </main>
 
 <style>
-  .eyebrow { margin: 0; color: var(--primary); font-size: .64rem; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
-  .mark { width: 4rem; height: 4rem; border-radius: 1rem; background: url("/brand/icon.png") center / cover no-repeat; box-shadow: 0 1rem 3rem color-mix(in oklch, var(--foreground) 22%, transparent); }
+  .eyebrow { margin: 0; color: var(--muted-foreground); font-size: var(--ui-text-xs); font-weight: 560; }
+  .mark { width: 4rem; height: 4rem; border-radius: 22%; background: url("/brand/icon.png") center / cover no-repeat; }
   .mark span { display: none; }
-  .primary { border: 1px solid var(--primary); border-radius: .45rem; padding: .58rem .85rem; color: var(--primary-foreground); background: var(--primary); font-weight: 750; cursor: pointer; box-shadow: 0 .35rem 1rem color-mix(in oklch, var(--foreground) 16%, transparent); }
-  .primary:hover:not(:disabled) { filter: brightness(1.08); }
-  .primary:disabled { cursor: not-allowed; filter: grayscale(.5); opacity: .42; }
-  .recovery-shell { display: grid; place-content: center; place-items: center; height: 100vh; padding: 2rem; color: var(--muted-foreground); text-align: center; background: radial-gradient(circle at center, color-mix(in oklch, var(--primary) 10%, var(--background)), var(--background) 65%); }
+  .primary { border: 1px solid var(--primary); border-radius: var(--radius-control); padding: .5rem .9rem; color: var(--primary-foreground); background: var(--primary); font-weight: 560; cursor: pointer; }
+  .primary:hover:not(:disabled) { background: color-mix(in srgb, var(--primary) 85%, var(--background)); }
+  .primary:disabled { cursor: not-allowed; opacity: .5; }
+  .recovery-shell { display: grid; place-content: center; place-items: center; height: 100vh; padding: 2rem; color: var(--muted-foreground); text-align: center; background: var(--background); }
   .recovery-shell { gap: .9rem; }
-  .recovery-shell h1 { max-width: 42rem; margin: .4rem 0; color: var(--foreground); font-family: Georgia, serif; font-size: 2.3rem; font-weight: 500; }
-  .recovery-shell > p:not(.eyebrow) { max-width: 44rem; margin: 0; line-height: 1.6; }
+  .recovery-shell h1 { max-width: 42rem; margin: .4rem 0; color: var(--foreground); font-size: 2.25rem; font-weight: 620; line-height: 1.1; letter-spacing: -.02em; }
+  .recovery-shell > p:not(.eyebrow) { max-width: 44rem; margin: 0; font-size: 1rem; line-height: 1.55; }
   .recovery-paths { display: grid; gap: .3rem; width: min(36rem, 100%); max-height: 12rem; margin: .5rem 0; overflow-y: auto; }
-  .recovery-paths code { border: 1px solid var(--border); border-radius: .3rem; padding: .45rem .6rem; color: var(--foreground); text-align: left; background: var(--card); font: .6rem ui-monospace, monospace; }
-  .recovery-actions { display: flex; gap: .7rem; }
-  .recovery-shell > small { color: var(--muted-foreground); font-size: .58rem; }
-  .secondary { border: 1px solid var(--border); border-radius: .45rem; padding: .58rem .85rem; color: var(--secondary-foreground); background: var(--secondary); cursor: pointer; }
-  .secondary:hover:not(:disabled) { border-color: var(--ring); color: var(--accent-foreground); background: var(--accent); }
-  .project-error { margin: 1rem 0 0; border: 1px solid color-mix(in oklch, var(--destructive) 45%, var(--border)); border-radius: .45rem; padding: .7rem .8rem; color: var(--destructive); background: color-mix(in oklch, var(--destructive) 10%, transparent); font-size: .67rem; }
+  .recovery-paths code { border: 1px solid var(--border); border-radius: var(--radius-control); padding: .4rem .6rem; color: var(--foreground); text-align: left; background: var(--card); font: var(--ui-text-xs) var(--font-mono); }
+  .recovery-actions { display: flex; gap: .6rem; }
+  .recovery-shell > small { color: var(--muted-foreground); font-size: var(--ui-text-xs); }
+  .secondary { border: 1px solid var(--field-border); border-radius: var(--radius-control); padding: .5rem .9rem; color: var(--foreground); background: var(--card); cursor: pointer; }
+  .secondary:hover:not(:disabled) { border-color: var(--foreground); }
+  .project-error { margin: 1rem 0 0; border: 1px solid color-mix(in srgb, var(--destructive) 45%, var(--border)); border-radius: var(--radius-control); padding: .65rem .8rem; color: var(--destructive); background: var(--card); font-size: var(--ui-text); }
 </style>

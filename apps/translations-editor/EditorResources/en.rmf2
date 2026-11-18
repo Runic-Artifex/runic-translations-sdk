@@ -3798,7 +3798,12 @@ ui {
 }
 ui {
   settings {
-    color_theme = Color theme
+    comfortable = Comfortable
+  }
+}
+ui {
+  settings {
+    compact = Compact
   }
 }
 ui {
@@ -3808,17 +3813,12 @@ ui {
 }
 ui {
   settings {
+    density = Density
+  }
+}
+ui {
+  settings {
     editor_settings = Editor settings
-  }
-}
-ui {
-  settings {
-    ember = Ember
-  }
-}
-ui {
-  settings {
-    fjord = Fjord
   }
 }
 ui {
@@ -3838,22 +3838,12 @@ ui {
 }
 ui {
   settings {
-    moss = Moss
-  }
-}
-ui {
-  settings {
     pseudo_localization = Pseudo-localization
   }
 }
 ui {
   settings {
     right_to_left = Right-to-left layout
-  }
-}
-ui {
-  settings {
-    runic_gold = Runic Gold
   }
 }
 ui {

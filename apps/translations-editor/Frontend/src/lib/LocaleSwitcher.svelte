@@ -2,6 +2,8 @@
 	import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
 	import Settings2Icon from "@lucide/svelte/icons/settings-2";
 	import { Badge } from "#lib/components/ui/badge/index.js";
+	import StateMark from "#lib/StateMark.svelte";
+	import { localeStateMark } from "#lib/state-mark.js";
 	import * as Collapsible from "#lib/components/ui/collapsible/index.js";
 	import * as Item from "#lib/components/ui/item/index.js";
 	import * as ScrollArea from "#lib/components/ui/scroll-area/index.js";
@@ -131,6 +133,8 @@
 										</Item.Title>
 									</Item.Content>
 									<Item.Actions>
+										{@const mark = localeStateMark(locale)}
+										{#if mark !== undefined}<StateMark state={mark} />{/if}
 										<Badge variant={locale.completeness === "error" && locale.missing ? "destructive" : "outline"} aria-label={`${coverage(locale).text} ${ui.text("ui_locale_translated")}`} title={coverageDetails(locale)} data-testid="locale-coverage">{coverage(locale).text}</Badge>
 									</Item.Actions>
 								</button>

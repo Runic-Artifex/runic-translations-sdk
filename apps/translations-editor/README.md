@@ -50,6 +50,16 @@ MF2 messages, watches external changes, and previews through the canonical
 compiler model. Diagnostics remain privacy-bounded and writes use revision
 checks plus atomic replacement.
 
+The editor wears the Runic Artifex brand: stone and ink in a light or dark scheme
+(or the system's), Schibsted Grotesk for words and Spline Sans Mono for keys and
+file names, both bundled so nothing loads from the network. Red-ochre paint marks
+only placeholders such as `{$count}`, keyboard focus, links and the selected
+message; missing, done, outdated and needs-review translations carry a shape
+besides their colour. **Editor settings** chooses the scheme and the **density**:
+comfortable (the default) or compact, which tightens spacing, the message tree's
+rows and the interface text. The colour palettes of earlier versions are gone; a
+stored palette is dropped when the editor loads its local state.
+
 The editor uses the RMF2 v5 compiler/runtime pipeline without fabricating a
 retired catalog carrier. Previews are formatted by the verified .NET artifact/pack
 path; the browser receives validated inert semantic runs and never approximates

@@ -35,7 +35,7 @@
     )}
   >
     <Dialog.Header class="shrink-0 border-b px-6 py-5 pr-16">
-      <Dialog.Title class="font-serif text-xl font-medium">{title}</Dialog.Title>
+      <Dialog.Title class="text-lg font-[620] tracking-[-0.01em]">{title}</Dialog.Title>
       {#if description}<Dialog.Description>{description}</Dialog.Description>{/if}
     </Dialog.Header>
     <div class={cn("min-h-0 flex-1 overflow-y-auto px-6 py-5", bodyClass)}>

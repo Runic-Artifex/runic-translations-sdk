@@ -159,23 +159,27 @@ export function virtualMessageTree(items: readonly MessageListItem[], collapsed:
   return visibleMessageRows(buildMessageTree(items), collapsed);
 }
 
-/** Returns only the rows needed for the viewport plus a small scroll overscan. */
+/**
+ * Returns only the rows needed for the viewport plus a small scroll overscan. `rowHeight` follows the density
+ * (`messageRowHeight` in appearance.ts).
+ */
 export function virtualMessageWindow(
   rowCount: number,
   scrollTop: number,
   viewportHeight: number,
+  rowHeight = messageVirtualRowHeight,
 ): VirtualMessageWindow {
-  const visible = Math.max(1, Math.ceil(Math.max(0, viewportHeight) / messageVirtualRowHeight));
-  const first = Math.max(0, Math.floor(Math.max(0, scrollTop) / messageVirtualRowHeight));
+  const visible = Math.max(1, Math.ceil(Math.max(0, viewportHeight) / rowHeight));
+  const first = Math.max(0, Math.floor(Math.max(0, scrollTop) / rowHeight));
   const start = Math.max(0, Math.min(first, rowCount) - messageVirtualOverscan);
   const end = Math.min(rowCount, first + visible + messageVirtualOverscan);
-  return { start, end, offset: start * messageVirtualRowHeight };
+  return { start, end, offset: start * rowHeight };
 }
 
 /** The scroll position that brings row `index` into view, moving as little as possible. */
-export function scrollTopForRow(index: number, scrollTop: number, viewportHeight: number): number {
-  const top = index * messageVirtualRowHeight;
-  const bottom = top + messageVirtualRowHeight;
+export function scrollTopForRow(index: number, scrollTop: number, viewportHeight: number, rowHeight = messageVirtualRowHeight): number {
+  const top = index * rowHeight;
+  const bottom = top + rowHeight;
   if (top < scrollTop) return top;
   if (viewportHeight > 0 && bottom > scrollTop + viewportHeight) return bottom - viewportHeight;
   return scrollTop;

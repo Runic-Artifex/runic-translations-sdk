@@ -140,7 +140,7 @@
             {#if variantLimits}
               {@const limit = lengthLimit(patternLength(variant.pattern), maxLength)!}
               <span
-                class={["text-[0.65rem] tabular-nums", limit.over ? "font-semibold text-amber-700 dark:text-amber-300" : "text-muted-foreground"]}
+                class={["font-mono text-xs tabular-nums", limit.over ? "font-semibold text-warning" : "text-muted-foreground"]}
                 data-testid="variant-character-count"
                 data-over-limit={limit.over}
                 title={ui.text("ui_count_characters_limit_title", { count: limit.length, limit: limit.limit })}

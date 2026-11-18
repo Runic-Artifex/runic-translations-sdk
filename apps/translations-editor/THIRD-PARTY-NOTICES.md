@@ -11,6 +11,8 @@ components. Versions are fixed by `Directory.Packages.props` and
 | SvelteKit and adapter-static | Copyright (c) 2020 SvelteKit contributors; https://github.com/sveltejs/kit | MIT |
 | Vite browser build tooling | Copyright (c) 2019-present VoidZero Inc. and Vite contributors; https://github.com/vitejs/vite | MIT |
 | .NET runtime in self-contained distributions | .NET Foundation and contributors; https://github.com/dotnet/runtime | MIT |
+| Schibsted Grotesk (variable font, via `@fontsource-variable/schibsted-grotesk`) | Copyright 2023 The Schibsted-Grotesk Project Authors; https://github.com/schibsted/schibsted-grotesk | SIL Open Font License 1.1 |
+| Spline Sans Mono (variable font, via `@fontsource-variable/spline-sans-mono`) | Copyright 2022 The Spline Sans Mono Project Authors; https://github.com/SorkinType/SplineSansMono | SIL Open Font License 1.1 |
 
 Vite, TypeScript, and the remaining packages recorded in the frontend lockfile
 are build and verification tools; they are not required on customer machines.
@@ -18,6 +20,10 @@ The generated browser application can contain small runtime portions of
 transitive packages. Their copyright and license declarations remain available
 in the locked source packages and are covered by the SPDX metadata in the
 lockfile.
+
+The two fonts are bundled unmodified in the browser application. The SIL Open
+Font License 1.1 text is in each font package's `LICENSE` file in the locked
+source packages (https://openfontlicense.org).
 
 ## MIT License
 
