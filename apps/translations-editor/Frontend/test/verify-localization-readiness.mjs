@@ -59,9 +59,20 @@ for (locale of ["en", "de"]) {
     assert.equal(ui.text("ui_count_affected_files", { count }), locale === "en"
       ? count === 1 ? "One affected file" : `${formatted} affected files`
       : count === 1 ? "Eine betroffene Datei" : `${formatted} betroffene Dateien`);
+    // Counts that share a line with other counts are digits in every form (D074.1): "1 message", "0 errors · 1 warning".
     assert.equal(ui.text("ui_count_messages", { count }), locale === "en"
-      ? count === 1 ? "one message" : `${formatted} messages`
-      : count === 1 ? "eine Nachricht" : `${formatted} Nachrichten`);
+      ? count === 1 ? "1 message" : `${formatted} messages`
+      : count === 1 ? "1 Nachricht" : `${formatted} Nachrichten`);
+    assert.equal(ui.text("ui_count_errors", { count }), locale === "en"
+      ? count === 1 ? "1 error" : `${formatted} errors`
+      : `${formatted} Fehler`);
+    assert.equal(ui.text("ui_count_warnings", { count }), locale === "en"
+      ? count === 1 ? "1 warning" : `${formatted} warnings`
+      : count === 1 ? "1 Warnung" : `${formatted} Warnungen`);
+    for (const key of ["ui_count_errors", "ui_count_warnings", "ui_count_locales", "ui_count_messages", "ui_count_state_entries",
+      "ui_count_state_bytes", "ui_count_state_drafts", "ui_count_state_preferences", "ui_count_state_recent"]) {
+      assert.ok(ui.text(key, { count }).startsWith(formatted), `${locale}/${key}/${count} does not start with the digits ${formatted}.`);
+    }
     for (const [key, source] of Object.entries(messages).filter(([key]) => key.startsWith("ui_count_"))) {
       const argumentsValue = Object.fromEntries([...source.matchAll(/\.input \{\$(\w+) :(integer|string)/g)]
         .map(([, name, type]) => [name, type === "integer" ? count : name === "state" ? ui.text("ui_review_state_draft") : "Runic"]));

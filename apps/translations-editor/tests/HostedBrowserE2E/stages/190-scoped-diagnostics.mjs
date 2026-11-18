@@ -35,7 +35,7 @@ export default async function scopedDiagnostics(context) {
   const disclosure = otherIssues.getByRole("button", { name: /^Other warnings in the project \(\d+\)$/ });
   assert.equal(await disclosure.getAttribute("aria-expanded"), "false", "Other warnings are not collapsed.");
   assert.equal(await otherIssues.locator("[data-severity]").count(), 0, "Collapsed warnings are listed.");
-  assert.match(await page.getByTestId("diagnostics-message-counts").textContent(), /^This message: (one error|\d+ errors), /);
+  assert.match(await page.getByTestId("diagnostics-message-counts").textContent(), /^This message: \d+ errors?, \d+ warnings?$/);
   if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "scoped-diagnostics-en.png"), fullPage: true });
   await disclosure.focus();
   await page.keyboard.press("Enter");

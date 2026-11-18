@@ -12,6 +12,7 @@
     errorsFirst, groupDiagnostics, messageDisplayName, placeDiagnostics,
     type DiagnosticSelection, type DiagnosticSources, type PlacedDiagnostic,
   } from "#lib/diagnostic-scope.js";
+  import { diagnosticText } from "#lib/review-model.js";
   import { getUiText, displayNotice } from "#lib/ui-text.js";
 
   interface Props {
@@ -112,7 +113,7 @@
         <TriangleAlertIcon class="mt-0.5 size-4 text-warning" aria-hidden="true" />
       {/if}
       <span class="min-w-0 text-xs leading-5 text-muted-foreground">
-        <strong class={["mr-2 font-mono", diagnostic.severity === "error" ? "text-destructive" : diagnostic.severity === "warning" ? "text-warning" : "text-foreground"]}>{diagnostic.id}</strong>{displayNotice(diagnostic.notice ?? diagnostic.message, ui)}
+        <strong class={["mr-2 font-mono", diagnostic.severity === "error" ? "text-destructive" : diagnostic.severity === "warning" ? "text-warning" : "text-foreground"]}>{diagnostic.id}</strong>{displayNotice(diagnosticText(diagnostic), ui)}
       </span>
       <span class="col-start-2 grid min-w-0 gap-0.5 text-[0.65rem] text-muted-foreground @md:col-start-auto @md:text-right" data-testid="diagnostic-place">
         {#if where !== undefined}<span class="font-medium text-foreground/80">{where}</span>{/if}

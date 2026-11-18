@@ -62,6 +62,24 @@ export default async function staleSourceDiff(context) {
   assert.equal(await before.locator("dd").getAttribute("lang"), "de", "The compared texts are not marked as the base language.");
   if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "stale-source-diff-en.png"), fullPage: true });
 
+  // The rail's diagnostics show the editor's hint for RTR0090, not the command line's `review mark` (D074.1): under the
+  // selected message, and in the other warnings once another message is selected.
+  const rail = page.getByTestId("editor-rail");
+  const staleHint = "then confirm it or mark it for review in the workflow panel.";
+  const staleRow = rail.getByTestId("diagnostics-message").locator('[data-severity="warning"]').filter({ hasText: "RTR0090" });
+  await staleRow.waitFor();
+  assert.match(await staleRow.textContent(), new RegExp(staleHint.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.doesNotMatch(await rail.textContent(), /review mark/, "The rail shows the command-line hint for RTR0090.");
+  await select("common_save");
+  const others = rail.getByTestId("diagnostics-other");
+  await others.getByRole("button", { name: /^Other warnings in the project \(\d+\)$/ }).click();
+  const otherStale = others.locator('[data-severity="warning"]').filter({ hasText: "RTR0090" });
+  await otherStale.first().waitFor();
+  assert.ok((await otherStale.allTextContents()).every(row => row.includes(staleHint)), "An other-warnings RTR0090 lacks the editor's hint.");
+  assert.doesNotMatch(await rail.textContent(), /review mark/, "The other warnings show the command-line hint for RTR0090.");
+  await select("common_cancel");
+  await page.getByTestId("workflow-stale").waitFor();
+
   // Confirming records the approval and the text for the current source; the comparison goes away.
   await confirm();
   await diff.waitFor({ state: "detached" });
