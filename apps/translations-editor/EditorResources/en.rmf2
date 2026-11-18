@@ -59,7 +59,7 @@ app {
   review = Review
 }
 app {
-  save = Save document
+  save = Save
 }
 app {
   saved = Saved
@@ -84,9 +84,6 @@ app {
 }
 app {
   translated = Translated
-}
-app {
-  unsaved = Unsaved changes
 }
 app {
   valid = Ready to save
@@ -1366,6 +1363,16 @@ ui {
       .match $count
       one {{Removed one local editor-state entry.}}
       * {{Removed {$count} local editor-state entries.}}
+
+  }
+}
+ui {
+  count {
+    unsaved_documents =
+      .input {$count :integer select=plural}
+      .match $count
+      one {{text in one document}}
+      * {{text in {$count} documents}}
 
   }
 }
@@ -2989,12 +2996,17 @@ ui {
 }
 ui {
   page {
-    recovered_drafts_restore = Restore drafts
+    recovered_drafts_restore = Restore
   }
 }
 ui {
   page {
     recovered_drafts_title = Unsaved work was recovered
+  }
+}
+ui {
+  page {
+    recovered_review = Unsaved review changes were found in local application storage.
   }
 }
 ui {
@@ -3120,11 +3132,6 @@ ui {
 ui {
   page {
     terminology_remove_term = Remove term
-  }
-}
-ui {
-  page {
-    terminology_save_workflow = Save workflow
   }
 }
 ui {
@@ -3365,12 +3372,7 @@ ui {
 }
 ui {
   palette {
-    save_document = Save document
-  }
-}
-ui {
-  palette {
-    save_workflow_changes = Save workflow changes
+    save_all = Save all changes
   }
 }
 ui {
@@ -3854,11 +3856,6 @@ ui {
 }
 ui {
   toolbar {
-    discard_workflow = Discard workflow changes
-  }
-}
-ui {
-  toolbar {
     open_navigation = Open editor navigation
   }
 }
@@ -3874,22 +3871,25 @@ ui {
 }
 ui {
   toolbar {
-    save_workflow = Save workflow
-  }
-}
-ui {
-  toolbar {
-    saving_workflow = Saving workflow…
-  }
-}
-ui {
-  toolbar {
     undo = Undo
   }
 }
 ui {
   toolbar {
     undo_saved_change = Undo saved change
+  }
+}
+ui {
+  toolbar {
+    unsaved_changes =
+      .input {$changes :string}
+      {{Unsaved changes: {$changes}}}
+
+  }
+}
+ui {
+  toolbar {
+    unsaved_review = review status
   }
 }
 ui {
@@ -3945,6 +3945,11 @@ ui {
 ui {
   workflow {
     approved = Approved
+  }
+}
+ui {
+  workflow {
+    discard = Discard review changes
   }
 }
 ui {

@@ -63,6 +63,8 @@ let page;
 const pageErrors = [];
 const consoleErrors = [];
 const sentUiLocales = [];
+// Every local-state record each `saveLocalState` request carried, newest last (key and value).
+const sentLocalState = [];
 let onUiLocaleSent = () => {};
 // Resolves as soon as the page sends a `saveLocalState` request carrying `lang`, so the caller can act before its reply.
 const uiLocaleSent = (lang, label) => {
@@ -96,6 +98,7 @@ try {
       // The header's length bytes can include "{", so the JSON starts at the request's first member.
       const request = JSON.parse(text.slice(text.indexOf('{"kind":'), text.lastIndexOf("}") + 1));
       const entries = JSON.parse(request.input).argument;
+      sentLocalState.push(entries);
       const value = entries.find(entry => entry.key === "runic-translations.ui-locale")?.value ?? null;
       sentUiLocales.push(value);
       onUiLocaleSent(value);
@@ -131,6 +134,8 @@ try {
     await page.locator('textarea[spellcheck="true"]').first().waitFor();
   };
   const editor = () => page.locator('textarea[spellcheck="true"]').first();
+  // The toolbar's one save state: "Saved", or "Unsaved changes: …" naming what is unsaved.
+  const saveState = async () => (await page.getByTestId("save-state").textContent())?.trim();
   const reloadFiles = async () => {
     await page.getByRole("button", { name: "Project runic-hosted-e2e", exact: true }).click();
     await page.getByRole("menuitem", { name: "Reload", exact: true }).click();
@@ -162,6 +167,16 @@ try {
   await page.reload({ waitUntil: "domcontentloaded" });
   await select("common_cancel");
   assert.equal(await editor().inputValue(), "Queued cancel from the real editor");
+
+  // Unsaved means "differs from the saved text": an edit typed back to the saved text leaves nothing to save.
+  stage = "edit-then-revert";
+  await editor().fill("A temporary edit");
+  await waitFor(async () => await saveState() === "Unsaved changes: text in one document", "unsaved text named in the toolbar");
+  assert.equal(await page.getByRole("button", { name: "Save", exact: true }).isEnabled(), true);
+  await editor().fill("Queued cancel from the real editor");
+  await waitFor(async () => await saveState() === "Saved", "reverted edit is no unsaved change");
+  assert.equal(await page.getByRole("button", { name: "Saved", exact: true }).isDisabled(), true, "Save stays disabled after a revert.");
+  assert.ok((await readFile(diskPath, "utf8")).includes("cancel = Queued cancel from the real editor"));
 
   stage = "plural-edit-preview-persistence";
   await select("files_selected");
@@ -256,7 +271,10 @@ try {
   await page.locator("#workflow-status").click();
   await page.getByRole("option", { name: "Approved", exact: true }).click();
   await page.locator("#review-note").fill("Checked against the new source");
-  await page.getByRole("button", { name: "Save workflow", exact: true }).first().click();
+  // One save: the toolbar names the unsaved review status, and Ctrl+S writes the review file.
+  await waitFor(async () => await saveState() === "Unsaved changes: review status", "unsaved review status named in the toolbar");
+  assert.equal(await page.getByRole("button", { name: "Save workflow" }).count(), 0, "There is no separate workflow save.");
+  await page.keyboard.press("Control+s");
   await waitFor(async () => {
     const review = JSON.parse(await readFile(reviewPath, "utf8"));
     const entry = review.entries.find(item => item.key === "common_save" && item.locale === "en");
@@ -279,6 +297,31 @@ try {
   await writeFile(reviewPath, JSON.stringify(external, null, 2) + "\n");
   await page.getByText("The review file changed on disk; the review data was reloaded.").first().waitFor({ timeout: 15_000 });
   await waitFor(async () => (await page.locator("#review-note").inputValue()) === "Changed by the CLI", "external review note shown in the workflow");
+  await waitFor(async () => await saveState() === "Saved", "saved review data after the external change");
+
+  // Unsaved review changes are kept in the native editor state like text drafts: after a reload (a closed window or
+  // a crash) they are offered for recovery, restored on top of the review file, and saved with Ctrl+S.
+  stage = "review-recovery";
+  const reviewDraftSent = () => sentLocalState.some(entries => entries.some(entry =>
+    entry.key.startsWith("runic-translations:review-drafts:1:") && entry.value.includes("Recovered after reload")));
+  await page.locator("#review-note").fill("Recovered after reload");
+  await waitFor(async () => reviewDraftSent(), "native save of the unsaved review change");
+  await page.reload({ waitUntil: "domcontentloaded" });
+  const recovered = page.getByTestId("recovered-work");
+  await recovered.getByText("Unsaved review changes were found in local application storage.").waitFor();
+  await recovered.getByRole("button", { name: "Restore", exact: true }).click();
+  await recovered.waitFor({ state: "detached" });
+  await waitFor(async () => await saveState() === "Unsaved changes: review status", "restored review change is unsaved");
+  await page.getByRole("button", { name: /^en / }).first().click();
+  await select("common_save");
+  await page.getByRole("button", { name: /^Workflow/ }).first().click();
+  await waitFor(async () => (await page.locator("#review-note").inputValue()) === "Recovered after reload", "recovered review note shown in the workflow");
+  if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "review-unsaved-en.png"), fullPage: true });
+  await page.keyboard.press("Control+s");
+  await waitFor(async () => JSON.parse(await readFile(reviewPath, "utf8")).entries
+    .find(item => item.key === "common_save" && item.locale === "en")?.note === "Recovered after reload", "recovered review note saved to the review file");
+  await waitFor(async () => await saveState() === "Saved", "nothing unsaved after saving the recovered review change");
+  if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "review-recovered-en.png"), fullPage: true });
 
   // The interface language switch sets the window's locale through the ViewModel, the page follows it, and the
   // choice survives a reload from the native editor state.

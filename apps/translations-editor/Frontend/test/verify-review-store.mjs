@@ -116,4 +116,90 @@ assert.equal(failing.saving, false);
   assert.equal(clean.index.get("common_save\u0000de").note, undefined, "Discarding returns to the file's data.");
 }
 
-console.log("PASS: the review store edits, saves, refuses, rebases and discards review data like the editor page did.");
+function memoryStorage() {
+  const values = new Map();
+  return { values, get: (key) => values.get(key) ?? null, set: (key, value) => values.set(key, value), remove: (key) => values.delete(key) };
+}
+
+// Dirty is content-based: an edit back to the saved entry, or a new entry that records nothing, is no change.
+{
+  const storage = memoryStorage();
+  const store = new ReviewStore({ bridge: {}, snapshot: () => snapshot, errorNotice: String, storage });
+  store.install(snapshot);
+  const saved = store.index.get("common_save\u0000de");
+  store.setNote("common_save", "de", "Temporary", true);
+  assert.equal(store.dirty, true);
+  assert.equal(storage.values.size, 1, "An unsaved review change is kept for recovery.");
+  store.setNote("common_save", "de", saved.note ?? "", true);
+  assert.equal(store.dirty, false, "A note typed back to the saved one is no change.");
+  assert.equal(storage.values.size, 0, "The recovery copy goes with the last change.");
+  store.setNote("dashboard_welcome", "fr", "Ask legal.", false);
+  assert.equal(store.dirty, true);
+  store.setNote("dashboard_welcome", "fr", "", false);
+  assert.equal(store.dirty, false, "A new entry whose note is cleared again records nothing.");
+  assert.equal(store.index.has("dashboard_welcome\u0000fr"), false, "The empty new entry is dropped.");
+  store.addTerm({ source: "Save", preferred: "Sichern" });
+  assert.equal(store.dirty, true);
+  store.removeTerm(store.terminology.length - 1);
+  assert.equal(store.dirty, false, "Terminology equal to the saved list is no change.");
+  assert.equal(storage.values.size, 0);
+}
+
+// Recovery: unsaved review changes are stored per workspace and catalog, offered to the next session, and restored
+// on top of the review file as it is then, the way an external change is rebased.
+{
+  const storage = memoryStorage();
+  const recoverySnapshot = structuredClone({ ...snapshot, history: undefined });
+  const first = new ReviewStore({ bridge: {}, snapshot: () => recoverySnapshot, errorNotice: String, storage });
+  first.install(recoverySnapshot);
+  first.setState("common_cancel", "en", "approved", { count: "2" }, true);
+  first.setNote("common_save", "de", "Recovered note", true);
+  first.addTerm({ source: "Cancel", preferred: "Abbrechen", locale: "de" });
+  const key = [...storage.values.keys()][0];
+  assert.match(key, /^runic-translations:review-drafts:1:/);
+  const stored = JSON.parse(storage.values.get(key));
+  assert.equal(stored.version, 1);
+  assert.deepEqual(stored.entries.map((change) => `${change.entry?.key}/${change.base?.key}`).sort(),
+    ["common_cancel/undefined", "common_save/common_save"], "Only changed entries are stored, with the entry each started from.");
+  assert.ok(stored.terminology !== undefined, "Changed terminology is stored with its base.");
+
+  // The next session: another writer changed the review file meanwhile (a new entry, and the same note).
+  const reopened = structuredClone(recoverySnapshot);
+  reopened.review = {
+    ...reopened.review,
+    revision: "external-3",
+    entries: [
+      ...reopened.review.entries.map((entry) => entry.key === "common_save" && entry.locale === "de" ? { ...entry, note: "CLI note" } : entry),
+      { key: "dashboard_welcome", locale: "de", state: "needs-review", samples: {} },
+    ],
+  };
+  const second = new ReviewStore({ bridge: {}, snapshot: () => reopened, errorNotice: String, storage });
+  second.reset(reopened);
+  assert.equal(second.dirty, false, "Recovered changes are only offered.");
+  assert.equal(second.recovered?.entries.length, 2);
+  second.restoreRecovered();
+  assert.equal(second.recovered, undefined);
+  assert.equal(second.dirty, true);
+  assert.equal(second.index.get("common_cancel\u0000en").state, "approved", "A recovered state is restored.");
+  assert.equal(second.index.get("common_cancel\u0000en").stale, false, "Recorded for the same base text, it is current.");
+  assert.equal(second.index.get("dashboard_welcome\u0000de").state, "needs-review", "The file's newer entry is kept.");
+  assert.equal(second.index.get("common_save\u0000de").note, "Recovered note", "An entry changed on both sides keeps the recovered value.");
+  assert.deepEqual(second.message, { code: "ui_feedback_review_external_conflict", args: [{ name: "entries", value: "common_save (de)" }] },
+    "…and is reported as a conflict, as an external change is.");
+  assert.deepEqual(second.terminology.at(-1), { source: "Cancel", preferred: "Abbrechen", locale: "de" }, "Recovered terminology is restored.");
+  assert.equal(second.terminology.length, reopened.review.terminology.length + 1);
+  assert.equal(second.revision, "external-3", "A later save targets the file as it is now.");
+
+  // Declining keeps only this session's changes; with none, the stored copy is removed.
+  const third = new ReviewStore({ bridge: {}, snapshot: () => reopened, errorNotice: String, storage });
+  third.reset(reopened);
+  assert.ok(third.recovered !== undefined);
+  third.discard();
+  third.reset(reopened);
+  assert.equal(third.recovered, undefined, "Discarding the review changes removes their stored copy.");
+  storage.set(key, "{not json");
+  third.reset(reopened);
+  assert.equal(third.recovered, undefined, "An unreadable stored copy offers nothing.");
+}
+
+console.log("PASS: the review store edits, saves, refuses, rebases and discards review data like the editor page did, counts only real changes as unsaved, and recovers them.");

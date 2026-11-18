@@ -10,42 +10,37 @@
   import { getUiText } from "#lib/ui-text.js";
 
   let {
-    reviewDirty,
-    reviewSaving,
-    reviewDisabled,
     saveDisabled,
     saving,
     saveLabel,
     savingLabel,
     saveState,
-    isDirty,
+    unsaved,
+    unsavedDetail,
     canUndo,
     canRedo,
     historyBusy,
     undoLabel,
     redoLabel,
-    ondiscardreview,
-    onsavereview,
     onsave,
     onundo,
     onredo,
   }: {
-    reviewDirty: boolean;
-    reviewSaving: boolean;
-    reviewDisabled: boolean;
     saveDisabled: boolean;
     saving: boolean;
     saveLabel: string;
     savingLabel: string;
+    /** The state shown while nothing is unsaved: "Saved", or the last save's notice. */
     saveState: string;
-    isDirty: boolean;
+    /** Whether any document text or review data is unsaved; one Save writes all of it. */
+    unsaved: boolean;
+    /** What is unsaved, such as "Unsaved changes: text in 2 documents and review status". */
+    unsavedDetail: string;
     canUndo: boolean;
     canRedo: boolean;
     historyBusy: boolean;
     undoLabel?: string;
     redoLabel?: string;
-    ondiscardreview: () => void;
-    onsavereview: () => void;
     onsave: () => void;
     onundo: () => void;
     onredo: () => void;
@@ -66,33 +61,29 @@
     <Button variant="ghost" size="icon-xs" disabled={!canRedo || historyBusy} onclick={onredo} aria-label={redoLabel === undefined ? ui.text("ui_toolbar_redo_saved_change") : `${ui.text("ui_toolbar_redo")} ${redoLabel}`} title={redoLabel === undefined ? `${ui.text("ui_toolbar_redo_saved_change")} (Ctrl+Shift+Z)` : `${ui.text("ui_toolbar_redo")} ${redoLabel} (Ctrl+Shift+Z)`}>
       <Redo2Icon data-icon="inline-start" />
     </Button>
-    {#if reviewDirty}
-      <Button variant="ghost" size="icon-xs" class="hidden sm:inline-flex" disabled={reviewSaving} onclick={ondiscardreview} aria-label={ui.text("ui_toolbar_discard_workflow")} title={ui.text("ui_toolbar_discard_workflow")}>
-        <Undo2Icon data-icon="inline-start" />
-      </Button>
-      <Button variant="outline" size="xs" class="hidden lg:inline-flex" disabled={reviewSaving || reviewDisabled} onclick={onsavereview}>
-        {#if reviewSaving}<Spinner data-icon="inline-start" />{/if}
-        {reviewSaving ? ui.text("ui_toolbar_saving_workflow") : ui.text("ui_toolbar_save_workflow")}
-      </Button>
+    <!-- One state for all unsaved work: "Saved", or "Unsaved changes" naming what is unsaved. -->
+    <span class="sr-only" data-testid="save-state" aria-live="polite">{unsaved ? unsavedDetail : saveState}</span>
+    {#if unsaved}
+      <span class="hidden max-w-64 truncate text-xs text-muted-foreground md:inline" title={unsavedDetail} aria-hidden="true">{unsavedDetail}</span>
     {/if}
 
     <Button
       size="sm"
-      variant={isDirty ? "default" : "secondary"}
+      variant={unsaved ? "default" : "secondary"}
       disabled={saveDisabled}
       onclick={onsave}
-      aria-label={saving ? savingLabel : isDirty ? saveLabel : saveState}
-      title={saving ? savingLabel : isDirty ? saveLabel : saveState}
+      aria-label={saving ? savingLabel : unsaved ? saveLabel : saveState}
+      title={saving ? savingLabel : unsaved ? unsavedDetail : saveState}
     >
       {#if saving}
         <Spinner data-icon="inline-start" />
-      {:else if !isDirty}
+      {:else if !unsaved}
         <CheckIcon data-icon="inline-start" />
       {:else}
         <SaveIcon data-icon="inline-start" />
       {/if}
-      <span class="hidden sm:inline">{saving ? savingLabel : isDirty ? saveLabel : saveState}</span>
-      {#if isDirty}<Kbd.Root class="hidden xl:inline-flex">⌘ S</Kbd.Root>{/if}
+      <span class="hidden sm:inline">{saving ? savingLabel : unsaved ? saveLabel : saveState}</span>
+      {#if unsaved}<Kbd.Root class="hidden xl:inline-flex">⌘ S</Kbd.Root>{/if}
     </Button>
   </div>
 </header>

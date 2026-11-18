@@ -23,7 +23,9 @@ const exactKeys = new Set([
   "runic.sidebar.messages",
   "runic.sidebar.languages-share",
 ]);
-const draftPrefix = "runic-translations:drafts:1:";
+// Recovery copies of unsaved work, per workspace and catalog: document drafts and review changes.
+const draftPrefixes = ["runic-translations:drafts:1:", "runic-translations:review-drafts:1:"];
+const isDraftKey = (key: string): boolean => draftPrefixes.some((prefix) => key.startsWith(prefix));
 const values = new Map<string, string>();
 const pendingKeys = new Set<string>();
 const listeners = new Set<() => void>();
@@ -112,7 +114,7 @@ export function inspectLocalEditorState(): LocalStateSummary {
   for (const [key, value] of values) {
     bytes += byteLength(key) + byteLength(value);
     if (key === "runic-translations:recent:1") recentProjectEntries++;
-    else if (key.startsWith(draftPrefix)) draftEntries++;
+    else if (isDraftKey(key)) draftEntries++;
     else preferenceEntries++;
   }
   return {
@@ -187,7 +189,7 @@ async function persist(): Promise<void> {
 }
 
 function requireOwnedKey(key: string): void {
-  if (!exactKeys.has(key) && !key.startsWith(draftPrefix)) {
+  if (!exactKeys.has(key) && !isDraftKey(key)) {
     throw new Error("Attempted to persist state that is not owned by the translations editor.");
   }
 }
