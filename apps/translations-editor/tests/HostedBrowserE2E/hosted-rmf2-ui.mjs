@@ -572,9 +572,9 @@ try {
   // An error in another message blocks saving, so it is listed without expanding anything.
   stage = "scoped-diagnostics";
   const reviewBefore = await readFile(reviewPath, "utf8");
-  const staleReview = JSON.parse(reviewBefore);
-  staleReview.entries.push({ key: "common_save", locale: "fr", state: "needs-review", sourceFingerprint: staleFingerprint });
-  await writeFile(reviewPath, JSON.stringify(staleReview, null, 2) + "\n");
+  const scopedReview = JSON.parse(reviewBefore);
+  scopedReview.entries.push({ key: "common_save", locale: "fr", state: "needs-review", sourceFingerprint: staleFingerprint });
+  await writeFile(reviewPath, JSON.stringify(scopedReview, null, 2) + "\n");
   await reloadFiles();
   await page.getByRole("button", { name: /^en / }).first().click();
   await select("common_cancel");
