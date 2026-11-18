@@ -5,6 +5,8 @@ export type ResourceValue = string | Record<string, unknown>;
 
 export interface ResourceEntry {
   key: string;
+  /** The logical path (`["common", "cancel"]`); `[key]` for a message the compiler has not described. */
+  path: string[];
   value: ResourceValue;
   description?: string;
   tags: string[];
@@ -28,7 +30,10 @@ export interface TranslationCell {
 export type MessageStructure = "plural" | "variants" | "formatted";
 
 export interface TranslationRow {
+  /** The flattened code identifier (`common_cancel`): the key of review entries and editor requests. */
   key: string;
+  /** The logical path (`["common", "cancel"]`, shown as `common.cancel`). */
+  path: string[];
   description?: string;
   tags: string[];
   cells: Record<string, TranslationCell>;
@@ -103,6 +108,9 @@ export function buildRows(
     }
     return {
       key,
+      path: source?.path ?? snapshot.catalog!.locales
+        .map((locale) => entriesByLocale.get(locale.tag)?.get(key)?.path)
+        .find((path) => path !== undefined) ?? [key],
       description: source?.description,
       tags: source?.tags ?? [],
       cells,
@@ -217,6 +225,7 @@ function flattenDocument(content: string, path: string, entries?: EditorMessageE
 function resourceEntry(key: string, value: string, entry?: EditorMessageEntry): ResourceEntry {
   return {
     key, value,
+    path: entry?.path !== undefined && entry.path.length > 0 ? [...entry.path] : [key],
     description: entry?.context?.comments.join("\n") || undefined,
     tags: entry?.context?.tags ?? [],
     authoring: entry?.authoring,
