@@ -1,18 +1,1 @@
 #nullable enable
-*REMOVED*const Runic.Translations.Generated.TranslationsCompatibility.Rmf2RuntimeAbiVersion = 3 -> int
-const Runic.Translations.Generated.TranslationsCompatibility.Rmf2RuntimeAbiVersion = 4 -> int
-static Runic.Translations.Generated.GeneratedCatalogSupport.ReadDeflatedValues(System.ReadOnlySpan<byte> deflatedUtf8Json, int length) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTranslationValue>!
-static Runic.Translations.Generated.GeneratedCatalogSupport.ReadDeflatedValues(System.ReadOnlySpan<byte> deflatedUtf8Json, int length, System.ReadOnlySpan<byte> formatData) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTranslationValue>!
-static Runic.Translations.Generated.GeneratedCatalogSupport.CreateKeys(string! catalog, System.ReadOnlySpan<byte> messageTable, int canonicalCount) -> Runic.Translations.TranslationKey[]!
-static Runic.Translations.Generated.GeneratedCatalogSupport.CreatePackContract(string! catalog, string! locale, string! contractFingerprint, System.ReadOnlySpan<byte> messageTable, int canonicalCount, System.ReadOnlySpan<int> extraIds, string! rmf2MarkupContract) -> Runic.Translations.TranslationPackContract!
-static Runic.Translations.Generated.GeneratedCatalogSupport.ReadDefinitions(System.ReadOnlySpan<byte> messageTable, int canonicalCount) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTranslationDefinition!>!
-static Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(string! name, string! value) -> Runic.Translations.TextArgument
-static Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(string! name, long value) -> Runic.Translations.TextArgument
-static Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(string! name, decimal value) -> Runic.Translations.TextArgument
-static Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(string! name, bool value) -> Runic.Translations.TextArgument
-static Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(string! name, System.DateOnly value) -> Runic.Translations.TextArgument
-static Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(string! name, System.TimeOnly value) -> Runic.Translations.TextArgument
-static Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(string! name, System.DateTimeOffset value) -> Runic.Translations.TextArgument
-static Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(string! name, System.Guid value) -> Runic.Translations.TextArgument
-static Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(string! name, System.Collections.Generic.IReadOnlyList<string!>! value) -> Runic.Translations.TextArgument
-static Runic.Translations.Generated.GeneratedCatalogSupport.ReadDeflatedText(System.ReadOnlySpan<byte> deflatedUtf8, int length) -> string!

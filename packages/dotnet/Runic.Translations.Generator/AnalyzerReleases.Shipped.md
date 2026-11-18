@@ -103,3 +103,11 @@ RTR0101 | Runic.Translations | Error | Currency or unit is not in the pinned CLD
 RTR0102 | Runic.Translations | Error | Run-time currency or unit has no declared set
 RTR0103 | Runic.Translations | Error | Override does not match the library catalog
 RTR0104 | Runic.Translations | Error | Library catalog to override is not available
+
+## Release 0.14.0.1000
+
+### New Rules
+
+Rule ID | Category | Severity | Notes
+--------|----------|----------|-------
+RTR0107 | Runic.Translations | Warning | Message overrides command-line framework text through the deprecated second path
