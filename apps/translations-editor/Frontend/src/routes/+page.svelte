@@ -1369,7 +1369,8 @@
     const liveContent = repairDocument?.path === document.path ? repairText : draftStore.content(document.path, document.content);
     if (liveContent !== content) return;
     if (document.locale !== undefined) selectedLocale = document.locale;
-    if (about?.key !== undefined && about.locale === document.locale && rows.some((row) => row.key === about.key)) selectedKey = about.key;
+    // A diagnostic located in another locale's file (RTR0090 points at the base text) still selects its message there.
+    if (about?.key !== undefined && rows.some((row) => row.key === about.key)) selectedKey = about.key;
     selectedDocumentPath = document.path;
     selectedDocumentViewState = undefined;
     if (document.isMalformed) {
