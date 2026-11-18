@@ -62,4 +62,26 @@ snapshot = undefined;
 const empty = new DiagnosticsStore(() => snapshot);
 assert.deepEqual(empty.displayed, [], "Without a workspace nothing is listed.");
 
+// A save of review data requests the saved workspace's diagnostics again (real-window check R5): they replace the
+// snapshot's and the results of earlier requests, which still reported RTR0090, until the next snapshot.
+{
+  const { RuneValue } = await import("./rune-value.svelte.ts");
+  const first = { diagnostics: [diagnostic("RTR0090", "warning", { key: "common_save", locale: "de" }), diagnostic("W9", "warning")] };
+  const open = new RuneValue(first);
+  const refreshing = new DiagnosticsStore(() => open.value);
+  refreshing.record("transform", "de.rmf2", { success: true, diagnostics: [diagnostic("RTR0090", "warning", { key: "common_save", locale: "de" })] });
+  refreshing.refreshWorkspace(first, [diagnostic("W9", "warning")]);
+  assert.equal(refreshing.latest, undefined, "The results of earlier requests still show.");
+  assert.deepEqual(refreshing.displayed.map((item) => item.id), ["W9"], "The stale-review warning stays after the review save.");
+  // A selection change clears the results: the refreshed workspace diagnostics stay.
+  refreshing.clear();
+  assert.deepEqual(refreshing.displayed.map((item) => item.id), ["W9"]);
+  // A refresh for a snapshot that is no longer open changes nothing; a new snapshot brings its own diagnostics.
+  const second = { diagnostics: [diagnostic("E7", "error")] };
+  open.value = second;
+  assert.deepEqual(refreshing.displayed.map((item) => item.id), ["E7"]);
+  refreshing.refreshWorkspace(first, []);
+  assert.deepEqual(refreshing.displayed.map((item) => item.id), ["E7"], "A refresh of an earlier snapshot replaced the open one's.");
+}
+
 console.log("PASS: the diagnostics store keeps results per request and document, shows the latest, and scopes and orders it.");

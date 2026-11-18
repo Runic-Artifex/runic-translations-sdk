@@ -146,8 +146,9 @@ export function createContext({ page, workspace, reportDirectory, observations }
     messageRow,
     groupRow,
     focusedRow,
-    // The editor of a plural message's `one` variant, of a starter's variant by its title, and the composer's MF2 source.
-    branchEditor: () => page.getByRole("textbox", { name: /Translation for count: one/ }).first(),
+    // The editor of a plural message's `one` variant ("Text for …" in the base locale, whose text is the source text),
+    // of a starter's variant by its title, and the composer's MF2 source.
+    branchEditor: () => page.getByRole("textbox", { name: /(Translation|Text) for count: one/ }).first(),
     variantBox: title => page.getByRole("textbox", { name: new RegExp(`^Translation for count: ${title}`) }).first(),
     composerSource: page.getByRole("textbox", { name: "Message source", exact: true }),
     undoButton: page.getByRole("button", { name: /^Undo(:| saved change)/ }),

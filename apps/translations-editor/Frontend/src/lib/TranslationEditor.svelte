@@ -24,8 +24,13 @@
     sourceLocale: string;
     sourceLocaleName: string;
     sourceEntry: ResourceEntry | undefined;
-    /** Whether the source panel can show: a content-editing project (D074.2) has no other language. */
+    /** Whether the source panel can show: the source text itself (the base locale, a content-editing project) has none. */
     showSource?: boolean;
+    /**
+     * Whether the composer offers the message's structure (plural forms, cases, the advanced structure, the message
+     * source as a primary action). A content-editing project (D074.2) leaves the structure to developers.
+     */
+    structure?: boolean;
     authoring?: EditorMessageProjection;
     authoringBusy?: boolean;
     onoperation?: (operation: EditorMessageOperation) => void;
@@ -59,6 +64,7 @@
     sourceLocaleName,
     sourceEntry,
     showSource = true,
+    structure = true,
     authoring,
     authoringBusy = false,
     onoperation,
@@ -77,8 +83,10 @@
   }: Props = $props();
 
   const ui = getUiText();
-  // With a limit the counter measures what RTR0098 measures: the literal text of the longest variant.
-  let limit = $derived(mode === "translation" ? lengthLimit(messageLength(authoring, value), maxLength) : undefined);
+  // The composer counts what the translator writes, as RTR0098 measures it with a limit: the literal text of the longest
+  // variant, without placeholders or the MF2 syntax around it, so an empty starter counts 0. The file view counts the file.
+  let length = $derived(mode === "translation" ? messageLength(authoring, value) : value.length);
+  let limit = $derived(mode === "translation" ? lengthLimit(length, maxLength) : undefined);
   let rawInput = $state<HTMLTextAreaElement | null>(null);
   $effect(() => {
     const selection = sourceSelection;
@@ -112,7 +120,7 @@
       </Field.Label>
       {#if limit === undefined}
         <span class="shrink-0 font-mono text-xs tabular-nums text-muted-foreground" data-testid="character-count">
-          {ui.text("ui_count_characters", { count: value.length })}
+          {ui.text("ui_count_characters", { count: length })}
         </span>
       {:else}
         <span
@@ -137,7 +145,7 @@
           <p class="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground" role="status">{ui.text("ui_translation_editor_starter_loading")}</p>
         {:else}
           {#key identity}
-            <MessageComposer value={resourceValue} {locale} {authoring} {authoringBusy} {onoperation} onchange={onresourcechange} {maxLength} {oncopysource} {revision} />
+            <MessageComposer value={resourceValue} {locale} {authoring} {authoringBusy} {onoperation} onchange={onresourcechange} {maxLength} {oncopysource} {revision} {structure} />
           {/key}
         {/if}
       </div>

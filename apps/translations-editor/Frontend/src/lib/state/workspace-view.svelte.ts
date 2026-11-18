@@ -5,7 +5,7 @@ import type { MessageGroupCountKind, MessageListItem } from "../MessageList.svel
 import type { MessageFilter } from "../MessageToolbar.svelte";
 import { createMessageSearchIndex } from "../message-search";
 import { adjacentMessage, messageTreeOrder, nextMessageKind, type NextMessageDirection, type NextMessageKind } from "../next-message";
-import { projectKind, type ProjectKind } from "../project-kind";
+import { projectKind, textRole, type ProjectKind, type TextRole } from "../project-kind";
 import { localeCoverage, preview, type TranslationRow } from "../resource-model";
 import {
   bidiIssues,
@@ -56,12 +56,20 @@ export class WorkspaceView {
   /** Whether the open project is a content-editing project: one language, nothing to translate or review. */
   contentProject = $derived(this.projectKind === "content");
   /**
-   * The list's filter as it applies. In a content-editing project a translation filter (missing, outdated, to review),
-   * kept from the time the project had more languages, shows every text.
+   * Whether the selected locale holds the source text or a translation: the base locale of a translation project and
+   * every text of a content-editing project are the source text. The source text has no translation states, review
+   * workflow, translation filters, source panel or Copy source, and is worded as text, not as a translation.
+   */
+  textRole = $derived.by((): TextRole => textRole(this.projectKind, this.#locale(), this.#defaultLocale()));
+  /** Whether the selection edits the source text (`textRole` "source"), not a translation. */
+  editingSource = $derived(this.textRole === "source");
+  /**
+   * The list's filter as it applies. While the source text is selected a translation filter (missing, outdated, to
+   * review), kept from another locale or from the time the project had more languages, shows every message.
    */
   filter = $derived.by((): MessageFilter => {
     const filter = this.#options.selection.filter;
-    return this.contentProject && translationFilters.has(filter) ? "all" : filter;
+    return this.editingSource && translationFilters.has(filter) ? "all" : filter;
   });
   /** What the validation area reads to name a diagnostic's message and its line in it (#225 P6, P12). */
   diagnosticSources = $derived.by((): DiagnosticSources => ({
@@ -115,7 +123,7 @@ export class WorkspaceView {
       left.key.localeCompare(right.key) || left.kind.localeCompare(right.kind));
   });
   qualityKeySet = $derived(new Set(this.localeQualityFindings.map((issue) => issue.key)));
-  /** The list's filters; a content-editing project has no missing, outdated or to-review texts to filter by. */
+  /** The list's filters; the source text has no missing, outdated or to-review messages to filter by. */
   filterOptions = $derived.by(() => {
     const labels = this.#options.labels();
     const rows = this.#rows();
@@ -124,7 +132,7 @@ export class WorkspaceView {
     const all = { value: "all" as const, label: labels.all, count: rows.length };
     const structured = { value: "structured" as const, label: labels.structured, count: rows.filter((row) => row.structured).length };
     const quality = { value: "quality" as const, label: this.#options.ui.text("ui_page_quality_title"), count: this.qualityKeySet.size };
-    if (this.contentProject) return [all, structured, quality];
+    if (this.editingSource) return [all, structured, quality];
     return [
       all,
       { value: "missing" as const, label: labels.missing, count: rows.filter((row) => row.cells[locale]?.entry === undefined).length },
@@ -153,10 +161,10 @@ export class WorkspaceView {
   });
   messageListItems = $derived.by((): MessageListItem[] => {
     const locale = this.#locale();
-    const content = this.contentProject;
+    const content = this.editingSource;
     return this.visibleRows.map((row) => {
       const cell = row.cells[locale];
-      // A content-editing project has no translation states: nothing is missing, outdated or waiting for review.
+      // The source text has no translation states: nothing is missing, outdated or waiting for review.
       const rowReview = content ? undefined : this.#options.review.index.get(reviewIdentity(row.key, locale));
       return {
         key: row.key,
@@ -173,24 +181,25 @@ export class WorkspaceView {
   /** The keys of the messages in tree order, which Next and Previous follow. */
   treeOrder = $derived.by(() => messageTreeOrder(this.#rows()));
   /**
-   * What Next and Previous step through for the list's filter: missing messages, or the outdated or to-review ones; in
-   * a content-editing project, every text.
+   * What Next and Previous step through for the list's filter: missing messages, or the outdated or to-review ones;
+   * while the source text is selected (the base locale, or a content-editing project), every text.
    */
-  stepKind = $derived.by((): NextMessageKind => this.contentProject ? "text" : nextMessageKind(this.filter));
+  stepKind = $derived.by((): NextMessageKind => this.editingSource ? "text" : nextMessageKind(this.filter));
   /** #225 P15: the selection stays, but the list says when the search or filter hides it. */
   selectedHiddenByFilter = $derived.by(() => this.#options.selection.selectedRow !== undefined &&
     !this.visibleRows.some((row) => row.key === this.#options.selection.selectedKey));
   /** The counts a collapsed group names for the selected locale: those the current filter does not already imply. */
   messageGroupCounts = $derived.by((): MessageGroupCountKind[] => {
     const filter = this.filter;
-    if (this.contentProject) return [];
+    if (this.editingSource) return [];
     return filter === "missing" || filter === "stale" || filter === "needs-review" ? [] : ["missing", "stale", "needsReview"];
   });
   /**
-   * The review entry of the selection. A content-editing project has no review workflow: a review file kept from the
-   * time it had more languages stays on disk untouched, but its states do not apply.
+   * The review entry of the selection. Review states belong to translations: the source text (the base locale, or a
+   * content-editing project) has none. Review entries of it, such as those a content-editing project kept from the time
+   * it had more languages, stay on disk untouched, but do not apply.
    */
-  currentReview = $derived.by(() => this.contentProject
+  currentReview = $derived.by(() => this.editingSource
     ? undefined
     : this.#options.review.index.get(reviewIdentity(this.#options.selection.selectedKey, this.#locale())));
   currentReviewState = $derived.by(() => effectiveReviewState(this.currentReview, this.#options.selection.currentCell?.entry !== undefined));
@@ -230,9 +239,9 @@ export class WorkspaceView {
     return this.#options.snapshot()?.catalog?.defaultLocale ?? "";
   }
 
-  // Review data cannot change now, or the project has no review workflow (a content-editing project).
+  // Review data cannot change now, or the selection has no review workflow (the source text).
   #reviewUnavailable(): boolean {
-    return this.contentProject || this.#options.reviewBlocked();
+    return this.editingSource || this.#options.reviewBlocked();
   }
 
   // Whether the locale has the message: a new review entry starts from its implicit state.

@@ -77,8 +77,11 @@
   } = $props();
   const ui = getUiText();
   const saveAndNextLabel = $derived(stepTitle("save_and_next", next.saveAndNextKind, ui));
-  // A content-editing project (D074.2): no review workflow, no source panel, no Copy source; the developers' note.
+  // A content-editing project (D074.2): the developers' note, and the composer without the message's structure.
   const content = $derived(view.contentProject);
+  // The source text (a translation project's base locale, or a content-editing project): no review workflow, no
+  // source panel, no Copy source.
+  const source = $derived(view.editingSource);
 </script>
 
 <!-- The selected message: its heading, review workflow, editor mode and the translation editor. -->
@@ -96,9 +99,10 @@
   ondelete={() => onmutation("delete-key")}
 />
 
-<!-- The review workflow and the stale-review confirmation belong to translation projects. A review file of a
-     content-editing project stays on disk untouched; the editor does not show it. -->
-{#if !content}
+<!-- The review workflow and the stale-review confirmation belong to translations, not to the source text (the base
+     locale, or a content-editing project). Review entries of the source text stay on disk untouched; the editor does
+     not show them. -->
+{#if !source}
 <ReviewWorkflow
   state={view.currentReviewState}
   notTranslated={selection.currentCell?.entry === undefined && (view.currentReview === undefined || view.currentReview.implicit === true)}
@@ -137,7 +141,8 @@
   mode={selection.mode}
   locale={selection.selectedLocale}
   label={selection.mode === "translation" ? content ? ui.text("ui_content_text") : localeName(selection.selectedLocale) : selection.currentDocument?.path ?? ui.text("ui_page_resource_document")}
-  showSource={!content}
+  showSource={!source}
+  structure={!content}
   value={selection.mode === "translation" && selection.currentStarter !== undefined ? selection.currentStarter.text : selection.editorText}
   resourceValue={selection.currentStarter?.text ?? selection.currentCell?.entry?.value ?? ""}
   sourceLocale={catalog.defaultLocale}
@@ -149,7 +154,7 @@
   maxLength={selection.currentStarter !== undefined ? selection.currentStarter.maxLength : selection.currentCell?.entry?.maxLength}
   lengthWarning={view.currentQuality.find((issue) => issue.code === "RTR0098")?.message}
   starterLoading={selection.starterLoading}
-  oncopysource={!content && selection.currentStarter !== undefined && selection.sourceAuthoring?.supported === true ? () => editing.copySource() : undefined}
+  oncopysource={!source && selection.currentStarter !== undefined && selection.sourceAuthoring?.supported === true ? () => editing.copySource() : undefined}
   sourceSelection={selection.sourceSelection}
   missing={selection.currentCell?.entry === undefined}
   invalid={clientError !== undefined || diagnostics.latest?.success === false}

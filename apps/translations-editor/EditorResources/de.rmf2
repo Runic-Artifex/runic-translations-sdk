@@ -5063,3 +5063,13 @@ ui {
 
   }
 }
+ui {
+  composer {
+    show_source = Quelltext anzeigen
+  }
+}
+ui {
+  composer {
+    hide_source = Quelltext ausblenden
+  }
+}

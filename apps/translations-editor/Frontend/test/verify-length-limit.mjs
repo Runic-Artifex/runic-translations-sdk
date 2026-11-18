@@ -77,6 +77,20 @@ const variants = [...plural.matchAll(/<span[^>]*data-testid="variant-character-c
 assert.deepEqual(variants, [["[ui_count_characters_limit count=10 limit=24]", "false"], ["[ui_count_characters_limit count=24 limit=24]", "false"]]);
 assert.doesNotMatch(html(TranslationEditor, { ...pluralProps, maxLength: undefined }), /variant-character-count/, "Without a limit no variant shows a length.");
 
+// Without a limit the counter counts what the translator writes too (real-window check R4): the visible text of the
+// longest variant, without placeholders or MF2 syntax. An empty plural starter counts 0, not its 54 characters of MF2.
+const starterValue = ".input {$count :integer}\n.match $count\none {{}}\n* {{}}";
+const starter = html(TranslationEditor, props({
+  value: starterValue, resourceValue: starterValue, missing: true, authoring: authoring([[["one"], ""], [["*"], ""]]),
+}));
+assert.equal(counter(starter)[1].trim(), "[ui_count_characters count=0]", "An empty plural starter counts its MF2 syntax.");
+assert.equal(counter(html(TranslationEditor, { ...pluralProps, maxLength: undefined }))[1].trim(), "[ui_count_characters count=24]",
+  "Without a limit the counter does not count like the limit counter.");
+assert.equal(counter(html(TranslationEditor, props({ value: "{$count} Dateien", resourceValue: "{$count} Dateien", authoring: authoring([[[], "{$count} Dateien"]]) })))[1].trim(),
+  "[ui_count_characters count=8]", "A placeholder is counted.");
+assert.equal(counter(html(TranslationEditor, props({ value: "", resourceValue: "", authoring: authoring([[[], ""]]), missing: true })))[1].trim(),
+  "[ui_count_characters count=0]");
+
 // The file view counts the file, without the limit.
 assert.equal(counter(html(TranslationEditor, props({ mode: "raw", maxLength: 3, value: "common {\n}\n" })))[1].trim(), "[ui_count_characters count=11]");
 
