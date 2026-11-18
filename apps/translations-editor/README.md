@@ -359,10 +359,12 @@ direnv exec . dotnet run --project apps/translations-editor/Runic.Translations.E
 Translations dependencies resolve from source in this repository. Runic Command
 Line and the Runic SDK packages (Views with its CS-WebUI host and ReactiveUI
 adapter, Navigation, Platform) and their npm counterparts resolve from
-independently pinned published packages; the editor is built on Runic SDK 0.17.1
-(NuGet and npm, which must match: Bridge protocol 3 is a strict version match).
+independently pinned published packages; the editor is built on Runic SDK 0.22.0
+(`Runic.Application.Views.CsWebUi` 0.22.0-preview.1), NuGet and npm, which move
+together: the page and the host speak Bridge protocol 4, and the generated Views
+clients in `Frontend/src/generated` are rewritten by each SDK update.
 No sibling SDK checkout is needed. The native transport is published `CsWebUi` and
-`CsWebUi.Native` `[2.5.0-beta.4.9, 3.0.0)`, the floor of Runic SDK 0.17.1's
+`CsWebUi.Native` `[2.5.0-beta.4.9, 3.0.0)`, the floor of Runic SDK 0.22.0's
 CS-WebUI host (an exact `2.5.0-beta.4.8` pin was a downgrade, NU1605). These
 resolve through the repository's ordinary NuGet.org configuration.
 `bun run test` checks the frontend, generated Views client, editor save/recovery smoke (a verification build, above) and example workspace.
