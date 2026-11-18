@@ -226,6 +226,15 @@ export class ReviewStore {
     this.update(key, locale, { state, sourceFingerprint: this.fingerprint(key), samples: createPreviewSamples(samples) }, translated);
   }
 
+  /**
+   * Confirms the entry's current state for the base text the editor loaded (#225 P20): the translator checked a stale
+   * state against the current source text. It is a review change like any other, written by the one save.
+   */
+  confirm(key: string, locale: string, samples: Record<string, string>, translated: boolean): void {
+    const state = effectiveReviewState(this.index.get(reviewIdentity(key, locale)), translated);
+    this.setState(key, locale, state, samples, translated);
+  }
+
   setNote(key: string, locale: string, note: string, translated: boolean): void {
     this.update(key, locale, { note }, translated);
   }

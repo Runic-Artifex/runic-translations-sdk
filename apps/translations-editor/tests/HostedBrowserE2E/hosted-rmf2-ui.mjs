@@ -323,7 +323,10 @@ try {
   const workflow = page.getByRole("button", { name: /^Workflow/ }).first();
   await workflow.getByText("Source changed", { exact: true }).waitFor();
   await workflow.click();
-  await page.getByText(/RTR0090.*predates a change to its source/).first().waitFor();
+  // The quality check names the editor's actions instead of the diagnostic's `runic-translations review mark` (#225 P20).
+  const staleCheck = page.getByRole("region", { name: "Quality checks", exact: true }).getByRole("button", { name: /^RTR0090/ });
+  await staleCheck.getByText(/confirm it or mark it for review in the workflow panel/).waitFor();
+  assert.doesNotMatch(await staleCheck.innerText(), /review mark/, "The workflow's quality check repeats the command-line instruction.");
   await page.locator("#workflow-status").click();
   await page.getByRole("option", { name: "Approved", exact: true }).click();
   await page.locator("#review-note").fill("Checked against the new source");
@@ -378,6 +381,62 @@ try {
     .find(item => item.key === "common_save" && item.locale === "en")?.note === "Recovered after reload", "recovered review note saved to the review file");
   await waitFor(async () => await saveState() === "Saved", "nothing unsaved after saving the recovered review change");
   if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "review-recovered-en.png"), fullPage: true });
+
+  // A stale approval (approved for source text that changed since) is re-confirmed in the editor (#225 P20): with
+  // "Confirm translation", or by choosing the same state again; the one save records it for the current source.
+  stage = "stale-approval-confirm";
+  const staleReview = JSON.parse(await readFile(reviewPath, "utf8"));
+  staleReview.entries.push(
+    { key: "common_cancel", locale: "en", state: "approved", sourceFingerprint: staleFingerprint },
+    { key: "files_selected", locale: "en", state: "approved", sourceFingerprint: staleFingerprint },
+  );
+  await writeFile(reviewPath, JSON.stringify(staleReview, null, 2) + "\n");
+  await reloadFiles();
+  await page.getByRole("button", { name: /^en / }).first().click();
+  await select("common_cancel");
+  assert.equal(await page.title(), "runic-hosted-e2e – Runic Translations Editor", "The window title names the catalog.");
+  const staleNotice = page.getByTestId("workflow-stale");
+  await staleNotice.getByText("The source text changed after this message was marked “Approved”.", { exact: false }).waitFor();
+  assert.equal(await staleNotice.getByRole("button", { name: "Mark needs review", exact: true }).count(), 1);
+  await staleNotice.getByRole("button", { name: "Confirm translation", exact: true }).click();
+  await staleNotice.waitFor({ state: "detached" });
+  await waitFor(async () => await saveState() === "Unsaved changes: review status", "the confirmation is an unsaved review change");
+  assert.equal(await page.title(), "• runic-hosted-e2e – Runic Translations Editor", "The window title marks unsaved work.");
+  await select("files_selected");
+  await page.getByTestId("workflow-stale").waitFor();
+  await page.getByRole("button", { name: /^Workflow/ }).first().click();
+  await page.locator("#workflow-status").click();
+  await page.getByRole("option", { name: "Approved", exact: true }).click();
+  await page.getByTestId("workflow-stale").waitFor({ state: "detached" });
+  if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "stale-confirmed-en.png"), fullPage: true });
+  await page.keyboard.press("Control+s");
+  await waitFor(async () => {
+    const entries = JSON.parse(await readFile(reviewPath, "utf8")).entries;
+    return ["common_cancel", "files_selected"].every(key => {
+      const entry = entries.find(item => item.key === key && item.locale === "en");
+      return entry?.state === "approved" && entry.sourceFingerprint?.startsWith("sha256:") && entry.sourceFingerprint !== staleFingerprint;
+    });
+  }, "both stale approvals recorded again for the current source");
+  await waitFor(async () => await saveState() === "Saved", "nothing unsaved after saving the confirmations");
+  assert.equal(await page.title(), "runic-hosted-e2e – Runic Translations Editor");
+
+  // The last locale and message of the catalog are restored on the next launch (#225 P24).
+  stage = "remembered-selection";
+  await page.getByRole("button", { name: /^fr / }).first().click();
+  await select("common_save");
+  await waitFor(async () => sentLocalState.some(entries => entries.some(entry =>
+    entry.key === "runic-translations:catalog-selection:1" && entry.value.includes('"locale":"fr","key":"common_save"'))), "native save of the selection");
+  // Its group is collapsed when the window closes: the restored message is revealed in the tree on the next launch.
+  await groupRow("common").click();
+  await waitFor(async () => await messageRow("common_save").count() === 0, "a click collapses the selected message's group");
+  await waitFor(async () => sentLocalState.some(entries => entries.some(entry =>
+    entry.key === "runic-translations:message-tree:1" && /"collapsed":\[[^\]]*"common"/.test(entry.value))), "native save of the collapsed group");
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("heading", { level: 2, name: "common.save", exact: true }).waitFor();
+  assert.equal(await page.getByRole("button", { name: /^fr / }).first().getAttribute("aria-pressed"), "true", "The locale was not restored.");
+  await waitFor(async () => await messageRow("common_save").getAttribute("aria-selected") === "true", "the restored message revealed and selected in the tree");
+  assert.equal(await groupRow("common").getAttribute("aria-expanded"), "true", "The restored message's group is expanded.");
+  await page.getByRole("button", { name: /^en / }).first().click();
 
   // The translate view (#225 P1, P8): another locale's editor shows the base locale's text read-only above it, one
   // block per variant with the variable as a chip; the base locale (de in this workspace) has no source panel, and the
@@ -646,6 +705,16 @@ try {
   await page.getByRole("region", { name: "Ausgangstext (Deutsch)", exact: true }).getByText("One edited file selected", { exact: true }).waitFor();
   assert.equal(await page.locator('[data-slot="toggle-group-item"]', { hasText: /^Datei$/ }).count(), 1, "The file tab is not named Datei.");
   if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "translate-view-de.png"), fullPage: true });
+  stage = "review-state-german-ui";
+  await select("common_cancel");
+  assert.equal((await page.getByTestId("workflow-state").textContent())?.trim(), "Freigegeben", "The approved badge is not German.");
+  await page.getByRole("button", { name: /^fr / }).first().click();
+  await select("common_cancel");
+  assert.equal((await page.getByTestId("workflow-state").textContent())?.trim(), "Übersetzt", "The translated badge is not German.");
+  for (const coverage of await page.getByTestId("locale-coverage").allTextContents())
+    assert.match(coverage.trim(), /^\d{1,3}\u00a0%$/, `Coverage ${coverage} is not whole percent in German format.`);
+  assert.equal(await page.title(), "runic-hosted-e2e – Runic Translations Editor");
+  await page.getByRole("button", { name: /^en / }).first().click();
 
   // A reload straight after a switch, as a user pressing F5 would. The reload ends the Bridge connection while the
   // native save is in flight: that must not surface as an uncaught `BridgeError: The Bridge is disconnected.`, and the

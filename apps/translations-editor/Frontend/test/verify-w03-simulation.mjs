@@ -32,7 +32,8 @@ async function importTs(path, imports = {}) {
 const simulation = await importTs("../src/lib/simulation.ts");
 const semanticReviewUrl = await tsModuleUrl("../src/lib/semantic-review.ts");
 const reviewModel = await importTs("../src/lib/review-model.ts", { "./semantic-review": semanticReviewUrl });
-const paletteModule = await importTs("../src/lib/command-palette.ts");
+const shortcutLabelsUrl = await tsModuleUrl("../src/lib/shortcut-labels.ts");
+const paletteModule = await importTs("../src/lib/command-palette.ts", { "./shortcut-labels": shortcutLabelsUrl });
 
 // --- Pseudo-localization comes from the SDK's generator on the preview host ---
 

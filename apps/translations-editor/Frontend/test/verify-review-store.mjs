@@ -202,4 +202,56 @@ function memoryStorage() {
   assert.equal(third.recovered, undefined, "An unreadable stored copy offers nothing.");
 }
 
-console.log("PASS: the review store edits, saves, refuses, rebases and discards review data like the editor page did, counts only real changes as unsaved, and recovers them.");
+// A stale state (approved for source text that changed since, RTR0090) is confirmed in the editor (#225 P20): the
+// current state is recorded again for the base text the editor loaded, as an unsaved review change the one save writes.
+{
+  const staleSnapshot = structuredClone({ ...snapshot, history: undefined });
+  staleSnapshot.review = (await mockExecute("LoadWorkspace", {})).review;
+  staleSnapshot.review.fingerprints = fingerprints;
+  const staleSaves = [];
+  const store = new ReviewStore({
+    bridge: { saveReview: (request) => { staleSaves.push(request); return mockExecute("SaveReview", request); } },
+    snapshot: () => staleSnapshot,
+    errorNotice: String,
+  });
+  store.install(staleSnapshot);
+  const before = store.index.get("common_save\u0000de");
+  assert.deepEqual([before.state, before.stale, before.sourceFingerprint], ["approved", true, "sha256:outdated"], "The fixture's approval is stale.");
+
+  store.confirm("common_save", "de", { count: "1" }, true);
+  const confirmed = store.index.get("common_save\u0000de");
+  assert.deepEqual([confirmed.state, confirmed.stale, confirmed.sourceFingerprint, confirmed.implicit], ["approved", false, "sha256:save", false],
+    "Confirming records the same state for the current source text.");
+  assert.equal(store.dirty, true, "A confirmation is an unsaved review change.");
+  assert.deepEqual(store.changes.entries.map((change) => `${change.entry?.key}:${change.base?.sourceFingerprint}`), ["common_save:sha256:outdated"]);
+
+  // Choosing the same state again on a stale entry re-records it too (the workflow panel's status select).
+  const reselect = new ReviewStore({ bridge: {}, snapshot: () => staleSnapshot, errorNotice: String });
+  reselect.install(staleSnapshot);
+  reselect.setState("common_save", "de", "approved", {}, true);
+  assert.deepEqual([reselect.index.get("common_save\u0000de").stale, reselect.dirty], [false, true], "Re-selecting the stale state records it anew.");
+
+  // A stale "needs review" stays "needs review"; an entry without a recorded state confirms its implicit one.
+  store.update("dashboard_welcome", "en", { state: "needs-review", sourceFingerprint: "sha256:old" }, true);
+  assert.equal(store.index.get("dashboard_welcome\u0000en").stale, true);
+  store.confirm("dashboard_welcome", "en", {}, true);
+  assert.deepEqual([store.index.get("dashboard_welcome\u0000en").state, store.index.get("dashboard_welcome\u0000en").stale], ["needs-review", false]);
+  assert.equal(store.index.has("files_selected\u0000fr"), false);
+  store.confirm("files_selected", "fr", {}, true);
+  assert.equal(store.index.get("files_selected\u0000fr").state, "translated", "Without a recorded state, the translation's presence is confirmed.");
+
+  // The one save writes the confirmation; the saved entry is current.
+  assert.equal(await store.save(), true);
+  assert.equal(staleSaves.length, 1);
+  assert.equal(staleSaves[0].entries.find((entry) => entry.key === "common_save" && entry.locale === "de").sourceFingerprint, "sha256:save");
+  assert.equal(store.dirty, false);
+
+  // Without the base text's fingerprints nothing can be confirmed.
+  const blocked = new ReviewStore({ bridge: {}, snapshot: () => ({ ...staleSnapshot, review: { ...staleSnapshot.review, fingerprints: undefined } }), errorNotice: String });
+  blocked.install(staleSnapshot);
+  blocked.confirm("common_save", "de", {}, true);
+  assert.equal(blocked.dirty, false);
+  assert.deepEqual(blocked.message, { code: "ui_review_states_need_base", args: [] });
+}
+
+console.log("PASS: the review store edits, saves, refuses, rebases and discards review data like the editor page did, counts only real changes as unsaved, recovers them, and confirms stale states.");

@@ -19,6 +19,8 @@ const exactKeys = new Set([
   "runic-translations.ui-direction",
   "runic-translations.ui-locale",
   "runic-translations:recent:1",
+  // The last selected locale and message of the most recent catalogs (catalog-selection.ts `catalogSelectionStateKey`).
+  "runic-translations:catalog-selection:1",
   "runic.sidebar.languages",
   "runic.sidebar.messages",
   "runic.sidebar.languages-share",
