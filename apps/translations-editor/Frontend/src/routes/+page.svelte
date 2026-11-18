@@ -20,6 +20,7 @@
   import {
     clearLocalEditorState,
     configureLocalEditorState,
+    flushLocalEditorState,
     getLocalEditorState,
     inspectLocalEditorState,
     loadLocalEditorState,
@@ -30,6 +31,7 @@
   import { createUiText, errorMessage, errorNotice, notice, setUiText, UiNoticeError } from "#lib/ui-text.js";
   import { editorWindowTitle } from "#lib/window-title.js";
   import AboutDialog from "#lib/dialogs/AboutDialog.svelte";
+  import CloseDialog from "#lib/dialogs/CloseDialog.svelte";
   import ExternalChangeDialog from "#lib/dialogs/ExternalChangeDialog.svelte";
   import MutationDialog from "#lib/dialogs/MutationDialog.svelte";
   import OpenProjectDialog from "#lib/dialogs/OpenProjectDialog.svelte";
@@ -44,6 +46,7 @@
   import WorkspaceNotices from "#lib/screens/WorkspaceNotices.svelte";
   import WorkspaceShell from "#lib/screens/WorkspaceShell.svelte";
   import { AboutController } from "#lib/state/about-controller.svelte.js";
+  import { CloseGuard } from "#lib/state/close-guard.svelte.js";
   import { DiagnosticsStore } from "#lib/state/diagnostics-store.svelte.js";
   import { DraftStore } from "#lib/state/draft-store.svelte.js";
   import { ExternalChangesController } from "#lib/state/external-changes.svelte.js";
@@ -139,6 +142,14 @@
       externalChanges.clear();
     },
   });
+  // The question before the window closes with unsaved work (#225 P19): the host asks it, the page shows Save, Discard
+  // and Cancel.
+  const closeGuard = new CloseGuard({
+    unsaved, save: saveCoordinator, repair,
+    saveAll: () => workspace.saveAll(),
+    flush: flushLocalEditorState,
+    closeWindow: () => bridge.closeWindow(),
+  });
   const recovery = new RecoveryController({ bridge, workspace, drafts: draftStore, review, selection, feedback, historyBusy });
   const view: WorkspaceView = new WorkspaceView({
     snapshot, selection, drafts: draftStore, review, diagnostics: diagnosticsStore, ui, localeName,
@@ -220,7 +231,7 @@
     history.busy || workspace.loading || saveCoordinator.saving || review.saving || draftStore.validating || mutation.busy ||
     recovery.busy || previewController.busy || wizard.busy || workspace.openingWorkspace || workspace.pickingWorkspace || repair.busy ||
     about.diagnosticBusy || about.busy || interchange.busy ||
-    unsaved.hasUnsavedWork || mutation.open || wizard.open || workspace.openDialogOpen ||
+    unsaved.hasUnsavedWork || mutation.open || wizard.open || workspace.openDialogOpen || closeGuard.open || closeGuard.busy ||
     externalChanges.compared !== undefined || repair.document !== undefined || terminologyDialogOpen || reportDialogOpen || about.open,
   );
   let editorMutationBlocked: boolean = $derived(history.busy || saveCoordinator.saving || review.saving || workspace.loading || recovery.busy || workspace.openingWorkspace);
@@ -230,7 +241,8 @@
   let draftHistoryBlocked: boolean = $derived(
     history.busy || workspace.loading || saveCoordinator.saving || review.saving || mutation.busy || recovery.busy || wizard.busy ||
     workspace.openingWorkspace || workspace.pickingWorkspace || repair.busy || interchange.busy || mutation.open || wizard.open ||
-    workspace.openDialogOpen || externalChanges.compared !== undefined || repair.document !== undefined,
+    workspace.openDialogOpen || externalChanges.compared !== undefined || repair.document !== undefined || closeGuard.open ||
+    closeGuard.busy,
   );
 
   const undo = (): void => history.undo();
@@ -251,6 +263,7 @@
         openWorkspaceDialog: () => workspace.showOpenDialog(),
         createProject: () => wizard.start(),
         openInterchange: () => interchange.open = true,
+        closeWindow: () => void closeGuard.requestClose(),
         saveAll: () => void saveAll(),
         undo,
         redo,
@@ -333,6 +346,8 @@
       if (!disposed) await workspace.load(false);
     })();
     const interval = window.setInterval(() => void externalChanges.check(), 2_000);
+    // The host asks before the window closes; the answer never waits for the user (CloseGuard).
+    const stopCloseQuestion = bridge.handleCloseQuestion(() => closeGuard.answer());
     // Another page of this window, or the application, can switch the window's locale.
     const stopWindowLocale = onWindowLocale((locale) => {
       const match = matchUiLocale(windowLocaleSync.windowChanged(locale), uiLocales);
@@ -347,6 +362,7 @@
     });
     return () => {
       disposed = true;
+      stopCloseQuestion();
       stopWindowLocale();
       stopConnection();
       colorScheme.removeEventListener("change", updateSystemTheme);
@@ -484,6 +500,7 @@
 {/if}
 
 <AboutDialog {about} />
+<CloseDialog guard={closeGuard} />
 <TerminologyDialog bind:open={terminologyDialogOpen} {review} blocked={reviewMutationBlocked} />
 <QualityReportDialog
   bind:open={reportDialogOpen}

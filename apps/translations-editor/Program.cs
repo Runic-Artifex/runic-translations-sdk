@@ -16,6 +16,7 @@ using Runic.Desktop;
 using Runic.Desktop.Gtk4;
 #endif
 using Runic.Navigation;
+using Runic.Platform;
 using Splat;
 
 namespace Runic.Translations.Editor;
@@ -283,6 +284,9 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
                         PresentationPolicy = DesktopPresentationPolicy.RequestedOnly,
                     }
                     : RunicDesktopHost.DefaultWindowOptions,
+                // The window opens where it last closed, with its size and maximized state, on a monitor that exists now
+                // (#225 P24). Without a stored placement it opens at 1440×900.
+                Placement = window => window is EditorWindow ? EditorWindowPlacements.Read() : null,
             },
             "REDIT0009",
             "The editor window could not be shown",
@@ -291,6 +295,10 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
                 await using var window = await host.OpenWindowAsync<EditorWindow>(EditorWindowOptions() with { Width = 1440, Height = 900 })
                     .ConfigureAwait(false);
                 await window.WaitForCloseAsync().ConfigureAwait(false);
+                // The state stays readable after the window closed, until it is disposed. A browser presentation reports
+                // none, and the stored placement is kept.
+                if (DesktopPlatformServices.GetWindowState(window) is PlatformResult<DesktopWindowState>.Success { Value: var state })
+                    EditorWindowPlacements.Remember(state.Placement);
                 return 0;
             }));
 
@@ -340,7 +348,7 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
     {
         try
         {
-            using var services = CreateEditorServices(workspacePath);
+            using var services = EditorServices.Create(workspacePath);
             DesktopHostOptions options = new() { DiagnosticSink = ReportDiagnostic };
             if (waitForConnection) options = options with { WaitForConnection = true };
 #if RUNIC_PLATFORM_Linux
@@ -368,33 +376,6 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
         typeof(EditorCommandLineOperations).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
             .FirstOrDefault(static attribute => attribute.Key == "ApplicationId")?.Value
         ?? throw new InvalidOperationException("The editor's project file sets no ApplicationId.");
-
-    private static ServiceProvider CreateEditorServices(string workspacePath)
-    {
-        AppLocator.CurrentMutable.RegisterConstant(new NullLogger(), typeof(ILogger));
-        AppLocator.CurrentMutable.RegisterConstant(new DefaultLogManager(AppLocator.Current), typeof(ILogManager));
-        var services = new ServiceCollection();
-        services.AddRunicReactiveModelContext();
-        services.AddScoped(_ => new EditorSession(workspacePath));
-        services.AddScoped(provider => new EditorViewModel(provider.GetRequiredService<EditorSession>(),
-            provider.GetRequiredService<IRunicModelContext>(), provider.GetRequiredService<ISequencer>(),
-            provider.GetRequiredService<IRunicWindowLocale>()));
-        var locator = new DefaultViewLocator();
-        locator.CreateMappingBuilder()
-            .Map<EditorWorkspaceViewModel>(() => new EditorWorkspaceView())
-            .Map<EditorDocumentToolsViewModel>(() => new EditorDocumentToolsView())
-            .Map<EditorReviewViewModel>(() => new EditorReviewView())
-            .Map<EditorInterchangeViewModel>(() => new EditorInterchangeView())
-            .Map<EditorDiagnosticsViewModel>(() => new EditorDiagnosticsView())
-            .Map<EditorLocalStateViewModel>(() => new EditorLocalStateView())
-            .Map<EditorProjectViewModel>(() => new EditorProjectView())
-            .Map<EditorLibrariesViewModel>(() => new EditorLibrariesView())
-            .Map<EditorDocumentViewModel>(() => new EditorDocumentView());
-        services.AddScoped<IRunicViewLocator>(_ => new ReactiveRunicViewLocator(locator));
-        services.AddRunicWindowService();
-        services.AddRunicViews();
-        return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-    }
 
     private static RunicWindowOptions EditorWindowOptions() => new() { ContentRoot = EditorUiRoot(), StartPage = "index.html" };
     private static string EditorUiRoot() => Path.Combine(AppContext.BaseDirectory, "www");

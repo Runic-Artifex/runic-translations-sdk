@@ -22,7 +22,7 @@ const members: BridgeMemberDecoders<EditorLibrariesState> = {
   isKeepOverrideExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isAddLocaleExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorLibrariesViewModel:78549E3CAAA6442CF554AC0FFCB1EC1047FE6861A0E946E89313A8C172321EF9";
+const bridgeContract = "Runic.Translations.Editor.EditorLibrariesViewModel:FA8C9DF07FEC823BE3D8DC803D948539CD74484F4055CD6BAE7FAAC1F3484270";
 const loadLibraryOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const overrideMessageOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const saveOverrideOperation: BridgeOperationCodec<void> = { decode: value => undefined };

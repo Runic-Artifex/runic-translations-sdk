@@ -25,7 +25,7 @@ for (const operation of palette.paletteBridgeOperations) {
   assert(bridgeMethods.includes(operation),
     `Palette claims bridge operation '${operation}' that the typed façade does not expose.`);
 }
-for (const name of ["load", "save", "undo", "redo", "about", "createDiagnosticBundle"]) {
+for (const name of ["load", "save", "undo", "redo", "about", "createDiagnosticBundle", "closeWindow"]) {
   assert(palette.paletteBridgeOperations.includes(name), `Bridge operation '${name}' lost palette coverage.`);
 }
 
@@ -57,7 +57,7 @@ for (const command of commands) {
   assert(typeof command.run === "function", `Command ${command.id} is not runnable.`);
 }
 for (const expected of [
-  "workspace.reload", "workspace.open", "workspace.new-project",
+  "workspace.reload", "workspace.open", "workspace.new-project", "workspace.close-window",
   "document.save", "document.undo", "document.redo",
   "document.next-message", "document.previous-message", "document.save-and-next",
   "review.discard-workflow", "review.state-approved",
@@ -240,6 +240,7 @@ function stubActions() {
     reloadWorkspace: record("reloadWorkspace"),
     openWorkspaceDialog: record("openWorkspaceDialog"),
     createProject: record("createProject"),
+    closeWindow: record("closeWindow"),
     openInterchange: record("openInterchange"),
     saveAll: record("saveAll"),
     undo: record("undo"),

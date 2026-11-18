@@ -85,6 +85,7 @@ const commands = paletteModule.buildEditorCommandPalette(
     reloadWorkspace: record("reloadWorkspace"),
     openWorkspaceDialog: record("openWorkspaceDialog"),
     createProject: record("createProject"),
+    closeWindow: record("closeWindow"),
     saveDocument: record("saveDocument"),
     undo: record("undo"),
     redo: record("redo"),

@@ -77,10 +77,57 @@ async function documentReference(path: string): Promise<EditorDocumentPageRefere
 }
 
 async function rootView(): Promise<EditorClient> {
-  return await (connection ??= connectEditor().catch(error => {
+  return await (connection ??= connectEditor().then(root => {
+    registerCloseQuestion(root);
+    return root;
+  }, error => {
     connection = undefined;
     throw error;
   }));
+}
+
+// The page's answer to the host's question before the window closes (EditorViewModel.ConfirmClose). It is registered on
+// each root client the page connects, so a reconnected page answers again; the host closes the window without asking
+// while no page has a handler.
+type CloseQuestionHandler = (signal: AbortSignal) => boolean | Promise<boolean>;
+let closeQuestionHandler: CloseQuestionHandler | undefined;
+let closeQuestionRegistration: { root: EditorClient; stop: () => void } | undefined;
+
+function registerCloseQuestion(root: EditorClient): void {
+  if (closeQuestionRegistration?.root === root) return;
+  closeQuestionRegistration?.stop();
+  closeQuestionRegistration = undefined;
+  const handler = closeQuestionHandler;
+  if (handler === undefined) return;
+  closeQuestionRegistration = { root, stop: root.interactions.confirmClose.handle((_, { signal }) => handler(signal)) };
+}
+
+function handleCloseQuestion(handler: CloseQuestionHandler): () => void {
+  if (import.meta.env.MODE === "mock") return () => undefined;
+  closeQuestionHandler = handler;
+  closeQuestionRegistration?.stop();
+  closeQuestionRegistration = undefined;
+  // Connects the root now, so the handler is registered before the first command that needs the root.
+  void rootView().then(registerCloseQuestion, () => undefined);
+  return () => {
+    if (closeQuestionHandler !== handler) return;
+    closeQuestionHandler = undefined;
+    closeQuestionRegistration?.stop();
+    closeQuestionRegistration = undefined;
+  };
+}
+
+// Closes the window as its close button does; the host asks the close question first. A window that closes cancels the
+// command, so its failure is the expected end.
+async function closeWindow(): Promise<void> {
+  if (import.meta.env.MODE === "mock") return;
+  let root: EditorClient | undefined;
+  try {
+    root = await rootView();
+    await root.closeWindow();
+  } catch (error) {
+    disconnectOnFailure(error, root);
+  }
 }
 
 async function serialized<T>(operation: () => Promise<T>): Promise<T> {
@@ -231,6 +278,13 @@ export interface EditorBridge {
   save(path: string, content: string, revision: string): Promise<EditorDocumentSaveResult>;
   /** Sets the window's locale (`IRunicWindowLocale`), which the window's pages and native surfaces follow. */
   setUiLocale(locale: string): Promise<void>;
+  /**
+   * Answers the host's question whether the window may close now (the close button, Alt+F4, the window manager, and
+   * `closeWindow`). Returns the function that stops answering; while no page answers, the host closes the window.
+   */
+  handleCloseQuestion(handler: (signal: AbortSignal) => boolean | Promise<boolean>): () => void;
+  /** Closes the window as its close button does: the host asks the close question first. */
+  closeWindow(): Promise<void>;
 }
 
 // The window's locale is set on the root View; the mock bridge has no window, so the page keeps its own locale there.
@@ -249,6 +303,8 @@ async function setWindowLocale(locale: string): Promise<void> {
 export function createEditorBridge(): EditorBridge {
   return {
     setUiLocale: setWindowLocale,
+    handleCloseQuestion,
+    closeWindow,
     load: () => invokeRouted("LoadWorkspace", root => root.snapshot.workspace, (view, request) => view.load(request), state => state.loadResultJson, {}) as Promise<WorkspaceSnapshot>,
     checkExternalChanges: () => invokeRouted("CheckExternalChanges", root => root.snapshot.workspace, (view, request) => view.checkExternalChanges(request), state => state.checkExternalChangesResultJson, {}) as Promise<EditorExternalChanges>,
     pickWorkspace: () => invokeRouted("PickWorkspace", root => root.snapshot.workspace, (view, request) => view.pickWorkspace(request), state => state.pickWorkspaceResultJson, {}) as Promise<EditorWorkspacePickerResult>,

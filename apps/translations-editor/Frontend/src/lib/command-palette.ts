@@ -31,6 +31,8 @@ export interface EditorPaletteActions {
   openWorkspaceDialog(): void;
   createProject(): void;
   openInterchange(): void;
+  /** Closes the window as its close button does: with unsaved work it asks Save, Discard or Cancel first. */
+  closeWindow(): void;
   /** Saves all unsaved work: every unsaved document, then the review changes. */
   saveAll(): void;
   /** Takes back the latest unsaved edit, or without one the latest saved change. */
@@ -141,6 +143,7 @@ export const paletteBridgeOperations = [
   "redo",
   "about",
   "createDiagnosticBundle",
+  "closeWindow",
 ] as const satisfies readonly (keyof EditorBridge)[];
 
 export function buildEditorCommandPalette(
@@ -184,6 +187,14 @@ export function buildEditorCommandPalette(
     group: "workspace",
     keywords: "wizard scaffold catalog",
     run: actions.createProject,
+  });
+  push({
+    id: "workspace.close-window",
+    title: (ui?.text("ui_palette_close_window") ?? "Close window"),
+    group: "workspace",
+    keywords: "quit exit leave",
+    bridge: "closeWindow",
+    run: actions.closeWindow,
   });
 
   push({
