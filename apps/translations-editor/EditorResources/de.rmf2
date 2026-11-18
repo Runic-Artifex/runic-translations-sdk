@@ -5064,6 +5064,85 @@ ui {
   }
 }
 ui {
+  close {
+    title = Änderungen vor dem Schließen speichern?
+  }
+}
+ui {
+  close {
+    description = Speichern schreibt sie in die Dateien des Arbeitsbereichs. Verwerfen löscht sie samt ihrer Wiederherstellungskopie, sodass der nächste Start nichts zum Wiederherstellen anbietet.
+  }
+}
+ui {
+  close {
+    unsaved_documents =
+      .input {$count :integer select=plural}
+      .match $count
+      one {{Ungespeicherter Text in einem Dokument:}}
+      * {{Ungespeicherter Text in {$count} Dokumenten:}}
+
+  }
+}
+ui {
+  close {
+    unsaved_review = Ungespeicherte Prüfänderungen: Status, Notizen oder Terminologie
+  }
+}
+ui {
+  close {
+    unsaved_repair =
+      .input {$path :string}
+      {{Eine ungespeicherte Reparatur von {$path}, die „Speichern“ nicht einschließt}}
+
+  }
+}
+ui {
+  close {
+    save = Speichern und schließen
+  }
+}
+ui {
+  close {
+    discard = Verwerfen und schließen
+  }
+}
+ui {
+  close {
+    still_open = Das Fenster bleibt geöffnet
+  }
+}
+ui {
+  close {
+    save_busy = Gerade läuft ein anderes Speichern oder Rückgängigmachen. Versuchen Sie es erneut, wenn es abgeschlossen ist.
+  }
+}
+ui {
+  close {
+    save_invalid =
+      .input {$path :string}
+      {{{$path} enthält Fehler, daher wurde nichts gespeichert. Beheben Sie sie oder verwerfen Sie die Änderungen.}}
+
+  }
+}
+ui {
+  close {
+    still_unsaved = Gespeichert, aber Änderungen, die während des Speicherns entstanden sind, sind noch nicht gespeichert.
+  }
+}
+ui {
+  close {
+    repair_unsaved =
+      .input {$path :string}
+      {{Gespeichert, aber die Reparatur von {$path} nicht: Speichern Sie sie im Reparaturdialog oder verwerfen Sie sie.}}
+
+  }
+}
+ui {
+  palette {
+    close_window = Fenster schließen
+  }
+}
+ui {
   composer {
     show_source = Quelltext anzeigen
   }

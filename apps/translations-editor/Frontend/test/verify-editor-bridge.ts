@@ -164,4 +164,20 @@ assert.equal(missingDraft.diagnostics[0]?.notice?.code, "ui_backend_preview_key_
 const preview = await mockExecute("PreviewMessage", { path: "de/common_save.mf2", content: "Speichern\n", locale: "de", key: "common_save" }) as EditorMessagePreview;
 assert.equal(preview.primaryDiagnostic, undefined, "A preview without a diagnostic of its message has no primary diagnostic.");
 
-console.log("Editor bridge read-your-writes, message identity and message draft checks passed.");
+// The close question (issue #225, P19): the page's handler answers the host's question on the root client, and stops
+// answering when the page unmounts; Close window runs the root's command, whose failure (the window closed) is the end.
+let closeQuestions = 0;
+let closeAnswer = false;
+const stopCloseQuestion = editor.handleCloseQuestion(() => { closeQuestions++; return closeAnswer; });
+await bridge.flush();
+assert.equal(root.interactions.confirmClose.handled, true, "The page did not register its close question handler.");
+assert.deepEqual(await root.interactions.confirmClose.request({ answerWithinMilliseconds: 30_000 }), { kind: "answered", output: false });
+closeAnswer = true;
+assert.deepEqual(await root.interactions.confirmClose.request({ answerWithinMilliseconds: 30_000 }), { kind: "answered", output: true });
+assert.equal(closeQuestions, 2);
+stopCloseQuestion();
+await bridge.flush();
+assert.equal(root.interactions.confirmClose.handled, false, "The close question handler outlived the page.");
+await promptly(editor.closeWindow(), "closeWindow");
+
+console.log("Editor bridge read-your-writes, message identity, message draft and close question checks passed.");

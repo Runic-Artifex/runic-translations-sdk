@@ -33,6 +33,9 @@ internal static class EditorLocalStateStore
         "runic.sidebar.languages-share",
         // Collapsed message groups of the most recent catalogs (one bounded record, not one entry per catalog).
         "runic-translations:message-tree:1",
+        // Where the editor window was and how large (EditorWindowPlacements): one entry per kind of window, written by
+        // the host when the window closes. The page keeps it in its projection and writes it back unchanged.
+        EditorWindowPlacements.EditorWindowKey,
     };
     // Keys earlier versions wrote that this one no longer owns: the colour palette (removed by D074). Loading drops
     // them instead of rejecting the record, and the next save writes the record without them.
@@ -41,7 +44,34 @@ internal static class EditorLocalStateStore
         "runic-translations.theme-palette",
     };
 
-    internal static EditorLocalStateSnapshot Load()
+    /// <summary>The record's file instead of the per-user one, for the smoke test; <see langword="null"/> otherwise.</summary>
+    internal static string? PathOverride { get; set; }
+
+    internal static EditorLocalStateSnapshot Load() => Load(quarantine: true);
+
+    /// <summary>
+    /// Reads one entry without changing the record: an unreadable record is left for the page's <see cref="Load()"/>,
+    /// which quarantines it and tells the user. <see langword="null"/> when there is no such entry.
+    /// </summary>
+    internal static string? Peek(string key) =>
+        Load(quarantine: false).Entries.FirstOrDefault(entry => entry.Key == key)?.Value;
+
+    /// <summary>
+    /// Sets one entry and keeps the others: the host's own entries (the window placement), written while no page of the
+    /// editor writes the record. A record that cannot be read is left for the page, which quarantines it and says so:
+    /// <see cref="InvalidOperationException"/>.
+    /// </summary>
+    internal static EditorLocalStateSnapshot Set(string key, string value)
+    {
+        ValidateEntry(key, value);
+        EditorLocalStateSnapshot current = Load(quarantine: false);
+        if (current.Recovered) throw new InvalidOperationException("The local editor-state record cannot be read.");
+        List<EditorLocalStateEntry> entries = [.. current.Entries.Where(entry => entry.Key != key)];
+        entries.Add(new EditorLocalStateEntry(key, value));
+        return Save(entries);
+    }
+
+    private static EditorLocalStateSnapshot Load(bool quarantine)
     {
         string path = StatePath();
         if (!File.Exists(path)) return new EditorLocalStateSnapshot([], false);
@@ -80,6 +110,7 @@ internal static class EditorLocalStateStore
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or DecoderFallbackException or InvalidDataException)
         {
+            if (!quarantine) return new EditorLocalStateSnapshot([], true);
             Quarantine(path);
             return new EditorLocalStateSnapshot([], true);
         }
@@ -190,6 +221,7 @@ internal static class EditorLocalStateStore
 
     private static string StatePath()
     {
+        if (PathOverride is { } overridden) return overridden;
         string root;
         if (OperatingSystem.IsWindows())
         {

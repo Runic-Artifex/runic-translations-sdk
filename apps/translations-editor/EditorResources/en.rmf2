@@ -5064,6 +5064,85 @@ ui {
   }
 }
 ui {
+  close {
+    title = Save your changes before closing?
+  }
+}
+ui {
+  close {
+    description = Save writes them to the workspace files. Discard drops them and their recovery copy, so the next start offers nothing to restore.
+  }
+}
+ui {
+  close {
+    unsaved_documents =
+      .input {$count :integer select=plural}
+      .match $count
+      one {{Unsaved text in one document:}}
+      * {{Unsaved text in {$count} documents:}}
+
+  }
+}
+ui {
+  close {
+    unsaved_review = Unsaved review changes: states, notes or terminology
+  }
+}
+ui {
+  close {
+    unsaved_repair =
+      .input {$path :string}
+      {{An unsaved repair of {$path}, which Save does not include}}
+
+  }
+}
+ui {
+  close {
+    save = Save and close
+  }
+}
+ui {
+  close {
+    discard = Discard and close
+  }
+}
+ui {
+  close {
+    still_open = The window stays open
+  }
+}
+ui {
+  close {
+    save_busy = Another save or undo is running. Try again when it has finished.
+  }
+}
+ui {
+  close {
+    save_invalid =
+      .input {$path :string}
+      {{{$path} has errors, so nothing was saved. Fix them, or discard the changes.}}
+
+  }
+}
+ui {
+  close {
+    still_unsaved = Saved, but changes made during the save are not saved yet.
+  }
+}
+ui {
+  close {
+    repair_unsaved =
+      .input {$path :string}
+      {{Saved, but the repair of {$path} is not: save it in the repair dialog, or discard it.}}
+
+  }
+}
+ui {
+  palette {
+    close_window = Close window
+  }
+}
+ui {
   composer {
     show_source = Show source
   }

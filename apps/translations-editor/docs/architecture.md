@@ -120,6 +120,9 @@ The stores own the unsaved work and the host's answers:
   data it validates a saved document again, because a stale review state
   (RTR0090) is computed from the review file, which the loaded snapshot's
   diagnostics predate.
+- `CloseGuard` answers the host's question before the window closes (#225 P19)
+  and runs the Save, Discard and Cancel dialog (`dialogs/CloseDialog.svelte`);
+  see "Closing the window" below.
 - `DiagnosticsStore` keeps validation results per request and document. The
   panel lists the latest one, or the workspace's diagnostics before any (the
   snapshot's, or those requested again after a review save); it also offers
@@ -271,6 +274,48 @@ verified .NET artifact/pack path. The Views command returns validated semantic r
 the Svelte frontend treats links, actions, icons, and custom markup as inert
 display data. It does not load application renderers, execute callbacks, or
 coerce AST 5 into a JavaScript evaluator.
+
+### Closing the window and its placement
+
+The unsaved work lives in the page, so the window asks the page before it
+closes. `EditorWindow` sets `GuardClose`, and its `CanCloseAsync` asks the
+page through `EditorViewModel.ConfirmClose`, a `ViewQuestion` that the page
+handles (`EditorBridge.handleCloseQuestion`, registered again on each root
+connection). The close button, Alt+F4 and the window manager ask it on the
+embedded Runic Desktop window; `CloseWindowCommand`, the palette's Close
+window, is the application's `RequestCloseAsync` and asks it on every host.
+
+The page's `CloseGuard.answer` never waits for a person: without unsaved work
+(`UnsavedWork.hasUnsavedWork`) it writes the native editor state and answers
+"close"; with unsaved work it opens its dialog and answers "keep" at once. Save
+runs `WorkspaceController.saveAll`; when nothing is left unsaved it closes the
+window through `closeWindow`, whose guard now finds nothing unsaved. A blocked
+save (an invalid document), a refused or failed save, or work the save leaves
+(a newer draft, a repair) keeps the dialog open with the reason. Discard runs
+`UnsavedWork.discard`, which drops the recovery copies as every confirmed
+discard does, and closes the same way. Cancel closes the dialog. New work typed
+before the second question shows the dialog again.
+
+A bridged question has a lifetime (runic-sdk#1146): two minutes for a ReactiveUI
+`Interaction`, at most ten for a `ViewQuestion`. Because the page answers at
+once, the lifetime only bounds a page that does not respond: `ConfirmClose`
+allows 30 seconds, and a timeout, a cancelled question or an unreadable answer
+keeps the window open (`EditorViewModel.CanCloseAsync`). With no page that has
+a handler (still loading, or gone) the question's fallback answers "close"; the
+recovery copy holds whatever the page had. A browser presentation and `serve`
+cannot hold the browser's own close (event 1053); there the recovery copy keeps
+the work, and only the Close window command asks.
+
+`edit` passes `RunicDesktopHostOptions.Placement`, which reads the editor
+window's last placement from the native editor state
+(`EditorWindowPlacements`, key `runic-translations:window-placement:1:editor`),
+and after `WaitForCloseAsync` stores `DesktopWindowState.Placement`. The host
+writes it with `EditorLocalStateStore.Set`, which keeps the page's entries and
+leaves an unreadable record for the page to quarantine; the page keeps the
+entry in its projection and writes it back unchanged. A value that is not a
+valid version 1 placement is ignored. GTK 4 on Wayland reports and sets no
+position, so there only the size and the maximized or full-screen state are
+restored.
 
 ## Formats and language tooling
 

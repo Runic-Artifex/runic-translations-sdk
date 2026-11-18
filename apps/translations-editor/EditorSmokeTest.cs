@@ -793,6 +793,8 @@ internal static partial class EditorSmokeTest
             await ImportedApprovalJourneyAsync(Path.Combine(container, "imported-approval")).ConfigureAwait(false);
             await StaleSourceJourneyAsync(Path.Combine(container, "stale-source")).ConfigureAwait(false);
             await LibraryCatalogJourneyAsync(Path.Combine(container, "library-catalogs")).ConfigureAwait(false);
+            await CloseGuardJourneyAsync(Path.Combine(container, "close-guard")).ConfigureAwait(false);
+            WindowPlacementJourney(Path.Combine(container, "window-placement"));
             string project = Path.Combine(container, "translations");
             // Smoke tests exercise an intentionally minimal workspace. They must
             // never mutate the packaged example or a caller-provided directory.
@@ -830,7 +832,8 @@ internal static partial class EditorSmokeTest
             var windowLocale = windowScope.ServiceProvider.GetRequiredService<IRunicWindowLocale>();
             using (var editor = new EditorViewModel(new EditorSession(project),
                 windowScope.ServiceProvider.GetRequiredService<IRunicModelContext>(),
-                windowScope.ServiceProvider.GetRequiredService<ISequencer>(), windowLocale))
+                windowScope.ServiceProvider.GetRequiredService<ISequencer>(), windowLocale,
+                windowScope.ServiceProvider.GetRequiredService<IRunicWindowContext>()))
             using (var window = RunicWindowTestHost.Create(windowScope.ServiceProvider, editor))
             {
                 // The page's language switch sets the window's locale, which reaches the page as a locale push; a
@@ -972,6 +975,123 @@ internal static partial class EditorSmokeTest
             try { if (Directory.Exists(container)) Directory.Delete(container, recursive: true); }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
+        }
+    }
+
+    // Issue #225, P19: the editor window asks its page before it closes, through the user's close (the close button,
+    // Alt+F4, the window manager) and the page's own Close window command alike. The page holds the unsaved work and
+    // answers at once; a page that does not answer keeps the window open.
+    private static async Task CloseGuardJourneyAsync(string project)
+    {
+        await TranslationProjectWriter.CreateAsync(TranslationProjectScaffolder.Render(
+            new TranslationProjectCreationRequest(project, "close-guard", "en", "Smoke.Translations", "SmokeText",
+                [new TranslationProjectLocale("de", "en")]))).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), "title = Title\n").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "de.rmf2"), "title = Titel\n").ConfigureAwait(false);
+
+        // No page has mounted its handler (it is loading, or gone): nothing unsaved can be in it, so the window closes.
+        await using (var services = EditorServices.Create(project))
+        await using (var window = await RunicWindowTestHost.CreateWindowAsync<EditorWindow>(services).ConfigureAwait(false))
+        {
+            Require(await window.RequestUserCloseAsync().ConfigureAwait(false) && !window.IsOpen,
+                "The editor window did not close without a page to ask.");
+        }
+
+        await using (var services = EditorServices.Create(project))
+        await using (var window = await RunicWindowTestHost.CreateWindowAsync<EditorWindow>(services).ConfigureAwait(false))
+        {
+            var editor = window.Root<EditorViewModel>();
+            using var page = await editor.MountPresentationAsync().ConfigureAwait(false);
+            int asked = 0;
+            bool clean = false;
+            // The page answers whether it may close now: with unsaved work it keeps the window open and shows its own
+            // Save, Discard and Cancel question; Cancel leaves it so.
+            page.Handle(vm => vm.ConfirmClose, (EditorCloseQuestion _) => { asked++; return clean; });
+            Require(!await window.RequestUserCloseAsync().ConfigureAwait(false) && window.IsOpen && asked == 1,
+                "The user's close did not ask the page, or closed the window with unsaved work.");
+            // The application's own close (the page's Close window command, RequestCloseAsync) asks the same guard.
+            (await editor.ExecuteAsync(vm => vm.CloseWindowCommand).ConfigureAwait(false)).ThrowIfFailed();
+            Require(window.IsOpen && asked == 2, "The Close window command did not ask the page, or closed the window.");
+            // Save or Discard leaves nothing unsaved; the page then closes the window, and the guard's question is
+            // answered at once.
+            clean = true;
+            Require(await window.RequestUserCloseAsync().ConfigureAwait(false) && !window.IsOpen && asked == 3,
+                "The editor window did not close once the page had nothing unsaved.");
+        }
+
+        // A page that does not answer in time keeps the window open; the user can close it again.
+        await using (var services = EditorServices.Create(project, TimeSpan.FromMilliseconds(300)))
+        await using (var window = await RunicWindowTestHost.CreateWindowAsync<EditorWindow>(services,
+            hostOptions: new RunicWindowTestHostOptions { TimeProvider = TimeProvider.System }).ConfigureAwait(false))
+        {
+            using var page = await window.Root<EditorViewModel>().MountPresentationAsync().ConfigureAwait(false);
+            bool answers = false;
+            await page.HandleAsync<EditorCloseQuestion, bool>(vm => vm.ConfirmClose, async (_, cancellationToken) =>
+            {
+                if (!answers) await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+                return true;
+            }).ConfigureAwait(false);
+            Require(!await window.RequestUserCloseAsync().ConfigureAwait(false) && window.IsOpen,
+                "A page that did not answer in time let the editor window close.");
+            answers = true;
+            Require(await window.RequestUserCloseAsync().ConfigureAwait(false) && !window.IsOpen,
+                "The editor window did not close once the page answered.");
+        }
+    }
+
+    // Issue #225, P24: the window's placement round-trips through the native editor state under one key, next to the
+    // page's entries, and a stored value this version cannot read is ignored.
+    private static void WindowPlacementJourney(string directory)
+    {
+        string? previous = EditorLocalStateStore.PathOverride;
+        Directory.CreateDirectory(directory);
+        string path = Path.Combine(directory, "editor-state-v1.json");
+        EditorLocalStateStore.PathOverride = path;
+        try
+        {
+            Require(EditorWindowPlacements.Read() is null, "A placement was read without a native editor state.");
+            EditorLocalStateStore.Save([new EditorLocalStateEntry("runic-translations.theme-mode", "dark")]);
+            var maximized = new Runic.Desktop.DesktopWindowPlacement { Width = 1280, Height = 800, X = 40, Y = 60, Maximized = true };
+            Require(EditorWindowPlacements.Remember(maximized), "The window placement was not stored.");
+            EditorLocalStateSnapshot stored = EditorLocalStateStore.Load();
+            Require(stored.Entries.Count == 2 && stored.Entries.Any(entry => entry.Key == "runic-translations.theme-mode" && entry.Value == "dark"),
+                "Storing the window placement changed the page's entries.");
+            Require(EditorWindowPlacements.Read() is { Width: 1280, Height: 800, X: 40, Y: 60, Maximized: true, FullScreen: false },
+                "The window placement did not round-trip through the native editor state.");
+            // GTK 4 on Wayland reports no position: the placement keeps the size and maximized state only.
+            Require(EditorWindowPlacements.Remember(new Runic.Desktop.DesktopWindowPlacement { Width = 1440, Height = 900 }) &&
+                EditorWindowPlacements.Read() is { Width: 1440, Height: 900, X: null, Y: null, Maximized: false },
+                "A placement without a position did not round-trip.");
+            // The page writes its whole projection back, the placement included (EditorLocalStateStore.Save validates it).
+            EditorLocalStateStore.Save(EditorLocalStateStore.Load().Entries);
+            Require(EditorWindowPlacements.Read() is { Width: 1440 }, "The page's write did not keep the window placement.");
+            // A window that never reported a size has nothing to restore.
+            Require(!EditorWindowPlacements.Remember(new Runic.Desktop.DesktopWindowPlacement { Width = 0, Height = 0 }) &&
+                EditorWindowPlacements.Read() is { Width: 1440 }, "An empty placement replaced the stored one.");
+            // Values another version wrote, or that are invalid, are ignored: the window opens at its usual size.
+            foreach (string invalid in new[]
+            {
+                "not json",
+                "[]",
+                "{\"version\":2,\"width\":800,\"height\":600,\"maximized\":false,\"fullScreen\":false}",
+                "{\"width\":800,\"height\":600,\"maximized\":false,\"fullScreen\":false}",
+                "{\"version\":1,\"width\":-5,\"height\":600,\"maximized\":false,\"fullScreen\":false}",
+                "{\"version\":1,\"width\":800,\"height\":600,\"x\":10,\"maximized\":false,\"fullScreen\":false}",
+                "{\"version\":1,\"width\":800,\"height\":600,\"maximized\":\"yes\",\"fullScreen\":false}",
+                "{\"version\":1,\"width\":800,\"height\":600,\"maximized\":false,\"fullScreen\":false,\"origin\":\"Middle\"}",
+            })
+            {
+                EditorLocalStateStore.Set(EditorWindowPlacements.EditorWindowKey, invalid);
+                Require(EditorWindowPlacements.Read() is null, $"An invalid stored placement was used: {invalid}");
+            }
+            // An unreadable record is left for the page, which quarantines it and says so; the placement is not stored.
+            File.WriteAllText(path, "{ broken");
+            Require(EditorWindowPlacements.Read() is null && !EditorWindowPlacements.Remember(maximized) &&
+                File.ReadAllText(path) == "{ broken", "The window placement replaced an unreadable native editor state.");
+        }
+        finally
+        {
+            EditorLocalStateStore.PathOverride = previous;
         }
     }
 

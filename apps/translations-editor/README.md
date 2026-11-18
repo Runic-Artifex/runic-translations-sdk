@@ -206,9 +206,23 @@ text and review changes are also kept in the native editor state; when the
 window is closed or the editor stops without saving, the next start offers them
 under **Unsaved work was recovered**, and **Restore** applies the review changes
 on top of the review file as it is then (an entry changed there meanwhile is
-reported as a conflict when you save). The editor does not yet ask before its
-window closes (the Runic Desktop host's close guard is a follow-up), so recovery
-is what keeps unsaved work.
+reported as a conflict when you save).
+
+Closing the window with unsaved work (the title-bar close button, Alt+F4, the
+window manager, or **Close window** in the command palette) asks first: **Save
+your changes before closing?** names what is unsaved (the documents with unsaved
+text, review changes, and the repair of a malformed file, which **Save** does
+not include) and offers three answers. **Save and close** runs the one save; a
+document with errors blocks it, and a refused or failed save keeps the window
+open, which then says why. **Discard and close** drops the work and its recovery
+copy, as every other discard does, so the next start offers nothing to restore.
+**Cancel** (or Escape) keeps the window open with the work as it is. Without
+unsaved work the window closes at once. The question never makes the window
+wait for you: the editor keeps the window open as soon as something is unsaved
+and closes it only after Save or Discard, so taking your time cannot close it
+or lose the work. In a browser (`--browser`, the fallback when the embedded
+WebView cannot start) and with `serve`, the browser's own close cannot be held
+back; only **Close window** asks there, and the recovery copy keeps the work.
 
 **Undo** (Ctrl+Z, or ⌘Z on macOS) and **Redo** (Ctrl+Shift+Z or Ctrl+Y) first
 take back the unsaved text edits, one step at a time, per document: each
@@ -314,7 +328,17 @@ embedded WebView cannot start, for example without WebKitGTK 6, the editor
 reports why on standard error and opens in an installed browser instead. Add
 `--browser` to open it in an installed browser (the first one found) from the
 start; `--webview` of the former CS-WebUI host is gone, since the native window is
-now the default. `serve` opens no window: it prints
+now the default.
+
+The window opens with the size and maximized (or full-screen) state it last
+closed with, kept in the native editor state under one entry for the editor
+window, not per workspace. Runic Desktop keeps it on a monitor that exists now:
+a window saved on a monitor since disconnected moves to the nearest one and
+shrinks to fit. On Windows, macOS and X11 the position is restored as well. On a
+Wayland desktop GTK 4 neither reports nor sets a window's position, so the
+editor opens at its size and maximized state wherever the compositor places it.
+A stored placement the editor cannot read, for example one an older or newer
+version wrote, is ignored, and the window opens at 1440×900. `serve` opens no window: it prints
 `RUNIC_APPLICATION_URL=<url>`, the window's capability URL, which admits one
 browser (open the full URL; the server's root does not carry its token), and
 serves until a line is read from standard input or the process gets Ctrl+C or
