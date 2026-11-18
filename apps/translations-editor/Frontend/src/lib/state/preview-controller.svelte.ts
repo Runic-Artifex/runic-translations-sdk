@@ -1,3 +1,4 @@
+import type { EditorMessagePreview } from "../contracts";
 import type { EditorBridge } from "../editor-bridge";
 import type { MessageArtifact, MessagePreviewResult } from "../message-composer";
 import {
@@ -13,6 +14,15 @@ import type { PseudoLocale } from "../simulation";
 import { notice, type UiMessage } from "../ui-text";
 
 export type PreviewRequest = ReturnType<typeof createMessagePreviewRequest>;
+
+/**
+ * Why a preview failed, for the previewed message: its primary diagnostic (its own error, not the first of the whole
+ * catalog), else the first error, else the generic failure.
+ */
+export function previewFailure(result: EditorMessagePreview | undefined): UiMessage {
+  const diagnostic = result?.primaryDiagnostic ?? result?.diagnostics.find(item => item.severity === "error");
+  return diagnostic?.notice ?? (diagnostic?.message || undefined) ?? notice("ui_feedback_preview_failed");
+}
 
 export interface PreviewControllerOptions {
   bridge: Pick<EditorBridge, "previewMessage">;
@@ -102,7 +112,7 @@ export class PreviewController {
         if (!result.success || result.astJson === undefined || result.locale === undefined) {
           this.ast = undefined;
           this.result = undefined;
-          this.error = result.diagnostics[0]?.notice ?? result.diagnostics[0]?.message ?? notice("ui_feedback_preview_failed");
+          this.error = previewFailure(result);
           return;
         }
         const ast = routed.ast as MessageArtifact;
@@ -113,7 +123,7 @@ export class PreviewController {
         const rendered = routed.rendered;
         if (!rendered?.success || rendered.renderedJson === undefined) {
           this.result = undefined;
-          this.error = rendered?.diagnostics[0]?.notice ?? rendered?.diagnostics[0]?.message ?? notice("ui_feedback_preview_failed");
+          this.error = previewFailure(rendered);
           return;
         }
         this.result = parseRenderedMessagePreview(rendered.renderedJson);
@@ -154,7 +164,7 @@ export class PreviewController {
     if (!this.#scheduler.isCurrent(epoch)) return;
     if (!result.success || result.renderedJson === undefined) {
       this.result = undefined;
-      this.error = result.diagnostics[0]?.notice ?? result.diagnostics[0]?.message ?? notice("ui_feedback_preview_failed");
+      this.error = previewFailure(result);
       return;
     }
     this.result = parseRenderedMessagePreview(result.renderedJson);
@@ -174,7 +184,7 @@ export class PreviewController {
     if (!isCurrent()) return;
     if (!result.success || result.renderedJson === undefined) {
       this.pseudoResult = undefined;
-      this.pseudoError = result.diagnostics[0]?.notice ?? result.diagnostics[0]?.message ?? notice("ui_feedback_preview_failed");
+      this.pseudoError = previewFailure(result);
       return;
     }
     this.pseudoResult = parseRenderedMessagePreview(result.renderedJson);

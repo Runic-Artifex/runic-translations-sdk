@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { settle } from "./svelte-modules.mjs";
 
-const { PreviewController } = await import("../src/lib/state/preview-controller.svelte.ts");
+const { PreviewController, previewFailure } = await import("../src/lib/state/preview-controller.svelte.ts");
 
 const ast = JSON.stringify({ astVersion: 5, profile: "rmf2-execution-v2", inputs: [{ name: "name", type: "string" }], declarations: [], selectors: [], variants: [] });
 const rendered = (text, locale = "de") => JSON.stringify({ key: "welcome", locale, runs: [{ text }] });
@@ -80,5 +80,24 @@ failing.schedule("de.rmf2", "x", "welcome", "de");
 await settle();
 assert.equal(failing.error, "failed: offline");
 assert.equal(failing.busy, false);
+
+// The preview error is the previewed message's primary diagnostic, not the first of the catalog (issue #225, P5): a
+// syntax error in the message is shown, not "Locale 'de' does not translate 'common.delete'".
+const unrelated = { id: "RTR0010", severity: "error", message: "Locale 'de' does not translate 'common.delete'.", path: "de.rmf2", line: 1, column: 1, endLine: 1, endColumn: 1, key: "common_delete", locale: "de" };
+const own = { id: "RTR0001", severity: "error", message: "Expected '}}'.", path: "de.rmf2", line: 4, column: 3, endLine: 4, endColumn: 9 };
+const broken = new PreviewController({
+  bridge: { previewMessage: async () => ({ success: false, diagnostics: [unrelated, own], primaryDiagnostic: own }) },
+  pseudoLocalization: () => false,
+  defaultSample: () => "",
+  errorNotice: (error) => `failed: ${error.message}`,
+  setTimer: (callback) => { callback(); return 0; },
+  clearTimer: () => undefined,
+});
+broken.schedule("de.rmf2", "x", "welcome", "de");
+await settle();
+assert.equal(broken.error, own.message, "The preview must show its primary diagnostic.");
+assert.equal(previewFailure({ success: false, diagnostics: [{ ...own, severity: "warning" }, unrelated] }), unrelated.message,
+  "Without a primary diagnostic the preview shows the first error, not a warning.");
+assert.deepEqual(previewFailure({ success: false, diagnostics: [] }), previewFailure(undefined), "Without diagnostics it shows the generic failure.");
 
 console.log("PASS: the preview controller debounces, renders samples and the pseudo-locale, and drops cancelled previews.");

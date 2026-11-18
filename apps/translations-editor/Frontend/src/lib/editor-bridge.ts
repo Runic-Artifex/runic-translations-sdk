@@ -10,6 +10,7 @@ import type {
   EditorDiagnosticBundleResult,
   EditorDocument,
   EditorDocumentDraft,
+  EditorMessageDraft,
   EditorLocalStateClearResult,
   EditorLocalStateEntry,
   EditorLocalStateSnapshot,
@@ -190,6 +191,10 @@ export interface EditorBridge {
   applyAuthoringOperation(path: string, content: string, key: string, expectedRevision: string, operation: EditorMessageOperation): Promise<EditorDocumentDraft>;
   applyDiagnosticFix(path: string, content: string, fix: EditorDiagnosticQuickFix): Promise<EditorDocumentDraft>;
   transformDocument(path: string, content: string, key?: string, value?: string): Promise<EditorDocumentDraft>;
+  /** The empty starter draft of `key` in `locale`, which has no translation yet, built from the base message. */
+  createMessageDraft(key: string, locale: string): Promise<EditorMessageDraft>;
+  /** An authoring operation on a draft's text (`expectedRevision`: its projection's revision); writes nothing. */
+  applyMessageDraftOperation(key: string, locale: string, text: string, expectedRevision: string, operation: EditorMessageOperation): Promise<EditorMessageDraft>;
   /** `requestedLocale` (`de-CH` for `de` text) and `timeZone` (`utc`, an IANA zone; empty: the host's) format the preview. */
   previewMessage(path: string, content: string, locale: string, key: string, samplesJson?: string, requestedLocale?: string, timeZone?: string): Promise<EditorMessagePreview>;
   listLocales(): Promise<EditorLocaleCatalog>;
@@ -255,6 +260,8 @@ export function createEditorBridge(): EditorBridge {
     applyAuthoringOperation: (path, content, key, expectedRevision, operation) => invokeRouted("ApplyAuthoringOperation", root => root.snapshot.documentTools, (view, request) => view.applyAuthoringOperation(request), state => state.applyAuthoringOperationResultJson, { path, content, key, expectedRevision, operation }) as Promise<EditorDocumentDraft>,
     applyDiagnosticFix: (path, content, fix) => invokeRouted("ApplyDiagnosticFix", root => root.snapshot.documentTools, (view, request) => view.applyDiagnosticFix(request), state => state.applyDiagnosticFixResultJson, { path, content, fix }) as Promise<EditorDocumentDraft>,
     transformDocument: (path, content, key, value) => invokeRouted("TransformDocument", root => root.snapshot.documentTools, (view, request) => view.transformDocument(request), state => state.transformDocumentResultJson, { path, content, key, value }) as Promise<EditorDocumentDraft>,
+    createMessageDraft: (key, locale) => invokeRouted("CreateMessageDraft", root => root.snapshot.documentTools, (view, request) => view.createMessageDraft(request), state => state.createMessageDraftResultJson, { key, locale }) as Promise<EditorMessageDraft>,
+    applyMessageDraftOperation: (key, locale, text, expectedRevision, operation) => invokeRouted("ApplyMessageDraftOperation", root => root.snapshot.documentTools, (view, request) => view.applyMessageDraftOperation(request), state => state.applyMessageDraftOperationResultJson, { key, locale, text, expectedRevision, operation }) as Promise<EditorMessageDraft>,
     previewMessage: (path, content, locale, key, samplesJson, requestedLocale, timeZone) => invokeRouted("PreviewMessage", root => root.snapshot.documentTools, (view, request) => view.previewMessage(request), state => state.previewMessageResultJson, { path, content, locale, key, samplesJson, requestedLocale, timeZone }) as Promise<EditorMessagePreview>,
     previewCatalogImport: (request) => invokeRouted("PreviewCatalogImport", root => root.snapshot.interchange, (view, argument) => view.previewCatalogImport(argument), state => state.previewCatalogImportResultJson, request) as Promise<EditorCatalogImportPlan>,
     applyCatalogImport: (confirmationToken) => invokeRouted("ApplyCatalogImport", root => root.snapshot.interchange, (view, argument) => view.applyCatalogImport(argument), state => state.applyCatalogImportResultJson, { confirmationToken }) as Promise<EditorOperationResult>,
