@@ -226,7 +226,7 @@ internal sealed class EditorWorkspace : IDisposable
                 else throw new EditorUserException(EditorNotice.Create("ui_backend_not_message_document"));
             }
             WorkspaceState state = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
-            return new EditorDocumentDraft(state.Compilation.Success, content, ReadEntries(path, content, state.Compilation), Diagnostics(state, cancellationToken));
+            return new EditorDocumentDraft(state.Compilation.Success, content, ReadEntries(path, content, state), Diagnostics(state, cancellationToken));
         }
         catch (Exception exception) when (exception is ArgumentException or TranslationAuthoringException)
         {
@@ -259,16 +259,66 @@ internal sealed class EditorWorkspace : IDisposable
                 content = StrictUtf8.GetString(Rmf2AuthoringService.Apply(source, expectedRevision, Operation(operation)).Bytes);
             else throw new ArgumentException("Choose an MF2 message document.");
             WorkspaceState state = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
-            return new(state.Compilation.Success, content, ReadEntries(path, content, state.Compilation), Diagnostics(state, cancellationToken));
+            return new(state.Compilation.Success, content, ReadEntries(path, content, state), Diagnostics(state, cancellationToken));
         }
         catch (Exception exception) when (exception is ArgumentException or TranslationAuthoringException)
         {
             return new(false, content, [], [new EditorDiagnostic("EDITOR-AUTHORING", "error", exception.Message, relativePath, 1, 1, 1, 1)]);
         }
         finally { _gate.Release(); }
-        static Rmf2AuthoringOperation Operation(EditorMessageOperation operation) => new(operation.Kind, operation.VariantId, operation.Pattern,
-            operation.Name, operation.NewName, operation.Function, operation.Keys, operation.Selectors);
     }
+
+    private static Rmf2AuthoringOperation Operation(EditorMessageOperation operation) => new(operation.Kind, operation.VariantId, operation.Pattern,
+        operation.Name, operation.NewName, operation.Function, operation.Keys, operation.Selectors);
+
+    /// <summary>
+    /// The starter text of <paramref name="key"/> in <paramref name="locale"/>, which has no translation yet: the base
+    /// message's structure with empty patterns and the variants the locale needs (<see cref="EditorMessageDrafts.Starter"/>),
+    /// and its composer projection. Reads the saved files; writes nothing.
+    /// </summary>
+    public async Task<EditorMessageDraft> CreateMessageDraftAsync(string key, string locale, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ThrowIfDisposed();
+            WorkspaceState state = await ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
+            Rmf2ProjectV5? project = state.Compilation.Project ?? ReviewCompilation(state, cancellationToken).Project;
+            if (project is null)
+                return new(false, key, locale, string.Empty, null, Diagnostics(state, cancellationToken)
+                    .Where(static diagnostic => diagnostic.Severity == "error").ToArray());
+            if (!project.Locales.Any(item => item.Tag == locale) || !BaseResources(state, cancellationToken).TryGetValue(key, out Rmf2TranslationV5? baseResource))
+                return new(false, key, locale, string.Empty, null, [new EditorDiagnostic("EDITOR-DRAFT", "error", string.Empty, string.Empty, 1, 1, 1, 1,
+                    EditorNotice.Create("ui_backend_preview_key_missing", ("key", Rmf2MessageKeys.Paths(project).TryGetValue(key, out var logical) ? string.Join('.', logical) : key)))]);
+            string text = EditorMessageDrafts.Starter(baseResource.Message, locale);
+            return new(true, key, locale, text, DraftProjection(key, locale, text), [], TranslationCompiler.MaxLengthV5(baseResource.Properties));
+        }
+        finally { _gate.Release(); }
+    }
+
+    /// <summary>
+    /// Applies a composer operation to the standalone text of a draft (<see cref="CreateMessageDraftAsync"/>), as
+    /// <see cref="ApplyAuthoringOperationAsync"/> does to a document's message: no document, no file I/O. A stale
+    /// revision or an operation the compiler refuses keeps <paramref name="text"/> and reports why.
+    /// </summary>
+    public static EditorMessageDraft ApplyMessageDraftOperation(string key, string locale, string text, string expectedRevision, EditorMessageOperation operation)
+    {
+        try
+        {
+            string changed = StrictUtf8.GetString(Rmf2AuthoringService.Apply(Source(DraftPath(key, locale), text), expectedRevision, Operation(operation)).Bytes);
+            return new(true, key, locale, changed, DraftProjection(key, locale, changed), []);
+        }
+        catch (Exception exception) when (exception is ArgumentException or TranslationAuthoringException)
+        {
+            return new(false, key, locale, text, DraftProjection(key, locale, text),
+                [new EditorDiagnostic("EDITOR-AUTHORING", "error", exception.Message, DraftPath(key, locale), 1, 1, 1, 1, Key: key, Locale: locale)]);
+        }
+    }
+
+    private static string DraftPath(string key, string locale) => locale + "/" + key + ".mf2";
+
+    private static EditorMessageProjection DraftProjection(string key, string locale, string text) =>
+        EditorProjection(Rmf2AuthoringService.Project(Source(DraftPath(key, locale), text), locale));
 
     public async Task<EditorDocumentDraft> ApplyDiagnosticFixAsync(string relativePath, string content,
         Rmf2DiagnosticQuickFix fix, CancellationToken cancellationToken = default)
@@ -282,7 +332,7 @@ internal sealed class EditorWorkspace : IDisposable
             WorkspaceState before = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
             content = StrictUtf8.GetString(Rmf2DiagnosticActions.ApplyQuickFix(Source(path, content), fix, before.Compilation).Bytes);
             WorkspaceState state = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
-            return new(state.Compilation.Success, content, ReadEntries(path, content, state.Compilation), Diagnostics(state, cancellationToken));
+            return new(state.Compilation.Success, content, ReadEntries(path, content, state), Diagnostics(state, cancellationToken));
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
         {
@@ -327,8 +377,10 @@ internal sealed class EditorWorkspace : IDisposable
             string path = NormalizeKnownPath(relativePath);
             WorkspaceState state = await ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
             EditorDiagnostic[] diagnostics = Diagnostics(state, cancellationToken);
+            EditorMessagePreview Result(EditorMessagePreview preview) =>
+                preview with { PrimaryDiagnostic = PrimaryDiagnostic(preview.Diagnostics, path, content, key, locale) };
             if (!state.Compilation.Success)
-                return new EditorMessagePreview(false, null, null, null, diagnostics);
+                return Result(new EditorMessagePreview(false, null, null, null, diagnostics));
 
             Rmf2ProjectV5 rmf2 = state.Compilation.Project!;
             // en-XA and ar-XB are generated from the base locale by the SDK's pseudo-locale generator, exactly as a
@@ -337,27 +389,27 @@ internal sealed class EditorWorkspace : IDisposable
             {
                 Rmf2ProjectCompilation pseudo = PseudoLocaleCompilation(state, Rmf2PseudoLocalesV5.Supported.First(tag => tag == locale), cancellationToken);
                 if (!pseudo.Success || pseudo.Project is null)
-                    return new EditorMessagePreview(false, null, null, null, [.. diagnostics, .. pseudo.Diagnostics
+                    return Result(new EditorMessagePreview(false, null, null, null, [.. diagnostics, .. pseudo.Diagnostics
                         .Where(static item => item.Severity == TranslationDiagnosticSeverity.Error)
-                        .Select(static item => new EditorDiagnostic(item.Id, "error", item.Message, item.Location.Path, item.Location.Line, item.Location.Column, item.Location.EndLine, item.Location.EndColumn))]);
+                        .Select(static item => new EditorDiagnostic(item.Id, "error", item.Message, item.Location.Path, item.Location.Line, item.Location.Column, item.Location.EndLine, item.Location.EndColumn))]));
                 rmf2 = pseudo.Project;
             }
             Rmf2LocaleV5? selectedLocale = rmf2.Locales.SingleOrDefault(item => item.Tag == locale);
             Rmf2TranslationV5? resource = selectedLocale?.ResolvedResources.SingleOrDefault(item => item.Key == key);
             if (resource is null)
-                return MissingPreviewKey(path, locale, key);
+                return Result(MissingPreviewKey(path, locale, key));
             string ast = Rmf2MessageJsonV5.Serialize(resource.Message);
             JsonObject samples = samplesJson is null ? new JsonObject() : JsonNode.Parse(samplesJson)?.AsObject()
                 ?? throw new JsonException("Preview samples must be a JSON object.");
             string? rendered = resource.Message.Inputs.All(input => samples.ContainsKey(input.Name))
                 ? Rmf2Preview.Render(rmf2, key, locale, samples, requestedLocale, timeZone).ToJsonString()
                 : null;
-            return new EditorMessagePreview(true, locale, ast, rendered, diagnostics);
+            return Result(new EditorMessagePreview(true, locale, ast, rendered, diagnostics));
         }
         catch (Exception exception) when (exception is ArgumentException or JsonException or TranslationAuthoringException or TranslationFormatException)
         {
-            return new EditorMessagePreview(false, null, null, null,
-                [new EditorDiagnostic("PREVIEW", "error", string.Empty, relativePath, 1, 1, 1, 1, EditorNotice.FromException(exception))]);
+            var failure = new EditorDiagnostic("PREVIEW", "error", string.Empty, relativePath, 1, 1, 1, 1, EditorNotice.FromException(exception));
+            return new EditorMessagePreview(false, null, null, null, [failure], failure);
         }
         finally
         {
@@ -382,6 +434,29 @@ internal sealed class EditorWorkspace : IDisposable
             if (state.SourcesRevision is { } revision && string.Equals(_lastCompilation?.Revision, revision, StringComparison.Ordinal))
                 _pseudoCompilations[locale] = (revision, compilation);
         return compilation;
+    }
+
+    // The diagnostic the preview shows for the previewed message (EditorMessagePreview.PrimaryDiagnostic): of those that
+    // belong to it, located in its source in the previewed document or naming its key and locale, the first error
+    // (located ones first), else the preview's own failure, else the first warning. A syntax error in the message is
+    // therefore shown instead of an unrelated catalog diagnostic that comes first in the list.
+    private EditorDiagnostic? PrimaryDiagnostic(IReadOnlyList<EditorDiagnostic> diagnostics, string path, string content, string key, string locale)
+    {
+        (int Start, int End)? extent = null;
+        if (path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)) extent = (0, StrictUtf8.GetByteCount(content));
+        else if (path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
+        {
+            Rmf2Workspace workspace = Rmf2Catalog();
+            if (Rmf2ResourceReader.Read(Source(path, content)).Nodes.FirstOrDefault(node => !node.IsGroup && Rmf2MessageKeys.Canonical(workspace.LogicalPath(path, node)) == key) is { } node)
+                extent = (node.NameLocation.StartByte, Math.Max(node.Location.StartByte + node.Location.LengthBytes, node.MessageByteMap.Count == 0 ? 0 : node.MessageByteMap[^1]));
+        }
+        bool Located(EditorDiagnostic diagnostic) => extent is { } range && diagnostic.Path == path && diagnostic.Span is { } span &&
+            span.StartByte >= range.Start && span.StartByte <= range.End;
+        bool Named(EditorDiagnostic diagnostic) => diagnostic.Key == key && diagnostic.Locale == locale;
+        return diagnostics.FirstOrDefault(diagnostic => diagnostic.Severity == "error" && Located(diagnostic))
+            ?? diagnostics.FirstOrDefault(diagnostic => diagnostic.Severity == "error" && Named(diagnostic))
+            ?? diagnostics.FirstOrDefault(static diagnostic => diagnostic.Id == "PREVIEW")
+            ?? diagnostics.FirstOrDefault(diagnostic => diagnostic.Severity != "error" && (Located(diagnostic) || Named(diagnostic)));
     }
 
     private static EditorMessagePreview MissingPreviewKey(string path, string locale, string key) =>
@@ -1405,6 +1480,7 @@ internal sealed class EditorWorkspace : IDisposable
         }
 
         var documents = new List<EditorDocument>(state.Files.Count);
+        IReadOnlyDictionary<string, Rmf2TranslationV5> baseResources = BaseResources(state);
         foreach (WorkspaceFile file in state.Files)
         {
             bool malformed = file.Kind == DocumentKind.Resource && state.Compilation.Diagnostics.Any(diagnostic =>
@@ -1418,7 +1494,7 @@ internal sealed class EditorWorkspace : IDisposable
                 malformed,
                 file.Locale,
                 file.Layer,
-                ReadEntries(file.Path, file.Content, state.Compilation)));
+                ReadEntries(file.Path, file.Content, state.Compilation, baseResources)));
         }
         EditorReviewSnapshot? review = null;
         if (_catalogId is not null)
@@ -1944,7 +2020,28 @@ internal sealed class EditorWorkspace : IDisposable
         return Path.GetFullPath(path).StartsWith(boundary, StringComparison.Ordinal);
     }
 
-    private EditorMessageEntry[] ReadEntries(string path, string content, Rmf2ProjectCompilation compilation)
+    private EditorMessageEntry[] ReadEntries(string path, string content, WorkspaceState state) =>
+        ReadEntries(path, content, state.Compilation, BaseResources(state));
+
+    // The base locale's messages by canonical key, from the compiled catalog, else from the review compilation, which
+    // compiles while translations are incomplete; empty when neither compiles.
+    private static Dictionary<string, Rmf2TranslationV5> BaseResources(WorkspaceState state, CancellationToken cancellationToken = default)
+    {
+        Rmf2ProjectV5? project = state.Compilation.Project ?? ReviewCompilation(state, cancellationToken).Project;
+        var resources = new Dictionary<string, Rmf2TranslationV5>(StringComparer.Ordinal);
+        foreach (Rmf2TranslationV5 resource in project?.Locales.FirstOrDefault(locale => locale.Tag == project.DefaultLocale)?.DirectResources ?? [])
+            resources.TryAdd(resource.Key, resource);
+        return resources;
+    }
+
+    private static EditorMessageProjection EditorProjection(Rmf2AuthoringProjection projection) =>
+        new(projection.Revision, projection.Supported, projection.Reason,
+            projection.Inputs.Select(input => new EditorMessageInput(input.Name, input.Type, input.Function, input.Declared)).ToArray(),
+            projection.Selectors, projection.SelectorFunctions, projection.Variants.Select(variant => new EditorMessageVariant(variant.Id, variant.Keys, variant.Pattern, variant.StartByte, variant.LengthBytes)).ToArray(),
+            projection.PluralCategories, projection.SelectorPluralCategories, projection.CldrVersion, EditorMessageDrafts.IsEmpty(projection));
+
+    private EditorMessageEntry[] ReadEntries(string path, string content, Rmf2ProjectCompilation compilation,
+        IReadOnlyDictionary<string, Rmf2TranslationV5> baseResources)
     {
         var resources = compilation.Project?.Locales.SelectMany(locale => locale.DirectResources).ToArray() ?? [];
         EditorMessageEntry Entry(IReadOnlyList<string> logicalPath, string message, int start, int length, Rmf2ResourceNode? node)
@@ -1971,13 +2068,12 @@ internal sealed class EditorWorkspace : IDisposable
             var context = new EditorMessageContext(node?.Comments ?? [],
                 (node?.Properties ?? []).Where(property => property.StartsWith("tag ", StringComparison.Ordinal) || property.StartsWith("tags ", StringComparison.Ordinal))
                     .SelectMany(property => property[(property.IndexOf(' ') + 1)..].Split([' ', ','], StringSplitOptions.RemoveEmptyEntries)).Distinct(StringComparer.Ordinal).ToArray(), examples);
-            return new(key, message, start, length,
-                new EditorMessageProjection(projection.Revision, projection.Supported, projection.Reason,
-                    projection.Inputs.Select(input => new EditorMessageInput(input.Name, input.Type, input.Function, input.Declared)).ToArray(),
-                    projection.Selectors, projection.SelectorFunctions, projection.Variants.Select(variant => new EditorMessageVariant(variant.Id, variant.Keys, variant.Pattern, variant.StartByte, variant.LengthBytes)).ToArray(),
-                    projection.PluralCategories, projection.SelectorPluralCategories, projection.CldrVersion), context,
+            int? maxLength = TranslationCompiler.EffectiveMaxLengthV5(
+                baseResources.TryGetValue(key, out var baseResource) ? TranslationCompiler.MaxLengthV5(baseResource.Properties) : null,
+                TranslationCompiler.MaxLengthV5(node?.Properties ?? linked?.Properties ?? []));
+            return new(key, message, start, length, EditorProjection(projection), context,
                 new EditorMessageSemantic(semantic.Text, semantic.Placeholders, semantic.Slots, semantic.Supported, semantic.HasBoundaryWhitespace),
-                logicalPath.ToArray());
+                logicalPath.ToArray(), maxLength);
         }
         if (path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
         {

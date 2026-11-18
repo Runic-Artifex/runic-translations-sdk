@@ -105,6 +105,8 @@ export interface EditorMessageEntry {
   semantic?: EditorMessageSemantic;
   /** The logical path (`["common", "cancel"]`, shown as `common.cancel`). */
   path: string[];
+  /** The effective `@maxLength` for the entry's locale (the smaller of the base's and its own), if any. */
+  maxLength?: number;
 }
 
 export interface EditorDocumentDraft {
@@ -390,6 +392,11 @@ export interface EditorMessagePreview {
   astJson?: string;
   renderedJson?: string;
   diagnostics: EditorDiagnostic[];
+  /**
+   * The diagnostic to show for the previewed message: the first error located in it or naming its key and locale, else
+   * the preview's own failure (`PREVIEW`), else such a warning. Absent when none belongs to it.
+   */
+  primaryDiagnostic?: EditorDiagnostic;
 }
 
 export interface EditorOperationResult {
@@ -573,6 +580,20 @@ export interface EditorMessageProjection {
   revision: string; supported: boolean; reason?: string;
   inputs: EditorMessageInput[]; selectors: string[]; selectorFunctions: string[]; variants: EditorMessageVariant[];
   pluralCategories: string[]; selectorPluralCategories: string[][]; cldrVersion: string;
+  /** Every variant's pattern is empty or white space: a draft the translator has not typed into yet. */
+  empty: boolean;
+}
+/**
+ * The editing model of a translation that does not exist yet: standalone MF2 text shaped like the base message (its
+ * declarations and selectors, the variants the target locale needs, every pattern empty), never a document entry.
+ * Nothing is written until the frontend inserts `text` with `transformDocument(path, content, key, text)`. A rejection
+ * keeps the text it was given and says why in `diagnostics`.
+ */
+export interface EditorMessageDraft {
+  success: boolean; key: string; locale: string; text: string;
+  projection?: EditorMessageProjection; diagnostics: EditorDiagnostic[];
+  /** The base message's `@maxLength`; reported by `createMessageDraft`, absent after an operation. */
+  maxLength?: number;
 }
 export interface EditorMessageOperation {
   kind: "set-pattern" | "rename-input" | "add-input" | "remove-input" | "set-input" | "set-selectors" | "add-variant" | "remove-variant";

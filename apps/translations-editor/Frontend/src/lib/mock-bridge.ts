@@ -1,5 +1,8 @@
 import type {
   EditorDocument,
+  EditorMessageDraft,
+  EditorMessageOperation,
+  EditorMessageProjection,
   EditorNotice,
   EditorProjectCreationRequest,
   EditorReviewSaveRequest,
@@ -440,6 +443,70 @@ function describeMockLocale(tag: string | undefined) {
   };
 }
 
+// The mock's missing-translation drafts (the host builds them with the compiler): the base document's declarations and
+// .match, one empty variant per key the target locale needs (Intl plural categories for :integer/:number selectors),
+// and set-pattern as the only operation.
+function mockDraftProjection(locale: string, text: string): EditorMessageProjection {
+  const encoder = new TextEncoder();
+  const variants: EditorMessageProjection["variants"] = [];
+  const selectors = /^\.match\s+(.+)$/m.exec(text)?.[1].split(/\s+/).map(selector => selector.slice(1)) ?? [];
+  if (selectors.length === 0) {
+    const quoted = text.lastIndexOf("{{");
+    const pattern = quoted < 0 ? text : text.slice(quoted + 2, text.lastIndexOf("}}"));
+    const start = quoted < 0 ? 0 : encoder.encode(text.slice(0, quoted + 2)).length;
+    variants.push({ id: "0", keys: [], pattern, startByte: start, lengthBytes: encoder.encode(pattern).length });
+  } else {
+    let offset = 0;
+    for (const line of text.split("\n")) {
+      const variant = /^(.*?) \{\{(.*)\}\}$/.exec(line);
+      if (variant !== null && !line.startsWith(".")) {
+        const start = offset + encoder.encode(variant[1] + " {{").length;
+        variants.push({ id: String(variants.length), keys: variant[1].split(" "), pattern: variant[2], startByte: start, lengthBytes: encoder.encode(variant[2]).length });
+      }
+      offset += encoder.encode(line + "\n").length;
+    }
+  }
+  const cardinal = describeMockLocale(locale).cardinal ?? [];
+  return {
+    revision: `mock-draft-${text}`, supported: true,
+    inputs: mockPreviewInputs(text).map(input => ({ name: input.name, type: input.type, declared: true })),
+    selectors, selectorFunctions: selectors.map(() => "plural"), variants,
+    pluralCategories: cardinal, selectorPluralCategories: selectors.map(() => cardinal), cldrVersion: "48.2",
+    empty: variants.every(variant => variant.pattern.trim() === ""),
+  };
+}
+
+function createMockMessageDraft(key: string, locale: string): EditorMessageDraft {
+  const base = snapshot.documents.find(document => document.path === `${snapshot.catalog?.defaultLocale}/${key}.mf2`);
+  if (base === undefined || !snapshot.catalog?.locales.some(item => item.tag === locale)) {
+    return { success: false, key, locale, text: "", diagnostics: [{ id: "EDITOR-DRAFT", severity: "error", message: "", path: "", line: 1, column: 1, endLine: 1, endColumn: 1,
+      notice: { code: "ui_backend_preview_key_missing", args: [{ name: "key", value: key }] } }] };
+  }
+  const lines = base.content.trimEnd().split("\n");
+  const declarations = lines.filter(line => line.startsWith(".input") || line.startsWith(".local"));
+  const match = lines.find(line => line.startsWith(".match"));
+  let text: string;
+  if (match === undefined) text = declarations.length === 0 ? "" : [...declarations, "{{}}"].join("\n");
+  else {
+    const categories = (describeMockLocale(locale).cardinal ?? []).filter(category => category !== "other");
+    text = [...declarations, match, ...categories.map(category => `${category} {{}}`), "* {{}}"].join("\n");
+  }
+  return { success: true, key, locale, text, projection: mockDraftProjection(locale, text), diagnostics: [] };
+}
+
+function applyMockMessageDraftOperation(key: string, locale: string, text: string, expectedRevision: string, operation: EditorMessageOperation): EditorMessageDraft {
+  const projection = mockDraftProjection(locale, text);
+  const variant = projection.variants.find(item => item.id === operation.variantId);
+  const refuse = (message: string): EditorMessageDraft => ({ success: false, key, locale, text, projection,
+    diagnostics: [{ id: "EDITOR-AUTHORING", severity: "error", message, path: `${locale}/${key}.mf2`, line: 1, column: 1, endLine: 1, endColumn: 1, key, locale }] });
+  if (expectedRevision !== projection.revision) return refuse("The message changed after this edit was prepared. Refresh the composer and try again.");
+  if (operation.kind !== "set-pattern" || variant === undefined || operation.pattern === undefined)
+    return refuse("Only pattern edits of draft messages are available in mock mode.");
+  const bytes = new TextEncoder().encode(text);
+  const changed = new TextDecoder().decode(bytes.slice(0, variant.startByte)) + operation.pattern + new TextDecoder().decode(bytes.slice(variant.startByte + variant.lengthBytes));
+  return { success: true, key, locale, text: changed, projection: mockDraftProjection(locale, changed), diagnostics: [] };
+}
+
 async function previewMessage(path: string, content: string, locale: string, key: string, samplesJson?: string, requestedLocale?: string, timeZone?: string) {
   try {
     const inputs = mockPreviewInputs(content);
@@ -800,6 +867,9 @@ export async function mockExecute(operation: string, argument: unknown): Promise
       return { ...validation, content, entries: path.endsWith(".mf2")
         ? [{ key, path: [key], content, valueStartByte: 0, valueLengthBytes: new TextEncoder().encode(content).length }] : [] };
     }
+    case "CreateMessageDraft": return createMockMessageDraft(value.key as string, value.locale as string);
+    case "ApplyMessageDraftOperation": return applyMockMessageDraftOperation(value.key as string, value.locale as string, value.text as string,
+      value.expectedRevision as string, value.operation as EditorMessageOperation);
     case "PreviewMessage": return previewMessage(value.path as string, value.content as string, value.locale as string, value.key as string, value.samplesJson as string | undefined, value.requestedLocale as string | undefined, value.timeZone as string | undefined);
     case "ListLocales": return { cldrVersion: "48.2", locales: mockLocales };
     // The mock has no importer: it reports a two-message dry run and applies nothing.

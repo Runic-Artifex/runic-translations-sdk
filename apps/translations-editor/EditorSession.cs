@@ -193,6 +193,13 @@ internal sealed partial class EditorSession : IDisposable
         string expectedRevision, EditorMessageOperation operation, CancellationToken cancellationToken = default) =>
         WithWorkspaceAsync((workspace, token) => workspace.ApplyAuthoringOperationAsync(relativePath, content, key, expectedRevision, operation, token), cancellationToken);
 
+    public Task<EditorMessageDraft> CreateMessageDraftAsync(string key, string locale, CancellationToken cancellationToken = default) =>
+        WithWorkspaceAsync((workspace, token) => workspace.CreateMessageDraftAsync(key, locale, token), cancellationToken);
+
+    public Task<EditorMessageDraft> ApplyMessageDraftOperationAsync(string key, string locale, string text, string expectedRevision,
+        EditorMessageOperation operation, CancellationToken cancellationToken = default) =>
+        WithWorkspaceAsync((_, _) => Task.FromResult(EditorWorkspace.ApplyMessageDraftOperation(key, locale, text, expectedRevision, operation)), cancellationToken);
+
     public Task<EditorDocumentDraft> ApplyDiagnosticFixAsync(string relativePath, string content,
         Runic.Translations.Compiler.Rmf2DiagnosticQuickFix fix, CancellationToken cancellationToken = default) =>
         WithWorkspaceAsync((workspace, token) => workspace.ApplyDiagnosticFixAsync(relativePath, content, fix, token), cancellationToken);
