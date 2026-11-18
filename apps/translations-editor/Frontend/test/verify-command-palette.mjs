@@ -59,6 +59,7 @@ for (const command of commands) {
 for (const expected of [
   "workspace.reload", "workspace.open", "workspace.new-project",
   "document.save", "document.undo", "document.redo",
+  "document.next-message", "document.previous-message", "document.save-and-next",
   "review.discard-workflow", "review.state-approved",
   "review.mark-visible-approved", "review.quality-report",
   "view.mode-raw", "view.focus-search", "view.toggle-messages",
@@ -125,6 +126,42 @@ assert(commands.find((command) => command.id === "document.undo").title === "Und
 commands.find((command) => command.id === "document.undo").run();
 assert(actions.calls.at(-1) === "undo", "The palette's Undo did not dispatch through the page's undo.");
 
+// Next missing, Previous missing and Save and next (D074.1): titled after the step kind, with their shortcuts, disabled
+// without a message to go to, and dispatched through the page's handlers.
+const stepping = palette.buildEditorCommandPalette(actions, {
+  ...state, shortcutPlatform: "other", stepKind: "missing", canStepNext: true, canStepPrevious: false, saveAndNextKind: "missing", canSaveAndNext: true,
+});
+const stepEntry = (commandsList, id) => commandsList.find((command) => command.id === id);
+assert(stepEntry(stepping, "document.next-message").title === "Next missing", "Next missing is misnamed.");
+assert(stepEntry(stepping, "document.next-message").keybinding === "Alt+↓", "Next missing does not show Alt+↓.");
+assert(stepEntry(stepping, "document.next-message").disabled !== true, "Next missing with a target must be enabled.");
+assert(stepEntry(stepping, "document.previous-message").title === "Previous missing", "Previous missing is misnamed.");
+assert(stepEntry(stepping, "document.previous-message").keybinding === "Alt+↑", "Previous missing does not show Alt+↑.");
+assert(stepEntry(stepping, "document.previous-message").disabled === true, "Previous missing without a target must be disabled.");
+assert(stepEntry(stepping, "document.save-and-next").title === "Save and next missing", "Save and next is misnamed.");
+assert(stepEntry(stepping, "document.save-and-next").keybinding === "Ctrl+Enter", "Save and next does not show Ctrl+Enter.");
+const macStepping = palette.buildEditorCommandPalette(actions, { ...state, shortcutPlatform: "mac", stepKind: "stale", saveAndNextKind: "stale" });
+assert(stepEntry(macStepping, "document.next-message").title === "Next outdated", "The outdated filter does not rename Next.");
+assert(stepEntry(macStepping, "document.next-message").keybinding === "⌥↓", "Next does not show ⌥↓ on macOS.");
+assert(stepEntry(macStepping, "document.save-and-next").keybinding === "⌘Enter", "Save and next does not show ⌘Enter on macOS.");
+assert(stepEntry(macStepping, "document.save-and-next").title === "Save and next outdated");
+assert(stepEntry(macStepping, "document.next-message").disabled === true, "Next without a target must be disabled.");
+const reviewStepping = palette.buildEditorCommandPalette(actions, { ...state, stepKind: "needs-review" });
+assert(stepEntry(reviewStepping, "document.next-message").title === "Next to review", "The to-review filter does not rename Next.");
+assert(stepEntry(reviewStepping, "document.previous-message").title === "Previous to review");
+for (const [id, call] of [
+  ["document.next-message", "nextMessage"],
+  ["document.previous-message", "previousMessage"],
+  ["document.save-and-next", "saveAndNext"],
+]) {
+  stepEntry(stepping, id).run();
+  assert(actions.calls.at(-1) === call, `${id} did not dispatch through ${call}.`);
+}
+const stepUi = { text: (key) => `[${key}]` };
+assert(stepEntry(palette.buildEditorCommandPalette(actions, { ...state, stepKind: "needs-review" }, stepUi), "document.next-message").title === "[ui_workbench_next_needs_review]",
+  "Next is not named through the interface text.");
+assert(palette.filterCommands(stepping, "next missing")[0].id === "document.next-message", "Searching \"next missing\" does not find Next missing first.");
+
 const blocked = palette.buildEditorCommandPalette(
   actions,
   { ...state, reviewEditable: false },
@@ -189,6 +226,9 @@ function stubActions() {
     saveAll: record("saveAll"),
     undo: record("undo"),
     redo: record("redo"),
+    nextMessage: record("nextMessage"),
+    previousMessage: record("previousMessage"),
+    saveAndNext: record("saveAndNext"),
     focusMessageSearch: record("focusMessageSearch"),
     discardReview: record("discardReview"),
     setMessageReviewState: (value) => calls.push(`setMessageReviewState:${value}`),

@@ -129,6 +129,9 @@ assert.deepEqual([...section("blocking").matchAll(/data-severity="(\w+)"/g)].map
 const other = section("other");
 assert.match(other, /<button[^>]*aria-expanded="false"[^>]*aria-controls="([^"]+)-other"[^>]*>[\s\S]*\[ui_validation_other_warnings_heading count=3\]/, "The other warnings are a collapsed disclosure button.");
 assert.match(other, /<div[^>]*id="[^"]+-other"[^>]*hidden/, "Other warnings are collapsed.");
+// D074.1: a disclosure is neither paint nor a state; it is ink inside the error-coloured panel.
+assert.match(other, /<button[^>]*class="[^"]*\btext-foreground\b[^"]*"[^>]*data-testid="diagnostics-other-toggle"/, "The other-warnings disclosure is not ink.");
+assert.doesNotMatch(/<button[^>]*data-testid="diagnostics-other-toggle"[^>]*>/.exec(other)?.[0] ?? "", /(?:^|[\s"])text-(?:destructive|warning|paint)\b/, "The other-warnings disclosure is coloured as a state.");
 assert.doesNotMatch(other, /RTR0010|RTR0094/, "Collapsed issues are not rendered.");
 assert.match(text(scoped), /Diagnostics · \[ui_count_errors count=3\] · \[ui_count_warnings count=4\] · \[ui_validation_message_counts errors=\[ui_count_errors count=1\] warnings=\[ui_count_warnings count=1\]\]/,
   "The summary keeps the project counts and adds this message's.");

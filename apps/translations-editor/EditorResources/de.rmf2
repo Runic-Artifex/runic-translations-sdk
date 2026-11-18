@@ -4106,6 +4106,91 @@ ui {
   }
 }
 ui {
+  workbench {
+    next_missing = Nächste fehlende
+  }
+}
+ui {
+  workbench {
+    next_needs_review = Nächste zu prüfende
+  }
+}
+ui {
+  workbench {
+    next_stale = Nächste veraltete
+  }
+}
+ui {
+  workbench {
+    none_missing = In {$locale} fehlt keine weitere Nachricht.
+  }
+}
+ui {
+  workbench {
+    none_needs_review = In {$locale} muss keine weitere Nachricht geprüft werden.
+  }
+}
+ui {
+  workbench {
+    none_stale = In {$locale} ist keine weitere Nachricht veraltet.
+  }
+}
+ui {
+  workbench {
+    previous_missing = Vorherige fehlende
+  }
+}
+ui {
+  workbench {
+    previous_needs_review = Vorherige zu prüfende
+  }
+}
+ui {
+  workbench {
+    previous_stale = Vorherige veraltete
+  }
+}
+ui {
+  workbench {
+    rail = Vorschau und Diagnosen
+  }
+}
+ui {
+  workbench {
+    save_and_next_failed = Nicht gespeichert, daher bleibt die Nachricht ausgewählt. Die Diagnosen nennen den Grund.
+  }
+}
+ui {
+  workbench {
+    save_and_next_invalid = Nicht gespeichert: Der Text enthält Fehler. Behebe sie und speichere dann erneut.
+  }
+}
+ui {
+  workbench {
+    save_and_next_missing = Speichern und nächste fehlende
+  }
+}
+ui {
+  workbench {
+    save_and_next_needs_review = Speichern und nächste zu prüfende
+  }
+}
+ui {
+  workbench {
+    save_and_next_stale = Speichern und nächste veraltete
+  }
+}
+ui {
+  workbench {
+    wrapped_next = Weiter am Anfang der Liste.
+  }
+}
+ui {
+  workbench {
+    wrapped_previous = Weiter am Ende der Liste.
+  }
+}
+ui {
   workflow {
     approved = Freigegeben
   }

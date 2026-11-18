@@ -53,6 +53,7 @@
   import { MessageDraftStore } from "#lib/state/message-draft-store.svelte.js";
   import { MessageEditingController } from "#lib/state/message-editing.svelte.js";
   import { MutationController } from "#lib/state/mutation-controller.svelte.js";
+  import { NextMessageController } from "#lib/state/next-message.svelte.js";
   import { PreferencesController } from "#lib/state/preferences-controller.svelte.js";
   import { defaultPreviewSample, PreviewController } from "#lib/state/preview-controller.svelte.js";
   import { ProjectWizardController } from "#lib/state/project-wizard.svelte.js";
@@ -157,6 +158,12 @@
     historyBlocked: (): boolean => historyBlocked,
     draftHistoryBlocked: (): boolean => draftHistoryBlocked,
   });
+  // Next missing and Save and next (D074.1): the next message to work on in tree order, after the one save.
+  const next: NextMessageController = new NextMessageController({
+    selection, view, localeName,
+    saveAll: () => workspace.saveAll(),
+    busy: () => saveCoordinator.saving || editorMutationBlocked,
+  });
   const interchange = new InterchangeController({ bridge, workspace, review, unsaved, feedback });
   const wizard = new ProjectWizardController({
     bridge, unsaved, feedback, interchange, historyBusy,
@@ -226,7 +233,11 @@
 
   const undo = (): void => history.undo();
   const redo = (): void => history.redo();
-  const saveAll = (): Promise<void> => workspace.saveAll();
+  const saveAll = async (): Promise<void> => { await workspace.saveAll(); };
+  const saveAndNext = (): void => void next.saveAndNext();
+  const stepMessage = (direction: "next" | "previous"): void => {
+    if (!editorMutationBlocked) next.step(direction);
+  };
   const openMutation = (kind: Parameters<MutationController["prepare"]>[0]): void => void mutation.prepare(kind);
   const toggleArtifactPreview = (): void => { artifactPreviewOpen = !artifactPreviewOpen; };
 
@@ -241,6 +252,9 @@
         saveAll: () => void saveAll(),
         undo,
         redo,
+        nextMessage: () => stepMessage("next"),
+        previousMessage: () => stepMessage("previous"),
+        saveAndNext,
         focusMessageSearch: () => searchInput?.focus(),
         discardReview: () => review.discard(),
         setMessageReviewState: (state) => view.setCurrentReviewState(state),
@@ -271,6 +285,11 @@
         unsaved: saveCoordinator.hasUnsaved && !editorMutationBlocked,
         canUndo,
         canRedo,
+        stepKind: next.kind,
+        canStepNext: next.nextTarget !== undefined && !editorMutationBlocked,
+        canStepPrevious: next.previousTarget !== undefined && !editorMutationBlocked,
+        saveAndNextKind: next.saveAndNextKind,
+        canSaveAndNext: selection.selectedRow !== undefined && !editorMutationBlocked && !saveCoordinator.saving && !next.running,
         undoTitle: undoLabel,
         redoTitle: redoLabel,
         reviewEditable: selection.selectedRow !== undefined && !reviewMutationBlocked &&
@@ -336,16 +355,26 @@
   $effect(() => selection.persistSelection());
 
   function handleKeyboard(event: KeyboardEvent): void {
-    const shortcut = editorShortcut(event, isTextEditingTarget(event.target), draftField(event.target) !== undefined);
+    const shortcut = editorShortcut(event, isTextEditingTarget(event.target), draftField(event.target) !== undefined,
+      { widgetTarget: stepWidgetTarget(event.target) });
     if (shortcut === undefined) return;
     event.preventDefault();
     if (shortcut === "undo") undo();
     else if (shortcut === "redo") redo();
     else if (shortcut === "save") void saveAll();
+    else if (shortcut === "save-and-next") { if (workspace.snapshot?.catalog !== undefined) saveAndNext(); }
+    else if (shortcut === "next-message") stepMessage("next");
+    else if (shortcut === "previous-message") stepMessage("previous");
     else if (shortcut === "toggle-command-search") commandPaletteOpen = !commandPaletteOpen;
     else if (shortcut === "toggle-pseudo-localization") preferences.togglePseudoLocalization();
     else if (shortcut === "toggle-right-to-left") preferences.toggleUiDirection();
     else toggleArtifactPreview();
+  }
+
+  // Alt+↑/↓ and Ctrl+Enter belong to a select, combobox, listbox or menu, and to an open dialog: no message step there.
+  function stepWidgetTarget(target: EventTarget | null): boolean {
+    return target instanceof Element &&
+      target.closest('select, [role="combobox"], [role="listbox"], [role="menu"], [role="menubar"], [role="dialog"], [role="alertdialog"]') !== null;
   }
 
   // The browser's own undo of a draft field (from its context menu) is the editor's: the field is rewritten from the
@@ -437,7 +466,9 @@
     bind:messagesOpen
     bind:searchInput
     bind:artifactPreviewOpen
+    {next}
     onsave={() => void saveAll()}
+    onsaveandnext={saveAndNext}
     onundo={undo}
     onredo={redo}
     onnewproject={() => wizard.start()}

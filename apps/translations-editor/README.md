@@ -60,6 +60,34 @@ comfortable (the default) or compact, which tightens spacing, the message tree's
 rows and the interface text. The colour palettes of earlier versions are gone; a
 stored palette is dropped when the editor loads its local state.
 
+The window is a workbench of three panes. The sidebar holds the project, its
+catalogs and languages, and the message tree; the editor column in the middle
+holds the selected message's heading, its review workflow (or, when its source
+changed after its review state was recorded, the **Source changed** callout
+above the workflow), the source text and the composer or the file view; the
+rail on the right holds the preview and the diagnostics. The toolbar above the
+editor column has **Libraries…**, **Interchange…**, **Next missing**, Undo, Redo
+and **Save**. Below a window width of 1100 px the rail folds under the editor
+column, and below 768 px the sidebar collapses behind the navigation button at
+the start of the toolbar.
+
+**Next missing** (Alt+↓, or ⌥↓ on macOS) selects the next message, in the order
+of the message tree, that the selected language lacks; Alt+↑ selects the
+previous one. With the **Stale** or **Review** filter on, they step through the
+outdated messages or those that need review instead, and the button says
+**Next outdated** or **Next to review**. They visit the messages the list shows
+(the search and filter apply) and wrap: after the last message comes the first,
+and the editor says so. **Save and next** (Ctrl+Enter, or ⌘Enter on macOS) saves
+all unsaved work as **Save** does, then selects the next message of the kind the
+selected one was: missing, outdated, or the kind of the filter. If the save is
+blocked, for example by an error in the text, the message stays selected and the
+editor says why. A button next to the composer offers it while the selected
+message was missing or outdated when you selected it. The three commands are in
+the command palette (Ctrl+K). The shortcuts work outside text fields and in the
+composer, the message source and the file view, but not in the search field, a
+menu or a dialog; on macOS ⌥↑ and ⌥↓ keep moving the caret in a text field, so
+there they work outside text fields only. AltGr is never one of them.
+
 The editor uses the RMF2 v5 compiler/runtime pipeline without fabricating a
 retired catalog carrier. Previews are formatted by the verified .NET artifact/pack
 path; the browser receives validated inert semantic runs and never approximates

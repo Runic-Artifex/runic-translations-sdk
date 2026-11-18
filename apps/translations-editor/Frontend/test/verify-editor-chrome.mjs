@@ -37,15 +37,23 @@ const keybindings = (platform) => Object.fromEntries(buildEditorCommandPalette(p
   .filter((command) => command.keybinding !== undefined).map((command) => [command.id, command.keybinding]));
 assert.deepEqual(keybindings("mac"), {
   "document.save": "⌘S", "document.undo": "⌘Z", "document.redo": "⇧⌘Z",
+  "document.next-message": "⌥↓", "document.previous-message": "⌥↑", "document.save-and-next": "⌘Enter",
   "view.toggle-pseudo-localization": "⌥P", "view.toggle-rtl-simulation": "⌥R", "view.toggle-artifact-preview": "⌥B",
 });
 assert.deepEqual(keybindings("other"), {
   "document.save": "Ctrl+S", "document.undo": "Ctrl+Z", "document.redo": "Ctrl+Shift+Z",
+  "document.next-message": "Alt+↓", "document.previous-message": "Alt+↑", "document.save-and-next": "Ctrl+Enter",
   "view.toggle-pseudo-localization": "Alt+P", "view.toggle-rtl-simulation": "Alt+R", "view.toggle-artifact-preview": "Alt+B",
 });
 const toolbar = await readFile(new URL("../src/lib/EditorToolbar.svelte", import.meta.url), "utf8");
 assert.doesNotMatch(toolbar, /⌘ S/, "The toolbar's save hint is not hard-coded to macOS.");
 assert.match(toolbar, /shortcutLabel\("Mod\+S"\)/, "The toolbar's save hint uses the platform's modifier.");
+// Next missing (D074.1) in the toolbar and Save and next at the composer show their shortcuts through shortcutLabel.
+assert.match(toolbar, /shortcutLabel\("Alt\+↓"\)/, "The toolbar's Next hint does not use shortcutLabel.");
+const editorPane = await readFile(new URL("../src/lib/screens/MessageEditorPane.svelte", import.meta.url), "utf8");
+assert.match(editorPane, /shortcutLabel\("Mod\+Enter"\)/, "Save and next does not show its shortcut through shortcutLabel.");
+assert.equal(shortcutLabel("Alt+↓", "mac"), "⌥↓");
+assert.equal(shortcutLabel("Mod+Enter", "other"), "Ctrl+Enter");
 
 // P16: whole percent in the interface locale's format; never 100 % while something is missing, never 0 % while
 // something is covered.

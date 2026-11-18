@@ -3,7 +3,8 @@ import type { DiagnosticSources } from "../diagnostic-scope";
 import type { EditorLabels } from "../editor-labels";
 import type { MessageGroupCountKind, MessageListItem } from "../MessageList.svelte";
 import { createMessageSearchIndex } from "../message-search";
-import { localeCoverage, preview } from "../resource-model";
+import { adjacentMessage, messageTreeOrder, nextMessageKind, type NextMessageDirection, type NextMessageKind } from "../next-message";
+import { localeCoverage, preview, type TranslationRow } from "../resource-model";
 import {
   bidiIssues,
   effectiveReviewState,
@@ -142,6 +143,10 @@ export class WorkspaceView {
       };
     });
   });
+  /** The keys of the messages in tree order, which Next and Previous follow. */
+  treeOrder = $derived.by(() => messageTreeOrder(this.#rows()));
+  /** What Next and Previous step through for the list's filter: missing messages, or the outdated or to-review ones. */
+  stepKind = $derived.by((): NextMessageKind => nextMessageKind(this.#options.selection.filter));
   /** #225 P15: the selection stays, but the list says when the search or filter hides it. */
   selectedHiddenByFilter = $derived.by(() => this.#options.selection.selectedRow !== undefined &&
     !this.visibleRows.some((row) => row.key === this.#options.selection.selectedKey));
@@ -191,6 +196,24 @@ export class WorkspaceView {
   // Whether the locale has the message: a new review entry starts from its implicit state.
   #translatedIn(key: string, locale: string): boolean {
     return this.#rows().find((candidate) => candidate.key === key)?.cells[locale]?.entry !== undefined;
+  }
+
+  /** Whether `row` is of `kind` in the selected locale, as the list's filters decide it. */
+  hasKind(row: TranslationRow, kind: NextMessageKind): boolean {
+    const locale = this.#locale();
+    const translated = row.cells[locale]?.entry !== undefined;
+    if (kind === "missing") return !translated;
+    const entry = this.#options.review.index.get(reviewIdentity(row.key, locale));
+    return kind === "stale" ? isStale(entry) : effectiveReviewState(entry, translated) === "needs-review";
+  }
+
+  /**
+   * The message Next (or Previous) selects: the one after the selection in tree order among the messages the list
+   * shows that are of `kind`, wrapping at the end.
+   */
+  adjacent(kind: NextMessageKind, direction: NextMessageDirection): { key: string; wrapped: boolean } | undefined {
+    const candidates = new Set(this.visibleRows.filter((row) => this.hasKind(row, kind)).map((row) => row.key));
+    return adjacentMessage(this.treeOrder, candidates, this.#options.selection.selectedKey, direction);
   }
 
   setCurrentReviewState(state: EditorReviewState): void {

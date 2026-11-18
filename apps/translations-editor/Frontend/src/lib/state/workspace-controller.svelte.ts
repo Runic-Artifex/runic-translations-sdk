@@ -6,7 +6,7 @@ import type { DraftStore } from "./draft-store.svelte";
 import type { EditorFeedback } from "./feedback.svelte";
 import type { MessageDraftStore } from "./message-draft-store.svelte";
 import type { ReviewStore } from "./review-store.svelte";
-import type { SaveCoordinator } from "./save-coordinator.svelte";
+import type { SaveCoordinator, SaveOutcome } from "./save-coordinator.svelte";
 import type { SelectionController } from "./selection-controller.svelte";
 import type { UnsavedWork } from "./unsaved-work.svelte";
 
@@ -186,14 +186,15 @@ export class WorkspaceController {
 
   /**
    * Ctrl+S and the toolbar's Save: every unsaved document (each validated; an invalid one blocks the save and its
-   * diagnostics are shown), then the review changes.
+   * diagnostics are shown), then the review changes. Says how the save ended; nothing when another save or a history
+   * step is running.
    */
-  async saveAll(): Promise<void> {
+  async saveAll(): Promise<SaveOutcome | undefined> {
     const { save, feedback } = this.#options;
-    if (save.saving || this.#options.historyBusy()) return;
+    if (save.saving || this.#options.historyBusy()) return undefined;
     feedback.clear();
     const outcome = await save.saveAll();
-    if (outcome.kind === "nothing" || outcome.kind === "invalid") return;
+    if (outcome.kind === "nothing" || outcome.kind === "invalid") return outcome;
     if (outcome.saved.length > 0) this.#options.selection.configureEditor();
     const newer = outcome.kind !== "failed" && outcome.kind !== "refused" && outcome.newer;
     if (outcome.kind === "saved") feedback.operationMessage = newer ? notice("ui_feedback_newer_draft") : outcome.message;
@@ -202,6 +203,7 @@ export class WorkspaceController {
       feedback.clientError = outcome.message;
       if (newer) feedback.operationMessage = notice("ui_feedback_newer_draft");
     }
+    return outcome;
   }
 
   /** Reads the recent projects from the native editor state, once it has loaded. */

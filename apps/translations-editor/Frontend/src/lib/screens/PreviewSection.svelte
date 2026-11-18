@@ -137,7 +137,7 @@
 />
 
 <style>
-  .message-preview { max-width: 1000px; margin: 1.2rem auto 0; border: 1px solid var(--border); border-radius: var(--radius-pane); color: var(--card-foreground); background: var(--card); overflow: hidden; }
+  .message-preview { width: 100%; max-width: 1000px; margin: 0 auto; border: 1px solid var(--border); border-radius: var(--radius-pane); color: var(--card-foreground); background: var(--card); overflow: hidden; }
   .message-preview > header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem 1rem; border-bottom: 1px solid var(--border); }
   .message-preview > header > div { display: grid; gap: .15rem; }
   .message-preview header strong { color: var(--foreground); font-size: var(--ui-text); font-weight: 620; }

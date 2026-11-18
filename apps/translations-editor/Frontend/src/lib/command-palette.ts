@@ -2,6 +2,7 @@ import type { UiText } from "./ui-text";
 import type { ThemeMode } from "./appearance";
 import type { EditorReviewState } from "./contracts";
 import type { EditorBridge } from "./editor-bridge";
+import type { NextMessageKind } from "./next-message";
 import type { UiDirection } from "./simulation";
 import { shortcutLabel, type ShortcutPlatform } from "./shortcut-labels";
 
@@ -34,6 +35,11 @@ export interface EditorPaletteActions {
   /** Takes back the latest unsaved edit, or without one the latest saved change. */
   undo(): void;
   redo(): void;
+  /** Selects the next (or previous) message to work on in tree order: missing, or outdated or to review (D074.1). */
+  nextMessage(): void;
+  previousMessage(): void;
+  /** Saves all unsaved work, then selects the next message of the kind the selected one had. */
+  saveAndNext(): void;
   focusMessageSearch(): void;
   discardReview(): void;
   setMessageReviewState(state: EditorReviewState): void;
@@ -70,6 +76,13 @@ export interface EditorPaletteState {
   /** The toolbar's names of Undo and Redo ("Undo: edit in files.selected"); without them the saved-change titles. */
   readonly undoTitle?: string;
   readonly redoTitle?: string;
+  /** What Next and Previous step through, and whether they have a message to go to. */
+  readonly stepKind?: NextMessageKind;
+  readonly canStepNext?: boolean;
+  readonly canStepPrevious?: boolean;
+  /** What Save and next steps to after the save, and whether it can run. */
+  readonly saveAndNextKind?: NextMessageKind;
+  readonly canSaveAndNext?: boolean;
   readonly reviewEditable: boolean;
   readonly reviewDirty: boolean;
   readonly pseudoLocalization: boolean;
@@ -86,6 +99,18 @@ const paletteGroupLabels: Record<PaletteCommandGroupId, string> = {
   view: "View",
   help: "Help",
 };
+
+/** The titles of the message steps for each kind, in English when no interface text is given. */
+const stepTitles: Record<"next" | "previous" | "save_and_next", Record<NextMessageKind, string>> = {
+  next: { missing: "Next missing", stale: "Next outdated", "needs-review": "Next to review" },
+  previous: { missing: "Previous missing", stale: "Previous outdated", "needs-review": "Previous to review" },
+  save_and_next: { missing: "Save and next missing", stale: "Save and next outdated", "needs-review": "Save and next to review" },
+};
+
+/** The title of a message step: "Next missing", "Previous outdated", "Save and next to review". */
+export function stepTitle(step: "next" | "previous" | "save_and_next", kind: NextMessageKind, ui?: UiText): string {
+  return ui?.text(`ui_workbench_${step}_${kind.replace("-", "_")}`) ?? stepTitles[step][kind];
+}
 
 const paletteGroupOrder: readonly PaletteCommandGroupId[] = [
   "workspace",
@@ -177,6 +202,34 @@ export function buildEditorCommandPalette(
     disabled: !state.canRedo,
     bridge: "redo",
     run: actions.redo,
+  });
+
+  push({
+    id: "document.next-message",
+    title: stepTitle("next", state.stepKind ?? "missing", ui),
+    group: "document",
+    keybinding: shortcutLabel("Alt+↓", state.shortcutPlatform),
+    keywords: "next missing untranslated outdated stale review jump step navigate go",
+    disabled: state.canStepNext !== true,
+    run: actions.nextMessage,
+  });
+  push({
+    id: "document.previous-message",
+    title: stepTitle("previous", state.stepKind ?? "missing", ui),
+    group: "document",
+    keybinding: shortcutLabel("Alt+↑", state.shortcutPlatform),
+    keywords: "previous back missing untranslated outdated stale review jump step navigate go",
+    disabled: state.canStepPrevious !== true,
+    run: actions.previousMessage,
+  });
+  push({
+    id: "document.save-and-next",
+    title: stepTitle("save_and_next", state.saveAndNextKind ?? state.stepKind ?? "missing", ui),
+    group: "document",
+    keybinding: shortcutLabel("Mod+Enter", state.shortcutPlatform),
+    keywords: "save write next continue missing outdated stale review step",
+    disabled: state.canSaveAndNext !== true,
+    run: actions.saveAndNext,
   });
 
   push({

@@ -4106,6 +4106,91 @@ ui {
   }
 }
 ui {
+  workbench {
+    next_missing = Next missing
+  }
+}
+ui {
+  workbench {
+    next_needs_review = Next to review
+  }
+}
+ui {
+  workbench {
+    next_stale = Next outdated
+  }
+}
+ui {
+  workbench {
+    none_missing = No other message is missing in {$locale}.
+  }
+}
+ui {
+  workbench {
+    none_needs_review = No other message needs review in {$locale}.
+  }
+}
+ui {
+  workbench {
+    none_stale = No other message is outdated in {$locale}.
+  }
+}
+ui {
+  workbench {
+    previous_missing = Previous missing
+  }
+}
+ui {
+  workbench {
+    previous_needs_review = Previous to review
+  }
+}
+ui {
+  workbench {
+    previous_stale = Previous outdated
+  }
+}
+ui {
+  workbench {
+    rail = Preview and diagnostics
+  }
+}
+ui {
+  workbench {
+    save_and_next_failed = Not saved, so the message stays selected. The diagnostics say why.
+  }
+}
+ui {
+  workbench {
+    save_and_next_invalid = Not saved: the text has errors. Fix them, then save again.
+  }
+}
+ui {
+  workbench {
+    save_and_next_missing = Save and next missing
+  }
+}
+ui {
+  workbench {
+    save_and_next_needs_review = Save and next to review
+  }
+}
+ui {
+  workbench {
+    save_and_next_stale = Save and next outdated
+  }
+}
+ui {
+  workbench {
+    wrapped_next = Continued from the top of the list.
+  }
+}
+ui {
+  workbench {
+    wrapped_previous = Continued from the bottom of the list.
+  }
+}
+ui {
   workflow {
     approved = Approved
   }

@@ -5,7 +5,9 @@ import ts from "typescript";
 import { readPageSourceFiles } from "./page-sources.mjs";
 import { readUiMessages } from "./ui-messages.mjs";
 
-const keyboard = await loadModule(new URL("../src/lib/editor-keyboard.ts", import.meta.url));
+// The keyboard module's one import, the shortcut platform, is inlined.
+const shortcutLabels = await loadModule(new URL("../src/lib/shortcut-labels.ts", import.meta.url), true);
+const keyboard = await loadModule(new URL("../src/lib/editor-keyboard.ts", import.meta.url), false, { "./shortcut-labels": shortcutLabels });
 for (const [event, textEditingTarget, expected, draftField = false] of [
   [key("z", { ctrlKey: true }), false, "undo"],
   [key("z", { ctrlKey: true, shiftKey: true }), false, "redo"],
@@ -32,6 +34,42 @@ for (const [event, textEditingTarget, expected, draftField = false] of [
 ]) {
   assert.equal(keyboard.editorShortcut(event, textEditingTarget, draftField), expected,
     `Keyboard route for ${event.key} did not preserve the owned editor command boundary.`);
+}
+
+// The message steps (D074.1): Alt+↓/↑ and Ctrl+Enter (⌘Enter) outside text fields and in draft fields; never in another
+// text field, a widget with its own use for the keys (select, combobox, listbox, menu, dialog), during an input method
+// composition, with Shift, or with AltGr (Ctrl+Alt on Windows; elsewhere AltGr does not set Alt). On macOS ⌥↑/⌥↓ move
+// the caret by paragraph, so there they step only outside text fields.
+for (const [event, textEditingTarget, draftField, context, expected] of [
+  [key("ArrowDown", { altKey: true }), false, false, { platform: "other" }, "next-message"],
+  [key("ArrowUp", { altKey: true }), false, false, { platform: "other" }, "previous-message"],
+  [key("ArrowDown", { altKey: true }), true, true, { platform: "other" }, "next-message"],
+  [key("ArrowUp", { altKey: true }), true, true, { platform: "other" }, "previous-message"],
+  [key("ArrowDown", { altKey: true }), false, false, { platform: "mac" }, "next-message"],
+  [key("ArrowDown", { altKey: true }), true, true, { platform: "mac" }, undefined],
+  [key("ArrowDown", { altKey: true }), true, false, { platform: "other" }, undefined],
+  [key("ArrowDown", { altKey: true }), false, false, { platform: "other", widgetTarget: true }, undefined],
+  [key("ArrowDown", { altKey: true, shiftKey: true }), false, false, { platform: "other" }, undefined],
+  [key("ArrowDown", { altKey: true, ctrlKey: true }), false, false, { platform: "other" }, undefined],
+  [key("ArrowDown", { altKey: true, ctrlKey: true }), true, true, { platform: "other" }, undefined],
+  [key("ArrowDown", { altKey: true, metaKey: true }), false, false, { platform: "mac" }, undefined],
+  [key("ArrowDown"), false, false, { platform: "other" }, undefined],
+  [{ ...key("ArrowDown", { altKey: true }), isComposing: true }, true, true, { platform: "other" }, undefined],
+  [key("Enter", { ctrlKey: true }), false, false, { platform: "other" }, "save-and-next"],
+  [key("Enter", { ctrlKey: true }), true, true, { platform: "other" }, "save-and-next"],
+  [key("Enter", { metaKey: true }), true, true, { platform: "mac" }, "save-and-next"],
+  [key("Enter", { ctrlKey: true }), true, false, { platform: "other" }, undefined],
+  [key("Enter", { ctrlKey: true }), false, false, { platform: "other", widgetTarget: true }, undefined],
+  [key("Enter", { ctrlKey: true, altKey: true }), true, true, { platform: "other" }, undefined],
+  [key("Enter", { ctrlKey: true, shiftKey: true }), true, true, { platform: "other" }, undefined],
+  [{ ...key("Enter", { ctrlKey: true }), isComposing: true }, true, true, { platform: "other" }, undefined],
+  [key("Enter"), true, true, { platform: "other" }, undefined],
+  // AltGr (Ctrl+Alt) still types characters; the existing Alt letters stay outside text fields only.
+  [key("p", { altKey: true, ctrlKey: true }), false, false, { platform: "other" }, undefined],
+  [key("b", { altKey: true }), false, false, { platform: "other" }, "toggle-artifact-preview"],
+]) {
+  assert.equal(keyboard.editorShortcut(event, textEditingTarget, draftField, context), expected,
+    `Message step route for ${JSON.stringify(event)} in ${JSON.stringify({ textEditingTarget, draftField, ...context })}.`);
 }
 
 const componentEntries = await Promise.all([
@@ -148,8 +186,12 @@ const page = pageFiles.map(([, text]) => text).join("\n");
 assert.match(page, /<svelte:window onkeydown=\{handleKeyboard\}/,
   "Owned keyboard dispatch is not installed on the Editor window.");
 // Ctrl+Z in a draft field undoes the unsaved edit, not the field's browser history, and so does the browser's own undo.
-assert.match(page, /editorShortcut\(event, isTextEditingTarget\(event\.target\), draftField\(event\.target\) !== undefined\)/,
-  "Keyboard dispatch does not tell draft fields from other text fields.");
+assert.match(page, /editorShortcut\(event, isTextEditingTarget\(event\.target\), draftField\(event\.target\) !== undefined,\s*\{ widgetTarget: stepWidgetTarget\(event\.target\) \}\)/,
+  "Keyboard dispatch does not tell draft fields from other text fields, or widgets from the rest.");
+assert.match(page, /function stepWidgetTarget[\s\S]*?closest\('select, \[role="combobox"\], \[role="listbox"\], \[role="menu"\], \[role="menubar"\], \[role="dialog"\], \[role="alertdialog"\]'\)/,
+  "The message steps do not leave selects, comboboxes, listboxes, menus and dialogs alone.");
+assert.match(page, /shortcut === "save-and-next"[\s\S]*?saveAndNext\(\)[\s\S]*?shortcut === "next-message"\) stepMessage\("next"\)[\s\S]*?shortcut === "previous-message"\) stepMessage\("previous"\)/,
+  "Ctrl+Enter and Alt+↓/↑ are not dispatched to Save and next and the message steps.");
 assert.match(page, /onbeforeinput=\{handleBeforeInput\}/, "The browser's own undo of a draft field is not routed to the editor.");
 assert.match(page, /inputType === "historyUndo"[\s\S]*undo\(\)[\s\S]*inputType === "historyRedo"[\s\S]*redo\(\)/,
   "historyUndo and historyRedo of a draft field are not the editor's undo and redo.");
@@ -195,13 +237,16 @@ for (const declaration of ["animation-duration: 0.01ms !important", "transition-
 
 console.log("PASS: headless Editor keyboard and accessibility semantics cover command search, recovery focus, labels, landmarks, and forced-colors focus." );
 
-async function loadModule(url) {
-  const source = await readFile(url, "utf8");
+async function loadModule(url, raw = false, imports = {}) {
+  let source = await readFile(url, "utf8");
   const transpiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
     fileName: url.pathname,
   });
-  return import(`data:text/javascript;base64,${Buffer.from(transpiled.outputText).toString("base64")}`);
+  let output = transpiled.outputText;
+  for (const [specifier, module] of Object.entries(imports)) output = output.replaceAll(JSON.stringify(specifier), JSON.stringify(module));
+  const dataUrl = `data:text/javascript;base64,${Buffer.from(output).toString("base64")}`;
+  return raw ? dataUrl : import(dataUrl);
 }
 
 function key(value, modifiers = {}) {

@@ -14,6 +14,7 @@
   import type { MessageDraftStore } from "#lib/state/message-draft-store.svelte.js";
   import type { MessageEditingController } from "#lib/state/message-editing.svelte.js";
   import type { MutationKind } from "#lib/state/mutation-controller.svelte.js";
+  import { noneNotice, type NextMessageController } from "#lib/state/next-message.svelte.js";
   import type { PreferencesController } from "#lib/state/preferences-controller.svelte.js";
   import type { PreviewController } from "#lib/state/preview-controller.svelte.js";
   import type { ReviewStore } from "#lib/state/review-store.svelte.js";
@@ -21,6 +22,7 @@
   import type { SelectionController } from "#lib/state/selection-controller.svelte.js";
   import type { WorkspaceController } from "#lib/state/workspace-controller.svelte.js";
   import type { WorkspaceView } from "#lib/state/workspace-view.svelte.js";
+  import { stepTitle } from "#lib/command-palette.js";
   import { displayNotice, getUiText, notice, type UiMessage } from "#lib/ui-text.js";
   import MessageEditorPane from "./MessageEditorPane.svelte";
   import PreviewSection from "./PreviewSection.svelte";
@@ -44,6 +46,7 @@
     save,
     library,
     interchange,
+    next,
     labels,
     localeCatalog,
     clientError,
@@ -56,6 +59,7 @@
     searchInput = $bindable(null),
     artifactPreviewOpen = $bindable(false),
     onsave,
+    onsaveandnext,
     onundo,
     onredo,
     onnewproject,
@@ -82,6 +86,8 @@
     save: SaveCoordinator;
     library: LibraryController;
     interchange: InterchangeController;
+    /** Next missing and Save and next (D074.1). */
+    next: NextMessageController;
     labels: EditorLabels;
     localeCatalog: EditorLocaleCatalog | undefined;
     clientError: UiMessage | undefined;
@@ -94,6 +100,8 @@
     searchInput?: HTMLInputElement | null;
     artifactPreviewOpen?: boolean;
     onsave(): void;
+    /** Saves, then selects the next message of the same kind (Ctrl+Enter). */
+    onsaveandnext(): void;
     onundo(): void;
     onredo(): void;
     onnewproject(): void;
@@ -122,9 +130,13 @@
     (save.unsavedSummary.documents.length > 0
       ? diagnostics.latest?.success === false || clientError !== undefined
       : snapshot.review?.error !== undefined));
+  const nextLabel = $derived(stepTitle("next", next.kind, ui));
 </script>
 
-<Sidebar.Provider style="--sidebar-width: 21rem; --sidebar-width-mobile: min(20rem, calc(100vw - 1rem));" class="h-svh min-h-0 overflow-hidden">
+<!-- The workbench (D074.1): the message tree in the sidebar, the editor in the middle and a rail with the preview and
+     the diagnostics on the right. Below 1100px the rail folds under the editor column; below 768px the sidebar
+     collapses behind the toolbar's toggle. -->
+<Sidebar.Provider style="--sidebar-width: clamp(16rem, 22vw, 21rem); --sidebar-width-mobile: min(20rem, calc(100vw - 1rem));" class="h-svh min-h-0 overflow-hidden">
   <WorkspaceSidebar
     {snapshot}
     {workspace}
@@ -159,17 +171,21 @@
       historyBusy={history.busy}
       undoLabel={history.undoLabel}
       redoLabel={history.redoLabel}
+      {nextLabel}
+      nextDisabled={next.nextTarget === undefined || editingBlocked}
+      nextDetail={next.nextTarget === undefined ? displayNotice(noneNotice(next.kind, localeName(selectedLocale)), ui) : ""}
       {onsave}
       {onundo}
       {onredo}
-    />
-
-    <div class="flex justify-end border-b px-4 py-2">
-      {#if (snapshot.libraries?.length ?? 0) > 0}
-        <Button variant="outline" size="sm" class="mr-2" disabled={workspace.loading || library.busy} onclick={() => void library.openLibrary(library.view?.catalog ?? snapshot.libraries![0].catalog)}>{ui.text("ui_library_open")}…</Button>
-      {/if}
-      <Button variant="outline" size="sm" disabled={workspace.loading || interchange.busy} onclick={() => interchange.open = true}>{ui.text("ui_page_interchange")}…</Button>
-    </div>
+      onnext={() => next.step("next")}
+    >
+      {#snippet leading()}
+        {#if (snapshot.libraries?.length ?? 0) > 0}
+          <Button variant="outline" size="sm" disabled={workspace.loading || library.busy} onclick={() => void library.openLibrary(library.view?.catalog ?? snapshot.libraries![0].catalog)}>{ui.text("ui_library_open")}…</Button>
+        {/if}
+        <Button variant="outline" size="sm" disabled={workspace.loading || interchange.busy} onclick={() => interchange.open = true}>{ui.text("ui_page_interchange")}…</Button>
+      {/snippet}
+    </EditorToolbar>
 
     {#if selection.selectedRow === undefined}
       <Empty.Root>
@@ -182,58 +198,75 @@
         </Empty.Header>
       </Empty.Root>
     {:else}
-      <div class="editor-content" lang={selectedLocale} dir={uiDirection}>
-        <MessageEditorPane
-          {snapshot}
-          {catalog}
-          row={selection.selectedRow}
-          {selection}
-          {view}
-          {editing}
-          {review}
-          {drafts}
-          {messageDrafts}
-          {diagnostics}
-          {history}
-          {labels}
-          {clientError}
-          {editingBlocked}
-          {reviewBlocked}
-          {localeName}
-          {onmutation}
-          {onterminology}
-          {onreport}
-        />
-
-        {#if selection.mode === "translation"}
-          <PreviewSection
-            {preview}
+      <div class="workbench" lang={selectedLocale} dir={uiDirection} data-testid="workbench">
+        <div class="editor-column" data-testid="editor-column">
+          <MessageEditorPane
+            {snapshot}
+            {catalog}
+            row={selection.selectedRow}
             {selection}
-            {localeCatalog}
-            pseudoLocalization={preferences.pseudoLocalization}
-            {uiDirection}
-            bind:artifactPreviewOpen
+            {view}
+            {editing}
+            {review}
+            {drafts}
+            {messageDrafts}
+            {diagnostics}
+            {history}
+            {next}
+            {labels}
+            {clientError}
+            {editingBlocked}
+            {reviewBlocked}
+            {localeName}
+            {onmutation}
+            {onterminology}
+            {onreport}
+            {onsaveandnext}
           />
-        {/if}
+        </div>
 
-        <ValidationArea
-          {catalog}
-          row={selection.selectedRow}
-          locale={selectedLocale}
-          {drafts}
-          {diagnostics}
-          {view}
-          {editing}
-          {labels}
-          {clientError}
-        />
+        <aside class="editor-rail" aria-label={ui.text("ui_workbench_rail")} data-testid="editor-rail">
+          {#if selection.mode === "translation"}
+            <PreviewSection
+              {preview}
+              {selection}
+              {localeCatalog}
+              pseudoLocalization={preferences.pseudoLocalization}
+              {uiDirection}
+              bind:artifactPreviewOpen
+            />
+          {/if}
+
+          <ValidationArea
+            {catalog}
+            row={selection.selectedRow}
+            locale={selectedLocale}
+            {drafts}
+            {diagnostics}
+            {view}
+            {editing}
+            {labels}
+            {clientError}
+          />
+        </aside>
       </div>
     {/if}
   </Sidebar.Inset>
 </Sidebar.Provider>
 
 <style>
-  .editor-content { flex: 1; min-width: 0; min-height: 0; padding: 1.25rem 1rem 2rem; overflow-x: hidden; overflow-y: auto; scrollbar-color: var(--border) transparent; }
-  @media (min-width: 640px) { .editor-content { padding: 1.5rem; } }
-  @media (min-width: 1100px) { .editor-content { padding: 2rem clamp(2rem, 5vw, 5rem) 3rem; } }
+  /* Narrow windows: one column that scrolls as a whole, the rail under the editor column. */
+  .workbench { flex: 1; min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-color: var(--border) transparent; }
+  .editor-column { min-width: 0; padding: 1.25rem 1rem 1rem; }
+  .editor-rail { display: grid; align-content: start; gap: 1rem; min-width: 0; border-top: 1px solid var(--border); padding: 1.25rem 1rem 2rem; }
+  @media (min-width: 640px) {
+    .editor-column { padding: 1.5rem 1.5rem 1rem; }
+    .editor-rail { padding: 1.5rem; }
+  }
+  /* Wide windows: the editor column and the rail side by side, each scrolling on its own. */
+  @media (min-width: 1100px) {
+    .workbench { display: grid; grid-template-columns: minmax(0, 1fr) clamp(18rem, 26vw, 26rem); overflow: hidden; }
+    .editor-column { min-height: 0; overflow-y: auto; padding: 2rem clamp(1.5rem, 3vw, 3rem) 3rem; scrollbar-color: var(--border) transparent; }
+    .editor-rail { min-height: 0; overflow-y: auto; border-top: 0; border-inline-start: 1px solid var(--border); padding: 1.5rem 1.25rem 2rem; background: var(--card); scrollbar-color: var(--border) transparent; }
+  }
 </style>
