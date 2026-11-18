@@ -84,6 +84,7 @@ internal static partial class EditorSmokeTest
         var document = loaded.Documents.Single(document => document.Path == "feature/en.rmf2");
         var entry = document.Entries!.Single();
         Require(loaded.Success && entry.Key == "shop_cart" && entry.Context?.Comments.Single() == "Checkout context 🦊" && entry.Context.Examples.Single()["count"] == "1", "Mounted context/examples weren't exposed under compiler identity.");
+        Require(entry.Path?.SequenceEqual(["shop", "cart"]) == true, "A mounted message didn't carry its logical path: " + string.Join(".", entry.Path ?? []));
         var draft = await session.ApplyAuthoringOperationAsync(document.Path, document.Content, entry.Key,
             entry.Authoring!.Revision, new("set-pattern", "0", "Exactly one item")).ConfigureAwait(false);
         var changed = draft.Entries.Single();
@@ -238,6 +239,8 @@ internal static partial class EditorSmokeTest
         EditorDocumentDraft draft = await session.TransformDocumentAsync(german.Path, withoutKey, "notes_deleteConfirm", "Löschen bestätigen?").ConfigureAwait(false);
         Require(draft.Success && draft.Entries.Any(entry => entry.Key == "notes_deleteConfirm"),
             "The missing nested key was not added to the German draft: " + draft.Content);
+        Require(draft.Entries.Single(entry => entry.Key == "notes_deleteConfirm").Path?.SequenceEqual(["notes", "deleteConfirm"]) == true,
+            "A nested message didn't carry its logical path.");
         string[] lines = draft.Content.Split('\n');
         Require(lines.Count(line => line == "notes {") == 1 && lines.Count(line => line == "}") == 1,
             "The missing nested key was written to a second group block: " + draft.Content);
@@ -467,7 +470,7 @@ internal static partial class EditorSmokeTest
             "An approval made before the source changed was exported as current.");
         WorkspaceSnapshot changed = await session.LoadAsync().ConfigureAwait(false);
         Require(changed.Review!.Entries.Single(entry => entry.Key == "title").Stale &&
-            changed.Diagnostics.Any(diagnostic => diagnostic is { Id: "RTR0090", Key: "title", Locale: "de" }),
+            changed.Diagnostics.Any(diagnostic => diagnostic is { Id: "RTR0090", Key: "title", Locale: "de" } && diagnostic.MessagePath?.SequenceEqual(["title"]) == true),
             "A stale approval was not marked stale or reported as RTR0090 on its row.");
 
         // Marking it again records the source the editor loaded (the snapshot's fingerprint), and the note moves onto the

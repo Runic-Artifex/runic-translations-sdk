@@ -646,13 +646,13 @@ internal static class Rmf2CSharpOutputRendererV5
         {
             changed = false;
             Dictionary<string, string> encoded = factories.Where(message => !readable.ContainsKey(message.Key))
-                .ToDictionary(Member, message => message.Key, StringComparer.Ordinal);
+                .ToDictionary(Member, message => Rmf2MessageKeys.Logical(message.Path), StringComparer.Ordinal);
             foreach (Rmf2ReadableMessageV1 names in readable.Values.OrderBy(item => item.Contract.Key, StringComparer.Ordinal).ToArray())
             {
                 if (!encoded.TryGetValue(names.Member, out string? other)) continue;
                 readable.Remove(names.Contract.Key); changed = true;
                 problems?.Add((names.Contract.Key, "Reference factory name '" + names.Member + "' is the encoded name of message '" + other + "'; " + className + ".References." +
-                    Member(names.Contract) + " is the factory of message '" + names.Contract.Key + "'."));
+                    Member(names.Contract) + " is the factory of message '" + Rmf2MessageKeys.Logical(names.Contract.Path) + "'."));
             }
         }
         return readable;

@@ -138,8 +138,14 @@ for. Commit it with the sources. The editor, the language server and the CLI
 read and write the same file:
 
 ```sh
-dotnet tool run runic-translations -- review mark --key save --key deleted --locale fr --state approved
+dotnet tool run runic-translations -- review mark --key common.save --key notes.deleted --locale fr --state approved
 ```
+
+A message is named by its logical key, the dotted path of its groups and name
+(`common.save` for `save` inside `common { … }`), as the editor, `validate` and
+the other diagnostics show it. Commands also accept the canonical key that
+generated code and the review file use (`common_save`); both name the same
+message, and a key that names none is reported with the closest logical key.
 
 - `xliff export` writes `approved` as the XLIFF state `final`, and
   `needs-review` as `translated` with `subState="runic:needs-review"`;

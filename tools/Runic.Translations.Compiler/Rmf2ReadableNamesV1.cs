@@ -45,11 +45,11 @@ internal static class Rmf2ReadableNamesV1
         ArgumentException.ThrowIfNullOrEmpty(className);
         ArgumentNullException.ThrowIfNull(contract);
         message = null;
-        string key = contract.Key;
+        string key = contract.Key, logical = Rmf2MessageKeys.Logical(contract.Path);
         if (ObjectMembers.Contains(key, StringComparer.Ordinal) || FacadeMembers.Contains(key, StringComparer.Ordinal) ||
             key == className || key == MessagesTypeName(className) || key == SlotsTypeName(className))
         {
-            problem = "Readable C# name '" + key + "' is reserved; message '" + key + "' is only available through its encoded member.";
+            problem = "Readable C# name '" + key + "' is reserved; message '" + logical + "' is only available through its encoded member.";
             return false;
         }
         Rmf2ReadableNameV1[] inputs = contract.Inputs.Select(input => new Rmf2ReadableNameV1(input.Name, Identifier(input.Name))).ToArray();
@@ -59,18 +59,18 @@ internal static class Rmf2ReadableNamesV1
         {
             if (ObjectMembers.Contains(slot.Identifier, StringComparer.Ordinal) || slot.Identifier == key)
             {
-                problem = "Readable C# slot name '" + slot.Identifier + "' is reserved in message '" + key + "'; the message is only available through its encoded member.";
+                problem = "Readable C# slot name '" + slot.Identifier + "' is reserved in message '" + logical + "'; the message is only available through its encoded member.";
                 return false;
             }
         }
         if (Clash(inputs) is { } input)
         {
-            problem = "Readable C# parameter name '" + input + "' clashes with the encoded name of another input of message '" + key + "'; the message is only available through its encoded member.";
+            problem = "Readable C# parameter name '" + input + "' clashes with the encoded name of another input of message '" + logical + "'; the message is only available through its encoded member.";
             return false;
         }
         if (Clash(slots) is { } slotName)
         {
-            problem = "Readable C# slot name '" + slotName + "' clashes with the encoded name of another slot of message '" + key + "'; the message is only available through its encoded member.";
+            problem = "Readable C# slot name '" + slotName + "' clashes with the encoded name of another slot of message '" + logical + "'; the message is only available through its encoded member.";
             return false;
         }
         problem = null;

@@ -7,6 +7,7 @@ import { createMockBridge, installMockBridge } from "@runic-artifex/views/mock";
 import { mockEditor, type EditorMock } from "../src/generated/editor.mock.ts";
 import { mockEditorDocument } from "../src/generated/editorDocument.mock.ts";
 import { mockEditorWorkspace } from "../src/generated/editorWorkspace.mock.ts";
+import type { EditorDocumentDraft, EditorMessageEntry, WorkspaceSnapshot } from "../src/lib/contracts.ts";
 
 const source = await readFile(new URL("../src/lib/editor-bridge.ts", import.meta.url), "utf8");
 assert.doesNotMatch(source, /setTimeout|\.subscribe\(/,
@@ -92,4 +93,15 @@ await bridge.flush();
 assert.equal((await promptly(editor.openDocument("en.json"), "openDocument after frames"))?.path, "en.json",
   "The root's later frame must map the remembered documents.");
 
-console.log("Editor bridge read-your-writes checks passed.");
+// Message identity (issue #225, P9): an entry and a per-message diagnostic carry the logical path besides the canonical key.
+const { mockExecute } = await import("../src/lib/mock-bridge.ts");
+const loadedSnapshot = await mockExecute("LoadWorkspace", {}) as WorkspaceSnapshot;
+const stale = loadedSnapshot.diagnostics.find(diagnostic => diagnostic.id === "RTR0090");
+assert.deepEqual(stale?.messagePath, ["common_save"], "A per-message diagnostic must carry its message path.");
+const transformed = await mockExecute("TransformDocument", { path: "de/common_save.mf2", content: "Speichern\n" }) as EditorDocumentDraft;
+assert.deepEqual(transformed.entries.map(entry => [entry.key, entry.path]), [["common_save", ["common_save"]]],
+  "A message entry must carry its logical path.");
+const entry: EditorMessageEntry = { key: "common_cancel", path: ["common", "cancel"], content: "Cancel", valueStartByte: 0, valueLengthBytes: 6 };
+assert.equal(entry.path.join("."), "common.cancel");
+
+console.log("Editor bridge read-your-writes and message identity checks passed.");

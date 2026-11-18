@@ -128,7 +128,8 @@ internal static class OverridesOperations
     {
         TranslationLibraryMessage? message = catalog.Messages.FirstOrDefault(item => item.Key == key) ??
             catalog.Messages.FirstOrDefault(item => string.Join(".", item.LogicalPath) == key);
-        return message?.Key ?? throw new ToolUsageException($"Catalog '{catalog.Catalog}' has no message '{key}'.");
+        return message?.Key ?? throw new ToolUsageException(
+            $"Catalog '{catalog.Catalog}' has no message '{key}'.{Rmf2MessageKeys.DidYouMean(key, catalog.Messages.Select(static item => Rmf2MessageKeys.Logical(item.LogicalPath)))}");
     }
 
     private static string Manifest(string projectPath)

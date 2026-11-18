@@ -270,8 +270,13 @@ internal static class InterchangeOperations
         if (locale == compiledProject.DefaultLocale || !compiledProject.Locales.Any(item => item.Tag == locale))
             throw new ToolUsageException($"--locale {locale} is not a translated locale of catalog '{catalog}'.");
         IReadOnlyDictionary<string, string> fingerprints = TranslationInterchange.ComputeSourceFingerprints(project.compilation);
+        // A key is given as its logical key (common.cancel) or canonical key (common_cancel); the review file stores the canonical key.
+        IReadOnlyDictionary<string, IReadOnlyList<string>> paths = Rmf2MessageKeys.Paths(compiledProject);
+        var resolved = new List<string>(keys.Count);
         foreach (string key in keys)
-            if (!fingerprints.ContainsKey(key)) throw new ToolUsageException($"--key {key} is not a message of catalog '{catalog}'.");
+            resolved.Add(Rmf2MessageKeys.Resolve(paths, fingerprints.Keys, key) ?? throw new ToolUsageException(
+                $"--key {key} is not a message of catalog '{catalog}'.{Rmf2MessageKeys.DidYouMean(key, fingerprints.Keys.Select(item => Rmf2MessageKeys.Display(paths, item)))}"));
+        keys = resolved;
         string path = ReviewFile.PathFor(project.inputs, catalog);
         // Compare-and-swap: another writer's change since the read is re-read and the marks applied to it.
         try { TranslationReviewFile.Update(path, catalog, existing => TranslationReviewFile.Mark(existing, catalog, keys, locale, state, note, fingerprints)); }
