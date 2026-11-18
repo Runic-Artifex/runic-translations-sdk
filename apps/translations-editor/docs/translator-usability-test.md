@@ -31,3 +31,8 @@ between validation and the editor, hidden or unexpectedly broad source changes, 
 repeated inability to complete translate/validate/save without help as a concrete
 finding. Record the scenario and outcome without personal or workspace data, then
 use the finding to prioritize a focused fix or further research.
+
+## Results
+
+- [Pilot, 2026-11](translator-usability-results-2026-11.md): findings tracked in
+  [#225](https://github.com/Runic-Artifex/runic-translations-sdk/issues/225).

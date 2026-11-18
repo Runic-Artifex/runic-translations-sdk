@@ -218,7 +218,7 @@ internal sealed class EditorWorkspace : IDisposable
                             }
                         // A new flat identifier stays flat; only an existing source symbol supplies hierarchy.
                         var local = logical is null ? new[] { key } : workspace.LocalPath(path, logical);
-                        content = StrictUtf8.GetString(Rmf2ResourceWriter.AddMessage(source, local, value));
+                        content = StrictUtf8.GetString(Rmf2ResourceWriter.InsertMessage(source, local, value));
                     }
                 }
                 else if (path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase))
