@@ -51,10 +51,14 @@
             DOTNET_ROOT = "${dotnet}/share/dotnet";
             shellHook = ''export NUGET_PACKAGES="$PWD/.cache/nuget"'';
           };
-          # Optional CS-WebUI browser/WebView runtime from this flake's lock.
-          # Desktop D-Bus and portal services remain owned by the user session.
+          # Optional editor runtime from this flake's lock. Desktop D-Bus and portal services remain owned by the
+          # user session.
+          # The chromium, gtk3 and webkitgtk_4_1 entries serve the current CS-WebUI host (browser app mode and
+          # `--webview`). They stay only until the editor moves to the Runic Desktop host; Playwright keeps
+          # Chromium for the hosted E2E. gtk4 and webkitgtk_6_0 are what Runic Desktop loads on Linux (runic-sdk's
+          # `desktop-gtk4` host); glib, glib-networking, gsettings-desktop-schemas and the gst plugins are shared.
           editorRuntime = with pkgs; [
-            chromium gtk3 webkitgtk_4_1 glib glib-networking
+            chromium gtk3 webkitgtk_4_1 gtk4 webkitgtk_6_0 glib glib-networking
             gsettings-desktop-schemas dbus xdg-desktop-portal xdg-desktop-portal-gtk
           ] ++ (with pkgs.gst_all_1; [
             gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-libav
@@ -70,9 +74,9 @@
               export CSWEBUI_BROWSER_PATH="$WEBUI_BROWSER_PATH"
               export PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH="$WEBUI_BROWSER_PATH"
               export LD_LIBRARY_PATH="${lib.makeLibraryPath editorRuntime}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-              export GIO_EXTRA_MODULES="${pkgs.glib-networking}/lib/gio/modules''${GIO_EXTRA_MODULES:+:$GIO_EXTRA_MODULES}"
+              export GIO_EXTRA_MODULES="${lib.makeSearchPath "lib/gio/modules" [ pkgs.glib-networking ]}''${GIO_EXTRA_MODULES:+:$GIO_EXTRA_MODULES}"
               export GST_PLUGIN_SYSTEM_PATH_1_0="${lib.makeSearchPath "lib/gstreamer-1.0" (with pkgs.gst_all_1; [ gstreamer gst-plugins-base gst-plugins-good gst-plugins-bad gst-libav ])}''${GST_PLUGIN_SYSTEM_PATH_1_0:+:$GST_PLUGIN_SYSTEM_PATH_1_0}"
-              export XDG_DATA_DIRS="${lib.concatMapStringsSep ":" (package: "${package}/share/gsettings-schemas/${package.name}") [ pkgs.gtk3 pkgs.gsettings-desktop-schemas ]}''${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+              export XDG_DATA_DIRS="${lib.concatMapStringsSep ":" (package: "${package}/share/gsettings-schemas/${package.name}") [ pkgs.gtk3 pkgs.gtk4 pkgs.gsettings-desktop-schemas ]}''${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
             '';
           });
         });

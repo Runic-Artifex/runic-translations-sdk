@@ -113,8 +113,8 @@
     /** The selected message exists but the search or filter hides it. */
     selectedHidden?: boolean;
     /**
-     * Whether the rows show their translation state and the list offers the bulk review actions; a content-editing
-     * project (D074.2) has neither.
+     * Whether the rows show their translation state and the list offers the bulk review actions; the source text (the
+     * base locale, or a content-editing project, D074.2) has neither.
      */
     translationStates?: boolean;
     reviewActionsDisabled?: boolean;
@@ -356,7 +356,7 @@
       </div>
     </Sidebar.GroupLabel>
 
-    <Collapsible.Content class="min-h-0 flex-1 overflow-hidden">
+    <Collapsible.Content class="min-h-0 flex-1 flex-col overflow-hidden data-[state=open]:flex">
       {@render toolbar()}
       {#if selectedHidden}
         <div class="mx-2 mb-2 flex items-start gap-2 rounded-md border border-dashed px-2 py-1.5 text-xs text-muted-foreground" role="status" data-testid="selected-message-hidden">
@@ -369,7 +369,7 @@
           </div>
         </div>
       {/if}
-      <Sidebar.GroupContent class="min-h-0 flex-1">
+      <Sidebar.GroupContent class="flex min-h-0 flex-1 flex-col">
         <nav
           class="min-h-0 flex-1 overflow-y-auto pb-3"
           aria-label={labels.messages}

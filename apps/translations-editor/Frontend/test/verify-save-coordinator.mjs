@@ -179,6 +179,52 @@ function createEditor(host) {
   assert.deepEqual(host.calls, ["saveReview"]);
 }
 
+// After a save of review data the saved workspace's diagnostics are requested again (real-window check R5): RTR0090 is
+// computed from the review file, which the snapshot's diagnostics predate. Review-only saves and saves with documents
+// both refresh; a save without review changes does not, and a failed refresh leaves the save saved.
+{
+  const run = async ({ document, failRefresh = false, reviewChange = true }) => {
+    const host = createHost();
+    const validate = host.bridge.validate;
+    host.bridge.validate = async (path, content) => {
+      if (host.calls.includes("saveReview")) {
+        host.calls.push(`refresh ${path} ${content.trim()}`);
+        if (failRefresh) throw new Error("host gone");
+        return { success: true, diagnostics: [{ id: "W9", severity: "warning", message: "fresh", path }] };
+      }
+      return validate(path, content);
+    };
+    const refreshed = [];
+    let snapshot = host.snapshotOf();
+    const drafts = new DraftStore({ bridge: host.bridge, snapshot: () => snapshot, storage: memoryStorage(), wait: () => Promise.resolve() });
+    const review = new ReviewStore({ bridge: host.bridge, snapshot: () => snapshot, errorNotice: (error) => String(error) });
+    drafts.reset(snapshot);
+    review.reset(snapshot);
+    const coordinator = new SaveCoordinator({
+      bridge: host.bridge, drafts, review, snapshot: () => snapshot,
+      install(next) { snapshot = next; drafts.prune(); if (!review.dirty) review.install(next); },
+      refreshed: (saved, diagnostics) => refreshed.push({ current: saved === snapshot, ids: diagnostics.map((item) => item.id) }),
+    });
+    if (document !== undefined) drafts.set("en.rmf2", document);
+    if (reviewChange) review.setNote("greeting", "de", "Checked", true);
+    return { outcome: await coordinator.saveAll(), calls: host.calls, refreshed };
+  };
+  const reviewOnly = await run({});
+  assert.equal(reviewOnly.outcome.kind, "saved");
+  assert.deepEqual(reviewOnly.calls, ["saveReview", "refresh en.rmf2 greeting = Hi"], "A review save does not request the saved diagnostics again.");
+  assert.deepEqual(reviewOnly.refreshed, [{ current: true, ids: ["W9"] }]);
+  const withDocument = await run({ document: "greeting = Hello\n" });
+  assert.deepEqual(withDocument.calls, ["validate en.rmf2", "save en.rmf2", "load", "saveReview", "refresh en.rmf2 greeting = Hello"],
+    "The refresh validates the saved text of the reloaded workspace after the review save.");
+  assert.deepEqual(withDocument.refreshed, [{ current: true, ids: ["W9"] }]);
+  const documentOnly = await run({ document: "greeting = Hello\n", reviewChange: false });
+  assert.deepEqual(documentOnly.calls, ["validate en.rmf2", "save en.rmf2", "load"], "A save without review changes refreshed the diagnostics.");
+  assert.deepEqual(documentOnly.refreshed, []);
+  const failed = await run({ failRefresh: true });
+  assert.equal(failed.outcome.kind, "saved", "A failed refresh failed the save.");
+  assert.deepEqual(failed.refreshed, []);
+}
+
 // An edit typed back to the saved text leaves nothing to save.
 {
   const host = createHost();

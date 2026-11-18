@@ -302,10 +302,13 @@ check, or with `--help` to inspect the supported commands. The `dotnet run` comm
 also launches on Windows or macOS with the corresponding .NET, Node, and Bun
 toolchain available; native UI launch requires the platform's windowing runtime.
 The default `direnv` shell supplies the build and CLI toolchain. The optional
-`nix develop .#editor` shell adds Chromium, GTK 3/WebKitGTK 4.1, GIO/TLS modules,
-and GStreamer from this repository's locked nixpkgs; it sets `CSWEBUI_BROWSER_PATH`,
-so `edit` opens that Chromium, and `WEBUI_BROWSER_PATH` for hosted browser acceptance.
-It does not require another repository's shell.
+`nix develop .#editor` shell adds Chromium, GTK 3/WebKitGTK 4.1, GTK 4/WebKitGTK 6.0,
+GIO/TLS modules, and GStreamer from this repository's locked nixpkgs; it sets
+`CSWEBUI_BROWSER_PATH`, so `edit` opens that Chromium, and `WEBUI_BROWSER_PATH` for hosted
+browser acceptance. GTK 4 and WebKitGTK 6.0 are the Linux runtime of the Runic Desktop
+host, which the editor will move to; the Chromium, GTK 3 and WebKitGTK 4.1 entries serve
+the current CS-WebUI host and stay until that move. It does not require another
+repository's shell.
 `edit` opens an installed browser in app mode; add `--webview` to request the
 embedded WebView instead. On Linux, interactive launch needs a running X11 or
 Wayland desktop session; native chooser services also need that session's D-Bus
