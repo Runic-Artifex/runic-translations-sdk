@@ -102,6 +102,7 @@
   } from "#lib/local-state.js";
   import {
     buildRows,
+    overrideLayer,
     localeCoverage,
     formatJson,
     preview,
@@ -409,7 +410,7 @@
       }));
     }
     if (formatting.formattingLocale !== undefined) parts.push(ui.text("ui_preview_formats_in", { locale: formatting.formattingLocale }));
-    parts.push(formatting.timeZone === undefined ? ui.text("ui_preview_time_zone_host") : ui.text("ui_preview_time_zone_summary", { zone: formatting.timeZone }));
+    parts.push(formatting.timeZone === undefined ? ui.text("ui_preview_time_zone_summary_host") : ui.text("ui_preview_time_zone_summary", { zone: formatting.timeZone }));
     return parts.join(" · ");
   }
   let messageListItems = $derived.by((): MessageListItem[] => visibleRows.map((row) => {
@@ -420,6 +421,7 @@
       preview: preview(cell?.entry, ui),
       missing: cell?.entry === undefined,
       structured: row.structured,
+      structure: row.structure,
       stale: isStale(rowReview),
       needsReview: effectiveReviewState(rowReview, cell?.entry !== undefined) === "needs-review",
     };
@@ -1852,6 +1854,9 @@
       all: m.app_all(options),
       missing: m.app_missing(options),
       structured: m.app_structured(options),
+      plural: m.app_plural(options),
+      variants: m.app_variants(options),
+      formatted: m.app_formatted(options),
       save: m.app_save(options),
       saving: m.app_saving(options),
       reload: m.app_reload(options),
@@ -2072,7 +2077,6 @@
       <EditorSidebarHeader
         catalogId={snapshot.catalog.id}
         localeCount={snapshot.catalog.locales.length}
-        schemaVersion={snapshot.catalog.schemaVersion}
         root={snapshot.root}
         success={snapshot.success}
         reloadLabel={labels.reload}
@@ -2127,7 +2131,9 @@
               noMatchingMessages: labels.noMatchingMessages,
               missingTranslation: labels.missingTranslation,
               translated: labels.translated,
-              structured: labels.structured,
+              plural: labels.plural,
+              variants: labels.variants,
+              formatted: labels.formatted,
               stale: labels.stale,
               review: labels.review,
             }}
@@ -2217,7 +2223,7 @@
             description={selectedRow.description}
             tags={selectedRow.tags}
             locale={selectedLocale}
-            layer={currentDocument?.layer ?? ui.text("ui_page_no_document")}
+            overrideLayer={overrideLayer(snapshot, currentDocument?.layer)}
             inheritedFrom={currentCell?.inheritedFrom}
             onrename={() => prepareMutation("rename-key")}
             onduplicate={() => prepareMutation("duplicate-key")}
@@ -2259,6 +2265,9 @@
             label={mode === "translation" ? localeName(selectedLocale) : currentDocument?.path ?? ui.text("ui_page_resource_document")}
             value={editorText}
             resourceValue={currentCell?.entry?.value ?? selectedRow.cells[snapshot.catalog.defaultLocale]?.entry?.value}
+            sourceLocale={snapshot.catalog.defaultLocale}
+            sourceLocaleName={localeName(snapshot.catalog.defaultLocale)}
+            sourceEntry={selectedRow.cells[snapshot.catalog.defaultLocale]?.entry}
             authoring={currentCell?.entry?.authoring}
             authoringBusy={draftStore.authoringPending > 0}
             onoperation={applyAuthoringOperation}
@@ -2329,7 +2338,7 @@
                 {/if}
               </div>
               {#if previewFormattingSummary(previewController.simulatedResult?.formatting)}<p class="safe-note">{previewFormattingSummary(previewController.simulatedResult?.formatting)}</p>{/if}
-              <p class="safe-note">{ui.text("ui_page_preview_safe_markup")}{pseudoLocalization ? ` ${ui.text("ui_page_preview_pseudo_active")}` : ""}{uiDirection === "rtl" ? ` ${ui.text("ui_page_preview_rtl_active")}` : ""}</p>
+              {#if pseudoLocalization || uiDirection === "rtl"}<p class="safe-note">{[pseudoLocalization ? ui.text("ui_page_preview_pseudo_active") : "", uiDirection === "rtl" ? ui.text("ui_page_preview_rtl_active") : ""].filter(Boolean).join(" ")}</p>{/if}
             </section>
 
             <ArtifactPreviewPanel

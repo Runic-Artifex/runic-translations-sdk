@@ -6,8 +6,9 @@
   import * as Field from "#lib/components/ui/field/index.js";
   import { Textarea } from "#lib/components/ui/textarea/index.js";
   import MessageComposer from "#lib/MessageComposer.svelte";
+  import SourceTextPanel from "#lib/SourceTextPanel.svelte";
   import type { EditorMode } from "#lib/EditorModeSwitcher.svelte";
-  import type { ResourceValue } from "#lib/resource-model.js";
+  import type { ResourceEntry, ResourceValue } from "#lib/resource-model.js";
   import { localeDirection } from "#lib/locale-text.js";
   import { getUiText } from "#lib/ui-text.js";
 
@@ -18,6 +19,10 @@
     label: string;
     value: string;
     resourceValue: ResourceValue | undefined;
+    /** The base locale and its entry of this message: shown read-only above the editor of every other locale. */
+    sourceLocale: string;
+    sourceLocaleName: string;
+    sourceEntry: ResourceEntry | undefined;
     authoring?: EditorMessageProjection;
     authoringBusy?: boolean;
     onoperation?: (operation: EditorMessageOperation) => void;
@@ -37,6 +42,9 @@
     label,
     value,
     resourceValue,
+    sourceLocale,
+    sourceLocaleName,
+    sourceEntry,
     authoring,
     authoringBusy = false,
     onoperation,
@@ -65,6 +73,12 @@
     });
   });
 </script>
+
+{#if mode === "translation" && sourceLocale !== "" && sourceLocale !== locale}
+  <div class="mx-auto mt-4 w-full max-w-[1000px]">
+    <SourceTextPanel entry={sourceEntry} locale={sourceLocale} localeName={sourceLocaleName} />
+  </div>
+{/if}
 
 <section class="mx-auto mt-4 w-full max-w-[1000px]" lang={locale} dir={localeDirection(locale)}>
   <Field.Field data-invalid={invalid} class="gap-2">

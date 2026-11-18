@@ -4,6 +4,8 @@
     preview: string;
     missing: boolean;
     structured: boolean;
+    /** Plural forms, other variants, or formatting only; set when `structured` is. */
+    structure?: "plural" | "variants" | "formatted";
     stale: boolean;
     needsReview: boolean;
   }
@@ -25,7 +27,9 @@
     noMatchingMessages: string;
     missingTranslation: string;
     translated: string;
-    structured: string;
+    plural: string;
+    variants: string;
+    formatted: string;
     stale: string;
     review: string;
   }
@@ -176,6 +180,7 @@
                     <span class="truncate">{row.label}</span><Badge variant="secondary" class="ml-auto">{row.messageCount}</Badge>
                   </div>
                 {:else if row.item !== undefined}
+                  {@const structureLabel = row.item.structure === undefined ? undefined : labels[row.item.structure]}
                   <button
                     class={cn("flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring", selectedKey === row.item.key && "bg-sidebar-accent")}
                     aria-label={`${row.item.key}: ${row.item.preview}`}
@@ -183,10 +188,10 @@
                     style:padding-inline-start={`${(row.depth - 1) * 1.25 + 0.5}rem`}
                     onclick={() => selectMessage(row.item!.key)}
                   >
-                    <Badge variant={row.item.missing ? "outline" : row.item.structured ? "default" : "secondary"} class="size-2 shrink-0 p-0" aria-label={row.item.missing ? labels.missingTranslation : row.item.structured ? labels.structured : labels.translated}></Badge>
+                    <Badge variant={row.item.missing ? "outline" : structureLabel !== undefined ? "default" : "secondary"} class="size-2 shrink-0 p-0" aria-label={row.item.missing ? labels.missingTranslation : structureLabel ?? labels.translated}></Badge>
                     <span class="truncate font-mono">{row.label}</span>
-                    {#if row.item.stale || row.item.needsReview || row.item.structured}
-                      <span class="ml-auto text-xs text-muted-foreground">{row.item.stale ? labels.stale : row.item.needsReview ? labels.review : labels.structured}</span>
+                    {#if row.item.stale || row.item.needsReview || structureLabel !== undefined}
+                      <span class="ml-auto text-xs text-muted-foreground">{row.item.stale ? labels.stale : row.item.needsReview ? labels.review : structureLabel}</span>
                     {/if}
                   </button>
                 {/if}

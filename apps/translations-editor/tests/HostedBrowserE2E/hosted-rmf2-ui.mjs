@@ -323,6 +323,49 @@ try {
   await waitFor(async () => await saveState() === "Saved", "nothing unsaved after saving the recovered review change");
   if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "review-recovered-en.png"), fullPage: true });
 
+  // The translate view (#225 P1, P8): another locale's editor shows the base locale's text read-only above it, one
+  // block per variant with the variable as a chip; the base locale (de in this workspace) has no source panel, and the
+  // header names no `base` layer.
+  stage = "translate-view-source";
+  await select("files_selected");
+  const sourcePanel = page.getByRole("region", { name: "Source text (German)", exact: true });
+  await sourcePanel.waitFor();
+  assert.deepEqual(await sourcePanel.locator("dd").evaluateAll(items => items.map(item => [item.lang, item.dir, item.textContent])),
+    [["de", "ltr", "One edited file selected"], ["de", "ltr", "{$count} files selected"]], "The source panel shows the German base text per variant.");
+  assert.deepEqual(await sourcePanel.locator("dt").allTextContents(), ["count: one", "count: Fallback"]);
+  assert.equal(await sourcePanel.locator('[data-placeholder="variable"]').textContent(), "{$count}");
+  assert.equal(await sourcePanel.locator("textarea, input, [contenteditable]").count(), 0, "The source text is read-only.");
+  assert.equal(await page.locator('[data-slot="badge"]', { hasText: /^base$/ }).count(), 0, "The header names the base layer.");
+  await page.getByRole("button", { name: /^de / }).first().click();
+  await select("files_selected");
+  assert.equal(await page.getByTestId("source-text").count(), 0, "The base locale shows a source panel of itself.");
+  await page.getByRole("button", { name: /^en / }).first().click();
+
+  // The "File" tab (formerly "Source") still opens the whole locale file.
+  stage = "translate-view-file-tab";
+  await select("common_cancel");
+  await page.locator('[data-slot="toggle-group-item"]', { hasText: /^File$/ }).click();
+  await waitFor(async () => (await page.locator("#translation-value").inputValue()).startsWith(preservedComment), "file view of en.rmf2");
+  assert.match(await page.locator("#translation-value").inputValue(), /common \{\n  cancel = Cancel\n/);
+  assert.equal(await page.getByTestId("source-text").count(), 0, "The file view shows the file only.");
+  await page.locator('[data-slot="toggle-group-item"]', { hasText: /^Translation$/ }).click();
+  await editor().waitFor();
+
+  // The pattern box is one text field (P22): a click on its empty area puts the caret at the end of the text.
+  stage = "translate-view-pattern-box";
+  const patternBox = page.locator("[data-pattern-box]").first();
+  assert.equal(await patternBox.evaluate(box => getComputedStyle(box).cursor), "text");
+  const box = await patternBox.boundingBox();
+  await page.mouse.click(box.x + box.width - 16, box.y + box.height - 16);
+  await waitFor(async () => await editor().evaluate(input => document.activeElement === input && input.selectionStart === input.value.length),
+    "caret at the end of the text segment");
+  await page.keyboard.type(" now");
+  await waitFor(async () => (await editor().inputValue()) === "Cancel now", "typing after a click on the empty pattern box");
+  await waitFor(async () => await saveState() === "Unsaved changes: text in one document", "typed text is unsaved");
+  await editor().fill("Cancel");
+  await waitFor(async () => await saveState() === "Saved", "pattern box edit reverted");
+  if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "translate-view-en.png"), fullPage: true });
+
   // The interface language switch sets the window's locale through the ViewModel, the page follows it, and the
   // choice survives a reload from the native editor state.
   // Library catalogs (T5d): the library's text is layer 0, read-only; an override (layer 1) is written to
@@ -376,6 +419,14 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.lang), "de", "The interface language did not survive a reload.");
   if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "interface-language-de.png"), fullPage: true });
   assert.deepEqual(pageErrors, [], "The production editor reported uncaught browser errors.");
+
+  // In the German interface the source panel and the file tab are German too.
+  stage = "translate-view-german-ui";
+  await page.getByRole("button", { name: /^en / }).first().click();
+  await select("files_selected");
+  await page.getByRole("region", { name: "Ausgangstext (Deutsch)", exact: true }).getByText("One edited file selected", { exact: true }).waitFor();
+  assert.equal(await page.locator('[data-slot="toggle-group-item"]', { hasText: /^Datei$/ }).count(), 1, "The file tab is not named Datei.");
+  if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "translate-view-de.png"), fullPage: true });
 
   // A reload straight after a switch, as a user pressing F5 would. The reload ends the Bridge connection while the
   // native save is in flight: that must not surface as an uncaught `BridgeError: The Bridge is disconnected.`, and the

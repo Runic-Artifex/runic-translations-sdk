@@ -11,7 +11,7 @@
     description,
     tags,
     locale,
-    layer,
+    overrideLayer,
     inheritedFrom,
     onrename,
     onduplicate,
@@ -21,7 +21,8 @@
     description?: string;
     tags: string[];
     locale: string;
-    layer: string;
+    /** A library override layer the message's document belongs to; absent for the catalog's own (base) layer. */
+    overrideLayer?: string;
     inheritedFrom?: string;
     onrename: () => void;
     onduplicate: () => void;
@@ -50,7 +51,9 @@
   <div class="flex shrink-0 flex-col items-start gap-2 xl:items-end">
     <div class="flex flex-wrap gap-1.5 xl:justify-end">
       <Badge variant="outline">{locale}</Badge>
-      <Badge variant="outline">{layer}</Badge>
+      {#if overrideLayer}
+        <Badge variant="outline" title={ui.text("ui_message_heading_override_layer_title")}>{ui.text("ui_message_heading_override_layer", { layer: overrideLayer })}</Badge>
+      {/if}
       {#if inheritedFrom}<Badge variant="secondary">{ui.text("ui_message_heading_falls_back_to")} {inheritedFrom}</Badge>{/if}
     </div>
     <div class="flex gap-1.5">

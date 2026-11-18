@@ -20,6 +20,9 @@ app {
   eyebrow = Runic Translations Editor
 }
 app {
+  formatted = Formatiert
+}
+app {
   invalid = Behebe die Validierungsfehler vor dem Speichern
 }
 app {
@@ -50,7 +53,10 @@ app {
   no_selection = Wähle eine Nachricht aus, um sie zu übersetzen
 }
 app {
-  raw = Quelldatei
+  plural = Plural
+}
+app {
+  raw = Datei
 }
 app {
   reload = Neu laden
@@ -77,7 +83,7 @@ app {
   stale = Veraltet
 }
 app {
-  structured = Strukturiert
+  structured = Varianten & Formatierung
 }
 app {
   title = Übersetzungen
@@ -87,6 +93,9 @@ app {
 }
 app {
   valid = Bereit zum Speichern
+}
+app {
+  variants = Varianten
 }
 app {
   visible_messages = Sichtbare Nachrichten
@@ -291,7 +300,7 @@ ui {
 }
 ui {
   backend {
-    history_sidecar = Die Workflow-Begleitdatei wurde nach diesem Vorgang geändert; der Verlauf wurde gelöscht.
+    history_sidecar = Die Prüfdaten wurden nach diesem Vorgang geändert; der Verlauf wurde gelöscht.
   }
 }
 ui {
@@ -334,7 +343,7 @@ ui {
 }
 ui {
   backend {
-    import_sidecar_changed = Die Workflow-Begleitdatei wurde auf dem Datenträger geändert. Prüfen Sie die Importvorschau erneut.
+    import_sidecar_changed = Die Prüfdatei wurde auf dem Datenträger geändert. Prüfen Sie die Importvorschau erneut.
   }
 }
 ui {
@@ -609,7 +618,7 @@ ui {
 }
 ui {
   backend {
-    sidecar_history_conflict = Die Editorzustands-Begleitdatei wurde auf dem Datenträger geändert. Laden Sie sie neu, bevor Sie den Verlauf ändern.
+    sidecar_history_conflict = Die Prüfdaten wurden auf dem Datenträger geändert. Laden Sie neu, bevor Sie den Verlauf ändern.
   }
 }
 ui {
@@ -1231,10 +1240,9 @@ ui {
   count {
     project_locales =
       .input {$count :integer select=plural}
-      .input {$version :integer}
       .match $count
-      one {{Eine Sprache · Schema v{$version}}}
-      * {{{$count} Sprachen · Schema v{$version}}}
+      one {{Eine Sprache}}
+      * {{{$count} Sprachen}}
 
   }
 }
@@ -1290,8 +1298,8 @@ ui {
     resource_variants =
       .input {$count :integer select=plural}
       .match $count
-      one {{Strukturierte Nachricht · eine Variante}}
-      * {{Strukturierte Nachricht · {$count} Varianten}}
+      one {{Eine Variante}}
+      * {{{$count} Varianten}}
 
   }
 }
@@ -1607,7 +1615,7 @@ ui {
 }
 ui {
   feedback {
-    workflow_saved = Workflow-Begleitdatei gespeichert
+    workflow_saved = Prüfstatus gespeichert
   }
 }
 ui {
@@ -2142,6 +2150,16 @@ ui {
 ui {
   message {
     heading_falls_back_to = fällt zurück auf
+  }
+}
+ui {
+  message {
+    heading_override_layer = Überschreibungsebene: {$layer}
+  }
+}
+ui {
+  message {
+    heading_override_layer_title = Dieser Text liegt in einer Ebene, die den Text einer niedrigeren Ebene überschreibt, etwa den einer Bibliothek.
   }
 }
 ui {
@@ -2696,11 +2714,6 @@ ui {
 }
 ui {
   page {
-    no_document = kein Dokument
-  }
-}
-ui {
-  page {
     open = Öffnen
   }
 }
@@ -2752,11 +2765,6 @@ ui {
 ui {
   page {
     preview_rtl_active = Rechts-nach-links-Simulation ist aktiv.
-  }
-}
-ui {
-  page {
-    preview_safe_markup = Semantisches Markup wird als Datenbaum angezeigt. Namen und Attribute werden niemals als vertrauenswürdiges HTML interpretiert.
   }
 }
 ui {
@@ -3086,7 +3094,7 @@ ui {
 }
 ui {
   page {
-    terminology_description = Begriffe bleiben in der optionalen versionierten Begleitdatei und werden lokal geprüft. Es wird nichts an einen Dienst gesendet.
+    terminology_description = Begriffe werden mit dem Editorzustand des Projekts gespeichert und auf diesem Computer geprüft. Es wird nichts an einen Dienst gesendet.
   }
 }
 ui {
@@ -3392,7 +3400,7 @@ ui {
 }
 ui {
   palette {
-    switch_to_raw_json_mode = Zum Quelltextmodus wechseln
+    switch_to_raw_json_mode = Zur Dateiansicht wechseln
   }
 }
 ui {
@@ -3847,6 +3855,21 @@ ui {
   }
 }
 ui {
+  source_panel {
+    missing = Diese Nachricht hat noch keinen Text in der Ausgangssprache.
+  }
+}
+ui {
+  source_panel {
+    read_only = Schreibgeschützt
+  }
+}
+ui {
+  source_panel {
+    title = Ausgangstext ({$language})
+  }
+}
+ui {
   terminology {
     remove_source =
       .input {$term :string}
@@ -4117,7 +4140,10 @@ ui {
   preview_time_zone_summary = Zeitzone {$zone}
 }
 ui {
-  preview_formats_in = Formatiert in {$locale}
+  preview_time_zone_summary_host = Ihre Zeitzone
+}
+ui {
+  preview_formats_in = Zahlen und Datumsangaben im Format für {$locale}
 }
 ui {
   preview_requested_summary = Angefordert {$requested} ({$resolution})

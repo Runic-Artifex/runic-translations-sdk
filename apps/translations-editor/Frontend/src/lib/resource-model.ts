@@ -21,12 +21,20 @@ export interface TranslationCell {
   inheritedFrom?: string;
 }
 
+/**
+ * What makes a message more than one line of text, as the message list names it (#225 P13): plural forms, other
+ * variants chosen by a selector, or formatting (declared inputs or markup) without variants.
+ */
+export type MessageStructure = "plural" | "variants" | "formatted";
+
 export interface TranslationRow {
   key: string;
   description?: string;
   tags: string[];
   cells: Record<string, TranslationCell>;
   structured: boolean;
+  /** Set exactly when `structured` is. */
+  structure?: MessageStructure;
 }
 
 const newMf2DocumentRevision = "new-mf2-document";
@@ -99,8 +107,21 @@ export function buildRows(
       tags: source?.tags ?? [],
       cells,
       structured: [...snapshot.catalog!.locales].some((locale) => entriesByLocale.get(locale.tag)?.get(key)?.structured),
+      structure: messageStructure(snapshot.catalog!.locales.map((locale) => entriesByLocale.get(locale.tag)?.get(key))),
     };
   });
+}
+
+/** The structure of a message over its locales: plural if any locale selects on a plural or ordinal category. */
+export function messageStructure(entries: readonly (ResourceEntry | undefined)[]): MessageStructure | undefined {
+  const structured = entries.filter((entry): entry is ResourceEntry => entry?.structured === true);
+  if (structured.length === 0) return undefined;
+  const selects = (entry: ResourceEntry) => entry.authoring?.supported === true
+    ? entry.authoring.selectors.length > 0
+    : typeof entry.value === "string" && /^\s*\.match\b/m.test(entry.value);
+  if (structured.some((entry) => entry.authoring?.supported === true &&
+    entry.authoring.selectorFunctions.some((name) => name === "plural" || name === "ordinal"))) return "plural";
+  return structured.some(selects) ? "variants" : "formatted";
 }
 
 function missingMessageDocument(
@@ -218,6 +239,17 @@ function directLocalePath(path: string, locale: string): string | undefined {
 
 function primaryDocument(documents: EditorDocument[]): EditorDocument | undefined {
   return documents[0];
+}
+
+/**
+ * The resource layer worth naming next to a message (#225 P8): only a layer that overrides a lower one. A catalog with
+ * one layer, or a document in its lowest layer, has nothing to tell the translator, so it yields no badge.
+ */
+export function overrideLayer(snapshot: WorkspaceSnapshot | undefined, layer: string | undefined): string | undefined {
+  const layers = snapshot?.catalog?.layers ?? [];
+  if (layer === undefined || layers.length < 2 || !layers.some((candidate) => candidate.name === layer)) return undefined;
+  const lowest = Math.min(...layers.map((candidate) => candidate.priority));
+  return layerPriority(snapshot!, layer) > lowest ? layer : undefined;
 }
 
 function layerPriority(snapshot: WorkspaceSnapshot, layer: string | undefined): number {

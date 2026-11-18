@@ -21,7 +21,6 @@
   let {
     catalogId,
     localeCount,
-    schemaVersion,
     root,
     success,
     reloadLabel,
@@ -33,7 +32,6 @@
   }: {
     catalogId: string;
     localeCount: number;
-    schemaVersion: number;
     root: string;
     success: boolean;
     reloadLabel: string;
@@ -74,7 +72,7 @@
               <span class="grid min-w-0 flex-1 text-left leading-tight">
                 <span class="truncate font-semibold">{catalogId}</span>
                 <span class="truncate text-xs text-muted-foreground">
-                  {ui.text("ui_count_project_locales", { count: localeCount, version: schemaVersion })}
+                  {ui.text("ui_count_project_locales", { count: localeCount })}
                 </span>
               </span>
               <ChevronsUpDownIcon class="ml-auto" aria-hidden="true" />

@@ -20,6 +20,9 @@ app {
   eyebrow = Runic Translations Editor
 }
 app {
+  formatted = Formatted
+}
+app {
   invalid = Resolve validation errors before saving
 }
 app {
@@ -50,7 +53,10 @@ app {
   no_selection = Choose a message to start translating
 }
 app {
-  raw = Source
+  plural = Plural
+}
+app {
+  raw = File
 }
 app {
   reload = Reload
@@ -77,7 +83,7 @@ app {
   stale = Stale
 }
 app {
-  structured = Structured
+  structured = Variants & formatting
 }
 app {
   title = Translations
@@ -87,6 +93,9 @@ app {
 }
 app {
   valid = Ready to save
+}
+app {
+  variants = Variants
 }
 app {
   visible_messages = Visible messages
@@ -291,7 +300,7 @@ ui {
 }
 ui {
   backend {
-    history_sidecar = The workflow sidecar changed after this operation; history was cleared.
+    history_sidecar = The review data changed after this operation; history was cleared.
   }
 }
 ui {
@@ -334,7 +343,7 @@ ui {
 }
 ui {
   backend {
-    import_sidecar_changed = The workflow sidecar changed on disk. Preview the import again.
+    import_sidecar_changed = The review file changed on disk. Preview the import again.
   }
 }
 ui {
@@ -609,7 +618,7 @@ ui {
 }
 ui {
   backend {
-    sidecar_history_conflict = The editor-state sidecar changed on disk. Reload before changing history.
+    sidecar_history_conflict = The review data changed on disk. Reload before changing history.
   }
 }
 ui {
@@ -1231,10 +1240,9 @@ ui {
   count {
     project_locales =
       .input {$count :integer select=plural}
-      .input {$version :integer}
       .match $count
-      one {{One locale · schema v{$version}}}
-      * {{{$count} locales · schema v{$version}}}
+      one {{One locale}}
+      * {{{$count} locales}}
 
   }
 }
@@ -1290,8 +1298,8 @@ ui {
     resource_variants =
       .input {$count :integer select=plural}
       .match $count
-      one {{Structured message · one variant}}
-      * {{Structured message · {$count} variants}}
+      one {{One variant}}
+      * {{{$count} variants}}
 
   }
 }
@@ -1607,7 +1615,7 @@ ui {
 }
 ui {
   feedback {
-    workflow_saved = Workflow sidecar saved
+    workflow_saved = Review status saved
   }
 }
 ui {
@@ -2142,6 +2150,16 @@ ui {
 ui {
   message {
     heading_falls_back_to = falls back to
+  }
+}
+ui {
+  message {
+    heading_override_layer = Override layer: {$layer}
+  }
+}
+ui {
+  message {
+    heading_override_layer_title = This text is in a layer that overrides the text of a lower layer, such as a library's.
   }
 }
 ui {
@@ -2696,11 +2714,6 @@ ui {
 }
 ui {
   page {
-    no_document = no document
-  }
-}
-ui {
-  page {
     open = Open
   }
 }
@@ -2752,11 +2765,6 @@ ui {
 ui {
   page {
     preview_rtl_active = Right-to-left simulation is active.
-  }
-}
-ui {
-  page {
-    preview_safe_markup = Semantic markup is displayed as a data tree. Names and attributes are never interpreted as trusted HTML.
   }
 }
 ui {
@@ -3086,7 +3094,7 @@ ui {
 }
 ui {
   page {
-    terminology_description = Terms stay in the optional versioned sidecar and are checked locally. Nothing is sent to a service.
+    terminology_description = Terms are stored with the project's editor state and checked on this computer. Nothing is sent to a service.
   }
 }
 ui {
@@ -3392,7 +3400,7 @@ ui {
 }
 ui {
   palette {
-    switch_to_raw_json_mode = Switch to source mode
+    switch_to_raw_json_mode = Switch to file view
   }
 }
 ui {
@@ -3847,6 +3855,21 @@ ui {
   }
 }
 ui {
+  source_panel {
+    missing = This message has no text in the source language yet.
+  }
+}
+ui {
+  source_panel {
+    read_only = Read-only
+  }
+}
+ui {
+  source_panel {
+    title = Source text ({$language})
+  }
+}
+ui {
   terminology {
     remove_source =
       .input {$term :string}
@@ -4117,7 +4140,10 @@ ui {
   preview_time_zone_summary = Time zone {$zone}
 }
 ui {
-  preview_formats_in = Formats in {$locale}
+  preview_time_zone_summary_host = your time zone
+}
+ui {
+  preview_formats_in = Numbers and dates formatted for {$locale}
 }
 ui {
   preview_requested_summary = Requested {$requested} ({$resolution})

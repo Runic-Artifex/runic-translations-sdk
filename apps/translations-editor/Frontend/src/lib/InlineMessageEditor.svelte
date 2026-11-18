@@ -236,6 +236,17 @@
     void focusSlot(Math.min(activeSlot, next.length - 1), slot.text.length);
   }
 
+  // The pattern box reads as one text field: a click on its empty area puts the caret at the end of the last text
+  // segment, opening an empty one after a trailing variable. Text segments, chips and insertion points keep their own
+  // clicks, and keyboard users reach the same segments with Tab.
+  function focusEnd(event: MouseEvent): void {
+    if (event.target !== event.currentTarget || slots.length === 0) return;
+    event.preventDefault();
+    const last = slots.length - 1;
+    editingSlot = last;
+    void focusSlot(last, slots[last].text.length);
+  }
+
   async function focusSlot(index: number, position: number): Promise<void> {
     await tick();
     const target = textareas[index];
@@ -301,10 +312,13 @@
 {/snippet}
 
 <div class="overflow-hidden rounded-2xl border bg-card/70 shadow-inner focus-within:ring-2 focus-within:ring-ring">
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
-    class="flex min-h-32 flex-wrap content-start items-start gap-x-1 gap-y-2 px-4 py-3"
+    class="flex min-h-32 cursor-text flex-wrap content-start items-start gap-x-1 gap-y-2 px-4 py-3"
     role="group"
     aria-label={label}
+    data-pattern-box
+    onmousedown={focusEnd}
   >
     {#each slots as slot, index (`${index}-${slot.token ?? "text"}`)}
       {#if index === 0}
