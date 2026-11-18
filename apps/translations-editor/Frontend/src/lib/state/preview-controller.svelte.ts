@@ -11,7 +11,7 @@ import {
   withPreviewSample,
 } from "../message-preview.js";
 import type { PseudoLocale } from "../simulation";
-import { notice, type UiMessage } from "../ui-text";
+import { notice, type UiMessage, type UiText } from "../ui-text";
 
 export type PreviewRequest = ReturnType<typeof createMessagePreviewRequest>;
 
@@ -22,6 +22,17 @@ export type PreviewRequest = ReturnType<typeof createMessagePreviewRequest>;
 export function previewFailure(result: EditorMessagePreview | undefined): UiMessage {
   const diagnostic = result?.primaryDiagnostic ?? result?.diagnostics.find(item => item.severity === "error");
   return diagnostic?.notice ?? (diagnostic?.message || undefined) ?? notice("ui_feedback_preview_failed");
+}
+
+/** The sample value of an input of `type` that the message declares without one. */
+export function defaultPreviewSample(type: string, ui: UiText): string {
+  if (type === "int" || type === "int64" || type === "number" || type === "decimal") return "1";
+  if (type === "bool" || type === "boolean") return "true";
+  if (type === "date") return "2026-08-08";
+  if (type === "time") return "12:30:00";
+  if (type === "datetime" || type === "instant") return "2026-08-08T12:30:00Z";
+  if (type === "guid" || type === "uuid") return "12345678-1234-1234-1234-123456789abc";
+  return ui.text("ui_preview_sample");
 }
 
 export interface PreviewControllerOptions {

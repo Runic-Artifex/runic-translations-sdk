@@ -1,98 +1,21 @@
 <script lang="ts">
-  import InlinePreview from "#lib/InlinePreview.svelte";
-  import { onMount, tick, untrack } from "svelte";
-  import { m } from "virtual:runic-translations/editor";
+  // The editor's composition root: it creates the stores and controllers of src/lib/state/, wires them to each other
+  // and to the host bridge, and lays out the screens and dialogs. Behaviour lives in the controllers; layout in the
+  // screens (src/lib/screens/) and dialogs (src/lib/dialogs/).
+  import { onMount } from "svelte";
   import { baseLocale as uiBaseLocale, locales as uiLocales } from "virtual:runic-translations/editor/runtime";
   import { onBridgeConnection, onWindowLocale, windowLocale } from "@runic-artifex/views";
-  import {
-    createWindowLocaleSync,
-    matchUiLocale,
-    negotiateUiLocale,
-    preferredLanguages,
-    uiLocaleName,
-    uiLocaleStateKey,
-  } from "#lib/ui-locale.js";
-
-  import type {
-    EditorAbout,
-    EditorDiagnostic,
-    EditorDiagnosticQuickFix,
-    EditorDocument,
-    EditorExternalFileChange,
-    EditorCatalogImportPlan,
-    EditorLocaleCatalog,
-    EditorLocaleDescription,
-    EditorLocaleMatches,
-    EditorMessageOperation,
-    EditorMutationPreview,
-    EditorMutationRequest,
-    EditorProjectCreationRequest,
-    EditorProjectPlan,
-    EditorReviewFileResult,
-    EditorReviewImportPreview,
-    EditorReviewState,
-    EditorXliffExportResult,
-    EditorXliffImportPreview,
-    ValidationResult,
-    WorkspaceSnapshot,
-  } from "#lib/contracts.js";
-  import {
-    applyAppearance,
-    readAppearance,
-    saveAppearance,
-    type ThemeMode,
-    type ThemePalette,
-  } from "#lib/appearance.js";
-  import AppDialog from "#lib/AppDialog.svelte";
-  import ArtifactPreviewPanel from "#lib/ArtifactPreviewPanel.svelte";
-  import { localeDirection } from "#lib/locale-text.js";
-  import DocumentPreview from "#lib/DocumentPreview.svelte";
+  import { createWindowLocaleSync, matchUiLocale, negotiateUiLocale, preferredLanguages, uiLocaleName, uiLocaleStateKey } from "#lib/ui-locale.js";
+  import type { EditorLocaleCatalog, WorkspaceSnapshot } from "#lib/contracts.js";
   import CommandPalette from "#lib/CommandPalette.svelte";
   import { buildEditorCommandPalette } from "#lib/command-palette.js";
+  import { draftField, isTextEditingTarget } from "#lib/draft-fields.js";
   import { createEditorBridge } from "#lib/editor-bridge.js";
-  import type { EditorDocumentState } from "../generated/editorDocument";
-  import { createUiText, setUiText, notice, displayNotice, UiNoticeError, type UiMessage } from "#lib/ui-text.js";
   import { editorShortcut } from "#lib/editor-keyboard.js";
-  import EditorModeSwitcher, { type EditorMode } from "#lib/EditorModeSwitcher.svelte";
+  import { editorLabels } from "#lib/editor-labels.js";
   import InterchangeDialog from "#lib/InterchangeDialog.svelte";
   import LibraryCatalogDialog from "#lib/LibraryCatalogDialog.svelte";
-  import EditorSettingsFooter from "#lib/EditorSettingsFooter.svelte";
-  import EditorSidebarHeader from "#lib/EditorSidebarHeader.svelte";
-  import EditorToolbar from "#lib/EditorToolbar.svelte";
-  import LocaleSwitcher from "#lib/LocaleSwitcher.svelte";
-  import MessageHeading from "#lib/MessageHeading.svelte";
-  import MessageList, { type MessageGroupCountKind, type MessageListItem } from "#lib/MessageList.svelte";
-  import MessageToolbar, { type MessageFilter } from "#lib/MessageToolbar.svelte";
-  import ReviewWorkflow from "#lib/ReviewWorkflow.svelte";
-  import { sourceDiff } from "#lib/source-diff.js";
-  import SidebarSectionPanels from "#lib/SidebarSectionPanels.svelte";
-  import TranslationEditor from "#lib/TranslationEditor.svelte";
-  import ValidationPanel from "#lib/ValidationPanel.svelte";
-  import { placeDiagnostics, type DiagnosticSources } from "#lib/diagnostic-scope.js";
-  import WorkspacePanel from "#lib/WorkspacePanel.svelte";
-  import MessageSquareTextIcon from "@lucide/svelte/icons/message-square-text";
-  import PlusIcon from "@lucide/svelte/icons/plus";
-  import Trash2Icon from "@lucide/svelte/icons/trash-2";
-  import * as Alert from "#lib/components/ui/alert/index.js";
-  import { Badge } from "#lib/components/ui/badge/index.js";
-  import { Button } from "#lib/components/ui/button/index.js";
-  import { Checkbox } from "#lib/components/ui/checkbox/index.js";
-  import * as Empty from "#lib/components/ui/empty/index.js";
-  import * as Field from "#lib/components/ui/field/index.js";
-  import { Input } from "#lib/components/ui/input/index.js";
-  import * as Select from "#lib/components/ui/select/index.js";
-  import * as Sidebar from "#lib/components/ui/sidebar/index.js";
-  import { Spinner } from "#lib/components/ui/spinner/index.js";
-  import { Textarea } from "#lib/components/ui/textarea/index.js";
-  import type { MessageArtifact, PreviewFormatting, PreviewNode } from "#lib/message-composer.js";
-  import { previewSampleOr } from "#lib/message-preview.js";
-  import { DraftStore, type DraftOutcome } from "#lib/state/draft-store.svelte.js";
-  import { caretAfterChange, type DraftStep } from "#lib/state/draft-history.svelte.js";
-  import { MessageDraftStore, type StarterOutcome, type StarterTarget } from "#lib/state/message-draft-store.svelte.js";
-  import { DiagnosticsStore } from "#lib/state/diagnostics-store.svelte.js";
-  import { PreviewController } from "#lib/state/preview-controller.svelte.js";
-  import { ReviewStore } from "#lib/state/review-store.svelte.js";
-  import { SaveCoordinator } from "#lib/state/save-coordinator.svelte.js";
+  import { localeDisplayName } from "#lib/locale-text.js";
   import {
     clearLocalEditorState,
     configureLocalEditorState,
@@ -102,489 +25,270 @@
     removeLocalEditorState,
     resumeLocalEditorState,
     setLocalEditorState,
-    type LocalStateSummary,
   } from "#lib/local-state.js";
-  import {
-    buildRows,
-    overrideLayer,
-    localeCoverage,
-    formatJson,
-    preview,
-    type ResourceValue,
-    type TranslationRow,
-  } from "#lib/resource-model.js";
-  import { createMessageSearchIndex } from "#lib/message-search.js";
-  import { catalogSelectionStateKey, readCatalogSelection, writeCatalogSelection } from "#lib/catalog-selection.js";
+  import { createUiText, errorMessage, errorNotice, notice, setUiText, UiNoticeError } from "#lib/ui-text.js";
   import { editorWindowTitle } from "#lib/window-title.js";
-  import {
-    effectiveReviewState,
-    bidiIssues,
-    isStale,
-    qualityIssues,
-    qualityReportCsv,
-    reviewIdentity,
-    translationSuggestions,
-    withCurrentReview,
-  } from "#lib/review-model.js";
-  import {
-    isPseudoLocale,
-    readUiSimulation,
-    saveUiSimulation,
-    type UiDirection,
-  } from "#lib/simulation.js";
-
-  type ProjectLocaleDraft = { id: number; tag: string; fallback: string };
-  type RecentProject = { root: string; catalogId: string; openedAt: string };
-  type MutationKind = EditorMutationRequest["kind"];
+  import AboutDialog from "#lib/dialogs/AboutDialog.svelte";
+  import ExternalChangeDialog from "#lib/dialogs/ExternalChangeDialog.svelte";
+  import MutationDialog from "#lib/dialogs/MutationDialog.svelte";
+  import OpenProjectDialog from "#lib/dialogs/OpenProjectDialog.svelte";
+  import ProjectWizardDialog from "#lib/dialogs/ProjectWizardDialog.svelte";
+  import QualityReportDialog from "#lib/dialogs/QualityReportDialog.svelte";
+  import RepairDialog from "#lib/dialogs/RepairDialog.svelte";
+  import TerminologyDialog from "#lib/dialogs/TerminologyDialog.svelte";
+  import FatalScreen from "#lib/screens/FatalScreen.svelte";
+  import LoadingScreen from "#lib/screens/LoadingScreen.svelte";
+  import TransactionRecoveryScreen from "#lib/screens/TransactionRecoveryScreen.svelte";
+  import WelcomeScreen from "#lib/screens/WelcomeScreen.svelte";
+  import WorkspaceNotices from "#lib/screens/WorkspaceNotices.svelte";
+  import WorkspaceShell from "#lib/screens/WorkspaceShell.svelte";
+  import { AboutController } from "#lib/state/about-controller.svelte.js";
+  import { DiagnosticsStore } from "#lib/state/diagnostics-store.svelte.js";
+  import { DraftStore } from "#lib/state/draft-store.svelte.js";
+  import { ExternalChangesController } from "#lib/state/external-changes.svelte.js";
+  import { EditorFeedback } from "#lib/state/feedback.svelte.js";
+  import { HistoryController } from "#lib/state/history-controller.svelte.js";
+  import { InterchangeController } from "#lib/state/interchange-controller.svelte.js";
+  import { LibraryController } from "#lib/state/library-controller.svelte.js";
+  import { MessageDraftStore } from "#lib/state/message-draft-store.svelte.js";
+  import { MessageEditingController } from "#lib/state/message-editing.svelte.js";
+  import { MutationController } from "#lib/state/mutation-controller.svelte.js";
+  import { PreferencesController } from "#lib/state/preferences-controller.svelte.js";
+  import { defaultPreviewSample, PreviewController } from "#lib/state/preview-controller.svelte.js";
+  import { ProjectWizardController } from "#lib/state/project-wizard.svelte.js";
+  import { RecoveryController } from "#lib/state/recovery-controller.svelte.js";
+  import { RepairController } from "#lib/state/repair-controller.svelte.js";
+  import { ReviewStore } from "#lib/state/review-store.svelte.js";
+  import { SaveCoordinator } from "#lib/state/save-coordinator.svelte.js";
+  import { currentManifest, SelectionController } from "#lib/state/selection-controller.svelte.js";
+  import { UnsavedWork } from "#lib/state/unsaved-work.svelte.js";
+  import { WorkspaceController } from "#lib/state/workspace-controller.svelte.js";
+  import { WorkspaceView } from "#lib/state/workspace-view.svelte.js";
 
   const bridge = createEditorBridge();
   const windowLocaleSync = createWindowLocaleSync({ current: windowLocale, send: (locale) => bridge.setUiLocale(locale) });
   configureLocalEditorState(bridge);
-  let snapshot = $state.raw<WorkspaceSnapshot>();
-  // Unsaved document text and the one queue per document that changes it (composer, authoring, raw validation, fixes).
+  // The native editor state: preferences, recent projects and the recovery copies of unsaved work.
   const nativeStorage = { get: getLocalEditorState, set: setLocalEditorState, remove: removeLocalEditorState };
-  const draftStore = new DraftStore({ bridge, snapshot: () => snapshot, storage: nativeStorage });
+  const confirmMessage = (messageKey: string): boolean => confirm(ui.text(messageKey));
+  const historyBusy = (): boolean => history.busy;
+  const snapshot = (): WorkspaceSnapshot | undefined => workspace.snapshot;
+
+  const feedback = new EditorFeedback();
+  const preferences: PreferencesController = new PreferencesController({
+    // Until the native state loads, the page shows the OS preference negotiated against the editor catalog.
+    initialLocale: negotiateUiLocale(preferredLanguages(), uiLocales, uiBaseLocale),
+    locales: uiLocales,
+    storage: nativeStorage,
+    windowLocale: windowLocaleSync,
+    preview: (): PreviewController => previewController,
+    refreshPreview: () => selection.refreshPreview(),
+  });
+  const ui = createUiText(() => preferences.uiLocale);
+  setUiText(ui);
+  const localeName = (tag: string): string => localeDisplayName(tag, preferences.uiLocale);
+
+  // Unsaved document text and the one queue per document that changes it (composer, authoring, raw validation, fixes).
+  const draftStore: DraftStore = new DraftStore({ bridge, snapshot, storage: nativeStorage });
   // The empty starters of missing translations, edited in memory until they have text (#225 P2).
   const messageDrafts = new MessageDraftStore({ bridge, drafts: draftStore });
-  const diagnosticsStore = new DiagnosticsStore(() => snapshot);
-  const review = new ReviewStore({ bridge, snapshot: () => snapshot, errorNotice, storage: nativeStorage });
+  const diagnosticsStore = new DiagnosticsStore(snapshot);
+  const review = new ReviewStore({ bridge, snapshot, errorNotice, storage: nativeStorage });
   // The one save: every unsaved document, then the review changes.
-  const saveCoordinator = new SaveCoordinator({
+  const saveCoordinator: SaveCoordinator = new SaveCoordinator({
     bridge,
     drafts: draftStore,
     review,
-    snapshot: () => snapshot,
+    snapshot,
     validated: (path, result) => diagnosticsStore.record("save", path, result),
-    install: (next) => installSnapshot(next, false),
+    install: (next) => workspace.install(next, false),
   });
-  const previewController = new PreviewController({ bridge, pseudoLocalization: () => pseudoLocalization, defaultSample, errorNotice });
-  let selectedKey = $state("");
-  let selectedLocale = $state("");
-  let selectedDocumentPath = $state("");
-  let selectedDocumentViewState = $state.raw<EditorDocumentState>();
-  let filter = $state<MessageFilter>("all");
-  let query = $state("");
-  let mode = $state<EditorMode>("translation");
-  let editorText = $state("");
-  // Advanced by each undo or redo of an unsaved edit: the composer's fields show the draft again.
-  let historyRevision = $state(0);
-  // Undo and redo run one after another, each after the edits typed before it reached the draft.
-  let draftHistoryChain = Promise.resolve();
-  let sourceSelection = $state.raw<{ start: number; end: number; token: number }>();
-  let selectionToken = 0;
-  // Until the native state loads, the page shows the OS preference negotiated against the editor catalog.
-  let uiLocale = $state<string>(negotiateUiLocale(preferredLanguages(), uiLocales, uiBaseLocale));
-  const ui = createUiText(() => uiLocale);
-  setUiText(ui);
-  let themeMode = $state<ThemeMode>("dark");
-  let themePalette = $state<ThemePalette>("runic");
-  let loading = $state(true);
-  let saving = $derived(saveCoordinator.saving);
-  let clientError = $state<UiMessage>();
-  let operationMessage = $state<UiMessage>();
-  let searchInput = $state<HTMLInputElement | null>(null);
-  let projectDialogOpen = $state(false);
-  let projectStep = $state(1);
-  // The wizard's optional import step: after creating the project, the import's dry run opens for confirmation.
-  let wizardImportFrom = $state<"" | "resx" | "i18next">("");
-  let wizardImportSource = $state("");
-  let projectDirectory = $state("");
-  let projectCatalog = $state("product");
-  let projectDefaultLocale = $state("en");
-  let projectLocales = $state<ProjectLocaleDraft[]>([]);
-  let projectNamespace = $state("Customer.Product");
-  let projectClassName = $state("ProductText");
-  let projectIncludeStarter = $state(true);
-  let projectPlan = $state.raw<EditorProjectPlan>();
-  let projectError = $state<UiMessage>();
-  let projectBusy = $state(false);
-  let nextProjectLocaleId = 1;
-  let openDirectory = $state("");
-  let openingWorkspace = $state(false);
-  let pickingWorkspace = $state(false);
-  let openDialogOpen = $state(false);
-  let commandPaletteOpen = $state(false);
-  let repairDocument = $state.raw<EditorDocument>();
-  let repairText = $state("");
-  let repairInput = $state<HTMLTextAreaElement | null>(null);
-  let repairValidation = $state.raw<ValidationResult>();
-  let repairBusy = $state(false);
-  let repairMessage = $state<UiMessage>();
-  let externalChanges = $state<string[]>([]);
-  let externalFileChanges = $state<EditorExternalFileChange[]>([]);
-  let comparedExternalChange = $state.raw<EditorExternalFileChange>();
-  let mergedExternalText = $state("");
-  let recentProjects = $state<RecentProject[]>([]);
-  let mutationDialogOpen = $state(false);
-  let mutationKind = $state<MutationKind>("add-locale");
-  let mutationLocale = $state("");
-  let mutationFallback = $state("");
-  let mutationReplacementFallback = $state("");
-  let mutationCopyFrom = $state("");
-  // What the typed new locale means in CLDR (canonical form, data ID, direction, plural and ordinal categories).
-  let mutationLocaleDescription = $state.raw<EditorLocaleDescription>();
-  let describeLocaleTimer: ReturnType<typeof setTimeout> | undefined;
-  // "With unsupportedLocale "exact", zh-Hant serves requests for: zh-Hant." (the tags the runtime resolves to it).
-  function localeMatchesText(locale: string, matches: EditorLocaleMatches, policy: string): string {
-    const more = matches.count - matches.tags.length;
-    const tags = matches.tags.join(", ") + (more > 0 ? " " + ui.text("ui_locale_matches_more", { count: more }) : "");
-    return ui.text("ui_locale_matches", { locale, policy, tags });
-  }
-  let describeLocaleGeneration = 0;
-  let mutationSourceKey = $state("");
-  let mutationTargetKey = $state("");
-  let mutationInitialValue = $state("");
-  let mutationPreview = $state.raw<EditorMutationPreview>();
-  let mutationError = $state<UiMessage>();
-  let mutationBusy = $state(false);
-  let mutationIrreversibleConfirmed = $state(false);
-  let recoveryBusy = $state(false);
-  let recoveryReloadRequired = $state(false);
-  let recoveryReloadMessage = $state<UiMessage>();
-  let historyBusy = $state(false);
+  const previewController: PreviewController = new PreviewController({
+    bridge,
+    pseudoLocalization: (): boolean => preferences.pseudoLocalization,
+    defaultSample: (type) => defaultPreviewSample(type, ui),
+    errorNotice,
+  });
+  const repair = new RepairController({
+    bridge, drafts: draftStore, feedback, historyBusy, confirm: confirmMessage,
+    install: (next, resetSelection) => workspace.install(next, resetSelection),
+    configureEditor: () => selection.configureEditor(),
+  });
+  const unsaved = new UnsavedWork({ save: saveCoordinator, drafts: draftStore, messageDrafts, review, repair, confirm: confirmMessage });
+  const selection: SelectionController = new SelectionController({
+    bridge, snapshot, drafts: draftStore, messageDrafts, review, preview: previewController, diagnostics: diagnosticsStore, feedback,
+    savedHasMessage: (key, locale) => workspace.savedHasMessage(key, locale),
+    editingBlocked: (): boolean => editorMutationBlocked,
+    storage: nativeStorage,
+  });
+  const externalChanges = new ExternalChangesController({
+    bridge, snapshot, drafts: draftStore, review, unsaved, feedback, historyBusy,
+    idle: () => !(workspace.loading || workspace.openingWorkspace || saveCoordinator.saving || workspace.snapshot === undefined),
+    setLoading: (loading) => workspace.loading = loading,
+    install: (next) => workspace.install(next, true),
+    configureEditor: () => selection.configureEditor(),
+  });
+  const workspace: WorkspaceController = new WorkspaceController({
+    bridge, drafts: draftStore, messageDrafts, review, diagnostics: diagnosticsStore, save: saveCoordinator, selection, unsaved,
+    feedback, historyBusy, storage: nativeStorage,
+    reloaded: (kind) => {
+      if (kind === "load") recovery.reloaded();
+      externalChanges.clear();
+    },
+  });
+  const recovery = new RecoveryController({ bridge, workspace, drafts: draftStore, review, selection, feedback, historyBusy });
+  const view = new WorkspaceView({
+    snapshot, selection, drafts: draftStore, review, diagnostics: diagnosticsStore, ui, localeName,
+    samples: () => previewController.samples,
+    reviewBlocked: () => reviewMutationBlocked,
+    labels: () => labels,
+    uiDirection: () => preferences.uiDirection,
+  });
+  const editing = new MessageEditingController({
+    bridge, snapshot, selection, drafts: draftStore, messageDrafts, diagnostics: diagnosticsStore, preview: previewController, repair,
+    feedback,
+    diagnosticSources: () => view.diagnosticSources,
+    editingBlocked: () => editorMutationBlocked,
+  });
+  const history: HistoryController = new HistoryController({
+    bridge, snapshot, drafts: draftStore, diagnostics: diagnosticsStore, selection, feedback, ui,
+    load: () => workspace.load(false),
+    install: (next) => workspace.install(next, false),
+    historyBlocked: (): boolean => historyBlocked,
+    draftHistoryBlocked: (): boolean => draftHistoryBlocked,
+  });
+  const interchange = new InterchangeController({ bridge, workspace, review, unsaved, feedback });
+  const wizard = new ProjectWizardController({
+    bridge, unsaved, feedback, interchange, historyBusy,
+    install: (next) => workspace.install(next, true),
+  });
+  const mutation = new MutationController({
+    bridge, snapshot, selection, unsaved, feedback, historyBusy,
+    load: () => workspace.load(false),
+    install: (next) => workspace.install(next, true),
+  });
+  // Library catalogs (T5d): the library is layer 0, read-only; the application's overrides layer 1.
+  const library = new LibraryController({
+    bridge,
+    hasUnsavedWork: () => unsaved.hasUnsavedWork,
+    projectChanged: async (deferred) => {
+      if (deferred) workspace.projectReloadPending = true;
+      else await workspace.load(false);
+    },
+  });
+  const about = new AboutController({
+    bridge, historyBusy, confirm: confirmMessage,
+    localState: { inspect: inspectLocalEditorState, clear: clearLocalEditorState },
+    localStateCleared: () => {
+      workspace.recentProjects = [];
+      draftStore.recovered = {};
+      review.recovered = undefined;
+    },
+    writeClipboard: (text) => navigator.clipboard.writeText(text),
+  });
+
   // The SDK's CLDR locales (add-language picker, regional preview locales); loaded once.
   let localeCatalog = $state.raw<EditorLocaleCatalog>();
+  let searchInput = $state<HTMLInputElement | null>(null);
+  let commandPaletteOpen = $state(false);
   let terminologyDialogOpen = $state(false);
-  let termSource = $state("");
-  let termPreferred = $state("");
-  let termLocale = $state("");
-  let termNote = $state("");
   let reportDialogOpen = $state(false);
-  let aboutDialogOpen = $state(false);
-  let aboutInfo = $state.raw<EditorAbout>();
-  let aboutBusy = $state(false);
-  let diagnosticBusy = $state(false);
-  let diagnosticMessage = $state<UiMessage>();
-  let diagnosticBundlePath = $state<string>();
-  let localStateSummary = $state.raw<LocalStateSummary>();
-  let localStateMessage = $state<UiMessage>();
   let languagesOpen = $state(true);
   let messagesOpen = $state(true);
-  let pseudoLocalization = $state(false);
-  let uiDirection = $state<UiDirection>("ltr");
   let artifactPreviewOpen = $state(false);
-  let interchangeOpen = $state(false);
-  // Library catalogs (T5d): the library is layer 0, read-only; the application's overrides layer 1.
-  let libraryOpen = $state(false);
-  let libraryBusy = $state(false);
-  let libraryView = $state.raw<import("#lib/contracts.js").EditorLibraryView>();
-  let libraryNotice = $state<import("#lib/ui-text.js").UiNotice>();
-  let libraryConflict = $state(false);
-  let libraryLocale = $state("");
-  // runic.json changed through a library operation (the catalog joined "overrides") while there was unsaved work, so the
-  // workspace was not reloaded: the page says so and offers the reload once the work is saved.
-  let projectReloadPending = $state(false);
-  // The selection of each catalog of a workspace, restored when the user switches back to it (L5-4); keyed by the
-  // catalog's runic.json, since two projects (an app and a copy of it) can share a catalog ID.
-  const catalogViews = new Map<string, { key: string; locale: string; filter: MessageFilter; query: string; mode: EditorMode }>();
-  const catalogViewKey = (value: WorkspaceSnapshot) => `${value.root}\n${currentManifest(value)}`;
-  // The open project's runic.json: the first catalog summary is the open one.
-  function currentManifest(value: WorkspaceSnapshot | undefined): string {
-    return value?.catalogs[0]?.manifestPaths[0] ?? value?.catalog?.id ?? "";
-  }
-  let interchangeBusy = $state(false);
-  let xliffDirectory = $state("");
-  let xliffImportPath = $state("");
-  let reviewExportPath = $state("");
-  let reviewImportPath = $state("");
-  let xliffExport = $state.raw<EditorXliffExportResult>();
-  let xliffPreview = $state.raw<EditorXliffImportPreview>();
-  let reviewExport = $state.raw<EditorReviewFileResult>();
-  let reviewPreview = $state.raw<EditorReviewImportPreview>();
-  // Import from .resx or i18next (runic-translations import): a dry run, then once by its confirmation token.
-  let catalogImportFrom = $state<"resx" | "i18next">("resx");
-  let catalogImportSource = $state("");
-  let catalogImportOverwrite = $state(false);
-  let catalogImportPlanned = $state.raw<{ inputs: string; plan: EditorCatalogImportPlan }>();
-  // The dry run of the current inputs only: changing the format, the source or "overwrite" invalidates it, so "Import once"
-  // never applies a plan made for other inputs (its token stays unused and expires with the next dry run).
-  const catalogImportInputs = $derived(JSON.stringify([catalogImportFrom, catalogImportSource.trim(), catalogImportOverwrite]));
-  const catalogImportPlan = $derived(catalogImportPlanned?.inputs === catalogImportInputs ? catalogImportPlanned.plan : undefined);
 
-  let labels = $derived(labelsFor(uiLocale));
+  let uiLocale = $derived(preferences.uiLocale);
+  let uiDirection = $derived(preferences.uiDirection);
+  let labels = $derived(editorLabels(uiLocale));
   $effect(() => {
     document.documentElement.lang = uiLocale;
     document.documentElement.dir = uiDirection;
   });
-  let hasUnsavedRepair = $derived(repairDocument !== undefined && repairText !== repairDocument.content);
-  let hasUnsavedWork = $derived(saveCoordinator.hasUnsaved || hasUnsavedRepair);
   // "<catalog> – Runic Translations Editor", marked while work is unsaved; the product name without a catalog (#225 P14).
-  let windowTitle = $derived(editorWindowTitle(ui, snapshot?.pendingTransaction === undefined ? snapshot?.catalog?.id : undefined, hasUnsavedWork));
-  // What the toolbar names as unsaved: text in some documents, review status, or both.
-  let unsavedDetail = $derived.by(() => {
-    const summary = saveCoordinator.unsavedSummary;
-    const parts = [
-      ...(summary.documents.length > 0 ? [ui.text("ui_count_unsaved_documents", { count: summary.documents.length })] : []),
-      ...(summary.review ? [ui.text("ui_toolbar_unsaved_review")] : []),
-    ];
-    return parts.length === 0 ? "" : ui.text("ui_toolbar_unsaved_changes", { changes: new Intl.ListFormat(uiLocale, { type: "conjunction" }).format(parts) });
-  });
-  let historyBlocked = $derived(
-    historyBusy || loading || saving || review.saving || draftStore.validating || mutationBusy || recoveryBusy ||
-    previewController.busy || projectBusy || openingWorkspace || pickingWorkspace || repairBusy || diagnosticBusy || aboutBusy || interchangeBusy ||
-    hasUnsavedWork || mutationDialogOpen || projectDialogOpen || openDialogOpen ||
-    comparedExternalChange !== undefined || repairDocument !== undefined || terminologyDialogOpen || reportDialogOpen || aboutDialogOpen,
+  let windowTitle = $derived(editorWindowTitle(ui, workspace.snapshot?.pendingTransaction === undefined ? workspace.snapshot?.catalog?.id : undefined, unsaved.hasUnsavedWork));
+  // What keeps the saved-change history (and the dialogs that replace the workspace) from running.
+  let historyBlocked: boolean = $derived(
+    history.busy || workspace.loading || saveCoordinator.saving || review.saving || draftStore.validating || mutation.busy ||
+    recovery.busy || previewController.busy || wizard.busy || workspace.openingWorkspace || workspace.pickingWorkspace || repair.busy ||
+    about.diagnosticBusy || about.busy || interchange.busy ||
+    unsaved.hasUnsavedWork || mutation.open || wizard.open || workspace.openDialogOpen ||
+    externalChanges.compared !== undefined || repair.document !== undefined || terminologyDialogOpen || reportDialogOpen || about.open,
   );
-  let editorMutationBlocked = $derived(historyBusy || saving || review.saving || loading || recoveryBusy || openingWorkspace);
+  let editorMutationBlocked: boolean = $derived(history.busy || saveCoordinator.saving || review.saving || workspace.loading || recovery.busy || workspace.openingWorkspace);
   // Version 1 editor approvals waiting to move into the review file are shown read-only.
-  let reviewMutationBlocked = $derived(editorMutationBlocked || review.saving || snapshot?.review?.migrationPending === true);
-  let rows = $derived(buildRows(snapshot, draftStore.drafts, draftStore.parsed));
-  // What the validation panel reads to name a diagnostic's message and its line in it (#225 P6, P12).
-  let diagnosticSources = $derived<DiagnosticSources>({ documents: snapshot?.documents ?? [], drafts: draftStore.drafts, parsed: draftStore.parsed });
-  let messageSearch = $derived(createMessageSearchIndex(rows));
-  // Coverage from runic-translations status (Tooling), the numbers of the command line, for the saved files.
-  let localeSummaries = $derived.by(() => (snapshot?.catalog?.locales ?? []).map((locale) => {
-    const state = localeCoverage(snapshot?.status, rows, locale.tag);
-    return {
-      tag: locale.tag,
-      name: localeName(locale.tag),
-      fallback: locale.fallback,
-      translated: state.translated,
-      fallbackCount: state.fallback,
-      missing: state.missing,
-      stale: state.stale,
-      completeness: state.completeness,
-      total: state.total,
-      percent: state.percent,
-      isSource: locale.tag === snapshot?.catalog?.defaultLocale,
-    };
-  }));
-  let reviewIndex = $derived(review.index);
-  // The SDK's diagnostics for each row (RTR0010, RTR0090, RTR0094–RTR0098) beside the editor-only checks.
-  let localeQuality = $derived(qualityIssues(
-    rows,
-    snapshot?.catalog?.defaultLocale ?? "",
-    selectedLocale,
-    withCurrentReview(diagnosticsStore.displayed, reviewIndex),
-    review.terminology,
-    ui,
-  ));
-  let localeQualityFindings = $derived.by(() => {
-    const bidi = bidiIssues(
-      rows.map((row) => ({
-        key: row.key,
-        locale: selectedLocale,
-        text: preview(row.cells[selectedLocale]?.entry),
-      })),
-      uiDirection,
-      ui,
-    );
-    if (bidi.length === 0) return localeQuality;
-    return [...localeQuality, ...bidi].sort((left, right) =>
-      left.key.localeCompare(right.key) || left.kind.localeCompare(right.kind));
-  });
-  let qualityKeySet = $derived(new Set(localeQualityFindings.map((issue) => issue.key)));
-  let filterOptions = $derived([
-    { value: "all" as const, label: labels.all, count: rows.length },
-    { value: "missing" as const, label: labels.missing, count: rows.filter((row) => row.cells[selectedLocale]?.entry === undefined).length },
-    { value: "structured" as const, label: labels.structured, count: rows.filter((row) => row.structured).length },
-    { value: "needs-review" as const, label: labels.review, count: rows.filter((row) => effectiveReviewState(reviewIndex.get(reviewIdentity(row.key, selectedLocale)), row.cells[selectedLocale]?.entry !== undefined) === "needs-review").length },
-    { value: "stale" as const, label: labels.stale, count: rows.filter((row) => isStale(reviewIndex.get(reviewIdentity(row.key, selectedLocale)))).length },
-    { value: "quality" as const, label: ui.text("ui_page_quality_title"), count: qualityKeySet.size },
-  ]);
-  let visibleRows = $derived.by(() => {
-    const searchMatches = messageSearch.matchingRows(query);
-    return rows.filter((row) => {
-      const cell = row.cells[selectedLocale];
-      if (filter === "missing" && cell?.entry !== undefined) return false;
-      if (filter === "structured" && !row.structured) return false;
-      const review = reviewIndex.get(reviewIdentity(row.key, selectedLocale));
-      if (filter === "needs-review" && effectiveReviewState(review, cell?.entry !== undefined) !== "needs-review") return false;
-      if (filter === "stale" && !isStale(review)) return false;
-      if (filter === "quality" && !qualityKeySet.has(row.key)) return false;
-      return searchMatches.has(row);
-    });
-  });
-  let previewDirection = $derived(localeDirection(pseudoLocalization ? previewController.pseudoLocale : selectedLocale));
-  // The time zones the preview offers: the host's, UTC, then the engine's IANA zones.
-  const previewTimeZones = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
-  // Regional variants of the selected locale's language that CLDR has data for (de → de-AT, de-CH, …).
-  let regionalLocaleSuggestions = $derived.by(() => {
-    const language = selectedLocale.split("-")[0]?.toLowerCase() ?? "";
-    return (localeCatalog?.locales ?? []).filter((tag) => tag.toLowerCase() === language || tag.toLowerCase().startsWith(`${language}-`));
-  });
+  let reviewMutationBlocked: boolean = $derived(editorMutationBlocked || review.saving || workspace.snapshot?.review?.migrationPending === true);
+  // Unsaved edits have their own undo history (#225 P4); it waits while an operation that replaces drafts runs.
+  let draftHistoryBlocked: boolean = $derived(
+    history.busy || workspace.loading || saveCoordinator.saving || review.saving || mutation.busy || recovery.busy || wizard.busy ||
+    workspace.openingWorkspace || workspace.pickingWorkspace || repair.busy || interchange.busy || mutation.open || wizard.open ||
+    workspace.openDialogOpen || externalChanges.compared !== undefined || repair.document !== undefined,
+  );
 
-  function describeMutationLocale(): void {
-    const generation = ++describeLocaleGeneration;
-    if (describeLocaleTimer !== undefined) clearTimeout(describeLocaleTimer);
-    const tag = mutationLocale.trim();
-    if (tag === "") { mutationLocaleDescription = undefined; return; }
-    describeLocaleTimer = setTimeout(() => {
-      void bridge.describeLocale(tag).then((description) => {
-        if (generation === describeLocaleGeneration) mutationLocaleDescription = description;
-      }, () => { if (generation === describeLocaleGeneration) mutationLocaleDescription = undefined; });
-    }, 200);
-  }
+  const undo = (): void => history.undo();
+  const redo = (): void => history.redo();
+  const saveAll = (): Promise<void> => workspace.saveAll();
+  const openMutation = (kind: Parameters<MutationController["prepare"]>[0]): void => void mutation.prepare(kind);
+  const toggleArtifactPreview = (): void => { artifactPreviewOpen = !artifactPreviewOpen; };
 
-  function previewFormattingSummary(formatting: PreviewFormatting | undefined): string | undefined {
-    if (formatting === undefined) return undefined;
-    const parts: string[] = [];
-    if (formatting.requestedLocale !== undefined && formatting.requestedLocale !== selectedLocale) {
-      parts.push(ui.text("ui_preview_requested_summary", {
-        requested: formatting.requestedLocale,
-        resolution: ui.text(formatting.resolution === "parent" ? "ui_preview_resolution_parent" : formatting.resolution === "related" ? "ui_preview_resolution_related" : "ui_preview_resolution_exact"),
-      }));
-    }
-    if (formatting.formattingLocale !== undefined) parts.push(ui.text("ui_preview_formats_in", { locale: formatting.formattingLocale }));
-    parts.push(formatting.timeZone === undefined ? ui.text("ui_preview_time_zone_summary_host") : ui.text("ui_preview_time_zone_summary", { zone: formatting.timeZone }));
-    return parts.join(" · ");
-  }
-  let messageListItems = $derived.by((): MessageListItem[] => visibleRows.map((row) => {
-    const cell = row.cells[selectedLocale];
-    const rowReview = reviewIndex.get(reviewIdentity(row.key, selectedLocale));
-    return {
-      key: row.key,
-      path: row.path,
-      preview: preview(cell?.entry, ui),
-      missing: cell?.entry === undefined,
-      structured: row.structured,
-      structure: row.structure,
-      stale: isStale(rowReview),
-      needsReview: effectiveReviewState(rowReview, cell?.entry !== undefined) === "needs-review",
-    };
-  }));
-  let selectedRow = $derived.by(() => rows.find((row) => row.key === selectedKey));
-  // #225 P15: the selection stays, but the list says when the search or filter hides it.
-  let selectedHiddenByFilter = $derived(selectedRow !== undefined && !visibleRows.some((row) => row.key === selectedKey));
-  // The counts a collapsed group names for the selected locale: those the current filter does not already imply.
-  let messageGroupCounts = $derived<MessageGroupCountKind[]>(
-    filter === "missing" || filter === "stale" || filter === "needs-review" ? [] : ["missing", "stale", "needsReview"],
-  );
-  let currentCell = $derived(selectedRow?.cells[selectedLocale]);
-  let sourceContext = $derived(selectedRow?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.context);
-  let currentExamples = $derived(currentCell?.entry?.context?.examples.length ? currentCell.entry.context.examples : sourceContext?.examples ?? []);
-  let currentReview = $derived(reviewIndex.get(reviewIdentity(selectedKey, selectedLocale)));
-  let currentReviewState = $derived(effectiveReviewState(currentReview, currentCell?.entry !== undefined));
-  let currentIsStale = $derived(isStale(currentReview));
-  // The base text a stale state was recorded for next to the current one, when the review file kept it (#225 P20).
-  let currentSourceDiff = $derived.by(() => {
-    if (!currentIsStale) return undefined;
-    const recorded = review.recordedSource(selectedKey, selectedLocale);
-    const current = selectedRow?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.value;
-    return recorded === undefined || typeof current !== "string" ? undefined : sourceDiff(recorded, current);
-  });
-  let currentQuality = $derived(localeQualityFindings.filter((issue) => issue.key === selectedKey));
-  let memorySuggestions = $derived(translationSuggestions(
-    rows,
-    snapshot?.catalog?.defaultLocale ?? "",
-    selectedLocale,
-    selectedKey,
-  ));
-  let currentDocument = $derived.by(() => {
-    const document = snapshot?.documents.find((candidate) => candidate.path === selectedDocumentPath) ?? currentCell?.document;
-    return document && selectedDocumentViewState?.path === document.path
-      && selectedDocumentViewState.fileRevision === document.revision
-      ? { ...document, content: selectedDocumentViewState.content, revision: selectedDocumentViewState.fileRevision }
-      : document;
-  });
-  let currentContent = $derived(
-    currentDocument === undefined
-      ? undefined
-      : draftStore.content(currentDocument.path, currentDocument.content),
-  );
-  // A translation the saved files lack is written in the composer on an empty starter shaped for the target locale
-  // (#225 P2): where it goes, the starter once it exists, and whether it is still being prepared.
-  let currentStarterTarget = $derived.by((): StarterTarget | undefined => {
-    if (currentDocument === undefined || selectedRow === undefined || selectedLocale === snapshot?.catalog?.defaultLocale) return undefined;
-    if (savedHasMessage(selectedKey, selectedLocale)) return undefined;
-    return { path: currentDocument.path, saved: currentDocument.content, key: selectedKey, locale: selectedLocale };
-  });
-  let currentStarter = $derived(currentStarterTarget === undefined ? undefined : messageDrafts.get(currentStarterTarget));
-  let starterLoading = $derived(currentStarterTarget !== undefined && currentStarter === undefined && messageDrafts.isLoading(currentStarterTarget));
-  let sourceAuthoring = $derived(selectedRow?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.authoring);
-  // Unsaved edits have their own undo history (#225 P4), per document: Undo and Redo take the selected document's
-  // latest step, or else the latest of another document. Without an unsaved step they act on the saved changes.
-  let draftHistoryBlocked = $derived(
-    historyBusy || loading || saving || review.saving || mutationBusy || recoveryBusy || projectBusy || openingWorkspace ||
-    pickingWorkspace || repairBusy || interchangeBusy || mutationDialogOpen || projectDialogOpen || openDialogOpen ||
-    comparedExternalChange !== undefined || repairDocument !== undefined,
-  );
-  let draftUndoStep = $derived(draftStore.history.peekUndo(draftStore.history.undoTarget(currentDocument?.path)));
-  let draftRedoStep = $derived(draftStore.history.peekRedo(draftStore.history.redoTarget(currentDocument?.path)));
-  let canUndo = $derived(draftUndoStep !== undefined ? !draftHistoryBlocked : snapshot?.history?.canUndo === true && !historyBlocked);
-  let canRedo = $derived(draftRedoStep !== undefined ? !draftHistoryBlocked : snapshot?.history?.canRedo === true && !historyBlocked);
-  let undoLabel = $derived.by(() => {
-    if (draftUndoStep !== undefined) {
-      return ui.text("ui_toolbar_undo_unsaved", { change: historyChangeName(draftUndoStep), message: draftUndoStep.message ?? draftUndoStep.path });
-    }
-    const saved = snapshot?.history?.undoLabel;
-    return saved === undefined ? ui.text("ui_toolbar_undo_saved_change") : ui.text("ui_toolbar_undo_saved_change_named", { change: displayNotice(saved, ui) });
-  });
-  let redoLabel = $derived.by(() => {
-    if (draftRedoStep !== undefined) {
-      return ui.text("ui_toolbar_redo_unsaved", { change: historyChangeName(draftRedoStep), message: draftRedoStep.message ?? draftRedoStep.path });
-    }
-    const saved = snapshot?.history?.redoLabel;
-    return saved === undefined ? ui.text("ui_toolbar_redo_saved_change") : ui.text("ui_toolbar_redo_saved_change_named", { change: displayNotice(saved, ui) });
-  });
-  let malformedDocuments = $derived(
-    snapshot?.documents.filter((document) => document.isMalformed) ?? [],
-  );
-  let paletteCommands = $derived.by(() =>
-    buildEditorCommandPalette(
+  let paletteCommands = $derived.by(() => {
+    const { canUndo, canRedo, undoLabel, redoLabel } = history;
+    return buildEditorCommandPalette(
       {
-        reloadWorkspace: () => void loadWorkspace(true),
-        openWorkspaceDialog: showOpenWorkspaceDialog,
-        createProject: openProjectWizard,
-        openInterchange: () => interchangeOpen = true,
+        reloadWorkspace: () => void workspace.load(true),
+        openWorkspaceDialog: () => workspace.showOpenDialog(),
+        createProject: () => wizard.start(),
+        openInterchange: () => interchange.open = true,
         saveAll: () => void saveAll(),
         undo,
         redo,
         focusMessageSearch: () => searchInput?.focus(),
-        discardReview,
-        setMessageReviewState: setCurrentReviewState,
-        markVisibleMessages: markVisible,
+        discardReview: () => review.discard(),
+        setMessageReviewState: (state) => view.setCurrentReviewState(state),
+        markVisibleMessages: (state) => view.markVisible(state),
         openTerminology: () => terminologyDialogOpen = true,
         openQualityReport: () => reportDialogOpen = true,
-        showAbout: () => void showAbout(),
-        createDiagnosticBundle: () => void createDiagnosticBundle(),
-        setEditorMode: chooseMode,
-        selectLocale,
-        setUiLocale: changeUiLocale,
-        setThemeMode: changeThemeMode,
+        showAbout: () => void about.show(),
+        createDiagnosticBundle: () => void about.createDiagnosticBundle(),
+        setEditorMode: (mode) => selection.chooseMode(mode),
+        selectLocale: (locale) => selection.selectLocale(locale),
+        setUiLocale: (locale) => preferences.changeUiLocale(locale),
+        setThemeMode: (mode) => preferences.changeThemeMode(mode),
         toggleLanguagesSection: () => languagesOpen = !languagesOpen,
         toggleMessagesSection: () => messagesOpen = !messagesOpen,
-        togglePseudoLocalization,
-        toggleUiDirection,
+        togglePseudoLocalization: () => preferences.togglePseudoLocalization(),
+        toggleUiDirection: () => preferences.toggleUiDirection(),
         toggleArtifactPreview,
       },
       {
-        locales: localeSummaries.map((locale) => ({ tag: locale.tag, name: locale.name })),
-        selectedLocale,
-        editorMode: mode,
+        locales: view.localeSummaries.map((locale) => ({ tag: locale.tag, name: locale.name })),
+        selectedLocale: selection.selectedLocale,
+        editorMode: selection.mode,
         uiLocale,
         uiLocales: uiLocales.map((tag) => ({ tag, name: uiLocaleName(tag) })),
-        themeMode,
-        workspaceReady: snapshot !== undefined,
+        themeMode: preferences.themeMode,
+        workspaceReady: workspace.snapshot !== undefined,
         searchAvailable: searchInput !== null,
         unsaved: saveCoordinator.hasUnsaved && !editorMutationBlocked,
         canUndo,
         canRedo,
         undoTitle: undoLabel,
         redoTitle: redoLabel,
-        reviewEditable: selectedRow !== undefined && !reviewMutationBlocked &&
-          snapshot?.review?.error === undefined,
+        reviewEditable: selection.selectedRow !== undefined && !reviewMutationBlocked &&
+          workspace.snapshot?.review?.error === undefined,
         reviewDirty: review.dirty,
-        pseudoLocalization,
+        pseudoLocalization: preferences.pseudoLocalization,
         uiDirection,
         artifactPreviewOpen,
       },
       ui,
-    ));
+    );
+  });
 
   onMount(() => {
     let disposed = false;
-    const appearance = readAppearance(getLocalEditorState);
-    themeMode = appearance.mode;
-    themePalette = appearance.palette;
-    applyAppearance(themeMode, themePalette);
-    const simulation = readUiSimulation(getLocalEditorState);
-    pseudoLocalization = simulation.pseudoLocalization;
-    uiDirection = simulation.direction;
+    preferences.restore();
     const colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
-    const updateSystemTheme = (): void => {
-      if (themeMode === "system") applyAppearance(themeMode, themePalette);
-    };
+    const updateSystemTheme = (): void => preferences.systemThemeChanged();
     colorScheme.addEventListener("change", updateSystemTheme);
     // The CLDR locale list only feeds suggestions; without it the fields stay free text.
     void bridge.listLocales().then((catalog) => { if (!disposed) localeCatalog = catalog; }, () => undefined);
@@ -592,31 +296,25 @@
       try {
         const nativeStateRecovered = await loadLocalEditorState();
         if (disposed) return;
-        const loadedAppearance = readAppearance(getLocalEditorState);
-        themeMode = loadedAppearance.mode;
-        themePalette = loadedAppearance.palette;
-        applyAppearance(themeMode, themePalette);
-        const loadedSimulation = readUiSimulation(getLocalEditorState);
-        pseudoLocalization = loadedSimulation.pseudoLocalization;
-        uiDirection = loadedSimulation.direction;
-        recentProjects = readRecentProjects();
+        preferences.restore();
+        workspace.loadRecentProjects();
         if (nativeStateRecovered) {
-          operationMessage = notice("ui_feedback_state_recovered");
+          feedback.operationMessage = notice("ui_feedback_state_recovered");
         }
       } catch (error) {
-        clientError = error instanceof UiNoticeError ? error.notice : notice("ui_feedback_state_load_failed", { error: errorMessage(error) });
+        feedback.clientError = error instanceof UiNoticeError ? error.notice : notice("ui_feedback_state_load_failed", { error: errorMessage(error) });
       } finally {
         // The stored choice wins over the OS preference; either becomes the window's locale, also when the native
         // state did not load.
-        if (!disposed) applyUiLocale(matchUiLocale(getLocalEditorState(uiLocaleStateKey), uiLocales) ?? uiLocale);
+        if (!disposed) preferences.applyUiLocale(matchUiLocale(getLocalEditorState(uiLocaleStateKey), uiLocales) ?? preferences.uiLocale);
       }
-      if (!disposed) await loadWorkspace(false);
+      if (!disposed) await workspace.load(false);
     })();
-    const interval = window.setInterval(() => void checkExternalChanges(), 2_000);
+    const interval = window.setInterval(() => void externalChanges.check(), 2_000);
     // Another page of this window, or the application, can switch the window's locale.
     const stopWindowLocale = onWindowLocale((locale) => {
       const match = matchUiLocale(windowLocaleSync.windowChanged(locale), uiLocales);
-      if (match !== undefined) uiLocale = match;
+      if (match !== undefined) preferences.uiLocale = match;
     });
     // A reconnected host keeps the locale it had; a switch made while it was unreachable is sent again, and so is a
     // local-state write the lost connection interrupted.
@@ -634,706 +332,8 @@
     };
   });
 
-  // Shows `locale` and makes it the window's locale, so native surfaces and the window's other pages follow. While the
-  // host is unreachable the page keeps showing it and sends it again when the connection returns.
-  function applyUiLocale(locale: string): void {
-    uiLocale = locale;
-    windowLocaleSync.request(locale);
-  }
-
-  function changeUiLocale(locale: string): void {
-    const match = matchUiLocale(locale, uiLocales);
-    if (match === undefined) return;
-    setLocalEditorState(uiLocaleStateKey, match);
-    applyUiLocale(match);
-  }
-
-  function changeThemeMode(mode: ThemeMode): void {
-    themeMode = mode;
-    saveAppearance(themeMode, themePalette, setLocalEditorState);
-  }
-
-  function changeThemePalette(palette: ThemePalette): void {
-    themePalette = palette;
-    saveAppearance(themeMode, themePalette, setLocalEditorState);
-  }
-
-  function togglePseudoLocalization(): void {
-    pseudoLocalization = !pseudoLocalization;
-    saveUiSimulation(pseudoLocalization, uiDirection, setLocalEditorState);
-    refreshCurrentPreview();
-  }
-
-  // A configured pseudo-locale in the sidebar previews in it; choosing it again turns the simulation off.
-  function selectPseudoLocale(locale: string): void {
-    if (!isPseudoLocale(locale)) return;
-    if (pseudoLocalization && previewController.pseudoLocale === locale) pseudoLocalization = false;
-    else { previewController.pseudoLocale = locale; pseudoLocalization = true; }
-    saveUiSimulation(pseudoLocalization, uiDirection, setLocalEditorState);
-    refreshCurrentPreview();
-  }
-
-  function changePreviewFormatting(requestedLocale: string, timeZone: string): void {
-    previewController.setFormatting(requestedLocale, timeZone);
-    refreshCurrentPreview();
-  }
-
-  function refreshCurrentPreview(): void {
-    if (currentDocument !== undefined && currentContent !== undefined) {
-      previewController.schedule(currentDocument.path, currentContent, selectedKey, selectedLocale);
-    }
-  }
-
-  function toggleUiDirection(): void {
-    uiDirection = uiDirection === "rtl" ? "ltr" : "rtl";
-    saveUiSimulation(pseudoLocalization, uiDirection, setLocalEditorState);
-  }
-
-  function toggleArtifactPreview(): void {
-    artifactPreviewOpen = !artifactPreviewOpen;
-  }
-
-  async function checkExternalChanges(): Promise<void> {
-    if (loading || openingWorkspace || saving || snapshot === undefined) return;
-    try {
-      const result = await bridge.checkExternalChanges();
-      if (result.review !== undefined && !review.saving) review.applyExternal(result.review);
-      if (result.paths.length > 0) {
-        externalChanges = [...new Set([...externalChanges, ...result.paths])].sort();
-        externalFileChanges = [
-          ...externalFileChanges.filter((existing) => !result.changes.some((change) => change.path === existing.path)),
-          ...result.changes,
-        ].sort((left, right) => left.path.localeCompare(right.path));
-      }
-    } catch {
-      // The next poll retries; editing and saving remain available.
-    }
-  }
-
-  async function loadWorkspace(confirmDiscard: boolean): Promise<void> {
-    if (hasUnsavedWork) {
-      if (!confirmDiscard || !confirmDiscardUnsavedWork("ui_confirm_reload_workspace")) return;
-      discardUnsavedWork();
-    }
-    loading = true;
-    operationMessage = undefined;
-    clientError = undefined;
-    try {
-      const next = await bridge.load();
-      installSnapshot(next, true);
-      recoveryReloadRequired = false;
-      recoveryReloadMessage = undefined;
-      externalChanges = [];
-      externalFileChanges = [];
-      projectReloadPending = false;
-    } catch (error) {
-      clientError = errorNotice(error);
-    } finally {
-      loading = false;
-    }
-  }
-
-  function installSnapshot(next: WorkspaceSnapshot, resetSelection: boolean): void {
-    draftStore.nextWorkspace();
-    snapshot = next;
-    if (resetSelection) draftStore.reset(next);
-    else draftStore.prune();
-    // A starter whose message the saved files now have (it was saved) is done.
-    if (resetSelection) messageDrafts.reset();
-    else messageDrafts.retain((target) => !savedHasMessage(target.key, target.locale));
-    // Unsaved review changes stay on top of the review data they started from.
-    if (!review.dirty) {
-      if (resetSelection) review.reset(next);
-      else review.install(next);
-    }
-    diagnosticsStore.clear();
-    const nextRows = buildRows(next, {});
-    if (resetSelection || !nextRows.some((row) => row.key === selectedKey)) {
-      selectedKey = nextRows[0]?.key ?? "";
-    }
-    if (resetSelection || !next.catalog?.locales.some((locale) => locale.tag === selectedLocale)) {
-      selectedLocale = next.catalog?.defaultLocale ?? next.catalog?.locales[0]?.tag ?? "";
-    }
-    const remembered = resetSelection && next.catalog ? catalogViews.get(catalogViewKey(next)) : undefined;
-    // Without a view of this session, the selection the catalog had when it was last open (#225 P24).
-    const stored = resetSelection && next.catalog && remembered === undefined
-      ? readCatalogSelection(getLocalEditorState(catalogSelectionStateKey), catalogViewKey(next))
-      : undefined;
-    if (stored) {
-      if (nextRows.some((row) => row.key === stored.key)) selectedKey = stored.key;
-      if (next.catalog?.locales.some((locale) => locale.tag === stored.locale)) selectedLocale = stored.locale;
-    }
-    if (remembered) {
-      if (nextRows.some((row) => row.key === remembered.key)) selectedKey = remembered.key;
-      if (next.catalog?.locales.some((locale) => locale.tag === remembered.locale)) selectedLocale = remembered.locale;
-      filter = remembered.filter;
-      query = remembered.query;
-      mode = remembered.mode;
-    }
-    configureEditor();
-    rememberProject(next);
-  }
-
-  function confirmDiscardUnsavedWork(messageKey: string): boolean {
-    if (!hasUnsavedWork) return true;
-    return confirm(ui.text(messageKey));
-  }
-
-  function discardUnsavedWork(): void {
-    draftStore.discard();
-    messageDrafts.reset();
-    review.discard();
-    if (hasUnsavedRepair) {
-      repairDocument = undefined;
-      repairText = "";
-      repairMessage = undefined;
-    }
-  }
-
-  function confirmDiscardNonDocumentWork(messageKey: string): boolean {
-    if (!review.dirty && !hasUnsavedRepair) return true;
-    if (!confirm(ui.text(messageKey))) return false;
-    review.discard();
-    if (hasUnsavedRepair) {
-      repairDocument = undefined;
-      repairText = "";
-      repairMessage = undefined;
-    }
-    return true;
-  }
-
-  function closeRepair(): void {
-    if (hasUnsavedRepair && !confirm(ui.text("ui_feedback_discard_repair"))) return;
-    repairDocument = undefined;
-    repairText = "";
-    repairMessage = undefined;
-  }
-
-  function selectRow(row: TranslationRow): void {
-    const nextKey = row.key;
-    diagnosticsStore.clear();
-    clientError = undefined;
-    operationMessage = undefined;
-    selectedKey = nextKey;
-    configureEditor(undefined, nextKey, selectedLocale);
-  }
-
-  function selectLocale(locale: string): void {
-    diagnosticsStore.clear();
-    clientError = undefined;
-    operationMessage = undefined;
-    selectedLocale = locale;
-    configureEditor(undefined, selectedKey, locale);
-  }
-
-  function chooseMode(nextMode: EditorMode): void {
-    if (editorMutationBlocked) return;
-    mode = nextMode;
-    clientError = undefined;
-    configureEditor(nextMode);
-  }
-
-  function configureEditor(preferredMode?: EditorMode, key = selectedKey, locale = selectedLocale): void {
-    sourceSelection = undefined;
-    const row = buildRows(snapshot, draftStore.drafts, draftStore.parsed).find((candidate) => candidate.key === key);
-    const cell = row?.cells[locale];
-    const document = cell?.document;
-    selectedDocumentPath = document?.path ?? "";
-    selectedDocumentViewState = undefined;
-    if (document !== undefined) {
-      const path = document.path;
-      const generation = draftStore.workspaceGeneration;
-      void bridge.openDocument(path).then((opened) => {
-        if (!opened || selectedDocumentPath !== path || draftStore.workspaceGeneration !== generation) return;
-        if (snapshot?.documents.find((candidate) => candidate.path === path)?.revision !== opened.fileRevision) return;
-        selectedDocumentViewState = opened;
-        if (mode === "raw" && draftStore.drafts[path] === undefined) editorText = opened.content;
-      }).catch((error) => { if (selectedDocumentPath === path) clientError = errorNotice(error); });
-    }
-    const sourceEntry = row?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry;
-    const savedSamples = reviewIndex.get(reviewIdentity(key, locale))?.samples;
-    previewController.useSamples(savedSamples !== undefined && Object.keys(savedSamples).length > 0
-      ? savedSamples : cell?.entry?.context?.examples[0] ?? sourceEntry?.context?.examples[0]);
-    const nextMode = preferredMode ?? "translation";
-    mode = nextMode;
-    if (nextMode === "raw") {
-      editorText = document === undefined ? "" : draftStore.content(document.path, document.content);
-    } else {
-      // A missing translation starts empty, never with the source text.
-      const resourceValue = cell?.entry?.value ?? "";
-      editorText = typeof resourceValue === "string" ? resourceValue : JSON.stringify(resourceValue, null, 2);
-    }
-    previewController.reset();
-    if (nextMode === "translation" && document !== undefined) {
-      previewController.schedule(document.path, draftStore.content(document.path, document.content), key, locale);
-    }
-    if (nextMode === "translation" && document !== undefined && cell?.entry === undefined && sourceEntry !== undefined &&
-      locale !== snapshot?.catalog?.defaultLocale && !savedHasMessage(key, locale)) {
-      void messageDrafts.open({ path: document.path, key, locale }).then((outcome) => {
-        if (outcome === undefined || outcome.kind === "applied" || selectedKey !== key || selectedLocale !== locale) return;
-        clientError = outcome.kind === "failed"
-          ? errorNotice(outcome.error)
-          : outcome.result.diagnostics[0]?.notice ?? outcome.result.diagnostics[0]?.message;
-      });
-    }
-  }
-
-  /** Whether the saved files have `key` in `locale`: a missing translation's starter is kept until they do. */
-  function savedHasMessage(key: string, locale: string): boolean {
-    return snapshot?.documents.some((document) => document.locale === locale && !document.isManifest &&
-      (document.entries?.some((entry) => entry.key === key) ?? document.path.endsWith(`/${key}.mf2`))) === true;
-  }
-
-  /** Reports a composer edit's change of a document's draft and refreshes the preview of the message it changed. */
-  function transformDone(path: string, key: string, locale: string): (outcome: DraftOutcome) => void {
-    return (outcome) => {
-      if (outcome.kind === "failed") {
-        clientError = errorNotice(outcome.error);
-        return;
-      }
-      const result = outcome.result;
-      if (outcome.kind === "rejected") {
-        clientError = result.diagnostics[0]?.notice ?? result.diagnostics[0]?.message;
-        return;
-      }
-      diagnosticsStore.record("transform", path, result);
-      if (selectedDocumentPath === path && selectedKey === key && selectedLocale === locale) {
-        previewController.schedule(path, result.content, key, locale);
-      }
-    };
-  }
-
-  function starterDone(outcome: StarterOutcome): void {
-    if (outcome.kind === "failed") clientError = errorNotice(outcome.error);
-    else if (outcome.kind === "rejected") {
-      const diagnostic = outcome.result.diagnostics.find((candidate) => candidate.id === "EDITOR-AUTHORING") ?? outcome.result.diagnostics[0];
-      clientError = diagnostic?.notice ?? diagnostic?.message;
-    }
-  }
-
-  /** "Copy source": the starter of the missing translation gets the source text, variant by variant. */
-  function copySource(): void {
-    const target = currentStarterTarget;
-    if (editorMutationBlocked || target === undefined || currentStarter === undefined || sourceAuthoring?.supported !== true) return;
-    clientError = undefined;
-    operationMessage = undefined;
-    void messageDrafts.copySource(target, sourceAuthoring.variants, starterDone, transformDone(target.path, target.key, target.locale));
-  }
-
-  function edit(value: string): void {
-    if (editorMutationBlocked) return;
-    if (mode !== "raw") {
-      editResourceValue(value);
-      return;
-    }
-    editorText = value;
-    clientError = undefined;
-    operationMessage = undefined;
-    const document = currentDocument;
-    if (document === undefined) {
-      clientError = notice("ui_feedback_no_resource");
-      return;
-    }
-    try {
-      const before = draftStore.capture(document.path);
-      draftStore.set(document.path, value);
-      draftStore.persist();
-      // The file's own text now decides what its missing translations hold.
-      messageDrafts.retain((target) => target.path !== document.path);
-      // Typing in the file view is one step per pause, like typing in the composer.
-      draftStore.recordStep(document.path, { kind: "file-edit", field: `${document.path}\u0000file` }, before);
-      draftStore.validate(document.path, value, (outcome) => {
-        if (outcome.kind === "applied") diagnosticsStore.record("validation", document.path, outcome.result);
-        else if (outcome.kind === "failed") clientError = errorNotice(outcome.error);
-      });
-    } catch (error) {
-      clientError = errorNotice(error);
-      diagnosticsStore.record("edit", document.path, { success: false, diagnostics: [] });
-    }
-  }
-
-  function editResourceValue(resourceValue: ResourceValue): void {
-    if (editorMutationBlocked) return;
-    if (typeof resourceValue !== "string") return;
-    editorText = resourceValue;
-    clientError = undefined;
-    operationMessage = undefined;
-    const document = currentDocument;
-    if (document === undefined) {
-      clientError = notice("ui_feedback_no_resource");
-      return;
-    }
-    const path = document.path;
-    const key = selectedKey;
-    const locale = selectedLocale;
-    const target = currentStarterTarget;
-    // MF2 source typed for a starter: it goes into the document unless it is empty or the untouched starter.
-    if (target !== undefined && currentStarter !== undefined) {
-      messageDrafts.edit(target, resourceValue, transformDone(path, key, locale));
-      return;
-    }
-    void draftStore.transform(path, document.content, key, resourceValue, transformDone(path, key, locale));
-  }
-
-  function applyAuthoringOperation(operation: EditorMessageOperation): Promise<void> {
-    if (editorMutationBlocked || currentDocument === undefined) return Promise.resolve();
-    clientError = undefined;
-    operationMessage = undefined;
-    const target = currentStarterTarget;
-    if (target !== undefined && currentStarter !== undefined) {
-      return messageDrafts.apply(target, operation, starterDone, transformDone(target.path, target.key, target.locale));
-    }
-    const document = currentDocument;
-    const path = document.path;
-    const key = selectedKey;
-    const locale = selectedLocale;
-    return draftStore.applyOperation(path, document.content, key, locale, operation, (outcome) => {
-      if (outcome.kind === "failed") {
-        clientError = errorNotice(outcome.error);
-        return;
-      }
-      const result = outcome.result;
-      if (outcome.kind === "rejected") {
-        clientError = result.diagnostics.find(diagnostic => diagnostic.id === "EDITOR-AUTHORING")?.message;
-        diagnosticsStore.record("authoring", path, result);
-        return;
-      }
-      diagnosticsStore.record("authoring", path, result);
-      if (selectedDocumentPath === path && selectedKey === key && selectedLocale === locale) {
-        editorText = result.entries.find((candidate) => candidate.key === key)?.content ?? editorText;
-        previewController.schedule(path, result.content, key, locale);
-      }
-    });
-  }
-
-  function selectPreviewExample(index: number): void {
-    const sample = currentExamples[index];
-    if (sample === undefined) return;
-    previewController.useSamples(sample);
-    if (currentDocument !== undefined && currentContent !== undefined) {
-      previewController.schedule(currentDocument.path, currentContent, selectedKey, selectedLocale);
-    }
-  }
-
-  // Whether the locale has the message: a new review entry starts from its implicit state.
-  function translatedIn(key: string, locale: string): boolean {
-    return rows.find((candidate) => candidate.key === key)?.cells[locale]?.entry !== undefined;
-  }
-
-  function setCurrentReviewState(state: EditorReviewState): void {
-    if (reviewMutationBlocked) return;
-    review.setState(selectedKey, selectedLocale, state, previewController.samples, translatedIn(selectedKey, selectedLocale));
-  }
-
-  // The translator checked a stale state against the current source text and confirms it (#225 P20).
-  function confirmCurrentReview(): void {
-    if (reviewMutationBlocked) return;
-    review.confirm(selectedKey, selectedLocale, previewController.samples, translatedIn(selectedKey, selectedLocale));
-  }
-
-  function setCurrentReviewNote(note: string): void {
-    if (reviewMutationBlocked) return;
-    review.setNote(selectedKey, selectedLocale, note, translatedIn(selectedKey, selectedLocale));
-  }
-
-  function markVisible(state: EditorReviewState): void {
-    if (reviewMutationBlocked) return;
-    review.mark(visibleRows.map((row) => row.key), selectedLocale, state);
-  }
-
-  function discardReview(): void {
-    review.discard();
-  }
-
-  function addTerm(): void {
-    if (reviewMutationBlocked) return;
-    if (termSource.trim() === "" || termPreferred.trim() === "") return;
-    review.addTerm({
-      source: termSource.trim(),
-      preferred: termPreferred.trim(),
-      locale: termLocale.trim() || undefined,
-      note: termNote.trim() || undefined,
-    });
-    termSource = "";
-    termPreferred = "";
-    termLocale = "";
-    termNote = "";
-  }
-
-  function removeTerm(index: number): void {
-    if (reviewMutationBlocked) return;
-    review.removeTerm(index);
-  }
-
-  async function showAbout(): Promise<void> {
-    if (historyBusy) return;
-    aboutDialogOpen = true;
-    diagnosticMessage = undefined;
-    localStateSummary = inspectLocalEditorState();
-    localStateMessage = undefined;
-    if (aboutInfo !== undefined || aboutBusy) return;
-    aboutBusy = true;
-    try {
-      aboutInfo = await bridge.about();
-    } catch (error) {
-      diagnosticMessage = errorNotice(error);
-    } finally {
-      aboutBusy = false;
-    }
-  }
-
-  async function clearLocalState(): Promise<void> {
-    const summary = localStateSummary ?? inspectLocalEditorState();
-    if (summary.entries === 0) return;
-    if (!confirm(ui.text("ui_feedback_clear_state_confirm"))) return;
-    // Called from a click handler: a failure, such as a host that went away, is reported here, never left unhandled.
-    let removed: number;
-    try {
-      removed = await clearLocalEditorState();
-    } catch (error) {
-      localStateMessage = errorNotice(error);
-      return;
-    }
-    recentProjects = [];
-    draftStore.recovered = {};
-    review.recovered = undefined;
-    localStateSummary = inspectLocalEditorState();
-    localStateMessage = notice("ui_count_state_removed", { count: removed });
-  }
-
-  async function createDiagnosticBundle(): Promise<void> {
-    if (diagnosticBusy || historyBusy) return;
-    diagnosticBusy = true;
-    diagnosticMessage = undefined;
-    try {
-      const result = await bridge.createDiagnosticBundle();
-      diagnosticBundlePath = result.ok ? result.path : undefined;
-      diagnosticMessage = result.ok
-        ? notice("ui_feedback_diagnostics_saved")
-        : result.message ?? notice("ui_feedback_diagnostics_failed");
-    } catch (error) {
-      diagnosticMessage = errorNotice(error);
-    } finally {
-      diagnosticBusy = false;
-    }
-  }
-
-  async function revealDiagnosticBundle(): Promise<void> {
-    if (diagnosticBundlePath === undefined || diagnosticBusy) return;
-    diagnosticBusy = true;
-    try {
-      const result = await bridge.revealDiagnosticBundle(diagnosticBundlePath);
-      diagnosticMessage = result.ok ? notice("ui_feedback_diagnostics_opened") : result.message ?? notice("ui_feedback_diagnostics_open_failed");
-    } catch (error) {
-      diagnosticMessage = errorNotice(error);
-    } finally {
-      diagnosticBusy = false;
-    }
-  }
-
-  async function copyDiagnosticBundlePath(): Promise<void> {
-    if (diagnosticBundlePath === undefined) return;
-    try {
-      await navigator.clipboard.writeText(diagnosticBundlePath);
-      diagnosticMessage = notice("ui_feedback_diagnostics_copied");
-    } catch {
-      diagnosticMessage = notice("ui_feedback_diagnostics_copy_failed");
-    }
-  }
-
-  async function deleteDiagnosticBundle(): Promise<void> {
-    if (diagnosticBundlePath === undefined || diagnosticBusy) return;
-    if (!confirm(ui.text("ui_feedback_diagnostics_delete_confirm"))) return;
-    diagnosticBusy = true;
-    try {
-      const result = await bridge.deleteDiagnosticBundle(diagnosticBundlePath);
-      if (result.ok) diagnosticBundlePath = undefined;
-      diagnosticMessage = result.ok ? notice("ui_feedback_diagnostics_deleted") : result.message ?? notice("ui_feedback_diagnostics_delete_failed");
-    } catch (error) {
-      diagnosticMessage = errorNotice(error);
-    } finally {
-      diagnosticBusy = false;
-    }
-  }
-
-  async function exportXliff(): Promise<void> {
-    if (interchangeBusy) return;
-    interchangeBusy = true;
-    try {
-      xliffExport = await bridge.exportXliff(xliffDirectory.trim() || undefined);
-    } catch (error) {
-      xliffExport = { ok: false, message: errorNotice(error), documents: [], losses: [], lossless: false };
-    } finally {
-      interchangeBusy = false;
-    }
-  }
-
-  async function previewXliffImport(): Promise<void> {
-    if (interchangeBusy || xliffImportPath.trim() === "") return;
-    interchangeBusy = true;
-    try {
-      xliffPreview = await bridge.previewXliffImport(xliffImportPath.trim());
-    } catch (error) {
-      xliffPreview = {
-        ok: false, message: errorNotice(error), requiresIrreversibleConfirmation: false,
-        changes: [], addedCount: 0, changedCount: 0, removedCount: 0, unchangedCount: 0,
-        reviewUpdateCount: 0, changesOverflowed: false, refusals: [],
-      };
-    } finally {
-      interchangeBusy = false;
-    }
-  }
-
-  async function applyXliffImport(): Promise<void> {
-    if (interchangeBusy || xliffPreview?.confirmationToken === undefined || !confirmDiscardUnsavedWork("ui_confirm_apply_xliff")) return;
-    interchangeBusy = true;
-    try {
-      const result = await bridge.applyXliffImport(xliffPreview.confirmationToken);
-      operationMessage = result.message ?? (result.ok ? notice("ui_feedback_xliff_applied") : notice("ui_feedback_xliff_failed"));
-      if (result.snapshot !== undefined) installSnapshot(result.snapshot, true);
-      if (result.ok) xliffPreview = undefined;
-    } catch (error) {
-      operationMessage = errorNotice(error);
-    } finally {
-      interchangeBusy = false;
-    }
-  }
-
-  async function previewCatalogImport(): Promise<void> {
-    if (interchangeBusy || catalogImportSource.trim() === "") return;
-    interchangeBusy = true;
-    try {
-      const inputs = catalogImportInputs;
-      const plan = await bridge.previewCatalogImport({ from: catalogImportFrom, source: catalogImportSource.trim(), overwrite: catalogImportOverwrite });
-      catalogImportPlanned = { inputs, plan };
-    } catch (error) {
-      operationMessage = errorNotice(error);
-    } finally {
-      interchangeBusy = false;
-    }
-  }
-
-  async function applyCatalogImport(): Promise<void> {
-    if (interchangeBusy || catalogImportPlan?.confirmationToken === undefined || !confirmDiscardUnsavedWork("ui_confirm_apply_catalog_import")) return;
-    interchangeBusy = true;
-    try {
-      const token = catalogImportPlan.confirmationToken;
-      // The token is one-use on the host whether or not the import commits: a failed apply needs a fresh dry run.
-      catalogImportPlanned = undefined;
-      const result = await bridge.applyCatalogImport(token);
-      operationMessage = result.message ?? (result.ok ? notice("ui_feedback_catalog_imported") : notice("ui_backend_import_messages_invalid"));
-      if (result.snapshot !== undefined) installSnapshot(result.snapshot, true);
-    } catch (error) {
-      operationMessage = errorNotice(error);
-    } finally {
-      interchangeBusy = false;
-    }
-  }
-
-  async function exportReviewJson(): Promise<void> {
-    if (interchangeBusy) return;
-    interchangeBusy = true;
-    try {
-      reviewExport = await bridge.exportReviewJson(reviewExportPath.trim() || undefined);
-    } catch (error) {
-      reviewExport = { ok: false, message: errorNotice(error), entryCount: 0 };
-    } finally {
-      interchangeBusy = false;
-    }
-  }
-
-  async function previewReviewJsonImport(): Promise<void> {
-    if (interchangeBusy || reviewImportPath.trim() === "") return;
-    interchangeBusy = true;
-    try {
-      reviewPreview = await bridge.previewReviewJsonImport(reviewImportPath.trim());
-    } catch (error) {
-      reviewPreview = {
-        ok: false, message: errorNotice(error), requiresIrreversibleConfirmation: false,
-        changes: [], addedCount: 0, changedCount: 0, removedCount: 0, changesOverflowed: false, refusals: [],
-      };
-    } finally {
-      interchangeBusy = false;
-    }
-  }
-
-  async function applyReviewJsonImport(): Promise<void> {
-    if (interchangeBusy || reviewPreview?.confirmationToken === undefined || !confirmDiscardUnsavedWork("ui_confirm_apply_review")) return;
-    interchangeBusy = true;
-    try {
-      const result = await bridge.applyReviewJsonImport(reviewPreview.confirmationToken);
-      operationMessage = result.message ?? (result.ok ? notice("ui_feedback_review_applied") : notice("ui_feedback_review_failed"));
-      if (result.ok && result.review !== undefined && snapshot !== undefined) {
-        snapshot = { ...snapshot, review: result.review, history: result.history ?? snapshot.history };
-        review.install(snapshot);
-        reviewPreview = undefined;
-      }
-    } catch (error) {
-      operationMessage = errorNotice(error);
-    } finally {
-      interchangeBusy = false;
-    }
-  }
-
-  function applySuggestion(value: string): void {
-    mode = "translation";
-    editResourceValue(value);
-  }
-
-  function previewInputEntries(ast: MessageArtifact): Array<[string, { type: string }]> {
-    return ast.inputs.map((input) => [input.name, input]);
-  }
-
-  function defaultSample(type: string): string {
-    if (type === "int" || type === "int64" || type === "number" || type === "decimal") return "1";
-    if (type === "bool" || type === "boolean") return "true";
-    if (type === "date") return "2026-08-08";
-    if (type === "time") return "12:30:00";
-    if (type === "datetime" || type === "instant") return "2026-08-08T12:30:00Z";
-    if (type === "guid" || type === "uuid") return "12345678-1234-1234-1234-123456789abc";
-    return ui.text("ui_preview_sample");
-  }
-
-  function formatRaw(): void {
-    if (editorMutationBlocked) return;
-    if (mode !== "raw") return;
-    try {
-      const formatted = formatJson(editorText);
-      // Formatting is a step of its own, not part of the typing before or after it.
-      draftStore.history.seal();
-      edit(formatted);
-      draftStore.history.seal();
-    } catch (error) {
-      clientError = errorNotice(error);
-    }
-  }
-
-  // Ctrl+S and the toolbar's Save: every unsaved document (each validated; an invalid one blocks the save and its
-  // diagnostics are shown), then the review changes.
-  async function saveAll(): Promise<void> {
-    if (saving || historyBusy) return;
-    operationMessage = undefined;
-    clientError = undefined;
-    const outcome = await saveCoordinator.saveAll();
-    if (outcome.kind === "nothing" || outcome.kind === "invalid") return;
-    if (outcome.saved.length > 0) configureEditor();
-    const newer = outcome.kind !== "failed" && outcome.kind !== "refused" && outcome.newer;
-    if (outcome.kind === "saved") operationMessage = newer ? notice("ui_feedback_newer_draft") : outcome.message;
-    else if (outcome.kind === "failed") clientError = errorNotice(outcome.error);
-    else {
-      clientError = outcome.message;
-      if (newer) operationMessage = notice("ui_feedback_newer_draft");
-    }
-  }
-
-  async function reloadAfterSave(path: string, content: string, generation: number, message: UiMessage): Promise<void> {
-    const next = await bridge.load();
-    const newer = draftStore.hasNewer(path, content, generation);
-    installSnapshot(next, false);
-    if (!newer) draftStore.drop(path);
-    configureEditor();
-    operationMessage = newer ? notice("ui_feedback_newer_draft") : message;
-  }
+  // The selected locale and message of the open catalog, restored on the next launch (#225 P24).
+  $effect(() => selection.persistSelection());
 
   function handleKeyboard(event: KeyboardEvent): void {
     const shortcut = editorShortcut(event, isTextEditingTarget(event.target), draftField(event.target) !== undefined);
@@ -1343,8 +343,8 @@
     else if (shortcut === "redo") redo();
     else if (shortcut === "save") void saveAll();
     else if (shortcut === "toggle-command-search") commandPaletteOpen = !commandPaletteOpen;
-    else if (shortcut === "toggle-pseudo-localization") togglePseudoLocalization();
-    else if (shortcut === "toggle-right-to-left") toggleUiDirection();
+    else if (shortcut === "toggle-pseudo-localization") preferences.togglePseudoLocalization();
+    else if (shortcut === "toggle-right-to-left") preferences.toggleUiDirection();
     else toggleArtifactPreview();
   }
 
@@ -1361,798 +361,9 @@
     }
   }
 
-  /** Ctrl+Z, the toolbar's and the palette's Undo: the latest unsaved edit, or without one the latest saved change. */
-  function undo(): void {
-    queueHistory("undo");
-  }
-
-  /** Ctrl+Shift+Z, Ctrl+Y, the toolbar's and the palette's Redo. */
-  function redo(): void {
-    queueHistory("redo");
-  }
-
-  function queueHistory(direction: "undo" | "redo"): void {
-    const field = draftField(document.activeElement);
-    const shown = field?.value;
-    draftHistoryChain = draftHistoryChain
-      .then(() => stepHistory(direction, field, shown))
-      .catch((error: unknown) => { clientError = errorNotice(error); });
-  }
-
-  async function stepHistory(direction: "undo" | "redo", field: DraftField | undefined, shown: string | undefined): Promise<void> {
-    // The edits typed before the key press reach the draft first, so the step they made is the one taken back.
-    await draftStore.settledAll();
-    const history = draftStore.history;
-    const path = direction === "undo" ? history.undoTarget(currentDocument?.path) : history.redoTarget(currentDocument?.path);
-    if (path === undefined) {
-      // Text a field shows that never reached the draft (a refused edit) gives way to the draft.
-      historyRevision += 1;
-      if (direction === "undo") await undoHistory();
-      else await redoHistory();
-      return;
-    }
-    if (draftHistoryBlocked) return;
-    const step = direction === "undo" ? draftStore.undo(path) : draftStore.redo(path);
-    if (step === undefined) return;
-    clientError = undefined;
-    operationMessage = undefined;
-    showStep(step);
-    historyRevision += 1;
-    // The restored text's entries and diagnostics: an error the undone edit caused leaves the panel.
-    void draftStore.refresh(path, (outcome) => {
-      if (outcome.kind === "failed") clientError = errorNotice(outcome.error);
-      else diagnosticsStore.record("validation", path, outcome.result);
-    });
-    await tick();
-    restoreCaret(field, shown);
-  }
-
-  /** Shows what an undone or redone step changed: its message and locale, or the file for a step of the whole file. */
-  function showStep(step: DraftStep): void {
-    diagnosticsStore.clear();
-    const locale = snapshot?.documents.find((candidate) => candidate.path === step.path)?.locale;
-    if (locale !== undefined && snapshot?.catalog?.locales.some((candidate) => candidate.tag === locale)) selectedLocale = locale;
-    if (step.key !== undefined && rows.some((row) => row.key === step.key)) selectedKey = step.key;
-    configureEditor(step.key === undefined ? "raw" : mode);
-  }
-
-  /**
-   * After an undo or redo the field keeps the focus with the caret where the text changed; a field that gave way (the
-   * step was in another message, or the composer's view changed) hands the focus to the editor's first field.
-   */
-  function restoreCaret(field: DraftField | undefined, shown: string | undefined): void {
-    if (field === undefined) return;
-    if (field.isConnected) {
-      field.focus();
-      if (shown !== undefined && field.value !== shown) {
-        const caret = caretAfterChange(shown, field.value);
-        field.setSelectionRange(caret, caret);
-      }
-      return;
-    }
-    document.querySelector<HTMLTextAreaElement | HTMLInputElement>("[data-draft-field]")?.focus();
-  }
-
-  type DraftField = HTMLTextAreaElement | HTMLInputElement;
-
-  /** A field whose text is a draft: the composer's patterns, the message source and the file view. */
-  function draftField(target: EventTarget | null): DraftField | undefined {
-    return (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) && target.closest("[data-draft-field]") !== null
-      ? target
-      : undefined;
-  }
-
-  function historyChangeName(step: DraftStep): string {
-    switch (step.kind) {
-      case "structure": return ui.text("ui_history_change_structure");
-      case "quick-fix": return ui.text("ui_history_change_quick_fix");
-      case "copy-source": return ui.text("ui_history_change_copy_source");
-      case "file-edit": return ui.text("ui_history_change_file_edit");
-      case "recovery": return ui.text("ui_history_change_recovery");
-      default: return ui.text("ui_history_change_edit");
-    }
-  }
-
-  async function undoHistory(): Promise<void> {
-    if (historyBlocked) return;
-    historyBusy = true;
-    clientError = undefined;
-    try {
-      const result = await bridge.undo();
-      if (!result.ok) {
-        if (snapshot !== undefined && result.history !== undefined) snapshot.history = result.history;
-        clientError = result.message ?? notice("ui_feedback_undo_failed");
-        return;
-      }
-      if (result.snapshot === undefined) {
-        await loadWorkspace(false);
-        operationMessage = result.message ?? notice("ui_feedback_undo_saved");
-        return;
-      }
-      installSnapshot(result.snapshot, false);
-      operationMessage = notice("ui_feedback_undo_saved");
-    } catch (error) {
-      clientError = errorNotice(error);
-    } finally {
-      historyBusy = false;
-    }
-  }
-
-  async function redoHistory(): Promise<void> {
-    if (historyBlocked) return;
-    historyBusy = true;
-    clientError = undefined;
-    try {
-      const result = await bridge.redo();
-      if (!result.ok) {
-        if (snapshot !== undefined && result.history !== undefined) snapshot.history = result.history;
-        clientError = result.message ?? notice("ui_feedback_redo_failed");
-        return;
-      }
-      if (result.snapshot === undefined) {
-        await loadWorkspace(false);
-        operationMessage = result.message ?? notice("ui_feedback_redo_saved");
-        return;
-      }
-      installSnapshot(result.snapshot, false);
-      operationMessage = notice("ui_feedback_redo_saved");
-    } catch (error) {
-      clientError = errorNotice(error);
-    } finally {
-      historyBusy = false;
-    }
-  }
-
-  function isTextEditingTarget(target: EventTarget | null): boolean {
-    return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement ||
-      (target instanceof HTMLElement && target.isContentEditable);
-  }
-
-  async function selectDiagnostic(diagnostic: EditorDiagnostic): Promise<void> {
-    const document = snapshot?.documents.find((candidate) => candidate.path === diagnostic.path);
-    if (document === undefined) return;
-    // The message the diagnostic is about becomes the selected one, so the panel lists it under that message.
-    const about = placeDiagnostics([diagnostic], diagnosticSources)[0];
-    const workspaceVersion = draftStore.workspaceGeneration;
-    const content = repairDocument?.path === document.path ? repairText : draftStore.content(document.path, document.content);
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(content));
-    const revision = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
-    let current = diagnostic;
-    if (diagnostic.sourceRevision !== revision) {
-      // Started without an awaiting caller (`void selectDiagnostic(…)`): a failed request is reported, not left unhandled.
-      const result = await bridge.transformDocument(document.path, content).catch((error: unknown) => {
-        if (draftStore.workspaceGeneration !== workspaceVersion) return undefined;
-        if (repairDocument?.path === document.path) repairMessage = errorNotice(error);
-        else clientError = errorNotice(error);
-        return undefined;
-      });
-      if (result === undefined || draftStore.workspaceGeneration !== workspaceVersion) return;
-      current = result.diagnostics.find(candidate => candidate.id === diagnostic.id && candidate.message === diagnostic.message) ?? diagnostic;
-      // A removed diagnostic cannot navigate with stale source coordinates.
-      if (current.sourceRevision !== revision) return;
-      const latestContent = repairDocument?.path === document.path ? repairText : draftStore.content(document.path, document.content);
-      if (latestContent !== content) return;
-      diagnosticsStore.record("navigation", document.path, result);
-    }
-    if (draftStore.workspaceGeneration !== workspaceVersion || current.span === undefined) return;
-    const liveContent = repairDocument?.path === document.path ? repairText : draftStore.content(document.path, document.content);
-    if (liveContent !== content) return;
-    if (document.locale !== undefined) selectedLocale = document.locale;
-    // A diagnostic located in another locale's file (RTR0090 points at the base text) still selects its message there.
-    if (about?.key !== undefined && rows.some((row) => row.key === about.key)) selectedKey = about.key;
-    selectedDocumentPath = document.path;
-    selectedDocumentViewState = undefined;
-    if (document.isMalformed) {
-      if (repairDocument?.path !== document.path) beginRepair(document);
-      await tick();
-      if (repairInput !== null && repairText === content) {
-        repairInput.focus();
-        repairInput.setSelectionRange(current.span.startUtf16, current.span.startUtf16 + current.span.lengthUtf16);
-      }
-    } else {
-      mode = "raw";
-      editorText = content;
-      sourceSelection = { start: current.span.startUtf16, end: current.span.startUtf16 + current.span.lengthUtf16, token: ++selectionToken };
-    }
-  }
-
-  async function applyDiagnosticFix(diagnostic: EditorDiagnostic, fix: EditorDiagnosticQuickFix): Promise<void> {
-    const document = snapshot?.documents.find(candidate => candidate.path === diagnostic.path);
-    if (document === undefined || editorMutationBlocked) return;
-    const path = document.path;
-    const repair = repairDocument?.path === path;
-    await draftStore.applyFix(path, document.content, fix, repair ? { text: () => repairText } : undefined, (outcome) => {
-      if (outcome.kind === "failed") {
-        if (repair) repairMessage = errorNotice(outcome.error); else clientError = errorNotice(outcome.error);
-        return;
-      }
-      const result = outcome.result;
-      if (outcome.kind === "rejected") {
-        const message = result.diagnostics.find(diagnostic => diagnostic.id === "EDITOR-FIX")?.message;
-        if (repair) repairMessage = message;
-        else clientError = message;
-        return;
-      }
-      if (repair) {
-        repairText = result.content;
-        repairValidation = result;
-      } else {
-        diagnosticsStore.record("quick-fix", path, result);
-        if (selectedDocumentPath === path) {
-          editorText = mode === "raw" ? result.content : result.entries.find(entry => entry.key === selectedKey)?.content ?? editorText;
-          if (mode === "translation") previewController.schedule(path, result.content, selectedKey, selectedLocale);
-        }
-      }
-    }, diagnostic.key);
-  }
-
   function protectDraft(event: BeforeUnloadEvent): void {
-    if (!hasUnsavedWork) return;
+    if (!unsaved.hasUnsavedWork) return;
     event.preventDefault();
-  }
-
-  function localeName(tag: string): string {
-    try {
-      return new Intl.DisplayNames([uiLocale], { type: "language" }).of(tag) ?? tag;
-    } catch {
-      return tag;
-    }
-  }
-
-  function errorNotice(error: unknown) {
-    if (error instanceof UiNoticeError) return error.notice;
-    return { ...notice("ui_backend_external_error"), detail: errorMessage(error) };
-  }
-
-  function errorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-  }
-
-  function openProjectWizard(): void {
-    if (historyBusy) return;
-    projectStep = 1;
-    wizardImportFrom = "";
-    wizardImportSource = "";
-    projectDirectory = "";
-    projectCatalog = "product";
-    projectDefaultLocale = "en";
-    projectLocales = [];
-    projectNamespace = "Customer.Product";
-    projectClassName = "ProductText";
-    projectIncludeStarter = true;
-    projectPlan = undefined;
-    projectError = undefined;
-    projectBusy = false;
-    projectDialogOpen = true;
-  }
-
-  function closeProjectWizard(): void {
-    if (!projectBusy) projectDialogOpen = false;
-  }
-
-  function addProjectLocale(): void {
-    projectLocales.push({ id: nextProjectLocaleId++, tag: "", fallback: "" });
-  }
-
-  function removeProjectLocale(id: number): void {
-    projectLocales = projectLocales.filter((locale) => locale.id !== id);
-  }
-
-  function projectRequest(): EditorProjectCreationRequest {
-    return {
-      directory: projectDirectory.trim(),
-      catalogId: projectCatalog.trim(),
-      defaultLocale: projectDefaultLocale.trim(),
-      additionalLocales: projectLocales.map((locale) => ({
-        tag: locale.tag.trim(),
-        fallback: locale.fallback.trim() || undefined,
-      })),
-      codeNamespace: projectNamespace.trim(),
-      className: projectClassName.trim(),
-      includeStarterMessage: projectIncludeStarter,
-    };
-  }
-
-  function validateProjectStep(): boolean {
-    if (projectStep === 1 && (projectDirectory.trim() === "" || projectCatalog.trim() === "")) {
-      projectError = notice("ui_feedback_project_directory_required");
-      return false;
-    }
-    if (projectStep === 2) {
-      const tags = [projectDefaultLocale.trim(), ...projectLocales.map((locale) => locale.tag.trim())];
-      if (tags.some((tag) => tag === "")) {
-        projectError = notice("ui_feedback_locale_required");
-        return false;
-      }
-      if (new Set(tags.map((tag) => tag.toLocaleLowerCase())).size !== tags.length) {
-        projectError = notice("ui_feedback_locale_duplicate");
-        return false;
-      }
-    }
-    if (projectStep === 3 && [projectNamespace, projectClassName].some((value) => value.trim() === "")) {
-      projectError = notice("ui_feedback_namespace_required");
-      return false;
-    }
-    if (projectStep === 4 && wizardImportFrom !== "" && wizardImportSource.trim() === "") {
-      projectError = notice("ui_backend_import_source_required");
-      return false;
-    }
-    projectError = undefined;
-    return true;
-  }
-
-  async function advanceProjectWizard(): Promise<void> {
-    if (historyBusy) return;
-    if (!validateProjectStep()) return;
-    if (projectStep < 4) {
-      projectStep += 1;
-      return;
-    }
-    projectBusy = true;
-    try {
-      const plan = await bridge.previewProject(projectRequest());
-      projectPlan = plan;
-      if (!plan.ok) {
-        projectError = plan.message ?? notice("ui_feedback_project_invalid");
-        return;
-      }
-      projectStep = 5;
-    } catch (error) {
-      projectError = errorNotice(error);
-    } finally {
-      projectBusy = false;
-    }
-  }
-
-  async function createProject(): Promise<void> {
-    if (projectPlan?.ok !== true || projectBusy || historyBusy) return;
-    if (!confirmDiscardUnsavedWork("ui_confirm_create_project")) return;
-    if (hasUnsavedWork) discardUnsavedWork();
-    projectBusy = true;
-    projectError = undefined;
-    try {
-      const result = await bridge.createProject(projectRequest());
-      if (!result.ok || result.snapshot === undefined) {
-        projectError = result.message ?? notice("ui_feedback_project_failed");
-        return;
-      }
-      installSnapshot(result.snapshot, true);
-      operationMessage = notice("ui_feedback_project_created");
-      projectDialogOpen = false;
-      if (wizardImportFrom !== "" && wizardImportSource.trim() !== "") {
-        // The import step: its dry run opens in the interchange dialog, applied only after confirmation.
-        catalogImportFrom = wizardImportFrom;
-        catalogImportSource = wizardImportSource.trim();
-        catalogImportOverwrite = false;
-        catalogImportPlanned = undefined;
-        interchangeOpen = true;
-        projectBusy = false;
-        await previewCatalogImport();
-      }
-    } catch (error) {
-      projectError = errorNotice(error);
-    } finally {
-      projectBusy = false;
-    }
-  }
-
-  // The selected locale and message of the open catalog, restored on the next launch (#225 P24).
-  $effect(() => {
-    const current = snapshot;
-    const key = selectedKey;
-    const locale = selectedLocale;
-    if (current?.catalog === undefined || key === "" || locale === "") return;
-    untrack(() => {
-      const catalog = catalogViewKey(current);
-      const raw = getLocalEditorState(catalogSelectionStateKey);
-      const stored = readCatalogSelection(raw, catalog);
-      if (stored?.key === key && stored.locale === locale) return;
-      try {
-        setLocalEditorState(catalogSelectionStateKey, writeCatalogSelection(raw, catalog, { key, locale }));
-      } catch {
-        // Without the native state (a test page), the selection is not remembered.
-      }
-    });
-  });
-
-  function rememberCatalogView(): void {
-    if (snapshot?.catalog)
-      catalogViews.set(catalogViewKey(snapshot), { key: selectedKey, locale: selectedLocale, filter, query, mode });
-  }
-
-  async function openLibrary(catalog: string): Promise<void> {
-    libraryOpen = true;
-    await runLibrary(() => bridge.loadLibrary(catalog));
-  }
-
-  // Runs a library operation; resolves whether it succeeded. A refused write (a file changed since the dialog loaded it)
-  // keeps the dialog's drafts and offers a reload.
-  async function runLibrary(operation: () => Promise<import("#lib/contracts.js").EditorLibraryResult>): Promise<boolean> {
-    if (libraryBusy) return false;
-    libraryBusy = true;
-    libraryNotice = undefined;
-    libraryConflict = false;
-    try {
-      const result = await operation();
-      if (!result.ok) {
-        libraryNotice = result.message ?? notice("ui_backend_external_error");
-        libraryConflict = result.conflict === true;
-      }
-      if (result.library) {
-        libraryView = result.library;
-        // The canonical tag the backend wrote (fr-ca → fr-CA), else the current one if it still exists.
-        if (result.locale && result.library.locales.some((locale) => locale.tag === result.locale)) libraryLocale = result.locale;
-        else if (!result.library.locales.some((locale) => locale.tag === libraryLocale)) libraryLocale = result.library.locales[0]?.tag ?? "";
-      }
-      // The catalog joined runic.json "overrides": the project changed on disk. With unsaved work the reload waits, and
-      // the page says so.
-      if (result.projectChanged) {
-        if (hasUnsavedWork) projectReloadPending = true;
-        else await loadWorkspace(false);
-      }
-      return result.ok;
-    } catch (error) {
-      libraryNotice = errorNotice(error) as import("#lib/ui-text.js").UiNotice;
-      return false;
-    } finally {
-      libraryBusy = false;
-    }
-  }
-
-  async function openWorkspace(catalogId?: string, directoryOverride?: string): Promise<void> {
-    if (openingWorkspace || historyBusy) return;
-    if (!confirmDiscardUnsavedWork("ui_confirm_open_workspace")) return;
-    rememberCatalogView();
-    if (hasUnsavedWork) discardUnsavedWork();
-    const directory = directoryOverride ?? (catalogId === undefined ? openDirectory.trim() : snapshot?.root ?? "");
-    if (directory === "") {
-      clientError = notice("ui_feedback_workspace_directory_required");
-      return;
-    }
-    openingWorkspace = true;
-    clientError = undefined;
-    try {
-      const result = await bridge.openWorkspace({ directory, catalogId });
-      if (!result.ok || result.snapshot === undefined) {
-        clientError = result.message ?? notice("ui_feedback_workspace_open_failed");
-        return;
-      }
-      installSnapshot(result.snapshot, true);
-      externalChanges = [];
-      externalFileChanges = [];
-      openDirectory = result.snapshot.root;
-      openDialogOpen = false;
-    } catch (error) {
-      clientError = errorNotice(error);
-    } finally {
-      openingWorkspace = false;
-    }
-  }
-
-  async function pickWorkspace(): Promise<void> {
-    if (pickingWorkspace || openingWorkspace || historyBusy) return;
-    pickingWorkspace = true;
-    clientError = undefined;
-    try {
-      const result = await bridge.pickWorkspace();
-      if (result.ok && result.directory !== undefined) {
-        openDirectory = result.directory;
-      } else if (!result.cancelled && result.message !== undefined) {
-        clientError = result.message;
-      }
-    } catch (error) {
-      clientError = errorNotice(error);
-    } finally {
-      pickingWorkspace = false;
-    }
-  }
-
-  function showOpenWorkspaceDialog(): void {
-    if (historyBusy) return;
-    const current = snapshot;
-    if (current === undefined) return;
-    openDirectory = current.root;
-    openDialogOpen = true;
-  }
-
-  function prepareMutation(kind: MutationKind): boolean {
-    if (historyBusy) return false;
-    const current = snapshot;
-    if (current?.catalog === undefined) return false;
-    if (!confirmDiscardUnsavedWork("ui_confirm_change_workspace")) return false;
-    if (hasUnsavedWork) discardUnsavedWork();
-    mutationKind = kind;
-    const firstNonDefault = current.catalog.locales.find((locale) => locale.tag !== current.catalog?.defaultLocale)?.tag ?? "";
-    mutationLocale = kind === "remove-locale" || kind === "set-fallback"
-      ? (selectedLocale === current.catalog.defaultLocale ? firstNonDefault : selectedLocale)
-      : "";
-    mutationFallback = current.catalog.defaultLocale;
-    mutationLocaleDescription = undefined;
-    mutationReplacementFallback = current.catalog.defaultLocale;
-    mutationCopyFrom = current.catalog.defaultLocale;
-    mutationSourceKey = selectedKey;
-    mutationTargetKey = kind === "duplicate-key" ? `${selectedKey}Copy` : kind === "create-key" ? "" : selectedKey;
-    mutationInitialValue = "";
-    mutationPreview = undefined;
-    mutationError = undefined;
-    mutationBusy = false;
-    mutationIrreversibleConfirmed = false;
-    mutationDialogOpen = true;
-    return true;
-  }
-
-  function mutationRequest(): EditorMutationRequest {
-    return {
-      kind: mutationKind,
-      locale: mutationLocale.trim() || undefined,
-      fallback: mutationFallback.trim() || undefined,
-      replacementFallback: mutationReplacementFallback.trim() || undefined,
-      copyFromLocale: mutationCopyFrom,
-      sourceKey: mutationSourceKey.trim() || undefined,
-      targetKey: mutationTargetKey.trim() || undefined,
-      initialValue: mutationInitialValue,
-      confirmationToken: mutationIrreversibleConfirmed ? mutationPreview?.confirmationToken : undefined,
-    };
-  }
-
-  function invalidateMutationPreview(): void {
-    mutationPreview = undefined;
-    mutationError = undefined;
-    mutationIrreversibleConfirmed = false;
-  }
-
-  function changeMutationKind(value: string): void {
-    const next = value as MutationKind;
-    mutationKind = next;
-    const locales = snapshot?.catalog?.locales ?? [];
-    const firstTarget = locales.find((locale) => locale.tag !== snapshot?.catalog?.defaultLocale)?.tag ?? "";
-    mutationLocale = next === "add-locale" ? "" : firstTarget;
-    mutationFallback = snapshot?.catalog?.defaultLocale ?? "";
-    mutationReplacementFallback = snapshot?.catalog?.defaultLocale ?? "";
-    invalidateMutationPreview();
-  }
-
-  async function previewMutation(): Promise<void> {
-    if (mutationBusy || historyBusy) return;
-    mutationBusy = true;
-    mutationError = undefined;
-    try {
-      const result = await bridge.previewMutation(mutationRequest());
-      mutationPreview = result;
-      if (!result.ok) mutationError = result.message ?? notice("ui_feedback_change_invalid");
-    } catch (error) {
-      mutationError = errorNotice(error);
-    } finally {
-      mutationBusy = false;
-    }
-  }
-
-  async function applyMutation(): Promise<void> {
-    if (mutationBusy || historyBusy || mutationPreview?.ok !== true ||
-      (mutationPreview.requiresIrreversibleConfirmation && !mutationIrreversibleConfirmed)) return;
-    mutationBusy = true;
-    mutationError = undefined;
-    try {
-      const result = await bridge.applyMutation(mutationRequest());
-      if (!result.ok) {
-        mutationError = result.message ?? notice("ui_feedback_change_failed");
-        mutationPreview = undefined;
-        return;
-      }
-      if (result.snapshot === undefined) {
-        await loadWorkspace(false);
-        operationMessage = result.message ?? notice("ui_feedback_workspace_updated");
-        mutationDialogOpen = false;
-        return;
-      }
-      const preferredKey = mutationKind === "rename-key" || mutationKind === "duplicate-key"
-        ? mutationTargetKey
-        : selectedKey;
-      installSnapshot(result.snapshot, true);
-      if (buildRows(result.snapshot, {}).some((row) => row.key === preferredKey)) selectedKey = preferredKey;
-      mutationDialogOpen = false;
-      // A committed change can carry a warning, such as review entries a locale removal could not drop.
-      operationMessage = result.message ?? notice("ui_feedback_workspace_updated");
-      configureEditor();
-    } catch (error) {
-      mutationError = errorNotice(error);
-      mutationPreview = undefined;
-    } finally {
-      mutationBusy = false;
-    }
-  }
-
-  async function recoverTransaction(mode: "complete" | "rollback"): Promise<void> {
-    if (recoveryBusy || historyBusy) return;
-    recoveryBusy = true;
-    clientError = undefined;
-    try {
-      const result = await bridge.recoverTransaction(mode);
-      if (!result.ok) {
-        clientError = result.message ?? notice("ui_feedback_recovery_failed");
-        return;
-      }
-      if (result.snapshot === undefined) {
-        openDirectory = snapshot?.root ?? openDirectory;
-        snapshot = undefined;
-        recoveryReloadRequired = true;
-        recoveryReloadMessage = result.message ?? notice("ui_feedback_recovery_reload");
-        await loadWorkspace(false);
-        return;
-      }
-      installSnapshot(result.snapshot, true);
-      recoveryReloadRequired = false;
-      recoveryReloadMessage = undefined;
-      operationMessage = mode === "complete" ? notice("ui_feedback_recovery_completed") : notice("ui_feedback_recovery_rollback");
-    } catch (error) {
-      clientError = errorNotice(error);
-    } finally {
-      recoveryBusy = false;
-    }
-  }
-
-  // Restores the unsaved work an earlier session left: document drafts and review changes.
-  function recoverSavedDrafts(): void {
-    draftStore.restoreRecovered();
-    review.restoreRecovered();
-    configureEditor();
-    for (const [path, content] of Object.entries(draftStore.drafts)) {
-      void draftStore.parse(path, content).then((stored) => {
-        if (stored && selectedDocumentPath === path) configureEditor();
-      }).catch((error) => { clientError = errorNotice(error); });
-    }
-  }
-
-  function reviewExternalChanges(): void {
-    const change = externalFileChanges[0];
-    if (change === undefined) return;
-    comparedExternalChange = change;
-    const base = snapshot?.documents.find((document) => document.path === change.path);
-    mergedExternalText = draftStore.drafts[change.path] ?? base?.content ?? change.content ?? "";
-  }
-
-  async function applyExternalMerge(): Promise<void> {
-    const change = comparedExternalChange;
-    if (change === undefined || historyBusy) return;
-    if (!confirmDiscardNonDocumentWork("ui_confirm_external_merge")) return;
-    const retainedDrafts = { ...draftStore.drafts, [change.path]: mergedExternalText };
-    loading = true;
-    clientError = undefined;
-    try {
-      const next = await bridge.load();
-      installSnapshot(next, true);
-      draftStore.replace(Object.fromEntries(Object.entries(retainedDrafts).filter(([path]) =>
-        next.documents.some((document) => document.path === path))));
-      if (draftStore.drafts[change.path] === undefined) {
-        clientError = notice("ui_feedback_deleted_merge", { path: change.path });
-      }
-      draftStore.persist();
-      externalChanges = [];
-      externalFileChanges = [];
-      comparedExternalChange = undefined;
-      configureEditor();
-    } catch (error) {
-      clientError = errorNotice(error);
-    } finally {
-      loading = false;
-    }
-  }
-
-  function discardSavedDrafts(): void {
-    draftStore.discardRecovered();
-    review.discardRecovered();
-  }
-
-  function readRecentProjects(): RecentProject[] {
-    try {
-      const value = JSON.parse(getLocalEditorState("runic-translations:recent:1") ?? "[]") as unknown;
-      if (!Array.isArray(value)) return [];
-      return value.filter((item): item is RecentProject =>
-        typeof item === "object" && item !== null &&
-        typeof (item as RecentProject).root === "string" &&
-        typeof (item as RecentProject).catalogId === "string" &&
-        typeof (item as RecentProject).openedAt === "string").slice(0, 8);
-    } catch {
-      return [];
-    }
-  }
-
-  function rememberProject(value: WorkspaceSnapshot): void {
-    const catalogId = value.catalog?.id;
-    if (catalogId === undefined) return;
-    const entry = { root: value.root, catalogId, openedAt: new Date().toISOString() };
-    recentProjects = [entry, ...recentProjects.filter((item) => item.root !== entry.root || item.catalogId !== catalogId)].slice(0, 8);
-    setLocalEditorState("runic-translations:recent:1", JSON.stringify(recentProjects));
-  }
-
-  function beginRepair(document: EditorDocument): void {
-    if (hasUnsavedRepair && !confirm(ui.text("ui_feedback_repair_open_confirm"))) return;
-    repairDocument = document;
-    repairText = document.content;
-    repairMessage = undefined;
-    repairValidation = undefined;
-    const content = repairText;
-    void bridge.validate(document.path, content).then(result => {
-      if (repairDocument?.path === document.path && repairText === content) repairValidation = result;
-    }).catch(error => { repairMessage = errorNotice(error); });
-  }
-
-  async function saveRepair(): Promise<void> {
-    const document = repairDocument;
-    if (document === undefined || repairBusy || historyBusy) return;
-    repairBusy = true;
-    repairMessage = undefined;
-    try {
-      const checked = await bridge.validate(document.path, repairText);
-      if (!checked.success) {
-        repairMessage = checked.diagnostics[0]?.notice ?? checked.diagnostics[0]?.message ?? notice("ui_feedback_repair_invalid");
-        return;
-      }
-      const result = await bridge.save(document.path, repairText, document.revision);
-      if (!result.ok) {
-        repairMessage = result.message ?? notice("ui_feedback_repair_failed");
-        return;
-      }
-      await reloadAfterSave(document.path, repairText, draftStore.generation(document.path), result.message ?? notice("app_saved"));
-      repairDocument = undefined;
-    } catch (error) {
-      repairMessage = errorNotice(error);
-    } finally {
-      repairBusy = false;
-    }
-  }
-
-  function mutationTitle(kind: MutationKind): string {
-    return {
-      "add-locale": ui.text("ui_page_mutation_add_language"),
-      "remove-locale": ui.text("ui_page_mutation_remove_language"),
-      "set-fallback": ui.text("ui_page_mutation_change_fallback_relationships"),
-      "create-key": labels.addMessage,
-      "rename-key": ui.text("ui_page_mutation_rename_move_message"),
-      "duplicate-key": ui.text("ui_page_mutation_duplicate_message"),
-      "delete-key": ui.text("ui_page_mutation_delete_message"),
-    }[kind];
-  }
-
-  function labelsFor(locale: string) {
-    const options = { locale };
-    return {
-      title: m.app_title(options),
-      eyebrow: m.app_eyebrow(options),
-      search: m.app_search(options),
-      all: m.app_all(options),
-      missing: m.app_missing(options),
-      structured: m.app_structured(options),
-      plural: m.app_plural(options),
-      variants: m.app_variants(options),
-      formatted: m.app_formatted(options),
-      save: m.app_save(options),
-      saving: m.app_saving(options),
-      reload: m.app_reload(options),
-      simple: m.app_simple(options),
-      advanced: m.app_advanced(options),
-      raw: m.app_raw(options),
-      noSelection: m.app_no_selection(options),
-      noResults: m.app_no_results(options),
-      valid: m.app_valid(options),
-      invalid: m.app_invalid(options),
-      saved: m.app_saved(options),
-      defaultLocale: m.app_default_locale(options),
-      workspace: m.app_workspace(options),
-      diagnostics: m.app_diagnostics(options),
-      messages: m.app_messages(options),
-      messageBulkActions: m.app_message_bulk_actions(options),
-      visibleMessages: m.app_visible_messages(options),
-      markForReview: m.app_mark_for_review(options),
-      approveTranslations: m.app_approve_translations(options),
-      addMessage: m.app_add_message(options),
-      noMatchingMessages: m.app_no_matching_messages(options),
-      missingTranslation: m.app_missing_translation(options),
-      translated: m.app_translated(options),
-      stale: m.app_stale(options),
-      review: m.app_review(options),
-      messageFilters: m.app_message_filters(options),
-    };
   }
 </script>
 
@@ -2162,941 +373,146 @@
 </svelte:head>
 <svelte:window onkeydown={handleKeyboard} onbeforeinput={handleBeforeInput} onbeforeunload={protectDraft} />
 
-{#snippet previewNodes(nodes: PreviewNode[])}
-  <InlinePreview {nodes} />
-{/snippet}
+<WorkspaceNotices {workspace} {externalChanges} {recovery} drafts={draftStore} {review} hasUnsavedWork={unsaved.hasUnsavedWork} />
+<ExternalChangeDialog {externalChanges} documents={workspace.snapshot?.documents ?? []} />
 
-{#if projectReloadPending}
-  <Alert.Root class="mx-4 mt-2" data-testid="project-reload-pending">
-    <Alert.Title>{ui.text("ui_library_project_changed_title")}</Alert.Title>
-    <Alert.Description class="flex flex-wrap items-center gap-2">
-      <p>{ui.text("ui_library_project_changed_unsaved")}</p>
-      <Button size="xs" onclick={() => void loadWorkspace(true)}>{ui.text("ui_page_external_changes_reload_files")}</Button>
-      <Button variant="ghost" size="xs" onclick={() => projectReloadPending = false}>{ui.text("ui_page_keep_current_view")}</Button>
-    </Alert.Description>
-  </Alert.Root>
-{/if}
-
-{#if externalChanges.length > 0}
-  <div class="pointer-events-none fixed inset-x-2 bottom-2 z-50 mx-auto max-w-[calc(100vw-1rem)] sm:inset-x-4 sm:bottom-4 sm:max-w-4xl">
-    <Alert.Root class="pointer-events-auto pr-4 shadow-xl" aria-live="polite">
-      <Alert.Title>{ui.text("ui_page_external_changes_title")}</Alert.Title>
-      <Alert.Description class="min-w-0">
-        <p class="truncate font-mono text-xs">{externalChanges.join(", ")}</p>
-        <p>{hasUnsavedWork ? ui.text("ui_page_external_changes_unsaved_intact") : ui.text("ui_page_external_changes_reload_latest")}</p>
-      </Alert.Description>
-      <Alert.Action class="static col-span-full mt-2 flex flex-wrap justify-end gap-2">
-        <Button variant="ghost" size="xs" onclick={() => { externalChanges = []; externalFileChanges = []; }}>{ui.text("ui_page_keep_current_view")}</Button>
-        <Button variant="outline" size="xs" onclick={reviewExternalChanges}>{ui.text("ui_page_external_changes_compare_merge")}</Button>
-        <Button size="xs" onclick={() => void loadWorkspace(true)}>{ui.text("ui_page_external_changes_reload_files")}</Button>
-      </Alert.Action>
-    </Alert.Root>
-  </div>
-{/if}
-
-{#if Object.keys(draftStore.recovered).length > 0 || review.recovered !== undefined}
-  <div class="pointer-events-none fixed inset-x-2 bottom-2 z-50 mx-auto max-w-[calc(100vw-1rem)] sm:inset-x-4 sm:bottom-4 sm:max-w-2xl">
-    <Alert.Root class="pointer-events-auto pr-4 shadow-xl" aria-live="polite" data-testid="recovered-work">
-      <Alert.Title>{ui.text("ui_page_recovered_drafts_title")}</Alert.Title>
-      <Alert.Description>
-        {#if Object.keys(draftStore.recovered).length > 0}<p>{ui.text("ui_count_recovered_drafts", { count: Object.keys(draftStore.recovered).length })}</p>{/if}
-        {#if review.recovered !== undefined}<p>{ui.text("ui_page_recovered_review")}</p>{/if}
-      </Alert.Description>
-      <Alert.Action class="static col-span-full mt-2 flex flex-col gap-2 min-[360px]:flex-row min-[360px]:justify-end">
-        <Button variant="ghost" size="xs" onclick={discardSavedDrafts}>{ui.text("ui_page_discard")}</Button>
-        <Button size="xs" onclick={recoverSavedDrafts}>{ui.text("ui_page_recovered_drafts_restore")}</Button>
-      </Alert.Action>
-    </Alert.Root>
-  </div>
-{/if}
-
-{#if comparedExternalChange !== undefined}
-  <AppDialog
-    open
-    title={comparedExternalChange.path}
-    description={ui.text("ui_page_external_compare_description")}
-    class="sm:max-w-6xl"
-    bodyClass="grid gap-4"
-    onopenchange={(open) => { if (!open) comparedExternalChange = undefined; }}
-  >
-    <div class="grid gap-4 lg:grid-cols-2">
-      <Field.Field>
-        <Field.Label for="external-editor-base">{ui.text("ui_page_external_compare_editor_base")}</Field.Label>
-        <Textarea id="external-editor-base" class="min-h-64 font-mono text-xs" readonly value={snapshot?.documents.find((document) => document.path === comparedExternalChange?.path)?.content ?? ui.text("ui_page_external_compare_not_previously_loaded")} />
-      </Field.Field>
-      <Field.Field>
-        <Field.Label for="external-current-disk">{ui.text("ui_page_external_compare_current_disk")}</Field.Label>
-        <Textarea id="external-current-disk" class="min-h-64 font-mono text-xs" readonly value={comparedExternalChange.content ?? ui.text("ui_page_external_compare_deleted_externally")} />
-      </Field.Field>
-    </div>
-    <Field.Field>
-      <Field.Label for="external-merged-draft">{ui.text("ui_page_external_compare_merged_draft")}</Field.Label>
-      <Textarea id="external-merged-draft" class="min-h-64 font-mono text-xs" bind:value={mergedExternalText} spellcheck={false} />
-    </Field.Field>
-    {#snippet footer()}
-      <Button variant="outline" onclick={() => comparedExternalChange = undefined}>{ui.text("ui_page_keep_current_view")}</Button>
-      <Button onclick={() => void applyExternalMerge()}>{ui.text("ui_page_external_compare_reload_keep_merged")}</Button>
-    {/snippet}
-  </AppDialog>
-{/if}
-
-{#if loading}
-  <main class="loading-shell" aria-live="polite">
-    <div class="mark" aria-hidden="true"><span></span></div>
-    <p>{labels.eyebrow}</p>
-    <div class="loading-line"></div>
-  </main>
-{:else if snapshot === undefined}
-  <main class="fatal-shell">
-    <div class="mark" aria-hidden="true"><span></span></div>
-    <p class="eyebrow">{labels.eyebrow}</p>
-    <h1>{recoveryReloadRequired ? ui.text("ui_page_fatal_recovery_reload_required") : ui.text("ui_page_fatal_could_not_open")}</h1>
-    <p>{displayNotice(recoveryReloadRequired ? recoveryReloadMessage ?? notice("ui_page_fatal_recovery_refresh") : clientError ?? notice("ui_page_fatal_no_catalog"), ui)}</p>
-    <div class="recovery-actions">
-      <button class="primary" onclick={() => void loadWorkspace(false)}>{labels.reload}</button>
-      {#if recoveryReloadRequired}<button class="secondary" onclick={() => openDialogOpen = true}>{ui.text("ui_page_fatal_open_another_workspace")}</button>{/if}
-    </div>
-  </main>
-{:else if snapshot.pendingTransaction !== undefined}
-  <main class="recovery-shell">
-    <div class="mark" aria-hidden="true"><span></span></div>
-    <p class="eyebrow">{ui.text("ui_page_recovery_eyebrow")}</p>
-    <h1>{ui.text("ui_page_recovery_title")}</h1>
-    <p>{ui.text("ui_count_recovery_journal", { catalog: snapshot.pendingTransaction.catalogId, count: snapshot.pendingTransaction.paths.length })}</p>
-    <div class="recovery-paths">
-      {#each snapshot.pendingTransaction.paths as path (path)}<code>{path}</code>{/each}
-    </div>
-    {#if clientError}<p class="project-error" aria-live="polite">{displayNotice(clientError, ui)}</p>{/if}
-    <div class="recovery-actions">
-      <button class="secondary" disabled={recoveryBusy} onclick={() => void recoverTransaction("rollback")}>{ui.text("ui_page_recovery_restore_before")}</button>
-      <button class="primary" disabled={recoveryBusy} onclick={() => void recoverTransaction("complete")}>{recoveryBusy ? ui.text("ui_page_recovery_recovering") : ui.text("ui_page_recovery_complete")}</button>
-    </div>
-    <small>{ui.text("ui_page_recovery_journal_note")}</small>
-  </main>
-{:else if snapshot.catalog === undefined}
-  <main class="welcome-shell">
-    <header class="welcome-brand">
-      <div class="mark small" aria-hidden="true"><span></span></div>
-      <div><p class="eyebrow">{labels.eyebrow}</p><h1>{labels.title}</h1></div>
-      <select aria-label={ui.text("ui_page_interface_language")} value={uiLocale} onchange={(event) => changeUiLocale(event.currentTarget.value)}>
-        {#each uiLocales as locale (locale)}<option value={locale} title={uiLocaleName(locale)}>{locale.toUpperCase()}</option>{/each}
-      </select>
-    </header>
-    <section class="welcome-content">
-      <div class="welcome-heading">
-        <p class="eyebrow">{ui.text("ui_page_welcome_eyebrow")}</p>
-        <h2>{snapshot.catalogs.length > 1 ? ui.text("ui_page_welcome_choose_catalog") : ui.text("ui_page_welcome_open_project")}</h2>
-        <p>{snapshot.catalogs.length > 1
-          ? ui.text("ui_count_catalogs_found", { count: snapshot.catalogs.length })
-          : ui.text("ui_page_welcome_open_or_create")}</p>
-      </div>
-
-      {#if snapshot.catalogs.length > 0}
-        <div class="catalog-choices">
-          {#each snapshot.catalogs as catalog (catalog.id)}
-            <button class="catalog-choice" onclick={() => void openWorkspace(catalog.id)} disabled={openingWorkspace}>
-              <span class={{ "status-dot": true, warning: !catalog.success }}></span>
-              <span><strong>{catalog.id}</strong><small>{catalog.manifestPaths.join(", ")}</small></span>
-              <span class="catalog-metrics">{ui.text("ui_count_locales", { count: catalog.localeCount })}<br />{ui.text("ui_count_messages", { count: catalog.messageCount })}</span>
-              <span class={catalog.errorCount > 0 ? "health error" : "health"}>{catalog.errorCount > 0 ? ui.text("ui_count_errors", { count: catalog.errorCount }) : ui.text("ui_page_healthy")}</span>
-            </button>
-          {/each}
-        </div>
-      {/if}
-
-      <div class="open-workspace-card">
-        <label for="open-directory">{ui.text("ui_page_workspace_directory")}</label>
-        <div><input id="open-directory" bind:value={openDirectory} placeholder="/projects/customer-app" autocomplete="off" />
-          <button class="secondary" disabled={pickingWorkspace || openingWorkspace} onclick={() => void pickWorkspace()}>{pickingWorkspace ? ui.text("ui_page_choosing") : ui.text("ui_page_browse")}</button>
-          <button class="primary" disabled={openingWorkspace} onclick={() => void openWorkspace()}>{openingWorkspace ? ui.text("ui_page_opening") : ui.text("ui_page_open")}</button></div>
-        <small>{ui.text("ui_page_welcome_traversal_note")}</small>
-      </div>
-
-      <div class="welcome-actions">
-        <button class="secondary" onclick={openProjectWizard}>＋ {ui.text("ui_page_welcome_create_project")}</button>
-        <button class="secondary" onclick={() => void loadWorkspace(true)}>↻ {ui.text("ui_page_welcome_scan")} {snapshot.root}</button>
-      </div>
-
-      {#if recentProjects.length > 0}
-        <section class="recent-projects">
-          <header><strong>{ui.text("ui_page_welcome_recent_projects")}</strong><span>{ui.text("ui_page_welcome_stored_local_profile")}</span></header>
-          {#each recentProjects as project (`${project.root}\n${project.catalogId}`)}
-            <button onclick={() => void openWorkspace(project.catalogId, project.root)} disabled={openingWorkspace}>
-              <span><strong>{project.catalogId}</strong><code>{project.root}</code></span>
-              <small>{new Date(project.openedAt).toLocaleDateString(uiLocale)}</small>
-            </button>
-          {/each}
-        </section>
-      {/if}
-
-      {#if malformedDocuments.length > 0}
-        <section class="repair-list">
-          <header><div><strong>{ui.text("ui_page_welcome_repair_malformed_json")}</strong><span>{ui.text("ui_count_files_attention", { count: malformedDocuments.length })}</span></div></header>
-          {#each malformedDocuments as document (document.path)}
-            <button onclick={() => beginRepair(document)}><span>!</span><code>{document.path}</code><small>{ui.text("ui_page_welcome_open_repair_editor")} →</small></button>
-          {/each}
-        </section>
-      {/if}
-      {#if clientError}<p class="project-error" aria-live="polite">{displayNotice(clientError, ui)}</p>{/if}
-    </section>
-  </main>
+{#if workspace.loading}
+  <LoadingScreen eyebrow={labels.eyebrow} />
+{:else if workspace.snapshot === undefined}
+  <FatalScreen
+    eyebrow={labels.eyebrow}
+    reloadLabel={labels.reload}
+    recoveryReloadRequired={recovery.reloadRequired}
+    recoveryReloadMessage={recovery.reloadMessage}
+    clientError={feedback.clientError}
+    onreload={() => void workspace.load(false)}
+    onopenother={() => workspace.openDialogOpen = true}
+  />
+{:else if workspace.snapshot.pendingTransaction !== undefined}
+  <TransactionRecoveryScreen
+    transaction={workspace.snapshot.pendingTransaction}
+    busy={recovery.busy}
+    clientError={feedback.clientError}
+    onrecover={(mode) => void recovery.recoverTransaction(mode)}
+  />
+{:else if workspace.snapshot.catalog === undefined}
+  <WelcomeScreen
+    snapshot={workspace.snapshot}
+    {workspace}
+    {labels}
+    {uiLocale}
+    {uiLocales}
+    malformedDocuments={view.malformedDocuments}
+    clientError={feedback.clientError}
+    onlocalechange={(locale) => preferences.changeUiLocale(locale)}
+    oncreateproject={() => wizard.start()}
+    onrepair={(document) => repair.begin(document)}
+  />
 {:else}
-  <Sidebar.Provider style="--sidebar-width: 21rem; --sidebar-width-mobile: min(20rem, calc(100vw - 1rem));" class="h-svh min-h-0 overflow-hidden">
-    <Sidebar.Root collapsible="offcanvas">
-      <EditorSidebarHeader
-        catalogId={snapshot.catalog.id}
-        localeCount={snapshot.catalog.locales.length}
-        root={snapshot.root}
-        success={snapshot.success}
-        reloadLabel={labels.reload}
-        {recentProjects}
-        onreload={() => void loadWorkspace(true)}
-        onopenworkspace={showOpenWorkspaceDialog}
-        onnewproject={openProjectWizard}
-        onopenrecent={(project) => void openWorkspace(project.catalogId, project.root)}
-      />
-
-      <Sidebar.Content class="gap-0 overflow-hidden">
-
-      <WorkspacePanel
-        {malformedDocuments}
-        reviewError={snapshot.review?.error}
-        onrepair={beginRepair}
-        currentManifest={currentManifest(snapshot)}
-        catalogs={snapshot.catalogs}
-        libraries={snapshot.libraries ?? []}
-        onswitchcatalog={(catalog) => void openWorkspace(catalog.manifestPaths[0] ?? catalog.id)}
-        onopenlibrary={(catalog) => void openLibrary(catalog)}
-      />
-
-      <SidebarSectionPanels bind:languagesOpen bind:messagesOpen>
-        {#snippet languages()}
-          <LocaleSwitcher
-            locales={localeSummaries}
-            {selectedLocale}
-            onselect={selectLocale}
-            onmanage={() => prepareMutation("add-locale")}
-            pseudoLocales={snapshot?.catalog?.pseudoLocales ?? []}
-            activePseudoLocale={pseudoLocalization ? previewController.pseudoLocale : undefined}
-            onselectpseudo={selectPseudoLocale}
-            bind:open={languagesOpen}
-            {uiLocale}
-          />
-        {/snippet}
-
-        {#snippet messages()}
-          <MessageList
-            items={messageListItems}
-            {selectedKey}
-            visibleCount={visibleRows.length}
-            catalogKey={snapshot === undefined ? "" : catalogViewKey(snapshot)}
-            filterKey={filter === "all" && query.trim() === "" ? "" : `${filter}\n${query.trim()}`}
-            groupCounts={messageGroupCounts}
-            selectedHidden={selectedHiddenByFilter}
-            onclearfilter={() => { filter = "all"; query = ""; }}
-            reviewActionsDisabled={reviewMutationBlocked}
-            noResultsLabel={labels.noResults}
-            labels={{
-              messages: labels.messages,
-              bulkActions: labels.messageBulkActions,
-              visibleMessages: labels.visibleMessages,
-              markForReview: labels.markForReview,
-              approveTranslations: labels.approveTranslations,
-              addMessage: labels.addMessage,
-              noMatchingMessages: labels.noMatchingMessages,
-              missingTranslation: labels.missingTranslation,
-              translated: labels.translated,
-              plural: labels.plural,
-              variants: labels.variants,
-              formatted: labels.formatted,
-              stale: labels.stale,
-              review: labels.review,
-            }}
-            onselect={(key) => {
-              const row = visibleRows.find((candidate) => candidate.key === key);
-              if (row !== undefined) selectRow(row);
-            }}
-            onadd={() => prepareMutation("create-key")}
-            onmarkreview={() => markVisible("needs-review")}
-            onapprove={() => markVisible("approved")}
-            bind:open={messagesOpen}
-          >
-            {#snippet toolbar()}
-              <MessageToolbar
-                bind:query
-                bind:filter
-                bind:inputRef={searchInput}
-                placeholder={labels.search}
-                options={filterOptions}
-                filterLabel={labels.messageFilters}
-              />
-            {/snippet}
-          </MessageList>
-        {/snippet}
-      </SidebarSectionPanels>
-      </Sidebar.Content>
-      <EditorSettingsFooter
-        locale={uiLocale}
-        locales={uiLocales}
-        {themeMode}
-        {themePalette}
-        {pseudoLocalization}
-        {uiDirection}
-        onlocalechange={changeUiLocale}
-        onthememodechange={changeThemeMode}
-        onthemepalettechange={changeThemePalette}
-        ontogglepseudo={togglePseudoLocalization}
-        ontoggledirection={toggleUiDirection}
-        onabout={() => void showAbout()}
-      />
-      <Sidebar.Rail />
-    </Sidebar.Root>
-
-    <Sidebar.Inset class="editor-shell min-h-0 min-w-0 overflow-hidden">
-      <EditorToolbar
-        saveDisabled={!saveCoordinator.hasUnsaved || saving || review.saving || draftStore.validating ||
-          (saveCoordinator.unsavedSummary.documents.length > 0
-            ? diagnosticsStore.latest?.success === false || clientError !== undefined
-            : snapshot.review?.error !== undefined)}
-        {saving}
-        saveLabel={labels.save}
-        savingLabel={labels.saving}
-        saveState={displayNotice(operationMessage ?? notice("app_saved"), ui)}
-        unsaved={saveCoordinator.hasUnsaved}
-        {unsavedDetail}
-        {canUndo}
-        {canRedo}
-        {historyBusy}
-        {undoLabel}
-        {redoLabel}
-        onsave={() => void saveAll()}
-        onundo={undo}
-        onredo={redo}
-      />
-
-      <div class="flex justify-end border-b px-4 py-2">
-        {#if (snapshot.libraries?.length ?? 0) > 0}
-          <Button variant="outline" size="sm" class="mr-2" disabled={loading || libraryBusy} onclick={() => void openLibrary(libraryView?.catalog ?? snapshot!.libraries![0].catalog)}>{ui.text("ui_library_open")}…</Button>
-        {/if}
-        <Button variant="outline" size="sm" disabled={loading || interchangeBusy} onclick={() => interchangeOpen = true}>{ui.text("ui_page_interchange")}…</Button>
-      </div>
-
-      {#if selectedRow === undefined}
-        <Empty.Root>
-          <Empty.Header>
-            <Empty.Media variant="icon" class="text-primary">
-              <MessageSquareTextIcon aria-hidden="true" />
-            </Empty.Media>
-            <Empty.Title class="font-serif font-medium">{labels.noSelection}</Empty.Title>
-            <Empty.Description>{ui.text("ui_page_empty_selection_description")}</Empty.Description>
-          </Empty.Header>
-        </Empty.Root>
-      {:else}
-        <div class="editor-content" lang={selectedLocale} dir={uiDirection}>
-          <MessageHeading
-            messageKey={selectedRow.key}
-            messagePath={selectedRow.path}
-            description={selectedRow.description}
-            tags={selectedRow.tags}
-            locale={selectedLocale}
-            overrideLayer={overrideLayer(snapshot, currentDocument?.layer)}
-            inheritedFrom={currentCell?.inheritedFrom}
-            onrename={() => prepareMutation("rename-key")}
-            onduplicate={() => prepareMutation("duplicate-key")}
-            ondelete={() => prepareMutation("delete-key")}
-          />
-
-          <ReviewWorkflow
-            state={currentReviewState}
-            notTranslated={currentCell?.entry === undefined && (currentReview === undefined || currentReview.implicit === true)}
-            dirty={review.dirty}
-            message={displayNotice(review.message ?? notice("ui_page_project_notes"), ui)}
-            disabled={snapshot.review?.error !== undefined || reviewMutationBlocked}
-            stale={currentIsStale}
-            sourceDiff={currentSourceDiff}
-            sourceLocale={snapshot.catalog.defaultLocale}
-            terminologyCount={review.terminology.length}
-            qualityCount={localeQualityFindings.length}
-            note={currentReview?.note ?? ""}
-            qualityIssues={currentQuality}
-            suggestions={memorySuggestions}
-            onstatechange={setCurrentReviewState}
-            onconfirm={confirmCurrentReview}
-            onnotechange={setCurrentReviewNote}
-            ondiscard={discardReview}
-            onterminology={() => terminologyDialogOpen = true}
-            onreport={() => reportDialogOpen = true}
-            onqualityfilter={() => filter = "quality"}
-            onsuggestion={applySuggestion}
-            onfix={(diagnostic, fix) => void applyDiagnosticFix(diagnostic, fix)}
-          />
-
-          <EditorModeSwitcher
-            {mode}
-            simpleLabel={labels.simple}
-            rawLabel={labels.raw}
-            onchange={chooseMode}
-          />
-
-          <TranslationEditor
-            identity={`${selectedDocumentPath}\u0000${selectedKey}\u0000${selectedLocale}`}
-            {mode}
-            locale={selectedLocale}
-            label={mode === "translation" ? localeName(selectedLocale) : currentDocument?.path ?? ui.text("ui_page_resource_document")}
-            value={mode === "translation" && currentStarter !== undefined ? currentStarter.text : editorText}
-            resourceValue={currentStarter?.text ?? currentCell?.entry?.value ?? ""}
-            sourceLocale={snapshot.catalog.defaultLocale}
-            sourceLocaleName={localeName(snapshot.catalog.defaultLocale)}
-            sourceEntry={selectedRow.cells[snapshot.catalog.defaultLocale]?.entry}
-            authoring={currentStarter?.projection ?? currentCell?.entry?.authoring}
-            authoringBusy={draftStore.authoringPending > 0 || messageDrafts.pending > 0}
-            onoperation={applyAuthoringOperation}
-            maxLength={currentStarter !== undefined ? currentStarter.maxLength : currentCell?.entry?.maxLength}
-            lengthWarning={currentQuality.find((issue) => issue.code === "RTR0098")?.message}
-            {starterLoading}
-            oncopysource={currentStarter !== undefined && sourceAuthoring?.supported === true ? copySource : undefined}
-            {sourceSelection}
-            missing={currentCell?.entry === undefined}
-            invalid={clientError !== undefined || diagnosticsStore.latest?.success === false}
-            disabled={editorMutationBlocked}
-            onresourcechange={editResourceValue}
-            onrawchange={edit}
-            onformatraw={formatRaw}
-            revision={historyRevision}
-          />
-
-          {#if mode === "translation"}
-            <section class="message-preview" aria-live="polite">
-              <header>
-                <div><strong>{ui.text("ui_page_preview_title")}</strong><span>{ui.text("ui_page_preview_description")}</span></div>
-                <span class="preview-state">{previewController.busy ? ui.text("ui_page_preview_compiling") : previewController.ast === undefined ? ui.text("ui_page_preview_unavailable") : pseudoLocalization ? ui.text("ui_preview_pseudo_locale", { locale: previewController.pseudoLocale }) : selectedLocale}</span>
-              </header>
-              <div class="flex flex-wrap items-end gap-3 px-4 pt-3" aria-label={ui.text("ui_preview_formatting")}>
-                <label class="grid gap-1 text-xs">
-                  <span class="text-muted-foreground">{ui.text("ui_preview_regional_locale")}</span>
-                  <Input class="h-8 w-40" value={previewController.requestedLocale} placeholder={selectedLocale} list="preview-regional-locales" autocomplete="off"
-                    title={ui.text("ui_preview_regional_locale_description")}
-                    onchange={(event) => changePreviewFormatting(event.currentTarget.value, previewController.timeZone)} />
-                </label>
-                <datalist id="preview-regional-locales">{#each regionalLocaleSuggestions as tag (tag)}<option value={tag}></option>{/each}</datalist>
-                <label class="grid gap-1 text-xs">
-                  <span class="text-muted-foreground">{ui.text("ui_preview_time_zone")}</span>
-                  <select class="h-8 max-w-56 rounded-md border bg-background px-2 text-sm" value={previewController.timeZone}
-                    title={ui.text("ui_preview_time_zone_description")}
-                    onchange={(event) => changePreviewFormatting(previewController.requestedLocale, event.currentTarget.value)}>
-                    <option value="">{ui.text("ui_preview_time_zone_host")}</option>
-                    <option value="utc">UTC</option>
-                    {#each previewTimeZones as zone (zone)}<option value={zone}>{zone}</option>{/each}
-                  </select>
-                </label>
-              </div>
-              {#if currentExamples.length > 0}
-                <div class="flex flex-wrap items-center gap-2 px-4 py-3" aria-label={ui.text("ui_preview_examples")}>
-                  <span class="text-xs text-muted-foreground">{ui.text("ui_preview_examples")}</span>
-                  {#each currentExamples as example, index (index)}
-                    <Button variant="outline" size="xs" onclick={() => selectPreviewExample(index)}>{ui.text("ui_preview_example", { number: String(index + 1) })}</Button>
-                  {/each}
-                </div>
-              {/if}
-              {#if previewController.ast !== undefined && previewInputEntries(previewController.ast).length > 0}
-                <div class="sample-inputs">
-                  {#each previewInputEntries(previewController.ast) as [name, descriptor] (name)}
-                    <label><span>{name}<small>{descriptor.type}</small></span><input value={previewSampleOr(previewController.samples, name, "")} oninput={(event) => previewController.updateSample(name, event.currentTarget.value)} /></label>
-                  {/each}
-                </div>
-              {/if}
-              <div class="preview-canvas" lang={pseudoLocalization ? previewController.pseudoLocale : selectedLocale} dir={previewDirection}>
-                {#if previewController.busy}
-                  <span class="preview-placeholder">{ui.text("ui_page_preview_compiling_draft")}</span>
-                {:else if previewController.error}
-                  <span class="preview-error">{displayNotice(previewController.error, ui)}</span>
-                {:else if pseudoLocalization && previewController.pseudoError}
-                  <span class="preview-error">{displayNotice(previewController.pseudoError, ui)}</span>
-                {:else if previewController.simulatedResult?.kind === "text"}
-                  <p>{previewController.simulatedResult.value}</p>
-                {:else if previewController.simulatedResult?.kind === "content"}
-                  <div class="safe-content">{@render previewNodes(previewController.simulatedResult.nodes)}</div>
-                {:else if previewController.simulatedResult?.kind === "document"}
-                  <div class="safe-content"><DocumentPreview blocks={previewController.simulatedResult.blocks} /></div>
-                {:else}
-                  <span class="preview-placeholder">{ui.text("ui_page_preview_edit_to_build")}</span>
-                {/if}
-              </div>
-              {#if previewFormattingSummary(previewController.simulatedResult?.formatting)}<p class="safe-note">{previewFormattingSummary(previewController.simulatedResult?.formatting)}</p>{/if}
-              {#if pseudoLocalization || uiDirection === "rtl"}<p class="safe-note">{[pseudoLocalization ? ui.text("ui_page_preview_pseudo_active") : "", uiDirection === "rtl" ? ui.text("ui_page_preview_rtl_active") : ""].filter(Boolean).join(" ")}</p>{/if}
-            </section>
-
-            <ArtifactPreviewPanel
-              open={artifactPreviewOpen}
-              baseResult={previewController.result}
-              simulatedResult={previewController.simulatedResult}
-              {pseudoLocalization}
-              direction={uiDirection}
-              busy={previewController.busy}
-              onclose={() => artifactPreviewOpen = false}
-            />
-          {/if}
-
-          <ValidationPanel
-            busy={draftStore.validating}
-            diagnostics={diagnosticsStore.displayed}
-            clientError={clientError === undefined ? undefined : displayNotice(clientError, ui)}
-            errorCount={diagnosticsStore.errorCount}
-            warningCount={diagnosticsStore.warningCount}
-            validLabel={labels.valid}
-            invalidLabel={labels.invalid}
-            diagnosticsLabel={labels.diagnostics}
-            schemaVersion={snapshot.catalog.schemaVersion}
-            sources={diagnosticSources}
-            selection={selectedRow === undefined ? undefined : { key: selectedRow.key, locale: selectedLocale }}
-            onselect={(diagnostic) => void selectDiagnostic(diagnostic)}
-            onfix={(diagnostic, fix) => void applyDiagnosticFix(diagnostic, fix)}
-          />
-        </div>
-      {/if}
-    </Sidebar.Inset>
-  </Sidebar.Provider>
+  <WorkspaceShell
+    snapshot={workspace.snapshot}
+    catalog={workspace.snapshot.catalog}
+    {workspace}
+    {selection}
+    {view}
+    {editing}
+    {history}
+    {preferences}
+    preview={previewController}
+    {review}
+    drafts={draftStore}
+    {messageDrafts}
+    diagnostics={diagnosticsStore}
+    save={saveCoordinator}
+    {library}
+    {interchange}
+    {labels}
+    {localeCatalog}
+    clientError={feedback.clientError}
+    operationMessage={feedback.operationMessage}
+    editingBlocked={editorMutationBlocked}
+    reviewBlocked={reviewMutationBlocked}
+    {localeName}
+    bind:languagesOpen
+    bind:messagesOpen
+    bind:searchInput
+    bind:artifactPreviewOpen
+    onsave={() => void saveAll()}
+    onundo={undo}
+    onredo={redo}
+    onnewproject={() => wizard.start()}
+    onrepair={(document) => repair.begin(document)}
+    onmutation={openMutation}
+    onabout={() => void about.show()}
+    onterminology={() => terminologyDialogOpen = true}
+    onreport={() => reportDialogOpen = true}
+  />
 {/if}
 
-{#if aboutDialogOpen}
-  <AppDialog
-    open
-    title={aboutInfo?.product ?? ui.text("ui_page_about_product")}
-    description={ui.text("ui_page_about_description")}
-    onopenchange={(open) => aboutDialogOpen = open}
-  >
-    <div class="grid gap-4">
-      {#if aboutBusy}
-        <div class="flex items-center gap-2 text-muted-foreground"><Spinner />{ui.text("ui_page_about_reading")}</div>
-      {:else if aboutInfo !== undefined}
-        <dl class="grid overflow-hidden rounded-xl border">
-          {#each [
-            [ui.text("ui_page_about_version"), aboutInfo.version],
-            [ui.text("ui_page_about_update_channel"), aboutInfo.updateChannel],
-            [ui.text("ui_page_about_source_revision"), aboutInfo.commit ?? ui.text("ui_page_about_development_build")],
-            [ui.text("ui_page_about_runtime"), aboutInfo.runtime],
-            [ui.text("ui_page_about_runtime_identifier"), aboutInfo.runtimeIdentifier],
-            [ui.text("ui_page_about_system"), `${aboutInfo.operatingSystem} · ${aboutInfo.architecture}`],
-          ] as item (item[0])}
-            <div class="grid gap-1 border-b px-4 py-3 last:border-b-0 sm:grid-cols-[9rem_1fr] sm:gap-4">
-              <dt class="text-muted-foreground">{item[0]}</dt><dd class="m-0 overflow-wrap-anywhere font-mono text-xs">{item[1]}</dd>
-            </div>
-          {/each}
-        </dl>
-      {/if}
-      <Alert.Root>
-        <Alert.Title>{ui.text("ui_page_about_diagnostic_bundle_title")}</Alert.Title>
-        <Alert.Description>{ui.text("ui_page_about_diagnostic_bundle_description")}</Alert.Description>
-        {#if diagnosticMessage}<p class="text-sm text-primary" aria-live="polite">{displayNotice(diagnosticMessage, ui)}</p>{/if}
-      </Alert.Root>
-      {#if diagnosticBundlePath !== undefined}
-        <section class="grid gap-2 rounded-xl border p-4" aria-labelledby="diagnostic-bundle-actions-title">
-          <h3 id="diagnostic-bundle-actions-title" class="font-medium">{ui.text("ui_page_about_diagnostic_bundle")}</h3>
-          <Input aria-label={ui.text("ui_page_about_diagnostic_bundle_path")} readonly value={diagnosticBundlePath} class="font-mono text-xs" />
-          <div class="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" disabled={diagnosticBusy} onclick={() => void revealDiagnosticBundle()}>{ui.text("ui_page_about_reveal_location")}</Button>
-            <Button variant="outline" size="sm" onclick={() => void copyDiagnosticBundlePath()}>{ui.text("ui_page_about_copy_path")}</Button>
-            <Button variant="destructive" size="sm" disabled={diagnosticBusy} onclick={() => void deleteDiagnosticBundle()}>{ui.text("ui_page_about_delete_bundle")}</Button>
-          </div>
-          <p class="text-xs text-muted-foreground">{ui.text("ui_page_about_bundle_no_upload")}</p>
-        </section>
-      {/if}
-      <section class="grid gap-3 rounded-xl border p-4" aria-labelledby="local-state-title">
-        <div class="grid gap-1 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-4">
-          <div><h3 id="local-state-title" class="font-medium">{ui.text("ui_page_about_local_state")}</h3><p class="text-sm text-muted-foreground">{ui.text("ui_page_about_local_state_description")}</p></div>
-          <Button variant="outline" size="sm" disabled={(localStateSummary?.entries ?? 0) === 0} onclick={clearLocalState}>{ui.text("ui_page_about_clear_local_state")}</Button>
-        </div>
-        {#if localStateSummary !== undefined}
-          <p class="text-sm text-muted-foreground">{ui.text("ui_count_state_entries", { count: localStateSummary.entries })} · {ui.text("ui_count_state_bytes", { count: localStateSummary.bytes })} · {ui.text("ui_count_state_preferences", { count: localStateSummary.preferenceEntries })} · {ui.text("ui_count_state_recent", { count: localStateSummary.recentProjectEntries })} · {ui.text("ui_count_state_drafts", { count: localStateSummary.draftEntries })}{localStateSummary.recovered ? ` · ${ui.text("ui_page_about_recovered_unreadable")}` : ""}</p>
-        {/if}
-        <p class="text-xs text-muted-foreground">{ui.text("ui_page_about_clear_local_state_note")}</p>
-        {#if localStateMessage}<p class="text-sm text-primary" aria-live="polite">{displayNotice(localStateMessage, ui)}</p>{/if}
-      </section>
-      <p class="text-sm text-muted-foreground">{ui.text("ui_page_about_license_note")}</p>
-    </div>
-    {#snippet footer()}
-      <Button variant="outline" onclick={() => aboutDialogOpen = false}>{ui.text("ui_page_close")}</Button>
-      <Button disabled={diagnosticBusy || aboutBusy} onclick={() => void createDiagnosticBundle()}>
-        {#if diagnosticBusy}<Spinner data-icon="inline-start" />{/if}
-        {diagnosticBusy ? ui.text("ui_page_about_creating_bundle") : ui.text("ui_page_about_create_bundle")}
-      </Button>
-    {/snippet}
-  </AppDialog>
-{/if}
-
-{#if terminologyDialogOpen}
-  <AppDialog
-    open
-    title={ui.text("ui_page_terminology_title")}
-    description={ui.text("ui_page_terminology_description")}
-    class="sm:max-w-4xl"
-    onopenchange={(open) => terminologyDialogOpen = open}
-  >
-    <div inert={reviewMutationBlocked} aria-disabled={reviewMutationBlocked} class:opacity-60={reviewMutationBlocked}>
-    <Field.FieldGroup class="grid gap-3 sm:grid-cols-2">
-      <Field.Field><Field.Label for="term-source">{ui.text("ui_page_terminology_source_term")}</Field.Label><Input id="term-source" bind:value={termSource} placeholder={ui.text("ui_page_terminology_source_placeholder")} /></Field.Field>
-      <Field.Field><Field.Label for="term-preferred">{ui.text("ui_page_terminology_preferred")}</Field.Label><Input id="term-preferred" bind:value={termPreferred} placeholder={ui.text("ui_page_terminology_preferred_placeholder")} /></Field.Field>
-      <Field.Field><Field.Label for="term-locale">{ui.text("ui_page_terminology_locale")}</Field.Label><Input id="term-locale" bind:value={termLocale} placeholder={ui.text("ui_page_terminology_locale_placeholder")} /></Field.Field>
-      <Field.Field><Field.Label for="term-note">{ui.text("ui_page_terminology_note")}</Field.Label><Input id="term-note" bind:value={termNote} placeholder={ui.text("ui_page_terminology_note_placeholder")} /></Field.Field>
-      <Button class="justify-self-start sm:col-span-2" variant="outline" disabled={reviewMutationBlocked || termSource.trim() === "" || termPreferred.trim() === ""} onclick={addTerm}>
-        <PlusIcon data-icon="inline-start" />{ui.text("ui_page_terminology_add_term")}
-      </Button>
-    </Field.FieldGroup>
-    <div class="mt-5 grid overflow-hidden rounded-xl border">
-      {#each review.terminology as term, index (term)}
-        <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b px-4 py-3 last:border-b-0">
-          <div class="min-w-0">
-            <div class="flex min-w-0 flex-wrap items-center gap-2"><strong>{term.source}</strong><span class="text-muted-foreground">→</span><strong>{term.preferred}</strong>{#if term.locale}<Badge variant="outline">{term.locale}</Badge>{/if}</div>
-            <p class="truncate text-xs text-muted-foreground">{term.note ?? ui.text("ui_page_terminology_no_note")}</p>
-          </div>
-          <Button variant="ghost" size="icon-xs" aria-label={ui.text("ui_terminology_remove_source", { term: term.source })} onclick={() => removeTerm(index)}><Trash2Icon /></Button>
-        </div>
-      {:else}
-        <p class="p-6 text-center text-sm text-muted-foreground">{ui.text("ui_page_terminology_empty")}</p>
-      {/each}
-    </div>
-    </div>
-    {#snippet footer()}
-      <Button variant="outline" onclick={() => terminologyDialogOpen = false}>{ui.text("ui_page_done")}</Button>
-    {/snippet}
-  </AppDialog>
-{/if}
-
-{#if reportDialogOpen}
-  <AppDialog
-    open
-    title={ui.text("ui_quality_report_locale", { locale: selectedLocale })}
-    description={ui.text("ui_count_quality_summary", { findings: localeQualityFindings.length, messages: qualityKeySet.size })}
-    class="sm:max-w-4xl"
-    onopenchange={(open) => reportDialogOpen = open}
-  >
-    <Textarea class="min-h-[26rem] font-mono text-xs" aria-label={ui.text("ui_page_quality_csv_aria_label")} readonly value={qualityReportCsv(localeQualityFindings)} />
-    {#snippet footer()}<Button variant="outline" onclick={() => reportDialogOpen = false}>{ui.text("ui_page_close")}</Button>{/snippet}
-  </AppDialog>
-{/if}
+<AboutDialog {about} />
+<TerminologyDialog bind:open={terminologyDialogOpen} {review} blocked={reviewMutationBlocked} />
+<QualityReportDialog
+  bind:open={reportDialogOpen}
+  locale={selection.selectedLocale}
+  findings={view.localeQualityFindings}
+  messageCount={view.qualityKeySet.size}
+/>
 
 <LibraryCatalogDialog
-  bind:open={libraryOpen}
-  bind:locale={libraryLocale}
-  busy={libraryBusy}
-  project={`${snapshot?.root ?? ""}\n${currentManifest(snapshot)}`}
-  libraries={snapshot?.libraries ?? []}
-  library={libraryView}
-  notice={libraryNotice}
-  conflict={libraryConflict}
-  onselect={(catalog) => void runLibrary(() => bridge.loadLibrary(catalog))}
-  onoverride={(key, locale, text, expectedRevision) => runLibrary(() => bridge.overrideLibraryMessage({ catalog: libraryView!.catalog, key, locale, text, expectedRevision }))}
-  onsave={(key, locale, text, expectedRevision) => runLibrary(() => bridge.saveLibraryOverride({ catalog: libraryView!.catalog, key, locale, text, expectedRevision }))}
-  onrevert={(key, locale, expectedRevision) => void runLibrary(() => bridge.revertLibraryOverride({ catalog: libraryView!.catalog, key, locale, expectedRevision }))}
-  onkeep={(key, locale, expectedRevision) => void runLibrary(() => bridge.keepLibraryOverride({ catalog: libraryView!.catalog, key, locale, expectedRevision }))}
-  onaddlocale={(locale) => void runLibrary(() => bridge.addLibraryLocale(libraryView!.catalog, locale))}
-  onreload={() => void runLibrary(() => bridge.loadLibrary(libraryView!.catalog))}
+  bind:open={library.open}
+  bind:locale={library.locale}
+  busy={library.busy}
+  project={`${workspace.snapshot?.root ?? ""}\n${currentManifest(workspace.snapshot)}`}
+  libraries={workspace.snapshot?.libraries ?? []}
+  library={library.view}
+  notice={library.notice}
+  conflict={library.conflict}
+  onselect={(catalog) => library.select(catalog)}
+  onoverride={(key, locale, text, expectedRevision) => library.override(key, locale, text, expectedRevision)}
+  onsave={(key, locale, text, expectedRevision) => library.saveOverride(key, locale, text, expectedRevision)}
+  onrevert={(key, locale, expectedRevision) => library.revert(key, locale, expectedRevision)}
+  onkeep={(key, locale, expectedRevision) => library.keep(key, locale, expectedRevision)}
+  onaddlocale={(locale) => library.addLocale(locale)}
+  onreload={() => library.reload()}
 />
 
 <InterchangeDialog
-  bind:open={interchangeOpen}
-  busy={interchangeBusy}
-  bind:xliffDirectory
-  bind:xliffImportPath
-  bind:reviewPath={reviewExportPath}
-  bind:reviewImportPath
-  {xliffExport}
-  {xliffPreview}
-  {reviewExport}
-  {reviewPreview}
-  onexportxliff={() => void exportXliff()}
-  onpreviewxliff={() => void previewXliffImport()}
-  onapplyxliff={() => void applyXliffImport()}
-  onexportreview={() => void exportReviewJson()}
-  onpreviewreview={() => void previewReviewJsonImport()}
-  onapplyreview={() => void applyReviewJsonImport()}
-  bind:catalogImportFrom
-  bind:catalogImportSource
-  bind:catalogImportOverwrite
-  {catalogImportPlan}
-  onpreviewcatalog={() => void previewCatalogImport()}
-  onapplycatalog={() => void applyCatalogImport()}
+  bind:open={interchange.open}
+  busy={interchange.busy}
+  bind:xliffDirectory={interchange.xliffDirectory}
+  bind:xliffImportPath={interchange.xliffImportPath}
+  bind:reviewPath={interchange.reviewExportPath}
+  bind:reviewImportPath={interchange.reviewImportPath}
+  xliffExport={interchange.xliffExport}
+  xliffPreview={interchange.xliffPreview}
+  reviewExport={interchange.reviewExport}
+  reviewPreview={interchange.reviewPreview}
+  onexportxliff={() => void interchange.exportXliff()}
+  onpreviewxliff={() => void interchange.previewXliffImport()}
+  onapplyxliff={() => void interchange.applyXliffImport()}
+  onexportreview={() => void interchange.exportReviewJson()}
+  onpreviewreview={() => void interchange.previewReviewJsonImport()}
+  onapplyreview={() => void interchange.applyReviewJsonImport()}
+  bind:catalogImportFrom={interchange.catalogImportFrom}
+  bind:catalogImportSource={interchange.catalogImportSource}
+  bind:catalogImportOverwrite={interchange.catalogImportOverwrite}
+  catalogImportPlan={interchange.catalogImportPlan}
+  onpreviewcatalog={() => void interchange.previewCatalogImport()}
+  onapplycatalog={() => void interchange.applyCatalogImport()}
 />
 
-{#if repairDocument !== undefined}
-  <AppDialog
-    open
-    title={repairDocument.path}
-    description={ui.text("ui_page_repair_description")}
-    class="sm:max-w-4xl"
-    showCloseButton={!repairBusy}
-    onopenchange={(open) => { if (!open && !repairBusy) closeRepair(); }}
-  >
-    <Textarea bind:ref={repairInput} class="min-h-[26rem] font-mono text-xs" aria-label={ui.text("ui_page_repair_document_aria_label")} bind:value={repairText} spellcheck={false} disabled={repairBusy || editorMutationBlocked} />
-    {#if repairValidation !== undefined}
-      <ValidationPanel busy={repairBusy} diagnostics={repairValidation.diagnostics} clientError={undefined}
-        errorCount={repairValidation.diagnostics.filter(item => item.severity === "error").length}
-        warningCount={repairValidation.diagnostics.filter(item => item.severity === "warning").length}
-        validLabel={labels.valid} invalidLabel={labels.invalid} diagnosticsLabel={labels.diagnostics}
-        schemaVersion={snapshot?.catalog?.schemaVersion ?? 1}
-        sources={{ documents: snapshot?.documents ?? [], drafts: { [repairDocument.path]: repairText } }}
-        onselect={(diagnostic) => void selectDiagnostic(diagnostic)}
-        onfix={(diagnostic, fix) => void applyDiagnosticFix(diagnostic, fix)} />
-    {/if}
-    {#if repairMessage}<Alert.Root variant="destructive" class="mt-4"><Alert.Title>{ui.text("ui_page_repair_failed")}</Alert.Title><Alert.Description>{displayNotice(repairMessage, ui)}</Alert.Description></Alert.Root>{/if}
-    {#snippet footer()}
-      <Button variant="outline" disabled={repairBusy} onclick={closeRepair}>{ui.text("ui_page_cancel")}</Button>
-      <Button disabled={repairBusy} onclick={() => void saveRepair()}>{#if repairBusy}<Spinner data-icon="inline-start" />{/if}{repairBusy ? ui.text("ui_page_validating") : ui.text("ui_page_repair_validate_save")}</Button>
-    {/snippet}
-  </AppDialog>
-{/if}
-
-{#if openDialogOpen}
-  <AppDialog
-    open
-    title={ui.text("ui_page_open_project_title")}
-    description={ui.text("ui_page_open_project_description")}
-    showCloseButton={!openingWorkspace && !pickingWorkspace}
-    onopenchange={(open) => { if (!openingWorkspace && !pickingWorkspace) openDialogOpen = open; }}
-  >
-    <Field.Field>
-      <Field.Label for="dialog-open-directory">{ui.text("ui_page_workspace_directory")}</Field.Label>
-      <div class="flex flex-col gap-2 sm:flex-row">
-        <Input id="dialog-open-directory" class="min-w-0 flex-1" bind:value={openDirectory} autocomplete="off" />
-        <Button variant="outline" disabled={pickingWorkspace || openingWorkspace} onclick={() => void pickWorkspace()}>{pickingWorkspace ? ui.text("ui_page_choosing") : ui.text("ui_page_browse")}</Button>
-      </div>
-    </Field.Field>
-    {#if clientError}<Alert.Root variant="destructive" class="mt-4"><Alert.Title>{ui.text("ui_page_fatal_could_not_open")}</Alert.Title><Alert.Description>{displayNotice(clientError, ui)}</Alert.Description></Alert.Root>{/if}
-    {#snippet footer()}
-      <Button variant="outline" disabled={openingWorkspace} onclick={() => openDialogOpen = false}>{ui.text("ui_page_cancel")}</Button>
-      <Button disabled={openingWorkspace || openDirectory.trim() === ""} onclick={() => void openWorkspace()}>{#if openingWorkspace}<Spinner data-icon="inline-start" />{/if}{openingWorkspace ? ui.text("ui_page_opening") : ui.text("ui_page_open_project_action")}</Button>
-    {/snippet}
-  </AppDialog>
-{/if}
-
-{#if mutationDialogOpen && snapshot?.catalog !== undefined}
-  <AppDialog
-    open
-    title={mutationTitle(mutationKind)}
-    description={ui.text("ui_page_mutation_description")}
-    class="sm:max-w-3xl"
-    showCloseButton={!mutationBusy}
-    onopenchange={(open) => { if (!mutationBusy) mutationDialogOpen = open; }}
-  >
-    <Field.FieldGroup class="gap-4">
-      {#if mutationKind === "add-locale" || mutationKind === "remove-locale" || mutationKind === "set-fallback"}
-        <Field.Field>
-          <Field.Label for="language-operation">{ui.text("ui_page_mutation_language_operation")}</Field.Label>
-          <Select.Root type="single" value={mutationKind} onValueChange={changeMutationKind}>
-            <Select.Trigger id="language-operation" class="w-full">{mutationTitle(mutationKind)}</Select.Trigger>
-            <Select.Content><Select.Group><Select.Label>{ui.text("ui_page_mutation_language_operation")}</Select.Label>
-              <Select.Item value="add-locale" label={ui.text("ui_page_mutation_add_language")}>{ui.text("ui_page_mutation_add_language")}</Select.Item>
-              <Select.Item value="remove-locale" label={ui.text("ui_page_mutation_remove_language")}>{ui.text("ui_page_mutation_remove_language")}</Select.Item>
-              <Select.Item value="set-fallback" label={ui.text("ui_page_mutation_change_fallback")}>{ui.text("ui_page_mutation_change_fallback")}</Select.Item>
-            </Select.Group></Select.Content>
-          </Select.Root>
-        </Field.Field>
-      {/if}
-
-      <datalist id="cldr-locales">{#each localeCatalog?.locales ?? [] as tag (tag)}<option value={tag}></option>{/each}</datalist>
-      {#if mutationKind === "add-locale"}
-        <div class="grid gap-4 sm:grid-cols-2">
-          <Field.Field><Field.Label for="mutation-locale">{ui.text("ui_page_mutation_new_locale_tag")}</Field.Label><Input id="mutation-locale" bind:value={mutationLocale} oninput={() => { invalidateMutationPreview(); describeMutationLocale(); }} placeholder="fr-FR" list="cldr-locales" autocomplete="off" aria-describedby="mutation-locale-cldr" /></Field.Field>
-          <Field.Field><Field.Label for="mutation-fallback">{ui.text("ui_page_mutation_fallback")}</Field.Label>
-            <Select.Root type="single" value={mutationFallback} onValueChange={(value) => { mutationFallback = value; invalidateMutationPreview(); }}>
-              <Select.Trigger id="mutation-fallback" class="w-full">{mutationFallback} · {localeName(mutationFallback)}</Select.Trigger>
-              <Select.Content><Select.Group>{#each snapshot.catalog.locales as locale (locale.tag)}<Select.Item value={locale.tag} label={`${locale.tag} · ${localeName(locale.tag)}`}>{locale.tag} · {localeName(locale.tag)}</Select.Item>{/each}</Select.Group></Select.Content>
-            </Select.Root>
-          </Field.Field>
-          <Field.Field><Field.Label for="mutation-copy-from">{ui.text("ui_page_mutation_copy_starter_values")}</Field.Label>
-            <Select.Root type="single" value={mutationCopyFrom} onValueChange={(value) => { mutationCopyFrom = value; invalidateMutationPreview(); }}>
-              <Select.Trigger id="mutation-copy-from" class="w-full">{mutationCopyFrom} · {localeName(mutationCopyFrom)}</Select.Trigger>
-              <Select.Content><Select.Group>{#each snapshot.catalog.locales as locale (locale.tag)}<Select.Item value={locale.tag} label={`${locale.tag} · ${localeName(locale.tag)}`}>{locale.tag} · {localeName(locale.tag)}</Select.Item>{/each}</Select.Group></Select.Content>
-            </Select.Root>
-            <Field.Description>{ui.text("ui_page_mutation_copy_starter_values_description")}</Field.Description>
-          </Field.Field>
-        </div>
-        <div id="mutation-locale-cldr" class="mt-3 grid gap-1 text-sm" aria-live="polite">
-          {#if mutationLocaleDescription?.valid && mutationLocaleDescription.canonical}
-            <p class="text-muted-foreground">{ui.text("ui_locale_cldr_summary", { locale: mutationLocaleDescription.canonical, data: mutationLocaleDescription.cldrLocale ?? "root", direction: mutationLocaleDescription.direction === "rtl" ? ui.text("ui_locale_direction_rtl") : ui.text("ui_locale_direction_ltr") })}</p>
-            {#if mutationLocaleDescription.dataId && mutationLocaleDescription.dataId !== mutationLocaleDescription.canonical}
-              <p class="text-muted-foreground">{ui.text("ui_locale_cldr_canonical", { locale: mutationLocaleDescription.dataId })}</p>
-            {/if}
-            {#if mutationLocaleDescription.matches && mutationLocaleDescription.unsupportedLocale}
-              <p data-locale-matches={mutationLocaleDescription.canonical}>{localeMatchesText(mutationLocaleDescription.canonical, mutationLocaleDescription.matches, mutationLocaleDescription.unsupportedLocale)}</p>
-            {/if}
-            {#if mutationLocaleDescription.suggested}
-              <p class="flex flex-wrap items-center gap-2"><span>{ui.text("ui_locale_script_suggestion", { locale: mutationLocaleDescription.suggested, typed: mutationLocaleDescription.canonical })}</span>
-                <Button variant="outline" size="xs" onclick={() => { mutationLocale = mutationLocaleDescription?.suggested ?? mutationLocale; invalidateMutationPreview(); describeMutationLocale(); }}>{ui.text("ui_locale_cldr_use", { locale: mutationLocaleDescription.suggested })}</Button></p>
-              {#if mutationLocaleDescription.suggestedMatches && mutationLocaleDescription.unsupportedLocale}
-                <p class="text-muted-foreground" data-locale-matches={mutationLocaleDescription.suggested}>{localeMatchesText(mutationLocaleDescription.suggested, mutationLocaleDescription.suggestedMatches, mutationLocaleDescription.unsupportedLocale)}</p>
-              {/if}
-            {/if}
-            <p>{ui.text("ui_locale_plural_categories", { categories: mutationLocaleDescription.cardinal.join(", ") || "other" })} · {ui.text("ui_locale_ordinal_categories", { categories: mutationLocaleDescription.ordinal.join(", ") || "other" })}</p>
-            <p class="text-muted-foreground">{ui.text("ui_locale_categories_seeded")}</p>
-          {/if}
-          {#if mutationLocaleDescription?.message}<p class="text-muted-foreground">{displayNotice(mutationLocaleDescription.message, ui)}</p>{/if}
-        </div>
-      {:else if mutationKind === "remove-locale"}
-        <div class="grid gap-4 sm:grid-cols-2">
-          <Field.Field><Field.Label for="remove-locale">{ui.text("ui_page_mutation_language_to_remove")}</Field.Label>
-            <Select.Root type="single" value={mutationLocale} onValueChange={(value) => { mutationLocale = value; invalidateMutationPreview(); }}>
-              <Select.Trigger id="remove-locale" class="w-full">{mutationLocale} · {localeName(mutationLocale)}</Select.Trigger>
-              <Select.Content><Select.Group>{#each snapshot.catalog.locales.filter((locale) => locale.tag !== snapshot?.catalog?.defaultLocale) as locale (locale.tag)}<Select.Item value={locale.tag} label={`${locale.tag} · ${localeName(locale.tag)}`}>{locale.tag} · {localeName(locale.tag)}</Select.Item>{/each}</Select.Group></Select.Content>
-            </Select.Root>
-          </Field.Field>
-          <Field.Field><Field.Label for="replacement-fallback">{ui.text("ui_page_mutation_redirect_fallbacks")}</Field.Label>
-            <Select.Root type="single" value={mutationReplacementFallback} onValueChange={(value) => { mutationReplacementFallback = value; invalidateMutationPreview(); }}>
-              <Select.Trigger id="replacement-fallback" class="w-full">{mutationReplacementFallback}</Select.Trigger>
-              <Select.Content><Select.Group>{#each snapshot.catalog.locales.filter((locale) => locale.tag !== mutationLocale) as locale (locale.tag)}<Select.Item value={locale.tag} label={locale.tag}>{locale.tag}</Select.Item>{/each}</Select.Group></Select.Content>
-            </Select.Root>
-          </Field.Field>
-        </div>
-        <Alert.Root variant="destructive"><Alert.Title>{ui.text("ui_page_mutation_files_deleted")}</Alert.Title><Alert.Description>{ui.text("ui_page_mutation_files_deleted_description")}</Alert.Description></Alert.Root>
-      {:else if mutationKind === "set-fallback"}
-        <div class="grid gap-4 sm:grid-cols-2">
-          <Field.Field><Field.Label for="fallback-locale">{ui.text("ui_page_mutation_language")}</Field.Label>
-            <Select.Root type="single" value={mutationLocale} onValueChange={(value) => { mutationLocale = value; invalidateMutationPreview(); }}>
-              <Select.Trigger id="fallback-locale" class="w-full">{mutationLocale} · {localeName(mutationLocale)}</Select.Trigger>
-              <Select.Content><Select.Group>{#each snapshot.catalog.locales.filter((locale) => locale.tag !== snapshot?.catalog?.defaultLocale) as locale (locale.tag)}<Select.Item value={locale.tag} label={`${locale.tag} · ${localeName(locale.tag)}`}>{locale.tag} · {localeName(locale.tag)}</Select.Item>{/each}</Select.Group></Select.Content>
-            </Select.Root>
-          </Field.Field>
-          <Field.Field><Field.Label for="fallback-target">{ui.text("ui_page_mutation_fallback")}</Field.Label>
-            <Select.Root type="single" value={mutationFallback} onValueChange={(value) => { mutationFallback = value; invalidateMutationPreview(); }}>
-              <Select.Trigger id="fallback-target" class="w-full">{mutationFallback} · {localeName(mutationFallback)}</Select.Trigger>
-              <Select.Content><Select.Group>{#each snapshot.catalog.locales.filter((locale) => locale.tag !== mutationLocale) as locale (locale.tag)}<Select.Item value={locale.tag} label={`${locale.tag} · ${localeName(locale.tag)}`}>{locale.tag} · {localeName(locale.tag)}</Select.Item>{/each}</Select.Group></Select.Content>
-            </Select.Root>
-          </Field.Field>
-        </div>
-        <div class="flex flex-wrap gap-2">{#each snapshot.catalog.locales as locale (locale.tag)}<Badge variant="outline"><strong>{locale.tag}</strong>{locale.tag === mutationLocale ? ` → ${mutationFallback}` : locale.fallback ? ` → ${locale.fallback}` : ` · ${ui.text("ui_page_project_wizard_source")}`}</Badge>{/each}</div>
-      {:else if mutationKind === "create-key"}
-        <Field.Field><Field.Label for="mutation-target-key">{ui.text("ui_page_mutation_message_key")}</Field.Label><Input id="mutation-target-key" bind:value={mutationTargetKey} oninput={invalidateMutationPreview} placeholder="checkout_actions_pay" autocomplete="off" /><Field.Description>{ui.text("ui_page_mutation_message_key_description")}</Field.Description></Field.Field>
-        <Field.Field><Field.Label for="mutation-initial-value">{ui.text("ui_page_mutation_initial_text")}</Field.Label><Textarea id="mutation-initial-value" class="min-h-28" bind:value={mutationInitialValue} oninput={invalidateMutationPreview} placeholder={ui.text("ui_page_mutation_initial_text_placeholder")} /><Field.Description>{ui.text("ui_page_mutation_initial_text_description")}</Field.Description></Field.Field>
-      {:else if mutationKind === "rename-key" || mutationKind === "duplicate-key"}
-        <Field.Field><Field.Label for="mutation-source-key">{ui.text("ui_page_mutation_existing_key")}</Field.Label><Input id="mutation-source-key" value={mutationSourceKey} readonly /></Field.Field>
-        <Field.Field><Field.Label for="mutation-new-key">{mutationKind === "rename-key" ? ui.text("ui_page_mutation_new_key_group_path") : ui.text("ui_page_mutation_duplicate_key")}</Field.Label><Input id="mutation-new-key" bind:value={mutationTargetKey} oninput={invalidateMutationPreview} autocomplete="off" /><Field.Description>{ui.text("ui_page_mutation_rename_description")}</Field.Description></Field.Field>
-      {:else}
-        <Alert.Root variant="destructive"><Alert.Title>{ui.text("ui_page_mutation_delete")} {mutationSourceKey}?</Alert.Title><Alert.Description>{ui.text("ui_page_mutation_delete_description")}</Alert.Description></Alert.Root>
-      {/if}
-    </Field.FieldGroup>
-
-    {#if mutationError}<Alert.Root variant="destructive" class="mt-4" aria-live="polite"><Alert.Title>{ui.text("ui_page_mutation_invalid")}</Alert.Title><Alert.Description>{displayNotice(mutationError, ui)}</Alert.Description></Alert.Root>{/if}
-    {#if mutationPreview?.ok}
-      <section class="mt-5 overflow-hidden rounded-xl border" aria-label={ui.text("ui_page_mutation_operation_preview")}>
-        <header class="flex items-center justify-between gap-3 border-b px-4 py-3"><strong>{ui.text("ui_page_mutation_operation_preview")}</strong><Badge variant="secondary">{ui.text("ui_count_affected_files", { count: mutationPreview.files.length })}</Badge></header>
-        {#each mutationPreview.files as file (file.path)}
-          <div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 border-b px-4 py-3 last:border-b-0 sm:grid-cols-[auto_minmax(0,1fr)_auto]"><Badge variant={file.kind === "delete" ? "destructive" : file.kind === "create" ? "default" : "secondary"}>{file.kind}</Badge><code class="truncate text-xs">{file.path}</code><small class="col-start-2 text-muted-foreground sm:col-start-auto">{file.beforeBytes.toLocaleString()} → {file.afterBytes.toLocaleString()} bytes</small></div>
-        {/each}
-      </section>
-      {#if mutationPreview.requiresIrreversibleConfirmation}
-        <Field.Field class="mt-4 rounded-lg border border-destructive/40 bg-destructive/5 p-4">
-          <div class="flex items-start gap-3">
-            <Checkbox id="confirm-irreversible" bind:checked={mutationIrreversibleConfirmed} />
-            <div class="grid gap-1.5 leading-none">
-              <Field.Label for="confirm-irreversible">{ui.text("ui_page_mutation_irreversible_confirm")}</Field.Label>
-              <Field.Description>{ui.text("ui_page_mutation_irreversible_description")}</Field.Description>
-            </div>
-          </div>
-        </Field.Field>
-      {/if}
-    {/if}
-    {#snippet footer()}
-      <Button variant="outline" disabled={mutationBusy} onclick={() => mutationDialogOpen = false}>{ui.text("ui_page_cancel")}</Button>
-      {#if mutationPreview?.ok}
-        <Button variant={mutationKind === "remove-locale" || mutationKind === "delete-key" ? "destructive" : "default"} disabled={mutationBusy || (mutationPreview.requiresIrreversibleConfirmation && !mutationIrreversibleConfirmed)} onclick={() => void applyMutation()}>{#if mutationBusy}<Spinner data-icon="inline-start" />{/if}{mutationBusy ? ui.text("ui_page_mutation_committing") : ui.text("ui_page_mutation_commit")}</Button>
-      {:else}
-        <Button disabled={mutationBusy} onclick={() => void previewMutation()}>{#if mutationBusy}<Spinner data-icon="inline-start" />{/if}{mutationBusy ? ui.text("ui_page_mutation_checking") : ui.text("ui_page_mutation_preview")}</Button>
-      {/if}
-    {/snippet}
-  </AppDialog>
-{/if}
-
-{#if projectDialogOpen}
-  <AppDialog
-    open
-    title={ui.text("ui_page_project_wizard_title")}
-    description={ui.text("ui_page_project_wizard_description")}
-    class="sm:max-w-3xl"
-    showCloseButton={!projectBusy}
-    onopenchange={(open) => { if (!open && !projectBusy) closeProjectWizard(); }}
-  >
-    <ol class="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-5" aria-label={ui.text("ui_page_project_wizard_steps_aria_label")}>
-      {#each [ui.text("ui_page_project_wizard_step_project"), ui.text("ui_page_project_wizard_step_languages"), ui.text("ui_page_project_wizard_step_settings"), ui.text("ui_page_project_wizard_step_import"), ui.text("ui_page_project_wizard_step_review")] as title, index (title)}
-        <li class="flex items-center gap-2 text-sm" aria-current={projectStep === index + 1 ? "step" : undefined}>
-          <Badge variant={projectStep === index + 1 ? "default" : projectStep > index + 1 ? "secondary" : "outline"}>{projectStep > index + 1 ? "✓" : index + 1}</Badge>
-          <span class={projectStep === index + 1 ? "font-medium" : "text-muted-foreground"}>{title}</span>
-        </li>
-      {/each}
-    </ol>
-
-    {#if projectStep === 1}
-      <div class="mb-5"><h3 class="font-medium">{ui.text("ui_page_project_wizard_where_live")}</h3><p class="text-sm text-muted-foreground">{ui.text("ui_page_project_wizard_no_overwrite")}</p></div>
-      <Field.FieldGroup>
-        <Field.Field><Field.Label for="project-directory">{ui.text("ui_page_project_wizard_new_directory")}</Field.Label><Input id="project-directory" bind:value={projectDirectory} placeholder="/projects/customer-app/Resources" autocomplete="off" /><Field.Description>{ui.text("ui_page_project_wizard_directory_description")}</Field.Description></Field.Field>
-        <Field.Field><Field.Label for="project-catalog">{ui.text("ui_page_project_wizard_catalog_id")}</Field.Label><Input id="project-catalog" bind:value={projectCatalog} placeholder="product" autocomplete="off" /><Field.Description>{ui.text("ui_page_project_wizard_catalog_id_description")}</Field.Description></Field.Field>
-      </Field.FieldGroup>
-    {:else if projectStep === 2}
-      <div class="mb-5"><h3 class="font-medium">{ui.text("ui_page_project_wizard_which_languages")}</h3><p class="text-sm text-muted-foreground">{ui.text("ui_page_project_wizard_language_description")}</p></div>
-      <div class="grid gap-3">
-        <div class="grid items-end gap-3 rounded-xl border p-4 sm:grid-cols-[1fr_auto]">
-          <Field.Field><Field.Label for="project-default-locale">{ui.text("ui_page_project_wizard_source_default")}</Field.Label><Input id="project-default-locale" bind:value={projectDefaultLocale} placeholder="de" list="cldr-locales-wizard" autocomplete="off" /></Field.Field>
-          <Badge variant="secondary" class="mb-2">{ui.text("ui_page_project_wizard_canonical_source")}</Badge>
-        </div>
-        {#each projectLocales as locale (locale.id)}
-          <div class="grid items-end gap-3 rounded-xl border p-4 sm:grid-cols-[1fr_1fr_auto]">
-            <Field.Field><Field.Label for={`project-locale-${locale.id}`}>{ui.text("ui_page_project_wizard_additional_language")}</Field.Label><Input id={`project-locale-${locale.id}`} bind:value={locale.tag} placeholder="en" list="cldr-locales-wizard" autocomplete="off" /></Field.Field>
-            <Field.Field><Field.Label for={`project-fallback-${locale.id}`}>{ui.text("ui_page_mutation_fallback")}</Field.Label>
-              <Select.Root type="single" value={locale.fallback} onValueChange={(value) => locale.fallback = value}>
-                <Select.Trigger id={`project-fallback-${locale.id}`} class="w-full">{locale.fallback || `${ui.text("ui_page_project_wizard_default")} (${projectDefaultLocale || ui.text("ui_page_project_wizard_source")})`}</Select.Trigger>
-                <Select.Content><Select.Group><Select.Item value="" label={`${ui.text("ui_page_project_wizard_default")} (${projectDefaultLocale || ui.text("ui_page_project_wizard_source")})`}>{ui.text("ui_page_project_wizard_default")} ({projectDefaultLocale || ui.text("ui_page_project_wizard_source")})</Select.Item>{#each projectLocales.filter((candidate) => candidate.id !== locale.id && candidate.tag.trim() !== "") as candidate (candidate.id)}<Select.Item value={candidate.tag} label={candidate.tag}>{candidate.tag}</Select.Item>{/each}</Select.Group></Select.Content>
-              </Select.Root>
-            </Field.Field>
-            <Button variant="ghost" size="icon-sm" aria-label={ui.text("ui_project_remove_locale", { locale: locale.tag || ui.text("ui_page_project_wizard_row") })} onclick={() => removeProjectLocale(locale.id)}><Trash2Icon /></Button>
-          </div>
-        {/each}
-        <datalist id="cldr-locales-wizard">{#each localeCatalog?.locales ?? [] as tag (tag)}<option value={tag}></option>{/each}</datalist>
-        <Button variant="outline" class="justify-self-start" onclick={addProjectLocale}><PlusIcon data-icon="inline-start" />{ui.text("ui_page_project_wizard_add_language")}</Button>
-      </div>
-    {:else if projectStep === 3}
-      <div class="mb-5"><h3 class="font-medium">{ui.text("ui_page_project_wizard_generated_api")}</h3><p class="text-sm text-muted-foreground">{ui.text("ui_page_project_wizard_generated_api_description")}</p></div>
-      <Field.FieldGroup>
-        <div class="grid gap-4 sm:grid-cols-2">
-          <Field.Field><Field.Label for="project-namespace">{ui.text("ui_page_project_wizard_code_namespace")}</Field.Label><Input id="project-namespace" bind:value={projectNamespace} autocomplete="off" /></Field.Field>
-          <Field.Field><Field.Label for="project-class">{ui.text("ui_page_project_wizard_generated_class")}</Field.Label><Input id="project-class" bind:value={projectClassName} autocomplete="off" /></Field.Field>
-        </div>
-        <Field.Field orientation="horizontal"><Checkbox id="project-starter" bind:checked={projectIncludeStarter} /><Field.Content><Field.Label for="project-starter">{ui.text("ui_page_project_wizard_add_starter")}</Field.Label><Field.Description>{ui.text("ui_page_project_wizard_add_starter_description")}</Field.Description></Field.Content></Field.Field>
-      </Field.FieldGroup>
-    {:else if projectStep === 4}
-      <div class="mb-5"><h3 class="font-medium">{ui.text("ui_catalog_import_title")}</h3><p class="text-sm text-muted-foreground">{ui.text("ui_page_project_wizard_import_description")}</p></div>
-      <Field.FieldGroup>
-        <Field.Field><Field.Label for="wizard-import-format">{ui.text("ui_catalog_import_format")}</Field.Label>
-          <select id="wizard-import-format" class="h-9 rounded-md border bg-background px-2 text-sm" bind:value={wizardImportFrom}>
-            <option value="">{ui.text("ui_page_project_wizard_import_none")}</option>
-            <option value="resx">.resx</option>
-            <option value="i18next">i18next</option>
-          </select>
-        </Field.Field>
-        {#if wizardImportFrom !== ""}
-          <Field.Field><Field.Label for="wizard-import-source">{ui.text("ui_catalog_import_source")}</Field.Label>
-            <Input id="wizard-import-source" bind:value={wizardImportSource} placeholder={wizardImportFrom === "resx" ? "/projects/customer-app/Properties/Strings.resx" : "/projects/customer-web/public/locales"} autocomplete="off" />
-            <Field.Description>{wizardImportFrom === "resx" ? ui.text("ui_catalog_import_format_resx") : ui.text("ui_catalog_import_format_i18next")}</Field.Description>
-          </Field.Field>
-        {/if}
-      </Field.FieldGroup>
-    {:else if projectStep === 5 && projectPlan !== undefined}
-      <Alert.Root><Alert.Title>{ui.text("ui_page_project_wizard_ready_create")} {projectPlan.catalogId}</Alert.Title><Alert.Description>{ui.text("ui_count_project_summary", { languages: projectPlan.locales.length, files: projectPlan.files.length })}</Alert.Description></Alert.Root>
-      <dl class="mt-4 grid gap-3 rounded-xl border p-4"><div class="grid gap-1 sm:grid-cols-[7rem_1fr]"><dt class="text-muted-foreground">{ui.text("ui_page_project_wizard_directory")}</dt><dd class="m-0 truncate font-mono text-xs">{projectPlan.directory}</dd></div><div class="grid gap-1 sm:grid-cols-[7rem_1fr]"><dt class="text-muted-foreground">{ui.text("ui_page_project_wizard_languages")}</dt><dd class="m-0 font-medium">{projectPlan.locales.map((locale) => locale.tag).join(", ")}</dd></div></dl>
-      {#if wizardImportFrom !== ""}<p class="mt-4 text-sm">{ui.text("ui_catalog_import_title")}: <code>{wizardImportSource}</code></p>{/if}
-      <section class="mt-4 overflow-hidden rounded-xl border" aria-label={ui.text("ui_page_project_wizard_files_to_create")}><h4 class="border-b px-4 py-3 font-medium">{ui.text("ui_page_project_wizard_files_to_create")}</h4>{#each projectPlan.files as file (file)}<div class="border-b px-4 py-3 last:border-b-0"><code class="text-xs">{file}</code></div>{/each}</section>
-    {/if}
-
-    {#if projectError}<Alert.Root variant="destructive" class="mt-4" aria-live="polite"><Alert.Title>{ui.text("ui_page_project_wizard_invalid")}</Alert.Title><Alert.Description>{displayNotice(projectError, ui)}</Alert.Description></Alert.Root>{/if}
-    {#snippet footer()}
-      <Button variant="outline" disabled={projectBusy} onclick={closeProjectWizard}>{ui.text("ui_page_cancel")}</Button>
-      {#if projectStep > 1}<Button variant="ghost" disabled={projectBusy} onclick={() => { projectStep -= 1; projectError = undefined; }}>{ui.text("ui_page_back")}</Button>{/if}
-      {#if projectStep < 5}
-        <Button disabled={projectBusy} onclick={() => void advanceProjectWizard()}>{#if projectBusy}<Spinner data-icon="inline-start" />{/if}{projectBusy ? ui.text("ui_page_validating") : ui.text("ui_page_continue")}</Button>
-      {:else}
-        <Button disabled={projectBusy || projectPlan?.ok !== true} onclick={() => void createProject()}>{#if projectBusy}<Spinner data-icon="inline-start" />{/if}{projectBusy ? ui.text("ui_page_creating") : ui.text("ui_page_project_wizard_create_project")}</Button>
-      {/if}
-    {/snippet}
-  </AppDialog>
-{/if}
+<RepairDialog
+  {repair}
+  documents={workspace.snapshot?.documents ?? []}
+  schemaVersion={workspace.snapshot?.catalog?.schemaVersion ?? 1}
+  {labels}
+  disabled={editorMutationBlocked}
+  onselectdiagnostic={(diagnostic) => void editing.selectDiagnostic(diagnostic)}
+  onfix={(diagnostic, fix) => void editing.applyDiagnosticFix(diagnostic, fix)}
+/>
+<OpenProjectDialog {workspace} clientError={feedback.clientError} />
+<MutationDialog {mutation} catalog={workspace.snapshot?.catalog} {localeCatalog} addMessageLabel={labels.addMessage} {localeName} />
+<ProjectWizardDialog {wizard} {localeCatalog} />
 
 <CommandPalette open={commandPaletteOpen} commands={paletteCommands} onopenchange={(open) => commandPaletteOpen = open} />
 
@@ -3113,98 +529,4 @@
   :global(button), :global(select) { color: inherit; }
   :global(button:focus-visible), :global(input:focus-visible), :global(textarea:focus-visible), :global(select:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
   :global(::selection) { color: var(--primary-foreground); background: var(--primary); }
-
-  .eyebrow { margin: 0; color: var(--primary); font-size: .64rem; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
-  .mark { width: 4rem; height: 4rem; border-radius: 1rem; background: url("/brand/icon.png") center / cover no-repeat; box-shadow: 0 1rem 3rem color-mix(in oklch, var(--foreground) 22%, transparent); }
-  .mark span { display: none; }
-  .mark.small { width: 2.25rem; height: 2.25rem; border-radius: .65rem; box-shadow: 0 .35rem 1rem color-mix(in oklch, var(--foreground) 16%, transparent); }
-
-  .status-dot { width: .5rem; height: .5rem; border-radius: 50%; background: var(--chart-2); box-shadow: 0 0 .6rem color-mix(in oklch, var(--chart-2) 55%, transparent); }
-  .status-dot.warning { background: var(--primary); box-shadow: 0 0 .6rem color-mix(in oklch, var(--primary) 55%, transparent); }
-  .primary { border: 1px solid var(--primary); border-radius: .45rem; padding: .58rem .85rem; color: var(--primary-foreground); background: var(--primary); font-weight: 750; cursor: pointer; box-shadow: 0 .35rem 1rem color-mix(in oklch, var(--foreground) 16%, transparent); }
-  .primary:hover:not(:disabled) { filter: brightness(1.08); }
-  .primary:disabled { cursor: not-allowed; filter: grayscale(.5); opacity: .42; }
-
-  .editor-content { flex: 1; min-width: 0; min-height: 0; padding: 1.25rem 1rem 2rem; overflow-x: hidden; overflow-y: auto; scrollbar-color: var(--border) transparent; }
-  .message-preview { max-width: 1000px; margin: 1.2rem auto 0; border: 1px solid var(--border); border-radius: .65rem; color: var(--card-foreground); background: color-mix(in oklch, var(--card) 94%, var(--primary)); overflow: hidden; }
-  .message-preview > header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem .9rem; background: color-mix(in oklch, var(--muted) 82%, var(--primary)); }
-  .message-preview > header > div { display: grid; gap: .15rem; }
-  .message-preview header strong { color: var(--foreground); font-size: .68rem; }
-  .message-preview header span { color: var(--muted-foreground); font-size: .56rem; }
-  .preview-state { border: 1px solid color-mix(in oklch, var(--primary) 45%, var(--border)); border-radius: 1rem; padding: .23rem .5rem; color: var(--primary) !important; background: color-mix(in oklch, var(--primary) 12%, transparent); font: .53rem ui-monospace, monospace !important; }
-  .sample-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .55rem; border-top: 1px solid var(--border); padding: .7rem .9rem; }
-  .sample-inputs label { display: grid; gap: .3rem; color: var(--muted-foreground); font-size: .58rem; }
-  .sample-inputs label > span { display: flex; justify-content: space-between; }
-  .sample-inputs small { color: var(--muted-foreground); font: .52rem ui-monospace, monospace; }
-  .sample-inputs input { min-width: 0; border: 1px solid var(--input); border-radius: .35rem; padding: .46rem .5rem; color: var(--foreground); background: var(--background); font: .62rem ui-monospace, monospace; }
-  .preview-canvas { min-height: 5rem; border-top: 1px solid var(--border); padding: 1rem; color: var(--foreground); background: radial-gradient(circle at 90% 0, color-mix(in oklch, var(--primary) 13%, transparent), transparent 45%), var(--background); font-size: .9rem; line-height: 1.7; }
-  .preview-canvas p { margin: 0; white-space: pre-wrap; }
-  .preview-placeholder { color: var(--muted-foreground); font-size: .65rem; }
-  .preview-error { color: var(--destructive); font-size: .65rem; }
-  .safe-content { display: block; }
-  .safe-note { margin: 0; border-top: 1px solid var(--border); padding: .55rem .9rem; color: var(--muted-foreground); font-size: .55rem; }
-  .loading-shell, .fatal-shell, .recovery-shell { display: grid; place-content: center; place-items: center; height: 100vh; padding: 2rem; color: var(--muted-foreground); text-align: center; background: radial-gradient(circle at center, color-mix(in oklch, var(--primary) 10%, var(--background)), var(--background) 65%); }
-  .loading-shell { gap: 1.5rem; }
-  .loading-shell p { margin: 0; color: var(--primary); font-size: .65rem; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
-  .loading-line { width: 12rem; height: 1px; background: linear-gradient(90deg, transparent, var(--primary), transparent); animation: pulse .8s infinite alternate; }
-  .fatal-shell { max-width: none; }
-  .fatal-shell .mark { margin-bottom: 2rem; }
-  .fatal-shell h1 { max-width: 36rem; margin: .8rem 0; color: var(--foreground); font-family: Georgia, serif; font-size: 2.6rem; font-weight: 500; }
-  .fatal-shell > p:not(.eyebrow) { max-width: 44rem; margin: 0 0 1.5rem; }
-  .recovery-shell { gap: .9rem; }
-  .recovery-shell h1 { max-width: 42rem; margin: .4rem 0; color: var(--foreground); font-family: Georgia, serif; font-size: 2.3rem; font-weight: 500; }
-  .recovery-shell > p:not(.eyebrow) { max-width: 44rem; margin: 0; line-height: 1.6; }
-  .recovery-paths { display: grid; gap: .3rem; width: min(36rem, 100%); max-height: 12rem; margin: .5rem 0; overflow-y: auto; }
-  .recovery-paths code { border: 1px solid var(--border); border-radius: .3rem; padding: .45rem .6rem; color: var(--foreground); text-align: left; background: var(--card); font: .6rem ui-monospace, monospace; }
-  .recovery-actions { display: flex; gap: .7rem; }
-  .recovery-shell > small { color: var(--muted-foreground); font-size: .58rem; }
-  .welcome-shell { width: 100vw; min-height: 100vh; overflow-y: auto; background: radial-gradient(circle at 70% -10%, color-mix(in oklch, var(--primary) 12%, transparent), transparent 42%), var(--background); }
-  .welcome-brand { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .8rem; border-bottom: 1px solid var(--border); padding: 1rem 1.5rem; background: color-mix(in oklch, var(--card) 94%, transparent); }
-  .welcome-brand h1 { margin: .1rem 0 0; color: var(--foreground); font-family: Georgia, serif; font-size: 1.35rem; font-weight: 500; }
-  .welcome-brand select { border: 1px solid var(--input); border-radius: .4rem; padding: .35rem .5rem; background: var(--secondary); }
-  .welcome-content { width: min(880px, calc(100% - 3rem)); margin: 0 auto; padding: 4rem 0; }
-  .welcome-heading { margin-bottom: 1.6rem; }
-  .welcome-heading h2 { margin: .55rem 0; color: var(--foreground); font-family: Georgia, serif; font-size: clamp(2rem, 4vw, 3.2rem); font-weight: 500; letter-spacing: -.035em; }
-  .welcome-heading > p:last-child { max-width: 42rem; margin: 0; color: var(--muted-foreground); font-size: .78rem; line-height: 1.6; }
-  .catalog-choices { display: grid; gap: .65rem; margin: 1.4rem 0; }
-  .catalog-choice { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: .9rem; width: 100%; border: 1px solid var(--border); border-radius: .65rem; padding: 1rem; color: var(--card-foreground); text-align: left; background: var(--card); cursor: pointer; }
-  .catalog-choice:hover { border-color: var(--ring); background: var(--accent); }
-  .catalog-choice > span:nth-child(2) { display: grid; gap: .2rem; min-width: 0; }
-  .catalog-choice strong { color: var(--foreground); font-size: .82rem; }
-  .catalog-choice small { overflow: hidden; color: var(--muted-foreground); font: .58rem ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
-  .catalog-metrics { color: var(--muted-foreground); font-size: .6rem; line-height: 1.55; text-align: right; }
-  .health { min-width: 4.5rem; border-radius: 1rem; padding: .25rem .45rem; color: var(--chart-2); background: color-mix(in oklch, var(--chart-2) 13%, transparent); font-size: .56rem; text-align: center; }
-  .health.error { color: var(--destructive); background: color-mix(in oklch, var(--destructive) 13%, transparent); }
-  .open-workspace-card { display: grid; gap: .45rem; margin-top: 1.2rem; border: 1px solid var(--border); border-radius: .65rem; padding: 1rem; background: var(--card); }
-  .open-workspace-card label { color: var(--foreground); font-size: .66rem; font-weight: 650; }
-  .open-workspace-card > div { display: grid; grid-template-columns: 1fr auto auto; gap: .6rem; }
-  .open-workspace-card input { min-width: 0; border: 1px solid var(--input); border-radius: .45rem; outline: 0; padding: .68rem .75rem; color: var(--foreground); background: var(--background); font-size: .75rem; }
-  .open-workspace-card input:focus { border-color: var(--ring); }
-  .open-workspace-card small { color: var(--muted-foreground); font-size: .58rem; }
-  .welcome-actions { display: flex; gap: .65rem; margin-top: .8rem; }
-  .repair-list { margin-top: 1.5rem; border: 1px solid color-mix(in oklch, var(--destructive) 42%, var(--border)); border-radius: .65rem; background: color-mix(in oklch, var(--destructive) 5%, var(--card)); overflow: hidden; }
-  .repair-list > header { padding: .8rem 1rem; background: color-mix(in oklch, var(--destructive) 10%, var(--card)); }
-  .repair-list > header > div { display: flex; justify-content: space-between; }
-  .repair-list strong { color: var(--destructive); font-size: .7rem; }
-  .repair-list header span { color: color-mix(in oklch, var(--destructive) 70%, var(--muted-foreground)); font-size: .6rem; }
-  .repair-list > button { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .7rem; width: 100%; border: 0; border-top: 1px solid color-mix(in oklch, var(--destructive) 28%, var(--border)); padding: .7rem 1rem; text-align: left; background: transparent; cursor: pointer; }
-  .repair-list > button:hover { background: color-mix(in oklch, var(--destructive) 9%, var(--card)); }
-  .repair-list > button > span { display: grid; place-items: center; width: 1.3rem; height: 1.3rem; border-radius: 50%; color: var(--destructive); background: color-mix(in oklch, var(--destructive) 16%, transparent); font-weight: 800; }
-  .repair-list code { color: var(--foreground); font: .62rem ui-monospace, monospace; }
-  .repair-list small { color: var(--muted-foreground); font-size: .58rem; }
-  .recent-projects { margin-top: 1.5rem; border: 1px solid var(--border); border-radius: .65rem; background: var(--card); overflow: hidden; }
-  .recent-projects > header { display: flex; justify-content: space-between; padding: .75rem 1rem; background: var(--muted); }
-  .recent-projects header strong { color: var(--foreground); font-size: .68rem; }
-  .recent-projects header span { color: var(--muted-foreground); font-size: .56rem; }
-  .recent-projects > button { display: grid; grid-template-columns: 1fr auto; align-items: center; width: 100%; border: 0; border-top: 1px solid var(--border); padding: .7rem 1rem; color: var(--foreground); text-align: left; background: transparent; cursor: pointer; }
-  .recent-projects > button:hover { background: var(--accent); }
-  .recent-projects button > span { display: grid; gap: .2rem; min-width: 0; }
-  .recent-projects code { overflow: hidden; color: var(--muted-foreground); font: .57rem ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
-  .recent-projects small { color: var(--muted-foreground); font-size: .55rem; }
-  .secondary { border: 1px solid var(--border); border-radius: .45rem; padding: .58rem .85rem; color: var(--secondary-foreground); background: var(--secondary); cursor: pointer; }
-  .secondary:hover:not(:disabled) { border-color: var(--ring); color: var(--accent-foreground); background: var(--accent); }
-  .project-error { margin: 1rem 0 0; border: 1px solid color-mix(in oklch, var(--destructive) 45%, var(--border)); border-radius: .45rem; padding: .7rem .8rem; color: var(--destructive); background: color-mix(in oklch, var(--destructive) 10%, transparent); font-size: .67rem; }
-  @keyframes pulse { to { opacity: .35; } }
-  @media (min-width: 640px) { .editor-content { padding: 1.5rem; } }
-  @media (min-width: 1100px) { .editor-content { padding: 2rem clamp(2rem, 5vw, 5rem) 3rem; } }
 </style>

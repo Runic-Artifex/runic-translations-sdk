@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { compile } from "svelte/compiler";
 import ts from "typescript";
+import { readPageSourceFiles } from "./page-sources.mjs";
 import { readUiMessages } from "./ui-messages.mjs";
 
 const keyboard = await loadModule(new URL("../src/lib/editor-keyboard.ts", import.meta.url));
@@ -47,9 +48,11 @@ const [english, german] = await Promise.all([
   readUiMessages("en"),
   readUiMessages("de"),
 ]);
+// The page: its composition root, screens, dialogs and controllers, each compiled on its own and read as one.
+const pageFiles = await readPageSourceFiles();
 const sources = Object.fromEntries([
   ...componentEntries,
-  ["+page.svelte", await readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8")],
+  ...pageFiles.filter(([path]) => path.endsWith(".svelte")),
 ]);
 
 for (const [name, source] of Object.entries(sources)) {
@@ -141,7 +144,7 @@ assert.match(editorToolbar, /aria-label=\{saving \? savingLabel/, "Save control 
 assertOrder(editorToolbar, "Undo2Icon", "Redo2Icon", "SaveIcon",
   "Editor toolbar focus order must remain undo, redo, then save.");
 
-const page = sources["+page.svelte"];
+const page = pageFiles.map(([, text]) => text).join("\n");
 assert.match(page, /<svelte:window onkeydown=\{handleKeyboard\}/,
   "Owned keyboard dispatch is not installed on the Editor window.");
 // Ctrl+Z in a draft field undoes the unsaved edit, not the field's browser history, and so does the browser's own undo.
@@ -151,7 +154,7 @@ assert.match(page, /onbeforeinput=\{handleBeforeInput\}/, "The browser's own und
 assert.match(page, /inputType === "historyUndo"[\s\S]*undo\(\)[\s\S]*inputType === "historyRedo"[\s\S]*redo\(\)/,
   "historyUndo and historyRedo of a draft field are not the editor's undo and redo.");
 // The field's pending input reaches the draft before the step is taken back; then the field keeps focus and caret.
-assert.match(page, /async function stepHistory[\s\S]*?await draftStore\.settledAll\(\)[\s\S]*?draftStore\.undo\(path\)[\s\S]*?restoreCaret\(field, shown\)/,
+assert.match(page, /async #stepHistory[\s\S]*?await drafts\.settledAll\(\)[\s\S]*?drafts\.undo\(path\)[\s\S]*?restoreCaret\(field, shown\)/,
   "Undo does not flush the field's pending input first or does not restore the caret.");
 assert.match(page, /onundo=\{undo\}/, "The toolbar's Undo does not use the unsaved-edit history.");
 assert.match(page, /onredo=\{redo\}/, "The toolbar's Redo does not use the unsaved-edit history.");

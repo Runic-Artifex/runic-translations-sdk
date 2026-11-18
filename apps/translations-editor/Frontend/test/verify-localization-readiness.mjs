@@ -3,6 +3,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { resolve, dirname } from "node:path";
 import ts from "typescript";
+import { readPageSources } from "./page-sources.mjs";
 import { readUiMessages } from "./ui-messages.mjs";
 import {
   localizationStressAttributes,
@@ -11,7 +12,7 @@ import {
   visualAccessibilityStressScenarios,
 } from "@runic-artifex/translations-svelte/testing";
 
-const page = await readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8");
+const page = await readPageSources();
 const editor = await readFile(new URL("../src/lib/TranslationEditor.svelte", import.meta.url), "utf8");
 const inline = await readFile(new URL("../src/lib/InlineMessageEditor.svelte", import.meta.url), "utf8");
 const styles = await readFile(new URL("../src/routes/layout.css", import.meta.url), "utf8");

@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { parse } from "svelte/compiler";
+import { readPageSources } from "./page-sources.mjs";
 import { readUiMessages } from "./ui-messages.mjs";
 
 const source = await readFile(new URL("../src/lib/MessageList.svelte", import.meta.url), "utf8");
-const page = await readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8");
+const page = await readPageSources();
 const [english, german] = await Promise.all([readUiMessages("en"), readUiMessages("de")]);
 const required = [
   "app_messages", "app_message_bulk_actions", "app_visible_messages", "app_mark_for_review", "app_approve_translations",
