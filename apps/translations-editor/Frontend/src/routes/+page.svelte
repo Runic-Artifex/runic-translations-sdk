@@ -29,11 +29,8 @@
     EditorProjectCreationRequest,
     EditorProjectPlan,
     EditorReviewFileResult,
-    EditorReviewEntry,
-    EditorReviewSnapshot,
     EditorReviewImportPreview,
     EditorReviewState,
-    EditorTerminologyEntry,
     EditorXliffExportResult,
     EditorXliffImportPreview,
     ValidationResult,
@@ -85,17 +82,12 @@
   import * as Sidebar from "#lib/components/ui/sidebar/index.js";
   import { Spinner } from "#lib/components/ui/spinner/index.js";
   import { Textarea } from "#lib/components/ui/textarea/index.js";
-  import type { MessageArtifact, MessagePreviewResult, PreviewFormatting, PreviewNode } from "#lib/message-composer.js";
-  import {
-    createMessagePreviewRequest,
-    createMessagePreviewOwnership,
-    createMessagePreviewScheduler,
-    createPreviewSamples,
-    parseRenderedMessagePreview,
-    previewSampleOr,
-    routeMessagePreview,
-    withPreviewSample,
-  } from "#lib/message-preview.js";
+  import type { MessageArtifact, PreviewFormatting, PreviewNode } from "#lib/message-composer.js";
+  import { previewSampleOr } from "#lib/message-preview.js";
+  import { DraftStore } from "#lib/state/draft-store.svelte.js";
+  import { DiagnosticsStore } from "#lib/state/diagnostics-store.svelte.js";
+  import { PreviewController } from "#lib/state/preview-controller.svelte.js";
+  import { ReviewStore } from "#lib/state/review-store.svelte.js";
   import {
     clearLocalEditorState,
     configureLocalEditorState,
@@ -123,40 +115,33 @@
     qualityIssues,
     qualityReportCsv,
     reviewIdentity,
-    reviewMap,
     translationSuggestions,
     withCurrentReview,
-    rebaseReview,
   } from "#lib/review-model.js";
   import {
     isPseudoLocale,
     readUiSimulation,
     saveUiSimulation,
-    type PseudoLocale,
     type UiDirection,
   } from "#lib/simulation.js";
 
   type ProjectLocaleDraft = { id: number; tag: string; fallback: string };
-  type StoredDraft = { content: string; baseRevision: string };
   type RecentProject = { root: string; catalogId: string; openedAt: string };
   type MutationKind = EditorMutationRequest["kind"];
-  type PreviewRequest = ReturnType<typeof createMessagePreviewRequest>;
 
   const bridge = createEditorBridge();
   const windowLocaleSync = createWindowLocaleSync({ current: windowLocale, send: (locale) => bridge.setUiLocale(locale) });
-  const previewOwnership = createMessagePreviewOwnership();
-  const previewScheduler = createMessagePreviewScheduler(
-    (callback, delay) => setTimeout(callback, delay),
-    (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
-  );
   configureLocalEditorState(bridge);
   let snapshot = $state.raw<WorkspaceSnapshot>();
-  let drafts = $state<Record<string, string>>({});
-  let parsedDrafts = $state<Record<string, { content: string; entries: import("#lib/contracts.js").EditorMessageEntry[] }>>({});
-  const transformQueues = new Map<string, Promise<void>>();
-  const transformVersions = new Map<string, number>();
-  let workspaceGeneration = 0;
-  let draftGenerations = $state<Record<string, number>>({});
+  // Unsaved document text and the one queue per document that changes it (composer, authoring, raw validation, fixes).
+  const draftStore = new DraftStore({
+    bridge,
+    snapshot: () => snapshot,
+    storage: { get: getLocalEditorState, set: setLocalEditorState, remove: removeLocalEditorState },
+  });
+  const diagnosticsStore = new DiagnosticsStore(() => snapshot);
+  const review = new ReviewStore({ bridge, snapshot: () => snapshot, errorNotice });
+  const previewController = new PreviewController({ bridge, pseudoLocalization: () => pseudoLocalization, defaultSample, errorNotice });
   let selectedKey = $state("");
   let selectedLocale = $state("");
   let selectedDocumentPath = $state("");
@@ -167,7 +152,6 @@
   let editorText = $state("");
   let sourceSelection = $state.raw<{ start: number; end: number; token: number }>();
   let selectionToken = 0;
-  let authoringPending = $state(0);
   // Until the native state loads, the page shows the OS preference negotiated against the editor catalog.
   let uiLocale = $state<string>(negotiateUiLocale(preferredLanguages(), uiLocales, uiBaseLocale));
   const ui = createUiText(() => uiLocale);
@@ -176,13 +160,9 @@
   let themePalette = $state<ThemePalette>("runic");
   let loading = $state(true);
   let saving = $state(false);
-  let validationBusy = $state(false);
-  let validation = $state.raw<ValidationResult>();
   let clientError = $state<UiMessage>();
   let operationMessage = $state<UiMessage>();
   let searchInput = $state<HTMLInputElement | null>(null);
-  let validationTimer: number | undefined;
-  let validationEpoch = 0;
   let projectDialogOpen = $state(false);
   let projectStep = $state(1);
   // The wizard's optional import step: after creating the project, the import's dry run opens for confirmation.
@@ -214,7 +194,6 @@
   let externalFileChanges = $state<EditorExternalFileChange[]>([]);
   let comparedExternalChange = $state.raw<EditorExternalFileChange>();
   let mergedExternalText = $state("");
-  let recoveredDrafts = $state<Record<string, StoredDraft>>({});
   let recentProjects = $state<RecentProject[]>([]);
   let mutationDialogOpen = $state(false);
   let mutationKind = $state<MutationKind>("add-locale");
@@ -243,31 +222,8 @@
   let recoveryReloadRequired = $state(false);
   let recoveryReloadMessage = $state<UiMessage>();
   let historyBusy = $state(false);
-  let previewBusy = $state(false);
-  let previewError = $state<UiMessage>();
-  let previewAst = $state.raw<MessageArtifact>();
-  let previewSamples = $state.raw<Record<string, string>>(createPreviewSamples());
-  let previewResult = $state.raw<MessagePreviewResult>();
-  // The preview's formatting: the locale a user requests (de-CH for de text) and the zone timeZone=local formats in.
-  let previewRequestedLocale = $state("");
-  let previewTimeZone = $state("");
-  // The pseudo-locale the simulation previews, rendered by the host's SDK generator (en-XA unless chosen in the sidebar).
-  let pseudoLocale = $state<PseudoLocale>("en-XA");
-  let pseudoPreviewResult = $state.raw<MessagePreviewResult>();
-  let pseudoPreviewError = $state<UiMessage>();
   // The SDK's CLDR locales (add-language picker, regional preview locales); loaded once.
   let localeCatalog = $state.raw<EditorLocaleCatalog>();
-  let previewRequest = $state.raw<PreviewRequest>();
-  let reviewEntries = $state<EditorReviewEntry[]>([]);
-  let terminology = $state<EditorTerminologyEntry[]>([]);
-  // The review data the unsaved edits started from: a save (or a review file another writer changed) re-applies only
-  // the user's changes on top of the files on disk.
-  let reviewBaseEntries: EditorReviewEntry[] = [];
-  let reviewBaseTerminology: EditorTerminologyEntry[] = [];
-  let reviewRevision = $state<string>();
-  let reviewDirty = $state(false);
-  let reviewSaving = $state(false);
-  let reviewMessage = $state<UiMessage>();
   let terminologyDialogOpen = $state(false);
   let termSource = $state("");
   let termPreferred = $state("");
@@ -331,17 +287,17 @@
     document.documentElement.dir = uiDirection;
   });
   let hasUnsavedRepair = $derived(repairDocument !== undefined && repairText !== repairDocument.content);
-  let hasUnsavedWork = $derived(reviewDirty || hasUnsavedRepair || Object.keys(drafts).length > 0);
+  let hasUnsavedWork = $derived(review.dirty || hasUnsavedRepair || draftStore.hasDrafts);
   let historyBlocked = $derived(
-    historyBusy || loading || saving || reviewSaving || validationBusy || mutationBusy || recoveryBusy ||
-    previewBusy || projectBusy || openingWorkspace || pickingWorkspace || repairBusy || diagnosticBusy || aboutBusy || interchangeBusy ||
+    historyBusy || loading || saving || review.saving || draftStore.validating || mutationBusy || recoveryBusy ||
+    previewController.busy || projectBusy || openingWorkspace || pickingWorkspace || repairBusy || diagnosticBusy || aboutBusy || interchangeBusy ||
     hasUnsavedWork || mutationDialogOpen || projectDialogOpen || openDialogOpen ||
     comparedExternalChange !== undefined || repairDocument !== undefined || terminologyDialogOpen || reportDialogOpen || aboutDialogOpen,
   );
-  let editorMutationBlocked = $derived(historyBusy || saving || reviewSaving || loading || recoveryBusy || openingWorkspace);
+  let editorMutationBlocked = $derived(historyBusy || saving || review.saving || loading || recoveryBusy || openingWorkspace);
   // Version 1 editor approvals waiting to move into the review file are shown read-only.
-  let reviewMutationBlocked = $derived(editorMutationBlocked || reviewSaving || snapshot?.review?.migrationPending === true);
-  let rows = $derived(buildRows(snapshot, drafts, parsedDrafts));
+  let reviewMutationBlocked = $derived(editorMutationBlocked || review.saving || snapshot?.review?.migrationPending === true);
+  let rows = $derived(buildRows(snapshot, draftStore.drafts, draftStore.parsed));
   let messageSearch = $derived(createMessageSearchIndex(rows));
   // Coverage from runic-translations status (Tooling), the numbers of the command line, for the saved files.
   let localeSummaries = $derived.by(() => (snapshot?.catalog?.locales ?? []).map((locale) => {
@@ -360,14 +316,14 @@
       isSource: locale.tag === snapshot?.catalog?.defaultLocale,
     };
   }));
-  let reviewIndex = $derived(reviewMap(reviewEntries));
+  let reviewIndex = $derived(review.index);
   // The SDK's diagnostics for each row (RTR0010, RTR0090, RTR0094–RTR0098) beside the editor-only checks.
   let localeQuality = $derived(qualityIssues(
     rows,
     snapshot?.catalog?.defaultLocale ?? "",
     selectedLocale,
-    withCurrentReview(validation?.diagnostics ?? snapshot?.diagnostics ?? [], reviewIndex),
-    terminology,
+    withCurrentReview(diagnosticsStore.displayed, reviewIndex),
+    review.terminology,
     ui,
   ));
   let localeQualityFindings = $derived.by(() => {
@@ -406,8 +362,7 @@
       return searchMatches.has(row);
     });
   });
-  let simulatedPreviewResult = $derived(pseudoLocalization ? pseudoPreviewResult : previewResult);
-  let previewDirection = $derived(localeDirection(pseudoLocalization ? pseudoLocale : selectedLocale));
+  let previewDirection = $derived(localeDirection(pseudoLocalization ? previewController.pseudoLocale : selectedLocale));
   // The time zones the preview offers: the host's, UTC, then the engine's IANA zones.
   const previewTimeZones = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
   // Regional variants of the selected locale's language that CLDR has data for (de → de-AT, de-CH, …).
@@ -477,14 +432,9 @@
   let currentContent = $derived(
     currentDocument === undefined
       ? undefined
-      : (drafts[currentDocument.path] ?? currentDocument.content),
+      : draftStore.content(currentDocument.path, currentDocument.content),
   );
-  let isDirty = $derived(
-    currentDocument !== undefined && drafts[currentDocument.path] !== undefined,
-  );
-  let diagnostics = $derived(validation?.diagnostics ?? snapshot?.diagnostics ?? []);
-  let errorCount = $derived(diagnostics.filter((item) => item.severity === "error").length);
-  let warningCount = $derived(diagnostics.filter((item) => item.severity === "warning").length);
+  let isDirty = $derived(draftStore.isDirty(currentDocument?.path));
   let malformedDocuments = $derived(
     snapshot?.documents.filter((document) => document.isMalformed) ?? [],
   );
@@ -531,7 +481,7 @@
         canRedo: snapshot?.history?.canRedo === true && !historyBlocked,
         reviewEditable: selectedRow !== undefined && !reviewMutationBlocked &&
           snapshot?.review?.error === undefined,
-        reviewDirty,
+        reviewDirty: review.dirty,
         reviewError: snapshot?.review?.error !== undefined,
         pseudoLocalization,
         uiDirection,
@@ -635,21 +585,20 @@
   // A configured pseudo-locale in the sidebar previews in it; choosing it again turns the simulation off.
   function selectPseudoLocale(locale: string): void {
     if (!isPseudoLocale(locale)) return;
-    if (pseudoLocalization && pseudoLocale === locale) pseudoLocalization = false;
-    else { pseudoLocale = locale; pseudoLocalization = true; }
+    if (pseudoLocalization && previewController.pseudoLocale === locale) pseudoLocalization = false;
+    else { previewController.pseudoLocale = locale; pseudoLocalization = true; }
     saveUiSimulation(pseudoLocalization, uiDirection, setLocalEditorState);
     refreshCurrentPreview();
   }
 
   function changePreviewFormatting(requestedLocale: string, timeZone: string): void {
-    previewRequestedLocale = requestedLocale;
-    previewTimeZone = timeZone;
+    previewController.setFormatting(requestedLocale, timeZone);
     refreshCurrentPreview();
   }
 
   function refreshCurrentPreview(): void {
     if (currentDocument !== undefined && currentContent !== undefined) {
-      schedulePreview(currentDocument.path, currentContent, selectedKey, selectedLocale);
+      previewController.schedule(currentDocument.path, currentContent, selectedKey, selectedLocale);
     }
   }
 
@@ -666,7 +615,7 @@
     if (loading || openingWorkspace || saving || snapshot === undefined) return;
     try {
       const result = await bridge.checkExternalChanges();
-      if (result.review !== undefined && !reviewSaving) applyExternalReview(result.review);
+      if (result.review !== undefined && !review.saving) review.applyExternal(result.review);
       if (result.paths.length > 0) {
         externalChanges = [...new Set([...externalChanges, ...result.paths])].sort();
         externalFileChanges = [
@@ -703,16 +652,11 @@
   }
 
   function installSnapshot(next: WorkspaceSnapshot, resetSelection: boolean): void {
-    workspaceGeneration += 1;
+    draftStore.nextWorkspace();
     snapshot = next;
-    if (resetSelection) {
-      drafts = {};
-      parsedDrafts = {};
-      draftGenerations = {};
-      recoveredDrafts = readStoredDrafts(next);
-    }
-    if (!reviewDirty) installReview(next);
-    validation = undefined;
+    if (resetSelection) draftStore.reset(next);
+    if (!review.dirty) review.install(next);
+    diagnosticsStore.clear();
     const nextRows = buildRows(next, {});
     if (resetSelection || !nextRows.some((row) => row.key === selectedKey)) {
       selectedKey = nextRows[0]?.key ?? "";
@@ -732,53 +676,14 @@
     rememberProject(next);
   }
 
-  function cloneReviewEntries(entries: readonly EditorReviewEntry[]): EditorReviewEntry[] {
-    return entries.map((entry) => ({ ...structuredClone(entry), samples: createPreviewSamples(entry.samples) }));
-  }
-
-  function installReview(next: WorkspaceSnapshot): void {
-    reviewEntries = cloneReviewEntries(next.review?.entries ?? []);
-    terminology = structuredClone(next.review?.terminology ?? []);
-    reviewBaseEntries = cloneReviewEntries(next.review?.entries ?? []);
-    reviewBaseTerminology = structuredClone(next.review?.terminology ?? []);
-    reviewRevision = next.review?.revision;
-    reviewDirty = false;
-    reviewMessage = next.review?.notice ?? next.review?.error;
-  }
-
-  // Another writer (runic-translations review mark or xliff import, the language server) changed the review file.
-  // Without unsaved review edits the new data is installed; with them, the edits are kept on top of it. The editor
-  // keeps the fingerprints of the base text it shows: those change only when the catalog is reloaded.
-  function applyExternalReview(incoming: EditorReviewSnapshot): void {
-    if (snapshot === undefined) return;
-    const fingerprints = snapshot.review?.fingerprints;
-    snapshot.review = { ...incoming, fingerprints };
-    if (!reviewDirty) {
-      installReview(snapshot);
-      reviewMessage = notice("ui_feedback_review_external");
-      return;
-    }
-    const rebased = rebaseReview(reviewEntries, reviewBaseEntries, incoming.entries, terminology, reviewBaseTerminology, incoming.terminology);
-    reviewEntries = cloneReviewEntries(rebased.entries);
-    terminology = rebased.terminology;
-    reviewBaseEntries = cloneReviewEntries(rebased.baseEntries);
-    reviewBaseTerminology = rebased.baseTerminology;
-    reviewRevision = incoming.revision;
-    reviewMessage = rebased.conflicts.length === 0
-      ? notice("ui_feedback_review_external_kept")
-      : notice("ui_feedback_review_external_conflict", { entries: rebased.conflicts.slice(0, 10).join(", ") });
-  }
-
   function confirmDiscardUnsavedWork(messageKey: string): boolean {
     if (!hasUnsavedWork) return true;
     return confirm(ui.text(messageKey));
   }
 
   function discardUnsavedWork(): void {
-    clearStoredDrafts(snapshot);
-    drafts = {};
-    draftGenerations = {};
-    if (snapshot !== undefined) installReview(snapshot);
+    draftStore.discard();
+    review.discard();
     if (hasUnsavedRepair) {
       repairDocument = undefined;
       repairText = "";
@@ -787,9 +692,9 @@
   }
 
   function confirmDiscardNonDocumentWork(messageKey: string): boolean {
-    if (!reviewDirty && !hasUnsavedRepair) return true;
+    if (!review.dirty && !hasUnsavedRepair) return true;
     if (!confirm(ui.text(messageKey))) return false;
-    if (snapshot !== undefined) installReview(snapshot);
+    review.discard();
     if (hasUnsavedRepair) {
       repairDocument = undefined;
       repairText = "";
@@ -807,7 +712,7 @@
 
   function selectRow(row: TranslationRow): void {
     const nextKey = row.key;
-    validation = undefined;
+    diagnosticsStore.clear();
     clientError = undefined;
     operationMessage = undefined;
     selectedKey = nextKey;
@@ -815,7 +720,7 @@
   }
 
   function selectLocale(locale: string): void {
-    validation = undefined;
+    diagnosticsStore.clear();
     clientError = undefined;
     operationMessage = undefined;
     selectedLocale = locale;
@@ -831,42 +736,36 @@
 
   function configureEditor(preferredMode?: EditorMode, key = selectedKey, locale = selectedLocale): void {
     sourceSelection = undefined;
-    const row = buildRows(snapshot, drafts, parsedDrafts).find((candidate) => candidate.key === key);
+    const row = buildRows(snapshot, draftStore.drafts, draftStore.parsed).find((candidate) => candidate.key === key);
     const cell = row?.cells[locale];
     const document = cell?.document;
     selectedDocumentPath = document?.path ?? "";
     selectedDocumentViewState = undefined;
     if (document !== undefined) {
       const path = document.path;
-      const generation = workspaceGeneration;
+      const generation = draftStore.workspaceGeneration;
       void bridge.openDocument(path).then((opened) => {
-        if (!opened || selectedDocumentPath !== path || workspaceGeneration !== generation) return;
+        if (!opened || selectedDocumentPath !== path || draftStore.workspaceGeneration !== generation) return;
         if (snapshot?.documents.find((candidate) => candidate.path === path)?.revision !== opened.fileRevision) return;
         selectedDocumentViewState = opened;
-        if (mode === "raw" && drafts[path] === undefined) editorText = opened.content;
+        if (mode === "raw" && draftStore.drafts[path] === undefined) editorText = opened.content;
       }).catch((error) => { if (selectedDocumentPath === path) clientError = errorNotice(error); });
     }
     const sourceEntry = row?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry;
     const savedSamples = reviewIndex.get(reviewIdentity(key, locale))?.samples;
-    previewSamples = createPreviewSamples(savedSamples !== undefined && Object.keys(savedSamples).length > 0
+    previewController.useSamples(savedSamples !== undefined && Object.keys(savedSamples).length > 0
       ? savedSamples : cell?.entry?.context?.examples[0] ?? sourceEntry?.context?.examples[0]);
     const nextMode = preferredMode ?? "translation";
     mode = nextMode;
     if (nextMode === "raw") {
-      editorText = document === undefined ? "" : (drafts[document.path] ?? document.content);
+      editorText = document === undefined ? "" : draftStore.content(document.path, document.content);
     } else {
       const resourceValue = cell?.entry?.value ?? sourceEntry?.value ?? "";
       editorText = typeof resourceValue === "string" ? resourceValue : JSON.stringify(resourceValue, null, 2);
     }
-    previewAst = undefined;
-    previewResult = undefined;
-    previewRequest = undefined;
-    previewOwnership.reset();
-    previewError = undefined;
-    previewScheduler.cancel();
-    previewBusy = false;
+    previewController.reset();
     if (nextMode === "translation" && document !== undefined) {
-      schedulePreview(document.path, drafts[document.path] ?? document.content, key, locale);
+      previewController.schedule(document.path, draftStore.content(document.path, document.content), key, locale);
     }
   }
 
@@ -885,12 +784,15 @@
       return;
     }
     try {
-      setDraft(document.path, value);
-      persistDrafts();
-      scheduleValidation(document.path, value);
+      draftStore.set(document.path, value);
+      draftStore.persist();
+      draftStore.validate(document.path, value, (outcome) => {
+        if (outcome.kind === "applied") diagnosticsStore.record("validation", document.path, outcome.result);
+        else if (outcome.kind === "failed") clientError = errorNotice(outcome.error);
+      });
     } catch (error) {
       clientError = errorNotice(error);
-      validation = { success: false, diagnostics: [] };
+      diagnosticsStore.record("edit", document.path, { success: false, diagnostics: [] });
     }
   }
 
@@ -908,34 +810,21 @@
     const path = document.path;
     const key = selectedKey;
     const locale = selectedLocale;
-    const workspaceRoot = snapshot?.root;
-    const workspaceVersion = workspaceGeneration;
-    const identity = `${path}\u0000${key}`;
-    const version = (transformVersions.get(identity) ?? 0) + 1;
-    transformVersions.set(identity, version);
-    const queued = transformQueues.get(path) ?? Promise.resolve();
-    const pending = queued.then(async () => {
-      if (snapshot?.root !== workspaceRoot || workspaceGeneration !== workspaceVersion || transformVersions.get(identity) !== version) return;
-      await new Promise<void>((resolve) => window.setTimeout(resolve, 150));
-      if (snapshot?.root !== workspaceRoot || workspaceGeneration !== workspaceVersion || transformVersions.get(identity) !== version) return;
-      const original = drafts[path] ?? document.content;
-      const generation = draftGenerations[path] ?? 0;
-      const result = await bridge.transformDocument(path, original, key, resourceValue);
-      if (snapshot?.root !== workspaceRoot || workspaceGeneration !== workspaceVersion || (draftGenerations[path] ?? 0) !== generation) return;
-      if (result.diagnostics.some((diagnostic) => diagnostic.id === "EDITOR-TRANSFORM")) {
+    void draftStore.transform(path, document.content, key, resourceValue, (outcome) => {
+      if (outcome.kind === "failed") {
+        clientError = errorNotice(outcome.error);
+        return;
+      }
+      const result = outcome.result;
+      if (outcome.kind === "rejected") {
         clientError = result.diagnostics[0]?.notice ?? result.diagnostics[0]?.message;
         return;
       }
-      parsedDrafts[path] = { content: result.content, entries: result.entries };
-      setDraft(path, result.content);
-      persistDrafts();
-      validation = result;
+      diagnosticsStore.record("transform", path, result);
       if (selectedDocumentPath === path && selectedKey === key && selectedLocale === locale) {
-        schedulePreview(path, result.content, key, locale);
+        previewController.schedule(path, result.content, key, locale);
       }
-    }).catch((error) => { clientError = errorNotice(error); });
-    transformQueues.set(path, pending);
-    void pending.finally(() => { if (transformQueues.get(path) === pending) transformQueues.delete(path); });
+    });
   }
 
   function applyAuthoringOperation(operation: EditorMessageOperation): Promise<void> {
@@ -946,243 +835,72 @@
     const path = document.path;
     const key = selectedKey;
     const locale = selectedLocale;
-    const workspaceVersion = workspaceGeneration;
-    const workspaceRoot = snapshot?.root;
-    const identity = `${path}\u0000${key}\u0000${operation.variantId ?? operation.kind}`;
-    const version = (transformVersions.get(identity) ?? 0) + 1;
-    transformVersions.set(identity, version);
-    authoringPending += 1;
-    const pending = (transformQueues.get(path) ?? Promise.resolve()).then(async () => {
-      if (workspaceGeneration !== workspaceVersion || snapshot?.root !== workspaceRoot) return;
-      if (operation.kind === "set-pattern") {
-        await new Promise<void>((resolve) => window.setTimeout(resolve, 120));
-        if (transformVersions.get(identity) !== version) return;
-      }
-      const original = drafts[path] ?? document.content;
-      const generation = draftGenerations[path] ?? 0;
-      const entry = buildRows(snapshot, drafts, parsedDrafts).find((row) => row.key === key)?.cells[locale]?.entry;
-      if (entry?.authoring?.supported !== true) return;
-      const result = await bridge.applyAuthoringOperation(path, original, key, entry.authoring.revision, operation);
-      if (workspaceGeneration !== workspaceVersion || snapshot?.root !== workspaceRoot || (draftGenerations[path] ?? 0) !== generation) return;
-      if (result.diagnostics.some(diagnostic => diagnostic.id === "EDITOR-AUTHORING")) {
-        clientError = result.diagnostics.find(diagnostic => diagnostic.id === "EDITOR-AUTHORING")?.message;
-        validation = result;
+    return draftStore.applyOperation(path, document.content, key, locale, operation, (outcome) => {
+      if (outcome.kind === "failed") {
+        clientError = errorNotice(outcome.error);
         return;
       }
-      parsedDrafts[path] = { content: result.content, entries: result.entries };
-      setDraft(path, result.content);
-      persistDrafts();
-      validation = result;
+      const result = outcome.result;
+      if (outcome.kind === "rejected") {
+        clientError = result.diagnostics.find(diagnostic => diagnostic.id === "EDITOR-AUTHORING")?.message;
+        diagnosticsStore.record("authoring", path, result);
+        return;
+      }
+      diagnosticsStore.record("authoring", path, result);
       if (selectedDocumentPath === path && selectedKey === key && selectedLocale === locale) {
         editorText = result.entries.find((candidate) => candidate.key === key)?.content ?? editorText;
-        schedulePreview(path, result.content, key, locale);
+        previewController.schedule(path, result.content, key, locale);
       }
-    }).catch((error) => { clientError = errorNotice(error); }).finally(() => { authoringPending -= 1; });
-    transformQueues.set(path, pending);
-    void pending.finally(() => { if (transformQueues.get(path) === pending) transformQueues.delete(path); });
-    return pending;
+    });
   }
 
   function selectPreviewExample(index: number): void {
     const sample = currentExamples[index];
     if (sample === undefined) return;
-    previewSamples = createPreviewSamples(sample);
+    previewController.useSamples(sample);
     if (currentDocument !== undefined && currentContent !== undefined) {
-      schedulePreview(currentDocument.path, currentContent, selectedKey, selectedLocale);
+      previewController.schedule(currentDocument.path, currentContent, selectedKey, selectedLocale);
     }
   }
 
-  function schedulePreview(path: string, content: string, key: string, locale: string): void {
-    const request = createMessagePreviewRequest(path, content, key, locale, { requestedLocale: previewRequestedLocale, timeZone: previewTimeZone });
-    const beginning = previewOwnership.begin(request);
-    previewRequest = beginning.request;
-    previewAst = beginning.ast;
-    previewResult = beginning.result;
-    previewError = beginning.error;
-    previewBusy = true;
-    previewScheduler.schedule(450, (epoch) => {
-      void routeMessagePreview(
-        (requestPath, requestContent, requestLocale, requestKey, samplesJson, requestedLocale, timeZone) =>
-          bridge.previewMessage(requestPath, requestContent, requestLocale, requestKey, samplesJson, requestedLocale, timeZone),
-        request,
-        previewSamples,
-        defaultSample,
-        () => previewScheduler.isCurrent(epoch),
-      ).then((routed) => {
-        if (!previewScheduler.isCurrent(epoch)) return;
-        const result = routed.initial;
-        if (!result.success || result.astJson === undefined || result.locale === undefined) {
-          previewAst = undefined;
-          previewResult = undefined;
-          previewError = result.diagnostics[0]?.notice ?? result.diagnostics[0]?.message ?? notice("ui_feedback_preview_failed");
-          return;
-        }
-        const ast = routed.ast as MessageArtifact;
-        if (!previewOwnership.acceptParsed(request)) return;
-        previewAst = ast;
-        previewSamples = routed.samples;
-        previewError = undefined;
-        const rendered = routed.rendered;
-        if (!rendered?.success || rendered.renderedJson === undefined) {
-          previewResult = undefined;
-          previewError = rendered?.diagnostics[0]?.notice ?? rendered?.diagnostics[0]?.message ?? notice("ui_feedback_preview_failed");
-          return;
-        }
-        previewResult = parseRenderedMessagePreview(rendered.renderedJson);
-        return renderPseudoPreview(request, routed.samples, () => previewScheduler.isCurrent(epoch));
-      }).catch((error) => {
-        if (previewScheduler.isCurrent(epoch)) previewError = errorNotice(error);
-      }).finally(() => {
-        if (previewScheduler.isCurrent(epoch)) previewBusy = false;
-      });
-    });
-  }
-
-  function updatePreviewSample(name: string, value: string): void {
-    previewSamples = withPreviewSample(previewSamples, name, value);
-    const request = previewRequest;
-    if (!previewOwnership.canRenderSample(request, previewAst)) return;
-    previewBusy = true;
-    previewScheduler.schedule(150, (epoch) => {
-      void renderCompilerPreview(request, epoch).catch((error) => {
-        if (previewScheduler.isCurrent(epoch)) previewError = errorNotice(error);
-      }).finally(() => {
-        if (previewScheduler.isCurrent(epoch)) previewBusy = false;
-      });
-    });
-  }
-
-  function updateReview(
-    key: string,
-    locale: string,
-    patch: Partial<EditorReviewEntry>,
-  ): void {
-    if (reviewMutationBlocked) return;
-    const identity = reviewIdentity(key, locale);
-    const index = reviewEntries.findIndex((entry) => reviewIdentity(entry.key, entry.locale) === identity);
-    const row = rows.find((candidate) => candidate.key === key);
-    const existing = index < 0 ? undefined : reviewEntries[index];
-    const setsState = patch.state !== undefined;
-    const next: EditorReviewEntry = {
-      key,
-      locale,
-      state: patch.state ?? effectiveReviewState(existing, row?.cells[locale]?.entry !== undefined),
-      // An empty note clears it, also a note that came from XLIFF.
-      note: "note" in patch ? (patch.note === "" ? undefined : patch.note) : existing?.note,
-      // A state the user sets is recorded for the base text the editor loaded.
-      sourceFingerprint: setsState ? patch.sourceFingerprint : existing?.sourceFingerprint,
-      samples: createPreviewSamples(patch.samples ?? existing?.samples),
-      stale: setsState ? patch.sourceFingerprint !== currentFingerprint(key) : existing?.stale,
-      // A note or samples alone record no review state.
-      implicit: setsState ? false : existing?.implicit ?? true,
-    };
-    reviewEntries = index < 0
-      ? [...reviewEntries, next]
-      : reviewEntries.map((entry, candidate) => candidate === index ? next : entry);
-    reviewDirty = true;
-    reviewMessage = undefined;
-  }
-
-  // The SDK per-unit fingerprint of the base message as the editor loaded it (undefined: the base locale has errors).
-  function currentFingerprint(key: string): string | undefined {
-    return snapshot?.review?.fingerprints?.[key];
-  }
-
-  // Review states are recorded for the base text the reviewer saw; without its fingerprint none can be recorded.
-  function reviewStatesBlocked(): boolean {
-    if (snapshot?.review?.fingerprints !== undefined) return false;
-    reviewMessage = notice("ui_review_states_need_base");
-    return true;
+  // Whether the locale has the message: a new review entry starts from its implicit state.
+  function translatedIn(key: string, locale: string): boolean {
+    return rows.find((candidate) => candidate.key === key)?.cells[locale]?.entry !== undefined;
   }
 
   function setCurrentReviewState(state: EditorReviewState): void {
-    if (reviewMutationBlocked || reviewStatesBlocked()) return;
-    updateReview(selectedKey, selectedLocale, {
-      state,
-      sourceFingerprint: currentFingerprint(selectedKey),
-      samples: createPreviewSamples(previewSamples),
-    });
+    if (reviewMutationBlocked) return;
+    review.setState(selectedKey, selectedLocale, state, previewController.samples, translatedIn(selectedKey, selectedLocale));
   }
 
   function setCurrentReviewNote(note: string): void {
-    updateReview(selectedKey, selectedLocale, { note });
+    if (reviewMutationBlocked) return;
+    review.setNote(selectedKey, selectedLocale, note, translatedIn(selectedKey, selectedLocale));
   }
 
   function markVisible(state: EditorReviewState): void {
-    if (reviewMutationBlocked || reviewStatesBlocked()) return;
-    let next = [...reviewEntries];
-    const byIdentity = reviewMap(next);
-    for (const row of visibleRows) {
-      const identity = reviewIdentity(row.key, selectedLocale);
-      const existing = byIdentity.get(identity);
-      const entry: EditorReviewEntry = {
-        key: row.key,
-        locale: selectedLocale,
-        state,
-        note: existing?.note,
-        sourceFingerprint: currentFingerprint(row.key),
-        samples: createPreviewSamples(existing?.samples),
-        stale: false,
-        implicit: false,
-      };
-      const index = next.findIndex((candidate) => reviewIdentity(candidate.key, candidate.locale) === identity);
-      if (index < 0) next.push(entry);
-      else next[index] = entry;
-      byIdentity.set(identity, entry);
-    }
-    reviewEntries = next;
-    reviewDirty = true;
-    reviewMessage = notice("ui_count_review_marked", { count: visibleRows.length, state });
+    if (reviewMutationBlocked) return;
+    review.mark(visibleRows.map((row) => row.key), selectedLocale, state);
   }
 
   async function saveReview(): Promise<void> {
-    if (!reviewDirty || reviewSaving || historyBusy || snapshot?.review?.error !== undefined) return;
-    reviewSaving = true;
-    reviewMessage = undefined;
-    try {
-      const result = await bridge.saveReview({
-        expectedRevision: reviewRevision,
-        entries: reviewEntries.map((entry) => ({ ...entry, samples: createPreviewSamples(entry.samples) })),
-        terminology: terminology.map((term) => ({ ...term })),
-        original: reviewBaseEntries.map((entry) => ({ ...entry, samples: createPreviewSamples(entry.samples) })),
-        originalTerminology: reviewBaseTerminology.map((term) => ({ ...term })),
-      });
-      if (!result.ok || result.review === undefined) {
-        reviewMessage = result.message ?? notice("ui_feedback_review_save_failed");
-        return;
-      }
-      reviewEntries = cloneReviewEntries(result.review.entries);
-      terminology = structuredClone(result.review.terminology);
-      reviewBaseEntries = cloneReviewEntries(result.review.entries);
-      reviewBaseTerminology = structuredClone(result.review.terminology);
-      reviewRevision = result.review.revision;
-      reviewDirty = false;
-      // A state recorded for base text that changed on disk since it was loaded is saved as stale; say so.
-      reviewMessage = result.review.notice ?? notice("ui_feedback_workflow_saved");
-      // The editor keeps the fingerprints of the base text it shows until the catalog is reloaded.
-      if (snapshot !== undefined) snapshot.review = { ...result.review, fingerprints: snapshot.review?.fingerprints ?? result.review.fingerprints };
-      if (snapshot !== undefined) snapshot.history = result.history;
-    } catch (error) {
-      reviewMessage = errorNotice(error);
-    } finally {
-      reviewSaving = false;
-    }
+    if (historyBusy) return;
+    await review.save();
   }
 
   function discardReview(): void {
-    if (snapshot !== undefined) installReview(snapshot);
+    review.discard();
   }
 
   function addTerm(): void {
     if (reviewMutationBlocked) return;
     if (termSource.trim() === "" || termPreferred.trim() === "") return;
-    terminology = [...terminology, {
+    review.addTerm({
       source: termSource.trim(),
       preferred: termPreferred.trim(),
       locale: termLocale.trim() || undefined,
       note: termNote.trim() || undefined,
-    }];
-    reviewDirty = true;
+    });
     termSource = "";
     termPreferred = "";
     termLocale = "";
@@ -1191,8 +909,7 @@
 
   function removeTerm(index: number): void {
     if (reviewMutationBlocked) return;
-    terminology = terminology.filter((_, candidate) => candidate !== index);
-    reviewDirty = true;
+    review.removeTerm(index);
   }
 
   async function showAbout(): Promise<void> {
@@ -1225,7 +942,7 @@
       return;
     }
     recentProjects = [];
-    recoveredDrafts = {};
+    draftStore.recovered = {};
     localStateSummary = inspectLocalEditorState();
     localStateMessage = notice("ui_count_state_removed", { count: removed });
   }
@@ -1394,7 +1111,7 @@
       operationMessage = result.message ?? (result.ok ? notice("ui_feedback_review_applied") : notice("ui_feedback_review_failed"));
       if (result.ok && result.review !== undefined && snapshot !== undefined) {
         snapshot = { ...snapshot, review: result.review, history: result.history ?? snapshot.history };
-        installReview(snapshot);
+        review.install(snapshot);
         reviewPreview = undefined;
       }
     } catch (error) {
@@ -1407,46 +1124,6 @@
   function applySuggestion(value: string): void {
     mode = "translation";
     editResourceValue(value);
-  }
-
-  async function renderCompilerPreview(request: PreviewRequest, epoch: number): Promise<void> {
-    const result = await bridge.previewMessage(
-      request.path,
-      request.content,
-      request.locale,
-      request.key,
-      JSON.stringify(previewSamples),
-      request.requestedLocale,
-      request.timeZone,
-    );
-    if (!previewScheduler.isCurrent(epoch)) return;
-    if (!result.success || result.renderedJson === undefined) {
-      previewResult = undefined;
-      previewError = result.diagnostics[0]?.notice ?? result.diagnostics[0]?.message ?? notice("ui_feedback_preview_failed");
-      return;
-    }
-    previewResult = parseRenderedMessagePreview(result.renderedJson);
-    previewError = undefined;
-    await renderPseudoPreview(request, previewSamples, () => previewScheduler.isCurrent(epoch));
-  }
-
-  // The simulated pseudo-locale, generated from the base locale by the host as a --pseudo-locales build does. Its
-  // formatting follows the pseudo-locale, so only the time zone carries over.
-  async function renderPseudoPreview(request: PreviewRequest, samples: Record<string, string>, isCurrent: () => boolean): Promise<void> {
-    if (!pseudoLocalization) {
-      pseudoPreviewResult = undefined;
-      pseudoPreviewError = undefined;
-      return;
-    }
-    const result = await bridge.previewMessage(request.path, request.content, pseudoLocale, request.key, JSON.stringify(samples), undefined, request.timeZone);
-    if (!isCurrent()) return;
-    if (!result.success || result.renderedJson === undefined) {
-      pseudoPreviewResult = undefined;
-      pseudoPreviewError = result.diagnostics[0]?.notice ?? result.diagnostics[0]?.message ?? notice("ui_feedback_preview_failed");
-      return;
-    }
-    pseudoPreviewResult = parseRenderedMessagePreview(result.renderedJson);
-    pseudoPreviewError = undefined;
   }
 
   function previewInputEntries(ast: MessageArtifact): Array<[string, { type: string }]> {
@@ -1474,37 +1151,19 @@
     }
   }
 
-  function scheduleValidation(path: string, content: string): void {
-    if (validationTimer !== undefined) window.clearTimeout(validationTimer);
-    const epoch = ++validationEpoch;
-    validationBusy = true;
-    validationTimer = window.setTimeout(() => {
-      void bridge.transformDocument(path, content).then((result) => {
-        if (epoch !== validationEpoch) return;
-        parsedDrafts[path] = { content: result.content, entries: result.entries };
-        validation = result;
-        validationBusy = false;
-      }).catch((error) => {
-        if (epoch !== validationEpoch) return;
-        clientError = errorNotice(error);
-        validationBusy = false;
-      });
-    }, 350);
-  }
-
   async function save(): Promise<void> {
-    const pending = transformQueues.get(selectedDocumentPath);
+    const pending = draftStore.settled(selectedDocumentPath);
     if (pending !== undefined) await pending;
     const document = currentDocument;
     const content = currentContent;
     if (document === undefined || content === undefined || !isDirty || saving || historyBusy) return;
-    const generation = draftGenerations[document.path] ?? 0;
+    const generation = draftStore.generation(document.path);
     saving = true;
     operationMessage = undefined;
     clientError = undefined;
     try {
       const checked = await bridge.validate(document.path, content);
-      validation = checked;
+      diagnosticsStore.record("save", document.path, checked);
       if (!checked.success) return;
       const result = await bridge.save(document.path, content, document.revision);
       if (!result.ok) {
@@ -1521,13 +1180,9 @@
 
   async function reloadAfterSave(path: string, content: string, generation: number, message: UiMessage): Promise<void> {
     const next = await bridge.load();
-    const newer = hasNewerDraft(path, content, generation);
+    const newer = draftStore.hasNewer(path, content, generation);
     installSnapshot(next, false);
-    if (!newer) {
-      delete drafts[path];
-      delete draftGenerations[path];
-      persistDrafts();
-    }
+    if (!newer) draftStore.drop(path);
     configureEditor();
     operationMessage = newer ? notice("ui_feedback_newer_draft") : message;
   }
@@ -1603,29 +1258,29 @@
   async function selectDiagnostic(diagnostic: EditorDiagnostic): Promise<void> {
     const document = snapshot?.documents.find((candidate) => candidate.path === diagnostic.path);
     if (document === undefined) return;
-    const workspaceVersion = workspaceGeneration;
-    const content = repairDocument?.path === document.path ? repairText : drafts[document.path] ?? document.content;
+    const workspaceVersion = draftStore.workspaceGeneration;
+    const content = repairDocument?.path === document.path ? repairText : draftStore.content(document.path, document.content);
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(content));
     const revision = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
     let current = diagnostic;
     if (diagnostic.sourceRevision !== revision) {
       // Started without an awaiting caller (`void selectDiagnostic(…)`): a failed request is reported, not left unhandled.
       const result = await bridge.transformDocument(document.path, content).catch((error: unknown) => {
-        if (workspaceGeneration !== workspaceVersion) return undefined;
+        if (draftStore.workspaceGeneration !== workspaceVersion) return undefined;
         if (repairDocument?.path === document.path) repairMessage = errorNotice(error);
         else clientError = errorNotice(error);
         return undefined;
       });
-      if (result === undefined || workspaceGeneration !== workspaceVersion) return;
+      if (result === undefined || draftStore.workspaceGeneration !== workspaceVersion) return;
       current = result.diagnostics.find(candidate => candidate.id === diagnostic.id && candidate.message === diagnostic.message) ?? diagnostic;
       // A removed diagnostic cannot navigate with stale source coordinates.
       if (current.sourceRevision !== revision) return;
-      const latestContent = repairDocument?.path === document.path ? repairText : drafts[document.path] ?? document.content;
+      const latestContent = repairDocument?.path === document.path ? repairText : draftStore.content(document.path, document.content);
       if (latestContent !== content) return;
-      validation = result;
+      diagnosticsStore.record("navigation", document.path, result);
     }
-    if (workspaceGeneration !== workspaceVersion || current.span === undefined) return;
-    const liveContent = repairDocument?.path === document.path ? repairText : drafts[document.path] ?? document.content;
+    if (draftStore.workspaceGeneration !== workspaceVersion || current.span === undefined) return;
+    const liveContent = repairDocument?.path === document.path ? repairText : draftStore.content(document.path, document.content);
     if (liveContent !== content) return;
     if (document.locale !== undefined) selectedLocale = document.locale;
     selectedDocumentPath = document.path;
@@ -1648,15 +1303,14 @@
     const document = snapshot?.documents.find(candidate => candidate.path === diagnostic.path);
     if (document === undefined || editorMutationBlocked) return;
     const path = document.path;
-    const workspaceVersion = workspaceGeneration;
     const repair = repairDocument?.path === path;
-    const pending = (transformQueues.get(path) ?? Promise.resolve()).then(async () => {
-      if (workspaceGeneration !== workspaceVersion) return;
-      const content = repair ? repairText : drafts[path] ?? document.content;
-      const generation = draftGenerations[path] ?? 0;
-      const result = await bridge.applyDiagnosticFix(path, content, fix);
-      if (workspaceGeneration !== workspaceVersion || (draftGenerations[path] ?? 0) !== generation || (repair && repairText !== content)) return;
-      if (result.diagnostics.some(diagnostic => diagnostic.id === "EDITOR-FIX")) {
+    await draftStore.applyFix(path, document.content, fix, repair ? { text: () => repairText } : undefined, (outcome) => {
+      if (outcome.kind === "failed") {
+        if (repair) repairMessage = errorNotice(outcome.error); else clientError = errorNotice(outcome.error);
+        return;
+      }
+      const result = outcome.result;
+      if (outcome.kind === "rejected") {
         const message = result.diagnostics.find(diagnostic => diagnostic.id === "EDITOR-FIX")?.message;
         if (repair) repairMessage = message;
         else clientError = message;
@@ -1666,19 +1320,13 @@
         repairText = result.content;
         repairValidation = result;
       } else {
-        parsedDrafts[path] = { content: result.content, entries: result.entries };
-        setDraft(path, result.content);
-        persistDrafts();
-        validation = result;
+        diagnosticsStore.record("quick-fix", path, result);
         if (selectedDocumentPath === path) {
           editorText = mode === "raw" ? result.content : result.entries.find(entry => entry.key === selectedKey)?.content ?? editorText;
-          if (mode === "translation") schedulePreview(path, result.content, selectedKey, selectedLocale);
+          if (mode === "translation") previewController.schedule(path, result.content, selectedKey, selectedLocale);
         }
       }
-    }).catch(error => { if (repair) repairMessage = errorNotice(error); else clientError = errorNotice(error); });
-    transformQueues.set(path, pending);
-    await pending;
-    if (transformQueues.get(path) === pending) transformQueues.delete(path);
+    });
   }
 
   function protectDraft(event: BeforeUnloadEvent): void {
@@ -2068,15 +1716,11 @@
   }
 
   function recoverSavedDrafts(): void {
-    drafts = Object.fromEntries(Object.entries(recoveredDrafts).map(([path, draft]) => [path, draft.content]));
-    recoveredDrafts = {};
-    persistDrafts();
+    draftStore.restoreRecovered();
     configureEditor();
-    for (const [path, content] of Object.entries(drafts)) {
-      void bridge.transformDocument(path, content).then((result) => {
-        if (drafts[path] !== content) return;
-        parsedDrafts[path] = { content, entries: result.entries };
-        if (selectedDocumentPath === path) configureEditor();
+    for (const [path, content] of Object.entries(draftStore.drafts)) {
+      void draftStore.parse(path, content).then((stored) => {
+        if (stored && selectedDocumentPath === path) configureEditor();
       }).catch((error) => { clientError = errorNotice(error); });
     }
   }
@@ -2086,25 +1730,25 @@
     if (change === undefined) return;
     comparedExternalChange = change;
     const base = snapshot?.documents.find((document) => document.path === change.path);
-    mergedExternalText = drafts[change.path] ?? base?.content ?? change.content ?? "";
+    mergedExternalText = draftStore.drafts[change.path] ?? base?.content ?? change.content ?? "";
   }
 
   async function applyExternalMerge(): Promise<void> {
     const change = comparedExternalChange;
     if (change === undefined || historyBusy) return;
     if (!confirmDiscardNonDocumentWork("ui_confirm_external_merge")) return;
-    const retainedDrafts = { ...drafts, [change.path]: mergedExternalText };
+    const retainedDrafts = { ...draftStore.drafts, [change.path]: mergedExternalText };
     loading = true;
     clientError = undefined;
     try {
       const next = await bridge.load();
       installSnapshot(next, true);
-      drafts = Object.fromEntries(Object.entries(retainedDrafts).filter(([path]) =>
-        next.documents.some((document) => document.path === path)));
-      if (drafts[change.path] === undefined) {
+      draftStore.replace(Object.fromEntries(Object.entries(retainedDrafts).filter(([path]) =>
+        next.documents.some((document) => document.path === path))));
+      if (draftStore.drafts[change.path] === undefined) {
         clientError = notice("ui_feedback_deleted_merge", { path: change.path });
       }
-      persistDrafts();
+      draftStore.persist();
       externalChanges = [];
       externalFileChanges = [];
       comparedExternalChange = undefined;
@@ -2117,59 +1761,7 @@
   }
 
   function discardSavedDrafts(): void {
-    recoveredDrafts = {};
-    clearStoredDrafts(snapshot);
-  }
-
-  function draftStorageKey(value: WorkspaceSnapshot): string {
-    return `runic-translations:drafts:1:${value.root}\n${value.catalog?.id ?? ""}`;
-  }
-
-  function persistDrafts(): void {
-    const current = snapshot;
-    if (current === undefined) return;
-    if (Object.keys(drafts).length === 0) {
-      clearStoredDrafts(current);
-      return;
-    }
-    const stored: Record<string, StoredDraft> = {};
-    for (const [path, content] of Object.entries(drafts)) {
-      const document = current.documents.find((candidate) => candidate.path === path);
-      if (document !== undefined) stored[path] = { content, baseRevision: document.revision };
-    }
-    setLocalEditorState(draftStorageKey(current), JSON.stringify({ version: 1, documents: stored }));
-  }
-
-  function setDraft(path: string, content: string): void {
-    drafts[path] = content;
-    draftGenerations[path] = (draftGenerations[path] ?? 0) + 1;
-  }
-
-  function hasNewerDraft(path: string, content: string, generation: number): boolean {
-    return draftGenerations[path] !== generation || drafts[path] !== content;
-  }
-
-  function readStoredDrafts(value: WorkspaceSnapshot): Record<string, StoredDraft> {
-    try {
-      const raw = getLocalEditorState(draftStorageKey(value));
-      if (raw === null) return {};
-      const parsed = JSON.parse(raw) as { version?: unknown; documents?: unknown };
-      if (parsed.version !== 1 || typeof parsed.documents !== "object" || parsed.documents === null) return {};
-      const recovered: Record<string, StoredDraft> = {};
-      for (const [path, candidate] of Object.entries(parsed.documents as Record<string, unknown>)) {
-        const document = value.documents.find((item) => item.path === path);
-        if (document === undefined || typeof candidate !== "object" || candidate === null) continue;
-        const draft = candidate as Partial<StoredDraft>;
-        if (typeof draft.content === "string" && typeof draft.baseRevision === "string") recovered[path] = draft as StoredDraft;
-      }
-      return recovered;
-    } catch {
-      return {};
-    }
-  }
-
-  function clearStoredDrafts(value: WorkspaceSnapshot | undefined): void {
-    if (value !== undefined) removeLocalEditorState(draftStorageKey(value));
+    draftStore.discardRecovered();
   }
 
   function readRecentProjects(): RecentProject[] {
@@ -2222,7 +1814,7 @@
         repairMessage = result.message ?? notice("ui_feedback_repair_failed");
         return;
       }
-      await reloadAfterSave(document.path, repairText, draftGenerations[document.path] ?? 0, result.message ?? notice("app_saved"));
+      await reloadAfterSave(document.path, repairText, draftStore.generation(document.path), result.message ?? notice("app_saved"));
       repairDocument = undefined;
     } catch (error) {
       repairMessage = errorNotice(error);
@@ -2321,12 +1913,12 @@
   </div>
 {/if}
 
-{#if Object.keys(recoveredDrafts).length > 0}
+{#if Object.keys(draftStore.recovered).length > 0}
   <div class="pointer-events-none fixed inset-x-2 bottom-2 z-50 mx-auto max-w-[calc(100vw-1rem)] sm:inset-x-4 sm:bottom-4 sm:max-w-2xl">
     <Alert.Root class="pointer-events-auto pr-4 shadow-xl" aria-live="polite">
       <Alert.Title>{ui.text("ui_page_recovered_drafts_title")}</Alert.Title>
       <Alert.Description>
-        {ui.text("ui_count_recovered_drafts", { count: Object.keys(recoveredDrafts).length })}
+        {ui.text("ui_count_recovered_drafts", { count: Object.keys(draftStore.recovered).length })}
       </Alert.Description>
       <Alert.Action class="static col-span-full mt-2 flex flex-col gap-2 min-[360px]:flex-row min-[360px]:justify-end">
         <Button variant="ghost" size="xs" onclick={discardSavedDrafts}>{ui.text("ui_page_discard")}</Button>
@@ -2504,7 +2096,7 @@
             onselect={selectLocale}
             onmanage={() => prepareMutation("add-locale")}
             pseudoLocales={snapshot?.catalog?.pseudoLocales ?? []}
-            activePseudoLocale={pseudoLocalization ? pseudoLocale : undefined}
+            activePseudoLocale={pseudoLocalization ? previewController.pseudoLocale : undefined}
             onselectpseudo={selectPseudoLocale}
             bind:open={languagesOpen}
           />
@@ -2573,10 +2165,10 @@
 
     <Sidebar.Inset class="editor-shell min-h-0 min-w-0 overflow-hidden">
       <EditorToolbar
-        {reviewDirty}
-        {reviewSaving}
+        reviewDirty={review.dirty}
+        reviewSaving={review.saving}
         reviewDisabled={snapshot.review?.error !== undefined}
-        saveDisabled={!isDirty || saving || validationBusy || validation?.success === false || clientError !== undefined}
+        saveDisabled={!isDirty || saving || draftStore.validating || diagnosticsStore.latest?.success === false || clientError !== undefined}
         {saving}
         saveLabel={labels.save}
         savingLabel={labels.saving}
@@ -2627,11 +2219,11 @@
 
           <ReviewWorkflow
             state={currentReviewState}
-            dirty={reviewDirty}
-            message={displayNotice(reviewMessage ?? notice("ui_page_project_notes"), ui)}
+            dirty={review.dirty}
+            message={displayNotice(review.message ?? notice("ui_page_project_notes"), ui)}
             disabled={snapshot.review?.error !== undefined || reviewMutationBlocked}
             stale={currentIsStale}
-            terminologyCount={terminology.length}
+            terminologyCount={review.terminology.length}
             qualityCount={localeQualityFindings.length}
             note={currentReview?.note ?? ""}
             qualityIssues={currentQuality}
@@ -2660,11 +2252,11 @@
             value={editorText}
             resourceValue={currentCell?.entry?.value ?? selectedRow.cells[snapshot.catalog.defaultLocale]?.entry?.value}
             authoring={currentCell?.entry?.authoring}
-            authoringBusy={authoringPending > 0}
+            authoringBusy={draftStore.authoringPending > 0}
             onoperation={applyAuthoringOperation}
             {sourceSelection}
             missing={currentCell?.entry === undefined}
-            invalid={clientError !== undefined || validation?.success === false}
+            invalid={clientError !== undefined || diagnosticsStore.latest?.success === false}
             disabled={editorMutationBlocked}
             onresourcechange={editResourceValue}
             onrawchange={edit}
@@ -2675,21 +2267,21 @@
             <section class="message-preview" aria-live="polite">
               <header>
                 <div><strong>{ui.text("ui_page_preview_title")}</strong><span>{ui.text("ui_page_preview_description")}</span></div>
-                <span class="preview-state">{previewBusy ? ui.text("ui_page_preview_compiling") : previewAst === undefined ? ui.text("ui_page_preview_unavailable") : pseudoLocalization ? ui.text("ui_preview_pseudo_locale", { locale: pseudoLocale }) : selectedLocale}</span>
+                <span class="preview-state">{previewController.busy ? ui.text("ui_page_preview_compiling") : previewController.ast === undefined ? ui.text("ui_page_preview_unavailable") : pseudoLocalization ? ui.text("ui_preview_pseudo_locale", { locale: previewController.pseudoLocale }) : selectedLocale}</span>
               </header>
               <div class="flex flex-wrap items-end gap-3 px-4 pt-3" aria-label={ui.text("ui_preview_formatting")}>
                 <label class="grid gap-1 text-xs">
                   <span class="text-muted-foreground">{ui.text("ui_preview_regional_locale")}</span>
-                  <Input class="h-8 w-40" value={previewRequestedLocale} placeholder={selectedLocale} list="preview-regional-locales" autocomplete="off"
+                  <Input class="h-8 w-40" value={previewController.requestedLocale} placeholder={selectedLocale} list="preview-regional-locales" autocomplete="off"
                     title={ui.text("ui_preview_regional_locale_description")}
-                    onchange={(event) => changePreviewFormatting(event.currentTarget.value, previewTimeZone)} />
+                    onchange={(event) => changePreviewFormatting(event.currentTarget.value, previewController.timeZone)} />
                 </label>
                 <datalist id="preview-regional-locales">{#each regionalLocaleSuggestions as tag (tag)}<option value={tag}></option>{/each}</datalist>
                 <label class="grid gap-1 text-xs">
                   <span class="text-muted-foreground">{ui.text("ui_preview_time_zone")}</span>
-                  <select class="h-8 max-w-56 rounded-md border bg-background px-2 text-sm" value={previewTimeZone}
+                  <select class="h-8 max-w-56 rounded-md border bg-background px-2 text-sm" value={previewController.timeZone}
                     title={ui.text("ui_preview_time_zone_description")}
-                    onchange={(event) => changePreviewFormatting(previewRequestedLocale, event.currentTarget.value)}>
+                    onchange={(event) => changePreviewFormatting(previewController.requestedLocale, event.currentTarget.value)}>
                     <option value="">{ui.text("ui_preview_time_zone_host")}</option>
                     <option value="utc">UTC</option>
                     {#each previewTimeZones as zone (zone)}<option value={zone}>{zone}</option>{/each}
@@ -2704,51 +2296,51 @@
                   {/each}
                 </div>
               {/if}
-              {#if previewAst !== undefined && previewInputEntries(previewAst).length > 0}
+              {#if previewController.ast !== undefined && previewInputEntries(previewController.ast).length > 0}
                 <div class="sample-inputs">
-                  {#each previewInputEntries(previewAst) as [name, descriptor] (name)}
-                    <label><span>{name}<small>{descriptor.type}</small></span><input value={previewSampleOr(previewSamples, name, "")} oninput={(event) => updatePreviewSample(name, event.currentTarget.value)} /></label>
+                  {#each previewInputEntries(previewController.ast) as [name, descriptor] (name)}
+                    <label><span>{name}<small>{descriptor.type}</small></span><input value={previewSampleOr(previewController.samples, name, "")} oninput={(event) => previewController.updateSample(name, event.currentTarget.value)} /></label>
                   {/each}
                 </div>
               {/if}
-              <div class="preview-canvas" lang={pseudoLocalization ? pseudoLocale : selectedLocale} dir={previewDirection}>
-                {#if previewBusy}
+              <div class="preview-canvas" lang={pseudoLocalization ? previewController.pseudoLocale : selectedLocale} dir={previewDirection}>
+                {#if previewController.busy}
                   <span class="preview-placeholder">{ui.text("ui_page_preview_compiling_draft")}</span>
-                {:else if previewError}
-                  <span class="preview-error">{displayNotice(previewError, ui)}</span>
-                {:else if pseudoLocalization && pseudoPreviewError}
-                  <span class="preview-error">{displayNotice(pseudoPreviewError, ui)}</span>
-                {:else if simulatedPreviewResult?.kind === "text"}
-                  <p>{simulatedPreviewResult.value}</p>
-                {:else if simulatedPreviewResult?.kind === "content"}
-                  <div class="safe-content">{@render previewNodes(simulatedPreviewResult.nodes)}</div>
-                {:else if simulatedPreviewResult?.kind === "document"}
-                  <div class="safe-content"><DocumentPreview blocks={simulatedPreviewResult.blocks} /></div>
+                {:else if previewController.error}
+                  <span class="preview-error">{displayNotice(previewController.error, ui)}</span>
+                {:else if pseudoLocalization && previewController.pseudoError}
+                  <span class="preview-error">{displayNotice(previewController.pseudoError, ui)}</span>
+                {:else if previewController.simulatedResult?.kind === "text"}
+                  <p>{previewController.simulatedResult.value}</p>
+                {:else if previewController.simulatedResult?.kind === "content"}
+                  <div class="safe-content">{@render previewNodes(previewController.simulatedResult.nodes)}</div>
+                {:else if previewController.simulatedResult?.kind === "document"}
+                  <div class="safe-content"><DocumentPreview blocks={previewController.simulatedResult.blocks} /></div>
                 {:else}
                   <span class="preview-placeholder">{ui.text("ui_page_preview_edit_to_build")}</span>
                 {/if}
               </div>
-              {#if previewFormattingSummary(simulatedPreviewResult?.formatting)}<p class="safe-note">{previewFormattingSummary(simulatedPreviewResult?.formatting)}</p>{/if}
+              {#if previewFormattingSummary(previewController.simulatedResult?.formatting)}<p class="safe-note">{previewFormattingSummary(previewController.simulatedResult?.formatting)}</p>{/if}
               <p class="safe-note">{ui.text("ui_page_preview_safe_markup")}{pseudoLocalization ? ` ${ui.text("ui_page_preview_pseudo_active")}` : ""}{uiDirection === "rtl" ? ` ${ui.text("ui_page_preview_rtl_active")}` : ""}</p>
             </section>
 
             <ArtifactPreviewPanel
               open={artifactPreviewOpen}
-              baseResult={previewResult}
-              simulatedResult={simulatedPreviewResult}
+              baseResult={previewController.result}
+              simulatedResult={previewController.simulatedResult}
               {pseudoLocalization}
               direction={uiDirection}
-              busy={previewBusy}
+              busy={previewController.busy}
               onclose={() => artifactPreviewOpen = false}
             />
           {/if}
 
           <ValidationPanel
-            busy={validationBusy}
-            {diagnostics}
+            busy={draftStore.validating}
+            diagnostics={diagnosticsStore.displayed}
             clientError={clientError === undefined ? undefined : displayNotice(clientError, ui)}
-            {errorCount}
-            {warningCount}
+            errorCount={diagnosticsStore.errorCount}
+            warningCount={diagnosticsStore.warningCount}
             validLabel={labels.valid}
             invalidLabel={labels.invalid}
             diagnosticsLabel={labels.diagnostics}
@@ -2847,7 +2439,7 @@
       </Button>
     </Field.FieldGroup>
     <div class="mt-5 grid overflow-hidden rounded-xl border">
-      {#each terminology as term, index (term)}
+      {#each review.terminology as term, index (term)}
         <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b px-4 py-3 last:border-b-0">
           <div class="min-w-0">
             <div class="flex min-w-0 flex-wrap items-center gap-2"><strong>{term.source}</strong><span class="text-muted-foreground">→</span><strong>{term.preferred}</strong>{#if term.locale}<Badge variant="outline">{term.locale}</Badge>{/if}</div>
@@ -2862,8 +2454,8 @@
     </div>
     {#snippet footer()}
       <Button variant="outline" onclick={() => terminologyDialogOpen = false}>{ui.text("ui_page_done")}</Button>
-      <Button disabled={!reviewDirty || reviewMutationBlocked} onclick={() => void saveReview()}>
-        {#if reviewSaving}<Spinner data-icon="inline-start" />{/if}{ui.text("ui_page_terminology_save_workflow")}
+      <Button disabled={!review.dirty || reviewMutationBlocked} onclick={() => void saveReview()}>
+        {#if review.saving}<Spinner data-icon="inline-start" />{/if}{ui.text("ui_page_terminology_save_workflow")}
       </Button>
     {/snippet}
   </AppDialog>

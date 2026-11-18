@@ -79,6 +79,26 @@ review edits stay in the browser UI so they can be discarded or recovered
 without changing the shared workspace. Persisted review state and workspace
 mutations remain in the compiler-backed session.
 
+The page (`Frontend/src/routes/+page.svelte`) keeps the layout, selection and
+dialogs and wires them to rune-based modules in `Frontend/src/lib/state/`:
+
+- `DraftStore` holds each document's draft, its generation, the compiler's
+  parsed entries and the recovery copy. Composer edits, authoring operations,
+  raw-source validation and quick fixes run through its one queue per document;
+  an answer is accepted only for the current workspace, draft generation and
+  latest request of its kind.
+- `ReviewStore` holds review states, notes and terminology with the saved data
+  the edits started from; it saves through the bridge against that revision and
+  rebases the edits when another writer changes the review file.
+- `DiagnosticsStore` keeps validation results per request and document. The
+  panel lists the latest one, or the workspace's diagnostics before any; it also
+  offers per-message and errors-first selectors.
+- `PreviewController` owns the preview samples, the requested formatting locale
+  and time zone, the debounced compiler requests and the pseudo-locale result.
+
+The stores take the bridge and the current snapshot as arguments, so the
+frontend checks exercise them without a host.
+
 Headless commands use the same workspace and compiler path as the interface:
 
 - `validate` reports compiler-backed workspace diagnostics;
