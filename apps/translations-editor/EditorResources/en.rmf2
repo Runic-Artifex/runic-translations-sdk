@@ -5142,3 +5142,13 @@ ui {
     close_window = Close window
   }
 }
+ui {
+  composer {
+    show_source = Show source
+  }
+}
+ui {
+  composer {
+    hide_source = Hide source
+  }
+}

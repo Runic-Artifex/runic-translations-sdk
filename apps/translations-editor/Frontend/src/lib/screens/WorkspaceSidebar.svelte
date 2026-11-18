@@ -122,7 +122,7 @@
         rowHeight={messageRowHeight(preferences.density)}
         selectedHidden={view.selectedHiddenByFilter}
         onclearfilter={() => selection.clearFilter()}
-        translationStates={!view.contentProject}
+        translationStates={!view.editingSource}
         reviewActionsDisabled={reviewBlocked}
         noResultsLabel={labels.noResults}
         labels={{

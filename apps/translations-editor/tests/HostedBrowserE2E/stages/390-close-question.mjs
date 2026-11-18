@@ -5,7 +5,7 @@ import { join } from "node:path";
 // #225 P19: closing the window with unsaved work asks Save, Discard or Cancel. Serve-only mode cannot guard the
 // browser's own close, but the palette's Close window is the application's RequestCloseAsync, which asks the page as the
 // native window's close button does. Cancel keeps the window open with the draft; the stage then reverts the draft, so
-// the window has nothing unsaved, as 350 left it (English, common.cancel selected).
+// the window stays open with nothing unsaved and no dialog, as 380 left it (English, common.cancel selected).
 /** @param {import("../context.mjs").HostedContext} context */
 export default async function closeQuestion(context) {
   const { page, reportDirectory, pageErrors, waitFor, editor, saveState } = context;

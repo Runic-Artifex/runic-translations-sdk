@@ -6,7 +6,7 @@
   import { localeDirection } from "./locale-text";
   import { getUiText } from "./ui-text";
 
-  let { pattern, inputs, locale, label, onchange, onensureinput, revision = 0 }: {
+  let { pattern, inputs, locale, label, onchange, onensureinput, revision = 0, sourceToggle = true }: {
     pattern: string;
     inputs: Record<string, MessageInput>;
     locale: string;
@@ -15,6 +15,8 @@
     onensureinput?: (name: string, type: InputType) => void;
     /** Advanced by an undo or redo: text typed before it gives way to `pattern`. */
     revision?: number;
+    /** Whether the pattern offers its own MF2 source; a content-editing project (D074.2) has one link for the message. */
+    sourceToggle?: boolean;
   } = $props();
   const ui = getUiText();
   let sourceMode = $state(false);
@@ -30,10 +32,12 @@
 </script>
 
 <div class="grid gap-2">
-  {#if sourceMode}
+  {#if sourceMode && sourceToggle}
     <Textarea value={visiblePattern} class="min-h-32 font-mono" data-draft-field aria-label={label} spellcheck={false} lang={locale} dir={localeDirection(locale)} oninput={(event) => changePattern(event.currentTarget.value)} />
   {:else}
     <InlineMessageEditor value={visiblePattern} {inputs} {locale} {label} onchange={changePattern} {onensureinput} />
   {/if}
-  <Button variant="ghost" size="sm" class="justify-self-start" aria-pressed={sourceMode} onclick={() => sourceMode = !sourceMode}>{ui.text("ui_composer_message_source")}</Button>
+  {#if sourceToggle}
+    <Button variant="ghost" size="sm" class="justify-self-start" aria-pressed={sourceMode} onclick={() => sourceMode = !sourceMode}>{ui.text("ui_composer_message_source")}</Button>
+  {/if}
 </div>

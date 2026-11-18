@@ -19,12 +19,23 @@ export type DiagnosticSource =
 export class DiagnosticsStore {
   #results = $state.raw<ReadonlyMap<string, ValidationResult>>(new Map());
   #latest = $state.raw<string>();
+  // The saved workspace's diagnostics requested again after the snapshot was loaded (a save of review data).
+  #refreshed = $state.raw<{ snapshot: WorkspaceSnapshot; diagnostics: EditorDiagnostic[] }>();
   readonly #snapshot: () => WorkspaceSnapshot | undefined;
 
   /** The result that finished last. */
   latest = $derived(this.#latest === undefined ? undefined : this.#results.get(this.#latest));
+  /**
+   * The diagnostics of the saved workspace: the snapshot's, or those requested again for the same snapshot since. A new
+   * snapshot (a reload, a save of documents) brings its own.
+   */
+  workspaceDiagnostics = $derived.by((): EditorDiagnostic[] => {
+    const snapshot = this.#snapshot();
+    const refreshed = this.#refreshed;
+    return refreshed !== undefined && refreshed.snapshot === snapshot ? refreshed.diagnostics : snapshot?.diagnostics ?? [];
+  });
   /** The diagnostics the panel lists. */
-  displayed = $derived.by(() => this.latest?.diagnostics ?? this.#snapshot()?.diagnostics ?? []);
+  displayed = $derived.by(() => this.latest?.diagnostics ?? this.workspaceDiagnostics);
   errorCount = $derived(this.displayed.filter((item) => item.severity === "error").length);
   warningCount = $derived(this.displayed.filter((item) => item.severity === "warning").length);
 
@@ -49,6 +60,17 @@ export class DiagnosticsStore {
   clear(): void {
     this.#results = new Map();
     this.#latest = undefined;
+  }
+
+  /**
+   * The saved workspace's diagnostics, requested again for `snapshot` after it was loaded: they replace the snapshot's
+   * while it stays the open one, and the panel shows them instead of the results of earlier requests, which were
+   * computed against the review file as it was. A save of review data changes what RTR0090 reports (#225 P20).
+   */
+  refreshWorkspace(snapshot: WorkspaceSnapshot, diagnostics: EditorDiagnostic[]): void {
+    if (this.#snapshot() !== snapshot) return;
+    this.#refreshed = { snapshot, diagnostics };
+    this.clear();
   }
 
   /** The displayed diagnostics about one message in one locale. */

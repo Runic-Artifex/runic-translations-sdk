@@ -89,8 +89,9 @@
     preview: (): PreviewController => previewController,
     refreshPreview: () => selection.refreshPreview(),
   });
-  // The interface text in the project's wording: a content-editing project (D074.2) speaks of texts, not translations.
-  const ui = projectUiText(createUiText(() => preferences.uiLocale), () => view.projectKind);
+  // The interface text in the project's wording: a content-editing project (D074.2) speaks of texts, not translations,
+  // and so does the composer while a translation project's base locale (the source text) is selected.
+  const ui = projectUiText(createUiText(() => preferences.uiLocale), () => view.projectKind, () => view.textRole);
   setUiText(ui);
   const localeName = (tag: string): string => localeDisplayName(tag, preferences.uiLocale);
 
@@ -108,6 +109,8 @@
     snapshot,
     validated: (path, result) => diagnosticsStore.record("save", path, result),
     install: (next) => workspace.install(next, false),
+    // RTR0090 follows the review file: after a save of review data the diagnostics are requested again.
+    refreshed: (saved, diagnostics) => diagnosticsStore.refreshWorkspace(saved, diagnostics),
   });
   const previewController: PreviewController = new PreviewController({
     bridge,
@@ -219,7 +222,7 @@
 
   let uiLocale = $derived(preferences.uiLocale);
   let uiDirection = $derived(preferences.uiDirection);
-  let labels: EditorLabels = $derived(editorLabels(uiLocale, view.projectKind));
+  let labels: EditorLabels = $derived(editorLabels(uiLocale, view.projectKind, view.textRole));
   $effect(() => {
     document.documentElement.lang = uiLocale;
     document.documentElement.dir = uiDirection;
@@ -314,6 +317,7 @@
         uiDirection,
         artifactPreviewOpen,
         projectKind: view.projectKind,
+        textRole: view.textRole,
       },
       ui,
     );

@@ -90,6 +90,7 @@ const reviewData = {
   entries: [
     { key: "settings_title", locale: "de", state: "needs-review", samples: {}, implicit: false },
     { key: "notes_empty", locale: "de", state: "approved", samples: {}, implicit: false, stale: true },
+    { key: "settings_title", locale: "en", state: "needs-review", samples: {}, implicit: false },
   ],
   terminology: [],
 };
@@ -211,15 +212,22 @@ workspace.value = translated;
 selection.install(translated, false);
 assert.equal(view.projectKind, "translation", "A second language makes it a translation project.");
 assert.equal(view.contentProject, false);
+// German is now the base locale, whose text is the source text: no translation filters or states there (#225 R1).
+assert.equal(view.textRole, "source");
+assert.deepEqual(view.filterOptions.map((option) => option.value), ["all", "structured", "quality"]);
+assert.equal(next.kind, "text");
+selection.selectLocale("en");
+assert.equal(view.textRole, "translation");
 assert.deepEqual(view.filterOptions.map((option) => option.value), ["all", "missing", "structured", "needs-review", "stale", "quality"]);
 assert.equal(next.kind, "missing");
-selection.selectLocale("en");
 assert.equal(view.messageListItems.filter((item) => item.missing).length, entries.length - 1, "The new language's missing texts show.");
-selection.selectLocale("de");
-assert.ok(view.messageListItems.some((item) => item.needsReview), "The kept review file applies again.");
+assert.ok(view.messageListItems.some((item) => item.needsReview), "The kept review file applies again to the translations.");
 selection.filter = "needs-review";
 assert.equal(view.filter, "needs-review", "Translation filters apply again.");
 selection.filter = "all";
+selection.selectLocale("de");
+assert.ok(view.messageListItems.every((item) => !item.needsReview && !item.stale),
+  "The review file's entries of the base locale do not apply to the source text.");
 // And back: removing it again makes it a content-editing project.
 workspace.value = germanOnly;
 selection.install(germanOnly, false);

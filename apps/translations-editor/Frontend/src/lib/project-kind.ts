@@ -26,17 +26,43 @@ export function projectKind(catalog: Pick<EditorCatalog, "defaultLocale" | "loca
 }
 
 /**
- * The interface text a content-editing project uses instead of the translation wording: the key the editor asks for,
- * and the key of the same text for someone who edits the application's text. Each pair takes the same arguments.
- * Developer-facing text (the code identifier, the File view, the advanced structure, diagnostics) is not replaced.
+ * What the selected text is: a translation of the base text, or the source text itself. The base locale of a
+ * translation project holds the source text, and so does the one language of a content-editing project. Review
+ * states, the source panel, Copy source and the translation filters belong to translations; the source text has none.
  */
-export const contentWording: Readonly<Record<string, string>> = {
+export type TextRole = "translation" | "source";
+
+/**
+ * The role of the text in `locale`: the source text in a content-editing project and in the base locale, a translation
+ * otherwise. `WorkspaceView.textRole` derives it for the selection; everything else reads it there.
+ */
+export function textRole(kind: ProjectKind, locale: string, baseLocale: string): TextRole {
+  return kind === "content" || (baseLocale !== "" && locale.toLowerCase() === baseLocale.toLowerCase()) ? "source" : "translation";
+}
+
+/**
+ * The interface text for editing the source text instead of a translation: the composer's heading, its variants and
+ * cases, the inline editor, the quality finding and the palette's mode command. The base locale of a translation
+ * project uses it, and so does a content-editing project. Each pair takes the same arguments.
+ */
+export const sourceTextWording: Readonly<Record<string, string>> = {
   ui_composer_translate_message: "ui_content_composer_heading",
   ui_composer_translation_for: "ui_content_composer_text_for",
   ui_composer_default_translation: "ui_content_composer_default_text",
   ui_composer_add_translation_case: "ui_content_composer_add_case",
   ui_inline_remove_variable: "ui_content_inline_remove_variable",
   ui_quality_whitespace: "ui_content_quality_whitespace",
+  ui_palette_switch_to_translation_mode: "ui_content_palette_switch_to_text",
+};
+
+/**
+ * The interface text a content-editing project uses instead of the translation wording: the key the editor asks for,
+ * and the key of the same text for someone who edits the application's text. It is the source-text wording plus the
+ * project's own (texts instead of messages). Each pair takes the same arguments. Developer-facing text (the code
+ * identifier, the File view, the advanced structure, diagnostics) is not replaced.
+ */
+export const contentWording: Readonly<Record<string, string>> = {
+  ...sourceTextWording,
   ui_message_toolbar_search_messages: "ui_content_search_label",
   ui_message_tree_group_label: "ui_content_tree_group_label",
   ui_message_tree_selected_hidden: "ui_content_tree_selected_hidden",
@@ -47,24 +73,28 @@ export const contentWording: Readonly<Record<string, string>> = {
   ui_page_empty_selection_description: "ui_content_empty_selection_description",
   ui_sidebar_panels_messages_panel: "ui_content_texts_panel",
   ui_workbench_save_and_next_failed: "ui_content_save_and_next_failed",
-  ui_palette_switch_to_translation_mode: "ui_content_palette_switch_to_text",
   ui_palette_focus_message_search: "ui_content_palette_focus_search",
   ui_palette_toggle_messages_section: "ui_content_palette_toggle_texts",
 };
 
-/** The key of `key`'s text in a project of `kind`. */
-export function projectTextKey(key: string, kind: ProjectKind): string {
-  return kind === "content" ? contentWording[key] ?? key : key;
+/**
+ * The key of `key`'s text in a project of `kind` while the selected text has `role`: the content wording in a
+ * content-editing project, the source-text wording while a translation project's base locale is selected.
+ */
+export function projectTextKey(key: string, kind: ProjectKind, role: TextRole = kind === "content" ? "source" : "translation"): string {
+  if (kind === "content") return contentWording[key] ?? key;
+  return role === "source" ? sourceTextWording[key] ?? key : key;
 }
 
 /**
- * The interface text for the open project: `ui` with the content wording while the project is a content-editing
- * project. The page sets it as the components' text, so a component asks for one key and gets the project's wording.
+ * The interface text for the open project and selection: `ui` with the content wording while the project is a
+ * content-editing project, and with the source-text wording while a translation project's base locale is selected.
+ * The page sets it as the components' text, so a component asks for one key and gets the wording that applies.
  */
-export function projectUiText(ui: UiText, kind: () => ProjectKind): UiText {
+export function projectUiText(ui: UiText, kind: () => ProjectKind, role?: () => TextRole): UiText {
   return {
     text(key: string, argumentsValue?: UiTextArguments): string {
-      return ui.text(projectTextKey(key, kind()), argumentsValue);
+      return ui.text(projectTextKey(key, kind(), role?.()), argumentsValue);
     },
   };
 }
