@@ -114,10 +114,14 @@ The stores own the unsaved work and the host's answers:
 - `SaveCoordinator` is the one save behind Ctrl+S and the toolbar: it owns the
   unsaved summary (documents with unsaved text, unsaved review changes) and
   `saveAll()`, which validates every unsaved document, writes them, reloads the
-  workspace once and then saves the review changes.
+  workspace once and then saves the review changes. After a save of review
+  data it validates a saved document again, because a stale review state
+  (RTR0090) is computed from the review file, which the loaded snapshot's
+  diagnostics predate.
 - `DiagnosticsStore` keeps validation results per request and document. The
-  panel lists the latest one, or the workspace's diagnostics before any; it also
-  offers per-message and errors-first selectors.
+  panel lists the latest one, or the workspace's diagnostics before any (the
+  snapshot's, or those requested again after a review save); it also offers
+  per-message and errors-first selectors.
 - `PreviewController` owns the preview samples, the requested formatting locale
   and time zone, the debounced compiler requests and the pseudo-locale result.
 
@@ -152,13 +156,22 @@ blocking flags):
   review, or any text). Its `projectKind` is the one place the project's kind
   is derived from the snapshot (D074.2, `project-kind.ts`): a catalog with one
   real locale, the base locale (configured pseudo-locales don't count), is a
-  content-editing project. There the view drops the translation filters and
+  content-editing project. Its `textRole` extends the kind to the selection: the
+  base locale of a translation project holds the source text, as every text of
+  a content-editing project does, and the source text is not a translation.
+  While the source text is selected the view drops the translation filters and
   states and the review of the selection, Next steps through every text, and the
-  components leave out the translation-only parts. The page wraps the interface
-  text in `projectUiText`, which swaps the translation wording for the content
-  wording (`contentWording`) while the project is a content-editing one, and
-  passes the kind to the labels, the palette and the keyboard shortcuts. A
-  second language changes the snapshot, and with it the kind, without a restart.
+  components leave out the translation-only parts (review workflow, source panel,
+  Copy source, the list's state marks and bulk review actions). A
+  content-editing project also leaves out the project's other translation parts
+  (coverage, Next missing) and the composer's structure (plural forms, cases,
+  the advanced structure; the message source is a "Show source" link). The page
+  wraps the interface text in `projectUiText`, which swaps the translation
+  wording for the source-text wording (`sourceTextWording`) while the source
+  text is selected and for the content wording (`contentWording`) in a
+  content-editing project, and passes the kind and the role to the labels, the
+  palette and the keyboard shortcuts. A second language changes the snapshot,
+  and with it the kind, without a restart.
 - `NextMessageController` runs Next and Previous (Alt+↓, Alt+↑, the toolbar
   button and the palette; none of them in a content-editing project): the kind
   follows the list's filter, the steps follow the tree and wrap at the end. Its Save and next (Ctrl+Enter) runs the one

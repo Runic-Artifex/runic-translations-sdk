@@ -165,8 +165,8 @@
 		<Sidebar.GroupAction aria-label={ui.text("ui_locale_manage")} title={ui.text("ui_locale_manage")} onclick={onmanage}>
 			<Settings2Icon />
 		</Sidebar.GroupAction>
-		<Collapsible.Content class="min-h-0 flex-1 overflow-hidden">
-			<Sidebar.GroupContent class="min-h-0 flex-1">
+		<Collapsible.Content class="min-h-0 flex-1 flex-col overflow-hidden data-[state=open]:flex">
+			<Sidebar.GroupContent class="flex min-h-0 flex-1 flex-col">
 				<ScrollArea.Root class="h-full min-h-0">
 					<Item.Group class="gap-1 pr-2">
 					{#each locales as locale (locale.tag)}

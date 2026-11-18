@@ -1,13 +1,15 @@
 import { m } from "virtual:runic-translations/editor";
-import type { ProjectKind } from "./project-kind";
+import type { ProjectKind, TextRole } from "./project-kind";
 
 /**
  * The page's labels from the generated editor catalog, in the interface locale. A content-editing project (D074.2)
- * speaks of texts, not messages and translations.
+ * speaks of texts, not messages and translations; the source text of a translation project (its base locale) is
+ * edited as "Text", not as a translation.
  */
-export function editorLabels(locale: string, kind: ProjectKind = "translation") {
+export function editorLabels(locale: string, kind: ProjectKind = "translation", role: TextRole = kind === "content" ? "source" : "translation") {
   const options = { locale };
   const content = kind === "content";
+  const source = content || role === "source";
   return {
     title: m.app_title(options),
     eyebrow: m.app_eyebrow(options),
@@ -21,7 +23,7 @@ export function editorLabels(locale: string, kind: ProjectKind = "translation") 
     save: m.app_save(options),
     saving: m.app_saving(options),
     reload: m.app_reload(options),
-    simple: content ? m.ui_content_text(options) : m.app_simple(options),
+    simple: source ? m.ui_content_text(options) : m.app_simple(options),
     advanced: m.app_advanced(options),
     raw: m.app_raw(options),
     noSelection: content ? m.ui_content_no_selection(options) : m.app_no_selection(options),

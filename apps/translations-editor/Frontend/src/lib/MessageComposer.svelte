@@ -30,9 +30,16 @@
     oncopysource?: () => void;
     /** Advanced by an undo or redo: text typed before it gives way to `value`. */
     revision?: number;
+    /**
+     * Whether the composer offers the message's structure: Add plural forms, adding and removing cases, the advanced
+     * structure (inputs, formatters, selection rules) and the message source as a primary action, also per variant.
+     * Without it (a content-editing project, D074.2) people edit the text of the cases the message has, and the message
+     * source is a small "Show source" link in the footer, for fixing a broken text.
+     */
+    structure?: boolean;
   }
 
-  let { value, locale, authoring, authoringBusy = false, onchange, onoperation, maxLength, oncopysource, revision = 0 }: Props = $props();
+  let { value, locale, authoring, authoringBusy = false, onchange, onoperation, maxLength, oncopysource, revision = 0, structure = true }: Props = $props();
   const ui = getUiText();
   let rawMode = $state(false);
   let exactCaseValue = $state("");
@@ -107,7 +114,7 @@
           <CopyIcon data-icon="inline-start" />{ui.text("ui_composer_copy_source")}
         </Button>
       {/if}
-      {#if canAuthor}
+      {#if canAuthor && structure}
         <Button variant="outline" size="sm" onclick={() => rawMode = !rawMode} aria-pressed={rawMode}>
           <CodeXmlIcon data-icon="inline-start" />{ui.text("ui_composer_message_source")}
         </Button>
@@ -124,7 +131,7 @@
     {/if}
     <Textarea value={source} rows={12} class="font-mono text-sm" data-draft-field aria-label={ui.text("ui_composer_message_source")} spellcheck={false} lang={locale} dir={localeDirection(locale)} oninput={(event) => changeSource(event.currentTarget.value)} />
   {:else if authoring}
-    {#if authoring.selectors.length === 0}
+    {#if structure && authoring.selectors.length === 0}
       <Button variant="outline" class="justify-self-start" disabled={authoringBusy} onclick={enablePluralForms}>
         <CirclePlusIcon data-icon="inline-start" />{ui.text("ui_composer_add_plural_forms")}
       </Button>
@@ -147,17 +154,17 @@
               >{ui.text("ui_count_characters_limit", { count: limit.length, limit: limit.limit })}</span>
             {/if}
           </div>
-          {#if variant.keys.length > 0}
+          {#if structure && variant.keys.length > 0}
             <Card.Action><Button variant="ghost" size="icon-sm" disabled={fallback || authoringBusy} aria-label={`${ui.text("ui_composer_remove")} ${title(variant.keys)}`} onclick={() => operation({ kind: "remove-variant", variantId: variant.id })}><Trash2Icon /></Button></Card.Action>
           {/if}
         </Card.Header>
         <Card.Content>
-          <PatternEditor pattern={variant.pattern} {inputs} {locale} {revision} label={`${ui.text("ui_composer_translation_for")} ${title(variant.keys)}`} onchange={(pattern) => operation({ kind: "set-pattern", variantId: variant.id, pattern })} />
+          <PatternEditor pattern={variant.pattern} {inputs} {locale} {revision} sourceToggle={structure} label={`${ui.text("ui_composer_translation_for")} ${title(variant.keys)}`} onchange={(pattern) => operation({ kind: "set-pattern", variantId: variant.id, pattern })} />
         </Card.Content>
       </Card.Root>
     {/each}
 
-    {#if authoring.selectors.length > 0}
+    {#if structure && authoring.selectors.length > 0}
       <div class="flex flex-wrap items-end gap-2">
         {#each availableCases as category (category)}
           <Button variant="outline" size="sm" disabled={authoringBusy} onclick={() => addVariant(category)}><CirclePlusIcon />{category}</Button>
@@ -170,6 +177,7 @@
       </div>
     {/if}
 
+    {#if structure}
     <details class="rounded-xl border bg-card p-4">
       <summary class="cursor-pointer text-sm font-semibold">{ui.text("ui_composer_advanced_structure")}</summary>
       <div class="mt-4 grid gap-4">
@@ -211,5 +219,15 @@
         </div>
       </div>
     </details>
+    {/if}
+  {/if}
+
+  {#if canAuthor && !structure}
+    <!-- A content-editing project: the message source stays reachable for fixing a broken text, as a small link. -->
+    <footer class="flex justify-end">
+      <Button variant="link" size="xs" class="h-auto p-0 text-xs" onclick={() => rawMode = !rawMode} data-testid="composer-show-source">
+        {ui.text(rawMode ? "ui_composer_hide_source" : "ui_composer_show_source")}
+      </Button>
+    </footer>
   {/if}
 </div>

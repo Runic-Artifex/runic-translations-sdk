@@ -1,5 +1,5 @@
 import type { EditorBridge } from "../editor-bridge";
-import type { ValidationResult, WorkspaceSnapshot } from "../contracts";
+import type { EditorDiagnostic, ValidationResult, WorkspaceSnapshot } from "../contracts";
 import { notice, type UiMessage } from "../ui-text";
 import type { DraftStore } from "./draft-store.svelte";
 import type { ReviewStore } from "./review-store.svelte";
@@ -29,6 +29,11 @@ export interface SaveCoordinatorOptions {
   validated?: (path: string, result: ValidationResult) => void;
   /** Installs the workspace reloaded after documents were saved. */
   install: (next: WorkspaceSnapshot) => void;
+  /**
+   * Receives the saved workspace's diagnostics, requested again after review data was saved: a stale review state
+   * (RTR0090) is computed from the review file, which the snapshot's diagnostics predate.
+   */
+  refreshed?: (snapshot: WorkspaceSnapshot, diagnostics: EditorDiagnostic[]) => void;
 }
 
 /**
@@ -107,9 +112,30 @@ export class SaveCoordinator {
     }
     if (refused !== undefined) return { kind: "refused", saved, ...refused };
 
+    const reviewChanged = review.dirty;
     if (!(await review.save())) {
       return { kind: "review-failed", saved, newer, message: review.message ?? notice("ui_feedback_review_save_failed") };
     }
+    if (reviewChanged) await this.#refreshDiagnostics();
     return { kind: "saved", saved, newer, message: message ?? notice("app_saved") };
+  }
+
+  /**
+   * After a save of review data (a confirmed or re-marked state, a state change, a note), the saved workspace's
+   * diagnostics are requested again through the validation request, so RTR0090 no longer reports a state the save
+   * recorded for the current source. Validating a saved document with its saved text gives the diagnostics a reload
+   * would, without reloading the workspace. A failed request leaves the diagnostics as they were: the save succeeded.
+   */
+  async #refreshDiagnostics(): Promise<void> {
+    const refreshed = this.#options.refreshed;
+    const snapshot = this.#options.snapshot();
+    const document = snapshot?.documents.find((candidate) => !candidate.isManifest && !candidate.isMalformed);
+    if (refreshed === undefined || snapshot === undefined || document === undefined) return;
+    try {
+      const result = await this.#options.bridge.validate(document.path, document.content);
+      if (this.#options.snapshot() === snapshot) refreshed(snapshot, result.diagnostics);
+    } catch {
+      // The diagnostics stay until the next request.
+    }
   }
 }

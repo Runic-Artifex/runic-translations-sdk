@@ -179,6 +179,18 @@ for (const kept of ["document.save", "document.undo", "view.mode-raw", "view.tog
 }
 assert(stepEntry(palette.buildEditorCommandPalette(actions, { ...state, projectKind: "translation" }), "review.state-approved") !== undefined,
   "A translation project's palette lost its review commands.");
+// The base locale of a translation project holds the source text (#225 R1): no review states to set on its messages;
+// the project's terminology, quality report and unsaved review changes stay, and so do Next and Previous (over texts).
+const sourceIds = palette.buildEditorCommandPalette(actions, {
+  ...state, selectedLocale: "de", projectKind: "translation", textRole: "source", stepKind: "text",
+}).map((command) => command.id);
+for (const hidden of ["review.state-needs-review", "review.state-approved", "review.state-translated", "review.state-draft",
+  "review.mark-visible-needs-review", "review.mark-visible-approved"]) {
+  assert(!sourceIds.includes(hidden), `The source text's palette offers ${hidden}.`);
+}
+for (const kept of ["review.terminology", "review.quality-report", "review.discard-workflow", "document.next-message", "view.toggle-languages"]) {
+  assert(sourceIds.includes(kept), `The source text's palette lost ${kept}.`);
+}
 
 const blocked = palette.buildEditorCommandPalette(
   actions,
