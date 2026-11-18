@@ -62,7 +62,6 @@ Every routine editor-owned backend notice uses the following stable resource key
 | `ui_backend_import_not_applied` | The import was not applied. |
 | `ui_backend_import_partial` | The import could not be rolled back after a write failed. Reload the workspace and review the affected translation files. |
 | `ui_backend_import_sidecar_changed` | The workflow sidecar changed on disk. Preview the import again. |
-| `ui_backend_invalid_json` | The document is not valid JSON. |
 | `ui_backend_no_redo` | There is no saved change to redo. |
 | `ui_backend_no_undo` | There is no saved change to undo. |
 | `ui_backend_not_message_document` | This document does not contain translation messages. |
