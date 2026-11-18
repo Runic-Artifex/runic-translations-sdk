@@ -4,7 +4,9 @@
 	import { getUiText } from "#lib/ui-text.js";
 
 	const storageKey = "runic.sidebar.languages-share";
-	const defaultShare = 0.5;
+	// The most of the panels' height the language list takes: it takes the height it needs up to this share, so a long
+	// list scrolls and leaves the message tree most of the height. The resizer changes it; it is stored.
+	const defaultShare = 0.4;
 	const minimumShare = 0.2;
 	const keyboardStep = 0.05;
 
@@ -105,8 +107,7 @@
 <div
 	bind:this={container}
 	class={["sidebar-section-panels", layout, resizing && "is-resizing"]}
-	style:--languages-size={`${languagesShare}fr`}
-	style:--messages-size={`${1 - languagesShare}fr`}
+	style:--languages-share={languagesShare}
 >
 	<section class="sidebar-section-panel languages-panel" aria-label={ui.text("ui_sidebar_panels_languages_panel")}>
 		{@render languages()}
@@ -146,8 +147,10 @@
 		overflow: hidden;
 	}
 
+	/* The language list takes the height it needs, at most its share of the panels' height; the message tree takes the
+	   rest. A stored share larger than the list needs leaves no empty space. */
 	.sidebar-section-panels.both-open {
-		grid-template-rows: minmax(0, var(--languages-size)) 0.5rem minmax(0, var(--messages-size));
+		grid-template-rows: fit-content(calc((100% - 0.5rem) * var(--languages-share))) 0.5rem minmax(0, 1fr);
 	}
 
 	.sidebar-section-panels.languages-open {

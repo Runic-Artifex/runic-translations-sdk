@@ -3,7 +3,7 @@ import type { ThemeMode } from "./appearance";
 import type { EditorReviewState } from "./contracts";
 import type { EditorBridge } from "./editor-bridge";
 import type { NextMessageKind } from "./next-message";
-import type { ProjectKind } from "./project-kind";
+import type { ProjectKind, TextRole } from "./project-kind";
 import type { UiDirection } from "./simulation";
 import { shortcutLabel, type ShortcutPlatform } from "./shortcut-labels";
 
@@ -96,7 +96,24 @@ export interface EditorPaletteState {
    * commands are left out, like the controls they stand for. A translation project when absent.
    */
   readonly projectKind?: ProjectKind;
+  /**
+   * Whether the selection is the source text (a translation project's base locale) or a translation. Review states
+   * belong to translations: the commands that set them on the selected or the listed messages are left out for the
+   * source text. Terminology, the quality report and discarding unsaved review changes concern the whole project and
+   * stay. A translation when absent.
+   */
+  readonly textRole?: TextRole;
 }
+
+/** The review commands that set states on messages of the selected locale; the source text has none. */
+const reviewStateCommands: ReadonlySet<string> = new Set([
+  "review.state-needs-review",
+  "review.state-approved",
+  "review.state-translated",
+  "review.state-draft",
+  "review.mark-visible-needs-review",
+  "review.mark-visible-approved",
+]);
 
 /** The commands of controls a content-editing project does not show; the review group goes as a whole. */
 const translationOnlyCommands: ReadonlySet<string> = new Set([
@@ -428,9 +445,10 @@ export function buildEditorCommandPalette(
     run: actions.createDiagnosticBundle,
   });
 
-  return state.projectKind === "content"
-    ? commands.filter((command) => command.group !== "review" && !translationOnlyCommands.has(command.id))
-    : commands;
+  if (state.projectKind === "content") {
+    return commands.filter((command) => command.group !== "review" && !translationOnlyCommands.has(command.id));
+  }
+  return state.textRole === "source" ? commands.filter((command) => !reviewStateCommands.has(command.id)) : commands;
 }
 
 export function filterCommands(
