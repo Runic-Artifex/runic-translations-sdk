@@ -1,6 +1,6 @@
 // The validation panel's scoping (#225 P6, P12): diagnostics are placed in their message (the backend's row, else the
 // entry their span starts in) with a line inside that message; the selected message's diagnostics come first, errors
-// before warnings; errors about no message stay visible; the rest of the project is under a collapsed disclosure.
+// before warnings; every other error stays visible (any error blocks saving); the other warnings are collapsed.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { plugin } from "bun";
@@ -63,6 +63,8 @@ const diagnostics = [
   diagnostic("RTR0001", "warning", { path: "runic.json" }),
   diagnostic("RTR0002", "error", { path: "runic.json" }),
   diagnostic("RTR0094", "warning", { key: "notes_title", locale: "de", line: 3, column: 11, span: span(titleStart) }),
+  // An error in another message, without a span.
+  diagnostic("RTR0070", "error", { key: "notes_title", locale: "de", messagePath: ["notes", "title"], line: 3, column: 11 }),
 ];
 const placed = placeDiagnostics(diagnostics, sources);
 assert.deepEqual(placed.map(({ key, locale, message, messageLine }) => [key, locale, message, messageLine]), [
@@ -73,6 +75,7 @@ assert.deepEqual(placed.map(({ key, locale, message, messageLine }) => [key, loc
   [undefined, undefined, undefined, undefined],
   // No messagePath from the backend: the entry's path names it.
   ["notes_title", "de", "notes.title", 1],
+  ["notes_title", "de", "notes.title", undefined],
 ], "Each diagnostic is placed in its message, with the line inside the message's text.");
 
 // Stale entries (the draft changed after they were parsed) give no span placement and no message line.
@@ -87,16 +90,19 @@ const shifted = placeDiagnostics([diagnostic("RTR0201", "error", { span: span(no
 assert.deepEqual([shifted[0].key, shifted[0].messageLine], ["notes_deleteConfirm", 3]);
 assert.deepEqual(placeDiagnostics(diagnostics.slice(0, 1), undefined).map((item) => item.message), ["notes.title"], "Without documents the backend's path still names the message.");
 
-// Grouping: the selected message in the selected locale first; errors about no message stay out of the collapsed rest.
+// Grouping: the selected message in the selected locale first; every other error is pinned; only warnings are collapsed.
 const groups = groupDiagnostics(placed, { key: "notes_deleteConfirm", locale: "de" });
 assert.deepEqual(groups.message.map((item) => item.diagnostic.id), ["RTR0201", "RTR0096"], "The selected message's error comes before its warning.");
-assert.deepEqual(groups.blocking.map((item) => item.diagnostic.id), ["RTR0002"]);
+assert.deepEqual(groups.blocking.map((item) => item.diagnostic.id), ["RTR0002", "RTR0070"], "Errors of other messages and about no message are pinned.");
 assert.deepEqual(groups.other.map((item) => item.diagnostic.id), ["RTR0010", "RTR0001", "RTR0094"]);
 const french = groupDiagnostics(placed, { key: "notes_title", locale: "fr" });
 assert.deepEqual(french.message.map((item) => item.diagnostic.id), ["RTR0010"], "Another locale's diagnostics of the same message are not this message's.");
-assert.deepEqual(french.other.map((item) => item.diagnostic.id), ["RTR0201", "RTR0096", "RTR0001", "RTR0094"], "The rest is errors first.");
+assert.deepEqual(french.blocking.map((item) => item.diagnostic.id), ["RTR0201", "RTR0002", "RTR0070"]);
+assert.deepEqual(french.other.map((item) => item.diagnostic.id), ["RTR0096", "RTR0001", "RTR0094"], "Only warnings are collapsed.");
+const noErrors = groupDiagnostics(placed.filter((item) => item.diagnostic.severity === "warning"), { key: "notes_title", locale: "fr" });
+assert.deepEqual([noErrors.blocking, noErrors.other.length], [[], 3]);
 assert.deepEqual(groupDiagnostics(placed, undefined).message, []);
-assert.deepEqual(errorsFirst(diagnostics, (item) => item).map((item) => item.id), ["RTR0201", "RTR0002", "RTR0010", "RTR0096", "RTR0001", "RTR0094"]);
+assert.deepEqual(errorsFirst(diagnostics, (item) => item).map((item) => item.id), ["RTR0201", "RTR0002", "RTR0070", "RTR0010", "RTR0096", "RTR0001", "RTR0094"]);
 assert.equal(messageDisplayName("notes_deleteConfirm", sources), "notes.deleteConfirm");
 assert.equal(messageDisplayName("unknown_key", sources), "unknown_key");
 
@@ -104,7 +110,7 @@ assert.equal(messageDisplayName("unknown_key", sources), "unknown_key");
 const html = (props) => render(ValidationPanel, { props }).body.replace(/<!--[^>]*-->/g, "");
 const text = (markup) => markup.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 const base = {
-  busy: false, diagnostics, clientError: undefined, errorCount: 2, warningCount: 4,
+  busy: false, diagnostics, clientError: undefined, errorCount: 3, warningCount: 4,
   validLabel: "valid", invalidLabel: "invalid", diagnosticsLabel: "Diagnostics", schemaVersion: 1, sources, onselect() {},
 };
 const scoped = html({ ...base, selection: { key: "notes_deleteConfirm", locale: "de" } });
@@ -116,23 +122,32 @@ assert.deepEqual([...message.matchAll(/data-severity="(\w+)"/g)].map(([, severit
 assert.ok(text(message).indexOf("RTR0201") < text(message).indexOf("RTR0096"));
 assert.match(text(message), /RTR0201 RTR0201 \[ui_validation_place_line line=3\] translations\/de\.rmf2:7:22/, "A line inside the message, the file position second.");
 assert.match(message, /title="\[ui_validation_file_position path=translations\/de\.rmf2 line=7 column=22\]"/, "The file position is the tooltip.");
-assert.match(text(section("blocking")), /\[ui_validation_blocking_heading\] RTR0002/, "An error about no message is visible without expanding.");
+assert.match(scoped, /<section[^>]*aria-labelledby="[^"]+-blocking"[^>]*data-testid="diagnostics-blocking"/);
+assert.match(text(section("blocking")), /^\[ui_validation_blocking_heading\] RTR0002 RTR0002 runic\.json:1:1 RTR0070 RTR0070 \[ui_validation_place_message message=notes\.title locale=de\] translations\/de\.rmf2:3:11$/,
+  "Errors about no message and in other messages are visible without expanding, each naming its message or file.");
+assert.deepEqual([...section("blocking").matchAll(/data-severity="(\w+)"/g)].map(([, severity]) => severity), ["error", "error"]);
 const other = section("other");
-assert.match(other, /<button[^>]*aria-expanded="false"[^>]*aria-controls="([^"]+)-other"[^>]*>[\s\S]*\[ui_validation_other_heading count=3\]/, "The rest is a collapsed disclosure button.");
-assert.match(other, /<div[^>]*id="[^"]+-other"[^>]*hidden/, "Other issues are collapsed.");
+assert.match(other, /<button[^>]*aria-expanded="false"[^>]*aria-controls="([^"]+)-other"[^>]*>[\s\S]*\[ui_validation_other_warnings_heading count=3\]/, "The other warnings are a collapsed disclosure button.");
+assert.match(other, /<div[^>]*id="[^"]+-other"[^>]*hidden/, "Other warnings are collapsed.");
 assert.doesNotMatch(other, /RTR0010|RTR0094/, "Collapsed issues are not rendered.");
-assert.match(text(scoped), /Diagnostics · \[ui_count_errors count=2\] · \[ui_count_warnings count=4\] · \[ui_validation_message_counts errors=\[ui_count_errors count=1\] warnings=\[ui_count_warnings count=1\]\]/,
+assert.match(text(scoped), /Diagnostics · \[ui_count_errors count=3\] · \[ui_count_warnings count=4\] · \[ui_validation_message_counts errors=\[ui_count_errors count=1\] warnings=\[ui_count_warnings count=1\]\]/,
   "The summary keeps the project counts and adds this message's.");
 
 // Without a selection (the repair dialog) every diagnostic is listed, errors first, each naming its message.
 const flat = html(base);
 assert.doesNotMatch(flat, /data-testid="diagnostics-(?:message|other)"/);
-assert.deepEqual([...flat.matchAll(/data-severity="(\w+)"/g)].map(([, severity]) => severity), ["error", "error", "warning", "warning", "warning", "warning"]);
+assert.deepEqual([...flat.matchAll(/data-severity="(\w+)"/g)].map(([, severity]) => severity), ["error", "error", "error", "warning", "warning", "warning", "warning"]);
 assert.match(text(flat), /RTR0010 \[ui_validation_place_message message=notes\.title locale=fr\] translations\/fr\.rmf2:3:3/);
 assert.match(text(flat), /RTR0201 \[ui_validation_place_message_line message=notes\.deleteConfirm locale=de line=3\]/);
 assert.doesNotMatch(text(flat), /ui_validation_message_counts/);
 
+// Without errors outside the selected message, the pinned section is not rendered.
+const warningsOnly = html({ ...base, diagnostics: diagnostics.filter((item) => item.severity === "warning"), errorCount: 0,
+  selection: { key: "notes_deleteConfirm", locale: "de" } });
+assert.doesNotMatch(warningsOnly, /data-testid="diagnostics-blocking"/);
+assert.match(warningsOnly, /\[ui_validation_other_warnings_heading count=3\]/);
+
 const source = await readFile(new URL("../src/lib/ValidationPanel.svelte", import.meta.url), "utf8");
 const warnings = compile(source, { generate: "server" }).warnings.filter((warning) => warning.code.startsWith("a11y_"));
 assert.deepEqual(warnings, [], "ValidationPanel.svelte has compiler-reported accessibility violations.");
-console.log("PASS: the validation panel lists the selected message's diagnostics first, errors before warnings, with message lines, and the rest collapsed.");
+console.log("PASS: the validation panel lists the selected message's diagnostics first, errors before warnings, with message lines, every other error pinned, and the other warnings collapsed.");

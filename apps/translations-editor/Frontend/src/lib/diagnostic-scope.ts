@@ -32,9 +32,9 @@ export interface DiagnosticSelection {
 export interface DiagnosticGroups {
   /** The selected message's diagnostics in the selected locale. */
   message: PlacedDiagnostic[];
-  /** Errors about no message (runic.json, a file's structure): they block saving, so they are never collapsed. */
+  /** Every other error (other messages, other locales, runic.json, a file's structure): any error blocks saving, so they are never collapsed. */
   blocking: PlacedDiagnostic[];
-  /** Everything else: other messages, other locales, and warnings about no message. */
+  /** The other warnings: other messages, other locales, and warnings about no message. */
   other: PlacedDiagnostic[];
 }
 
@@ -103,12 +103,12 @@ export function placeDiagnostics(diagnostics: readonly EditorDiagnostic[], sourc
   });
 }
 
-/** Splits placed diagnostics into the selected message's, the never-collapsed blocking ones, and the rest; each errors first. */
+/** Splits placed diagnostics into the selected message's (errors first), every other error, and the other warnings. */
 export function groupDiagnostics(placed: readonly PlacedDiagnostic[], selection: DiagnosticSelection | undefined): DiagnosticGroups {
   const groups: DiagnosticGroups = { message: [], blocking: [], other: [] };
   for (const item of errorsFirst(placed, (candidate) => candidate.diagnostic)) {
     if (selection !== undefined && item.key === selection.key && item.locale === selection.locale) groups.message.push(item);
-    else if (item.key === undefined && item.diagnostic.severity === "error") groups.blocking.push(item);
+    else if (item.diagnostic.severity === "error") groups.blocking.push(item);
     else groups.other.push(item);
   }
   return groups;

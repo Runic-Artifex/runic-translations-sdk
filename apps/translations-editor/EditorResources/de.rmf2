@@ -3937,7 +3937,7 @@ ui {
 }
 ui {
   validation {
-    blocking_heading = Fehler in Dateien und Projekteinstellungen
+    blocking_heading = Fehler, die das Speichern verhindern
   }
 }
 ui {
@@ -3977,9 +3977,9 @@ ui {
 }
 ui {
   validation {
-    other_heading =
+    other_warnings_heading =
       .input {$count :integer}
-      {{Weitere Probleme im Projekt ({$count})}}
+      {{Weitere Warnungen im Projekt ({$count})}}
 
   }
 }

@@ -27,8 +27,9 @@
     /** The documents the diagnostics point into, to name a diagnostic's message and its line in it. */
     sources?: DiagnosticSources;
     /**
-     * The message being translated: its diagnostics are listed first, the rest of the project under a collapsed
-     * disclosure. Without one, every diagnostic is listed, errors first.
+     * The message being translated: its diagnostics are listed first, then every other error (always shown, as each
+     * blocks saving), then the other warnings under a collapsed disclosure. Without one, every diagnostic is listed,
+     * errors first.
      */
     selection?: DiagnosticSelection;
     onselect: (diagnostic: EditorDiagnostic) => void;
@@ -196,7 +197,7 @@
               onclick={() => otherExpanded = !otherExpanded}
             >
               <ChevronRightIcon class="size-4 shrink-0 transition-transform {otherExpanded ? 'rotate-90' : ''}" aria-hidden="true" />
-              {ui.text("ui_validation_other_heading", { count: groups.other.length })}
+              {ui.text("ui_validation_other_warnings_heading", { count: groups.other.length })}
             </Button>
           </h3>
           <div id="{ids}-other" class="divide-y border-t" hidden={!otherExpanded}>

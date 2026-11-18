@@ -3937,7 +3937,7 @@ ui {
 }
 ui {
   validation {
-    blocking_heading = Errors in files and project settings
+    blocking_heading = Errors that block saving
   }
 }
 ui {
@@ -3977,9 +3977,9 @@ ui {
 }
 ui {
   validation {
-    other_heading =
+    other_warnings_heading =
       .input {$count :integer}
-      {{Other issues in the project ({$count})}}
+      {{Other warnings in the project ({$count})}}
 
   }
 }

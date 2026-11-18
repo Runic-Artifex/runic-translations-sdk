@@ -367,7 +367,8 @@ try {
   if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "translate-view-en.png"), fullPage: true });
 
   // The diagnostics panel (#225 P6, P12): with an error in the selected message and a warning in another message, the
-  // selected message's error is listed first under its heading, and the other issues are under a collapsed disclosure.
+  // selected message's error is listed first under its heading and the other warnings are under a collapsed disclosure.
+  // An error in another message blocks saving, so it is listed without expanding anything.
   stage = "scoped-diagnostics";
   const reviewBefore = await readFile(reviewPath, "utf8");
   const staleReview = JSON.parse(reviewBefore);
@@ -380,26 +381,40 @@ try {
   const fileText = page.locator("#translation-value");
   await waitFor(async () => (await fileText.inputValue()).startsWith(preservedComment), "file view of en.rmf2");
   const enText = await fileText.inputValue();
-  assert.ok(enText.includes("  cancel = Cancel\n"));
-  await fileText.fill(enText.replace("  cancel = Cancel\n", "  cancel = Cancel {$what :nosuch}\n"));
+  assert.ok(enText.includes("  cancel = Cancel\n") && enText.includes("  save = Save\n"));
+  const brokenCancel = enText.replace("  cancel = Cancel\n", "  cancel = Cancel {$what :nosuch}\n");
+  await fileText.fill(brokenCancel);
   const messageIssues = page.getByRole("region", { name: "Issues in common.cancel (en)", exact: true });
   await waitFor(async () => await messageIssues.locator("[data-severity]").count() > 0, "the selected message's diagnostics");
   assert.equal(await messageIssues.locator("[data-severity]").first().getAttribute("data-severity"), "error",
     "The selected message's error is not listed first.");
   assert.match(await messageIssues.locator("[data-severity]").first().textContent(), /Line 1/, "The error does not name its line in the message.");
+  const blockingIssues = page.getByTestId("diagnostics-blocking");
+  assert.equal(await blockingIssues.count(), 0, "Errors elsewhere are shown although the project has none.");
   const otherIssues = page.getByTestId("diagnostics-other");
-  const disclosure = otherIssues.getByRole("button", { name: /^Other issues in the project \(\d+\)$/ });
-  assert.equal(await disclosure.getAttribute("aria-expanded"), "false", "Other issues are not collapsed.");
-  assert.equal(await otherIssues.locator("[data-severity]").count(), 0, "Collapsed issues are listed.");
+  const disclosure = otherIssues.getByRole("button", { name: /^Other warnings in the project \(\d+\)$/ });
+  assert.equal(await disclosure.getAttribute("aria-expanded"), "false", "Other warnings are not collapsed.");
+  assert.equal(await otherIssues.locator("[data-severity]").count(), 0, "Collapsed warnings are listed.");
   assert.match(await page.getByTestId("diagnostics-message-counts").textContent(), /^This message: (one error|\d+ errors), /);
   if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "scoped-diagnostics-en.png"), fullPage: true });
   await disclosure.focus();
   await page.keyboard.press("Enter");
-  await waitFor(async () => await disclosure.getAttribute("aria-expanded") === "true", "expanded other issues");
+  await waitFor(async () => await disclosure.getAttribute("aria-expanded") === "true", "expanded other warnings");
   await otherIssues.getByRole("button", { name: /RTR0090.*in common\.save \(fr\)/ }).first().waitFor();
-  const otherSeverities = await otherIssues.locator("[data-severity]").evaluateAll(items => items.map(item => item.getAttribute("data-severity")));
-  assert.deepEqual(otherSeverities, [...otherSeverities].sort(), "Other issues are not listed errors first.");
-  if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "scoped-diagnostics-expanded-en.png"), fullPage: true });
+  assert.deepEqual(await otherIssues.locator("[data-severity]").evaluateAll(items => [...new Set(items.map(item => item.getAttribute("data-severity")))]),
+    ["warning"], "The collapsed section holds warnings only.");
+  await disclosure.click();
+  await waitFor(async () => await disclosure.getAttribute("aria-expanded") === "false", "collapsed other warnings");
+  // An error in another message of the file: pinned under its own heading, visible while the warnings stay collapsed.
+  await fileText.fill(brokenCancel.replace("  save = Save\n", "  save = Save {$what :nosuch}\n"));
+  const elsewhere = page.getByRole("region", { name: "Errors that block saving", exact: true });
+  const saveError = elsewhere.getByRole("button", { name: /RTR0065.*in common\.save \(en\)/ });
+  await saveError.waitFor();
+  assert.equal(await saveError.isVisible(), true, "The other message's error is not visible without expanding.");
+  assert.equal(await disclosure.getAttribute("aria-expanded"), "false");
+  assert.equal(await otherIssues.locator("[data-severity]").count(), 0);
+  assert.equal(await messageIssues.locator("[data-severity]").first().getAttribute("data-severity"), "error");
+  if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "scoped-diagnostics-errors-en.png"), fullPage: true });
   await fileText.fill(enText);
   await waitFor(async () => await saveState() === "Saved", "scoped-diagnostics edit reverted");
   await writeFile(reviewPath, reviewBefore);
