@@ -220,6 +220,34 @@ internal static partial class EditorSmokeTest
             "The editor's status model doesn't match runic-translations status for an incomplete catalog.");
     }
 
+    // P7: a missing key of an existing group is inserted into that group, not written to a second block at the end.
+    private static async Task NestedMissingKeyJourneyAsync(string project)
+    {
+        Directory.CreateDirectory(project);
+        const string manifest = "{\n  \"schemaVersion\": 1,\n  \"catalog\": \"nested\",\n  \"code\": { \"namespace\": \"Smoke.Translations\", \"className\": \"SmokeText\" },\n  \"baseLocale\": \"en\",\n  \"locales\": [\"en\", \"de\"]\n}\n";
+        await File.WriteAllTextAsync(Path.Combine(project, "runic.json"), manifest).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), "notes {\n  selected = Selected\n  empty = Empty\n  deleteConfirm = Delete?\n}\n").ConfigureAwait(false);
+        // The German file must load, so it keeps every base key; the edit starts from the same group without deleteConfirm.
+        await File.WriteAllTextAsync(Path.Combine(project, "de.rmf2"), "notes {\n  selected = Ausgewählt\n  empty = Leer\n  deleteConfirm = Löschen?\n}\n").ConfigureAwait(false);
+        using var session = new EditorSession(project);
+        WorkspaceSnapshot loaded = await session.LoadAsync().ConfigureAwait(false);
+        Require(loaded.Success, "The nested-key fixture did not load: " + string.Join("; ", loaded.Diagnostics.Select(item => item.Id + " " + item.Message)));
+        EditorDocument german = loaded.Documents.Single(document => document.Path.EndsWith("de.rmf2", StringComparison.OrdinalIgnoreCase));
+        string withoutKey = german.Content.Replace("  deleteConfirm = Löschen?\n", "", StringComparison.Ordinal);
+        Require(withoutKey != german.Content, "The fixture's German group has no deleteConfirm line to remove.");
+        EditorDocumentDraft draft = await session.TransformDocumentAsync(german.Path, withoutKey, "notes_deleteConfirm", "Löschen bestätigen?").ConfigureAwait(false);
+        Require(draft.Success && draft.Entries.Any(entry => entry.Key == "notes_deleteConfirm"),
+            "The missing nested key was not added to the German draft: " + draft.Content);
+        string[] lines = draft.Content.Split('\n');
+        Require(lines.Count(line => line == "notes {") == 1 && lines.Count(line => line == "}") == 1,
+            "The missing nested key was written to a second group block: " + draft.Content);
+        Require(lines.Contains("  deleteConfirm = Löschen bestätigen?"),
+            "The missing nested key was not indented inside its existing group: " + draft.Content);
+        EditorOperationResult saved = await session.SaveAsync(german.Path, draft.Content, german.Revision).ConfigureAwait(false);
+        Require(saved.Ok && await File.ReadAllTextAsync(Path.Combine(project, "de.rmf2")).ConfigureAwait(false) == draft.Content,
+            "The German document with the inserted nested key was not saved as drafted: " + saved.Message?.Code);
+    }
+
     // L5-26: migration from .resx and i18next through Tooling's importer: a dry run lists every message and the files
     // it writes; applying it is a one-use confirmation, refused once a file changed.
     private static async Task CatalogImportJourneyAsync(string root)
@@ -615,6 +643,7 @@ internal static partial class EditorSmokeTest
             await MountedContextJourneyAsync(Path.Combine(container, "mounted-context")).ConfigureAwait(false);
             await PreviewFormattingJourneyAsync(Path.Combine(container, "preview-formatting")).ConfigureAwait(false);
             await LocaleChangeJourneyAsync(Path.Combine(container, "locale-change")).ConfigureAwait(false);
+            await NestedMissingKeyJourneyAsync(Path.Combine(container, "nested-missing-key")).ConfigureAwait(false);
             await CatalogImportJourneyAsync(Path.Combine(container, "catalog-import")).ConfigureAwait(false);
             await MalformedManifestJourneyAsync(Path.Combine(container, "malformed-manifest")).ConfigureAwait(false);
             await InterchangeOutputJourneyAsync(Path.Combine(container, "interchange-output"), commandLine).ConfigureAwait(false);

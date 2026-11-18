@@ -225,6 +225,24 @@ internal sealed class Rmf2AuthoringTests
         Assert.True(created.Edits.All(edit => Encoding.UTF8.GetString(edit.GetUtf8Bytes()!).Contains("new {", StringComparison.Ordinal)),
             "RMF2 message creation missed a locale document.");
     }
+    [Test, DisplayName("RMF2 message creation under an existing group inserts into that group")]
+    public void CreateResourceInsertsIntoExistingGroup()
+    {
+        var workspace = new Rmf2Workspace(Path.GetTempPath(), Project(), [
+            Source("en.rmf2", "notes {\n  selected = Selected\n}\n"),
+            Source("de.rmf2", "notes {\n  selected = Ausgewählt\n}\n"),
+        ]);
+        TranslationWorkspaceTransactionPlan created = workspace.CreateResource("en.rmf2", ["notes", "deleteConfirm"], "Delete?");
+        Assert.True(created.IsValid, "RMF2 nested message creation failed validation.");
+        Assert.Equal(2, created.Edits.Count);
+        foreach (TranslationWorkspaceEdit edit in created.Edits)
+        {
+            string text = Encoding.UTF8.GetString(edit.GetUtf8Bytes()!);
+            Assert.True(text.Split('\n').Count(line => line == "notes {") == 1 && text.Contains("  deleteConfirm = ", StringComparison.Ordinal),
+                "RMF2 nested message creation wrote a second group block: " + text);
+        }
+    }
+
     [Test, DisplayName("RMF2 mounted namespace rename preserves configuration trivia and physical roots")]
     public void MountedRename()
     {
