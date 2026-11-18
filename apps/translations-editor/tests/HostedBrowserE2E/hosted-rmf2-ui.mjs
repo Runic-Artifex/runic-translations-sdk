@@ -366,6 +366,49 @@ try {
   await waitFor(async () => await saveState() === "Saved", "pattern box edit reverted");
   if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "translate-view-en.png"), fullPage: true });
 
+  // The diagnostics panel (#225 P6, P12): with an error in the selected message and a warning in another message, the
+  // selected message's error is listed first under its heading, and the other issues are under a collapsed disclosure.
+  stage = "scoped-diagnostics";
+  const reviewBefore = await readFile(reviewPath, "utf8");
+  const staleReview = JSON.parse(reviewBefore);
+  staleReview.entries.push({ key: "common_save", locale: "fr", state: "needs-review", sourceFingerprint: staleFingerprint });
+  await writeFile(reviewPath, JSON.stringify(staleReview, null, 2) + "\n");
+  await reloadFiles();
+  await page.getByRole("button", { name: /^en / }).first().click();
+  await select("common_cancel");
+  await page.locator('[data-slot="toggle-group-item"]', { hasText: /^File$/ }).click();
+  const fileText = page.locator("#translation-value");
+  await waitFor(async () => (await fileText.inputValue()).startsWith(preservedComment), "file view of en.rmf2");
+  const enText = await fileText.inputValue();
+  assert.ok(enText.includes("  cancel = Cancel\n"));
+  await fileText.fill(enText.replace("  cancel = Cancel\n", "  cancel = Cancel {$what :nosuch}\n"));
+  const messageIssues = page.getByRole("region", { name: "Issues in common.cancel (en)", exact: true });
+  await waitFor(async () => await messageIssues.locator("[data-severity]").count() > 0, "the selected message's diagnostics");
+  assert.equal(await messageIssues.locator("[data-severity]").first().getAttribute("data-severity"), "error",
+    "The selected message's error is not listed first.");
+  assert.match(await messageIssues.locator("[data-severity]").first().textContent(), /Line 1/, "The error does not name its line in the message.");
+  const otherIssues = page.getByTestId("diagnostics-other");
+  const disclosure = otherIssues.getByRole("button", { name: /^Other issues in the project \(\d+\)$/ });
+  assert.equal(await disclosure.getAttribute("aria-expanded"), "false", "Other issues are not collapsed.");
+  assert.equal(await otherIssues.locator("[data-severity]").count(), 0, "Collapsed issues are listed.");
+  assert.match(await page.getByTestId("diagnostics-message-counts").textContent(), /^This message: (one error|\d+ errors), /);
+  if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "scoped-diagnostics-en.png"), fullPage: true });
+  await disclosure.focus();
+  await page.keyboard.press("Enter");
+  await waitFor(async () => await disclosure.getAttribute("aria-expanded") === "true", "expanded other issues");
+  await otherIssues.getByRole("button", { name: /RTR0090.*in common\.save \(fr\)/ }).first().waitFor();
+  const otherSeverities = await otherIssues.locator("[data-severity]").evaluateAll(items => items.map(item => item.getAttribute("data-severity")));
+  assert.deepEqual(otherSeverities, [...otherSeverities].sort(), "Other issues are not listed errors first.");
+  if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "scoped-diagnostics-expanded-en.png"), fullPage: true });
+  await fileText.fill(enText);
+  await waitFor(async () => await saveState() === "Saved", "scoped-diagnostics edit reverted");
+  await writeFile(reviewPath, reviewBefore);
+  await reloadFiles();
+  await page.getByRole("button", { name: /^en / }).first().click();
+  await page.getByRole("button", { name: /^common_cancel:/ }).click();
+  await page.locator('[data-slot="toggle-group-item"]', { hasText: /^Translation$/ }).click();
+  await editor().waitFor();
+
   // The interface language switch sets the window's locale through the ViewModel, the page follows it, and the
   // choice survives a reload from the native editor state.
   // Library catalogs (T5d): the library's text is layer 0, read-only; an override (layer 1) is written to

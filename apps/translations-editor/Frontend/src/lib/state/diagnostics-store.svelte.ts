@@ -1,4 +1,5 @@
 import type { EditorDiagnostic, ValidationResult, WorkspaceSnapshot } from "../contracts";
+import { errorsFirst } from "../diagnostic-scope";
 import { rowDiagnostics } from "../review-model";
 
 /** The request that produced a validation result. */
@@ -10,8 +11,6 @@ export type DiagnosticSource =
   | "save"
   | "navigation"
   | "edit";
-
-const severityRank = (diagnostic: EditorDiagnostic): number => diagnostic.severity === "error" ? 0 : diagnostic.severity === "warning" ? 1 : 2;
 
 /**
  * The compiler's validation results of the open workspace, kept per request and document. The panel shows the result
@@ -59,9 +58,6 @@ export class DiagnosticsStore {
 
   /** The displayed diagnostics, errors before warnings, otherwise in their reported order. */
   sortedErrorsFirst(): EditorDiagnostic[] {
-    return this.displayed
-      .map((diagnostic, index) => ({ diagnostic, index }))
-      .sort((left, right) => severityRank(left.diagnostic) - severityRank(right.diagnostic) || left.index - right.index)
-      .map((item) => item.diagnostic);
+    return errorsFirst(this.displayed, (diagnostic) => diagnostic);
   }
 }
