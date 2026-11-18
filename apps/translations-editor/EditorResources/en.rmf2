@@ -348,11 +348,6 @@ ui {
 }
 ui {
   backend {
-    invalid_json = The document is not valid JSON.
-  }
-}
-ui {
-  backend {
     no_redo = There is no saved change to redo.
   }
 }

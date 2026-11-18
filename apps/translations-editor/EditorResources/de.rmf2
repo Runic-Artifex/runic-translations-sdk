@@ -348,11 +348,6 @@ ui {
 }
 ui {
   backend {
-    invalid_json = Das Dokument enthält kein gültiges JSON.
-  }
-}
-ui {
-  backend {
     no_redo = Es gibt keine gespeicherte Änderung, die wiederholt werden kann.
   }
 }
