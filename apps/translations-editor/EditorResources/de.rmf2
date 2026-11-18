@@ -59,7 +59,7 @@ app {
   review = Überprüfung
 }
 app {
-  save = Dokument speichern
+  save = Speichern
 }
 app {
   saved = Gespeichert
@@ -84,9 +84,6 @@ app {
 }
 app {
   translated = Übersetzt
-}
-app {
-  unsaved = Ungespeicherte Änderungen
 }
 app {
   valid = Bereit zum Speichern
@@ -1366,6 +1363,16 @@ ui {
       .match $count
       one {{Ein lokaler Editorzustandseintrag wurde entfernt.}}
       * {{{$count} lokale Editorzustandseinträge wurden entfernt.}}
+
+  }
+}
+ui {
+  count {
+    unsaved_documents =
+      .input {$count :integer select=plural}
+      .match $count
+      one {{Text in einem Dokument}}
+      * {{Text in {$count} Dokumenten}}
 
   }
 }
@@ -2989,12 +2996,17 @@ ui {
 }
 ui {
   page {
-    recovered_drafts_restore = Entwürfe wiederherstellen
+    recovered_drafts_restore = Wiederherstellen
   }
 }
 ui {
   page {
     recovered_drafts_title = Nicht gespeicherte Arbeit wurde wiederhergestellt
+  }
+}
+ui {
+  page {
+    recovered_review = Ungespeicherte Prüfänderungen wurden im lokalen Anwendungsspeicher gefunden.
   }
 }
 ui {
@@ -3120,11 +3132,6 @@ ui {
 ui {
   page {
     terminology_remove_term = Begriff entfernen
-  }
-}
-ui {
-  page {
-    terminology_save_workflow = Workflow speichern
   }
 }
 ui {
@@ -3365,12 +3372,7 @@ ui {
 }
 ui {
   palette {
-    save_document = Dokument speichern
-  }
-}
-ui {
-  palette {
-    save_workflow_changes = Workflow-Änderungen speichern
+    save_all = Alle Änderungen speichern
   }
 }
 ui {
@@ -3854,11 +3856,6 @@ ui {
 }
 ui {
   toolbar {
-    discard_workflow = Workflowänderungen verwerfen
-  }
-}
-ui {
-  toolbar {
     open_navigation = Editornavigation öffnen
   }
 }
@@ -3874,22 +3871,25 @@ ui {
 }
 ui {
   toolbar {
-    save_workflow = Workflow speichern
-  }
-}
-ui {
-  toolbar {
-    saving_workflow = Workflow wird gespeichert…
-  }
-}
-ui {
-  toolbar {
     undo = Rückgängig
   }
 }
 ui {
   toolbar {
     undo_saved_change = Gespeicherte Änderung rückgängig machen
+  }
+}
+ui {
+  toolbar {
+    unsaved_changes =
+      .input {$changes :string}
+      {{Ungespeicherte Änderungen: {$changes}}}
+
+  }
+}
+ui {
+  toolbar {
+    unsaved_review = Prüfstatus
   }
 }
 ui {
@@ -3945,6 +3945,11 @@ ui {
 ui {
   workflow {
     approved = Freigegeben
+  }
+}
+ui {
+  workflow {
+    discard = Prüfänderungen verwerfen
   }
 }
 ui {

@@ -28,11 +28,11 @@ export interface EditorPaletteActions {
   openWorkspaceDialog(): void;
   createProject(): void;
   openInterchange(): void;
-  saveDocument(): void;
+  /** Saves all unsaved work: every unsaved document, then the review changes. */
+  saveAll(): void;
   undo(): void;
   redo(): void;
   focusMessageSearch(): void;
-  saveReview(): void;
   discardReview(): void;
   setMessageReviewState(state: EditorReviewState): void;
   markVisibleMessages(state: EditorReviewState): void;
@@ -61,12 +61,12 @@ export interface EditorPaletteState {
   readonly themeMode: ThemeMode;
   readonly workspaceReady: boolean;
   readonly searchAvailable: boolean;
-  readonly documentDirty: boolean;
+  /** Whether any document text or review data is unsaved. */
+  readonly unsaved: boolean;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
   readonly reviewEditable: boolean;
   readonly reviewDirty: boolean;
-  readonly reviewError: boolean;
   readonly pseudoLocalization: boolean;
   readonly uiDirection: UiDirection;
   readonly artifactPreviewOpen: boolean;
@@ -94,7 +94,6 @@ export const paletteBridgeOperations = [
   "save",
   "undo",
   "redo",
-  "saveReview",
   "about",
   "createDiagnosticBundle",
 ] as const satisfies readonly (keyof EditorBridge)[];
@@ -144,13 +143,13 @@ export function buildEditorCommandPalette(
 
   push({
     id: "document.save",
-    title: (ui?.text("ui_palette_save_document") ?? "Save document"),
+    title: (ui?.text("ui_palette_save_all") ?? "Save all changes"),
     group: "document",
     keybinding: "Ctrl+S",
-    keywords: "write persist commit",
-    disabled: !state.documentDirty,
+    keywords: "write persist commit review workflow approve state terminology",
+    disabled: !state.unsaved,
     bridge: "save",
-    run: actions.saveDocument,
+    run: actions.saveAll,
   });
   push({
     id: "document.undo",
@@ -173,15 +172,6 @@ export function buildEditorCommandPalette(
     run: actions.redo,
   });
 
-  push({
-    id: "review.save-workflow",
-    title: (ui?.text("ui_palette_save_workflow_changes") ?? "Save workflow changes"),
-    group: "review",
-    keywords: "sidecar persist approve state terminology",
-    disabled: !state.reviewDirty || state.reviewError,
-    bridge: "saveReview",
-    run: actions.saveReview,
-  });
   push({
     id: "review.discard-workflow",
     title: (ui?.text("ui_palette_discard_workflow_changes") ?? "Discard workflow changes"),

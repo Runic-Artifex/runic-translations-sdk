@@ -41,7 +41,7 @@ These commands are thin wrappers over the same Tooling code as `runic-translatio
 
 ## Local support diagnostics
 
-Run `diagnostics <workspace>` to create the existing privacy-bounded diagnostic ZIP for an explicit local support collection. The command never uploads it. Use `runic-translations support preview|collect|remove --editor-diagnostics <zip> --destination <path>` (the `dotnet-runic-translations` tool) to inspect, collect, or remove a local unsigned support envelope. The interface language starts from the operating system's preferred languages, matched against the editor's own languages (English and German), and the choice is kept; it is also the window's language, so native surfaces follow it. The editor stores preferences, recents, and recovery drafts in one native per-user record, not a browser profile; it is atomically replaced and an unreadable record is quarantined on next launch. In the editor’s **About & diagnostics** panel, **Local editor state** reports only entry counts and bytes; use **Clear local state** to remove those records without changing workspace files or current in-memory work.
+Run `diagnostics <workspace>` to create the existing privacy-bounded diagnostic ZIP for an explicit local support collection. The command never uploads it. Use `runic-translations support preview|collect|remove --editor-diagnostics <zip> --destination <path>` (the `dotnet-runic-translations` tool) to inspect, collect, or remove a local unsigned support envelope. The interface language starts from the operating system's preferred languages, matched against the editor's own languages (English and German), and the choice is kept; it is also the window's language, so native surfaces follow it. The editor stores preferences, recents, and the recovery copies of unsaved work (text drafts and review changes) in one native per-user record, not a browser profile; it is atomically replaced and an unreadable record is quarantined on next launch. In the editor’s **About & diagnostics** panel, **Local editor state** reports only entry counts and bytes; use **Clear local state** to remove those records without changing workspace files or current in-memory work.
 
 ## What it supports
 
@@ -114,6 +114,22 @@ The editor checks the review file for changes by other writers while it is open:
 without unsaved review changes it reloads the review data; with them, your
 changes are kept on top of the file's, and saving refuses only an entry that
 changed both in the editor and on disk.
+
+**Save** (Ctrl+S) saves all unsaved work at once: first the text of every
+document you changed, each validated (an invalid document blocks the save, and
+nothing is written), then the review changes (states, notes, terminology), so a
+review state is recorded against saved text. The toolbar shows one state:
+**Saved**, or **Unsaved changes** naming what is unsaved (text in some documents,
+review status). Unsaved means "differs from the file": an edit typed back to the
+saved text, or a review entry set back to its saved value, is no change. The
+Workflow panel's **Discard review changes** drops unsaved review changes. Unsaved
+text and review changes are also kept in the native editor state; when the
+window is closed or the editor stops without saving, the next start offers them
+under **Unsaved work was recovered**, and **Restore** applies the review changes
+on top of the review file as it is then (an entry changed there meanwhile is
+reported as a conflict when you save). The editor cannot ask before its window
+closes: the CS-WebUI host of the Runic SDK opens the window without a close
+guard, so recovery is what keeps unsaved work.
 
 When the editor opens a project with a version 1 editor state, it moves the
 review states into the review file once: an approval whose base text is

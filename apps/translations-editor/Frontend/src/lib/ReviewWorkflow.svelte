@@ -6,6 +6,7 @@
   import ListChecksIcon from "@lucide/svelte/icons/list-checks";
   import SparklesIcon from "@lucide/svelte/icons/sparkles";
   import TriangleAlertIcon from "@lucide/svelte/icons/triangle-alert";
+  import Undo2Icon from "@lucide/svelte/icons/undo-2";
   import { Badge } from "#lib/components/ui/badge/index.js";
   import { Button } from "#lib/components/ui/button/index.js";
   import * as Card from "#lib/components/ui/card/index.js";
@@ -39,6 +40,7 @@
     suggestions,
     onstatechange,
     onnotechange,
+    ondiscard,
     onterminology,
     onreport,
     onqualityfilter,
@@ -57,6 +59,8 @@
     suggestions: TranslationSuggestion[];
     onstatechange: (state: EditorReviewState) => void;
     onnotechange: (note: string) => void;
+    /** Discards the unsaved review changes of the workspace. */
+    ondiscard: () => void;
     onterminology: () => void;
     onreport: () => void;
     onqualityfilter: () => void;
@@ -117,6 +121,12 @@
         <ClipboardListIcon data-icon="inline-start" />
         {ui.text("ui_workflow_quality_report")} · {qualityCount}
       </Button>
+      {#if dirty}
+        <Button variant="ghost" size="sm" {disabled} onclick={() => { if (!disabled) ondiscard(); }}>
+          <Undo2Icon data-icon="inline-start" />
+          {ui.text("ui_workflow_discard")}
+        </Button>
+      {/if}
           </div>
 
           <Field.Field>

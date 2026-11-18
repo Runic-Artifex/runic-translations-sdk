@@ -88,6 +88,7 @@
   import { DiagnosticsStore } from "#lib/state/diagnostics-store.svelte.js";
   import { PreviewController } from "#lib/state/preview-controller.svelte.js";
   import { ReviewStore } from "#lib/state/review-store.svelte.js";
+  import { SaveCoordinator } from "#lib/state/save-coordinator.svelte.js";
   import {
     clearLocalEditorState,
     configureLocalEditorState,
@@ -134,13 +135,19 @@
   configureLocalEditorState(bridge);
   let snapshot = $state.raw<WorkspaceSnapshot>();
   // Unsaved document text and the one queue per document that changes it (composer, authoring, raw validation, fixes).
-  const draftStore = new DraftStore({
-    bridge,
-    snapshot: () => snapshot,
-    storage: { get: getLocalEditorState, set: setLocalEditorState, remove: removeLocalEditorState },
-  });
+  const nativeStorage = { get: getLocalEditorState, set: setLocalEditorState, remove: removeLocalEditorState };
+  const draftStore = new DraftStore({ bridge, snapshot: () => snapshot, storage: nativeStorage });
   const diagnosticsStore = new DiagnosticsStore(() => snapshot);
-  const review = new ReviewStore({ bridge, snapshot: () => snapshot, errorNotice });
+  const review = new ReviewStore({ bridge, snapshot: () => snapshot, errorNotice, storage: nativeStorage });
+  // The one save: every unsaved document, then the review changes.
+  const saveCoordinator = new SaveCoordinator({
+    bridge,
+    drafts: draftStore,
+    review,
+    snapshot: () => snapshot,
+    validated: (path, result) => diagnosticsStore.record("save", path, result),
+    install: (next) => installSnapshot(next, false),
+  });
   const previewController = new PreviewController({ bridge, pseudoLocalization: () => pseudoLocalization, defaultSample, errorNotice });
   let selectedKey = $state("");
   let selectedLocale = $state("");
@@ -159,7 +166,7 @@
   let themeMode = $state<ThemeMode>("dark");
   let themePalette = $state<ThemePalette>("runic");
   let loading = $state(true);
-  let saving = $state(false);
+  let saving = $derived(saveCoordinator.saving);
   let clientError = $state<UiMessage>();
   let operationMessage = $state<UiMessage>();
   let searchInput = $state<HTMLInputElement | null>(null);
@@ -287,7 +294,16 @@
     document.documentElement.dir = uiDirection;
   });
   let hasUnsavedRepair = $derived(repairDocument !== undefined && repairText !== repairDocument.content);
-  let hasUnsavedWork = $derived(review.dirty || hasUnsavedRepair || draftStore.hasDrafts);
+  let hasUnsavedWork = $derived(saveCoordinator.hasUnsaved || hasUnsavedRepair);
+  // What the toolbar names as unsaved: text in some documents, review status, or both.
+  let unsavedDetail = $derived.by(() => {
+    const summary = saveCoordinator.unsavedSummary;
+    const parts = [
+      ...(summary.documents.length > 0 ? [ui.text("ui_count_unsaved_documents", { count: summary.documents.length })] : []),
+      ...(summary.review ? [ui.text("ui_toolbar_unsaved_review")] : []),
+    ];
+    return parts.length === 0 ? "" : ui.text("ui_toolbar_unsaved_changes", { changes: new Intl.ListFormat(uiLocale, { type: "conjunction" }).format(parts) });
+  });
   let historyBlocked = $derived(
     historyBusy || loading || saving || review.saving || draftStore.validating || mutationBusy || recoveryBusy ||
     previewController.busy || projectBusy || openingWorkspace || pickingWorkspace || repairBusy || diagnosticBusy || aboutBusy || interchangeBusy ||
@@ -434,7 +450,6 @@
       ? undefined
       : draftStore.content(currentDocument.path, currentDocument.content),
   );
-  let isDirty = $derived(draftStore.isDirty(currentDocument?.path));
   let malformedDocuments = $derived(
     snapshot?.documents.filter((document) => document.isMalformed) ?? [],
   );
@@ -445,11 +460,10 @@
         openWorkspaceDialog: showOpenWorkspaceDialog,
         createProject: openProjectWizard,
         openInterchange: () => interchangeOpen = true,
-        saveDocument: () => void save(),
+        saveAll: () => void saveAll(),
         undo: () => void undoHistory(),
         redo: () => void redoHistory(),
         focusMessageSearch: () => searchInput?.focus(),
-        saveReview: () => void saveReview(),
         discardReview,
         setMessageReviewState: setCurrentReviewState,
         markVisibleMessages: markVisible,
@@ -476,13 +490,12 @@
         themeMode,
         workspaceReady: snapshot !== undefined,
         searchAvailable: searchInput !== null,
-        documentDirty: isDirty && !editorMutationBlocked,
+        unsaved: saveCoordinator.hasUnsaved && !editorMutationBlocked,
         canUndo: snapshot?.history?.canUndo === true && !historyBlocked,
         canRedo: snapshot?.history?.canRedo === true && !historyBlocked,
         reviewEditable: selectedRow !== undefined && !reviewMutationBlocked &&
           snapshot?.review?.error === undefined,
         reviewDirty: review.dirty,
-        reviewError: snapshot?.review?.error !== undefined,
         pseudoLocalization,
         uiDirection,
         artifactPreviewOpen,
@@ -655,7 +668,12 @@
     draftStore.nextWorkspace();
     snapshot = next;
     if (resetSelection) draftStore.reset(next);
-    if (!review.dirty) review.install(next);
+    else draftStore.prune();
+    // Unsaved review changes stay on top of the review data they started from.
+    if (!review.dirty) {
+      if (resetSelection) review.reset(next);
+      else review.install(next);
+    }
     diagnosticsStore.clear();
     const nextRows = buildRows(next, {});
     if (resetSelection || !nextRows.some((row) => row.key === selectedKey)) {
@@ -883,11 +901,6 @@
     review.mark(visibleRows.map((row) => row.key), selectedLocale, state);
   }
 
-  async function saveReview(): Promise<void> {
-    if (historyBusy) return;
-    await review.save();
-  }
-
   function discardReview(): void {
     review.discard();
   }
@@ -943,6 +956,7 @@
     }
     recentProjects = [];
     draftStore.recovered = {};
+    review.recovered = undefined;
     localStateSummary = inspectLocalEditorState();
     localStateMessage = notice("ui_count_state_removed", { count: removed });
   }
@@ -1151,30 +1165,21 @@
     }
   }
 
-  async function save(): Promise<void> {
-    const pending = draftStore.settled(selectedDocumentPath);
-    if (pending !== undefined) await pending;
-    const document = currentDocument;
-    const content = currentContent;
-    if (document === undefined || content === undefined || !isDirty || saving || historyBusy) return;
-    const generation = draftStore.generation(document.path);
-    saving = true;
+  // Ctrl+S and the toolbar's Save: every unsaved document (each validated; an invalid one blocks the save and its
+  // diagnostics are shown), then the review changes.
+  async function saveAll(): Promise<void> {
+    if (saving || historyBusy) return;
     operationMessage = undefined;
     clientError = undefined;
-    try {
-      const checked = await bridge.validate(document.path, content);
-      diagnosticsStore.record("save", document.path, checked);
-      if (!checked.success) return;
-      const result = await bridge.save(document.path, content, document.revision);
-      if (!result.ok) {
-        clientError = result.message ?? notice("ui_feedback_save_failed", { kind: result.kind });
-        return;
-      }
-      await reloadAfterSave(document.path, content, generation, result.message ?? notice("app_saved"));
-    } catch (error) {
-      clientError = errorNotice(error);
-    } finally {
-      saving = false;
+    const outcome = await saveCoordinator.saveAll();
+    if (outcome.kind === "nothing" || outcome.kind === "invalid") return;
+    if (outcome.saved.length > 0) configureEditor();
+    const newer = outcome.kind !== "failed" && outcome.kind !== "refused" && outcome.newer;
+    if (outcome.kind === "saved") operationMessage = newer ? notice("ui_feedback_newer_draft") : outcome.message;
+    else if (outcome.kind === "failed") clientError = errorNotice(outcome.error);
+    else {
+      clientError = outcome.message;
+      if (newer) operationMessage = notice("ui_feedback_newer_draft");
     }
   }
 
@@ -1193,7 +1198,7 @@
     event.preventDefault();
     if (shortcut === "undo") void undoHistory();
     else if (shortcut === "redo") void redoHistory();
-    else if (shortcut === "save") void save();
+    else if (shortcut === "save") void saveAll();
     else if (shortcut === "toggle-command-search") commandPaletteOpen = !commandPaletteOpen;
     else if (shortcut === "toggle-pseudo-localization") togglePseudoLocalization();
     else if (shortcut === "toggle-right-to-left") toggleUiDirection();
@@ -1715,8 +1720,10 @@
     }
   }
 
+  // Restores the unsaved work an earlier session left: document drafts and review changes.
   function recoverSavedDrafts(): void {
     draftStore.restoreRecovered();
+    review.restoreRecovered();
     configureEditor();
     for (const [path, content] of Object.entries(draftStore.drafts)) {
       void draftStore.parse(path, content).then((stored) => {
@@ -1762,6 +1769,7 @@
 
   function discardSavedDrafts(): void {
     draftStore.discardRecovered();
+    review.discardRecovered();
   }
 
   function readRecentProjects(): RecentProject[] {
@@ -1854,7 +1862,6 @@
       noResults: m.app_no_results(options),
       valid: m.app_valid(options),
       invalid: m.app_invalid(options),
-      unsaved: m.app_unsaved(options),
       saved: m.app_saved(options),
       defaultLocale: m.app_default_locale(options),
       workspace: m.app_workspace(options),
@@ -1913,12 +1920,13 @@
   </div>
 {/if}
 
-{#if Object.keys(draftStore.recovered).length > 0}
+{#if Object.keys(draftStore.recovered).length > 0 || review.recovered !== undefined}
   <div class="pointer-events-none fixed inset-x-2 bottom-2 z-50 mx-auto max-w-[calc(100vw-1rem)] sm:inset-x-4 sm:bottom-4 sm:max-w-2xl">
-    <Alert.Root class="pointer-events-auto pr-4 shadow-xl" aria-live="polite">
+    <Alert.Root class="pointer-events-auto pr-4 shadow-xl" aria-live="polite" data-testid="recovered-work">
       <Alert.Title>{ui.text("ui_page_recovered_drafts_title")}</Alert.Title>
       <Alert.Description>
-        {ui.text("ui_count_recovered_drafts", { count: Object.keys(draftStore.recovered).length })}
+        {#if Object.keys(draftStore.recovered).length > 0}<p>{ui.text("ui_count_recovered_drafts", { count: Object.keys(draftStore.recovered).length })}</p>{/if}
+        {#if review.recovered !== undefined}<p>{ui.text("ui_page_recovered_review")}</p>{/if}
       </Alert.Description>
       <Alert.Action class="static col-span-full mt-2 flex flex-col gap-2 min-[360px]:flex-row min-[360px]:justify-end">
         <Button variant="ghost" size="xs" onclick={discardSavedDrafts}>{ui.text("ui_page_discard")}</Button>
@@ -2165,23 +2173,22 @@
 
     <Sidebar.Inset class="editor-shell min-h-0 min-w-0 overflow-hidden">
       <EditorToolbar
-        reviewDirty={review.dirty}
-        reviewSaving={review.saving}
-        reviewDisabled={snapshot.review?.error !== undefined}
-        saveDisabled={!isDirty || saving || draftStore.validating || diagnosticsStore.latest?.success === false || clientError !== undefined}
+        saveDisabled={!saveCoordinator.hasUnsaved || saving || review.saving || draftStore.validating ||
+          (saveCoordinator.unsavedSummary.documents.length > 0
+            ? diagnosticsStore.latest?.success === false || clientError !== undefined
+            : snapshot.review?.error !== undefined)}
         {saving}
         saveLabel={labels.save}
         savingLabel={labels.saving}
-        saveState={isDirty ? labels.unsaved : displayNotice(operationMessage ?? notice("app_saved"), ui)}
-        {isDirty}
+        saveState={displayNotice(operationMessage ?? notice("app_saved"), ui)}
+        unsaved={saveCoordinator.hasUnsaved}
+        {unsavedDetail}
         canUndo={snapshot.history?.canUndo === true && !historyBlocked}
         canRedo={snapshot.history?.canRedo === true && !historyBlocked}
         {historyBusy}
         undoLabel={snapshot.history?.undoLabel === undefined ? undefined : displayNotice(snapshot.history.undoLabel, ui)}
         redoLabel={snapshot.history?.redoLabel === undefined ? undefined : displayNotice(snapshot.history.redoLabel, ui)}
-        ondiscardreview={discardReview}
-        onsavereview={() => void saveReview()}
-        onsave={() => void save()}
+        onsave={() => void saveAll()}
         onundo={() => void undoHistory()}
         onredo={() => void redoHistory()}
       />
@@ -2230,6 +2237,7 @@
             suggestions={memorySuggestions}
             onstatechange={setCurrentReviewState}
             onnotechange={setCurrentReviewNote}
+            ondiscard={discardReview}
             onterminology={() => terminologyDialogOpen = true}
             onreport={() => reportDialogOpen = true}
             onqualityfilter={() => filter = "quality"}
@@ -2454,9 +2462,6 @@
     </div>
     {#snippet footer()}
       <Button variant="outline" onclick={() => terminologyDialogOpen = false}>{ui.text("ui_page_done")}</Button>
-      <Button disabled={!review.dirty || reviewMutationBlocked} onclick={() => void saveReview()}>
-        {#if review.saving}<Spinner data-icon="inline-start" />{/if}{ui.text("ui_page_terminology_save_workflow")}
-      </Button>
     {/snippet}
   </AppDialog>
 {/if}

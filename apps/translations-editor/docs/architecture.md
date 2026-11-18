@@ -64,7 +64,8 @@ The Svelte frontend renders the editor workflow. A generated Runic Views
 Window connects typed TypeScript calls to an application-scoped `EditorViewModel`
 and `EditorSession` through the CS-WebUI host. The host serves the frontend and owns local application state, diagnostics, and filesystem-facing
 workspace operations. The browser profile does not hold durable editor state;
-preferences, recent projects, and recovery drafts live in one native per-user
+preferences, recent projects, and recovery copies of unsaved text and review
+changes live in one native per-user
 record. Clearing that record does not change workspace files or in-memory work.
 
 The root ViewModel publishes stable routed ViewModels for workspace, document
@@ -83,13 +84,21 @@ The page (`Frontend/src/routes/+page.svelte`) keeps the layout, selection and
 dialogs and wires them to rune-based modules in `Frontend/src/lib/state/`:
 
 - `DraftStore` holds each document's draft, its generation, the compiler's
-  parsed entries and the recovery copy. Composer edits, authoring operations,
-  raw-source validation and quick fixes run through its one queue per document;
-  an answer is accepted only for the current workspace, draft generation and
-  latest request of its kind.
+  parsed entries and the recovery copy. A draft is kept only while it differs
+  from the saved text. Composer edits, authoring operations, raw-source
+  validation and quick fixes run through its one queue per document; an answer
+  is accepted only for the current workspace, draft generation and latest
+  request of its kind.
 - `ReviewStore` holds review states, notes and terminology with the saved data
-  the edits started from; it saves through the bridge against that revision and
-  rebases the edits when another writer changes the review file.
+  the edits started from; it is dirty only while they differ from that data. It
+  saves through the bridge against that revision, rebases the edits when
+  another writer changes the review file, and keeps the changed entries with
+  their starting point as a recovery copy, which a later session rebases onto
+  the review file in the same way.
+- `SaveCoordinator` is the one save behind Ctrl+S and the toolbar: it owns the
+  unsaved summary (documents with unsaved text, unsaved review changes) and
+  `saveAll()`, which validates every unsaved document, writes them, reloads the
+  workspace once and then saves the review changes.
 - `DiagnosticsStore` keeps validation results per request and document. The
   panel lists the latest one, or the workspace's diagnostics before any; it also
   offers per-message and errors-first selectors.
