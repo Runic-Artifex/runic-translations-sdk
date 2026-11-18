@@ -115,6 +115,52 @@ internal sealed class InterchangeCliTests
         Assert.Contains("warning RTR0091", broken.StandardError);
     }
 
+    [Test, DisplayName("CLI review mark takes a logical or canonical key, stores the canonical key and suggests the logical form")]
+    public void ReviewMarkAcceptsLogicalKeys()
+    {
+        using TemporaryDirectory temporary = CopyProject();
+        string reviewPath = temporary.Resolve("translations", "shop.review.json");
+        // The dotted logical key, as validate prints it, is the canonical key cart_empty in the review file.
+        ProcessResult mark = TestFixture.RunTool(temporary, "review", "mark", "--project", "translations", "--key", "cart.empty", "--locale", "de", "--state", "approved", "--format", "json");
+        Assert.Equal(0, mark.ExitCode, mark.Combined);
+        using (JsonDocument envelope = JsonDocument.Parse(mark.StandardOutput))
+            Assert.Equal("cart_empty", envelope.RootElement.GetProperty("payload").GetProperty("interchange").GetProperty("entries")[0].GetProperty("key").GetString());
+        string review = File.ReadAllText(reviewPath);
+        Assert.Contains("\"key\": \"cart_empty\"", review);
+        Assert.False(review.Contains("cart.empty", StringComparison.Ordinal), review);
+
+        // Both spellings of one message are one mark.
+        ProcessResult both = TestFixture.RunTool(temporary, "review", "mark", "--project", "translations", "--key", "cart_empty", "--key", "cart.empty", "--locale", "de", "--state", "needs-review");
+        Assert.Equal(0, both.ExitCode, both.Combined);
+        Assert.Contains("marked 1 translation(s) in de as needs-review;", both.StandardOutput);
+
+        // An unknown key names the closest message in its logical form, whichever form was typed.
+        foreach (string typo in new[] { "cart.emtpy", "cart_emty" })
+        {
+            ProcessResult unknown = TestFixture.RunTool(temporary, "review", "mark", "--project", "translations", "--key", typo, "--locale", "de", "--state", "approved");
+            Assert.Equal(2, unknown.ExitCode, unknown.Combined);
+            Assert.Contains($"--key {typo} is not a message of catalog 'shop'. Did you mean 'cart.empty'?", unknown.StandardError);
+        }
+
+        // RTR0090 names the message, and the review mark command it suggests, in the logical form.
+        File.WriteAllText(temporary.Resolve("translations", "en.rmf2"),
+            File.ReadAllText(temporary.Resolve("translations", "en.rmf2")).Replace("empty = Your cart is empty", "empty = Your cart has no items", StringComparison.Ordinal), new UTF8Encoding(false));
+        ProcessResult stale = TestFixture.RunTool(temporary, "validate", "--project", "translations", "--format", "json");
+        Assert.Equal(0, stale.ExitCode, stale.Combined);
+        using (JsonDocument envelope = JsonDocument.Parse(stale.StandardOutput))
+        {
+            JsonElement diagnostic = envelope.RootElement.GetProperty("payload").GetProperty("diagnostics").EnumerateArray()
+                .Single(item => item.GetProperty("code").GetString() == "RTR0090" && item.GetProperty("message").GetString()!.Contains("cart", StringComparison.Ordinal));
+            string message = diagnostic.GetProperty("message").GetString()!;
+            Assert.Contains("The 'de' translation of 'cart.empty' (needs-review)", message);
+            Assert.Contains("review mark --key cart.empty --locale de", message);
+        }
+        ProcessResult remark = TestFixture.RunTool(temporary, "review", "mark", "--project", "translations", "--key", "cart.empty", "--locale", "de", "--state", "approved");
+        Assert.Equal(0, remark.ExitCode, remark.Combined);
+        ProcessResult current = TestFixture.RunTool(temporary, "validate", "--project", "translations");
+        Assert.False(current.Combined.Contains("'cart.empty'", StringComparison.Ordinal), current.Combined);
+    }
+
     [Test, DisplayName("CLI xliff import of a changed source records needs-review with the old fingerprint, or refuses it")]
     public void XliffImportOfChangedSources()
     {

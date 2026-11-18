@@ -57,7 +57,7 @@ let snapshot: WorkspaceSnapshot = {
   ],
   // The SDK's per-message diagnostics carry their row: a stale review state (RTR0090).
   diagnostics: [
-    { id: "RTR0090", severity: "warning", message: "The 'de' translation of 'common_save' (approved) predates a change to its source; review it, then record it with runic-translations review mark --key common_save --locale de --state <state>.", path: "de/common_save.mf2", line: 1, column: 1, endLine: 1, endColumn: 10, key: "common_save", locale: "de" },
+    { id: "RTR0090", severity: "warning", message: "The 'de' translation of 'common_save' (approved) predates a change to its source; review it, then record it with runic-translations review mark --key common_save --locale de --state <state>.", path: "de/common_save.mf2", line: 1, column: 1, endLine: 1, endColumn: 10, key: "common_save", locale: "de", messagePath: ["common_save"] },
   ],
   success: true,
   review: {
@@ -798,7 +798,7 @@ export async function mockExecute(operation: string, argument: unknown): Promise
       const path = value.path as string;
       const key = path.slice(path.lastIndexOf("/") + 1, -4);
       return { ...validation, content, entries: path.endsWith(".mf2")
-        ? [{ key, content, valueStartByte: 0, valueLengthBytes: new TextEncoder().encode(content).length }] : [] };
+        ? [{ key, path: [key], content, valueStartByte: 0, valueLengthBytes: new TextEncoder().encode(content).length }] : [] };
     }
     case "PreviewMessage": return previewMessage(value.path as string, value.content as string, value.locale as string, value.key as string, value.samplesJson as string | undefined, value.requestedLocale as string | undefined, value.timeZone as string | undefined);
     case "ListLocales": return { cldrVersion: "48.2", locales: mockLocales };

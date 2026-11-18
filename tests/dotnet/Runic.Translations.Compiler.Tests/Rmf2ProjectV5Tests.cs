@@ -114,6 +114,20 @@ internal sealed class Rmf2ProjectV5Tests
         var normalized = Good("x = {$cafe\u0301}", "x = {$café}");
         Assert.Equal("café", normalized.CanonicalMessages[0].Inputs[0].Name);
     }
+    [Test, DisplayName("RMF2 v5 diagnostics name a message by its logical path; the structured key stays canonical")]
+    public void DiagnosticsNameLogicalPaths()
+    {
+        var input = Compile("common {\n  cancel = Cancel {$name}\n}", "common {\n  cancel = Abbrechen {$extra}\n}");
+        TranslationDiagnostic changed = input.Diagnostics.FirstOrDefault(d => d.Id == "RTR0016") ?? throw new InvalidOperationException("RTR0016: " + Errors(input));
+        Assert.True(changed.Message.Contains("for 'common.cancel'", StringComparison.Ordinal) && !changed.Message.Contains("common_cancel", StringComparison.Ordinal), changed.Message);
+        var missing = Compile("common {\n  cancel = Cancel\n  save = Save\n}", "common {\n  cancel = Abbrechen\n}");
+        TranslationDiagnostic untranslated = missing.Diagnostics.FirstOrDefault(d => d.Id == "RTR0010") ?? throw new InvalidOperationException("RTR0010: " + Errors(missing));
+        Assert.True(untranslated.Message.Contains("'common.save'", StringComparison.Ordinal), untranslated.Message);
+        Assert.Equal("common_save", untranslated.MessageKey);
+        var empty = Compile("common {\n  cancel = {{}}\n}", config: ",\"validation\":{\"emptyValues\":\"warning\"}");
+        string emptyVariant = (empty.Diagnostics.FirstOrDefault(d => d.Id == "RTR0021") ?? throw new InvalidOperationException("RTR0021: " + Errors(empty))).Message;
+        Assert.True(emptyVariant == "Resource 'common.cancel' has an empty variant.", emptyVariant);
+    }
     [Test, DisplayName("RMF2 v5 project composition matches flat split and external mounts")]
     public void Composition()
     {

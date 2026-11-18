@@ -39,7 +39,8 @@ A root `en.rmf2` containing that group and `checkout/en.rmf2` containing `items`
 contribute the same logical path `checkout.items` and generated ID
 `checkout_items`. Splitting and joining files does not change caller IDs.
 Underscores in source identifiers stay literal: `checkout_items` is not inferred
-to be two segments. Ambiguous flattened IDs are errors.
+to be two segments. Ambiguous flattened IDs are errors (`RTR0018`), so diagnostics
+name a message by its logical path and commands accept either form.
 
 Files are named `{locale}.rmf2`. Directory segments and explicit group names form
 the namespace. Groups may reopen across files; only one declaration per locale

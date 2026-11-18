@@ -57,9 +57,11 @@ internal sealed record EditorDocument(
     string? Layer,
     IReadOnlyList<EditorMessageEntry>? Entries = null);
 
-// Logical messages share their containing document's physical path and revision.
+// Logical messages share their containing document's physical path and revision. Key is the canonical key (common_cancel),
+// the stable identifier of review files and requests; Path is the logical path (["common", "cancel"]), the display form.
 internal sealed record EditorMessageEntry(string Key, string Content, int ValueStartByte, int ValueLengthBytes,
-    EditorMessageProjection? Authoring = null, EditorMessageContext? Context = null, EditorMessageSemantic? Semantic = null);
+    EditorMessageProjection? Authoring = null, EditorMessageContext? Context = null, EditorMessageSemantic? Semantic = null,
+    IReadOnlyList<string>? Path = null);
 internal sealed record EditorMessageInput(string Name, string Type, string? Function, bool Declared);
 internal sealed record EditorMessageVariant(string Id, IReadOnlyList<string> Keys, string Pattern, int StartByte, int LengthBytes);
 internal sealed record EditorMessageProjection(string Revision, bool Supported, string? Reason,
@@ -87,8 +89,9 @@ internal sealed record EditorDiagnostic(
     int EndColumn,
     EditorNotice? Notice = null,
     Rmf2DiagnosticSpan? Span = null, string? SourceRevision = null, IReadOnlyList<Rmf2DiagnosticQuickFix>? QuickFixes = null,
-    // The message row a per-message check is about (RTR0010, RTR0090, RTR0094-RTR0098, or a diagnostic at a message name).
-    string? Key = null, string? Locale = null);
+    // The message row a per-message check is about (RTR0010, RTR0090, RTR0094-RTR0098, or a diagnostic at a message name):
+    // its canonical key, its locale and its logical path.
+    string? Key = null, string? Locale = null, IReadOnlyList<string>? MessagePath = null);
 
 internal sealed record WorkspaceSnapshot(
     string Root,

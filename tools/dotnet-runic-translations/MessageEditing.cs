@@ -158,7 +158,7 @@ internal static class MessageEditing
         if (compilation.Project is not { } project)
             throw new EditException(Errors.Invalid, 1, "The catalog does not compile; fix its errors first.",
                 compilation.Diagnostics.Where(static diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error).ToArray());
-        Rmf2MessageContractV5 contract = Contract(project, key) ?? throw new EditException(Errors.NotFound, 2, $"Catalog '{project.Id}' has no message '{key}'.");
+        Rmf2MessageContractV5 contract = Contract(project, key) ?? throw new EditException(Errors.NotFound, 2, $"Catalog '{project.Id}' has no message '{key}'.{DidYouMean(project, key)}");
         var sources = inputs.Messages.ToDictionary(static source => source.Path, StringComparer.Ordinal);
         bool direct = sources.Keys.Any(static path => path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase));
         var workspace = new Rmf2Workspace(Environment.CurrentDirectory, inputs.Project, inputs.Messages);
@@ -207,7 +207,7 @@ internal static class MessageEditing
         TranslationLibraryCatalog library = TranslationLibraryCatalog.Load(target);
         if (library.Library.Project is not { } project)
             throw new EditException(Errors.Unsupported, 1, $"The library catalog '{catalogId}' ({target.Dependency.Display}) does not compile with this tool: {library.LibraryError?.Id} {library.LibraryError?.Message}");
-        Rmf2MessageContractV5 contract = Contract(project, key) ?? throw new EditException(Errors.NotFound, 2, $"Catalog '{catalogId}' has no message '{key}'.");
+        Rmf2MessageContractV5 contract = Contract(project, key) ?? throw new EditException(Errors.NotFound, 2, $"Catalog '{catalogId}' has no message '{key}'.{DidYouMean(project, key)}");
         TranslationLibraryMessage message = library.Message(contract.Key)!;
         var locales = new List<LocaleView>();
         foreach (TranslationLibraryLocale locale in library.Locales.Where(static item => !item.Pending))
@@ -229,9 +229,11 @@ internal static class MessageEditing
         return new MessageView(catalogId, contract, project.DefaultLocale, locales, library, null) { Package = target.Dependency.Display };
     }
 
-    private static Rmf2MessageContractV5? Contract(Rmf2ProjectV5 project, string key) =>
-        project.CanonicalMessages.Concat(project.ExtraMessages).FirstOrDefault(contract => contract.Key == key) ??
-        project.CanonicalMessages.Concat(project.ExtraMessages).FirstOrDefault(contract => string.Join(".", contract.Path) == key);
+    // A logical key (common.cancel) or a canonical key (common_cancel).
+    private static Rmf2MessageContractV5? Contract(Rmf2ProjectV5 project, string key) => Rmf2MessageKeys.Resolve(project, key);
+
+    private static string DidYouMean(Rmf2ProjectV5 project, string key) =>
+        Rmf2MessageKeys.DidYouMean(key, Rmf2MessageKeys.Messages(project).Select(static contract => Rmf2MessageKeys.Logical(contract.Path)));
 
     // The base locale first, then the others in ordinal order; pseudo-locales are generated, never authored.
     private static IEnumerable<Rmf2LocaleV5> Ordered(Rmf2ProjectV5 project) =>

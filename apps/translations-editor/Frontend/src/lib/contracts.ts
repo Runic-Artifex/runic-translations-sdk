@@ -95,6 +95,7 @@ export interface EditorLocaleMatches {
 }
 
 export interface EditorMessageEntry {
+  /** The canonical key (`common_cancel`): the stable identifier of review entries and requests. */
   key: string;
   content: string;
   valueStartByte: number;
@@ -102,6 +103,8 @@ export interface EditorMessageEntry {
   authoring?: EditorMessageProjection;
   context?: EditorMessageContext;
   semantic?: EditorMessageSemantic;
+  /** The logical path (`["common", "cancel"]`, shown as `common.cancel`). */
+  path: string[];
 }
 
 export interface EditorDocumentDraft {
@@ -138,6 +141,8 @@ export interface EditorDiagnostic {
   /** The message row a per-message check is about (RTR0010, RTR0090, RTR0094–RTR0098, or a diagnostic at a message name). */
   key?: string;
   locale?: string;
+  /** The logical path of that message (`["common", "cancel"]`). */
+  messagePath?: string[];
 }
 
 export interface WorkspaceSnapshot {
