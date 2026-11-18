@@ -3,10 +3,11 @@ import { extname } from "node:path";
 import { gzipSync } from "node:zlib";
 
 const build = new URL("../build/", import.meta.url);
-const generated = await readFile(new URL("../src/generated/editor.ts", import.meta.url), "utf8");
+// Since Runic SDK 0.20 a generated client's types are in <view>.contract.d.ts beside <view>.ts.
+const generated = await readFile(new URL("../src/generated/editor.contract.d.ts", import.meta.url), "utf8");
 if (!generated.includes("export interface EditorState") || !generated.includes("readonly workspace: EditorWorkspacePageReference;") || !generated.includes("readonly interchange: EditorInterchangePageReference;"))
   throw new Error("The generated Views Editor client is missing its routed feature contracts.");
-const generatedDocument = await readFile(new URL("../src/generated/editorDocument.ts", import.meta.url), "utf8");
+const generatedDocument = await readFile(new URL("../src/generated/editorDocument.contract.d.ts", import.meta.url), "utf8");
 const generatedTypes = await readFile(new URL("../src/generated/types.ts", import.meta.url), "utf8");
 const saveArgument = "editorDocumentSaveRequest: EditorDocumentSaveRequest";
 if (!/export interface EditorDocumentSaveRequest \{\s*readonly content: string;\s*readonly revision: string;\s*\}/.test(generatedTypes) ||

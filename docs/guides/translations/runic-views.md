@@ -2,8 +2,7 @@
 
 > **Requires runic-sdk 0.17 or later.** This guide uses `IRunicApplicationLocale`,
 > `syncDocumentLocale`, `configureFieldErrorText` and other runic-sdk APIs that
-> 0.17 adds. runic-sdk 0.17 is not released at the time of writing; until it
-> is, the linked runic-sdk READMEs on `main` describe it.
+> 0.17 adds. The linked runic-sdk READMEs on `main` describe the latest release.
 
 A Runic Views application shows text in three places: the page, which formats
 its own messages; ViewModels, which produce status lines and validation
