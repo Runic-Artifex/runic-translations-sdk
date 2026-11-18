@@ -206,9 +206,9 @@ text and review changes are also kept in the native editor state; when the
 window is closed or the editor stops without saving, the next start offers them
 under **Unsaved work was recovered**, and **Restore** applies the review changes
 on top of the review file as it is then (an entry changed there meanwhile is
-reported as a conflict when you save). The editor cannot ask before its window
-closes: the CS-WebUI host of the Runic SDK opens the window without a close
-guard, so recovery is what keeps unsaved work.
+reported as a conflict when you save). The editor does not yet ask before its
+window closes (the Runic Desktop host's close guard is a follow-up), so recovery
+is what keeps unsaved work.
 
 **Undo** (Ctrl+Z, or ⌘Z on macOS) and **Redo** (Ctrl+Shift+Z or Ctrl+Y) first
 take back the unsaved text edits, one step at a time, per document: each
@@ -302,33 +302,52 @@ check, or with `--help` to inspect the supported commands. The `dotnet run` comm
 also launches on Windows or macOS with the corresponding .NET, Node, and Bun
 toolchain available; native UI launch requires the platform's windowing runtime.
 The default `direnv` shell supplies the build and CLI toolchain. The optional
-`nix develop .#editor` shell adds Chromium, GTK 3/WebKitGTK 4.1, GTK 4/WebKitGTK 6.0,
-GIO/TLS modules, and GStreamer from this repository's locked nixpkgs; it sets
-`CSWEBUI_BROWSER_PATH`, so `edit` opens that Chromium, and `WEBUI_BROWSER_PATH` for hosted
-browser acceptance. GTK 4 and WebKitGTK 6.0 are the Linux runtime of the Runic Desktop
-host, which the editor will move to; the Chromium, GTK 3 and WebKitGTK 4.1 entries serve
-the current CS-WebUI host and stay until that move. It does not require another
-repository's shell.
-`edit` opens an installed browser in app mode; add `--webview` to request the
-embedded WebView instead. On Linux, interactive launch needs a running X11 or
-Wayland desktop session; native chooser services also need that session's D-Bus
-and configured XDG portal backend. On Linux, **Browse** chooses a workspace folder
-through the first of these that is available: the portal's FileChooser (version 3 or
-newer, for example from `xdg-desktop-portal-gnome`, `-kde` or `-gtk`), then
-`/usr/bin/zenity` when the session has no such FileChooser or no session bus. Without
-either, enter the workspace directory instead. Windows and macOS show their system
-folder dialog. The shell supplies tools and libraries without starting those services or
-selecting the session's backend.
+`nix develop .#editor` shell adds GTK 4 and WebKitGTK 6.0, GIO/TLS modules and
+GStreamer, the Linux runtime of the editor's window, plus Chromium for the hosted
+browser acceptance (`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`) and `xvfb-run`, all from this
+repository's locked nixpkgs. It does not require another repository's shell.
 
-On Linux without Nix, provide a supported Chromium browser for normal `edit`,
-GTK 3 and WebKitGTK 4.1 for `--webview`, and the session services above. To choose
-the browser `edit` opens, set `CSWEBUI_BROWSER_PATH` to its executable; it is then
-used without fallback. For the
-hosted acceptance harness, explicitly set `WEBUI_BROWSER_PATH` to your browser's
-executable. The [hosted acceptance guide](tests/HostedBrowserE2E/README.md) explains
-the reproducible Nix workflow. Headless browser acceptance and editor smoke tests
-exercise application behavior; they do not certify interactive Linux desktop
-launch, embedded WebView, or native chooser behavior.
+The editor runs on the Runic SDK's **Runic Desktop** host. `edit` opens a native
+window: GTK 4 with WebKitGTK 6 on Linux, WebView2 on Windows and WKWebView on
+macOS, under the application ID `eu.runic-artifex.TranslationsEditor`. When the
+embedded WebView cannot start, for example without WebKitGTK 6, the editor
+reports why on standard error and opens in an installed browser instead. Add
+`--browser` to open it in an installed browser (the first one found) from the
+start; `--webview` of the former CS-WebUI host is gone, since the native window is
+now the default. `serve` opens no window: it prints
+`RUNIC_APPLICATION_URL=<url>`, the window's capability URL, which admits one
+browser (open the full URL; the server's root does not carry its token), and
+serves until a line is read from standard input or the process gets Ctrl+C or
+SIGTERM. The end of standard input does not stop it.
+
+On Linux, `edit` needs a running X11 or Wayland desktop session, GTK 4.12 or newer and
+WebKitGTK 6 (Ubuntu and Debian: `libwebkitgtk-6.0-4`; Fedora: `webkitgtk6.0`);
+native chooser services also need that session's D-Bus and configured XDG portal
+backend. On Linux, **Browse** chooses a workspace folder through the first of these
+that is available: the portal's FileChooser (version 3 or newer, for example from
+`xdg-desktop-portal-gnome`, `-kde` or `-gtk`), then `/usr/bin/zenity` when the session
+has no such FileChooser or no session bus. Without either, enter the workspace
+directory instead. Windows and macOS show their system folder dialog. Windows needs
+the WebView2 runtime, which current Windows releases include. The shell supplies tools
+and libraries without starting those services or selecting the session's backend.
+
+`edit --native-shell-canary` opens the native window without a browser fallback,
+closes it as soon as its page has connected, and prints one JSON line
+(`runic.translations.editor-native-shell/4`, `"host":"desktop"`,
+`"presentation":"Embedded"`); it exits 1 when the embedded window cannot open. On a
+machine without a desktop session, run it under Xvfb:
+
+```sh
+nix develop .#editor -c env GDK_BACKEND=x11 xvfb-run -a \
+  dotnet apps/translations-editor/bin/Release/net10.0/Runic.Translations.Editor.dll edit --native-shell-canary
+```
+
+For the hosted acceptance harness outside Nix, set
+`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to a Chromium executable. The [hosted acceptance
+guide](tests/HostedBrowserE2E/README.md) explains the reproducible Nix workflow.
+Headless browser acceptance and editor smoke tests exercise application behavior;
+they do not certify interactive desktop launch, the embedded WebView, or native
+chooser behavior.
 
 The shell examples elsewhere on this page use the standalone launcher's name;
 when running from source, pass those arguments after the `--` above.
@@ -341,9 +360,12 @@ direnv exec . dotnet publish apps/translations-editor/Runic.Translations.Editor.
   --configuration Release --runtime win-x64 --self-contained false --output artifacts/editor-win-x64
 ```
 
-Use `linux-x64`, `win-x64` or `osx-arm64`. The runtime selects the native platform
-package (`Runic.Platform.Linux` with its portal, `Runic.Platform.Windows` or
-`Runic.Platform.MacOS`), so each publish carries only its own.
+Use `linux-x64`, `win-x64` or `osx-arm64`. The runtime selects what each publish
+carries, and it carries only its own: the Runic Desktop server library
+(`librunic_server.so`, `runic_server.dll` with `WebView2Loader.dll`, or
+`librunic_server.dylib`) and the platform provider (`Runic.Platform.Linux` with its
+portal, D-Bus and GTK 4 parts, `Runic.Platform.Windows` or `Runic.Platform.MacOS`).
+Only a Linux publish references `Runic.Desktop.Gtk4` and its GirCore bindings.
 
 The editor smoke test (`edit --smoke-test`) drives the editor's window through the
 Runic SDK's window test host, `Runic.Application.Testing`. Only verification builds
@@ -357,16 +379,16 @@ direnv exec . dotnet run --project apps/translations-editor/Runic.Translations.E
 ```
 
 Translations dependencies resolve from source in this repository. Runic Command
-Line and the Runic SDK packages (Views with its CS-WebUI host and ReactiveUI
-adapter, Navigation, Platform) and their npm counterparts resolve from
-independently pinned published packages; the editor is built on Runic SDK 0.22.0
-(`Runic.Application.Views.CsWebUi` 0.22.0-preview.1), NuGet and npm, which move
-together: the page and the host speak Bridge protocol 4, and the generated Views
-clients in `Frontend/src/generated` are rewritten by each SDK update.
-No sibling SDK checkout is needed. The native transport is published `CsWebUi` and
-`CsWebUi.Native` `[2.5.0-beta.4.9, 3.0.0)`, the floor of Runic SDK 0.22.0's
-CS-WebUI host (an exact `2.5.0-beta.4.8` pin was a downgrade, NU1605). These
-resolve through the repository's ordinary NuGet.org configuration.
+Line and the Runic SDK packages (Views with its Runic Desktop host
+`Runic.Application.Views.Desktop`, `Runic.Desktop.Gtk4` and the native server
+`Runic.Desktop.NativeServer`, the ReactiveUI adapter, Navigation, Platform) and their
+npm counterparts resolve from independently pinned published packages; the editor is
+built on Runic SDK 0.22.0, NuGet and npm, which move together: the page and the host
+speak Bridge protocol 4, and the generated Views clients in `Frontend/src/generated`
+are rewritten by each SDK update. No sibling SDK checkout is needed; the packages
+resolve through the repository's ordinary NuGet.org configuration. Runic Desktop
+serves each window below a path of its own, so the page names its files relative to
+itself (`Frontend/vite.config.ts`).
 `bun run test` checks the frontend, generated Views client, editor save/recovery smoke (a verification build, above) and example workspace.
 `bun run verify-packages` checks the SDK's isolated package consumers. See the
 [contributor guide](../../CONTRIBUTING.md) for the complete verification sequence.

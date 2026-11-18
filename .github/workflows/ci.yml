@@ -374,12 +374,20 @@ jobs:
         run: bun eng/run.mjs build
       - name: Validate the example translation workspace
         run: dotnet apps/translations-editor/bin/Release/net10.0/Runic.Translations.Editor.dll validate apps/translations-editor/ExampleWorkspace
+      # The editor's Runic Desktop host on Linux: GTK 4 with WebKitGTK 6, under Xvfb (runic-sdk's native leg does the same).
+      - name: Install the GTK 4 and WebKitGTK 6 runtime
+        run: eng/ci/apt-install.sh libwebkitgtk-6.0-4 xvfb dbus-x11 at-spi2-core
+      - name: Permit the WebKit sandbox on Ubuntu
+        run: eng/ci/permit-webkit-sandbox.sh
+      - name: Open and close the native editor window (GTK 4 / WebKitGTK 6)
+        timeout-minutes: 3
+        run: GDK_BACKEND=x11 xvfb-run -a dotnet apps/translations-editor/bin/Release/net10.0/Runic.Translations.Editor.dll edit --native-shell-canary
       - name: Install the locked E2E harness and Chromium
         working-directory: apps/translations-editor/tests/HostedBrowserE2E
         run: |
           bun install --frozen-lockfile
           "$GITHUB_WORKSPACE/eng/ci/install-chromium.sh"
-          bun -e 'import { chromium } from "playwright-core"; console.log("WEBUI_BROWSER_PATH=" + chromium.executablePath())' >> "$GITHUB_ENV"
+          bun -e 'import { chromium } from "playwright-core"; console.log("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=" + chromium.executablePath())' >> "$GITHUB_ENV"
       - name: Verify real hosted editor RMF2 editing and recovery
         run: bun apps/translations-editor/tests/HostedBrowserE2E/run-hosted-rmf2-ui.mjs apps/translations-editor/bin/Release/net10.0/Runic.Translations.Editor.dll
         env:
@@ -419,7 +427,7 @@ jobs:
         run: |
           bun install --frozen-lockfile
           "$GITHUB_WORKSPACE/eng/ci/install-chromium.sh"
-          bun -e 'import { chromium } from "playwright-core"; console.log("WEBUI_BROWSER_PATH=" + chromium.executablePath())' >> "$GITHUB_ENV"
+          bun -e 'import { chromium } from "playwright-core"; console.log("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=" + chromium.executablePath())' >> "$GITHUB_ENV"
       - name: Verify real hosted editing with the packed editor build
         run: bun apps/translations-editor/tests/HostedBrowserE2E/run-hosted-rmf2-ui.mjs apps/translations-editor/bin/Release/net10.0/Runic.Translations.Editor.dll
         env:

@@ -1,16 +1,20 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-using CsWebUi;
 using Microsoft.Extensions.DependencyInjection;
 using ReactiveUI;
 using ReactiveUI.Primitives.Concurrency;
 using Runic.Application.Views;
-using Runic.Application.Views.CsWebUi;
+using Runic.Application.Views.Desktop;
 using Runic.Application.Views.ReactiveUI;
 using Runic.CommandLine;
+using Runic.Desktop;
+#if RUNIC_PLATFORM_Linux
+using Runic.Desktop.Gtk4;
+#endif
 using Runic.Navigation;
 using Splat;
 
@@ -25,7 +29,7 @@ internal static class Program
         Runic Translations Editor
 
         Usage:
-          runic-translations-editor [edit] [<workspace>] [--workspace <path>] [--webview] [--smoke-test] [--native-shell-canary]
+          runic-translations-editor [edit] [<workspace>] [--workspace <path>] [--browser] [--smoke-test] [--native-shell-canary]
           runic-translations-editor validate [<workspace>] [--workspace <path>]
           runic-translations-editor diagnostics [<workspace>] [--workspace <path>]
           runic-translations-editor export [<workspace>] --interchange xliff --output <directory> [--workspace <path>]
@@ -37,6 +41,11 @@ internal static class Program
           runic-translations-editor --version
 
         The packaged launcher opens the current directory when no workspace is given.
+        `edit` opens a native window (GTK 4 with WebKitGTK 6 on Linux, WebView2 on Windows,
+        WKWebView on macOS) and falls back to an installed browser when the WebView cannot
+        start; `--browser` opens an installed browser instead. `serve` opens no window: it
+        prints RUNIC_APPLICATION_URL=<url>, which one browser can open, and serves until a
+        line is read from standard input or the process is stopped.
         Validation uses the same compiler path and diagnostics as editor load and save.
         `report` is the read-only, reviewable import preview. `import --apply` previews
         and then applies one import in the same process; it never accepts a reusable token.
@@ -45,13 +54,10 @@ internal static class Program
         failure, such as workspace diagnostics or a refused import; 3 internal failure; 130 cancelled.
         """ + "\n";
 
+    // Synchronous, with no await before CommandApp.Run: `edit`, `serve` and the native-shell canary hand the Runic Desktop
+    // host back to this thread (CommandExecutionContext.ContinueOnCallingThread), because GTK 4 and AppKit run on the
+    // process main thread.
     public static int Main(string[] args)
-    {
-        ArgumentNullException.ThrowIfNull(args);
-        return RunAsync(args).GetAwaiter().GetResult();
-    }
-
-    private static async Task<int> RunAsync(string[] args)
     {
         ArgumentNullException.ThrowIfNull(args);
         if (args.Length > 0 && args[0] == "manual-replacement-preflight")
@@ -61,7 +67,7 @@ internal static class Program
         }
         bool bareInvocation = args.Length == 0;
         CommandCatalog catalog = EditorCommandModule.CreateCatalog();
-        return await new CommandApp(catalog)
+        return new CommandApp(catalog)
         {
             Name = "runic-translations-editor",
             Version = VersionText(),
@@ -84,7 +90,7 @@ internal static class Program
                 else await console.WriteOutAsync(text.AsMemory(), cancellationToken).ConfigureAwait(false);
                 return SuccessExitCode;
             },
-        }.RunAsync(bareInvocation ? ["edit"] : args).ConfigureAwait(false);
+        }.Run(bareInvocation ? ["edit"] : args);
     }
 
     private static string VersionText()
@@ -155,7 +161,7 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
         if (request.Command == "diagnostics")
             return await CreateDiagnosticBundleAsync(workspacePath).ConfigureAwait(false);
         if (request.Command == "serve")
-            return await ServeHostedWebAsync(ResolveHostedWorkspace(request)).ConfigureAwait(false);
+            return await ServeHostedWebAsync(ResolveHostedWorkspace(request), request.ContinueOnMainThread).ConfigureAwait(false);
         if (request.Command == "export")
             return await ExportInterchangeAsync(workspacePath, request).ConfigureAwait(false);
         if (request.Command == "report")
@@ -169,10 +175,10 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
         if (request.SmokeTest)
             return await RunSmokeTestAsync(workspacePath).ConfigureAwait(false);
         if (request.NativeShellCanary)
-            return await RunNativeShellCanaryAsync(workspacePath).ConfigureAwait(false);
+            return await RunNativeShellCanaryAsync(workspacePath, request.ContinueOnMainThread).ConfigureAwait(false);
         if (request.Validate)
             return await ValidateWorkspaceAsync(request, workspacePath).ConfigureAwait(false);
-        return await OpenEditorAsync(workspacePath, request.Webview).ConfigureAwait(false);
+        return await OpenEditorAsync(workspacePath, request.Browser, request.ContinueOnMainThread).ConfigureAwait(false);
     }
 
     // Default workspace rules: an explicit edit or validate verb (or --validate)
@@ -218,81 +224,150 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
                 $"This editor build does not include the smoke test, so '{workspacePath}' was not tested. Build the editor with -p:RunicEditorSmokeTest=true.")));
 #endif
 
-    private static async Task<CommandOutcome<EditorCommandResult>> RunNativeShellCanaryAsync(string workspacePath)
+    // Opens the editor's window natively, closes it as soon as its page has connected, and reports what opened. It never
+    // falls back to a browser, so it fails where the embedded WebView (GTK 4 and WebKitGTK 6 on Linux) cannot open.
+    private static Task<CommandOutcome<EditorCommandResult>> RunNativeShellCanaryAsync(string workspacePath, Action<Func<int>>? continueOnMainThread) =>
+        StartDesktopHost(continueOnMainThread, "REDIT0008", "Native shell capability unavailable", () => RunDesktopHost(
+            workspacePath,
+            new RunicDesktopHostOptions
+            {
+                WindowOptions = RunicDesktopHost.DefaultWindowOptions with
+                {
+                    Browser = BrowserKind.Embedded,
+                    PresentationPolicy = DesktopPresentationPolicy.RequestedOnly,
+                },
+            },
+            "REDIT0008",
+            "Native shell capability unavailable",
+            async host =>
+            {
+                RunicWindowCloseResult closed;
+                string presentation;
+                bool connected;
+                await using (var window = await host.OpenWindowAsync<EditorWindow>(EditorWindowOptions()).ConfigureAwait(false))
+                {
+                    DesktopWindow? native = DesktopPlatformServices.GetDesktopWindow(window);
+                    presentation = native is { IsFallback: false } ? native.Browser.ToString() : "none";
+                    connected = RunicDesktopHost.GetSurface(window)?.ConnectionCount > 0;
+                    closed = await window.CloseAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                }
+                var evidence = new
+                {
+                    schema = "runic.translations.editor-native-shell/4",
+                    host = "desktop",
+                    presentation,
+                    backend = NativeBackend(),
+                    applicationId = ApplicationId,
+                    packagedUiPresent = true,
+                    bridgeConnected = connected,
+                    cleanup = closed.Drained ? "closed-disposed" : "closed-undrained",
+                };
+                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(evidence));
+                return presentation == nameof(BrowserKind.Embedded) && connected && closed.Drained ? 0 : CommandExitCodes.Unavailable;
+            },
+            waitForConnection: true));
+
+    private static Task<CommandOutcome<EditorCommandResult>> OpenEditorAsync(
+        string workspacePath,
+        bool browser,
+        Action<Func<int>>? continueOnMainThread) =>
+        StartDesktopHost(continueOnMainThread, "REDIT0009", "The editor window could not be shown", () => RunDesktopHost(
+            workspacePath,
+            new RunicDesktopHostOptions
+            {
+                // The embedded WebView, falling back to an installed browser; --browser asks for an installed browser.
+                WindowOptions = browser
+                    ? RunicDesktopHost.DefaultWindowOptions with
+                    {
+                        Browser = BrowserKind.Any,
+                        PresentationPolicy = DesktopPresentationPolicy.RequestedOnly,
+                    }
+                    : RunicDesktopHost.DefaultWindowOptions,
+            },
+            "REDIT0009",
+            "The editor window could not be shown",
+            async host =>
+            {
+                await using var window = await host.OpenWindowAsync<EditorWindow>(EditorWindowOptions() with { Width = 1440, Height = 900 })
+                    .ConfigureAwait(false);
+                await window.WaitForCloseAsync().ConfigureAwait(false);
+                return 0;
+            }));
+
+    // Serve-only mode of the Runic Desktop host: no window and no toolkit. The host writes RUNIC_APPLICATION_URL=<url>, the
+    // window's capability URL, which admits one browser, and serves until a line is read from standard input or a
+    // termination signal arrives; the end of standard input does not stop it.
+    private static Task<CommandOutcome<EditorCommandResult>> ServeHostedWebAsync(string workspacePath, Action<Func<int>>? continueOnMainThread) =>
+        StartDesktopHost(continueOnMainThread, "REDIT0009", "The editor could not be served", () => RunDesktopHost(
+            workspacePath,
+            new RunicDesktopHostOptions { ServeOnly = true },
+            "REDIT0009",
+            "The editor could not be served",
+            async host =>
+            {
+                Console.WriteLine($"Runic Translations Editor is serving '{Path.GetFullPath(workspacePath)}'. Open the full RUNIC_APPLICATION_URL in one browser; write a line to standard input or press Ctrl+C to stop.");
+                Console.Out.Flush();
+                await using var window = await host.OpenWindowAsync<EditorWindow>(EditorWindowOptions()).ConfigureAwait(false);
+                await window.WaitForCloseAsync().ConfigureAwait(false);
+                return 0;
+            }));
+
+    // The command only checks that the packaged UI is present. The host starts after the command has completed, on the
+    // thread that called CommandApp.Run, and its result is the process exit code.
+    private static Task<CommandOutcome<EditorCommandResult>> StartDesktopHost(
+        Action<Func<int>>? continueOnMainThread,
+        string code,
+        string message,
+        Func<int> run)
     {
         if (!EditorUiAvailable())
-            return CommandOutcome.Failure<EditorCommandResult>(CommandExitCategory.Unavailable,
-                new CommandFault("REDIT0004", "The packaged web UI is unavailable."));
+            return Task.FromResult(CommandOutcome.Failure<EditorCommandResult>(CommandExitCategory.Unavailable,
+                new CommandFault("REDIT0004", "The packaged web UI is unavailable.")));
+        if (continueOnMainThread is null)
+            return Task.FromResult(CommandOutcome.Failure<EditorCommandResult>(CommandExitCategory.Unavailable,
+                new CommandFault(code, $"{message}: the Runic Desktop host needs the process main thread, which only CommandApp.Run hands back.")));
+        continueOnMainThread(run);
+        return Task.FromResult(CommandOutcome.Success(new EditorCommandResult(string.Empty)));
+    }
+
+    private static int RunDesktopHost(
+        string workspacePath,
+        RunicDesktopHostOptions hostOptions,
+        string code,
+        string message,
+        Func<RunicDesktopHost, Task<int>> application,
+        bool waitForConnection = false)
+    {
         try
         {
             using var services = CreateEditorServices(workspacePath);
-            // Opens the native window with its Bridge and content root, but shows nothing.
-            var host = new RunicCsWebUiHost(services, new RunicCsWebUiHostOptions { ShowWindow = static (_, _) => { } });
-            await using var window = await host.OpenWindowAsync<EditorWindow>(EditorWindowOptions()).ConfigureAwait(false);
-            await Task.Yield();
-            var evidence = new
-            {
-                schema = "runic.translations.editor-native-shell/3",
-                host = "cs-webui",
-                packagedUiPresent = true,
-                cleanup = "closed-disposed"
-            };
-            return CommandOutcome.Success(new EditorCommandResult(
-                System.Text.Json.JsonSerializer.Serialize(evidence)));
+            DesktopHostOptions options = new() { DiagnosticSink = ReportDiagnostic };
+            if (waitForConnection) options = options with { WaitForConnection = true };
+#if RUNIC_PLATFORM_Linux
+            // GTK 4 with WebKitGTK 6, under the editor's application ID. Windows uses WebView2 and macOS WKWebView.
+            options = options.WithGtk4(ApplicationId);
+#endif
+            return RunicDesktopHost.Run(services, options, hostOptions, application);
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OutOfMemoryException)
         {
-            return CommandOutcome.Failure<EditorCommandResult>(CommandExitCategory.Unavailable,
-                new CommandFault("REDIT0008", $"Native shell capability unavailable: {exception.Message}."));
+            Console.Error.WriteLine($"{code}: {message}: {exception.Message}");
+            return CommandExitCodes.Unavailable;
         }
-        finally { WebUiApplication.Clean(); }
     }
 
-    private static async Task<CommandOutcome<EditorCommandResult>> OpenEditorAsync(
-        string workspacePath,
-        bool useWebView)
-    {
-        if (!EditorUiAvailable())
-            return CommandOutcome.Failure<EditorCommandResult>(CommandExitCategory.Unavailable,
-                new CommandFault("REDIT0004", "The packaged web UI is unavailable."));
-        using var services = CreateEditorServices(workspacePath);
-        // Run keeps this thread in WebUI's wait loop while the window is shown and cleans up WebUI afterwards.
-        int exitCode = RunicCsWebUiHost.Run(services, new RunicCsWebUiHostOptions { UseWebView = useWebView }, async host =>
-        {
-            await using var window = await host.OpenWindowAsync<EditorWindow>(EditorWindowOptions() with { Width = 1440, Height = 900 })
-                .ConfigureAwait(false);
-            await window.WaitForCloseAsync().ConfigureAwait(false);
-            return 0;
-        });
-        return exitCode == 0
-            ? CommandOutcome.Success(new EditorCommandResult(string.Empty))
-            : CommandOutcome.Failure<EditorCommandResult>(CommandExitCategory.Unavailable,
-                new CommandFault("REDIT0009", "The editor window could not be shown."));
-    }
+    // Fallbacks and limitations, such as a missing WebKitGTK runtime, go to standard error.
+    private static void ReportDiagnostic(DesktopDiagnostic diagnostic) =>
+        Console.Error.WriteLine($"{diagnostic.Severity} {diagnostic.Code}: {diagnostic.Message} {diagnostic.Remediation}".TrimEnd());
 
-    private static async Task<CommandOutcome<EditorCommandResult>> ServeHostedWebAsync(string workspacePath)
-    {
-        if (!EditorUiAvailable())
-            return CommandOutcome.Failure<EditorCommandResult>(CommandExitCategory.Unavailable,
-                new CommandFault("REDIT0004", "The packaged web UI is unavailable."));
-        using var services = CreateEditorServices(workspacePath);
-        // Starts the window's local server instead of opening a browser, and serves until the process ends.
-        var host = new RunicCsWebUiHost(services, new RunicCsWebUiHostOptions
-        {
-            ShowWindow = (window, startPage) =>
-            {
-                string url = window.StartServer(startPage);
-                Console.WriteLine($"Runic Translations Editor is serving '{Path.GetFullPath(workspacePath)}' at {url}");
-                Console.Out.Flush();
-            },
-        });
-        await using (var window = await host.OpenWindowAsync<EditorWindow>(EditorWindowOptions()).ConfigureAwait(false))
-        {
-            await Task.Delay(Timeout.InfiniteTimeSpan).ConfigureAwait(false);
-        }
-        WebUiApplication.Clean();
-        return CommandOutcome.Success(new EditorCommandResult(string.Empty));
-    }
+    private static string NativeBackend() =>
+        OperatingSystem.IsLinux() ? "gtk4-webkitgtk6" : OperatingSystem.IsWindows() ? "webview2" : OperatingSystem.IsMacOS() ? "wkwebview" : "none";
+
+    // The project file's ApplicationId: the GTK application ID and desktop entry name on Linux.
+    internal static string ApplicationId { get; } =
+        typeof(EditorCommandLineOperations).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(static attribute => attribute.Key == "ApplicationId")?.Value
+        ?? throw new InvalidOperationException("The editor's project file sets no ApplicationId.");
 
     private static ServiceProvider CreateEditorServices(string workspacePath)
     {

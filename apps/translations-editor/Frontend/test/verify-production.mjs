@@ -15,9 +15,12 @@ if (!/export interface EditorDocumentSaveRequest \{\s*readonly content: string;\
     !generatedDocument.includes(`startSave(${saveArgument}, options?: BridgeOperationStartOptions): Promise<EditorDocumentSaveOperation>`))
   throw new Error("The generated document client is missing its revision-aware save command or result operation.");
 const index = await readFile(new URL("index.html", build), "utf8");
-for (const script of ['src="/webui.js"', 'src="/runic-views.js"'])
+for (const script of ['src="webui.js"', 'src="runic-views.js"'])
   if (!index.includes(script)) throw new Error(`The production shell omitted ${script}.`);
-if (!index.includes("/_app/immutable/")) throw new Error("The SvelteKit client entry was not emitted.");
+if (!index.includes("./_app/immutable/")) throw new Error("The SvelteKit client entry was not emitted.");
+// Runic Desktop serves each window below a path of its own, so the shell names nothing root-relative (vite.config.ts).
+const rootRelative = /(?:src|href)="\/(?!\/)|import\("\//.exec(index);
+if (rootRelative) throw new Error(`The production shell is not relocatable: ${rootRelative[0]}`);
 
 const scripts = [];
 await collect(build, scripts);

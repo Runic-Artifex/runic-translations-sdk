@@ -1,6 +1,6 @@
 # Real hosted editor acceptance
 
-This Linux acceptance runs the packaged editor and the production Views CS-WebUI host with Chromium selected by this repository's optional locked `editor` Nix shell; it does not mock the frontend,
+This Linux acceptance runs the packaged editor in the serve-only mode of the production Runic Desktop host (`serve`) with Chromium selected by this repository's optional locked `editor` Nix shell; it does not mock the frontend,
 filesystem, parser, authoring engine, validation, or save path. It prepares a
 disposable RMF2 v2 workspace, proves that two logical edits in one `.rmf2`
 resource serialize through the UI transform queue before save, detects an
@@ -20,11 +20,19 @@ RUNIC_EDITOR_HOSTED_E2E_REPORT_DIR="$PWD/artifacts/editor-hosted-rmf2-ui" \
   apps/translations-editor/bin/Release/net10.0/Runic.Translations.Editor.dll
 ```
 
-The `editor` shell supplies `WEBUI_BROWSER_PATH` and native runtime libraries
+The `editor` shell supplies `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` and native runtime libraries
 from this repository's `flake.lock`. The default CLI shell stays lightweight.
 Neither the harness nor shell entry installs Playwright browser downloads.
-Outside Nix, explicitly set `WEBUI_BROWSER_PATH` to a compatible installed
-Chromium executable and make the CS-WebUI Linux native dependencies available.
+Outside Nix, explicitly set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to a compatible installed
+Chromium executable. Serve-only mode starts no window toolkit, so it needs no GTK or WebKitGTK.
+
+The runner reads the host's first `RUNIC_APPLICATION_URL=<url>` line and the driver opens
+that full capability URL in one Playwright page: it binds the browser context to the
+window's surface with a cookie and redirects to the page below the surface's own path,
+so every later reload of the page keeps its session. The surface admits one browser;
+the server's root (`/`) does not carry the token. The runner stops the host by writing a
+line to its standard input, the serve-only protocol's stop request, and sends SIGTERM
+and then SIGKILL only when it does not exit.
 
 This proof uses the production `serve` host and a headless browser. It does not
 prove an interactive desktop launch, embedded WebView, or native file chooser;

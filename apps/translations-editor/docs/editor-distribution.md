@@ -5,11 +5,15 @@ source, as described in the [editor README](../README.md). SDK package publicati
 does not create an Editor archive.
 
 If an archive is produced for `linux-x64`, `win-x64`, or `osx-arm64`, it should be
-self-contained: the .NET runtime, Runic Views CS-WebUI host, required native
-browser assets, static SvelteKit application, launchers, example workspace, license,
-third-party notices, per-file manifest, and sibling SHA-256 checksum travel together.
-Users should not need an SDK, Node.js installation, package-registry authentication,
-or a separate runtime to start it.
+self-contained: the .NET runtime, the Runic Desktop host with its native server
+library for that runtime identifier, the static SvelteKit application, launchers,
+example workspace, license, third-party notices (including the native server's crate
+list), per-file manifest, and sibling SHA-256 checksum travel together. Users should
+not need an SDK, Node.js installation, package-registry authentication, or a separate
+.NET runtime to start it. The window's WebView comes from the system: GTK 4.12 or newer
+with WebKitGTK 6 on Linux (Ubuntu and Debian: `libwebkitgtk-6.0-4`), the Microsoft Edge
+WebView2 Runtime on Windows, and WKWebView on macOS. Without it, `edit` opens the
+editor in an installed browser instead and says why on standard error.
 
 Archive verification should exercise the artifact a user receives, not only its
 staging directory: compare reproducible archive digests, verify its checksum,

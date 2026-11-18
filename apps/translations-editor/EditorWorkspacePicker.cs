@@ -10,10 +10,10 @@ namespace Runic.Translations.Editor;
 /// <summary>
 /// Chooses a workspace directory. On Linux it first uses the Runic SDK's XDG desktop portal FileChooser, which needs no
 /// toolkit and no parent window. When the session has no FileChooser portal of version 3 or later, or no session bus,
-/// it falls back to <c>/usr/bin/zenity</c> when that is installed. CS-WebUI windows have no native owner, so the window's
-/// <see cref="IFileDialogs"/> always reports <c>OwnerUnavailable</c>, and Runic SDK 0.16 makes unowned dialogs public
-/// only for the portal. Windows and macOS therefore keep their system folder dialog through PowerShell and AppleScript
-/// until the SDK offers theirs.
+/// it falls back to <c>/usr/bin/zenity</c> when that is installed. The picker needs no window and works the same with
+/// every host, also in <c>serve</c> mode, which has no native owner. Windows and macOS keep their system folder dialog
+/// through PowerShell and AppleScript. Parented dialogs through the Runic Desktop window's <see cref="IFileDialogs"/>
+/// are a follow-up.
 /// </summary>
 /// <remarks>The latest selection's directory lease is held until the next pick or disposal, as the SDK asks for
 /// filesystem work through <see cref="IDirectoryLease.LocalPath"/>.</remarks>
