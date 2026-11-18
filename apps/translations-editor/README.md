@@ -149,6 +149,20 @@ reported as a conflict when you save). The editor cannot ask before its window
 closes: the CS-WebUI host of the Runic SDK opens the window without a close
 guard, so recovery is what keeps unsaved work.
 
+**Undo** (Ctrl+Z, or ⌘Z on macOS) and **Redo** (Ctrl+Shift+Z or Ctrl+Y) first
+take back the unsaved text edits, one step at a time, per document: each
+composer edit, change of a message's structure, edit of the message source or
+the file view, quick fix, **Copy source**, and the restore of recovered work is
+a step, and typing in one field is one step until you pause or move to another
+field. They work also with the focus in the composer or the file view (the
+editor's history replaces the field's own), across messages (undoing a step of
+another message selects that message), and for a missing translation (undoing
+its first text returns to the empty translation). An edit undone back to the
+saved text leaves the document clean. The toolbar names the step, such as
+**Undo: edit in files.selected**. Without an unsaved step, Undo and Redo act on
+the saved changes (**Undo saved change**), as after a save, which clears the
+unsaved steps of the documents it wrote.
+
 When the editor opens a project with a version 1 editor state, it moves the
 review states into the review file once: an approval whose base text is
 unchanged stays approved, every other recorded state whose base text changed

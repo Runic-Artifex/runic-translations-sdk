@@ -1662,6 +1662,36 @@ ui {
   }
 }
 ui {
+  history {
+    change_copy_source = Ausgangstext übernehmen
+  }
+}
+ui {
+  history {
+    change_edit = Bearbeitung
+  }
+}
+ui {
+  history {
+    change_file_edit = Dateibearbeitung
+  }
+}
+ui {
+  history {
+    change_quick_fix = Schnellkorrektur
+  }
+}
+ui {
+  history {
+    change_recovery = Entwurfswiederherstellung
+  }
+}
+ui {
+  history {
+    change_structure = Strukturänderung
+  }
+}
+ui {
   host {
     capability_invalid = Der Editorserver hat ungültige Verbindungseinstellungen bereitgestellt.
   }
@@ -3889,7 +3919,24 @@ ui {
 }
 ui {
   toolbar {
-    redo_saved_change = Gespeicherte Änderung wiederherstellen
+    redo_saved_change = Gespeicherte Änderung wiederholen
+  }
+}
+ui {
+  toolbar {
+    redo_saved_change_named =
+      .input {$change :string}
+      {{Gespeicherte Änderung wiederholen: {$change}}}
+
+  }
+}
+ui {
+  toolbar {
+    redo_unsaved =
+      .input {$change :string}
+      .input {$message :string}
+      {{Wiederholen: {$change} in {$message}}}
+
   }
 }
 ui {
@@ -3900,6 +3947,23 @@ ui {
 ui {
   toolbar {
     undo_saved_change = Gespeicherte Änderung rückgängig machen
+  }
+}
+ui {
+  toolbar {
+    undo_saved_change_named =
+      .input {$change :string}
+      {{Gespeicherte Änderung rückgängig machen: {$change}}}
+
+  }
+}
+ui {
+  toolbar {
+    undo_unsaved =
+      .input {$change :string}
+      .input {$message :string}
+      {{Rückgängig: {$change} in {$message}}}
+
   }
 }
 ui {

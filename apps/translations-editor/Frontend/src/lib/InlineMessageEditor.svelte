@@ -334,6 +334,7 @@
             dropSlot === index && "bg-primary/10 ring-2 ring-primary/50",
           ]}
           rows="1"
+          data-draft-field
           value={slot.text}
           aria-label={ui.text("ui_inline_text_index", { label: label, index: index + 1 })}
           placeholder={ui.text("ui_inline_write_text")}

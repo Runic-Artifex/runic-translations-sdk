@@ -8,6 +8,7 @@ import type {
 } from "../contracts";
 import { buildRows } from "../resource-model";
 import { nextPlacement, removePlacement, type Placement } from "../message-starter";
+import { DraftHistory, type DraftChangeKind, type DraftHistoryOptions, type DraftState, type DraftStep } from "./draft-history.svelte";
 
 /** The compiler's reading of a draft: its entries are current while the draft still has this content. */
 export type ParsedDraft = { content: string; entries: EditorMessageEntry[] };
@@ -29,6 +30,21 @@ export type DraftOutcome =
   | { kind: "rejected"; result: EditorDocumentDraft }
   | { kind: "failed"; error: unknown };
 
+/** What an unsaved step records about a change: its kind, the message and the field typing extends a step in. */
+export interface DraftStepInfo {
+  kind: DraftChangeKind;
+  key?: string;
+  field?: string;
+  /** The state the change started from, when it began before its request (a starter changed in memory first). */
+  before?: DraftState;
+}
+
+/** The starters of missing translations, which the history captures and restores with their document. */
+export interface DraftStarters {
+  capture(path: string): Record<string, unknown>;
+  restore(path: string, starters: Readonly<Record<string, unknown>>): void;
+}
+
 export interface DraftStoreOptions {
   bridge: Pick<EditorBridge, "transformDocument" | "applyAuthoringOperation" | "applyDiagnosticFix">;
   snapshot: () => WorkspaceSnapshot | undefined;
@@ -38,6 +54,7 @@ export interface DraftStoreOptions {
   /** The timer of the raw-source validation debounce, which runs before a validation joins its document's queue. */
   setTimer?: (callback: () => void, milliseconds: number) => unknown;
   clearTimer?: (handle: unknown) => void;
+  history?: DraftHistoryOptions;
 }
 
 type Ticket = { workspace: number; root: string | undefined };
@@ -61,6 +78,8 @@ interface DraftJob {
   rejection?: string;
   /** What an accepted answer updates: the draft and its parsed entries, only the parsed entries, or nothing. */
   commit: "draft" | "parsed" | "none";
+  /** The unsaved step a committed draft change records. */
+  step?: DraftStepInfo;
   done(outcome: DraftOutcome): void;
 }
 
@@ -89,6 +108,8 @@ export class DraftStore {
   hasDrafts = $derived(Object.keys(this.drafts).length > 0);
   /** The documents with unsaved text, in the workspace's order. */
   dirtyPaths = $derived(this.#ordered(Object.keys(this.drafts)));
+  /** The undo and redo steps of the unsaved edits, per document. */
+  readonly history: DraftHistory;
 
   readonly #options: DraftStoreOptions;
   readonly #queues = new Map<string, Promise<void>>();
@@ -97,9 +118,18 @@ export class DraftStore {
   readonly #placed = new Map<string, Placement>();
   #workspace = 0;
   #validationTimer: unknown;
+  #starters: DraftStarters | undefined;
+  /** The saved text each document with steps had when its first step was recorded; a change of it clears them. */
+  readonly #historyBase = new Map<string, string | undefined>();
 
   constructor(options: DraftStoreOptions) {
     this.#options = options;
+    this.history = new DraftHistory(options.history);
+  }
+
+  /** The starters of missing translations take part in the history of their document. */
+  attachStarters(starters: DraftStarters): void {
+    this.#starters = starters;
   }
 
   /** Bumped whenever a snapshot is installed: answers for an earlier one are dropped. */
@@ -147,6 +177,10 @@ export class DraftStore {
 
   /** Drops the drafts that equal the saved text of a newly installed snapshot, and their recovery copy. */
   prune(): void {
+    // A document whose saved text changed (it was saved, or a saved change was undone) starts a new history.
+    for (const path of this.history.paths()) {
+      if (this.#historyBase.get(path) !== this.saved(path)) this.#clearHistory(path);
+    }
     const equal = Object.keys(this.drafts).filter((path) => this.drafts[path] === this.saved(path));
     if (equal.length === 0) return;
     for (const path of equal) delete this.drafts[path];
@@ -161,6 +195,7 @@ export class DraftStore {
   /** Forgets the saved document's draft. Its generation stays, so an answer for the saved text is still dropped. */
   drop(path: string): void {
     this.#forgetPlaced(path);
+    this.#clearHistory(path);
     delete this.drafts[path];
     this.generations[path] = this.generation(path) + 1;
     this.persist();
@@ -172,6 +207,7 @@ export class DraftStore {
     this.parsed = {};
     this.generations = {};
     this.#placed.clear();
+    this.#clearAllHistory();
     this.recovered = this.#readStored(next);
   }
 
@@ -181,6 +217,7 @@ export class DraftStore {
     this.drafts = {};
     this.generations = {};
     this.#placed.clear();
+    this.#clearAllHistory();
   }
 
   /**
@@ -188,9 +225,13 @@ export class DraftStore {
    * is not mistaken for a newer draft; one equal to the saved text is dropped.
    */
   restoreRecovered(): void {
+    const paths = Object.keys(this.recovered);
+    const before = new Map(paths.map((path) => [path, this.capture(path)]));
     this.replace(Object.fromEntries(Object.entries(this.recovered).map(([path, draft]) => [path, draft.content])));
     this.recovered = {};
     this.persist();
+    // Each restored document's recovery is one step, which Undo takes back.
+    for (const path of paths) this.recordStep(path, { kind: "recovery" }, before.get(path)!);
   }
 
   /** Declines the recovered drafts; the stored copy then holds only this session's drafts. */
@@ -216,6 +257,63 @@ export class DraftStore {
 
   clearStored(value: WorkspaceSnapshot | undefined): void {
     if (value !== undefined) this.#options.storage.remove(storageKey(value));
+  }
+
+  /** The document's unsaved state as a step records it. */
+  capture(path: string): DraftState {
+    const draft = this.drafts[path];
+    const parsed = this.parsed[path];
+    const placements: Record<string, Placement> = {};
+    for (const [identity, placement] of this.#placed) if (identity.startsWith(`${path}\u0000`)) placements[identity] = placement;
+    return {
+      draft,
+      parsed: parsed !== undefined && parsed.content === (draft ?? this.saved(path)) ? parsed : undefined,
+      placements,
+      starters: this.#starters?.capture(path) ?? {},
+    };
+  }
+
+  /** Records a change of the document that ran outside the queue (raw-source typing, a starter changed in memory). */
+  recordStep(path: string, info: DraftStepInfo, before: DraftState): DraftStep | undefined {
+    const depth = this.history.depth(path);
+    if (depth.undo + depth.redo === 0) this.#historyBase.set(path, this.saved(path));
+    return this.history.record({
+      path, kind: info.kind, key: info.key, message: this.#messagePath(info.key), field: info.field, before, after: this.capture(path),
+    });
+  }
+
+  /**
+   * Takes back the document's latest unsaved step: its draft, compiler reading, placements and starters return to the
+   * state before it, and the recovery copy follows. A draft equal to the saved text is none, so the document can be
+   * clean again. The draft's generation advances, so answers for the undone text are dropped.
+   */
+  undo(path: string): DraftStep | undefined {
+    const step = this.history.takeUndo(path);
+    if (step !== undefined) this.#restore(path, step.before);
+    return step;
+  }
+
+  /** Applies the document's latest undone step again. */
+  redo(path: string): DraftStep | undefined {
+    const step = this.history.takeRedo(path);
+    if (step !== undefined) this.#restore(path, step.after);
+    return step;
+  }
+
+  /**
+   * Reads the document's current text again (after an undo or redo): its entries and diagnostics, queued behind the
+   * document's other requests. A document that does not exist yet and has no draft has nothing to read.
+   */
+  refresh(path: string, done: (outcome: DraftOutcome) => void): Promise<void> {
+    if (this.drafts[path] === undefined && this.saved(path) === undefined) return Promise.resolve();
+    return this.#submit({
+      path,
+      ticket: this.#ticket(),
+      source: () => this.drafts[path] ?? this.saved(path) ?? "",
+      request: (content) => this.#options.bridge.transformDocument(path, content),
+      commit: "parsed",
+      done,
+    });
   }
 
   /** The document's queued requests; a save waits for them. */
@@ -247,6 +345,7 @@ export class DraftStore {
       request: (content) => this.#options.bridge.transformDocument(path, content, key, value),
       rejection: "EDITOR-TRANSFORM",
       commit: "draft",
+      step: { kind: "edit", key, field: `${path}\u0000${key}\u0000value` },
       done,
     });
   }
@@ -277,6 +376,9 @@ export class DraftStore {
       },
       rejection: "EDITOR-AUTHORING",
       commit: "draft",
+      step: pattern
+        ? { kind: "edit", key, field: `${path}\u0000${key}\u0000pattern\u0000${operation.variantId ?? ""}` }
+        : { kind: "structure", key },
       done,
     }).finally(() => { this.authoringPending -= 1; });
   }
@@ -287,7 +389,14 @@ export class DraftStore {
    * is taken out again, so a translation cleared back to empty leaves the text the document had without it (the saved
    * text when nothing else changed, which is then no draft). A newer placement of the same message supersedes it.
    */
-  placeMessage(path: string, saved: string, key: string, value: string | undefined, done: (outcome: DraftOutcome) => void): Promise<void> {
+  placeMessage(
+    path: string,
+    saved: string,
+    key: string,
+    value: string | undefined,
+    done: (outcome: DraftOutcome) => void,
+    step: DraftStepInfo = { kind: "edit", key, field: `${path}\u0000${key}\u0000value` },
+  ): Promise<void> {
     const identity = `${path}\u0000${key}`;
     let source: string | undefined;
     return this.#submit({
@@ -307,6 +416,7 @@ export class DraftStore {
       },
       rejection: "EDITOR-TRANSFORM",
       commit: "draft",
+      step,
       done: (outcome) => {
         if (outcome.kind === "applied" && source !== undefined) {
           const next = value === undefined ? undefined : nextPlacement(this.#placed.get(identity), source, outcome.result.content);
@@ -378,6 +488,7 @@ export class DraftStore {
     fix: EditorDiagnosticQuickFix,
     repair: { text(): string } | undefined,
     done: (outcome: DraftOutcome) => void,
+    key?: string,
   ): Promise<void> {
     return this.#submit({
       path,
@@ -387,6 +498,7 @@ export class DraftStore {
       current: repair === undefined ? undefined : (content) => repair.text() === content,
       rejection: "EDITOR-FIX",
       commit: repair === undefined ? "draft" : "none",
+      step: { kind: "quick-fix", key },
       done,
     });
   }
@@ -450,15 +562,66 @@ export class DraftStore {
         job.done({ kind: "rejected", result });
         return;
       }
+      const before = job.commit === "draft" && job.step !== undefined ? this.#stepStart(job.path, job.step) : undefined;
       if (job.commit !== "none") this.parsed[job.path] = { content: result.content, entries: result.entries };
       if (job.commit === "draft") {
         this.set(job.path, result.content);
         this.persist();
       }
       job.done({ kind: "applied", result });
+      // After `done`, which may hand a starter over or drop a draft: the step ends in the state the change left.
+      if (before !== undefined) this.recordStep(job.path, job.step!, before);
     } catch (error) {
       job.done({ kind: "failed", error });
     }
+  }
+
+  /**
+   * The state a committed change started from: the one its caller captured (a starter changes in memory before its
+   * placement runs) while the document's draft is still the one it saw, else the current one with the caller's starters.
+   */
+  #stepStart(path: string, step: DraftStepInfo): DraftState {
+    const current = this.capture(path);
+    if (step.before === undefined) return current;
+    return step.before.draft === current.draft ? step.before : { ...current, starters: step.before.starters };
+  }
+
+  #restore(path: string, state: DraftState): void {
+    if (state.draft === undefined || state.draft === this.saved(path)) {
+      delete this.drafts[path];
+      this.generations[path] = this.generation(path) + 1;
+    } else this.set(path, state.draft);
+    if (state.parsed !== undefined) this.parsed[path] = state.parsed;
+    this.#forgetPlaced(path);
+    for (const [identity, placement] of Object.entries(state.placements)) this.#placed.set(identity, placement);
+    this.#starters?.restore(path, state.starters);
+    this.persist();
+  }
+
+  /** The dotted path of the message `key` (`files.selected`), as the editor shows it; the key when it is unknown. */
+  #messagePath(key: string | undefined): string | undefined {
+    if (key === undefined) return undefined;
+    const named = (entries: readonly EditorMessageEntry[] | undefined) =>
+      entries?.find((entry) => entry.key === key && (entry.path?.length ?? 0) > 0)?.path.join(".");
+    for (const parsed of Object.values(this.parsed)) {
+      const path = named(parsed.entries);
+      if (path !== undefined) return path;
+    }
+    for (const document of this.#options.snapshot()?.documents ?? []) {
+      const path = named(document.entries);
+      if (path !== undefined) return path;
+    }
+    return key;
+  }
+
+  #clearHistory(path: string): void {
+    this.history.clear(path);
+    this.#historyBase.delete(path);
+  }
+
+  #clearAllHistory(): void {
+    this.history.clearAll();
+    this.#historyBase.clear();
   }
 
   #readStored(value: WorkspaceSnapshot): Record<string, StoredDraft> {

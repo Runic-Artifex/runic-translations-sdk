@@ -1,7 +1,8 @@
 import type { EditorBridge } from "../editor-bridge";
 import type { EditorMessageDraft, EditorMessageOperation, EditorMessageProjection } from "../contracts";
 import { copySourcePlan, type PatternVariant } from "../message-starter";
-import type { DraftOutcome, DraftStore } from "./draft-store.svelte";
+import type { DraftOutcome, DraftStepInfo, DraftStore } from "./draft-store.svelte";
+import type { DraftState } from "./draft-history.svelte";
 
 /**
  * The starter of a translation that does not exist yet (#225 P2): standalone MF2 text shaped for the target locale
@@ -39,11 +40,13 @@ export interface MessageDraftStoreOptions {
 export interface StarterTarget { path: string; saved: string; key: string; locale: string }
 
 const identityOf = (target: Pick<StarterTarget, "path" | "key" | "locale">) => `${target.path}\u0000${target.key}\u0000${target.locale}`;
+const ofDocument = (identity: string, path: string) => identity.startsWith(`${path}\u0000`);
 
 /**
  * The starters of missing translations, keyed by document, message and locale, so switching to another message and
  * back keeps one. Their operations run in the document's queue of the `DraftStore`, so a save waits for them and for
- * the placement they lead to.
+ * the placement they lead to. They take part in their document's undo history: each change records the starters as
+ * they were before it, so undoing the insert of a starter returns to the empty starter.
  */
 export class MessageDraftStore {
   starters = $state<Record<string, MessageStarter>>({});
@@ -56,10 +59,19 @@ export class MessageDraftStore {
   readonly #versions = new Map<string, number>();
   /** Bumped on every change of a starter's text: an operation prepared for older text is dropped. */
   readonly #changes = new Map<string, number>();
+  /**
+   * The document state before a starter change whose placement has not committed yet: a quicker change of the same
+   * starter, whose placement supersedes the first, starts from the same state.
+   */
+  readonly #pending = new Map<string, DraftState>();
   #session = 0;
 
   constructor(options: MessageDraftStoreOptions) {
     this.#options = options;
+    options.drafts.attachStarters({
+      capture: (path) => this.#capture(path),
+      restore: (path, starters) => this.#restore(path, starters as Readonly<Record<string, MessageStarter>>),
+    });
   }
 
   get(target: Pick<StarterTarget, "path" | "key" | "locale">): MessageStarter | undefined {
@@ -121,7 +133,9 @@ export class MessageDraftStore {
           done({ kind: "rejected", result });
           return;
         }
-        this.#change(target, result.text, result.projection, placed);
+        this.#change(target, result.text, result.projection, pattern
+          ? { kind: "edit", key: target.key, field: `${target.path}\u0000${target.key}\u0000pattern\u0000${operation.variantId ?? ""}` }
+          : { kind: "structure", key: target.key }, placed);
         done({ kind: "applied", result });
       } catch (error) {
         done({ kind: "failed", error });
@@ -161,7 +175,7 @@ export class MessageDraftStore {
           last = result;
         }
         if (last === undefined || this.starters[identity] === undefined || (this.#changes.get(identity) ?? 0) !== change) return;
-        this.#change(target, text, projection, placed);
+        this.#change(target, text, projection, { kind: "copy-source", key: target.key }, placed);
         done({ kind: "applied", result: last });
       } catch (error) {
         done({ kind: "failed", error });
@@ -178,6 +192,7 @@ export class MessageDraftStore {
     const identity = identityOf(target);
     const starter = this.starters[identity];
     if (starter === undefined) return;
+    const step: DraftStepInfo = { kind: "edit", key: target.key, field: `${target.path}\u0000${target.key}\u0000value`, before: this.#before(target) };
     this.#changes.set(identity, (this.#changes.get(identity) ?? 0) + 1);
     const untouched = text.trim() === "" || text === starter.initial;
     starter.text = untouched ? starter.initial : text;
@@ -185,13 +200,20 @@ export class MessageDraftStore {
     if (!untouched) {
       starter.placed = true;
       void this.#options.drafts.placeMessage(target.path, target.saved, target.key, text, (outcome) => {
-        if (outcome.kind === "applied" && this.starters[identity]?.text === text) delete this.starters[identity];
+        if (outcome.kind === "applied" && this.starters[identity]?.text === text) {
+          delete this.starters[identity];
+          this.#pending.delete(identity);
+        }
+        this.#settle(identity, text);
         placed?.(outcome);
-      });
+      }, step);
     } else if (starter.placed) {
       starter.placed = false;
-      void this.#options.drafts.placeMessage(target.path, target.saved, target.key, undefined, (outcome) => placed?.(outcome));
-    }
+      void this.#options.drafts.placeMessage(target.path, target.saved, target.key, undefined, (outcome) => {
+        this.#settle(identity, starter.initial);
+        placed?.(outcome);
+      }, step);
+    } else this.#settle(identity, starter.text);
   }
 
   /** Keeps only the starters `keep` accepts, such as those whose message the saved document still lacks. */
@@ -208,22 +230,71 @@ export class MessageDraftStore {
     this.starters = {};
     this.loading = {};
     this.#changes.clear();
+    this.#pending.clear();
   }
 
-  #change(target: StarterTarget, text: string, projection: EditorMessageProjection, placed?: (outcome: DraftOutcome) => void): void {
+  #change(target: StarterTarget, text: string, projection: EditorMessageProjection, info: DraftStepInfo, placed?: (outcome: DraftOutcome) => void): void {
     const identity = identityOf(target);
     const starter = this.starters[identity];
     if (starter === undefined) return;
+    const step: DraftStepInfo = { ...info, before: this.#before(target) };
     this.#changes.set(identity, (this.#changes.get(identity) ?? 0) + 1);
     starter.text = text;
     starter.projection = projection;
-    const report = (outcome: DraftOutcome) => placed?.(outcome);
+    const report = (outcome: DraftOutcome) => {
+      this.#settle(identity, text);
+      placed?.(outcome);
+    };
     if (!projection.empty) {
       starter.placed = true;
-      void this.#options.drafts.placeMessage(target.path, target.saved, target.key, text, report);
+      void this.#options.drafts.placeMessage(target.path, target.saved, target.key, text, report, step);
     } else if (starter.placed) {
       starter.placed = false;
-      void this.#options.drafts.placeMessage(target.path, target.saved, target.key, undefined, report);
+      void this.#options.drafts.placeMessage(target.path, target.saved, target.key, undefined, report, step);
+    } else {
+      // A change of an empty starter that the document does not see (a variant added before any text) is a step too.
+      this.#options.drafts.recordStep(target.path, step, step.before!);
+      this.#pending.delete(identity);
     }
+  }
+
+  /** The state a starter change starts from: that of a change whose placement is still pending, else the current one. */
+  #before(target: StarterTarget): DraftState {
+    const identity = identityOf(target);
+    const pending = this.#pending.get(identity);
+    if (pending !== undefined) return pending;
+    const state = this.#options.drafts.capture(target.path);
+    this.#pending.set(identity, state);
+    return state;
+  }
+
+  /** A placement of `text` finished: once it is the starter's latest text, the next change starts a new state. */
+  #settle(identity: string, text: string): void {
+    const starter = this.starters[identity];
+    if (starter === undefined || starter.text === text) this.#pending.delete(identity);
+  }
+
+  #capture(path: string): Record<string, MessageStarter> {
+    const captured: Record<string, MessageStarter> = {};
+    for (const [identity, starter] of Object.entries(this.starters)) {
+      if (ofDocument(identity, path)) captured[identity] = $state.snapshot(starter) as MessageStarter;
+    }
+    return captured;
+  }
+
+  /**
+   * Returns the document's starters to a captured state; operations prepared for the replaced starters are dropped. A
+   * starter the state lacks is dropped too (its message is the document's there); opening the message creates an
+   * empty one again.
+   */
+  #restore(path: string, starters: Readonly<Record<string, MessageStarter>>): void {
+    for (const identity of Object.keys(this.starters)) {
+      if (ofDocument(identity, path) && !(identity in starters)) delete this.starters[identity];
+    }
+    for (const [identity, starter] of Object.entries(starters)) this.starters[identity] = structuredClone(starter);
+    for (const identity of [...this.#changes.keys(), ...Object.keys(starters)]) {
+      if (ofDocument(identity, path)) this.#changes.set(identity, (this.#changes.get(identity) ?? 0) + 1);
+    }
+    for (const identity of [...this.#pending.keys()]) if (ofDocument(identity, path)) this.#pending.delete(identity);
   }
 }

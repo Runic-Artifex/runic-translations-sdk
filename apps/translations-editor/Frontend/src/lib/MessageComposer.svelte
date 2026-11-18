@@ -28,21 +28,25 @@
     maxLength?: number;
     /** "Copy source" of a missing translation's starter. */
     oncopysource?: () => void;
+    /** Advanced by an undo or redo: text typed before it gives way to `value`. */
+    revision?: number;
   }
 
-  let { value, locale, authoring, authoringBusy = false, onchange, onoperation, maxLength, oncopysource }: Props = $props();
+  let { value, locale, authoring, authoringBusy = false, onchange, onoperation, maxLength, oncopysource, revision = 0 }: Props = $props();
   const ui = getUiText();
   let rawMode = $state(false);
   let exactCaseValue = $state("");
   let selectorInput = $state("");
   const inputFunctions = ["string", "integer", "number", "date", "time", "datetime", "uuid"];
-  let pendingSource = $state<string>();
-  let source = $derived(pendingSource ?? (typeof value === "string" ? value : ""));
+  // The typed source until the draft has it; an undo or redo (a new revision) shows the draft again.
+  let pendingSource = $state<{ text: string; revision: number }>();
+  let source = $derived(pendingSource !== undefined && pendingSource.revision === revision
+    ? pendingSource.text : typeof value === "string" ? value : "");
   $effect(() => {
-    if (pendingSource !== undefined && pendingSource === value) pendingSource = undefined;
+    if (pendingSource !== undefined && (pendingSource.text === value || pendingSource.revision !== revision)) pendingSource = undefined;
   });
   function changeSource(next: string): void {
-    pendingSource = next;
+    pendingSource = { text: next, revision };
     onchange(next);
   }
   let canAuthor = $derived(authoring?.supported === true && onoperation !== undefined && typeof value === "string");
@@ -118,7 +122,7 @@
         {#if authoring?.reason}<span class="mt-1 block text-xs">{authoring.reason}</span>{/if}
       </p>
     {/if}
-    <Textarea value={source} rows={12} class="font-mono text-sm" aria-label={ui.text("ui_composer_message_source")} spellcheck={false} lang={locale} dir={localeDirection(locale)} oninput={(event) => changeSource(event.currentTarget.value)} />
+    <Textarea value={source} rows={12} class="font-mono text-sm" data-draft-field aria-label={ui.text("ui_composer_message_source")} spellcheck={false} lang={locale} dir={localeDirection(locale)} oninput={(event) => changeSource(event.currentTarget.value)} />
   {:else if authoring}
     {#if authoring.selectors.length === 0}
       <Button variant="outline" class="justify-self-start" disabled={authoringBusy} onclick={enablePluralForms}>
@@ -148,7 +152,7 @@
           {/if}
         </Card.Header>
         <Card.Content>
-          <PatternEditor pattern={variant.pattern} {inputs} {locale} label={`${ui.text("ui_composer_translation_for")} ${title(variant.keys)}`} onchange={(pattern) => operation({ kind: "set-pattern", variantId: variant.id, pattern })} />
+          <PatternEditor pattern={variant.pattern} {inputs} {locale} {revision} label={`${ui.text("ui_composer_translation_for")} ${title(variant.keys)}`} onchange={(pattern) => operation({ kind: "set-pattern", variantId: variant.id, pattern })} />
         </Card.Content>
       </Card.Root>
     {/each}

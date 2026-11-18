@@ -1662,6 +1662,36 @@ ui {
   }
 }
 ui {
+  history {
+    change_copy_source = Copy source
+  }
+}
+ui {
+  history {
+    change_edit = edit
+  }
+}
+ui {
+  history {
+    change_file_edit = file edit
+  }
+}
+ui {
+  history {
+    change_quick_fix = quick fix
+  }
+}
+ui {
+  history {
+    change_recovery = draft recovery
+  }
+}
+ui {
+  history {
+    change_structure = structure change
+  }
+}
+ui {
   host {
     capability_invalid = The editor server provided invalid connection settings.
   }
@@ -3894,12 +3924,46 @@ ui {
 }
 ui {
   toolbar {
+    redo_saved_change_named =
+      .input {$change :string}
+      {{Redo saved change: {$change}}}
+
+  }
+}
+ui {
+  toolbar {
+    redo_unsaved =
+      .input {$change :string}
+      .input {$message :string}
+      {{Redo: {$change} in {$message}}}
+
+  }
+}
+ui {
+  toolbar {
     undo = Undo
   }
 }
 ui {
   toolbar {
     undo_saved_change = Undo saved change
+  }
+}
+ui {
+  toolbar {
+    undo_saved_change_named =
+      .input {$change :string}
+      {{Undo saved change: {$change}}}
+
+  }
+}
+ui {
+  toolbar {
+    undo_unsaved =
+      .input {$change :string}
+      .input {$message :string}
+      {{Undo: {$change} in {$message}}}
+
   }
 }
 ui {
