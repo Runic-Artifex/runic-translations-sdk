@@ -4544,3 +4544,41 @@ ui {
     project_changed_unsaved = Ein Bibliothekskatalog wurde zu "overrides" in runic.json hinzugefügt. Ihre ungespeicherten Änderungen bleiben erhalten; laden Sie den Arbeitsbereich neu, sobald sie gespeichert sind.
   }
 }
+ui {
+  composer {
+    copy_source = Ausgangstext übernehmen
+  }
+}
+ui {
+  composer {
+    copy_source_title = Füllt jede Variante mit dem Ausgangstext; Platzhalter bleiben Platzhalter.
+  }
+}
+ui {
+  count {
+    characters_limit =
+      .input {$count :integer}
+      .input {$limit :integer}
+      {{{$count} / {$limit}}}
+  }
+}
+ui {
+  count {
+    characters_limit_title =
+      .input {$count :integer}
+      .input {$limit :integer}
+      {{{$count} von höchstens {$limit} Zeichen; Platzhalterwerte werden nicht gezählt}}
+  }
+}
+ui {
+  translation {
+    editor_over_limit =
+      .input {$limit :integer}
+      {{Dieser Text ist länger als seine Grenze von {$limit} Zeichen. Platzhalterwerte werden nicht gezählt.}}
+  }
+}
+ui {
+  translation {
+    editor_starter_loading = Leere Übersetzung wird vorbereitet…
+  }
+}

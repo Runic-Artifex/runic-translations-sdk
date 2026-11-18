@@ -29,6 +29,7 @@
 
   let {
     state: reviewState,
+    notTranslated = false,
     dirty,
     message,
     disabled,
@@ -48,6 +49,8 @@
     onfix,
   }: {
     state: EditorReviewState;
+    /** The locale has no text for the message and no review state was recorded for it. */
+    notTranslated?: boolean;
     dirty: boolean;
     message: string;
     disabled: boolean;
@@ -69,6 +72,8 @@
   } = $props();
 
   let stateLabel = $derived(states.find((option) => option.value === reviewState)?.label ?? reviewState);
+  // A translation that does not exist yet is not a draft of one: the badge says so until text is typed (#225 P2).
+  let badgeLabel = $derived(notTranslated ? ui.text("ui_resource_not_translated") : stateLabel);
   let open = $state(false);
 </script>
 
@@ -78,7 +83,7 @@
       <Collapsible.Trigger class="flex min-h-12 w-full items-center gap-2 rounded-2xl px-4 py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <ListChecksIcon class="size-4 shrink-0" aria-hidden="true" />
         <span class="font-medium">{ui.text("ui_workflow_title")}</span>
-        <Badge variant="secondary">{stateLabel}</Badge>
+        <Badge variant="secondary" data-testid="workflow-state">{badgeLabel}</Badge>
         {#if stale}<Badge variant="destructive">{ui.text("ui_workflow_source_changed")}</Badge>{/if}
         <span class="ml-auto hidden min-w-0 truncate text-xs text-muted-foreground sm:block">
           {dirty ? ui.text("ui_workflow_unsaved_changes") : message}

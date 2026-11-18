@@ -10,6 +10,7 @@
   import type { EditorMode } from "#lib/EditorModeSwitcher.svelte";
   import type { ResourceEntry, ResourceValue } from "#lib/resource-model.js";
   import { localeDirection } from "#lib/locale-text.js";
+  import { lengthLimit, messageLength } from "#lib/message-starter.js";
   import { getUiText } from "#lib/ui-text.js";
 
   interface Props {
@@ -33,6 +34,14 @@
     onresourcechange: (value: ResourceValue) => void;
     onrawchange: (value: string) => void;
     onformatraw: () => void;
+    /** The message's `@maxLength` in this locale: the counter shows the text against it (#225 P21). */
+    maxLength?: number;
+    /** The compiler's RTR0098 text for this message, shown at the field while the text is over the limit. */
+    lengthWarning?: string;
+    /** The empty starter of a missing translation is being prepared. */
+    starterLoading?: boolean;
+    /** Fills the starter of a missing translation from the source text; absent for an existing translation. */
+    oncopysource?: () => void;
   }
 
   let {
@@ -55,9 +64,15 @@
     onresourcechange,
     onrawchange,
     onformatraw,
+    maxLength,
+    lengthWarning,
+    starterLoading = false,
+    oncopysource,
   }: Props = $props();
 
   const ui = getUiText();
+  // With a limit the counter measures what RTR0098 measures: the literal text of the longest variant.
+  let limit = $derived(mode === "translation" ? lengthLimit(messageLength(authoring, value), maxLength) : undefined);
   let rawInput = $state<HTMLTextAreaElement | null>(null);
   $effect(() => {
     const selection = sourceSelection;
@@ -89,16 +104,36 @@
       >
         {label}
       </Field.Label>
-      <span class="shrink-0 text-[0.65rem] tabular-nums text-muted-foreground">
-        {ui.text("ui_count_characters", { count: value.length })}
-      </span>
+      {#if limit === undefined}
+        <span class="shrink-0 text-[0.65rem] tabular-nums text-muted-foreground" data-testid="character-count">
+          {ui.text("ui_count_characters", { count: value.length })}
+        </span>
+      {:else}
+        <span
+          class={["shrink-0 text-[0.65rem] tabular-nums", limit.over ? "font-semibold text-amber-700 dark:text-amber-300" : "text-muted-foreground"]}
+          data-testid="character-count"
+          data-over-limit={limit.over}
+          title={ui.text("ui_count_characters_limit_title", { count: limit.length, limit: limit.limit })}
+        >
+          {ui.text("ui_count_characters_limit", { count: limit.length, limit: limit.limit })}
+        </span>
+      {/if}
     </div>
+    {#if limit?.over}
+      <p class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200" role="status" data-testid="length-limit">
+        {lengthWarning ?? ui.text("ui_translation_editor_over_limit", { limit: limit.limit })}
+      </p>
+    {/if}
 
     {#if mode === "translation"}
       <div inert={disabled} aria-disabled={disabled} class:opacity-60={disabled}>
-        {#key identity}
-          <MessageComposer value={resourceValue} {locale} {authoring} {authoringBusy} {onoperation} onchange={onresourcechange} />
-        {/key}
+        {#if starterLoading}
+          <p class="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground" role="status">{ui.text("ui_translation_editor_starter_loading")}</p>
+        {:else}
+          {#key identity}
+            <MessageComposer value={resourceValue} {locale} {authoring} {authoringBusy} {onoperation} onchange={onresourcechange} {maxLength} {oncopysource} />
+          {/key}
+        {/if}
       </div>
     {:else}
       <Textarea

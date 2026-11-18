@@ -13,6 +13,8 @@ export interface ResourceEntry {
   authoring?: EditorMessageEntry["authoring"];
   context?: EditorMessageEntry["context"];
   semantic?: EditorMessageEntry["semantic"];
+  /** The effective `@maxLength` of the message in this locale. */
+  maxLength?: number;
 }
 
 export interface TranslationCell {
@@ -222,6 +224,7 @@ function resourceEntry(key: string, value: string, entry?: EditorMessageEntry): 
     authoring: entry?.authoring,
     context: entry?.context,
     semantic: entry?.semantic,
+    ...(entry?.maxLength === undefined ? {} : { maxLength: entry.maxLength }),
     structured: entry?.authoring?.supported === true
       ? entry.authoring.selectors.length > 0 || entry.authoring.inputs.some(input => input.declared) || (entry.semantic?.slots.length ?? 0) > 0
       : /^\s*\.(?:input|local|match)\b/m.test(value) || value.includes("{#"),
