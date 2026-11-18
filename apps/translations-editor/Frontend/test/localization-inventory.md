@@ -11,7 +11,7 @@ The runtime catalog is `EditorResources/runic.json` with grouped `en.rmf2` and
 | Command palette, groups, language and theme actions | `ui_command_palette_*`, `ui_palette_*`; locale context supplied to command construction and grouping |
 | Shared sidebar, dialogs, sheets, loading indicators | `ui_a11y_toggle_sidebar`, `ui_sidebar_*`, `ui_page_close`, `ui_loading`; hidden mobile description and screen-reader labels included |
 | Inline editor, structured-message composer, pattern editor | `ui_inline_*`, `ui_composer_*`, `ui_pattern_*`, `ui_common_*`; parameterized accessible names |
-| Toolbar, settings, sidebar panels, language summaries | `ui_toolbar_*`, `ui_settings_*`, `ui_project_*`, `ui_sidebar_*`, `ui_locale_*` |
+| Toolbar, settings, sidebar panels, language summaries, window title | `ui_toolbar_*`, `ui_settings_*`, `ui_project_*`, `ui_sidebar_*`, `ui_locale_*`, `ui_window_*`; coverage percentages use the interface locale's `Intl.NumberFormat` |
 | Workflow, quality findings and reports | `ui_workflow_*`, `ui_quality_*`, `ui_review_state_*`; quality findings regenerate when interface locale changes |
 | XLIFF and review interchange | `ui_interchange_*`, `ui_count_exported_*`, `ui_backend_refusal_*`; typed backend notices render through the current locale |
 | Hosted connection initialization and capability validation | `ui_host_*`; typed `UiNoticeError` preserves notice identity until rendering |

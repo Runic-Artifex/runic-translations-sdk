@@ -1,6 +1,6 @@
 <script lang="ts">
   import InlinePreview from "#lib/InlinePreview.svelte";
-  import { onMount, tick } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import { m } from "virtual:runic-translations/editor";
   import { baseLocale as uiBaseLocale, locales as uiLocales } from "virtual:runic-translations/editor/runtime";
   import { onBridgeConnection, onWindowLocale, windowLocale } from "@runic-artifex/views";
@@ -111,6 +111,8 @@
     type TranslationRow,
   } from "#lib/resource-model.js";
   import { createMessageSearchIndex } from "#lib/message-search.js";
+  import { catalogSelectionStateKey, readCatalogSelection, writeCatalogSelection } from "#lib/catalog-selection.js";
+  import { editorWindowTitle } from "#lib/window-title.js";
   import {
     effectiveReviewState,
     bidiIssues,
@@ -299,6 +301,8 @@
   });
   let hasUnsavedRepair = $derived(repairDocument !== undefined && repairText !== repairDocument.content);
   let hasUnsavedWork = $derived(saveCoordinator.hasUnsaved || hasUnsavedRepair);
+  // "<catalog> – Runic Translations Editor", marked while work is unsaved; the product name without a catalog (#225 P14).
+  let windowTitle = $derived(editorWindowTitle(ui, snapshot?.pendingTransaction === undefined ? snapshot?.catalog?.id : undefined, hasUnsavedWork));
   // What the toolbar names as unsaved: text in some documents, review status, or both.
   let unsavedDetail = $derived.by(() => {
     const summary = saveCoordinator.unsavedSummary;
@@ -708,6 +712,14 @@
       selectedLocale = next.catalog?.defaultLocale ?? next.catalog?.locales[0]?.tag ?? "";
     }
     const remembered = resetSelection && next.catalog ? catalogViews.get(catalogViewKey(next)) : undefined;
+    // Without a view of this session, the selection the catalog had when it was last open (#225 P24).
+    const stored = resetSelection && next.catalog && remembered === undefined
+      ? readCatalogSelection(getLocalEditorState(catalogSelectionStateKey), catalogViewKey(next))
+      : undefined;
+    if (stored) {
+      if (nextRows.some((row) => row.key === stored.key)) selectedKey = stored.key;
+      if (next.catalog?.locales.some((locale) => locale.tag === stored.locale)) selectedLocale = stored.locale;
+    }
     if (remembered) {
       if (nextRows.some((row) => row.key === remembered.key)) selectedKey = remembered.key;
       if (next.catalog?.locales.some((locale) => locale.tag === remembered.locale)) selectedLocale = remembered.locale;
@@ -965,6 +977,12 @@
   function setCurrentReviewState(state: EditorReviewState): void {
     if (reviewMutationBlocked) return;
     review.setState(selectedKey, selectedLocale, state, previewController.samples, translatedIn(selectedKey, selectedLocale));
+  }
+
+  // The translator checked a stale state against the current source text and confirms it (#225 P20).
+  function confirmCurrentReview(): void {
+    if (reviewMutationBlocked) return;
+    review.confirm(selectedKey, selectedLocale, previewController.samples, translatedIn(selectedKey, selectedLocale));
   }
 
   function setCurrentReviewNote(note: string): void {
@@ -1560,6 +1578,25 @@
     }
   }
 
+  // The selected locale and message of the open catalog, restored on the next launch (#225 P24).
+  $effect(() => {
+    const current = snapshot;
+    const key = selectedKey;
+    const locale = selectedLocale;
+    if (current?.catalog === undefined || key === "" || locale === "") return;
+    untrack(() => {
+      const catalog = catalogViewKey(current);
+      const raw = getLocalEditorState(catalogSelectionStateKey);
+      const stored = readCatalogSelection(raw, catalog);
+      if (stored?.key === key && stored.locale === locale) return;
+      try {
+        setLocalEditorState(catalogSelectionStateKey, writeCatalogSelection(raw, catalog, { key, locale }));
+      } catch {
+        // Without the native state (a test page), the selection is not remembered.
+      }
+    });
+  });
+
   function rememberCatalogView(): void {
     if (snapshot?.catalog)
       catalogViews.set(catalogViewKey(snapshot), { key: selectedKey, locale: selectedLocale, filter, query, mode });
@@ -1962,7 +1999,7 @@
 </script>
 
 <svelte:head>
-  <title>{labels.title}</title>
+  <title>{windowTitle}</title>
     <meta name="description" content={ui.text("ui_page_meta_description")} />
 </svelte:head>
 <svelte:window onkeydown={handleKeyboard} onbeforeunload={protectDraft} />
@@ -2185,6 +2222,7 @@
             activePseudoLocale={pseudoLocalization ? previewController.pseudoLocale : undefined}
             onselectpseudo={selectPseudoLocale}
             bind:open={languagesOpen}
+            {uiLocale}
           />
         {/snippet}
 
@@ -2323,6 +2361,7 @@
             qualityIssues={currentQuality}
             suggestions={memorySuggestions}
             onstatechange={setCurrentReviewState}
+            onconfirm={confirmCurrentReview}
             onnotechange={setCurrentReviewNote}
             ondiscard={discardReview}
             onterminology={() => terminologyDialogOpen = true}

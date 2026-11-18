@@ -3715,7 +3715,7 @@ ui {
 }
 ui {
   quality {
-    stale = Der Ausgangstext wurde nach dem Speichern dieses Prüfstatus geändert.
+    stale = Der Ausgangstext wurde geändert, nachdem dieser Prüfstatus gespeichert wurde. Vergleiche die Übersetzung mit dem aktuellen Ausgangstext und bestätige sie oder markiere sie im Workflow-Bereich zur Prüfung.
   }
 }
 ui {
@@ -4620,5 +4620,39 @@ ui {
 ui {
   translation {
     editor_starter_loading = Leere Übersetzung wird vorbereitet…
+  }
+}
+ui {
+  workflow {
+    stale_explanation =
+      .input {$state :string}
+      {{Der Ausgangstext wurde geändert, nachdem diese Nachricht als „{$state}“ markiert wurde. Vergleiche die Übersetzung mit dem aktuellen Ausgangstext im Bereich darunter und bestätige sie oder markiere sie zur Prüfung.}}
+  }
+}
+ui {
+  workflow {
+    confirm_translation = Übersetzung bestätigen
+  }
+}
+ui {
+  workflow {
+    confirm_translation_title = Erfasst den Status erneut für den aktuellen Ausgangstext; er wird mit den anderen Änderungen gespeichert.
+  }
+}
+ui {
+  workflow {
+    mark_needs_review = Zur Prüfung markieren
+  }
+}
+ui {
+  window {
+    title_product = Runic Translations Editor
+  }
+}
+ui {
+  window {
+    title_catalog =
+      .input {$catalog :string}
+      {{{$catalog} – Runic Translations Editor}}
   }
 }

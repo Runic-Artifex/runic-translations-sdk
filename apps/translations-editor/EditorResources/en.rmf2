@@ -3715,7 +3715,7 @@ ui {
 }
 ui {
   quality {
-    stale = Source changed after this review state was recorded.
+    stale = The source text changed after this review state was recorded. Check the translation against the current source text, then confirm it or mark it for review in the workflow panel.
   }
 }
 ui {
@@ -4620,5 +4620,39 @@ ui {
 ui {
   translation {
     editor_starter_loading = Preparing an empty translation…
+  }
+}
+ui {
+  workflow {
+    stale_explanation =
+      .input {$state :string}
+      {{The source text changed after this message was marked “{$state}”. Check the translation against the current source text in the source panel below, then confirm it or mark it for review.}}
+  }
+}
+ui {
+  workflow {
+    confirm_translation = Confirm translation
+  }
+}
+ui {
+  workflow {
+    confirm_translation_title = Records the state again for the current source text; it is saved with your other changes.
+  }
+}
+ui {
+  workflow {
+    mark_needs_review = Mark needs review
+  }
+}
+ui {
+  window {
+    title_product = Runic Translations Editor
+  }
+}
+ui {
+  window {
+    title_catalog =
+      .input {$catalog :string}
+      {{{$catalog} – Runic Translations Editor}}
   }
 }
