@@ -568,7 +568,7 @@ public static partial class TranslationCompiler
 
     // The closest base-locale path for RTR0011: the same path ignoring case and separators, else
     // a small edit distance. Returns null when nothing is close enough to be a likely typo.
-    private static string? SuggestKey(string path, IReadOnlyList<string> candidates)
+    internal static string? SuggestKey(string path, IReadOnlyList<string> candidates)
     {
         static string Normalize(string value) => value.Replace('.', '_').Replace('-', '_').ToLowerInvariant();
         string normalized = Normalize(path);

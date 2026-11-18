@@ -218,11 +218,22 @@ internal static class TranslationReviewFile
         return stale;
     }
 
-    /// <summary>The <c>RTR0090</c> warnings of <see cref="Stale"/>, each naming its message and locale.</summary>
-    internal static IReadOnlyList<TranslationDiagnostic> StaleDiagnostics(Rmf2ProjectCompilation compilation, TranslationInterchangeReview review) =>
-        Stale(compilation, review).Select(static stale => new TranslationDiagnostic(StaleCode, TranslationDiagnosticSeverity.Warning,
-            $"The '{stale.Entry.Locale}' translation of '{stale.Entry.Key}' ({StateText(stale.Entry.State)}) predates a change to its source; review it, then record it with runic-translations review mark --key {stale.Entry.Key} --locale {stale.Entry.Locale} --state <state>.",
-            stale.Location) { MessageKey = stale.Entry.Key, Locale = stale.Entry.Locale }).ToArray();
+    /// <summary>
+    /// The <c>RTR0090</c> warnings of <see cref="Stale"/>, each naming its message by its logical key (<c>common.cancel</c>)
+    /// and its locale; <see cref="TranslationDiagnostic.MessageKey"/> stays the canonical key of the review entry.
+    /// </summary>
+    internal static IReadOnlyList<TranslationDiagnostic> StaleDiagnostics(Rmf2ProjectCompilation compilation, TranslationInterchangeReview review)
+    {
+        IReadOnlyDictionary<string, IReadOnlyList<string>> paths = compilation.Project is { } project
+            ? Rmf2MessageKeys.Paths(project) : new Dictionary<string, IReadOnlyList<string>>();
+        return Stale(compilation, review).Select(stale =>
+        {
+            string logical = Rmf2MessageKeys.Display(paths, stale.Entry.Key);
+            return new TranslationDiagnostic(StaleCode, TranslationDiagnosticSeverity.Warning,
+                $"The '{stale.Entry.Locale}' translation of '{logical}' ({StateText(stale.Entry.State)}) predates a change to its source; review it, then record it with runic-translations review mark --key {logical} --locale {stale.Entry.Locale} --state <state>.",
+                stale.Location) { MessageKey = stale.Entry.Key, Locale = stale.Entry.Locale };
+        }).ToArray();
+    }
 
     /// <summary>The <c>RTR0091</c> warning for a review file that cannot be read.</summary>
     internal static TranslationDiagnostic InvalidDiagnostic(string displayPath, TranslationInterchangeException exception) =>

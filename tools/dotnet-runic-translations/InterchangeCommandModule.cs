@@ -53,7 +53,7 @@ internal static class ReviewCommandModule
     internal static CommandOutcome<TranslationsToolCommandResult> Mark(
         [FromServices] ITranslationsToolCommandOperations operations,
         [Option("--project", Description = "Translations directory or its runic.json. Defaults to ./runic.json, then ./translations/runic.json.", ValueName = "directory")] string? project,
-        [Option("--key", Required = true, AllowMultipleValues = true, ValueName = "key", Description = "Message key; repeatable.")] IReadOnlyList<string> keys,
+        [Option("--key", Required = true, AllowMultipleValues = true, ValueName = "key", Description = "A message, as its logical key (common.cancel) or canonical key (common_cancel); repeatable.")] IReadOnlyList<string> keys,
         [Option("--locale", Required = true, ValueName = "locale", Description = "A translated locale of the catalog.")] string locale,
         [Option("--state", Required = true, ValueName = "state", Description = "draft, translated, needs-review or approved.")] string state,
         [Option("--note", ValueName = "text", Description = "A review note to store with the entries.")] string? note) =>

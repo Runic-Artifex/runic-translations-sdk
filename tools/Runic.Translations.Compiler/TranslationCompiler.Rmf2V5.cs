@@ -270,7 +270,7 @@ public static partial class TranslationCompiler
                 if (entries[locale.Tag].TryGetValue(pair.Key, out var translated))
                 {
                     ValidateCallerContract(pair.Value, translated);
-                    Rmf2ProjectMarkupV5.ValidateSlots(pair.Key, requirements, translated.Linked, translated.Source.Node.NameLocation, diagnostics);
+                    Rmf2ProjectMarkupV5.ValidateSlots(Rmf2MessageKeys.Logical(pair.Value.Source.Path), requirements, translated.Linked, translated.Source.Node.NameLocation, diagnostics);
                     if (!ReferenceEquals(translated, pair.Value)) { ValidateStructure(pair.Value, translated); ValidateInputParity(pair.Value, translated); }
                     ValidateMaxLength(pair.Value, translated);
                     names.UnionWith(translated.Linked.Names);
@@ -307,7 +307,7 @@ public static partial class TranslationCompiler
             foreach (var entry in entries.Values.Where(locale => locale.ContainsKey(pair.Key)).Select(locale => locale[pair.Key]))
             {
                 ValidateCallerContract(pair.Value, entry);
-                Rmf2ProjectMarkupV5.ValidateSlots(pair.Key, requirements, entry.Linked, entry.Source.Node.NameLocation, diagnostics);
+                Rmf2ProjectMarkupV5.ValidateSlots(Rmf2MessageKeys.Logical(pair.Value.Source.Path), requirements, entry.Linked, entry.Source.Node.NameLocation, diagnostics);
                 if (!ReferenceEquals(entry, pair.Value)) ValidateStructure(pair.Value, entry);
                 names.UnionWith(entry.Linked.Names);
             }
@@ -479,12 +479,12 @@ public static partial class TranslationCompiler
             ValidatePluralCategories(source, result.Message);
             ValidateFormattedBooleans(source, result.Message);
             if (result.Message.Variants.Any(variant => variant.Nodes.Count == 0))
-                AddPolicyDiagnostic("RTR0021", manifest.Policy(source.Locale, ValidationMembers.EmptyValues), "Resource '" + source.Key + "' has an empty variant.", source.Source, new(source.Node.NameLocation.StartByte, source.Node.NameLocation.LengthBytes), diagnostics);
+                AddPolicyDiagnostic("RTR0021", manifest.Policy(source.Locale, ValidationMembers.EmptyValues), "Resource '" + Rmf2MessageKeys.Logical(source.Path) + "' has an empty variant.", source.Source, new(source.Node.NameLocation.StartByte, source.Node.NameLocation.LengthBytes), diagnostics);
             return new(source, markup.Link(result.Message, source.Node.NameLocation, diagnostics));
         }
         Rmf2ProjectEntryV5 Profile(Rmf2ProjectEntryV5 entry, string? expectedKind, SortedDictionary<string, Rmf2ProjectEntryV5> locale)
         {
-            var analysis = Rmf2DocumentProfileV5.Analyze(entry.Source.Key, entry.Linked.Message, expectedKind, markup.Contracts, entry.Source.Node.NameLocation, diagnostics);
+            var analysis = Rmf2DocumentProfileV5.Analyze(Rmf2MessageKeys.Logical(entry.Source.Path), entry.Linked.Message, expectedKind, markup.Contracts, entry.Source.Node.NameLocation, diagnostics);
             var updated = entry with { Linked = entry.Linked with { Message = analysis.Message } };
             profiles[updated] = analysis;
             kinds.TryAdd(entry.Source.Key, analysis.Kind);
@@ -504,14 +504,14 @@ public static partial class TranslationCompiler
                 if (!source.Variants.Any(variant => variant.Encoded == encoded))
                 {
                     var difference = Rmf2DocumentProfileV5.FirstDifference(sourceSkeletons, target.Variants[index].Skeleton!);
-                    diagnostics.Add("RTR0074", TranslationDiagnosticSeverity.Error, "Translated structure of '" + origin.Source.Key + "' does not match any source structure (structure is locked); first difference at '" +
+                    diagnostics.Add("RTR0074", TranslationDiagnosticSeverity.Error, "Translated structure of '" + Rmf2MessageKeys.Logical(origin.Source.Path) + "' does not match any source structure (structure is locked); first difference at '" +
                         difference.Path + "': expected " + difference.Expected + ", found " + difference.Found + ".", translated.Source.Node.NameLocation);
                     continue;
                 }
                 var keys = target.Message.Variants[index].Keys;
                 int same = Enumerable.Range(0, source.Message.Variants.Count).FirstOrDefault(candidate => SameKeys(source.Message.Variants[candidate].Keys, keys), -1);
                 if (same >= 0 && source.Variants[same].Encoded is { } expected && expected != encoded)
-                    diagnostics.Add("RTR0071", TranslationDiagnosticSeverity.Warning, "A translated variant of '" + origin.Source.Key + "' matches the structure of a different source variant, not the one with the same keys; it may have been copied from the wrong variant.", translated.Source.Node.NameLocation);
+                    diagnostics.Add("RTR0071", TranslationDiagnosticSeverity.Warning, "A translated variant of '" + Rmf2MessageKeys.Logical(origin.Source.Path) + "' matches the structure of a different source variant, not the one with the same keys; it may have been copied from the wrong variant.", translated.Source.Node.NameLocation);
             }
             static bool SameKeys(IReadOnlyList<Rmf2KeyV5> left, IReadOnlyList<Rmf2KeyV5> right) =>
                 left.Count == right.Count && left.Zip(right).All(pair => pair.First.Kind == pair.Second.Kind && (pair.First.Canonical ?? pair.First.Value) == (pair.Second.Canonical ?? pair.Second.Value));
@@ -520,7 +520,7 @@ public static partial class TranslationCompiler
         {
             foreach (var input in translated.Linked.Message.Inputs)
                 if (!origin.Linked.Message.Inputs.Any(expected => expected.Name == input.Name && expected.Type == input.Type))
-                    diagnostics.Add("RTR0016", TranslationDiagnosticSeverity.Error, "Translation introduces or changes caller input '" + input.Name + "' for '" + origin.Source.Key + "'.", translated.Source.Node.NameLocation);
+                    diagnostics.Add("RTR0016", TranslationDiagnosticSeverity.Error, "Translation introduces or changes caller input '" + input.Name + "' for '" + Rmf2MessageKeys.Logical(origin.Source.Path) + "'.", translated.Source.Node.NameLocation);
         }
         // RTR0094/RTR0095: plural or ordinal keys checked against the categories of the message's own locale, from
         // the generated CLDR rule metadata that both runtimes select with. A selector position whose keys are all

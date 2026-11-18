@@ -315,7 +315,7 @@ notices and the files written.
 ## Track review state and stale translations
 
 ```bash
-dotnet tool run runic-translations -- review mark --key greeting --locale de --state approved
+dotnet tool run runic-translations -- review mark --key cart.empty --locale de --state approved
 dotnet tool run runic-translations -- validate
 ```
 
@@ -329,7 +329,9 @@ MF2 form: spacing inside an expression or between a `.match`'s parts, literal qu
 escapes do not change it; different text, placeholders, functions, options or selectors do.
 
 - `review mark --key <key>... --locale <locale> --state draft|translated|needs-review|approved [--note <text>]`
-  creates or updates entries with the fingerprint of the current source. `--key` is repeatable.
+  creates or updates entries with the fingerprint of the current source. `--key` is repeatable and takes the
+  logical key (`cart.empty`, as diagnostics print it) or the canonical key (`cart_empty`, as the review file stores
+  it); an unknown key is reported with the closest logical key.
 - `xliff import` updates the file when it exists, or creates it with `--review`. A translation of a changed
   source keeps the fingerprint of the source the translator saw.
 - `validate` warns with `RTR0090` at the translation when its entry's fingerprint is not the current one:

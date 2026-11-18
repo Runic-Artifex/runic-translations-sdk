@@ -61,7 +61,7 @@ export function buildRows(
       const compilerEntriesCurrent = parsed?.content === content || content === document.content;
       const messageEntries = parsed?.content === content ? parsed.entries : document.entries;
       const safeEntries = compilerEntriesCurrent ? messageEntries : messageEntries?.map(entry => ({
-        key: entry.key, content: entry.content, valueStartByte: entry.valueStartByte, valueLengthBytes: entry.valueLengthBytes,
+        key: entry.key, path: entry.path, content: entry.content, valueStartByte: entry.valueStartByte, valueLengthBytes: entry.valueLengthBytes,
       }));
       for (const entry of flattenDocument(content, document.path, safeEntries)) {
         entries.set(entry.key, entry);

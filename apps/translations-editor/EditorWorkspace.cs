@@ -1452,7 +1452,7 @@ internal sealed class EditorWorkspace : IDisposable
 
     // The compiler's diagnostics and, with a review file, RTR0090 for stale review entries (or RTR0091 when the file
     // cannot be read), each attached to its message row where the check names one: the per-message checks carry their
-    // key and locale; any other diagnostic at a message name belongs to that message. Quick fixes are the compiler's
+    // key and locale (and the row its logical path); any other diagnostic at a message name belongs to that message. Quick fixes are the compiler's
     // document repairs (RTR0050, RTR0078) and project repairs (RTR0095: add the missing plural variants).
     private EditorDiagnostic[] Diagnostics(WorkspaceState state, CancellationToken cancellationToken = default)
     {
@@ -1471,7 +1471,9 @@ internal sealed class EditorWorkspace : IDisposable
             catch (Exception exception) when (exception is TranslationEditorStateException or IOException or UnauthorizedAccessException) { /* The review snapshot reports it. */ }
         }
         var rows = new Dictionary<(string Path, int Start), (string Key, string Locale)>();
-        foreach (Rmf2LocaleV5 locale in (compilation.Project ?? reviewCompilation.Project)?.Locales ?? [])
+        Rmf2ProjectV5? rowProject = compilation.Project ?? reviewCompilation.Project;
+        IReadOnlyDictionary<string, IReadOnlyList<string>> messagePaths = rowProject is null ? new Dictionary<string, IReadOnlyList<string>>() : Rmf2MessageKeys.Paths(rowProject);
+        foreach (Rmf2LocaleV5 locale in rowProject?.Locales ?? [])
             foreach (Rmf2TranslationV5 resource in locale.DirectResources)
                 rows.TryAdd((resource.SourceLocation.Path, resource.SourceLocation.StartByte), (resource.Key, locale.Tag));
         var sources = state.Files.ToDictionary(file => file.Path, file => Source(file.Path, file.Content), StringComparer.Ordinal);
@@ -1517,7 +1519,7 @@ internal sealed class EditorWorkspace : IDisposable
                 location.Column,
                 location.EndLine,
                 location.EndColumn, null, span, source is null ? null : sourceRevisions.GetValueOrDefault(source.Path), fixes,
-                row?.Key, row?.Locale);
+                row?.Key, row?.Locale, row is { } about && messagePaths.TryGetValue(about.Key, out var messagePath) ? messagePath : null);
         }
         return result;
     }
@@ -1945,8 +1947,9 @@ internal sealed class EditorWorkspace : IDisposable
     private EditorMessageEntry[] ReadEntries(string path, string content, Rmf2ProjectCompilation compilation)
     {
         var resources = compilation.Project?.Locales.SelectMany(locale => locale.DirectResources).ToArray() ?? [];
-        EditorMessageEntry Entry(string key, string message, int start, int length, Rmf2ResourceNode? node)
+        EditorMessageEntry Entry(IReadOnlyList<string> logicalPath, string message, int start, int length, Rmf2ResourceNode? node)
         {
+            string key = Rmf2MessageKeys.Canonical(logicalPath);
             var linked = resources.FirstOrDefault(resource => resource.Key == key && resource.SourceLocation.Path == path);
             var source = Source(path, message);
             string locale = linked?.ContentLocale ?? Rmf2Catalog().Locale(path);
@@ -1973,18 +1976,21 @@ internal sealed class EditorWorkspace : IDisposable
                     projection.Inputs.Select(input => new EditorMessageInput(input.Name, input.Type, input.Function, input.Declared)).ToArray(),
                     projection.Selectors, projection.SelectorFunctions, projection.Variants.Select(variant => new EditorMessageVariant(variant.Id, variant.Keys, variant.Pattern, variant.StartByte, variant.LengthBytes)).ToArray(),
                     projection.PluralCategories, projection.SelectorPluralCategories, projection.CldrVersion), context,
-                new EditorMessageSemantic(semantic.Text, semantic.Placeholders, semantic.Slots, semantic.Supported, semantic.HasBoundaryWhitespace));
+                new EditorMessageSemantic(semantic.Text, semantic.Placeholders, semantic.Slots, semantic.Supported, semantic.HasBoundaryWhitespace),
+                logicalPath.ToArray());
         }
         if (path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
         {
             var workspace = Rmf2Catalog();
             return Rmf2ResourceReader.Read(Source(path, content)).Nodes.Where(node => !node.IsGroup)
-                .Select(node => Entry(string.Join('_', workspace.LogicalPath(path, node)), node.Message!, node.MessageByteMap[0], node.MessageByteMap[^1] - node.MessageByteMap[0], node)).ToArray();
+                .Select(node => Entry(workspace.LogicalPath(path, node), node.Message!, node.MessageByteMap[0], node.MessageByteMap[^1] - node.MessageByteMap[0], node)).ToArray();
         }
         if (path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase))
         {
-            string key = resources.FirstOrDefault(resource => resource.SourceLocation.Path == path)?.Key ?? Path.GetFileNameWithoutExtension(path);
-            return [Entry(key, content, 0, StrictUtf8.GetByteCount(content), null)];
+            // A direct message document is one message; its path is the compiled contract's, else the file name.
+            string? key = resources.FirstOrDefault(resource => resource.SourceLocation.Path == path)?.Key;
+            IReadOnlyList<string>? logical = key is not null && compilation.Project is { } project && Rmf2MessageKeys.Paths(project).TryGetValue(key, out var found) ? found : null;
+            return [Entry(logical ?? [key ?? Path.GetFileNameWithoutExtension(path)], content, 0, StrictUtf8.GetByteCount(content), null)];
         }
         return [];
     }
