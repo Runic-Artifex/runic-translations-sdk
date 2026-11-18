@@ -156,6 +156,16 @@ message, and a key that names none is reported with the closest logical key.
   **Mark … reviewed** records its state again for the current source; to mark
   a message reviewed otherwise, use `review mark` or the editor.
 
+Beside the review file, `<catalog>.review-sources.json`
+(`runic.translations.review-sources/1`) keeps the source text each state was
+recorded for: one text per message and fingerprint, shared by all locales with
+that fingerprint. `review mark`, `xliff import`, the editor and the language
+server add the text of every entry they record and drop texts that no entry
+uses any more. Commit it with the review file. It only adds information: tools
+before 0.15 neither read nor write it, and an entry recorded without its text
+works as before, without the comparison below. The file can be deleted at any
+time, and a merge conflict in it can be resolved by keeping either side.
+
 ## Stale translations
 
 When a source message changes after its translation was made or approved, the
@@ -164,6 +174,15 @@ at the translation, `status` counts it in its `stale` column, and the next
 `xliff export` exports an approved translation as needs-review. Review the
 translation, then mark it again. Only real changes count: spacing, quoting or
 option order in the source do not make translations stale.
+
+In the editor, the workflow panel of a stale translation says so and offers
+**Confirm translation** (records the state again for the current source) and
+**Mark needs review**. When `<catalog>.review-sources.json` has the text the
+state was recorded for, the panel shows it as **Source when marked** above the
+**Current source**, with removed words struck through and added words
+highlighted, and placeholders as chips. A message with declarations or
+selectors is compared as its MF2 source. When only the message's inputs or
+their types changed, the panel says that the text reads the same.
 
 ## Plurals and other selectors
 

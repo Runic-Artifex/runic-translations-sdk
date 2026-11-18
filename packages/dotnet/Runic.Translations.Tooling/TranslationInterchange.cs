@@ -525,6 +525,8 @@ public sealed class TranslationXliffUnitResult
     public string? SourceFingerprint { get; }
     /// <summary>Whether the live source changed since the document was exported.</summary>
     public bool SourceChanged { get; }
+    /// <summary>The MF2 base text <see cref="SourceFingerprint"/> was computed from, when it is known (an import against the live catalog).</summary>
+    internal string? SourceText { get; init; }
 }
 
 /// <summary>One imported MF2 message addressed by its generated-call identifier.</summary>

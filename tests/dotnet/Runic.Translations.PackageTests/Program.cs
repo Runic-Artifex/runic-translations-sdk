@@ -100,7 +100,8 @@ internal static class Program
             "schemas/locale-artifact-v5.schema.json",
             "schemas/external-pack-v5.schema.json",
             "schemas/web-module-manifest-v3.schema.json",
-            "schemas/interchange-review-v2.schema.json");
+            "schemas/interchange-review-v2.schema.json",
+            "schemas/review-sources-v1.schema.json");
         AssertPackageShape(commandLine,
             "Runic.Translations.CommandLine.nuspec",
             "README.md",

@@ -76,7 +76,24 @@ internal sealed class EditorReviewStore
         Terminology(files),
         notice,
         fingerprints,
-        migrationPending);
+        migrationPending,
+        RecordedSources(entries));
+
+    // The recorded base text of each stale entry (#225 P20), from the review file's companion; null when there is none.
+    private Dictionary<string, IReadOnlyDictionary<string, string>>? RecordedSources(IReadOnlyList<EditorReviewEntry> entries)
+    {
+        if (!entries.Any(static entry => entry.Stale && entry.SourceFingerprint is not null)) return null;
+        IReadOnlyDictionary<string, string> sources = TranslationReviewSources.Read(ReviewPath, _catalogId);
+        var recorded = new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal);
+        foreach (EditorReviewEntry entry in entries)
+        {
+            if (!entry.Stale || TranslationReviewSources.Text(sources, entry.Key, entry.SourceFingerprint) is not { } text) continue;
+            if (!recorded.TryGetValue(entry.Key, out IReadOnlyDictionary<string, string>? texts))
+                recorded[entry.Key] = texts = new Dictionary<string, string>(StringComparer.Ordinal);
+            ((Dictionary<string, string>)texts)[entry.SourceFingerprint!] = text;
+        }
+        return recorded.Count == 0 ? null : recorded;
+    }
 
     private static EditorTerminologyEntry[] Terminology(Files files) =>
         files.EditorState.State.Terminology.Select(static term => new EditorTerminologyEntry(term.Source, term.Preferred, term.Locale, term.Note)).ToArray();
@@ -110,6 +127,9 @@ internal sealed class EditorReviewStore
         var reviewEntries = new List<TranslationInterchangeReviewEntry>(entries.Count);
         var stateEntries = new List<TranslationEditorStateEntry>();
         var unstamped = new List<string>();
+        // The base text of each state recorded for the current source, kept beside the review file (TranslationReviewSources).
+        IReadOnlyDictionary<string, TranslationReviewSource>? currentSources = fingerprints is null ? null : TranslationReviewFile.CurrentSources(compilation!);
+        var sources = new List<TranslationReviewSource>();
         int changedSince = 0;
         foreach (EditorReviewEntry entry in entries)
         {
@@ -132,6 +152,8 @@ internal sealed class EditorReviewStore
                 !string.Equals(now, fingerprint, StringComparison.Ordinal)) changedSince++;
             // The note lives on the review entry, so an edited or cleared note (also one from XLIFF) is what is exported.
             reviewEntries.Add(new TranslationInterchangeReviewEntry(entry.Key, entry.Locale, state, entry.Note, fingerprint));
+            if (recorded && currentSources is not null && currentSources.TryGetValue(entry.Key, out TranslationReviewSource? source) && source.Fingerprint == fingerprint)
+                sources.Add(source);
             if (samples is not null) stateEntries.Add(new TranslationEditorStateEntry(entry.Key, entry.Locale, null, null, null, samples));
         }
         if (unstamped.Count != 0)
@@ -142,7 +164,10 @@ internal sealed class EditorReviewStore
             terminology.Select(static term => new TranslationTerminologyEntry(term.Source, term.Preferred, term.Locale, term.Note)).ToArray());
         byte[] reviewBytes = TranslationReviewFile.Render(review);
         if (files.ReviewBytes is null ? reviewEntries.Count != 0 : !files.ReviewBytes.AsSpan().SequenceEqual(reviewBytes))
+        {
+            RecordSources(sources);
             WriteReview(reviewBytes, files.ReviewBytes);
+        }
         bool stateExists = files.EditorState.Revision is not null;
         if (stateExists || stateEntries.Count != 0 || editorState.Terminology.Count != 0)
         {
@@ -220,6 +245,8 @@ internal sealed class EditorReviewStore
         if (!string.Equals(files.Revision, expectedRevision, StringComparison.Ordinal))
             throw new TranslationEditorStateException("The review data changed on disk. Reload before saving review data.");
         if (files.ReviewBytes is not null) File.Delete(ReviewPath);
+        string sources = TranslationReviewSources.PathFor(ReviewPath);
+        if (files.ReviewBytes is not null && File.Exists(sources)) File.Delete(sources);
         TranslationEditorStateStore.Delete(_root, _catalogId, files.EditorState.Revision);
     }
 
@@ -266,6 +293,18 @@ internal sealed class EditorReviewStore
             (File.Exists(ReviewPath) && (File.GetAttributes(ReviewPath) & FileAttributes.ReparsePoint) != 0))
             throw new TranslationEditorStateException("The review file cannot be a link or reparse point.");
         TranslationReviewFile.WriteRendered(ReviewPath, bytes, expected);
+    }
+
+    /// <summary>
+    /// Records base texts in the review file's companion (<see cref="TranslationReviewSources.Record"/>) before a write of
+    /// the review file; a companion that is a link or reparse point is left alone (the texts are then not recorded).
+    /// </summary>
+    internal void RecordSources(IReadOnlyCollection<TranslationReviewSource> sources)
+    {
+        if (sources.Count == 0) return;
+        string path = TranslationReviewSources.PathFor(ReviewPath);
+        if (File.Exists(path) && (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) return;
+        TranslationReviewSources.Record(ReviewPath, _catalogId, sources);
     }
 
     internal static string? CombinedRevision(byte[]? reviewBytes, string? editorStateRevision) =>

@@ -191,7 +191,8 @@ internal sealed class ReviewService
         IReadOnlyDictionary<string, string> fingerprints = TranslationInterchange.ComputeSourceFingerprints(review);
         string catalog = _reader.CatalogId;
         TranslationReviewFile.Update(TranslationReviewFile.PathFor(config, catalog), catalog,
-            existing => TranslationReviewFile.Mark(existing, catalog, keys.Where(fingerprints.ContainsKey), added.Tag, TranslationReviewState.Draft, null, fingerprints));
+            existing => TranslationReviewFile.Mark(existing, catalog, keys.Where(fingerprints.ContainsKey), added.Tag, TranslationReviewState.Draft, null, fingerprints),
+            TranslationReviewFile.SourcesOf(TranslationReviewFile.CurrentSources(review), keys));
     }
 
     // The draft review entries of a translated locale's messages that one saved file contains, and their text before the
@@ -230,7 +231,7 @@ internal sealed class ReviewService
         {
             string[] drafts = edited.Where(key => fingerprints.ContainsKey(key) && existing?.Entries.Any(entry => entry.Key == key && entry.Locale == locale && entry.State == TranslationReviewState.Draft) == true).ToArray();
             return drafts.Length == 0 ? existing : TranslationReviewFile.Mark(existing, catalog, drafts, locale, TranslationReviewState.Translated, null, fingerprints);
-        });
+        }, TranslationReviewFile.SourcesOf(TranslationReviewFile.CurrentSources(review), edited));
     }
 
     /// <summary>After a locale's removal: its entries leave the review file, as runic-translations locale remove drops them.</summary>

@@ -64,6 +64,7 @@
   import MessageList, { type MessageGroupCountKind, type MessageListItem } from "#lib/MessageList.svelte";
   import MessageToolbar, { type MessageFilter } from "#lib/MessageToolbar.svelte";
   import ReviewWorkflow from "#lib/ReviewWorkflow.svelte";
+  import { sourceDiff } from "#lib/source-diff.js";
   import SidebarSectionPanels from "#lib/SidebarSectionPanels.svelte";
   import TranslationEditor from "#lib/TranslationEditor.svelte";
   import ValidationPanel from "#lib/ValidationPanel.svelte";
@@ -455,6 +456,13 @@
   let currentReview = $derived(reviewIndex.get(reviewIdentity(selectedKey, selectedLocale)));
   let currentReviewState = $derived(effectiveReviewState(currentReview, currentCell?.entry !== undefined));
   let currentIsStale = $derived(isStale(currentReview));
+  // The base text a stale state was recorded for next to the current one, when the review file kept it (#225 P20).
+  let currentSourceDiff = $derived.by(() => {
+    if (!currentIsStale) return undefined;
+    const recorded = review.recordedSource(selectedKey, selectedLocale);
+    const current = selectedRow?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.value;
+    return recorded === undefined || typeof current !== "string" ? undefined : sourceDiff(recorded, current);
+  });
   let currentQuality = $derived(localeQualityFindings.filter((issue) => issue.key === selectedKey));
   let memorySuggestions = $derived(translationSuggestions(
     rows,
@@ -2505,6 +2513,8 @@
             message={displayNotice(review.message ?? notice("ui_page_project_notes"), ui)}
             disabled={snapshot.review?.error !== undefined || reviewMutationBlocked}
             stale={currentIsStale}
+            sourceDiff={currentSourceDiff}
+            sourceLocale={snapshot.catalog.defaultLocale}
             terminologyCount={review.terminology.length}
             qualityCount={localeQualityFindings.length}
             note={currentReview?.note ?? ""}

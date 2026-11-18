@@ -486,7 +486,9 @@ same policy. For Translations:
   package's `PublicAPI.Shipped.txt`, the `Runic.Translations.Build` MSBuild
   properties and the `dotnet-runic-translations` commands and options: the JSON
   contract `runic.translations.interchange-review/2` (schema `interchange-review-v2`,
-  also the optional `<catalog>.review.json`; readers keep reading `/1`) and the
+  also the optional `<catalog>.review.json`; readers keep reading `/1`), its
+  companion `runic.translations.review-sources/1` (schema `review-sources-v1`, the
+  optional `<catalog>.review-sources.json`; readers ignore unknown members) and the
   XLIFF profile `runic.xliff21.closed-text` version 3 (import keeps reading
   version 2); the
   `runic.translations.editor-diagnostics/1` bundle only as input of

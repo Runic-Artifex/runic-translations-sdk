@@ -93,7 +93,7 @@ internal static class TranslationXliffReader
         {
             units.Add(new TranslationXliffUnitResult(decision.Key, decision.Outcome, decision.Code, decision.Message,
                 decision.Outcome == TranslationXliffUnitOutcome.Applied ? decision.State : null,
-                decision.SourceFingerprint, decision.SourceChanged));
+                decision.SourceFingerprint, decision.SourceChanged) { SourceText = decision.SourceText });
             if (decision.Outcome != TranslationXliffUnitOutcome.Applied) continue;
             messages.Add(new TranslationMf2Document(decision.Key, Encoding.UTF8.GetBytes(decision.Pattern! + "\n")));
             if (decision.ExplicitState)
@@ -324,6 +324,7 @@ internal static class TranslationXliffReader
         internal string? Note { get; init; }
         internal string? SourceFingerprint { get; init; }
         internal bool SourceChanged { get; init; }
+        internal string? SourceText { get; init; }
 
         internal static UnitDecision Skip(string key, string code, string message) => new() { Key = key, Outcome = TranslationXliffUnitOutcome.Skipped, Code = code, Message = message };
         internal static UnitDecision Refuse(string key, string code, string message) => new() { Key = key, Outcome = TranslationXliffUnitOutcome.Refused, Code = code, Message = message };
@@ -541,6 +542,10 @@ internal static class TranslationXliffReader
             Note = note,
             SourceFingerprint = fileFingerprint,
             SourceChanged = sourceChanged,
+            // The base text the fingerprint was computed from, for the review file's companion (TranslationReviewSources):
+            // the live base message while it is unchanged, else the file's source when it hashes to the file's fingerprint.
+            SourceText = live is not null && !sourceChanged ? live.Text
+                : string.Equals(TranslationInterchangeFingerprint.UnitSource(key, sourcePattern, sourcePieces, recordedContract), fileFingerprint, StringComparison.Ordinal) ? sourcePattern : null,
         };
     }
 

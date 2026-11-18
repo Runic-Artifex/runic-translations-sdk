@@ -7,8 +7,15 @@ using Runic.Translations.Compiler;
 
 namespace Runic.Translations.Tooling;
 
-/// <summary>A review entry whose source changed after it was recorded, with the translation it describes (null when removed).</summary>
-internal sealed record TranslationReviewStaleEntry(TranslationInterchangeReviewEntry Entry, Rmf2TranslationV5? Translation, TextSourceLocation Location);
+/// <summary>
+/// A review entry whose source changed after it was recorded, with the translation it describes (null when removed) and
+/// the base text it was recorded for (<see cref="RecordedSource"/>, when <see cref="TranslationReviewSources"/> kept it).
+/// </summary>
+internal sealed record TranslationReviewStaleEntry(TranslationInterchangeReviewEntry Entry, Rmf2TranslationV5? Translation, TextSourceLocation Location)
+{
+    /// <summary>The MF2 base text the entry was recorded for, or null when no writer recorded it.</summary>
+    internal string? RecordedSource { get; init; }
+}
 
 /// <summary>
 /// The optional, SDK-owned review file <c>&lt;catalog&gt;.review.json</c> beside runic.json
@@ -95,6 +102,42 @@ internal static class TranslationReviewFile
     {
         ArgumentNullException.ThrowIfNull(bytes);
         Replace(path, bytes, expected, compare: true);
+    }
+
+    /// <summary>
+    /// As <see cref="Update(string, string, Func{TranslationInterchangeReview?, TranslationInterchangeReview?})"/>, recording
+    /// <paramref name="sources"/> (the base text of each entry the change records) in the companion file first
+    /// (<see cref="TranslationReviewSources"/>), so a reader that sees the new entries also sees their text.
+    /// </summary>
+    internal static TranslationInterchangeReview? Update(string path, string catalog, Func<TranslationInterchangeReview?, TranslationInterchangeReview?> change,
+        IEnumerable<TranslationReviewSource> sources)
+    {
+        TranslationReviewSources.Record(path, catalog, sources);
+        return Update(path, catalog, change);
+    }
+
+    /// <summary>
+    /// The current base text of every canonical message with its per-unit fingerprint, by key: what a writer records
+    /// beside an entry it stamps with that fingerprint. <paramref name="compilation"/> must have succeeded (a review compilation).
+    /// </summary>
+    internal static IReadOnlyDictionary<string, TranslationReviewSource> CurrentSources(Rmf2ProjectCompilation compilation) =>
+        TranslationInterchangeProjectionAdapter.From(compilation).CanonicalUnits.ToDictionary(static unit => unit.Key,
+            static unit => new TranslationReviewSource(unit.Key, unit.SourceFingerprint, unit.Text), StringComparer.Ordinal);
+
+    /// <summary>The current base texts of <paramref name="keys"/> (unknown keys are left out).</summary>
+    internal static TranslationReviewSource[] SourcesOf(IReadOnlyDictionary<string, TranslationReviewSource> current, IEnumerable<string> keys) =>
+        keys.Distinct(StringComparer.Ordinal).Select(key => current.GetValueOrDefault(key)).OfType<TranslationReviewSource>().ToArray();
+
+    /// <summary>
+    /// The base texts an XLIFF import records: for each applied unit whose entry in <paramref name="review"/> (the review
+    /// file after <see cref="MergeImport"/>) has the unit's fingerprint, the text that fingerprint was computed from.
+    /// </summary>
+    internal static TranslationReviewSource[] ImportSources(TranslationXliffImportResult import, TranslationInterchangeReview review)
+    {
+        var entries = review.Entries.Where(entry => entry.Locale == import.TargetLocale).ToDictionary(static entry => entry.Key, StringComparer.Ordinal);
+        return import.Units.Where(unit => unit.Outcome == TranslationXliffUnitOutcome.Applied && unit.SourceText is not null && unit.SourceFingerprint is not null &&
+                entries.TryGetValue(unit.Key, out TranslationInterchangeReviewEntry? entry) && entry.SourceFingerprint == unit.SourceFingerprint)
+            .Select(static unit => new TranslationReviewSource(unit.Key, unit.SourceFingerprint!, unit.SourceText!)).ToArray();
     }
 
     /// <summary>
@@ -198,7 +241,12 @@ internal static class TranslationReviewFile
     /// <c>validate</c> warns about each (RTR0090), <c>status</c> counts them, and the editor and language server mark them.
     /// A removed translation still counts unless its entry is a draft. The location is the translation, else the base message.
     /// </summary>
-    internal static IReadOnlyList<TranslationReviewStaleEntry> Stale(Rmf2ProjectCompilation compilation, TranslationInterchangeReview review)
+    internal static IReadOnlyList<TranslationReviewStaleEntry> Stale(Rmf2ProjectCompilation compilation, TranslationInterchangeReview review) =>
+        Stale(compilation, review, null);
+
+    /// <summary>As <see cref="Stale(Rmf2ProjectCompilation, TranslationInterchangeReview)"/>, with the recorded base text of each entry (<see cref="TranslationReviewSources.Read"/>).</summary>
+    internal static IReadOnlyList<TranslationReviewStaleEntry> Stale(Rmf2ProjectCompilation compilation, TranslationInterchangeReview review,
+        IReadOnlyDictionary<string, string>? sources)
     {
         ArgumentNullException.ThrowIfNull(compilation);
         ArgumentNullException.ThrowIfNull(review);
@@ -213,7 +261,10 @@ internal static class TranslationReviewFile
                 !baseResources.TryGetValue(entry.Key, out Rmf2TranslationV5? origin)) continue;
             Rmf2TranslationV5? translation = locale.DirectResources.FirstOrDefault(resource => resource.Key == entry.Key);
             if (translation is null && entry.State == TranslationReviewState.Draft) continue;
-            stale.Add(new TranslationReviewStaleEntry(entry, translation, translation?.SourceLocation ?? origin.SourceLocation));
+            stale.Add(new TranslationReviewStaleEntry(entry, translation, translation?.SourceLocation ?? origin.SourceLocation)
+            {
+                RecordedSource = sources is null ? null : TranslationReviewSources.Text(sources, entry.Key, entry.SourceFingerprint),
+            });
         }
         return stale;
     }

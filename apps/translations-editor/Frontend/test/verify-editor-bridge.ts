@@ -122,6 +122,11 @@ const { mockExecute } = await import("../src/lib/mock-bridge.ts");
 const loadedSnapshot = await mockExecute("LoadWorkspace", {}) as WorkspaceSnapshot;
 const stale = loadedSnapshot.diagnostics.find(diagnostic => diagnostic.id === "RTR0090");
 assert.deepEqual(stale?.messagePath, ["common_save"], "A per-message diagnostic must carry its message path.");
+// The recorded base text of a stale review state (issue #225, P20): by key, then by the entry's source fingerprint.
+const staleEntry = loadedSnapshot.review?.entries.find(item => item.stale === true);
+assert.equal(staleEntry?.sourceFingerprint, "sha256:outdated");
+assert.equal(loadedSnapshot.review?.recordedSources?.[staleEntry!.key]?.[staleEntry!.sourceFingerprint!], "Save all changes",
+  "A stale entry's recorded base text must be addressed by its key and source fingerprint.");
 const transformed = await mockExecute("TransformDocument", { path: "de/common_save.mf2", content: "Speichern\n" }) as EditorDocumentDraft;
 assert.deepEqual(transformed.entries.map(entry => [entry.key, entry.path]), [["common_save", ["common_save"]]],
   "A message entry must carry its logical path.");

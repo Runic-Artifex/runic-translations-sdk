@@ -1648,7 +1648,8 @@ internal sealed partial class Rmf2LanguageServer
         try
         {
             TranslationReviewFile.Update(path, project.Id, existing => TranslationReviewFile.Mark(existing, project.Id, [key], locale,
-                existing?.Entries.FirstOrDefault(entry => entry.Key == key && entry.Locale == locale)?.State ?? TranslationReviewState.Translated, null, fingerprints));
+                existing?.Entries.FirstOrDefault(entry => entry.Key == key && entry.Locale == locale)?.State ?? TranslationReviewState.Translated, null, fingerprints),
+                TranslationReviewFile.SourcesOf(TranslationReviewFile.CurrentSources(review), [key]));
         }
         catch (TranslationInterchangeException exception) { throw new TranslationAuthoringException("The review was not recorded: " + exception.Message); }
         _reviewViews.Clear();

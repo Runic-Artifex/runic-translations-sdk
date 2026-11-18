@@ -4770,6 +4770,38 @@ ui {
   }
 }
 ui {
+  workflow {
+    stale_diff_explanation =
+      .input {$state :string}
+      {{Der Ausgangstext wurde geändert, nachdem diese Nachricht als „{$state}“ markiert wurde. Sieh dir unten an, was sich geändert hat, und prüfe die Übersetzung. Bestätige sie dann oder markiere sie zur Prüfung.}}
+  }
+}
+ui {
+  workflow {
+    source_before = Ausgangstext beim Markieren
+  }
+}
+ui {
+  workflow {
+    source_now = Aktueller Ausgangstext
+  }
+}
+ui {
+  workflow {
+    source_removed = Entfernt:
+  }
+}
+ui {
+  workflow {
+    source_added = Hinzugefügt:
+  }
+}
+ui {
+  workflow {
+    source_same_text = Der Text ist gleich geblieben; die Platzhalter der Nachricht oder ihre Typen wurden geändert.
+  }
+}
+ui {
   window {
     title_product = Runic Translations Editor
   }

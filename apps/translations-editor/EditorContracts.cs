@@ -153,7 +153,11 @@ internal sealed record EditorReviewSnapshot(
     IReadOnlyDictionary<string, string>? Fingerprints = null,
     // Version 1 editor approvals wait to move into the review file (the base locale has errors): Entries shows them
     // read-only, and review data cannot be saved until they have moved.
-    bool MigrationPending = false);
+    bool MigrationPending = false,
+    // The base text each stale entry was recorded for, by message key and then source fingerprint, where a writer kept
+    // it beside the review file (<catalog>.review-sources.json): the editor shows it next to the current source. Absent
+    // when no stale entry has a recorded text.
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? RecordedSources = null);
 
 internal sealed record EditorReviewSaveRequest(
     string? ExpectedRevision,
@@ -386,7 +390,9 @@ internal sealed record PreparedInterchangeImport(
     IReadOnlyList<PreparedInterchangeDocument> Documents,
     // The review file after the import (null: unchanged) and the review revision it was computed from.
     byte[]? ReviewBytes,
-    string? ExpectedReviewRevision);
+    string? ExpectedReviewRevision,
+    // The base texts of the entries the import records, written beside the review file first (TranslationReviewSources).
+    IReadOnlyList<TranslationReviewSource>? Sources = null);
 
 internal sealed record PreparedInterchangeDocument(
     string Path,

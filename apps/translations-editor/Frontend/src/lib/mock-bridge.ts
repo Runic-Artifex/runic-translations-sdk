@@ -71,6 +71,8 @@ let snapshot: WorkspaceSnapshot = {
       { key: "dashboard_welcome", locale: "en", state: "needs-review", note: "Check the tone.", samples: { name: "Ada" } },
     ],
     terminology: [{ source: "Save", preferred: "Speichern", locale: "de", note: "Use for action buttons." }],
+    // The base text the stale approval was recorded for (#225 P20).
+    recordedSources: { common_save: { "sha256:outdated": "Save all changes" } },
   },
   history: { canUndo: false, canRedo: false },
 };
@@ -582,6 +584,8 @@ async function saveReview(request: EditorReviewSaveRequest) {
     revision: crypto.randomUUID(),
     entries: structuredClone(request.entries),
     terminology: structuredClone(request.terminology),
+    // The recorded texts of entries that are still stale stay available, as the editor's backend keeps them.
+    recordedSources: before?.recordedSources === undefined ? undefined : structuredClone(before.recordedSources),
   };
   recordReviewHistory(before, snapshot.review);
   destructiveConfirmation = undefined;

@@ -18,6 +18,8 @@
   import { Textarea } from "#lib/components/ui/textarea/index.js";
   import type { EditorDiagnostic, EditorDiagnosticQuickFix, EditorReviewState } from "#lib/contracts.js";
   import type { QualityIssue, TranslationSuggestion } from "#lib/review-model.js";
+  import { localeDirection } from "#lib/locale-text.js";
+  import type { SourceDiff, SourceDiffPart } from "#lib/source-diff.js";
   import { getUiText } from "#lib/ui-text.js";
 
   const ui = getUiText();
@@ -37,6 +39,8 @@
     message,
     disabled,
     stale,
+    sourceDiff,
+    sourceLocale = "",
     terminologyCount,
     qualityCount,
     note,
@@ -59,6 +63,10 @@
     message: string;
     disabled: boolean;
     stale: boolean;
+    /** A stale state's recorded base text compared with the current one; absent when no writer recorded the text. */
+    sourceDiff?: SourceDiff;
+    /** The base locale, for the language and direction of the compared texts. */
+    sourceLocale?: string;
     terminologyCount: number;
     qualityCount: number;
     note: string;
@@ -81,7 +89,13 @@
   // A translation that does not exist yet is not a draft of one: the badge says so until text is typed (#225 P2).
   let badgeLabel = $derived(notTranslated ? ui.text("ui_resource_not_translated") : stateLabel);
   let open = $state(false);
+  let sourceDirection = $derived(localeDirection(sourceLocale));
+  const chip = "mx-0.5 inline-flex h-6 items-center rounded-full bg-secondary px-2 align-baseline font-mono text-xs text-secondary-foreground";
 </script>
+
+<!-- The compared base text (#225 P20): removed words struck through in the recorded text, added ones marked in the current
+     text, placeholders as chips as in the source panel. -->
+{#snippet diffParts(parts: SourceDiffPart[])}{#each parts as part, index (index)}{#if part.kind === "text"}{#if part.change === "same"}{part.text}{:else if part.change === "removed"}<del class="rounded-sm bg-destructive/15 px-0.5 text-destructive decoration-destructive/70" data-change="removed"><span class="sr-only">{`${ui.text("ui_workflow_source_removed")} `}</span>{part.text}</del>{:else}<ins class="rounded-sm bg-primary/15 px-0.5 font-medium no-underline" data-change="added"><span class="sr-only">{`${ui.text("ui_workflow_source_added")} `}</span>{part.text}</ins>{/if}{:else if part.change === "same"}<span class={chip} data-placeholder={part.kind}>{part.syntax}</span>{:else if part.change === "removed"}<del class="{chip} ring-2 ring-destructive/60" data-placeholder={part.kind} data-change="removed"><span class="sr-only">{`${ui.text("ui_workflow_source_removed")} `}</span>{part.syntax}</del>{:else}<ins class="{chip} no-underline ring-2 ring-primary/60" data-placeholder={part.kind} data-change="added"><span class="sr-only">{`${ui.text("ui_workflow_source_added")} `}</span>{part.syntax}</ins>{/if}{/each}{/snippet}
 
 <Collapsible.Root bind:open class="group/workflow mx-auto mb-4 w-full max-w-[1000px]">
   <Card.Root size="sm" class="gap-0 py-0 shadow-none">
@@ -101,7 +115,24 @@
     {#if stale}
       <!-- The source text changed since the state was recorded: confirm it or mark it for review (#225 P20). -->
       <div class="flex flex-col gap-2 border-t px-4 py-3" role="group" aria-label={ui.text("ui_workflow_source_changed")} data-testid="workflow-stale">
-        <p class="text-sm">{ui.text("ui_workflow_stale_explanation", { state: stateLabel })}</p>
+        {#if sourceDiff === undefined}
+          <p class="text-sm">{ui.text("ui_workflow_stale_explanation", { state: stateLabel })}</p>
+        {:else}
+          <p class="text-sm">{ui.text("ui_workflow_stale_diff_explanation", { state: stateLabel })}</p>
+          <dl class="grid gap-2 rounded-lg border bg-muted/30 px-3 py-2" data-testid="workflow-source-diff" data-syntax={sourceDiff.syntax ? "true" : undefined}>
+            <div class="grid gap-0.5" data-testid="workflow-source-before">
+              <dt class="text-xs text-muted-foreground">{ui.text("ui_workflow_source_before")}</dt>
+              <dd class={["leading-7 whitespace-pre-wrap", sourceDiff.syntax ? "font-mono text-xs" : "text-sm"]} lang={sourceLocale || undefined} dir={sourceDirection}>{@render diffParts(sourceDiff.before)}</dd>
+            </div>
+            <div class="grid gap-0.5" data-testid="workflow-source-now">
+              <dt class="text-xs text-muted-foreground">{ui.text("ui_workflow_source_now")}</dt>
+              <dd class={["leading-7 whitespace-pre-wrap", sourceDiff.syntax ? "font-mono text-xs" : "text-sm"]} lang={sourceLocale || undefined} dir={sourceDirection}>{@render diffParts(sourceDiff.after)}</dd>
+            </div>
+          </dl>
+          {#if !sourceDiff.changed}
+            <p class="text-xs text-muted-foreground" data-testid="workflow-source-same">{ui.text("ui_workflow_source_same_text")}</p>
+          {/if}
+        {/if}
         <div class="flex flex-wrap gap-2">
           <Button size="sm" {disabled} title={ui.text("ui_workflow_confirm_translation_title")} data-testid="workflow-confirm" onclick={() => { if (!disabled) onconfirm(); }}>
             <CircleCheckBigIcon data-icon="inline-start" />
