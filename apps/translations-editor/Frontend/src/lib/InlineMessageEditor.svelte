@@ -324,7 +324,8 @@
       {#if index === 0}
         {@render insertionPoint(index, 0, ui.text("ui_inline_at_beginning"))}
       {/if}
-      {#if slot.text !== "" || editingSlot === index}
+      <!-- An empty pattern (a starter's variant) shows its empty text field, ready for typing. -->
+      {#if slot.text !== "" || editingSlot === index || (slots.length === 1 && slot.token === undefined)}
         <textarea
           {@attach registerTextarea(index)}
           class={[

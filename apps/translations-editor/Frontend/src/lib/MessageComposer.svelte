@@ -1,6 +1,7 @@
 <script lang="ts">
   import CirclePlusIcon from "@lucide/svelte/icons/circle-plus";
   import CodeXmlIcon from "@lucide/svelte/icons/code-xml";
+  import CopyIcon from "@lucide/svelte/icons/copy";
   import Trash2Icon from "@lucide/svelte/icons/trash-2";
   import { Badge } from "#lib/components/ui/badge/index.js";
   import { Button } from "#lib/components/ui/button/index.js";
@@ -12,6 +13,7 @@
   import { nextIdentifier, variantTitle, type InputType, type MessageInput } from "./message-composer";
   import type { EditorMessageOperation, EditorMessageProjection } from "./contracts";
   import type { ResourceValue } from "./resource-model";
+  import { lengthLimit, patternLength } from "./message-starter";
   import { localeDirection } from "#lib/locale-text.js";
   import { getUiText } from "#lib/ui-text.js";
 
@@ -22,9 +24,13 @@
     authoringBusy?: boolean;
     onchange: (value: ResourceValue) => void;
     onoperation?: (operation: EditorMessageOperation) => void | Promise<void>;
+    /** The message's `@maxLength`: each variant shows its length against it. */
+    maxLength?: number;
+    /** "Copy source" of a missing translation's starter. */
+    oncopysource?: () => void;
   }
 
-  let { value, locale, authoring, authoringBusy = false, onchange, onoperation }: Props = $props();
+  let { value, locale, authoring, authoringBusy = false, onchange, onoperation, maxLength, oncopysource }: Props = $props();
   const ui = getUiText();
   let rawMode = $state(false);
   let exactCaseValue = $state("");
@@ -46,7 +52,9 @@
   let primarySelector = $derived(authoring?.selectors[0]);
   let primaryIsNumeric = $derived(["plural", "ordinal"].includes(authoring?.selectorFunctions[0] ?? ""));
   let availableCases = $derived(primaryIsNumeric ? (authoring?.selectorPluralCategories?.[0] ?? authoring?.pluralCategories ?? []).filter(category => category !== "other" && !authoring?.variants.some(variant => variant.keys[0] === category)) : []);
-  let exactCaseDuplicate = $derived(authoring?.variants.some(variant => variant.keys[0] === exactCaseValue.trim() && variant.keys.slice(1).every(key => key === "*")) ?? false);
+  // Per-variant lengths where the composer shows variants of a message with a length limit.
+  let variantLimits = $derived(maxLength !== undefined && (authoring?.variants.length ?? 0) > 1);
+  let exactCaseDuplicate =$derived(authoring?.variants.some(variant => variant.keys[0] === exactCaseValue.trim() && variant.keys.slice(1).every(key => key === "*")) ?? false);
 
   function inputType(type: string, fn?: string): InputType {
     if (fn === "integer") return "int64";
@@ -89,11 +97,18 @@
       <h3 class="text-sm font-semibold">{ui.text("ui_composer_translate_message")}</h3>
       <p class="text-xs text-muted-foreground">{ui.text("ui_composer_write_naturally")} <code>{"{$count}"}</code> {ui.text("ui_composer_variables_become_chips")}</p>
     </div>
-    {#if canAuthor}
-      <Button variant="outline" size="sm" onclick={() => rawMode = !rawMode} aria-pressed={rawMode}>
-        <CodeXmlIcon data-icon="inline-start" />{ui.text("ui_composer_message_source")}
-      </Button>
-    {/if}
+    <div class="flex flex-wrap items-center gap-2">
+      {#if canAuthor && oncopysource !== undefined}
+        <Button variant="outline" size="sm" disabled={authoringBusy} title={ui.text("ui_composer_copy_source_title")} onclick={() => oncopysource?.()}>
+          <CopyIcon data-icon="inline-start" />{ui.text("ui_composer_copy_source")}
+        </Button>
+      {/if}
+      {#if canAuthor}
+        <Button variant="outline" size="sm" onclick={() => rawMode = !rawMode} aria-pressed={rawMode}>
+          <CodeXmlIcon data-icon="inline-start" />{ui.text("ui_composer_message_source")}
+        </Button>
+      {/if}
+    </div>
   </header>
 
   {#if rawMode || !canAuthor}
@@ -118,6 +133,15 @@
           <div class="flex flex-wrap items-center gap-2">
             <Card.Title>{title(variant.keys)}</Card.Title>
             {#if fallback}<Badge variant="secondary">{ui.text("ui_composer_required_fallback")}</Badge>{/if}
+            {#if variantLimits}
+              {@const limit = lengthLimit(patternLength(variant.pattern), maxLength)!}
+              <span
+                class={["text-[0.65rem] tabular-nums", limit.over ? "font-semibold text-amber-700 dark:text-amber-300" : "text-muted-foreground"]}
+                data-testid="variant-character-count"
+                data-over-limit={limit.over}
+                title={ui.text("ui_count_characters_limit_title", { count: limit.length, limit: limit.limit })}
+              >{ui.text("ui_count_characters_limit", { count: limit.length, limit: limit.limit })}</span>
+            {/if}
           </div>
           {#if variant.keys.length > 0}
             <Card.Action><Button variant="ghost" size="icon-sm" disabled={fallback || authoringBusy} aria-label={`${ui.text("ui_composer_remove")} ${title(variant.keys)}`} onclick={() => operation({ kind: "remove-variant", variantId: variant.id })}><Trash2Icon /></Button></Card.Action>

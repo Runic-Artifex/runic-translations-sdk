@@ -18,6 +18,8 @@ if (urlOrPrepare === "--prepare") {
     catalog: "runic-hosted-e2e",
     code: { namespace: "Runic.HostedBrowserProof", className: "Messages" },
     baseLocale: "de", locales: ["de", "en", "fr"],
+    // files.deleted exists in the base locale only: the missing translations a translator starts from (#225 P2).
+    validation: { translationCompleteness: "allow" },
     overrides: [{ catalog: "acme.table", from: "Acme.Table" }],
   }, null, 2) + "\n");
   // T5d: the acme.table library of the build-time override tests, installed as a restore leaves it: a NuGet package
@@ -33,8 +35,10 @@ if (urlOrPrepare === "--prepare") {
   await writeFile(join(workspace, "obj", "project.assets.json"), JSON.stringify({ version: 3,
     libraries: { "Acme.Table/1.0.0": { type: "package", path: "acme.table/1.0.0", files: ["runic/acme.table/de.rmf2", "runic/acme.table/en.rmf2", "runic/acme.table/runic.json"] } },
     packageFolders: { [resolve(workspace, "..", "packages") + "/"]: {} } }));
+  // A plural with a length limit that only the base locale (de) has.
+  const deleted = "  @maxLength 24\n  deleted =\n    .input {$count :integer}\n    .match $count\n    one {{Eine Datei gelöscht}}\n    * {{{$count} Dateien gelöscht}}\n";
   for (const [locale, cancel, save] of [["de", "Abbrechen", "Speichern"], ["en", "Cancel", "Save"], ["fr", "Annuler", "Enregistrer"]])
-    await writeFile(join(workspace, `${locale}.rmf2`), `${preservedComment}common {\n  cancel = ${cancel}\n  save = ${save}\n}\nfiles {\n  # Context for a selected-file count.\n  @tags files selection\n  @example {"count":1}\n  @example {"count":2}\n  selected =\n    .input {$count :integer}\n    .match $count\n    one {{One file selected}}\n    * {{{$count} files selected}}\n}\n`);
+    await writeFile(join(workspace, `${locale}.rmf2`), `${preservedComment}common {\n  cancel = ${cancel}\n  save = ${save}\n}\nfiles {\n  # Context for a selected-file count.\n  @tags files selection\n  @example {"count":1}\n  @example {"count":2}\n  selected =\n    .input {$count :integer}\n    .match $count\n    one {{One file selected}}\n    * {{{$count} files selected}}\n${locale === "de" ? deleted : ""}}\n`);
   console.log(`prepared real-host RMF2 fixture: ${workspace}`);
   process.exit(0);
 }
@@ -365,6 +369,92 @@ try {
   await editor().fill("Cancel");
   await waitFor(async () => await saveState() === "Saved", "pattern box edit reverted");
   if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "translate-view-en.png"), fullPage: true });
+
+  // A missing translation (#225 P2) opens in the visual composer on an empty starter shaped for the target locale
+  // (French: one, many and the fallback), under the source text, with nothing pre-filled and nothing written; its
+  // length limit (P21) shows at the field.
+  stage = "missing-translation-starter";
+  const frPath = join(workspace, "fr.rmf2");
+  const frSaved = await readFile(frPath, "utf8");
+  const variantBox = title => page.getByRole("textbox", { name: new RegExp(`^Translation for count: ${title}`) }).first();
+  const characterCount = async () => (await page.getByTestId("character-count").textContent())?.trim();
+  await page.getByRole("button", { name: /^fr / }).first().click();
+  await select("files_deleted");
+  await variantBox("Fallback").waitFor();
+  await page.getByRole("region", { name: "Source text (German)", exact: true }).getByText("Eine Datei gelöscht", { exact: true }).waitFor();
+  assert.equal(await page.getByText("Visual editing is unavailable for this message.", { exact: false }).count(), 0,
+    "A missing translation opens in the visual composer.");
+  for (const title of ["one", "many", "Fallback"]) assert.equal(await variantBox(title).inputValue(), "", `The ${title} variant is not empty.`);
+  assert.equal(await page.getByRole("textbox", { name: /^Translation for count: (few|other|two)/ }).count(), 0, "The starter has categories French does not use.");
+  assert.equal((await page.getByTestId("workflow-state").textContent())?.trim(), "Not translated");
+  assert.equal(await characterCount(), "0 / 24");
+  assert.deepEqual((await page.getByTestId("variant-character-count").allTextContents()).map(item => item.trim()), ["0 / 24", "0 / 24", "0 / 24"]);
+  // The composer's MF2 source of the starter is the starter, not the base text.
+  const composerSource = page.getByRole("textbox", { name: "Message source", exact: true });
+  await page.getByRole("button", { name: "Message source", exact: true }).first().click();
+  assert.equal(await composerSource.inputValue(), ".input {$count :integer}\n.match $count\none {{}}\nmany {{}}\n* {{}}");
+  await page.getByRole("button", { name: "Message source", exact: true }).first().click();
+  await variantBox("one").waitFor();
+  assert.equal(await saveState(), "Saved", "An empty starter is no unsaved change.");
+  assert.equal(await readFile(frPath, "utf8"), frSaved);
+
+  // Typing makes it a normal unsaved draft; the counter follows the longest variant and warns over the limit.
+  await variantBox("one").fill("Un fichier supprimé");
+  await waitFor(async () => await saveState() === "Unsaved changes: text in one document", "a starter with text is unsaved");
+  await waitFor(async () => await characterCount() === "19 / 24", "counter of the typed variant");
+  await variantBox("many").fill("Beaucoup de fichiers supprimés");
+  await waitFor(async () => await characterCount() === "30 / 24", "counter over the limit");
+  assert.equal(await page.getByTestId("character-count").getAttribute("data-over-limit"), "true");
+  await page.getByTestId("length-limit").waitFor();
+  assert.match(await page.getByTestId("length-limit").textContent(), /24/);
+  await variantBox("many").fill("De nombreux fichiers");
+  await variantBox("Fallback").fill("Des fichiers supprimés");
+  await waitFor(async () => await characterCount() === "22 / 24", "counter back under the limit");
+  assert.equal(await page.getByTestId("length-limit").count(), 0);
+  assert.deepEqual((await page.getByTestId("variant-character-count").allTextContents()).map(item => item.trim()), ["19 / 24", "20 / 24", "22 / 24"]);
+  if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "missing-translation-fr.png"), fullPage: true });
+  // Ctrl+S writes the message into its existing group (P7).
+  await page.keyboard.press("Control+s");
+  await waitFor(async () => (await readFile(frPath, "utf8")).includes("deleted ="), "saved starter in fr.rmf2");
+  await waitFor(async () => await saveState() === "Saved", "nothing unsaved after saving the starter");
+  const frWritten = await readFile(frPath, "utf8");
+  assert.equal((frWritten.match(/^files \{$/gm) ?? []).length, 1, "The new message opened a second files group.");
+  const filesGroup = frWritten.slice(frWritten.indexOf("files {\n"));
+  assert.ok(filesGroup.indexOf("selected =") < filesGroup.indexOf("deleted =") && filesGroup.indexOf("deleted =") < filesGroup.lastIndexOf("\n}\n"),
+    "The message is written inside its group, after its sibling.");
+  for (const line of [".match $count", "one {{Un fichier supprimé}}", "many {{De nombreux fichiers}}", "* {{Des fichiers supprimés}}"])
+    assert.ok(filesGroup.includes(line), `fr.rmf2 lacks ${line}`);
+  assert.ok(frWritten.startsWith(frSaved.slice(0, frSaved.indexOf("files {\n"))), "The rest of fr.rmf2 changed.");
+  assert.notEqual((await page.getByTestId("workflow-state").textContent())?.trim(), "Not translated");
+
+  // A starter cleared back to empty leaves the document clean (#231): nothing to save, no empty translation.
+  stage = "missing-translation-clear";
+  const enPath = join(workspace, "en.rmf2");
+  const enSaved = await readFile(enPath, "utf8");
+  await page.getByRole("button", { name: /^en / }).first().click();
+  await select("files_deleted");
+  await variantBox("Fallback").waitFor();
+  assert.equal(await page.getByRole("textbox", { name: /^Translation for count: many/ }).count(), 0, "English has no many variant.");
+  await variantBox("one").fill("One file deleted");
+  await waitFor(async () => await saveState() === "Unsaved changes: text in one document", "typed English starter is unsaved");
+  await variantBox("one").fill("");
+  await waitFor(async () => await saveState() === "Saved", "a cleared starter leaves the document clean");
+  assert.equal(await readFile(enPath, "utf8"), enSaved);
+
+  // "Copy source" fills every variant from the German base text; the placeholder stays a placeholder. Restoring the
+  // untouched starter in its MF2 source leaves the document clean again.
+  stage = "missing-translation-copy-source";
+  await page.getByRole("button", { name: "Copy source", exact: true }).click();
+  await waitFor(async () => (await variantBox("one").inputValue()) === "Eine Datei gelöscht", "Copy source fills the one variant");
+  await waitFor(async () => await saveState() === "Unsaved changes: text in one document", "copied source is unsaved");
+  await page.getByRole("button", { name: "Message source", exact: true }).first().click();
+  await waitFor(async () => (await composerSource.inputValue()) === ".input {$count :integer}\n.match $count\none {{Eine Datei gelöscht}}\n* {{{$count} Dateien gelöscht}}",
+    "copied starter source with the placeholder as an expression");
+  await composerSource.fill(".input {$count :integer}\n.match $count\none {{}}\n* {{}}");
+  await waitFor(async () => await saveState() === "Saved", "the restored empty starter leaves the document clean");
+  await page.getByRole("button", { name: "Message source", exact: true }).first().click();
+  assert.equal(await readFile(enPath, "utf8"), enSaved);
+  assert.deepEqual(pageErrors, [], "The production editor reported uncaught browser errors for a missing translation.");
 
   // The interface language switch sets the window's locale through the ViewModel, the page follows it, and the
   // choice survives a reload from the native editor state.

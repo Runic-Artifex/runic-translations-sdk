@@ -7,6 +7,7 @@ import type {
   WorkspaceSnapshot,
 } from "../contracts";
 import { buildRows } from "../resource-model";
+import { nextPlacement, removePlacement, type Placement } from "../message-starter";
 
 /** The compiler's reading of a draft: its entries are current while the draft still has this content. */
 export type ParsedDraft = { content: string; entries: EditorMessageEntry[] };
@@ -92,6 +93,8 @@ export class DraftStore {
   readonly #options: DraftStoreOptions;
   readonly #queues = new Map<string, Promise<void>>();
   readonly #versions = new Map<string, number>();
+  /** Messages the saved documents lack that `placeMessage` put into a draft, by document and key. */
+  readonly #placed = new Map<string, Placement>();
   #workspace = 0;
   #validationTimer: unknown;
 
@@ -157,6 +160,7 @@ export class DraftStore {
 
   /** Forgets the saved document's draft. Its generation stays, so an answer for the saved text is still dropped. */
   drop(path: string): void {
+    this.#forgetPlaced(path);
     delete this.drafts[path];
     this.generations[path] = this.generation(path) + 1;
     this.persist();
@@ -167,6 +171,7 @@ export class DraftStore {
     this.drafts = {};
     this.parsed = {};
     this.generations = {};
+    this.#placed.clear();
     this.recovered = this.#readStored(next);
   }
 
@@ -175,6 +180,7 @@ export class DraftStore {
     this.clearStored(this.#options.snapshot());
     this.drafts = {};
     this.generations = {};
+    this.#placed.clear();
   }
 
   /**
@@ -276,6 +282,56 @@ export class DraftStore {
   }
 
   /**
+   * Places a message the saved document lacks (a missing translation started empty in the composer) into the
+   * document's draft: inserted on its first text and updated after that, as a composer edit; with `value` undefined it
+   * is taken out again, so a translation cleared back to empty leaves the text the document had without it (the saved
+   * text when nothing else changed, which is then no draft). A newer placement of the same message supersedes it.
+   */
+  placeMessage(path: string, saved: string, key: string, value: string | undefined, done: (outcome: DraftOutcome) => void): Promise<void> {
+    const identity = `${path}\u0000${key}`;
+    let source: string | undefined;
+    return this.#submit({
+      path,
+      ticket: this.#ticket(),
+      supersede: this.#supersede(identity),
+      delay: 150,
+      source: () => this.content(path, saved),
+      request: (content) => {
+        source = content;
+        if (value !== undefined) return this.#options.bridge.transformDocument(path, content, key, value);
+        const placed = this.#placed.get(identity);
+        const without = placed === undefined ? undefined : removePlacement(content, placed);
+        // Nothing was placed (the insertion was superseded before it ran), or the message cannot be found again.
+        if (without === undefined) return undefined;
+        return this.#options.bridge.transformDocument(path, without);
+      },
+      rejection: "EDITOR-TRANSFORM",
+      commit: "draft",
+      done: (outcome) => {
+        if (outcome.kind === "applied" && source !== undefined) {
+          const next = value === undefined ? undefined : nextPlacement(this.#placed.get(identity), source, outcome.result.content);
+          if (next === undefined) this.#placed.delete(identity);
+          else this.#placed.set(identity, next);
+          // A document that does not exist yet has no saved text to fall back to: back at its empty start, no draft.
+          if (value === undefined && this.saved(path) === undefined && outcome.result.content === saved) {
+            delete this.drafts[path];
+            this.persist();
+          }
+        }
+        done(outcome);
+      },
+    });
+  }
+
+  /**
+   * Runs `task` in the document's queue, after the document's earlier requests and before later ones; a save waits for
+   * it as for them. The task reports its own failures.
+   */
+  queue(path: string, task: () => Promise<void>): Promise<void> {
+    return this.#enqueue(path, () => task().catch(() => undefined));
+  }
+
+  /**
    * Validates a raw-source draft the user typed: debounced, then queued behind the document's other requests, so its
    * entries never overwrite those of a composer edit that changed the draft meanwhile. Only the latest validation
    * counts.
@@ -363,10 +419,18 @@ export class DraftStore {
 
   // The one queue of a document: each request starts after the earlier ones finished and never rejects.
   #submit(job: DraftJob): Promise<void> {
-    const pending = (this.#queues.get(job.path) ?? Promise.resolve()).then(() => this.#run(job));
-    this.#queues.set(job.path, pending);
-    void pending.finally(() => { if (this.#queues.get(job.path) === pending) this.#queues.delete(job.path); });
+    return this.#enqueue(job.path, () => this.#run(job));
+  }
+
+  #enqueue(path: string, run: () => Promise<void>): Promise<void> {
+    const pending = (this.#queues.get(path) ?? Promise.resolve()).then(run);
+    this.#queues.set(path, pending);
+    void pending.finally(() => { if (this.#queues.get(path) === pending) this.#queues.delete(path); });
     return pending;
+  }
+
+  #forgetPlaced(path: string): void {
+    for (const identity of [...this.#placed.keys()]) if (identity.startsWith(`${path}\u0000`)) this.#placed.delete(identity);
   }
 
   async #run(job: DraftJob): Promise<void> {

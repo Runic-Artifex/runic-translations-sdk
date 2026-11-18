@@ -86,6 +86,24 @@ the source or **Overwrite** discards the dry run, so the import applies only a p
 made for the inputs shown; errors the catalog already had are listed as such. The
 editor and the language server read `runic.json` as the compiler does: a UTF-8 BOM
 is skipped and a duplicate member is the compiler's diagnostic.
+
+In the **Translation** view every locale except the base locale shows the base
+text read-only above its field. A message the locale does not have yet opens in
+the visual composer on an empty **starter** shaped for that locale: the base
+message's declarations and selectors, with one empty variant per plural category
+the locale uses (German `one` and `*`; Polish `one`, `few`, `many` and `*`). The
+base text is not filled in, the Workflow badge says **Not translated**, and
+**Message source** shows the starter. Nothing is written while the starter is
+empty. With its first text it becomes ordinary unsaved text of the locale's
+document, inserted into the message's existing group, saved by **Save** and kept
+for recovery; cleared back to empty before saving, the document is back at its
+saved text. **Copy source** fills each variant with the base variant that has the
+same keys, else with the base's `*` variant, keeping placeholders, as one edit.
+For a message with `@maxLength` the counter shows its text against the limit
+(`16 / 24`), counted as `RTR0098` counts it (the literal text of the longest
+variant; placeholder values are not counted), and each variant shows its own
+length; text over the limit is marked, and the reason is shown next to the field.
+
 The closed XLIFF 2.1 profile (version 3, shared with `runic-translations xliff`)
 deterministically round-trips plain RMF2 messages, with placeholders as `<ph>`,
 reports structured messages as semantic loss and skips them on import instead of
