@@ -5,7 +5,7 @@ import type { MockBridge, MockTypedView, MockCommandHandler, MockTypedOperation,
 import type { EditorDocumentToolsClient, EditorDocumentToolsState } from "./editorDocumentTools.js";
 
 /** The state of a mock EditorDocumentTools: the client state, with content as `{ kind, id }` and command state optional. */
-export type EditorDocumentToolsMockState = Omit<EditorDocumentToolsState, "isApplyAuthoringOperationExecuting" | "isApplyDiagnosticFixExecuting" | "isTransformDocumentExecuting" | "isPreviewMessageExecuting"> & Partial<Pick<EditorDocumentToolsState, "isApplyAuthoringOperationExecuting" | "isApplyDiagnosticFixExecuting" | "isTransformDocumentExecuting" | "isPreviewMessageExecuting">>;
+export type EditorDocumentToolsMockState = Omit<EditorDocumentToolsState, "isApplyAuthoringOperationExecuting" | "isApplyDiagnosticFixExecuting" | "isTransformDocumentExecuting" | "isPreviewMessageExecuting" | "isCreateMessageDraftExecuting" | "isApplyMessageDraftOperationExecuting"> & Partial<Pick<EditorDocumentToolsState, "isApplyAuthoringOperationExecuting" | "isApplyDiagnosticFixExecuting" | "isTransformDocumentExecuting" | "isPreviewMessageExecuting" | "isCreateMessageDraftExecuting" | "isApplyMessageDraftOperationExecuting">>;
 
 export interface EditorDocumentToolsMockDefinition {
   /** Presents the mock as content on route `content{id}`; omit it for the root route `editorDocumentTools`. */
@@ -16,6 +16,8 @@ export interface EditorDocumentToolsMockDefinition {
     readonly applyDiagnosticFix?: MockCommandHandler<EditorDocumentToolsMockState, [input: string]>;
     readonly transformDocument?: MockCommandHandler<EditorDocumentToolsMockState, [input: string]>;
     readonly previewMessage?: MockCommandHandler<EditorDocumentToolsMockState, [input: string]>;
+    readonly createMessageDraft?: MockCommandHandler<EditorDocumentToolsMockState, [input: string]>;
+    readonly applyMessageDraftOperation?: MockCommandHandler<EditorDocumentToolsMockState, [input: string]>;
   };
   /** Availability of commands with an argument. */
   readonly canExecute?: {
@@ -23,6 +25,8 @@ export interface EditorDocumentToolsMockDefinition {
     readonly applyDiagnosticFix?: (state: EditorDocumentToolsMockState, input: string) => boolean;
     readonly transformDocument?: (state: EditorDocumentToolsMockState, input: string) => boolean;
     readonly previewMessage?: (state: EditorDocumentToolsMockState, input: string) => boolean;
+    readonly createMessageDraft?: (state: EditorDocumentToolsMockState, input: string) => boolean;
+    readonly applyMessageDraftOperation?: (state: EditorDocumentToolsMockState, input: string) => boolean;
   };
   /** Operation handlers; without one an operation runs its command handler and succeeds. */
   readonly operations?: {
@@ -30,36 +34,44 @@ export interface EditorDocumentToolsMockDefinition {
     readonly applyDiagnosticFix?: MockTypedOperationHandler<EditorDocumentToolsMockState, string, void> | "manual";
     readonly transformDocument?: MockTypedOperationHandler<EditorDocumentToolsMockState, string, void> | "manual";
     readonly previewMessage?: MockTypedOperationHandler<EditorDocumentToolsMockState, string, void> | "manual";
+    readonly createMessageDraft?: MockTypedOperationHandler<EditorDocumentToolsMockState, string, void> | "manual";
+    readonly applyMessageDraftOperation?: MockTypedOperationHandler<EditorDocumentToolsMockState, string, void> | "manual";
   };
 }
 
 export interface EditorDocumentToolsMock extends MockTypedView<EditorDocumentToolsMockState, EditorDocumentToolsClient, "editorDocumentTools"> {
-  readonly operations: { readonly applyAuthoringOperation: readonly MockTypedOperation<string, void>[]; readonly applyDiagnosticFix: readonly MockTypedOperation<string, void>[]; readonly transformDocument: readonly MockTypedOperation<string, void>[]; readonly previewMessage: readonly MockTypedOperation<string, void>[]; };
+  readonly operations: { readonly applyAuthoringOperation: readonly MockTypedOperation<string, void>[]; readonly applyDiagnosticFix: readonly MockTypedOperation<string, void>[]; readonly transformDocument: readonly MockTypedOperation<string, void>[]; readonly previewMessage: readonly MockTypedOperation<string, void>[]; readonly createMessageDraft: readonly MockTypedOperation<string, void>[]; readonly applyMessageDraftOperation: readonly MockTypedOperation<string, void>[]; };
 }
 
 const spec: MockTypedViewSpec = {
   kind: "editorDocumentTools",
   route: "editorDocumentTools",
-  contract: "Runic.Translations.Editor.EditorDocumentToolsViewModel:038EF687035CE7BA203C5B35C0FC6FE8C52706385336A981E5058A8BA7500500",
+  contract: "Runic.Translations.Editor.EditorDocumentToolsViewModel:78549E3CAAA6442CF554AC0FFCB1EC1047FE6861A0E946E89313A8C172321EF9",
   fields: {
     applyAuthoringOperationResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     applyDiagnosticFixResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     transformDocumentResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     previewMessageResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
+    createMessageDraftResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
+    applyMessageDraftOperationResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
   },
-  defaults: { isApplyAuthoringOperationExecuting: false, isApplyDiagnosticFixExecuting: false, isTransformDocumentExecuting: false, isPreviewMessageExecuting: false },
-  texts: ["applyAuthoringOperationResultJson", "applyDiagnosticFixResultJson", "transformDocumentResultJson", "previewMessageResultJson"],
+  defaults: { isApplyAuthoringOperationExecuting: false, isApplyDiagnosticFixExecuting: false, isTransformDocumentExecuting: false, isPreviewMessageExecuting: false, isCreateMessageDraftExecuting: false, isApplyMessageDraftOperationExecuting: false },
+  texts: ["applyAuthoringOperationResultJson", "applyDiagnosticFixResultJson", "transformDocumentResultJson", "previewMessageResultJson", "createMessageDraftResultJson", "applyMessageDraftOperationResultJson"],
   commands: {
     applyAuthoringOperation: { member: "applyAuthoringOperation", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
     applyDiagnosticFix: { member: "applyDiagnosticFix", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
     transformDocument: { member: "transformDocument", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
     previewMessage: { member: "previewMessage", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    createMessageDraft: { member: "createMessageDraft", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    applyMessageDraftOperation: { member: "applyMessageDraftOperation", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
   },
   operations: {
     applyAuthoringOperation: { member: "applyAuthoringOperation", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
     applyDiagnosticFix: { member: "applyDiagnosticFix", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
     transformDocument: { member: "transformDocument", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
     previewMessage: { member: "previewMessage", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    createMessageDraft: { member: "createMessageDraft", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
+    applyMessageDraftOperation: { member: "applyMessageDraftOperation", decodeInput: (wire: unknown) => bridgeWire.string(wire) },
   },
 };
 

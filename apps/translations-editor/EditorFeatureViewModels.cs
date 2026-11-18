@@ -162,6 +162,8 @@ public sealed class EditorDocumentToolsViewModel : EditorFeatureViewModel
     private EditorDocumentDraft? _lastTransformDocument;
     private string _previewMessageResultJson = "null";
     private EditorMessagePreview? _lastPreviewMessage;
+    private string _createMessageDraftResultJson = "null";
+    private string _applyMessageDraftOperationResultJson = "null";
 
     internal EditorDocumentToolsViewModel(EditorSession session, EditorViewModel owner, ISequencer scheduler) : base(session, owner, scheduler)
     {
@@ -169,6 +171,8 @@ public sealed class EditorDocumentToolsViewModel : EditorFeatureViewModel
         ApplyDiagnosticFixCommand = CreateCommand(async argument => await Session.ApplyDiagnosticFixAsync(Required(argument, "path"), Required(argument, "content"), Parse<Runic.Translations.Compiler.Rmf2DiagnosticQuickFix>(argument.GetProperty("fix"))), (_, value) => ApplyDiagnosticFixResultJson = value);
         TransformDocumentCommand = CreateCommand(async argument => await Session.TransformDocumentAsync(Required(argument, "path"), Required(argument, "content"), Optional(argument, "key"), Optional(argument, "value")), (result, value) => { LastTransformDocument = result; TransformDocumentResultJson = value; });
         PreviewMessageCommand = CreateCommand(async argument => await Session.PreviewMessageAsync(Required(argument, "path"), Required(argument, "content"), Required(argument, "locale"), Required(argument, "key"), Optional(argument, "samplesJson"), Optional(argument, "requestedLocale"), Optional(argument, "timeZone")), (result, value) => { LastPreviewMessage = result; PreviewMessageResultJson = value; });
+        CreateMessageDraftCommand = CreateCommand(async argument => await Session.CreateMessageDraftAsync(Required(argument, "key"), Required(argument, "locale")), (_, value) => CreateMessageDraftResultJson = value);
+        ApplyMessageDraftOperationCommand = CreateCommand(async argument => await Session.ApplyMessageDraftOperationAsync(Required(argument, "key"), Required(argument, "locale"), Required(argument, "text"), Required(argument, "expectedRevision"), Parse<EditorMessageOperation>(argument.GetProperty("operation"))), (_, value) => ApplyMessageDraftOperationResultJson = value);
     }
 
     public string ApplyAuthoringOperationResultJson { get => _applyAuthoringOperationResultJson; private set => this.RaiseAndSetIfChanged(ref _applyAuthoringOperationResultJson, value); }
@@ -183,6 +187,12 @@ public sealed class EditorDocumentToolsViewModel : EditorFeatureViewModel
 
     public ReactiveCommand<string, RxVoid> TransformDocumentCommand { get; }
     public ReactiveCommand<string, RxVoid> PreviewMessageCommand { get; }
+
+    // The editing model of a missing translation (EditorMessageDraft): its starter text, and composer operations on it.
+    public string CreateMessageDraftResultJson { get => _createMessageDraftResultJson; private set => this.RaiseAndSetIfChanged(ref _createMessageDraftResultJson, value); }
+    public string ApplyMessageDraftOperationResultJson { get => _applyMessageDraftOperationResultJson; private set => this.RaiseAndSetIfChanged(ref _applyMessageDraftOperationResultJson, value); }
+    public ReactiveCommand<string, RxVoid> CreateMessageDraftCommand { get; }
+    public ReactiveCommand<string, RxVoid> ApplyMessageDraftOperationCommand { get; }
 }
 
 /// <summary>Review operations exposed as individual generated View commands.</summary>

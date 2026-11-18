@@ -8,16 +8,22 @@ export interface EditorDocumentToolsState {
   readonly applyDiagnosticFixResultJson: string;
   readonly transformDocumentResultJson: string;
   readonly previewMessageResultJson: string;
+  readonly createMessageDraftResultJson: string;
+  readonly applyMessageDraftOperationResultJson: string;
   readonly isApplyAuthoringOperationExecuting: boolean;
   readonly isApplyDiagnosticFixExecuting: boolean;
   readonly isTransformDocumentExecuting: boolean;
   readonly isPreviewMessageExecuting: boolean;
+  readonly isCreateMessageDraftExecuting: boolean;
+  readonly isApplyMessageDraftOperationExecuting: boolean;
 }
 
 export interface EditorDocumentToolsApplyAuthoringOperationOperation extends BridgeOperation<void> {}
 export interface EditorDocumentToolsApplyDiagnosticFixOperation extends BridgeOperation<void> {}
 export interface EditorDocumentToolsTransformDocumentOperation extends BridgeOperation<void> {}
 export interface EditorDocumentToolsPreviewMessageOperation extends BridgeOperation<void> {}
+export interface EditorDocumentToolsCreateMessageDraftOperation extends BridgeOperation<void> {}
+export interface EditorDocumentToolsApplyMessageDraftOperationOperation extends BridgeOperation<void> {}
 
 /**
  * A connected EditorDocumentTools ViewModel. Dispose it when its presentation ends.
@@ -33,6 +39,10 @@ export interface EditorDocumentToolsClient extends ViewClient<EditorDocumentTool
   canTransformDocument(input: string): Promise<boolean>;
   previewMessage(input: string): Promise<EditorDocumentToolsState>;
   canPreviewMessage(input: string): Promise<boolean>;
+  createMessageDraft(input: string): Promise<EditorDocumentToolsState>;
+  canCreateMessageDraft(input: string): Promise<boolean>;
+  applyMessageDraftOperation(input: string): Promise<EditorDocumentToolsState>;
+  canApplyMessageDraftOperation(input: string): Promise<boolean>;
   /**
    * Starts `ApplyAuthoringOperation` as an operation that the page can observe, cancel and recover. `options.requestId` names it;
    * the default is a random id. A start with a request id that .NET already admitted returns that operation.
@@ -61,6 +71,20 @@ export interface EditorDocumentToolsClient extends ViewClient<EditorDocumentTool
   startPreviewMessage(input: string, options?: BridgeOperationStartOptions): Promise<EditorDocumentToolsPreviewMessageOperation>;
   /** Returns the `PreviewMessage` operation started with `requestId`, for example after the page reloaded. */
   recoverPreviewMessage(requestId: string): Promise<EditorDocumentToolsPreviewMessageOperation>;
+  /**
+   * Starts `CreateMessageDraft` as an operation that the page can observe, cancel and recover. `options.requestId` names it;
+   * the default is a random id. A start with a request id that .NET already admitted returns that operation.
+   */
+  startCreateMessageDraft(input: string, options?: BridgeOperationStartOptions): Promise<EditorDocumentToolsCreateMessageDraftOperation>;
+  /** Returns the `CreateMessageDraft` operation started with `requestId`, for example after the page reloaded. */
+  recoverCreateMessageDraft(requestId: string): Promise<EditorDocumentToolsCreateMessageDraftOperation>;
+  /**
+   * Starts `ApplyMessageDraftOperation` as an operation that the page can observe, cancel and recover. `options.requestId` names it;
+   * the default is a random id. A start with a request id that .NET already admitted returns that operation.
+   */
+  startApplyMessageDraftOperation(input: string, options?: BridgeOperationStartOptions): Promise<EditorDocumentToolsApplyMessageDraftOperationOperation>;
+  /** Returns the `ApplyMessageDraftOperation` operation started with `requestId`, for example after the page reloaded. */
+  recoverApplyMessageDraftOperation(requestId: string): Promise<EditorDocumentToolsApplyMessageDraftOperationOperation>;
 }
 
 export interface EditorDocumentToolsPageReference {
@@ -75,16 +99,22 @@ const members: BridgeMemberDecoders<EditorDocumentToolsState> = {
   applyDiagnosticFixResultJson: (wire: unknown) => bridgeWire.string(wire),
   transformDocumentResultJson: (wire: unknown) => bridgeWire.string(wire),
   previewMessageResultJson: (wire: unknown) => bridgeWire.string(wire),
+  createMessageDraftResultJson: (wire: unknown) => bridgeWire.string(wire),
+  applyMessageDraftOperationResultJson: (wire: unknown) => bridgeWire.string(wire),
   isApplyAuthoringOperationExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isApplyDiagnosticFixExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isTransformDocumentExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isPreviewMessageExecuting: (wire: unknown) => bridgeWire.boolean(wire),
+  isCreateMessageDraftExecuting: (wire: unknown) => bridgeWire.boolean(wire),
+  isApplyMessageDraftOperationExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorDocumentToolsViewModel:038EF687035CE7BA203C5B35C0FC6FE8C52706385336A981E5058A8BA7500500";
+const bridgeContract = "Runic.Translations.Editor.EditorDocumentToolsViewModel:78549E3CAAA6442CF554AC0FFCB1EC1047FE6861A0E946E89313A8C172321EF9";
 const applyAuthoringOperationOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const applyDiagnosticFixOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const transformDocumentOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const previewMessageOperation: BridgeOperationCodec<void> = { decode: value => undefined };
+const createMessageDraftOperation: BridgeOperationCodec<void> = { decode: value => undefined };
+const applyMessageDraftOperationOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 
 /**
  * Connects a EditorDocumentTools client. It waits up to `options.timeout` milliseconds (default 5000) for the
@@ -93,7 +123,7 @@ const previewMessageOperation: BridgeOperationCodec<void> = { decode: value => u
  */
 export function connectEditorDocumentTools(options?: BridgeConnectOptions): Promise<EditorDocumentToolsClient & globalThis.Disposable> { return connectEditorDocumentToolsAt("editorDocumentTools", options); }
 async function connectEditorDocumentToolsAt(route: string, options?: BridgeConnectOptions): Promise<EditorDocumentToolsClient & globalThis.Disposable> {
-  const view = await connectView<EditorDocumentToolsState>({ contract: bridgeContract, route, members, texts: ["applyAuthoringOperationResultJson", "applyDiagnosticFixResultJson", "transformDocumentResultJson", "previewMessageResultJson"], operations: bridgeOperations, timeout: options?.timeout, signal: options?.signal });
+  const view = await connectView<EditorDocumentToolsState>({ contract: bridgeContract, route, members, texts: ["applyAuthoringOperationResultJson", "applyDiagnosticFixResultJson", "transformDocumentResultJson", "previewMessageResultJson", "createMessageDraftResultJson", "applyMessageDraftOperationResultJson"], operations: bridgeOperations, timeout: options?.timeout, signal: options?.signal });
   return disposable<EditorDocumentToolsClient>({
     get snapshot() { return view.snapshot; },
     subscribe: view.subscribe,
@@ -106,6 +136,10 @@ async function connectEditorDocumentToolsAt(route: string, options?: BridgeConne
     async canTransformDocument(input) { return view.can("transformDocument", input); },
     async previewMessage(input) { return view.command("previewMessage", input); },
     async canPreviewMessage(input) { return view.can("previewMessage", input); },
+    async createMessageDraft(input) { return view.command("createMessageDraft", input); },
+    async canCreateMessageDraft(input) { return view.can("createMessageDraft", input); },
+    async applyMessageDraftOperation(input) { return view.command("applyMessageDraftOperation", input); },
+    async canApplyMessageDraftOperation(input) { return view.can("applyMessageDraftOperation", input); },
     startApplyAuthoringOperation(input: string, options?: BridgeOperationStartOptions) { return view.start("applyAuthoringOperation", options?.requestId ?? globalThis.crypto.randomUUID(), input, applyAuthoringOperationOperation); },
     recoverApplyAuthoringOperation(requestId: string) { return view.recover("applyAuthoringOperation", requestId, applyAuthoringOperationOperation); },
     startApplyDiagnosticFix(input: string, options?: BridgeOperationStartOptions) { return view.start("applyDiagnosticFix", options?.requestId ?? globalThis.crypto.randomUUID(), input, applyDiagnosticFixOperation); },
@@ -114,5 +148,9 @@ async function connectEditorDocumentToolsAt(route: string, options?: BridgeConne
     recoverTransformDocument(requestId: string) { return view.recover("transformDocument", requestId, transformDocumentOperation); },
     startPreviewMessage(input: string, options?: BridgeOperationStartOptions) { return view.start("previewMessage", options?.requestId ?? globalThis.crypto.randomUUID(), input, previewMessageOperation); },
     recoverPreviewMessage(requestId: string) { return view.recover("previewMessage", requestId, previewMessageOperation); },
+    startCreateMessageDraft(input: string, options?: BridgeOperationStartOptions) { return view.start("createMessageDraft", options?.requestId ?? globalThis.crypto.randomUUID(), input, createMessageDraftOperation); },
+    recoverCreateMessageDraft(requestId: string) { return view.recover("createMessageDraft", requestId, createMessageDraftOperation); },
+    startApplyMessageDraftOperation(input: string, options?: BridgeOperationStartOptions) { return view.start("applyMessageDraftOperation", options?.requestId ?? globalThis.crypto.randomUUID(), input, applyMessageDraftOperationOperation); },
+    recoverApplyMessageDraftOperation(requestId: string) { return view.recover("applyMessageDraftOperation", requestId, applyMessageDraftOperationOperation); },
   });
 }

@@ -71,6 +71,81 @@ internal static partial class EditorSmokeTest
         Require(staleFix.Diagnostics.Any(diagnostic => diagnostic.Id == "EDITOR-FIX"), "Stale repair wasn't refused as an operation result.");
     }
 
+    // Issue #225, P2/P5/P21: a missing translation starts as a standalone draft shaped like the base message with the
+    // target locale's plural variants; composer operations apply to the draft text; the frontend inserts it once it has
+    // text. The preview names the previewed message's own error, and entries carry their effective @maxLength.
+    private static async Task MessageDraftJourneyAsync(string project)
+    {
+        Directory.CreateDirectory(project);
+        await File.WriteAllTextAsync(Path.Combine(project, "runic.json"),
+            "{\"schemaVersion\":1,\"catalog\":\"drafts\",\"code\":{\"namespace\":\"Smoke.Translations\",\"className\":\"SmokeText\"},\"baseLocale\":\"en\",\"locales\":[\"en\",\"de\",\"pl\"]}\n").ConfigureAwait(false);
+        const string english = "@maxLength 20\nsave = Save\nfiles =\n  .input {$count :integer}\n  .match $count\n  one {{One file}}\n  * {{{$count} files}}\n" +
+            "greeting =\n  .input {$name :string}\n  {{Hello {$name}}}\n";
+        const string german = "@maxLength 10\nsave = Speichern\ngreeting =\n  .input {$name :string}\n  {{Hallo {$name}}}\n";
+        const string polish = "save = Zapisz\n";
+        await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), english).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "de.rmf2"), german).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "pl.rmf2"), polish).ConfigureAwait(false);
+        using var session = new EditorSession(project);
+        var loaded = await session.LoadAsync().ConfigureAwait(false);
+        string Describe(IEnumerable<EditorDiagnostic> diagnostics) => string.Join("; ", diagnostics.Select(item => item.Id + " " + item.Message));
+
+        // P21: the effective @maxLength, the smaller of the base's and the translation's own.
+        int? MaxLength(string path, string key) => loaded.Documents.Single(document => document.Path == path).Entries!.Single(entry => entry.Key == key).MaxLength;
+        Require(MaxLength("en.rmf2", "save") == 20 && MaxLength("de.rmf2", "save") == 10 && MaxLength("pl.rmf2", "save") == 20 && MaxLength("en.rmf2", "files") is null,
+            "Entries didn't carry their effective @maxLength.");
+
+        // A missing plain message: the empty simple pattern, supported by the composer, empty, with the base's limit.
+        var plain = await session.CreateMessageDraftAsync("save", "fr").ConfigureAwait(false);
+        Require(!plain.Success && plain.Diagnostics.Single().Id == "EDITOR-DRAFT", "A draft for an undeclared locale wasn't refused.");
+        var unknown = await session.CreateMessageDraftAsync("nothing", "pl").ConfigureAwait(false);
+        Require(!unknown.Success && unknown.Diagnostics.Single().Notice?.Code == "ui_backend_preview_key_missing", "A draft of an unknown key wasn't refused.");
+        await File.WriteAllTextAsync(Path.Combine(project, "pl.rmf2"), "").ConfigureAwait(false);
+        plain = await session.CreateMessageDraftAsync("save", "pl").ConfigureAwait(false);
+        Require(plain.Success && plain.Text.Length == 0 && plain.Projection is { Supported: true, Empty: true, Variants.Count: 1 } && plain.MaxLength == 20,
+            "A missing plain message didn't start as an empty supported draft: " + JsonSerializer.Serialize(plain, EditorJsonContext.Default.EditorMessageDraft));
+        var typed = await session.ApplyMessageDraftOperationAsync("save", "pl", plain.Text, plain.Projection!.Revision,
+            new EditorMessageOperation("set-pattern", "0", "Zapisz")).ConfigureAwait(false);
+        Require(typed.Success && typed.Text == "Zapisz" && typed.Projection?.Empty == false, "Typing into a plain draft didn't give its text: " + typed.Text);
+
+        // Declarations without a matcher: the declarations and an empty quoted pattern.
+        var greeting = await session.CreateMessageDraftAsync("greeting", "pl").ConfigureAwait(false);
+        Require(greeting.Success && greeting.Text == ".input {$name :string}\n{{}}" && greeting.Projection is { Supported: true, Empty: true } &&
+            greeting.Projection.Inputs.Single().Name == "name", "A declared message's draft wasn't its declarations and an empty pattern: " + greeting.Text);
+
+        // A missing plural message in a locale with more categories than the base (en: one/other; pl integers: one/few/many).
+        var files = await session.CreateMessageDraftAsync("files", "pl").ConfigureAwait(false);
+        Require(files.Success && files.Text == ".input {$count :integer}\n.match $count\none {{}}\nfew {{}}\nmany {{}}\n* {{}}",
+            "The plural draft didn't take pl's categories: " + files.Text + Describe(files.Diagnostics));
+        Require(files.Projection is { Supported: true, Empty: true } projection && projection.Selectors.SequenceEqual(["count"]) &&
+            projection.Variants.Select(variant => variant.Keys.Single()).SequenceEqual(["one", "few", "many", "*"]) && projection.SelectorPluralCategories.Single().Contains("few"),
+            "The plural draft's projection wasn't supported for the composer.");
+        var few = await session.ApplyMessageDraftOperationAsync("files", "pl", files.Text, files.Projection!.Revision,
+            new EditorMessageOperation("set-pattern", "1", "{$count} pliki")).ConfigureAwait(false);
+        Require(few.Success && few.Text.Contains("few {{{$count} pliki}}", StringComparison.Ordinal) && few.Projection?.Empty == false &&
+            few.Projection.Variants[1].Pattern == "{$count} pliki", "An operation on the draft didn't change its text: " + few.Text + Describe(few.Diagnostics));
+        var stale = await session.ApplyMessageDraftOperationAsync("files", "pl", few.Text, files.Projection.Revision,
+            new EditorMessageOperation("set-pattern", "0", "Stale")).ConfigureAwait(false);
+        Require(!stale.Success && stale.Text == few.Text && stale.Diagnostics.Single().Id == "EDITOR-AUTHORING", "A stale draft operation wasn't refused.");
+        var refused = await session.ApplyMessageDraftOperationAsync("files", "pl", few.Text, few.Projection!.Revision,
+            new EditorMessageOperation("remove-variant", "3")).ConfigureAwait(false);
+        Require(!refused.Success && refused.Text == few.Text, "Removing the catch-all of a draft wasn't refused.");
+        // Nothing was written; the frontend inserts the typed draft through the document transform.
+        Require(await File.ReadAllTextAsync(Path.Combine(project, "pl.rmf2")).ConfigureAwait(false) == "", "A draft wrote to the document.");
+        var inserted = await session.TransformDocumentAsync("pl.rmf2", "", "files", few.Text).ConfigureAwait(false);
+        Require(inserted.Entries.Single(entry => entry.Key == "files").Authoring is { Supported: true, Variants.Count: 4, Empty: false },
+            "The inserted draft wasn't a supported message entry: " + inserted.Content + Describe(inserted.Diagnostics));
+
+        // P5: the preview names the previewed message's syntax error, not the first diagnostic of the catalog.
+        const string broken = "save = Speichern\ngreeting =\n  .input {$name :string}\n  {{Hallo {$name}\n";
+        var preview = await session.PreviewMessageAsync("de.rmf2", broken, "de", "greeting").ConfigureAwait(false);
+        Require(!preview.Success && preview.PrimaryDiagnostic is { Severity: "error" } primary && primary.Id != "RTR0010" && primary.Line >= 2 &&
+            preview.Diagnostics.Any(item => item.Id == "RTR0010") && !ReferenceEquals(preview.Diagnostics[0], primary),
+            "The preview's primary diagnostic wasn't the message's syntax error: " + preview.PrimaryDiagnostic?.Id + " of " + Describe(preview.Diagnostics));
+        var valid = await session.PreviewMessageAsync("de.rmf2", german, "de", "save").ConfigureAwait(false);
+        Require(valid.PrimaryDiagnostic is null || valid.PrimaryDiagnostic.Key == "save", "A preview chose a diagnostic of another message: " + valid.PrimaryDiagnostic?.Id);
+    }
+
     private static async Task MountedContextJourneyAsync(string root)
     {
         string project = Path.Combine(root, "translations"), feature = Path.Combine(root, "feature");
@@ -643,6 +718,7 @@ internal static partial class EditorSmokeTest
         {
             WorkspacePickerSelection();
             await AuthoringJourneyAsync(Path.Combine(container, "authoring")).ConfigureAwait(false);
+            await MessageDraftJourneyAsync(Path.Combine(container, "message-drafts")).ConfigureAwait(false);
             await MountedContextJourneyAsync(Path.Combine(container, "mounted-context")).ConfigureAwait(false);
             await PreviewFormattingJourneyAsync(Path.Combine(container, "preview-formatting")).ConfigureAwait(false);
             await LocaleChangeJourneyAsync(Path.Combine(container, "locale-change")).ConfigureAwait(false);

@@ -7,7 +7,9 @@ import { createMockBridge, installMockBridge } from "@runic-artifex/views/mock";
 import { mockEditor, type EditorMock } from "../src/generated/editor.mock.ts";
 import { mockEditorDocument } from "../src/generated/editorDocument.mock.ts";
 import { mockEditorWorkspace } from "../src/generated/editorWorkspace.mock.ts";
-import type { EditorDocumentDraft, EditorMessageEntry, WorkspaceSnapshot } from "../src/lib/contracts.ts";
+import { mockEditorDocumentTools } from "../src/generated/editorDocumentTools.mock.ts";
+import type { EditorDocumentDraft, EditorMessageDraft, EditorMessageEntry, EditorMessagePreview, WorkspaceSnapshot } from "../src/lib/contracts.ts";
+import { mockExecute as executeMock } from "../src/lib/mock-bridge.ts";
 
 const source = await readFile(new URL("../src/lib/editor-bridge.ts", import.meta.url), "utf8");
 assert.doesNotMatch(source, /setTimeout|\.subscribe\(/,
@@ -44,10 +46,32 @@ const workspace = mockEditorWorkspace(bridge, {
     },
   },
 });
+// The draft commands of a missing translation (issue #225, P2) route to DocumentTools with their typed arguments; the
+// mock answers them as the mock bridge does.
+const draftRequests: Array<{ command: string; argument: unknown }> = [];
+const documentTools = mockEditorDocumentTools(bridge, {
+  id: "documentTools",
+  state: {
+    applyAuthoringOperationResultJson: "null", applyDiagnosticFixResultJson: "null", transformDocumentResultJson: "null",
+    previewMessageResultJson: "null", createMessageDraftResultJson: "null", applyMessageDraftOperationResultJson: "null",
+  },
+  commands: {
+    createMessageDraft: async (_state, input) => {
+      const { requestId, argument } = JSON.parse(input) as { requestId: string; argument: unknown };
+      draftRequests.push({ command: "createMessageDraft", argument });
+      return { createMessageDraftResultJson: JSON.stringify({ requestId, result: await executeMock("CreateMessageDraft", argument) }) };
+    },
+    applyMessageDraftOperation: async (_state, input) => {
+      const { requestId, argument } = JSON.parse(input) as { requestId: string; argument: unknown };
+      draftRequests.push({ command: "applyMessageDraftOperation", argument });
+      return { applyMessageDraftOperationResultJson: JSON.stringify({ requestId, result: await executeMock("ApplyMessageDraftOperation", argument) }) };
+    },
+  },
+});
 root = mockEditor(bridge, {
   state: {
     workspace: workspace.reference,
-    documentTools: unused("editorDocumentTools"),
+    documentTools: documentTools.reference,
     review: unused("editorReview"),
     interchange: unused("editorInterchange"),
     diagnostics: unused("editorDiagnostics"),
@@ -104,4 +128,35 @@ assert.deepEqual(transformed.entries.map(entry => [entry.key, entry.path]), [["c
 const entry: EditorMessageEntry = { key: "common_cancel", path: ["common", "cancel"], content: "Cancel", valueStartByte: 0, valueLengthBytes: 6 };
 assert.equal(entry.path.join("."), "common.cancel");
 
-console.log("Editor bridge read-your-writes and message identity checks passed.");
+// A missing translation's draft (issue #225, P2): the base's structure with the target locale's categories, empty,
+// supported by the composer; an operation changes only the draft text, and a stale revision is refused.
+const draft = await promptly(editor.createMessageDraft("files_selected", "fr"), "createMessageDraft");
+assert.deepEqual(draftRequests.at(-1), { command: "createMessageDraft", argument: { key: "files_selected", locale: "fr" } });
+assert.equal(draft.success, true);
+assert.equal(draft.text, ".input {$count :integer select=plural}\n.match $count\none {{}}\nmany {{}}\n* {{}}",
+  "A plural draft must take the target locale's categories, with empty patterns.");
+assert.deepEqual(draft.projection?.variants.map(variant => variant.keys), [["one"], ["many"], ["*"]]);
+assert.equal(draft.projection?.supported, true);
+assert.equal(draft.projection?.empty, true, "An untouched draft must be empty.");
+const operation = { kind: "set-pattern", variantId: "1", pattern: "{$count} de fichiers" } as const;
+const typed: EditorMessageDraft = await promptly(editor.applyMessageDraftOperation("files_selected", "fr", draft.text, draft.projection!.revision, operation), "applyMessageDraftOperation");
+assert.deepEqual(draftRequests.at(-1), { command: "applyMessageDraftOperation",
+  argument: { key: "files_selected", locale: "fr", text: draft.text, expectedRevision: draft.projection!.revision, operation } });
+assert.equal(typed.success, true);
+assert.match(typed.text, /^many \{\{\{\$count\} de fichiers\}\}$/m);
+assert.equal(typed.projection?.empty, false, "A draft with text must not be empty.");
+const staleDraft = await mockExecute("ApplyMessageDraftOperation", { key: "files_selected", locale: "fr", text: typed.text, expectedRevision: draft.projection!.revision, operation }) as EditorMessageDraft;
+assert.equal(staleDraft.success, false);
+assert.equal(staleDraft.text, typed.text, "A refused operation must keep the draft text.");
+const plainDraft = await mockExecute("CreateMessageDraft", { key: "common_save", locale: "en" }) as EditorMessageDraft;
+assert.equal(plainDraft.text, "", "A plain message's draft must be the empty simple pattern.");
+assert.equal(plainDraft.projection?.empty, true);
+const missingDraft = await mockExecute("CreateMessageDraft", { key: "missing_key", locale: "en" }) as EditorMessageDraft;
+assert.equal(missingDraft.success, false);
+assert.equal(missingDraft.diagnostics[0]?.notice?.code, "ui_backend_preview_key_missing");
+
+// The preview result carries the previewed message's primary diagnostic besides the catalog's (issue #225, P5).
+const preview = await mockExecute("PreviewMessage", { path: "de/common_save.mf2", content: "Speichern\n", locale: "de", key: "common_save" }) as EditorMessagePreview;
+assert.equal(preview.primaryDiagnostic, undefined, "A preview without a diagnostic of its message has no primary diagnostic.");
+
+console.log("Editor bridge read-your-writes, message identity and message draft checks passed.");

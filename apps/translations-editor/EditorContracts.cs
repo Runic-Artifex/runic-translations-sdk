@@ -59,14 +59,24 @@ internal sealed record EditorDocument(
 
 // Logical messages share their containing document's physical path and revision. Key is the canonical key (common_cancel),
 // the stable identifier of review files and requests; Path is the logical path (["common", "cancel"]), the display form.
+// MaxLength is the effective @maxLength for the entry's locale (the smaller of the base's and its own), if any.
 internal sealed record EditorMessageEntry(string Key, string Content, int ValueStartByte, int ValueLengthBytes,
     EditorMessageProjection? Authoring = null, EditorMessageContext? Context = null, EditorMessageSemantic? Semantic = null,
-    IReadOnlyList<string>? Path = null);
+    IReadOnlyList<string>? Path = null, int? MaxLength = null);
 internal sealed record EditorMessageInput(string Name, string Type, string? Function, bool Declared);
 internal sealed record EditorMessageVariant(string Id, IReadOnlyList<string> Keys, string Pattern, int StartByte, int LengthBytes);
 internal sealed record EditorMessageProjection(string Revision, bool Supported, string? Reason,
     IReadOnlyList<EditorMessageInput> Inputs, IReadOnlyList<string> Selectors, IReadOnlyList<string> SelectorFunctions, IReadOnlyList<EditorMessageVariant> Variants,
-    IReadOnlyList<string> PluralCategories, IReadOnlyList<IReadOnlyList<string>> SelectorPluralCategories, string CldrVersion);
+    IReadOnlyList<string> PluralCategories, IReadOnlyList<IReadOnlyList<string>> SelectorPluralCategories, string CldrVersion,
+    // Every variant's pattern is empty or white space: a draft the translator has not typed into yet.
+    bool Empty = false);
+// The editing model of a translation that does not exist yet (issue #225, P2): standalone MF2 text, never a document
+// entry. CreateMessageDraft builds it from the base message (EditorMessageDrafts.Starter); ApplyMessageDraftOperation
+// applies a composer operation to the text. Nothing is written until the frontend inserts the text (TransformDocument).
+// A rejection keeps the text it was given and says why in Diagnostics. MaxLength is the base message's @maxLength,
+// which CreateMessageDraft reports; an operation leaves it null.
+internal sealed record EditorMessageDraft(bool Success, string Key, string Locale, string Text,
+    EditorMessageProjection? Projection, IReadOnlyList<EditorDiagnostic> Diagnostics, int? MaxLength = null);
 internal sealed record EditorMessageOperation(string Kind, string? VariantId = null, string? Pattern = null,
     string? Name = null, string? NewName = null, string? Function = null,
     IReadOnlyList<string>? Keys = null, IReadOnlyList<string>? Selectors = null);
@@ -208,12 +218,16 @@ internal sealed record ValidationResult(
     bool Success,
     IReadOnlyList<EditorDiagnostic> Diagnostics);
 
+// PrimaryDiagnostic is the one to show for the previewed message (issue #225, P5): the first error that belongs to the
+// previewed key and locale (located in its source in the previewed document first, then by key and locale), else the
+// preview's own failure (PREVIEW), else the first such warning; null when none belongs to it.
 internal sealed record EditorMessagePreview(
     bool Success,
     string? Locale,
     string? AstJson,
     string? RenderedJson,
-    IReadOnlyList<EditorDiagnostic> Diagnostics);
+    IReadOnlyList<EditorDiagnostic> Diagnostics,
+    EditorDiagnostic? PrimaryDiagnostic = null);
 
 internal sealed record EditorOperationResult(
     bool Ok,
@@ -420,6 +434,7 @@ internal sealed record PreparedInterchangeDocument(
 [JsonSerializable(typeof(EditorCatalogImportPlan))]
 [JsonSerializable(typeof(EditorLocalStateEntry[]))]
 [JsonSerializable(typeof(EditorDocumentDraft))]
+[JsonSerializable(typeof(EditorMessageDraft))]
 [JsonSerializable(typeof(EditorMessageOperation))]
 [JsonSerializable(typeof(Rmf2DiagnosticQuickFix))]
 [JsonSerializable(typeof(EditorLocalStateSnapshot))]
