@@ -4755,6 +4755,38 @@ ui {
   }
 }
 ui {
+  workflow {
+    stale_diff_explanation =
+      .input {$state :string}
+      {{The source text changed after this message was marked “{$state}”. See what changed below and check the translation, then confirm it or mark it for review.}}
+  }
+}
+ui {
+  workflow {
+    source_before = Source when marked
+  }
+}
+ui {
+  workflow {
+    source_now = Current source
+  }
+}
+ui {
+  workflow {
+    source_removed = Removed:
+  }
+}
+ui {
+  workflow {
+    source_added = Added:
+  }
+}
+ui {
+  workflow {
+    source_same_text = The text reads the same; the message’s placeholders or their types changed.
+  }
+}
+ui {
   window {
     title_product = Runic Translations Editor
   }

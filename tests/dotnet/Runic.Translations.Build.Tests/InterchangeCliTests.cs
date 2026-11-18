@@ -204,6 +204,59 @@ internal sealed class InterchangeCliTests
         Assert.Contains("pass --input only", both.StandardError);
     }
 
+    [Test, DisplayName("CLI review mark and xliff import record the source text beside the version 2 review file; a file without texts keeps working (#225 P20)")]
+    public void ReviewWritersRecordTheSourceText()
+    {
+        using TemporaryDirectory temporary = CopyProject();
+        string reviewPath = temporary.Resolve("translations", "shop.review.json");
+        string sourcesPath = temporary.Resolve("translations", "shop.review-sources.json");
+        // The corpus review file, as Tooling 0.14 wrote it, has no recorded texts: it is read, and its stale approval reported, as before.
+        Assert.False(File.Exists(sourcesPath), "The corpus has a companion file.");
+        ProcessResult before = TestFixture.RunTool(temporary, "validate", "--project", "translations");
+        Assert.Equal(0, before.ExitCode, before.Combined);
+        Assert.Contains("warning RTR0090", before.StandardError);
+
+        ProcessResult mark = TestFixture.RunTool(temporary, "review", "mark", "--project", "translations", "--key", "farewell", "--key", "greeting", "--locale", "de", "--state", "approved");
+        Assert.Equal(0, mark.ExitCode, mark.Combined);
+        string review = File.ReadAllText(reviewPath);
+        Assert.Contains("\"$schema\": \"runic.translations.interchange-review/2\"", review);
+        Assert.False(review.Contains("\"source\"", StringComparison.Ordinal), review);
+        string farewellFingerprint;
+        using (JsonDocument reviewFile = JsonDocument.Parse(review))
+            farewellFingerprint = reviewFile.RootElement.GetProperty("entries").EnumerateArray().Single(entry => entry.GetProperty("key").GetString() == "farewell").GetProperty("sourceFingerprint").GetString()!;
+        using (JsonDocument sources = JsonDocument.Parse(File.ReadAllBytes(sourcesPath)))
+        {
+            Assert.Equal("runic.translations.review-sources/1", sources.RootElement.GetProperty("$schema").GetString());
+            Assert.Equal("shop", sources.RootElement.GetProperty("catalog").GetString());
+            JsonElement[] items = sources.RootElement.GetProperty("sources").EnumerateArray().ToArray();
+            Assert.Equal("farewell,greeting", string.Join(',', items.Select(item => item.GetProperty("key").GetString())));
+            Assert.Equal(farewellFingerprint, items[0].GetProperty("sourceFingerprint").GetString());
+            Assert.Equal("See you soon", items[0].GetProperty("source").GetString());
+            Assert.Equal("Hello {$name}!", items[1].GetProperty("source").GetString());
+        }
+
+        // The source changes: the entry is stale and the companion still holds the text it was approved for.
+        File.WriteAllText(temporary.Resolve("translations", "en.rmf2"),
+            File.ReadAllText(temporary.Resolve("translations", "en.rmf2")).Replace("farewell = See you soon", "farewell = See you later", StringComparison.Ordinal), new UTF8Encoding(false));
+        ProcessResult stale = TestFixture.RunTool(temporary, "validate", "--project", "translations");
+        Assert.Contains("warning RTR0090", stale.StandardError);
+        Assert.Contains("\"source\": \"See you soon\"", File.ReadAllText(sourcesPath));
+
+        // An XLIFF import records the source the file was translated from, also for a source that changed since export.
+        using TemporaryDirectory second = CopyProject();
+        ProcessResult import = TestFixture.RunTool(second, "xliff", "import", "--project", "translations", "--input", Path.Combine(Corpus, "files", "stale-approval.de.xliff"));
+        Assert.Equal(0, import.ExitCode, import.Combined);
+        using (JsonDocument reviewFile = JsonDocument.Parse(File.ReadAllBytes(second.Resolve("translations", "shop.review.json"))))
+        using (JsonDocument sources = JsonDocument.Parse(File.ReadAllBytes(second.Resolve("translations", "shop.review-sources.json"))))
+        {
+            JsonElement farewell = reviewFile.RootElement.GetProperty("entries").EnumerateArray().Single(entry => entry.GetProperty("key").GetString() == "farewell");
+            Assert.Equal("needs-review", farewell.GetProperty("state").GetString());
+            JsonElement recorded = sources.RootElement.GetProperty("sources").EnumerateArray().Single(item => item.GetProperty("key").GetString() == "farewell");
+            Assert.Equal(farewell.GetProperty("sourceFingerprint").GetString(), recorded.GetProperty("sourceFingerprint").GetString());
+            Assert.Equal("Goodbye", recorded.GetProperty("source").GetString());
+        }
+    }
+
     [Test, DisplayName("CLI xliff import --fail-on refused fails with RTR0092 and writes nothing when a unit is refused")]
     public void XliffImportFailOnRefused()
     {

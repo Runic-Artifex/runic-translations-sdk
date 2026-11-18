@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.eu/schemas/translations/review-sources-v1.schema.json",
+  "title": "runic.translations.review-sources/1",
+  "description": "The base texts that review states were recorded for: the optional <catalog>.review-sources.json beside <catalog>.review.json. runic-translations review mark, xliff import, the Translations Editor and the language server add the text of each entry they record, so a stale entry (RTR0090) can show the source it was recorded for next to the current one. One text per message key and source fingerprint, shared by every locale whose entry has that fingerprint; texts no entry of the review file refers to are dropped on the next write. Readers ignore members they do not know and treat a file they cannot read as empty; the file is safe to delete, and a merge conflict can be resolved by keeping either side.",
+  "type": "object",
+  "required": [
+    "$schema",
+    "catalog",
+    "sources"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "runic.translations.review-sources/1"
+    },
+    "catalog": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The catalog identifier of runic.json, as in the review file."
+    },
+    "sources": {
+      "type": "array",
+      "description": "Sorted by key, then source fingerprint; at most one item per key and fingerprint.",
+      "items": {
+        "$ref": "#/$defs/source"
+      }
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "required": [
+        "key",
+        "sourceFingerprint",
+        "source"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "description": "The message key, as in the review file."
+        },
+        "sourceFingerprint": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "The sourceFingerprint of the review entries this text belongs to: sha256: and the per-unit fingerprint of the key, the source text and the caller contract."
+        },
+        "source": {
+          "type": "string",
+          "maxLength": 65536,
+          "description": "The base message's MF2 source text the fingerprint was computed from, as written in the base locale's file."
+        }
+      }
+    }
+  }
+}

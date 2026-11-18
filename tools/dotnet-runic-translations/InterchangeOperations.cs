@@ -212,6 +212,8 @@ internal static class InterchangeOperations
         if (!dryRun && !failed)
         {
             var writes = edits.Select(edit => new SourceWrite(Path.GetFullPath(edit.Path, currentDirectory), edit.Path, edit.OriginalBytes, edit.Bytes)).ToList();
+            // The base text of each entry the import records goes to the review file's companion first (TranslationReviewSources).
+            if (writeReviewFile) TranslationReviewSources.Record(reviewPath, catalog, TranslationReviewFile.ImportSources(import, review!));
             if (writeReviewFile) writes.Add(new SourceWrite(reviewPath, Display(reviewPath), existingReviewBytes, TranslationInterchange.ExportReviewJson(review!)));
             try { WriteSources(writes); }
             catch (SourceChangedException exception)
@@ -278,8 +280,10 @@ internal static class InterchangeOperations
                 $"--key {key} is not a message of catalog '{catalog}'.{Rmf2MessageKeys.DidYouMean(key, fingerprints.Keys.Select(item => Rmf2MessageKeys.Display(paths, item)))}"));
         keys = resolved;
         string path = ReviewFile.PathFor(project.inputs, catalog);
-        // Compare-and-swap: another writer's change since the read is re-read and the marks applied to it.
-        try { TranslationReviewFile.Update(path, catalog, existing => TranslationReviewFile.Mark(existing, catalog, keys, locale, state, note, fingerprints)); }
+        // Compare-and-swap: another writer's change since the read is re-read and the marks applied to it. The base text
+        // of each marked message goes to the companion file first, so a stale entry can later show what changed.
+        TranslationReviewSource[] sources = TranslationReviewFile.SourcesOf(TranslationReviewFile.CurrentSources(project.compilation), keys);
+        try { TranslationReviewFile.Update(path, catalog, existing => TranslationReviewFile.Mark(existing, catalog, keys, locale, state, note, fingerprints), sources); }
         catch (TranslationInterchangeException exception) when (exception.Code == TranslationReviewFile.ChangedCode) { return Refuse(result, exception, "The review file kept changing; nothing was written."); }
         catch (TranslationInterchangeException exception) { return Refuse(result, exception, "The review file cannot be read; nothing was written."); }
         string display = Display(path);

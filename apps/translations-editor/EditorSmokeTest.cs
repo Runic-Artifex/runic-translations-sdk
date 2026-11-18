@@ -709,6 +709,68 @@ internal static partial class EditorSmokeTest
             "A unit whose source changed since export refused the import or was not demoted: " + string.Join("; ", changedSource.Refusals.Select(refusal => refusal.Code)));
     }
 
+    // #225 P20: a review state the editor records keeps its base text beside the review file
+    // (<catalog>.review-sources.json), in the form the source panel shows; once the source changes, the stale entry's
+    // recorded text reaches the frontend (EditorReviewSnapshot.RecordedSources) to be compared with the current one, an
+    // entry an older tool recorded without its text has none, and confirming records the new text.
+    private static async Task StaleSourceJourneyAsync(string container)
+    {
+        string project = Path.Combine(container, "workspace");
+        await TranslationProjectWriter.CreateAsync(TranslationProjectScaffolder.Render(
+            new TranslationProjectCreationRequest(project, "stale-source-smoke", "en", "Smoke.Translations", "SmokeText",
+                [new TranslationProjectLocale("de", "en")]))).ConfigureAwait(false);
+        const string English = "actions {\n  save = Save all changes\n}\nwelcome =\n  .input {$name :string}\n  {{Welcome back, {$name}}}\n" +
+            "files =\n  .input {$count :integer}\n  .match $count\n  one {{One file}}\n  * {{{$count} files}}\nother = Other\n";
+        await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), English).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "de.rmf2"), "actions {\n  save = Alle Änderungen speichern\n}\nwelcome =\n  .input {$name :string}\n  {{Willkommen zurück, {$name}}}\n" +
+            "files =\n  .input {$count :integer}\n  .match $count\n  one {{Eine Datei}}\n  * {{{$count} Dateien}}\nother = Andere\n").ConfigureAwait(false);
+        using var session = new EditorSession(project);
+        WorkspaceSnapshot opened = await session.LoadAsync().ConfigureAwait(false);
+        EditorReviewSnapshot review = opened.Review!;
+        Require(opened.Success && review.Fingerprints is not null && review.RecordedSources is null, "The stale-source fixture did not load without review data.");
+        IReadOnlyDictionary<string, string> fingerprints = review.Fingerprints!;
+        EditorReviewEntry Approve(string key, EditorReviewSnapshot from) => new(key, "de", "approved", null, from.Fingerprints![key], new Dictionary<string, string>());
+        EditorReviewOperationResult saved = await session.SaveReviewAsync(new EditorReviewSaveRequest(review.Revision,
+            [Approve("actions_save", review), Approve("welcome", review), Approve("files", review)], review.Terminology, review.Entries, review.Terminology)).ConfigureAwait(false);
+        Require(saved.Ok, "The approvals were not saved: " + saved.Message?.Code);
+        string reviewPath = Path.Combine(project, "stale-source-smoke.review.json");
+        string sourcesPath = Path.Combine(project, "stale-source-smoke.review-sources.json");
+        string reviewText = await File.ReadAllTextAsync(reviewPath).ConfigureAwait(false);
+        Require(reviewText.Contains("runic.translations.interchange-review/2", StringComparison.Ordinal) && !reviewText.Contains("\"source\"", StringComparison.Ordinal),
+            "The review file changed its format: " + reviewText);
+        IReadOnlyDictionary<string, string> recorded = TranslationReviewSources.Read(reviewPath, "stale-source-smoke");
+        Require(recorded.Count == 3 && TranslationReviewSources.Text(recorded, "actions_save", fingerprints["actions_save"]) == "Save all changes",
+            "The approvals' base texts were not recorded beside the review file.");
+        // The recorded text is the base message as the source panel shows it, also for a multi-line message.
+        IReadOnlyList<EditorMessageEntry> baseEntries = opened.Documents.Single(document => document.Path == "en.rmf2").Entries ?? [];
+        foreach (string key in new[] { "welcome", "files" })
+            Require(TranslationReviewSources.Text(recorded, key, fingerprints[key]) == baseEntries.Single(entry => entry.Key == key).Content,
+                $"The recorded text of {key} is not the base message's text as the editor shows it.");
+
+        // An entry recorded without its text, as a 0.14 tool writes it.
+        TranslationReviewFile.Update(reviewPath, "stale-source-smoke", current => TranslationReviewFile.Mark(current, "stale-source-smoke", ["other"], "de",
+            TranslationReviewState.Approved, null, fingerprints));
+        // The source changes: both entries are stale, and only the recorded one has its text.
+        await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), English.Replace("Save all changes", "Save the changes", StringComparison.Ordinal)
+            .Replace("other = Other", "other = Others", StringComparison.Ordinal)).ConfigureAwait(false);
+        EditorReviewSnapshot stale = (await session.LoadAsync().ConfigureAwait(false)).Review!;
+        Require(stale.Entries.Where(static entry => entry.Stale).Select(static entry => entry.Key).Order(StringComparer.Ordinal).SequenceEqual(["actions_save", "other"]),
+            "The changed sources did not make their entries stale.");
+        Require(stale.RecordedSources is { Count: 1 } sources && sources["actions_save"].Single() is { } text &&
+            text.Key == fingerprints["actions_save"] && text.Value == "Save all changes",
+            "The stale entry's recorded text was not offered for the comparison, or an entry without one got one.");
+
+        // Confirming the translation records it for the current source, with the current text.
+        EditorReviewOperationResult confirmed = await session.SaveReviewAsync(new EditorReviewSaveRequest(stale.Revision,
+            [.. stale.Entries.Select(entry => entry.Key == "actions_save" ? Approve("actions_save", stale) : entry)], stale.Terminology, stale.Entries, stale.Terminology)).ConfigureAwait(false);
+        Require(confirmed.Ok && confirmed.Review!.Entries.Single(entry => entry.Key == "actions_save") is { Stale: false } &&
+            confirmed.Review.RecordedSources is null,
+            "Confirming did not record the current source: " + confirmed.Message?.Code);
+        Require(TranslationReviewSources.Text(TranslationReviewSources.Read(reviewPath, "stale-source-smoke"), "actions_save", stale.Fingerprints!["actions_save"]) == "Save the changes",
+            "Confirming did not record the current text.");
+        Require(File.Exists(sourcesPath), "The companion file is missing.");
+    }
+
     // commandLine is the command-line operations (Program.cs), which a frontend
     // bootstrap build does not compile.
     public static async Task<int> RunAsync(string workspacePath, IEditorCommandOperations commandLine)
@@ -729,6 +791,7 @@ internal static partial class EditorSmokeTest
             await ReviewStampJourneyAsync(Path.Combine(container, "review-stamp")).ConfigureAwait(false);
             await IncompleteCatalogReviewJourneyAsync(Path.Combine(container, "incomplete-review")).ConfigureAwait(false);
             await ImportedApprovalJourneyAsync(Path.Combine(container, "imported-approval")).ConfigureAwait(false);
+            await StaleSourceJourneyAsync(Path.Combine(container, "stale-source")).ConfigureAwait(false);
             await LibraryCatalogJourneyAsync(Path.Combine(container, "library-catalogs")).ConfigureAwait(false);
             string project = Path.Combine(container, "translations");
             // Smoke tests exercise an intentionally minimal workspace. They must

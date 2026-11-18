@@ -319,6 +319,11 @@ export interface EditorReviewSnapshot {
   fingerprints?: Record<string, string>;
   /** Version 1 editor approvals wait to move into the review file: the entries are shown read-only. */
   migrationPending?: boolean;
+  /**
+   * The base text each stale entry was recorded for, by message key and then source fingerprint, where a writer kept it
+   * beside the review file (`<catalog>.review-sources.json`, #225 P20). Absent when no stale entry has a recorded text.
+   */
+  recordedSources?: Record<string, Record<string, string>>;
 }
 
 export interface EditorReviewSaveRequest {

@@ -181,6 +181,17 @@ export class ReviewStore {
     return this.#options.snapshot()?.review?.fingerprints?.[key];
   }
 
+  /**
+   * The base text a stale entry was recorded for, when the writer kept it beside the review file (#225 P20): what the
+   * workflow panel compares with the current source. Undefined for an entry that is not stale (also one confirmed
+   * but not saved yet) and for one recorded without its text (by an older tool).
+   */
+  recordedSource(key: string, locale: string): string | undefined {
+    const entry = this.index.get(reviewIdentity(key, locale));
+    if (entry?.stale !== true || entry.implicit === true || entry.sourceFingerprint === undefined) return undefined;
+    return this.#options.snapshot()?.review?.recordedSources?.[key]?.[entry.sourceFingerprint];
+  }
+
   // Review states are recorded for the base text the reviewer saw; without its fingerprint none can be recorded.
   statesBlocked(): boolean {
     if (this.#options.snapshot()?.review?.fingerprints !== undefined) return false;

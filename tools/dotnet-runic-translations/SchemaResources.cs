@@ -21,6 +21,7 @@ internal static class SchemaResources
         ("translations-status-v1.schema.json", "Runic.Translations.Tool.Schemas.translations-status-v1.schema.json"),
         ("translations-serve-v1.schema.json", "Runic.Translations.Tool.Schemas.translations-serve-v1.schema.json"),
         ("interchange-review-v2.schema.json", "Runic.Translations.Tool.Schemas.interchange-review-v2.schema.json"),
+        ("review-sources-v1.schema.json", "Runic.Translations.Tool.Schemas.review-sources-v1.schema.json"),
     ];
 
     internal static IReadOnlyList<ToolArtifact> Read()

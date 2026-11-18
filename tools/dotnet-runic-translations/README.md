@@ -334,6 +334,14 @@ escapes do not change it; different text, placeholders, functions, options or se
   it); an unknown key is reported with the closest logical key.
 - `xliff import` updates the file when it exists, or creates it with `--review`. A translation of a changed
   source keeps the fingerprint of the source the translator saw.
+- Both, like the editor and the language server, also record the base text of each entry they write in
+  `<catalog>.review-sources.json` beside the review file (`runic.translations.review-sources/1`, schema
+  `review-sources-v1.schema.json`): one MF2 source text per key and fingerprint, written before the review file, so
+  the Translations Editor can show a stale entry's old source next to the current one. For a translation of a changed
+  source, `xliff import` records the source from the XLIFF file when it hashes to the recorded fingerprint. Texts no
+  entry refers to are dropped on the next write. The review file itself keeps its `/2` format, which the published
+  0.14 readers require (they refuse unknown members and schemas); readers of the companion ignore unknown members
+  and treat an unreadable file as empty. Commit it with the review file; it is safe to delete.
 - `validate` warns with `RTR0090` at the translation when its entry's fingerprint is not the current one:
   the translation predates a source change. Review it, then run `review mark`. An unreadable review file is
   the warning `RTR0091`. Without the file nothing is reported.

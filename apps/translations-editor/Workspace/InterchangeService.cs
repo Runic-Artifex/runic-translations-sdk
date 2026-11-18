@@ -225,7 +225,8 @@ internal sealed class InterchangeService
                 catalog.SourceFreshness,
                 documents,
                 reviewBytes,
-                reviewRevision);
+                reviewRevision,
+                reviewBytes is null ? null : TranslationReviewFile.ImportSources(import, merged));
             return (new EditorXliffImportPlan(true, null, null, import.CatalogId, import.SourceLocale, import.TargetLocale, null,
                 changes.ToArray(), plan.Count("added"), plan.Count("changed"), 0, plan.Count("unchanged"), reviewUpdates, overflowed, []),
                 prepared);
@@ -289,7 +290,11 @@ internal sealed class InterchangeService
                     committed.Add((document, fullPath));
                 }
                 // Compare-and-swap: a review file another writer changed since the check is not overwritten.
-                if (prepared.ReviewBytes is not null) store.WriteReview(prepared.ReviewBytes, reviewBytes);
+                if (prepared.ReviewBytes is not null)
+                {
+                    store.RecordSources(prepared.Sources ?? []);
+                    store.WriteReview(prepared.ReviewBytes, reviewBytes);
+                }
             }
             catch (Exception exception) when (exception is TranslationEditorStateException or TranslationInterchangeException or IOException or UnauthorizedAccessException)
             {
@@ -393,7 +398,9 @@ internal sealed class InterchangeService
                 catalog.SourceFreshness,
                 [],
                 existingBytes is not null && existingBytes.AsSpan().SequenceEqual(reviewBytes) ? null : reviewBytes,
-                revision);
+                revision,
+                // An imported entry stamped with the current source gets the current base text beside it.
+                ImportedSources(state.Compilation, import));
             return (new EditorReviewImportPlan(true, null, null, catalog.CatalogId, changes.ToArray(), added, changed, 0, overflowed, []), prepared);
         }
         catch (Exception exception) when (exception is TranslationInterchangeException or TranslationAuthoringException or TranslationEditorStateException or ArgumentException or IOException or UnauthorizedAccessException)
@@ -428,7 +435,11 @@ internal sealed class InterchangeService
             (string? reviewRevision, byte[]? reviewBytes) = store.CurrentState();
             if (!string.Equals(reviewRevision, prepared.ExpectedReviewRevision, StringComparison.Ordinal))
                 return new EditorReviewOperationResult(false, EditorNotice.Create("ui_backend_import_sidecar_changed"), null, null);
-            if (prepared.ReviewBytes is not null) store.WriteReview(prepared.ReviewBytes, reviewBytes);
+            if (prepared.ReviewBytes is not null)
+            {
+                store.RecordSources(prepared.Sources ?? []);
+                store.WriteReview(prepared.ReviewBytes, reviewBytes);
+            }
             return new EditorReviewOperationResult(true, null, _review.KnownReview(store.Load(currentState.Compilation)), null);
         }
         catch (TranslationInterchangeException exception) when (exception.Code == TranslationReviewFile.ChangedCode)
@@ -464,6 +475,14 @@ internal sealed class InterchangeService
     }
 
     private static string Identity(string key, string locale) => key + "\0" + locale;
+
+    // The current base text of each imported review entry whose fingerprint is the current one.
+    private static TranslationReviewSource[] ImportedSources(Rmf2ProjectCompilation compilation, TranslationInterchangeReview import)
+    {
+        IReadOnlyDictionary<string, TranslationReviewSource> current = TranslationReviewFile.CurrentSources(compilation);
+        return import.Entries.Where(entry => current.TryGetValue(entry.Key, out TranslationReviewSource? source) && source.Fingerprint == entry.SourceFingerprint)
+            .Select(entry => current[entry.Key]).Distinct().ToArray();
+    }
 
     private static EditorXliffImportPlan RefuseXliff(string code, EditorNotice message) =>
         new(false, message, null, null, null, null, null, [], 0, 0, 0, 0, 0, false, [new EditorInterchangeRefusal(code, message)]);

@@ -33,6 +33,7 @@
     <None Include="..\..\..\specs\translations\schemas\external-pack-v5.schema.json" Pack="true" PackagePath="schemas" />
     <None Include="..\..\..\specs\translations\schemas\web-module-manifest-v3.schema.json" Pack="true" PackagePath="schemas" />
     <None Include="..\..\..\specs\translations\schemas\interchange-review-v2.schema.json" Pack="true" PackagePath="schemas" />
+    <None Include="..\..\..\specs\translations\schemas\review-sources-v1.schema.json" Pack="true" PackagePath="schemas" />
     <None Update="README.md" Pack="true" PackagePath="\" />
     <None Include="..\..\..\specs\translations\THIRD-PARTY-NOTICES.md" Pack="true" PackagePath="\" />
     <None Include="..\..\..\specs\translations\cldr\LICENSE" Pack="true" PackagePath="licenses" />
