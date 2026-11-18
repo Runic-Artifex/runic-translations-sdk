@@ -23,6 +23,7 @@ const persisted = new Map([
   ["runic.sidebar.languages-share", "0.500"],
   ["runic-translations:recent:1", '[{"root":"/private/customer","catalogId":"product"}]'],
   ["runic-translations:drafts:1:/private/customer\nproduct", '{"documents":{"de.json":{"content":"secret translation"}}}'],
+  ["runic-translations:review-drafts:1:/private/customer\nproduct", '{"version":1,"entries":[{"entry":{"key":"k","locale":"de","state":"approved","note":"private note"}}]}'],
 ]);
 let saves = 0;
 localState.configureLocalEditorState({
@@ -46,7 +47,7 @@ await localState.loadLocalEditorState();
 const summary = localState.inspectLocalEditorState();
 assert.deepEqual(
   { entries: summary.entries, preferenceEntries: summary.preferenceEntries, recentProjectEntries: summary.recentProjectEntries, draftEntries: summary.draftEntries },
-  { entries: 4, preferenceEntries: 2, recentProjectEntries: 1, draftEntries: 1 },
+  { entries: 5, preferenceEntries: 2, recentProjectEntries: 1, draftEntries: 2 },
   "The local-state inventory must count only editor-owned state.",
 );
 assert.ok(summary.bytes > 0, "The local-state inventory must provide a bounded size signal.");
@@ -63,7 +64,7 @@ assert.ok(saves >= 2, "Each changed projection must be sent through the native b
 assert.throws(() => localState.setLocalEditorState("unrelated.application", "keep me"), /not owned/,
   "The UI must not use the editor store for another application's data.");
 
-assert.equal(await localState.clearLocalEditorState(), 5,
+assert.equal(await localState.clearLocalEditorState(), 6,
   "Clear must remove every editor-owned native entry.");
 assert.deepEqual(localState.inspectLocalEditorState(), {
   entries: 0, bytes: 0, preferenceEntries: 0, recentProjectEntries: 0, draftEntries: 0, recovered: false,

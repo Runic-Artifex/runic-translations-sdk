@@ -149,8 +149,10 @@ internal static class EditorLocalStateStore
             throw new ArgumentException("A local editor-state value is too large.", nameof(value));
     }
 
+    // Recovery copies of unsaved work per workspace and catalog: document drafts and review changes.
     private static bool IsAllowedKey(string key) => ExactKeys.Contains(key) ||
-        key.StartsWith("runic-translations:drafts:1:", StringComparison.Ordinal);
+        key.StartsWith("runic-translations:drafts:1:", StringComparison.Ordinal) ||
+        key.StartsWith("runic-translations:review-drafts:1:", StringComparison.Ordinal);
 
     private static byte[] ReadBounded(string path)
     {

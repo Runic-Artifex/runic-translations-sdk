@@ -81,8 +81,13 @@ export class DraftStore {
   authoringPending = $state(0);
   /** A raw-source validation is scheduled or running. */
   validating = $state(false);
-  /** Whether any document has a draft: the unsaved-work signal of the documents. */
+  /**
+   * Whether any document has unsaved text. A draft is kept only while it differs from the saved document, so this is
+   * the unsaved-work signal of the documents.
+   */
   hasDrafts = $derived(Object.keys(this.drafts).length > 0);
+  /** The documents with unsaved text, in the workspace's order. */
+  dirtyPaths = $derived(this.#ordered(Object.keys(this.drafts)));
 
   readonly #options: DraftStoreOptions;
   readonly #queues = new Map<string, Promise<void>>();
@@ -103,9 +108,14 @@ export class DraftStore {
     return ++this.#workspace;
   }
 
-  /** A document is dirty while it has a draft, also one equal to the saved text. */
+  /** A document is dirty while its draft differs from the saved text; a draft equal to it is never kept. */
   isDirty(path: string | undefined): boolean {
     return path !== undefined && this.drafts[path] !== undefined;
+  }
+
+  /** The saved text of `path` in the open workspace. */
+  saved(path: string): string | undefined {
+    return this.#options.snapshot()?.documents.find((document) => document.path === path)?.content;
   }
 
   content(path: string, saved: string): string {
@@ -116,25 +126,39 @@ export class DraftStore {
     return this.generations[path] ?? 0;
   }
 
+  /**
+   * Sets the document's text. Text equal to the saved document is no draft: the draft is dropped, also from the
+   * recovery copy once it is persisted. Either way the generation advances, so answers for the earlier text are dropped.
+   */
   set(path: string, content: string): void {
-    this.drafts[path] = content;
+    if (content === this.saved(path)) delete this.drafts[path];
+    else this.drafts[path] = content;
     this.generations[path] = this.generation(path) + 1;
   }
 
-  /** Replaces the drafts, keeping their generations (recovered or merged drafts). */
+  /** Replaces the drafts (recovered or merged drafts); each starts a new generation and equal ones are dropped. */
   replace(drafts: Record<string, string>): void {
-    this.drafts = drafts;
+    this.drafts = {};
+    for (const [path, content] of Object.entries(drafts)) this.set(path, content);
+  }
+
+  /** Drops the drafts that equal the saved text of a newly installed snapshot, and their recovery copy. */
+  prune(): void {
+    const equal = Object.keys(this.drafts).filter((path) => this.drafts[path] === this.saved(path));
+    if (equal.length === 0) return;
+    for (const path of equal) delete this.drafts[path];
+    this.persist();
   }
 
   /** A save of `content` at `generation` left a newer draft of `path`. */
   hasNewer(path: string, content: string, generation: number): boolean {
-    return this.generations[path] !== generation || this.drafts[path] !== content;
+    return this.generation(path) !== generation || this.drafts[path] !== content;
   }
 
-  /** Forgets the saved document's draft. */
+  /** Forgets the saved document's draft. Its generation stays, so an answer for the saved text is still dropped. */
   drop(path: string): void {
     delete this.drafts[path];
-    delete this.generations[path];
+    this.generations[path] = this.generation(path) + 1;
     this.persist();
   }
 
@@ -153,17 +177,20 @@ export class DraftStore {
     this.generations = {};
   }
 
-  /** Restores the recovered drafts and forgets the offer. */
+  /**
+   * Restores the recovered drafts and forgets the offer. Each restored draft starts a new generation, so a save of it
+   * is not mistaken for a newer draft; one equal to the saved text is dropped.
+   */
   restoreRecovered(): void {
-    this.drafts = Object.fromEntries(Object.entries(this.recovered).map(([path, draft]) => [path, draft.content]));
+    this.replace(Object.fromEntries(Object.entries(this.recovered).map(([path, draft]) => [path, draft.content])));
     this.recovered = {};
     this.persist();
   }
 
-  /** Declines the recovered drafts. */
+  /** Declines the recovered drafts; the stored copy then holds only this session's drafts. */
   discardRecovered(): void {
     this.recovered = {};
-    this.clearStored(this.#options.snapshot());
+    this.persist();
   }
 
   persist(): void {
@@ -188,6 +215,11 @@ export class DraftStore {
   /** The document's queued requests; a save waits for them. */
   settled(path: string): Promise<void> | undefined {
     return this.#queues.get(path);
+  }
+
+  /** Every document's queued requests, also those of a document whose first edit has no draft yet. */
+  async settledAll(): Promise<void> {
+    while (this.#queues.size > 0) await Promise.all([...this.#queues.values()]);
   }
 
   /** Parses a recovered draft; resolves whether its entries were stored (the draft did not change meanwhile). */
@@ -301,6 +333,12 @@ export class DraftStore {
       commit: repair === undefined ? "draft" : "none",
       done,
     });
+  }
+
+  #ordered(paths: string[]): string[] {
+    const order = this.#options.snapshot()?.documents.map((document) => document.path) ?? [];
+    const rank = (path: string) => { const index = order.indexOf(path); return index < 0 ? order.length : index; };
+    return paths.sort((left, right) => rank(left) - rank(right) || left.localeCompare(right));
   }
 
   #ticket(): Ticket {

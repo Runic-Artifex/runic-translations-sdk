@@ -18,7 +18,7 @@ for (const operation of palette.paletteBridgeOperations) {
   assert(bridgeMethods.includes(operation),
     `Palette claims bridge operation '${operation}' that the typed façade does not expose.`);
 }
-for (const name of ["load", "save", "undo", "redo", "saveReview", "about", "createDiagnosticBundle"]) {
+for (const name of ["load", "save", "undo", "redo", "about", "createDiagnosticBundle"]) {
   assert(palette.paletteBridgeOperations.includes(name), `Bridge operation '${name}' lost palette coverage.`);
 }
 
@@ -32,12 +32,11 @@ const state = {
   themeMode: "dark",
   workspaceReady: true,
   searchAvailable: true,
-  documentDirty: true,
+  unsaved: true,
   canUndo: true,
   canRedo: false,
   reviewEditable: true,
   reviewDirty: false,
-  reviewError: false,
   pseudoLocalization: false,
   uiDirection: "ltr",
   artifactPreviewOpen: false,
@@ -53,7 +52,7 @@ for (const command of commands) {
 for (const expected of [
   "workspace.reload", "workspace.open", "workspace.new-project",
   "document.save", "document.undo", "document.redo",
-  "review.save-workflow", "review.discard-workflow", "review.state-approved",
+  "review.discard-workflow", "review.state-approved",
   "review.mark-visible-approved", "review.quality-report",
   "view.mode-raw", "view.focus-search", "view.toggle-messages",
   "view.toggle-pseudo-localization", "view.toggle-rtl-simulation", "view.toggle-artifact-preview",
@@ -74,14 +73,15 @@ assert(bridgesUsed.length === palette.paletteBridgeOperations.length,
 
 const disabled = commands.filter((command) => command.disabled === true).map((command) => command.id);
 assert(disabled.includes("document.redo"), "Redo should inherit canRedo=false as disabled.");
-assert(!disabled.includes("document.save"), "A dirty document must stay savable from the palette.");
+assert(!disabled.includes("document.save"), "Unsaved work must stay savable from the palette.");
+assert(!ids.includes("review.save-workflow"), "Review changes are saved by the one save, not by a separate entry.");
 assert(commands.find((command) => command.id === "view.locale:en").disabled === true,
   "The active locale entry should be disabled.");
 assert(commands.find((command) => command.id === "view.locale:fr").disabled !== true,
   "Inactive locales should remain selectable.");
 
 commands.find((command) => command.id === "document.save").run();
-assert(actions.calls.at(-1) === "saveDocument", "Save entry did not dispatch through the handed-in handler.");
+assert(actions.calls.at(-1) === "saveAll", "Save entry did not dispatch through the handed-in handler.");
 commands.find((command) => command.id === "review.state-approved").run();
 assert(actions.calls.at(-1) === "setMessageReviewState:approved",
   "Review transition did not reuse the page handler.");
@@ -106,7 +106,7 @@ assert(JSON.stringify(simulatedTitles) === JSON.stringify([
 
 const blocked = palette.buildEditorCommandPalette(
   actions,
-  { ...state, reviewEditable: false, reviewError: true },
+  { ...state, reviewEditable: false },
 ).filter((command) => command.disabled === true).map((command) => command.id);
 assert(blocked.includes("review.state-approved") && blocked.includes("review.terminology"),
   "Locked review workflow must disable review transitions in the palette.");
@@ -165,11 +165,10 @@ function stubActions() {
     openWorkspaceDialog: record("openWorkspaceDialog"),
     createProject: record("createProject"),
     openInterchange: record("openInterchange"),
-    saveDocument: record("saveDocument"),
+    saveAll: record("saveAll"),
     undo: record("undo"),
     redo: record("redo"),
     focusMessageSearch: record("focusMessageSearch"),
-    saveReview: record("saveReview"),
     discardReview: record("discardReview"),
     setMessageReviewState: (value) => calls.push(`setMessageReviewState:${value}`),
     markVisibleMessages: (value) => calls.push(`markVisibleMessages:${value}`),

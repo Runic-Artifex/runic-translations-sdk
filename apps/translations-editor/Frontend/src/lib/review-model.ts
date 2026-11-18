@@ -60,7 +60,14 @@ export function sameReviewEntry(left: EditorReviewEntry | undefined, right: Edit
     leftSamples.every(([name, value]) => Object.hasOwn(rightSamples, name) && rightSamples[name] === value);
 }
 
-function sameTerminology(left: readonly EditorTerminologyEntry[], right: readonly EditorTerminologyEntry[]): boolean {
+// An entry with no recorded state, note, fingerprint or samples says nothing beyond the translation's presence: it is
+// the same as no entry.
+export function emptyReviewEntry(entry: EditorReviewEntry): boolean {
+  return entry.implicit === true && (entry.note ?? undefined) === undefined && (entry.sourceFingerprint ?? undefined) === undefined &&
+    Object.keys(entry.samples ?? {}).length === 0;
+}
+
+export function sameTerminology(left: readonly EditorTerminologyEntry[], right: readonly EditorTerminologyEntry[]): boolean {
   return left.length === right.length && left.every((term, index) => term.source === right[index].source &&
     term.preferred === right[index].preferred && (term.locale ?? undefined) === (right[index].locale ?? undefined) &&
     (term.note ?? undefined) === (right[index].note ?? undefined));

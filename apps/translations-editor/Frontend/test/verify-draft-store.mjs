@@ -93,9 +93,60 @@ const outcomes = () => {
   const stored = JSON.parse([...storage.values.values()][0]);
   assert.deepEqual(stored.documents[document.path], { content: "Sichern\n", baseRevision: document.revision },
     "The draft is kept for recovery against the revision it started from.");
-  // Today's dirty semantics: a draft equal to the saved text still counts.
+  // Dirty means "differs from the saved text": an edit back to it drops the draft and its recovery copy.
+  const before = store.generation(document.path);
   store.set(document.path, document.content);
-  assert.equal(store.isDirty(document.path), true);
+  store.persist();
+  assert.equal(store.isDirty(document.path), false, "A draft equal to the saved text is no draft.");
+  assert.equal(store.hasDrafts, false);
+  assert.deepEqual(store.dirtyPaths, []);
+  assert.equal(store.generation(document.path), before + 1, "The edit back still advances the generation.");
+  assert.equal(storage.values.size, 0, "The recovery copy of a reverted draft is removed.");
+}
+
+// A composer edit whose answer is the saved text again (an edit typed back) leaves the document clean.
+{
+  const host = scriptedHost();
+  const { store, storage } = createStore({ bridge: host.bridge });
+  const { list, record } = outcomes();
+  store.set(path, "greeting = Hello\n");
+  store.persist();
+  assert.deepEqual(store.dirtyPaths, [path]);
+  const reverted = store.transform(path, saved, "greeting", "Hi", record("transform"));
+  await settle();
+  host.calls[0].reply.resolve(draft(saved));
+  await reverted;
+  assert.deepEqual(list.map((item) => item.kind), ["applied"]);
+  assert.equal(store.isDirty(path), false);
+  assert.equal(store.content(path, saved), saved);
+  assert.equal(storage.values.size, 0);
+}
+
+// A snapshot whose saved text now equals a draft (another document's save, a reload) makes that draft clean.
+{
+  const { store, setSnapshot } = createStore({ bridge: scriptedHost().bridge });
+  store.set(path, "greeting = Saved elsewhere\n");
+  const next = workspace();
+  next.documents[0] = { ...next.documents[0], content: "greeting = Saved elsewhere\n", revision: "rev-2" };
+  setSnapshot(next);
+  store.prune();
+  assert.equal(store.hasDrafts, false, "prune drops drafts equal to the newly saved text.");
+}
+
+// Every document's queue settles before a save, also one whose first edit has no draft yet.
+{
+  const host = scriptedHost();
+  const { store } = createStore({ bridge: host.bridge });
+  const pending = store.transform(path, saved, "greeting", "Hallo", () => {});
+  let settled = false;
+  const all = store.settledAll().then(() => { settled = true; });
+  await settle();
+  assert.equal(settled, false, "settledAll waits for the queued edit.");
+  host.calls[0].reply.resolve(draft("greeting = Hallo\n"));
+  await pending;
+  await all;
+  assert.equal(settled, true);
+  assert.deepEqual(store.dirtyPaths, [path]);
 }
 
 // The race of the former raw validation, which bypassed the queue: a raw edit after a queued composer edit now waits
@@ -290,6 +341,11 @@ const outcomes = () => {
   second.store.restoreRecovered();
   assert.equal(second.store.drafts[path], "greeting = Recovered\n");
   assert.deepEqual(second.store.recovered, {});
+  // The restored draft has a generation of its own, so saving it is not mistaken for a newer draft.
+  const restored = second.store.generation(path);
+  assert.ok(restored > 0, "A restored draft starts a new generation.");
+  assert.equal(second.store.hasNewer(path, "greeting = Recovered\n", restored), false,
+    "Saving a restored draft does not report a newer draft.");
   assert.equal(await second.store.parse(path, "greeting = Recovered\n"), true);
   assert.equal(second.store.parsed[path].content, "greeting = Recovered\n");
   second.store.set(path, "greeting = Edited\n");
