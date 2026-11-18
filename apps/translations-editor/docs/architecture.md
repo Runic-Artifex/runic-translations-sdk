@@ -62,7 +62,9 @@ reformatted.
 
 The Svelte frontend renders the editor workflow. A generated Runic Views
 Window connects typed TypeScript calls to an application-scoped `EditorViewModel`
-and `EditorSession` through the CS-WebUI host. The host serves the frontend and owns local application state, diagnostics, and filesystem-facing
+and `EditorSession` through the Runic Desktop host (`RunicDesktopHost`: GTK 4 and WebKitGTK 6 on Linux, WebView2 on
+Windows, WKWebView on macOS; `serve` uses its serve-only mode). The host serves the frontend below the window's own path
+and owns local application state, diagnostics, and filesystem-facing
 workspace operations. The browser profile does not hold durable editor state;
 preferences, recent projects, and recovery copies of unsaved text and review
 changes live in one native per-user

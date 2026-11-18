@@ -8,7 +8,7 @@ import { createContext, createObservations, fixtureMarker, preservedComment } fr
 
 const [urlOrPrepare, workspaceArgument] = process.argv.slice(2);
 if (!urlOrPrepare || !workspaceArgument)
-  throw new Error("Usage: hosted-rmf2-ui.mjs --prepare <new-workspace> | <host-url> <prepared-workspace>");
+  throw new Error("Usage: hosted-rmf2-ui.mjs --prepare <new-workspace> | <capability-url> <prepared-workspace>");
 const workspace = resolve(workspaceArgument);
 if (urlOrPrepare === "--prepare") {
   await mkdir(workspace, { recursive: false });
@@ -64,8 +64,8 @@ for (const file of (await readdir(stageDirectory)).sort()) {
   stages.push({ order: match[1], name: match[2], run });
 }
 assert.ok(stages.length > 0, "No hosted acceptance stages found.");
-const executablePath = process.env.WEBUI_BROWSER_PATH;
-if (!executablePath) throw new Error("WEBUI_BROWSER_PATH must name the pinned Chromium.");
+const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
+if (!executablePath) throw new Error("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH must name the pinned Chromium.");
 const { chromium } = createRequire(import.meta.url)("playwright-core");
 const browser = await chromium.launch({ executablePath, headless: true,
   args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"] });
@@ -83,7 +83,9 @@ try {
   page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
   page.setDefaultTimeout(20_000);
   observations.observe(page);
-  await page.goto(new URL("/", urlOrPrepare).href, { waitUntil: "domcontentloaded" });
+  // The serve-only host's capability URL, in full: it binds this browser context to the window's surface with a
+  // cookie and redirects to the page below the surface's own path, which every later reload keeps.
+  await page.goto(urlOrPrepare, { waitUntil: "domcontentloaded" });
   const context = createContext({ page, workspace, reportDirectory, observations });
   for (const { name, run } of stages) {
     stage = name;

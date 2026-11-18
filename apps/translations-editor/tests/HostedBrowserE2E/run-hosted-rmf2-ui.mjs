@@ -7,7 +7,7 @@ import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const [assemblyArgument] = process.argv.slice(2);
-if (!assemblyArgument || !process.env.WEBUI_BROWSER_PATH) throw new Error("Expected prebuilt editor DLL argument and project-pinned WEBUI_BROWSER_PATH.");
+if (!assemblyArgument || !process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) throw new Error("Expected prebuilt editor DLL argument and project-pinned PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH.");
 if (process.platform !== "linux") throw new Error("This Linux runner isolates editor state with XDG_STATE_HOME; use a platform-specific isolated profile on other systems.");
 const assembly = resolve(assemblyArgument);
 await access(assembly);
@@ -52,13 +52,16 @@ try {
     entries: [{ key: "runic-translations.theme-mode", value: "dark" }, { key: "runic-translations.theme-palette", value: "moss" }],
   }));
   const ready = new Promise((resolveReady, reject) => {
+    // Standard input stays open: a line written to it is the Runic Desktop host's request to stop serving.
     host = spawn("dotnet", [assembly, "serve", "--workspace", workspace], {
-      cwd: dirname(assembly), env: childEnvironment, stdio: ["ignore", "pipe", "pipe"],
+      cwd: dirname(assembly), env: childEnvironment, stdio: ["pipe", "pipe", "pipe"],
     });
     const timer = setTimeout(() => reject(new Error("Hosted editor did not announce its loopback URL within 30 seconds.")), 30_000);
+    // The serve-only protocol's first RUNIC_APPLICATION_URL= line, the window's capability URL. It admits one browser,
+    // so the driver opens this full URL; the surface's root ("/") does not carry its token.
     const consume = (bytes) => {
       hostOutput += bytes;
-      const match = /Runic Translations Editor is serving .* at (http:\/\/(?:127\.0\.0\.1|localhost):\d+\/?)/.exec(hostOutput);
+      const match = /^RUNIC_APPLICATION_URL=(http:\/\/(?:127\.0\.0\.1|localhost):\d+\/\S*)$/m.exec(hostOutput);
       if (match) { clearTimeout(timer); resolveReady(match[1]); }
     };
     host.stdout.on("data", consume);
@@ -72,10 +75,13 @@ try {
 } finally {
   if (host?.pid !== undefined && host.exitCode === null) {
     const closed = new Promise((resolveClose) => host.once("exit", resolveClose));
-    host.kill("SIGTERM");
-    const timer = setTimeout(() => host.kill("SIGKILL"), 5000);
+    // A line on standard input stops serving; SIGTERM, then SIGKILL, when the host does not exit.
+    host.stdin.end("stop\n");
+    const terminate = setTimeout(() => host.kill("SIGTERM"), 5000);
+    const kill = setTimeout(() => host.kill("SIGKILL"), 10_000);
     await closed;
-    clearTimeout(timer);
+    clearTimeout(terminate);
+    clearTimeout(kill);
   }
   await writeFile(join(reportDirectory, "host.log"), hostOutput);
   await writeFile(join(reportDirectory, "browser.log"), browserOutput);

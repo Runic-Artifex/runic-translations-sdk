@@ -16,6 +16,10 @@
     <Product>Runic Translations Editor</Product>
     <Title>Runic Translations Editor</Title>
     <Description>A focused desktop editor for Runic Translations workspaces.</Description>
+    <!-- The application ID, in one place: the GTK application ID and desktop entry name on Linux, the bundle identifier
+         on macOS and the package name on Windows. Program.cs reads it from the assembly. -->
+    <ApplicationId>eu.runic-artifex.TranslationsEditor</ApplicationId>
+    <ApplicationTitle>Runic Translations Editor</ApplicationTitle>
     <IsPackable>false</IsPackable>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -47,10 +51,13 @@
     <Compile Include="../../eng/translations/Rmf2Preview.cs" Link="Shared/Rmf2Preview.cs" />
     <Compile Include="../../eng/translations/TranslationManifestReader.cs" Link="Shared/TranslationManifestReader.cs" />
   </ItemGroup>
-  <ItemGroup Condition="'$(RunicNativeProvider)' != ''">
-    <PackageReference Include="Runic.Platform.$(RunicNativeProvider)" />
+  <!-- Runic.Application.Views.Desktop brings the Runic.Platform providers; a build for a runtime keeps its own. On Linux the
+       editor's windows are GTK 4 with WebKitGTK 6 (Runic.Desktop.Gtk4, through GirCore); Windows uses WebView2 and macOS
+       WKWebView, which Runic.Desktop itself hosts. -->
+  <ItemGroup Condition="'$(RunicNativeProvider)' == 'Linux'">
+    <PackageReference Include="Runic.Desktop.Gtk4" />
     <!-- The workspace folder picker uses the portal's unparented FileChooser (EditorWorkspacePicker). -->
-    <PackageReference Include="Runic.Platform.Linux.Portal" Condition="'$(RunicNativeProvider)' == 'Linux'" />
+    <PackageReference Include="Runic.Platform.Linux.Portal" />
   </ItemGroup>
 
   <!-- The editor smoke test (the smoke-test option of edit) drives the editor's window through the SDK's window test host,
@@ -67,6 +74,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <AssemblyMetadata Include="ApplicationId" Value="$(ApplicationId)" />
     <AssemblyMetadata Include="RunicUpdateChannel" Value="$(RunicEditorUpdateChannel)" />
     <AssemblyMetadata Include="RepositoryCommit" Value="$(SourceRevisionId)" Condition="'$(SourceRevisionId)' != ''" />
   </ItemGroup>
@@ -74,7 +82,9 @@
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <PackageReference Include="Runic.Application.Views.CsWebUi" />
+    <PackageReference Include="Runic.Application.Views.Desktop" />
+    <!-- The server each window's page is served from: Runic's native server, without ASP.NET Core. -->
+    <PackageReference Include="Runic.Desktop.NativeServer" />
     <PackageReference Include="Runic.Application.Views.ReactiveUI" />
     <PackageReference Include="Runic.CommandLine" />
   </ItemGroup>

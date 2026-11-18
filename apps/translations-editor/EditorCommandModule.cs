@@ -21,7 +21,7 @@ namespace Runic.Translations.Editor;
 /// </para>
 /// <para>
 /// Recorded strictness deltas versus the legacy parser: <c>validate</c> rejects the
-/// editor-only <c>--webview</c> and <c>--smoke-test</c> options as unknown options with a
+/// editor-only <c>--browser</c> and <c>--smoke-test</c> options as unknown options with a
 /// usage error; repeated or unknown options fail fast with focused usage diagnostics
 /// instead of being silently ignored or resolved last-one-wins; and a build without
 /// the embedded packaged web UI fails gracefully as unavailable (fault <c>REDIT0004</c>,
@@ -109,7 +109,7 @@ internal static class EditorCommandModule
         [FromServices] IEditorCommandOperations operations,
         [Argument(AllowMultipleValues = true)] IReadOnlyList<string> workspace,
         CommandExecutionContext context,
-        [Option("--webview")] bool webview,
+        [Option("--browser")] bool browser,
         [Option("--smoke-test")] bool smokeTest,
         [Option("--native-shell-canary")] bool nativeShellCanary,
         [Option("--validate")] bool validate,
@@ -118,15 +118,16 @@ internal static class EditorCommandModule
             "edit",
             workspace,
             workspacePath,
-            webview,
+            browser,
             smokeTest,
             validate,
             context.OutputMode,
-            NativeShellCanary: nativeShellCanary));
+            NativeShellCanary: nativeShellCanary,
+            ContinueOnMainThread: MainThreadContinuation(context)));
 
     /// <summary>
     /// Validates one workspace headlessly without opening the editor.
-    /// Editor-only options (<c>--webview</c>, <c>--smoke-test</c>) are rejected with a usage error.
+    /// Editor-only options (<c>--browser</c>, <c>--smoke-test</c>) are rejected with a usage error.
     /// </summary>
     [Command("validate", Description = "Validate the selected workspace.")]
     [CommandResult("runic.editor.command/1", typeof(EditorCommandJsonContext))]
@@ -199,8 +200,8 @@ internal static class EditorCommandModule
             Format: format, Source: source, Apply: apply));
 
     /// <summary>
-    /// Hosts the same Views Window and editor session as <c>edit</c> over the
-    /// CS-WebUI loopback server without opening a native presentation.
+    /// Hosts the same Views Window and editor session as <c>edit</c> in the Runic Desktop host's serve-only mode: the
+    /// window's loopback surface serves the page to one browser, and no native window opens.
     /// </summary>
     [Command("serve", Description = "Serve the editor in a browser.")]
     [CommandResult("runic.editor.command/1", typeof(EditorCommandJsonContext))]
@@ -216,7 +217,13 @@ internal static class EditorCommandModule
             false,
             false,
             false,
-            context.OutputMode));
+            context.OutputMode,
+            ContinueOnMainThread: MainThreadContinuation(context)));
+
+    // The Runic Desktop host runs on the process main thread (GTK 4 on Linux, AppKit on macOS), which a command does not
+    // run on. Under CommandApp.Run (Program.Main) the command hands the host's start back to that thread.
+    private static Action<Func<int>>? MainThreadContinuation(CommandExecutionContext context) =>
+        context.CanContinueOnCallingThread ? context.ContinueOnCallingThread : null;
 
     private sealed class EmptyServices : IServiceProvider
     {
@@ -238,7 +245,7 @@ internal sealed record EditorCommandRequest(
     string Command,
     IReadOnlyList<string> Workspace,
     string? WorkspacePath,
-    bool Webview,
+    bool Browser,
     bool SmokeTest,
     bool Validate,
     CommandOutputMode OutputMode,
@@ -246,7 +253,8 @@ internal sealed record EditorCommandRequest(
     string? Source = null,
     string? Output = null,
     bool Apply = false,
-    bool NativeShellCanary = false);
+    bool NativeShellCanary = false,
+    Action<Func<int>>? ContinueOnMainThread = null);
 
 /// <summary>Portable command payload; silent commands carry an empty summary.</summary>
 internal sealed record EditorCommandResult(

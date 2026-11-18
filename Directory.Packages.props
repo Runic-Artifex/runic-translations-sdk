@@ -11,14 +11,16 @@
     <PackageVersion Include="JsonSchema.Net" Version="9.4.0" />
     <!-- Build tests check the dependency range with NuGet's own version ordering. -->
     <PackageVersion Include="NuGet.Versioning" Version="7.9.0" />
-    <PackageVersion Include="CsWebUi" Version="[2.5.0-beta.4.9, 3.0.0)" />
-    <PackageVersion Include="CsWebUi.Native" Version="[2.5.0-beta.4.9, 3.0.0)" />
     <!-- The floor only: the packed range is stamped after pack (eng/Versions.props, RunicCommandLineVersion). -->
     <PackageVersion Include="Runic.CommandLine" Version="$(RunicCommandLineVersion)" />
     <PackageVersion Include="Runic.CommandLine.Spectre" Version="$(RunicCommandLineVersion)" />
-    <PackageVersion Include="Runic.Application.Views.CsWebUi" Version="$(RunicSdkCsWebUiDependencyVersion)" />
     <PackageVersion Include="Runic.Application.Testing" Version="$(RunicSdkDependencyVersion)" />
     <PackageVersion Include="Runic.Application.Views.ReactiveUI" Version="$(RunicSdkDependencyVersion)" />
+    <!-- The editor's Runic Desktop host: native windows (GTK 4 and WebKitGTK 6 on Linux, WebView2, WKWebView) and the
+         native presentation server. -->
+    <PackageVersion Include="Runic.Application.Views.Desktop" Version="$(RunicSdkDependencyVersion)" />
+    <PackageVersion Include="Runic.Desktop.Gtk4" Version="$(RunicSdkDependencyVersion)" />
+    <PackageVersion Include="Runic.Desktop.NativeServer" Version="$(RunicSdkDependencyVersion)" />
     <PackageVersion Include="Runic.Platform.Linux" Version="$(RunicSdkDependencyVersion)" />
     <PackageVersion Include="Runic.Platform.Linux.Portal" Version="$(RunicSdkDependencyVersion)" />
     <PackageVersion Include="Runic.Platform.Windows" Version="$(RunicSdkDependencyVersion)" />

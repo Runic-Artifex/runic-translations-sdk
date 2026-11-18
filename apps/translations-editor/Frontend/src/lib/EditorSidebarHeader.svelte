@@ -63,7 +63,7 @@
             >
               {#if success}
                 <img
-                  src="/brand/icon.png"
+                  src="brand/icon.png"
                   alt=""
                   class="size-10 shrink-0 rounded-xl object-cover"
                 />
