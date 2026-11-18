@@ -84,7 +84,8 @@
   import { Textarea } from "#lib/components/ui/textarea/index.js";
   import type { MessageArtifact, PreviewFormatting, PreviewNode } from "#lib/message-composer.js";
   import { previewSampleOr } from "#lib/message-preview.js";
-  import { DraftStore } from "#lib/state/draft-store.svelte.js";
+  import { DraftStore, type DraftOutcome } from "#lib/state/draft-store.svelte.js";
+  import { MessageDraftStore, type StarterOutcome, type StarterTarget } from "#lib/state/message-draft-store.svelte.js";
   import { DiagnosticsStore } from "#lib/state/diagnostics-store.svelte.js";
   import { PreviewController } from "#lib/state/preview-controller.svelte.js";
   import { ReviewStore } from "#lib/state/review-store.svelte.js";
@@ -138,6 +139,8 @@
   // Unsaved document text and the one queue per document that changes it (composer, authoring, raw validation, fixes).
   const nativeStorage = { get: getLocalEditorState, set: setLocalEditorState, remove: removeLocalEditorState };
   const draftStore = new DraftStore({ bridge, snapshot: () => snapshot, storage: nativeStorage });
+  // The empty starters of missing translations, edited in memory until they have text (#225 P2).
+  const messageDrafts = new MessageDraftStore({ bridge, drafts: draftStore });
   const diagnosticsStore = new DiagnosticsStore(() => snapshot);
   const review = new ReviewStore({ bridge, snapshot: () => snapshot, errorNotice, storage: nativeStorage });
   // The one save: every unsaved document, then the review changes.
@@ -459,6 +462,16 @@
       ? undefined
       : draftStore.content(currentDocument.path, currentDocument.content),
   );
+  // A translation the saved files lack is written in the composer on an empty starter shaped for the target locale
+  // (#225 P2): where it goes, the starter once it exists, and whether it is still being prepared.
+  let currentStarterTarget = $derived.by((): StarterTarget | undefined => {
+    if (currentDocument === undefined || selectedRow === undefined || selectedLocale === snapshot?.catalog?.defaultLocale) return undefined;
+    if (savedHasMessage(selectedKey, selectedLocale)) return undefined;
+    return { path: currentDocument.path, saved: currentDocument.content, key: selectedKey, locale: selectedLocale };
+  });
+  let currentStarter = $derived(currentStarterTarget === undefined ? undefined : messageDrafts.get(currentStarterTarget));
+  let starterLoading = $derived(currentStarterTarget !== undefined && currentStarter === undefined && messageDrafts.isLoading(currentStarterTarget));
+  let sourceAuthoring = $derived(selectedRow?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.authoring);
   let malformedDocuments = $derived(
     snapshot?.documents.filter((document) => document.isMalformed) ?? [],
   );
@@ -678,6 +691,9 @@
     snapshot = next;
     if (resetSelection) draftStore.reset(next);
     else draftStore.prune();
+    // A starter whose message the saved files now have (it was saved) is done.
+    if (resetSelection) messageDrafts.reset();
+    else messageDrafts.retain((target) => !savedHasMessage(target.key, target.locale));
     // Unsaved review changes stay on top of the review data they started from.
     if (!review.dirty) {
       if (resetSelection) review.reset(next);
@@ -710,6 +726,7 @@
 
   function discardUnsavedWork(): void {
     draftStore.discard();
+    messageDrafts.reset();
     review.discard();
     if (hasUnsavedRepair) {
       repairDocument = undefined;
@@ -787,13 +804,65 @@
     if (nextMode === "raw") {
       editorText = document === undefined ? "" : draftStore.content(document.path, document.content);
     } else {
-      const resourceValue = cell?.entry?.value ?? sourceEntry?.value ?? "";
+      // A missing translation starts empty, never with the source text.
+      const resourceValue = cell?.entry?.value ?? "";
       editorText = typeof resourceValue === "string" ? resourceValue : JSON.stringify(resourceValue, null, 2);
     }
     previewController.reset();
     if (nextMode === "translation" && document !== undefined) {
       previewController.schedule(document.path, draftStore.content(document.path, document.content), key, locale);
     }
+    if (nextMode === "translation" && document !== undefined && cell?.entry === undefined && sourceEntry !== undefined &&
+      locale !== snapshot?.catalog?.defaultLocale && !savedHasMessage(key, locale)) {
+      void messageDrafts.open({ path: document.path, key, locale }).then((outcome) => {
+        if (outcome === undefined || outcome.kind === "applied" || selectedKey !== key || selectedLocale !== locale) return;
+        clientError = outcome.kind === "failed"
+          ? errorNotice(outcome.error)
+          : outcome.result.diagnostics[0]?.notice ?? outcome.result.diagnostics[0]?.message;
+      });
+    }
+  }
+
+  /** Whether the saved files have `key` in `locale`: a missing translation's starter is kept until they do. */
+  function savedHasMessage(key: string, locale: string): boolean {
+    return snapshot?.documents.some((document) => document.locale === locale && !document.isManifest &&
+      (document.entries?.some((entry) => entry.key === key) ?? document.path.endsWith(`/${key}.mf2`))) === true;
+  }
+
+  /** Reports a composer edit's change of a document's draft and refreshes the preview of the message it changed. */
+  function transformDone(path: string, key: string, locale: string): (outcome: DraftOutcome) => void {
+    return (outcome) => {
+      if (outcome.kind === "failed") {
+        clientError = errorNotice(outcome.error);
+        return;
+      }
+      const result = outcome.result;
+      if (outcome.kind === "rejected") {
+        clientError = result.diagnostics[0]?.notice ?? result.diagnostics[0]?.message;
+        return;
+      }
+      diagnosticsStore.record("transform", path, result);
+      if (selectedDocumentPath === path && selectedKey === key && selectedLocale === locale) {
+        previewController.schedule(path, result.content, key, locale);
+      }
+    };
+  }
+
+  function starterDone(outcome: StarterOutcome): void {
+    if (outcome.kind === "failed") clientError = errorNotice(outcome.error);
+    else if (outcome.kind === "rejected") {
+      const diagnostic = outcome.result.diagnostics.find((candidate) => candidate.id === "EDITOR-AUTHORING") ?? outcome.result.diagnostics[0];
+      clientError = diagnostic?.notice ?? diagnostic?.message;
+    }
+  }
+
+  /** "Copy source": the starter of the missing translation gets the source text, variant by variant. */
+  function copySource(): void {
+    const target = currentStarterTarget;
+    if (editorMutationBlocked || target === undefined || currentStarter === undefined || sourceAuthoring?.supported !== true) return;
+    clientError = undefined;
+    operationMessage = undefined;
+    void messageDrafts.copySource(target, sourceAuthoring.variants, starterDone, transformDone(target.path, target.key, target.locale));
   }
 
   function edit(value: string): void {
@@ -813,6 +882,8 @@
     try {
       draftStore.set(document.path, value);
       draftStore.persist();
+      // The file's own text now decides what its missing translations hold.
+      messageDrafts.retain((target) => target.path !== document.path);
       draftStore.validate(document.path, value, (outcome) => {
         if (outcome.kind === "applied") diagnosticsStore.record("validation", document.path, outcome.result);
         else if (outcome.kind === "failed") clientError = errorNotice(outcome.error);
@@ -837,27 +908,23 @@
     const path = document.path;
     const key = selectedKey;
     const locale = selectedLocale;
-    void draftStore.transform(path, document.content, key, resourceValue, (outcome) => {
-      if (outcome.kind === "failed") {
-        clientError = errorNotice(outcome.error);
-        return;
-      }
-      const result = outcome.result;
-      if (outcome.kind === "rejected") {
-        clientError = result.diagnostics[0]?.notice ?? result.diagnostics[0]?.message;
-        return;
-      }
-      diagnosticsStore.record("transform", path, result);
-      if (selectedDocumentPath === path && selectedKey === key && selectedLocale === locale) {
-        previewController.schedule(path, result.content, key, locale);
-      }
-    });
+    const target = currentStarterTarget;
+    // MF2 source typed for a starter: it goes into the document unless it is empty or the untouched starter.
+    if (target !== undefined && currentStarter !== undefined) {
+      messageDrafts.edit(target, resourceValue, transformDone(path, key, locale));
+      return;
+    }
+    void draftStore.transform(path, document.content, key, resourceValue, transformDone(path, key, locale));
   }
 
   function applyAuthoringOperation(operation: EditorMessageOperation): Promise<void> {
     if (editorMutationBlocked || currentDocument === undefined) return Promise.resolve();
     clientError = undefined;
     operationMessage = undefined;
+    const target = currentStarterTarget;
+    if (target !== undefined && currentStarter !== undefined) {
+      return messageDrafts.apply(target, operation, starterDone, transformDone(target.path, target.key, target.locale));
+    }
     const document = currentDocument;
     const path = document.path;
     const key = selectedKey;
@@ -2245,6 +2312,7 @@
 
           <ReviewWorkflow
             state={currentReviewState}
+            notTranslated={currentCell?.entry === undefined && (currentReview === undefined || currentReview.implicit === true)}
             dirty={review.dirty}
             message={displayNotice(review.message ?? notice("ui_page_project_notes"), ui)}
             disabled={snapshot.review?.error !== undefined || reviewMutationBlocked}
@@ -2276,14 +2344,18 @@
             {mode}
             locale={selectedLocale}
             label={mode === "translation" ? localeName(selectedLocale) : currentDocument?.path ?? ui.text("ui_page_resource_document")}
-            value={editorText}
-            resourceValue={currentCell?.entry?.value ?? selectedRow.cells[snapshot.catalog.defaultLocale]?.entry?.value}
+            value={mode === "translation" && currentStarter !== undefined ? currentStarter.text : editorText}
+            resourceValue={currentStarter?.text ?? currentCell?.entry?.value ?? ""}
             sourceLocale={snapshot.catalog.defaultLocale}
             sourceLocaleName={localeName(snapshot.catalog.defaultLocale)}
             sourceEntry={selectedRow.cells[snapshot.catalog.defaultLocale]?.entry}
-            authoring={currentCell?.entry?.authoring}
-            authoringBusy={draftStore.authoringPending > 0}
+            authoring={currentStarter?.projection ?? currentCell?.entry?.authoring}
+            authoringBusy={draftStore.authoringPending > 0 || messageDrafts.pending > 0}
             onoperation={applyAuthoringOperation}
+            maxLength={currentStarter !== undefined ? currentStarter.maxLength : currentCell?.entry?.maxLength}
+            lengthWarning={currentQuality.find((issue) => issue.code === "RTR0098")?.message}
+            {starterLoading}
+            oncopysource={currentStarter !== undefined && sourceAuthoring?.supported === true ? copySource : undefined}
             {sourceSelection}
             missing={currentCell?.entry === undefined}
             invalid={clientError !== undefined || diagnosticsStore.latest?.success === false}

@@ -4584,3 +4584,41 @@ ui {
     project_changed_unsaved = A library catalog was added to runic.json "overrides". Your unsaved changes are kept; reload the workspace once they are saved.
   }
 }
+ui {
+  composer {
+    copy_source = Copy source
+  }
+}
+ui {
+  composer {
+    copy_source_title = Fill each variant with the source text; placeholders stay placeholders.
+  }
+}
+ui {
+  count {
+    characters_limit =
+      .input {$count :integer}
+      .input {$limit :integer}
+      {{{$count} / {$limit}}}
+  }
+}
+ui {
+  count {
+    characters_limit_title =
+      .input {$count :integer}
+      .input {$limit :integer}
+      {{{$count} of at most {$limit} characters; placeholder values are not counted}}
+  }
+}
+ui {
+  translation {
+    editor_over_limit =
+      .input {$limit :integer}
+      {{This text is longer than its limit of {$limit} characters. Placeholder values are not counted.}}
+  }
+}
+ui {
+  translation {
+    editor_starter_loading = Preparing an empty translation…
+  }
+}
