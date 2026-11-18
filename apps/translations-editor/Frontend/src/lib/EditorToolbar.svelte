@@ -25,6 +25,7 @@
     historyBusy,
     undoLabel,
     redoLabel,
+    showNext = true,
     nextLabel,
     nextDisabled,
     nextDetail,
@@ -50,6 +51,8 @@
     /** What Undo takes back: "Undo: edit in files.selected" for an unsaved step, else the saved change it undoes. */
     undoLabel: string;
     redoLabel: string;
+    /** Whether the toolbar has the Next command; a content-editing project (D074.2) has nothing missing to go to. */
+    showNext?: boolean;
     /** The Next command for the list's filter: "Next missing", "Next outdated" or "Next to review" (D074.1). */
     nextLabel: string;
     nextDisabled: boolean;
@@ -73,20 +76,22 @@
 
   <div class="flex shrink-0 items-center gap-2">
     <!-- The next message to work on in tree order (Alt+↓); the label follows the list's filter. -->
-    <Button
-      variant="outline"
-      size="sm"
-      disabled={nextDisabled}
-      onclick={onnext}
-      aria-label={nextLabel}
-      aria-keyshortcuts="Alt+ArrowDown"
-      title={nextDetail === "" ? `${nextLabel} (${shortcutLabel("Alt+↓")})` : nextDetail}
-      data-testid="next-message"
-    >
-      <ArrowDownIcon data-icon="inline-start" class="sm:hidden" />
-      <span class="hidden sm:inline">{nextLabel}</span>
-      <Kbd.Root class="hidden lg:inline-flex">{shortcutLabel("Alt+↓")}</Kbd.Root>
-    </Button>
+    {#if showNext}
+      <Button
+        variant="outline"
+        size="sm"
+        disabled={nextDisabled}
+        onclick={onnext}
+        aria-label={nextLabel}
+        aria-keyshortcuts="Alt+ArrowDown"
+        title={nextDetail === "" ? `${nextLabel} (${shortcutLabel("Alt+↓")})` : nextDetail}
+        data-testid="next-message"
+      >
+        <ArrowDownIcon data-icon="inline-start" class="sm:hidden" />
+        <span class="hidden sm:inline">{nextLabel}</span>
+        <Kbd.Root class="hidden lg:inline-flex">{shortcutLabel("Alt+↓")}</Kbd.Root>
+      </Button>
+    {/if}
     <Button variant="ghost" size="icon-xs" disabled={!canUndo || historyBusy} onclick={onundo} aria-label={undoLabel} title={`${undoLabel} (${shortcutLabel("Mod+Z")})`}>
       <Undo2Icon data-icon="inline-start" />
     </Button>

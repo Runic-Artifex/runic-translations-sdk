@@ -22,7 +22,7 @@ const scripts = [];
 await collect(build, scripts);
 // Generated ESM writes a plain message as its text, so German text is unescaped (#85).
 const bundled = (await Promise.all(scripts.map((file) => readFile(file, "utf8")))).join("\n");
-for (const text of ["Translations", "Übersetzungen", "LoadWorkspace", "SaveReview", "RecoverTransaction", "Undo", "Redo", "About", "CreateDiagnosticBundle", "Translate the message", "Create new variable", "Message source", "Preview", "Editor settings", "Density", "Compact", "Comfortable", "Anzeigedichte", "Resize Languages and Messages", "Quality report", "About & diagnostics", "Terminology", "schema", "Saved the earlier draft; your newer edit is still open.", "Recovery completed; reload required", "Discard unsaved document drafts, repair text, and workflow/terminology changes", "Local editor state", "Clear local state"]) {
+for (const text of ["Translations", "Übersetzungen", "LoadWorkspace", "SaveReview", "RecoverTransaction", "Undo", "Redo", "About", "CreateDiagnosticBundle", "Translate the message", "Edit the text", "Text bearbeiten", "Save and next text", "Note from the developers", "Create new variable", "Message source", "Preview", "Editor settings", "Density", "Compact", "Comfortable", "Anzeigedichte", "Resize Languages and Messages", "Quality report", "About & diagnostics", "Terminology", "schema", "Saved the earlier draft; your newer edit is still open.", "Recovery completed; reload required", "Discard unsaved document drafts, repair text, and workflow/terminology changes", "Local editor state", "Clear local state"]) {
   if (!bundled.includes(text)) throw new Error(`The production client omitted '${text}'.`);
 }
 if (bundled.includes("node:fs") || bundled.includes("Runic.Translations.Compiler.dll")) {

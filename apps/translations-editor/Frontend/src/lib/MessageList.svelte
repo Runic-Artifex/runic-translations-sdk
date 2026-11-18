@@ -87,6 +87,7 @@
     groupCounts = ["missing", "stale", "needsReview"],
     rowHeight = messageVirtualRowHeight,
     selectedHidden = false,
+    translationStates = true,
     reviewActionsDisabled = false,
     noResultsLabel,
     labels,
@@ -111,6 +112,11 @@
     rowHeight?: number;
     /** The selected message exists but the search or filter hides it. */
     selectedHidden?: boolean;
+    /**
+     * Whether the rows show their translation state and the list offers the bulk review actions; a content-editing
+     * project (D074.2) has neither.
+     */
+    translationStates?: boolean;
     reviewActionsDisabled?: boolean;
     noResultsLabel: string;
     labels: MessageListLabels;
@@ -320,6 +326,7 @@
         <ChevronDownIcon class="ml-auto transition-transform group-data-[state=open]/messages:rotate-180" />
       </Collapsible.Trigger>
       <div class="flex items-center gap-1">
+        {#if translationStates}
         <DropdownMenu.Root>
           <DropdownMenu.Trigger
             class={buttonVariants({ variant: "ghost", size: "icon-xs" })}
@@ -342,6 +349,7 @@
             </DropdownMenu.Group>
           </DropdownMenu.Content>
         </DropdownMenu.Root>
+        {/if}
         <Button variant="ghost" size="icon-xs" aria-label={labels.addMessage} title={labels.addMessage} onclick={addMessage}>
           <PlusIcon />
         </Button>
@@ -438,7 +446,7 @@
                     onclick={() => activate(row)}
                     onkeydown={handleTreeKeydown}
                   >
-                    <StateMark state={messageStateMark(row.item)} />
+                    {#if translationStates}<StateMark state={messageStateMark(row.item)} />{/if}
                     <span class="truncate font-mono text-[0.92em]">{row.label}</span>
                     {#if status !== undefined}
                       <span class="ml-auto text-xs text-muted-foreground">{status}</span>

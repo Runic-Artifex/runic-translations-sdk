@@ -146,6 +146,7 @@
     {preview}
     {labels}
     {reviewBlocked}
+    {localeName}
     bind:languagesOpen
     bind:messagesOpen
     bind:searchInput
@@ -171,6 +172,7 @@
       historyBusy={history.busy}
       undoLabel={history.undoLabel}
       redoLabel={history.redoLabel}
+      showNext={!view.contentProject}
       {nextLabel}
       nextDisabled={next.nextTarget === undefined || editingBlocked}
       nextDetail={next.nextTarget === undefined ? displayNotice(noneNotice(next.kind, localeName(selectedLocale)), ui) : ""}

@@ -4873,3 +4873,193 @@ ui {
       {{{$catalog} – Runic Translations Editor}}
   }
 }
+ui {
+  content {
+    composer_heading = Edit the text
+  }
+}
+ui {
+  content {
+    composer_text_for = Text for
+  }
+}
+ui {
+  content {
+    composer_default_text = Default text
+  }
+}
+ui {
+  content {
+    composer_add_case = Add case
+  }
+}
+ui {
+  content {
+    inline_remove_variable = Remove variable from this text
+  }
+}
+ui {
+  content {
+    quality_whitespace = The text has leading or trailing whitespace.
+  }
+}
+ui {
+  content {
+    search_label = Search texts
+  }
+}
+ui {
+  content {
+    tree_selected_hidden = The selected text is hidden by the filter.
+  }
+}
+ui {
+  content {
+    tree_show_all = Show all texts
+  }
+}
+ui {
+  content {
+    heading_rename_title = Rename or move this text
+  }
+}
+ui {
+  content {
+    heading_duplicate_title = Duplicate this text
+  }
+}
+ui {
+  content {
+    heading_delete_title = Delete this text
+  }
+}
+ui {
+  content {
+    empty_selection_description = Choose a text in the sidebar to edit it.
+  }
+}
+ui {
+  content {
+    texts_panel = Texts panel
+  }
+}
+ui {
+  content {
+    save_and_next_failed = Not saved, so the text stays selected. The diagnostics say why.
+  }
+}
+ui {
+  content {
+    palette_switch_to_text = Switch to text view
+  }
+}
+ui {
+  content {
+    palette_focus_search = Focus text search
+  }
+}
+ui {
+  content {
+    palette_toggle_texts = Toggle texts section
+  }
+}
+ui {
+  content {
+    texts = Texts
+  }
+}
+ui {
+  content {
+    search = Search texts…
+  }
+}
+ui {
+  content {
+    no_selection = Choose a text to edit
+  }
+}
+ui {
+  content {
+    no_results = No texts match this view
+  }
+}
+ui {
+  content {
+    no_matching_texts = No matching texts
+  }
+}
+ui {
+  content {
+    add_text = Add text
+  }
+}
+ui {
+  content {
+    text_filters = Text filters
+  }
+}
+ui {
+  content {
+    text = Text
+  }
+}
+ui {
+  content {
+    language = Language
+  }
+}
+ui {
+  content {
+    developer_note = Note from the developers
+  }
+}
+ui {
+  workbench {
+    next_text = Next text
+  }
+}
+ui {
+  workbench {
+    previous_text = Previous text
+  }
+}
+ui {
+  workbench {
+    save_and_next_text = Save and next text
+  }
+}
+ui {
+  workbench {
+    none_text = There is no other text.
+  }
+}
+ui {
+  content {
+    only_language =
+      .input {$language :string}
+      .input {$locale :string}
+      {{{$language} ({$locale}), the only language of this project}}
+
+  }
+}
+ui {
+  content {
+    tree_group_label =
+      .input {$count :integer select=plural}
+      .match $count
+      one {{{$name}, one text}}
+      * {{{$name}, {$count} texts}}
+
+  }
+}
+ui {
+  content {
+    project_summary =
+      .input {$language :string}
+      .input {$count :integer select=plural}
+      .match $count
+      one {{{$language} · 1 text}}
+      * {{{$language} · {$count} texts}}
+
+  }
+}

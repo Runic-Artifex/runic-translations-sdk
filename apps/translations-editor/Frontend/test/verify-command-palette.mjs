@@ -162,6 +162,24 @@ assert(stepEntry(palette.buildEditorCommandPalette(actions, { ...state, stepKind
   "Next is not named through the interface text.");
 assert(palette.filterCommands(stepping, "next missing")[0].id === "document.next-message", "Searching \"next missing\" does not find Next missing first.");
 
+// A content-editing project (D074.2) shows neither Next nor Previous, no review workflow and one language: the palette
+// leaves out their commands. Save and next goes to the next text.
+const contentCommands = palette.buildEditorCommandPalette(actions, {
+  ...state, projectKind: "content", stepKind: "text", saveAndNextKind: "text", canSaveAndNext: true,
+});
+const contentIds = contentCommands.map((command) => command.id);
+for (const hidden of ["document.next-message", "document.previous-message", "view.toggle-languages"]) {
+  assert(!contentIds.includes(hidden), `A content-editing project's palette offers ${hidden}.`);
+}
+assert(contentCommands.every((command) => command.group !== "review"), "A content-editing project's palette offers review commands.");
+assert(stepEntry(contentCommands, "document.save-and-next").title === "Save and next text", "Save and next is not named after texts.");
+assert(stepEntry(contentCommands, "document.save-and-next").disabled !== true);
+for (const kept of ["document.save", "document.undo", "view.mode-raw", "view.toggle-messages", "view.toggle-pseudo-localization"]) {
+  assert(contentIds.includes(kept), `A content-editing project's palette lost ${kept}.`);
+}
+assert(stepEntry(palette.buildEditorCommandPalette(actions, { ...state, projectKind: "translation" }), "review.state-approved") !== undefined,
+  "A translation project's palette lost its review commands.");
+
 const blocked = palette.buildEditorCommandPalette(
   actions,
   { ...state, reviewEditable: false },

@@ -4873,3 +4873,193 @@ ui {
       {{{$catalog} – Runic Translations Editor}}
   }
 }
+ui {
+  content {
+    composer_heading = Text bearbeiten
+  }
+}
+ui {
+  content {
+    composer_text_for = Text für
+  }
+}
+ui {
+  content {
+    composer_default_text = Standardtext
+  }
+}
+ui {
+  content {
+    composer_add_case = Fall hinzufügen
+  }
+}
+ui {
+  content {
+    inline_remove_variable = Variable aus diesem Text entfernen
+  }
+}
+ui {
+  content {
+    quality_whitespace = Der Text enthält führende oder abschließende Leerzeichen.
+  }
+}
+ui {
+  content {
+    search_label = Texte suchen
+  }
+}
+ui {
+  content {
+    tree_selected_hidden = Der ausgewählte Text ist durch den Filter ausgeblendet.
+  }
+}
+ui {
+  content {
+    tree_show_all = Alle Texte anzeigen
+  }
+}
+ui {
+  content {
+    heading_rename_title = Diesen Text umbenennen oder verschieben
+  }
+}
+ui {
+  content {
+    heading_duplicate_title = Diesen Text duplizieren
+  }
+}
+ui {
+  content {
+    heading_delete_title = Diesen Text löschen
+  }
+}
+ui {
+  content {
+    empty_selection_description = Wähle in der Seitenleiste einen Text aus, um ihn zu bearbeiten.
+  }
+}
+ui {
+  content {
+    texts_panel = Textbereich
+  }
+}
+ui {
+  content {
+    save_and_next_failed = Nicht gespeichert, daher bleibt der Text ausgewählt. Die Diagnosen nennen den Grund.
+  }
+}
+ui {
+  content {
+    palette_switch_to_text = Zur Textansicht wechseln
+  }
+}
+ui {
+  content {
+    palette_focus_search = Textsuche fokussieren
+  }
+}
+ui {
+  content {
+    palette_toggle_texts = Textbereich ein- oder ausblenden
+  }
+}
+ui {
+  content {
+    texts = Texte
+  }
+}
+ui {
+  content {
+    search = Texte suchen…
+  }
+}
+ui {
+  content {
+    no_selection = Wähle einen Text zum Bearbeiten aus
+  }
+}
+ui {
+  content {
+    no_results = Keine Texte passen zu dieser Ansicht
+  }
+}
+ui {
+  content {
+    no_matching_texts = Keine passenden Texte
+  }
+}
+ui {
+  content {
+    add_text = Text hinzufügen
+  }
+}
+ui {
+  content {
+    text_filters = Textfilter
+  }
+}
+ui {
+  content {
+    text = Text
+  }
+}
+ui {
+  content {
+    language = Sprache
+  }
+}
+ui {
+  content {
+    developer_note = Hinweis vom Entwicklungsteam
+  }
+}
+ui {
+  workbench {
+    next_text = Nächster Text
+  }
+}
+ui {
+  workbench {
+    previous_text = Vorheriger Text
+  }
+}
+ui {
+  workbench {
+    save_and_next_text = Speichern und nächster Text
+  }
+}
+ui {
+  workbench {
+    none_text = Es gibt keinen weiteren Text.
+  }
+}
+ui {
+  content {
+    only_language =
+      .input {$language :string}
+      .input {$locale :string}
+      {{{$language} ({$locale}), die einzige Sprache dieses Projekts}}
+
+  }
+}
+ui {
+  content {
+    tree_group_label =
+      .input {$count :integer select=plural}
+      .match $count
+      one {{{$name}, ein Text}}
+      * {{{$name}, {$count} Texte}}
+
+  }
+}
+ui {
+  content {
+    project_summary =
+      .input {$language :string}
+      .input {$count :integer select=plural}
+      .match $count
+      one {{{$language} · 1 Text}}
+      * {{{$language} · {$count} Texte}}
+
+  }
+}

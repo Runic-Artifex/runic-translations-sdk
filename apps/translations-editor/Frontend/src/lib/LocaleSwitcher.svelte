@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
+	import PlusIcon from "@lucide/svelte/icons/plus";
 	import Settings2Icon from "@lucide/svelte/icons/settings-2";
 	import { Badge } from "#lib/components/ui/badge/index.js";
 	import StateMark from "#lib/StateMark.svelte";
@@ -55,6 +56,7 @@
 		onselectpseudo,
 		open = $bindable(true),
 		uiLocale = "en",
+		content = false,
 	}: {
 		locales: LocaleSummary[];
 		selectedLocale: string;
@@ -68,6 +70,11 @@
 		open?: boolean;
 		/** The interface locale, whose percent format the coverage uses. */
 		uiLocale?: string;
+		/**
+		 * A content-editing project (D074.2): its one language as a label, with the action that adds a language and the
+		 * pseudo-locales; no coverage, no translation marks.
+		 */
+		content?: boolean;
 	} = $props();
 
 	const sidebar = Sidebar.useSidebar();
@@ -91,6 +98,61 @@
 	}
 </script>
 
+{#snippet pseudoLocaleItems()}
+	{#each pseudoLocales as locale (locale)}
+		<Item.Root
+			variant={activePseudoLocale === locale ? "muted" : "default"}
+			size="xs"
+			aria-pressed={activePseudoLocale === locale}
+			onclick={() => onselectpseudo?.(locale)}
+			class="cursor-pointer"
+			aria-label={`${locale}, ${ui.text("ui_locale_pseudo_description")}`}
+		>
+			{#snippet child({ props })}
+				<button type="button" {...props}>
+					<Item.Media>
+						<Badge variant={activePseudoLocale === locale ? "default" : "outline"} class="min-w-8">
+							<code>{locale}</code>
+						</Badge>
+					</Item.Media>
+					<Item.Content class="min-w-0">
+						<Item.Title class="min-w-0">
+							<span class="truncate">{ui.text("ui_locale_pseudo")}</span>
+							<Badge variant="ghost" aria-hidden="true" title={ui.text("ui_locale_pseudo_description")}>{ui.text("ui_locale_generated")}</Badge>
+						</Item.Title>
+					</Item.Content>
+				</button>
+			{/snippet}
+		</Item.Root>
+	{/each}
+{/snippet}
+
+{#if content}
+	<!-- One language (D074.2): its name as a label, nothing to switch to, no coverage; "Add a language" in the place of
+	     "Manage languages", which opens the same dialog. -->
+	{@const language = locales.find((locale) => locale.isSource) ?? locales[0]}
+	<Sidebar.Group aria-label={ui.text("ui_content_language")} class="py-1" data-testid="project-language">
+		<Sidebar.GroupLabel class="pr-10">{ui.text("ui_content_language")}</Sidebar.GroupLabel>
+		<Sidebar.GroupAction aria-label={ui.text("ui_page_mutation_add_language")} title={ui.text("ui_page_mutation_add_language")} onclick={onmanage} data-testid="add-language">
+			<PlusIcon />
+		</Sidebar.GroupAction>
+		<Sidebar.GroupContent>
+			<Item.Group class="gap-1 pr-2">
+				{#if language !== undefined}
+					<Item.Root size="xs" title={ui.text("ui_content_only_language", { language: language.name, locale: language.tag })}>
+						<Item.Media>
+							<Badge variant="outline" class="min-w-8"><code>{language.tag}</code></Badge>
+						</Item.Media>
+						<Item.Content class="min-w-0">
+							<Item.Title class="min-w-0"><span class="truncate" data-testid="project-language-name">{language.name}</span></Item.Title>
+						</Item.Content>
+					</Item.Root>
+				{/if}
+				{@render pseudoLocaleItems()}
+			</Item.Group>
+		</Sidebar.GroupContent>
+	</Sidebar.Group>
+{:else}
 <Collapsible.Root bind:open onOpenChange={persistOpen} class={["group/languages", open && "min-h-0 flex flex-1 flex-col"]}>
 	<Sidebar.Group aria-label={ui.text("ui_locale_coverage")} class={["py-1", open && "min-h-0 flex-1"]}>
 		<Sidebar.GroupLabel class="pr-10">
@@ -141,35 +203,11 @@
 							{/snippet}
 						</Item.Root>
 					{/each}
-					{#each pseudoLocales as locale (locale)}
-						<Item.Root
-							variant={activePseudoLocale === locale ? "muted" : "default"}
-							size="xs"
-							aria-pressed={activePseudoLocale === locale}
-							onclick={() => onselectpseudo?.(locale)}
-							class="cursor-pointer"
-							aria-label={`${locale}, ${ui.text("ui_locale_pseudo_description")}`}
-						>
-							{#snippet child({ props })}
-								<button type="button" {...props}>
-									<Item.Media>
-										<Badge variant={activePseudoLocale === locale ? "default" : "outline"} class="min-w-8">
-											<code>{locale}</code>
-										</Badge>
-									</Item.Media>
-									<Item.Content class="min-w-0">
-										<Item.Title class="min-w-0">
-											<span class="truncate">{ui.text("ui_locale_pseudo")}</span>
-											<Badge variant="ghost" aria-hidden="true" title={ui.text("ui_locale_pseudo_description")}>{ui.text("ui_locale_generated")}</Badge>
-										</Item.Title>
-									</Item.Content>
-								</button>
-							{/snippet}
-						</Item.Root>
-					{/each}
+					{@render pseudoLocaleItems()}
 					</Item.Group>
 				</ScrollArea.Root>
 			</Sidebar.GroupContent>
 		</Collapsible.Content>
 	</Sidebar.Group>
 </Collapsible.Root>
+{/if}

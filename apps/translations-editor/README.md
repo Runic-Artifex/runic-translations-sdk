@@ -88,6 +88,29 @@ composer, the message source and the file view, but not in the search field, a
 menu or a dialog; on macOS ⌥↑ and ⌥↓ keep moving the caret in a text field, so
 there they work outside text fields only. AltGr is never one of them.
 
+### One-language projects
+
+A project whose `runic.json` declares one language, its base locale, is a
+content-editing project: people edit the application's text in that language,
+for example the copy of a German-only app, and nothing is translated. Configured
+`pseudoLocales` don't count as languages; they stay in the language list for the
+preview. In such a project the editor speaks of texts: the list is **Texts**,
+the composer says **Edit the text**, and the developers' comment above a message
+is shown as **Note from the developers**. It leaves out what only translation
+needs: coverage and the languages' marks, the **Missing**, **Stale** and
+**Review** filters, **Next missing**, the source panel, **Copy source**, the
+review workflow and its stale-state confirmation, and the review commands of the
+palette. Length limits, the preview, the issues, Undo, the one **Save** and the
+namespace tree stay. **Save and next** (Ctrl+Enter) is always offered and selects
+the next text in tree order. The code identifier and the **File** view keep their
+developer vocabulary.
+
+A review file such a project kept from the time it had more languages stays on
+disk unchanged: the editor neither shows nor writes it. **Add a language**, in the
+place of **Manage languages** in the language list, adds a second language as
+before; the editor then switches to translation mode without a restart, and the
+review file applies again.
+
 The editor uses the RMF2 v5 compiler/runtime pipeline without fabricating a
 retired catalog carrier. Previews are formatted by the verified .NET artifact/pack
 path; the browser receives validated inert semantic runs and never approximates

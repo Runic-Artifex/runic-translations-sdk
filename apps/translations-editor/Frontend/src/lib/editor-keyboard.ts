@@ -21,6 +21,11 @@ export interface EditorShortcutContext {
    * combobox, a listbox, a menu or a dialog. The message steps leave it alone.
    */
   readonly widgetTarget?: boolean;
+  /**
+   * Whether Next and Previous (Alt+↓, Alt+↑) are shown. A content-editing project (D074.2) shows neither, so the keys
+   * are left to the browser there. Shown when absent.
+   */
+  readonly messageSteps?: boolean;
 }
 
 /**
@@ -51,7 +56,7 @@ export function editorShortcut(
   const step = editorUndo && context.widgetTarget !== true && event.isComposing !== true;
   if (commandModifier && !event.altKey && !event.shiftKey && key === "enter" && step) return "save-and-next";
   if (event.altKey && !commandModifier && !event.shiftKey && (key === "arrowdown" || key === "arrowup") && step &&
-    (!textEditingTarget || (context.platform ?? shortcutPlatform()) !== "mac")) {
+    context.messageSteps !== false && (!textEditingTarget || (context.platform ?? shortcutPlatform()) !== "mac")) {
     return key === "arrowdown" ? "next-message" : "previous-message";
   }
   if (!event.altKey || event.ctrlKey || event.metaKey || textEditingTarget) return undefined;

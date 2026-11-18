@@ -3,9 +3,9 @@ import { buildMessageTree, messageTreeKeys } from "./message-virtualization";
 
 /**
  * What "Next" steps through (D074.1): the messages missing in the selected locale, or, while the list shows only
- * outdated messages or those that need review, those.
+ * outdated messages or those that need review, those. In a content-editing project (D074.2) every text: "text".
  */
-export type NextMessageKind = "missing" | "stale" | "needs-review";
+export type NextMessageKind = "missing" | "stale" | "needs-review" | "text";
 export type NextMessageDirection = "next" | "previous";
 
 /** The kind the Next and Previous commands step through for the list's filter. */

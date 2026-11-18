@@ -13,11 +13,14 @@
 		messages,
 		languagesOpen = $bindable(true),
 		messagesOpen = $bindable(true),
+		singleLanguage = false,
 	}: {
 		languages: Snippet;
 		messages: Snippet;
 		languagesOpen?: boolean;
 		messagesOpen?: boolean;
+		/** The project has one language (D074.2): its line takes the height it needs, and the panels have no resizer. */
+		singleLanguage?: boolean;
 	} = $props();
 
 	let container = $state<HTMLDivElement>();
@@ -26,7 +29,9 @@
 	const ui = getUiText();
 
 	let layout = $derived(
-		languagesOpen && messagesOpen
+		singleLanguage
+			? messagesOpen ? "messages-open" : "both-closed"
+			: languagesOpen && messagesOpen
 			? "both-open"
 			: languagesOpen
 				? "languages-open"
@@ -107,7 +112,7 @@
 		{@render languages()}
 	</section>
 
-	{#if languagesOpen && messagesOpen}
+	{#if layout === "both-open"}
 		<div
 			class="section-resizer"
 			role="slider"
