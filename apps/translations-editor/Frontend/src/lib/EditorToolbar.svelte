@@ -8,6 +8,7 @@
   import { Spinner } from "#lib/components/ui/spinner/index.js";
   import * as Sidebar from "#lib/components/ui/sidebar/index.js";
   import { getUiText } from "#lib/ui-text.js";
+  import { shortcutLabel } from "#lib/shortcut-labels.js";
 
   let {
     saveDisabled,
@@ -83,7 +84,7 @@
         <SaveIcon data-icon="inline-start" />
       {/if}
       <span class="hidden sm:inline">{saving ? savingLabel : unsaved ? saveLabel : saveState}</span>
-      {#if unsaved}<Kbd.Root class="hidden xl:inline-flex">⌘ S</Kbd.Root>{/if}
+      {#if unsaved}<Kbd.Root class="hidden xl:inline-flex" data-testid="save-shortcut">{shortcutLabel("Mod+S")}</Kbd.Root>{/if}
     </Button>
   </div>
 </header>

@@ -1,6 +1,8 @@
 <script lang="ts">
   import BookOpenIcon from "@lucide/svelte/icons/book-open";
   import CheckCircle2Icon from "@lucide/svelte/icons/check-circle-2";
+  import CircleCheckBigIcon from "@lucide/svelte/icons/circle-check-big";
+  import FlagIcon from "@lucide/svelte/icons/flag";
   import ClipboardListIcon from "@lucide/svelte/icons/clipboard-list";
   import ChevronDownIcon from "@lucide/svelte/icons/chevron-down";
   import ListChecksIcon from "@lucide/svelte/icons/list-checks";
@@ -20,12 +22,13 @@
 
   const ui = getUiText();
 
-  const states: { value: EditorReviewState; label: string }[] = [
+  // Derived, so the labels follow a change of the interface language (#225 P23).
+  const states: { value: EditorReviewState; label: string }[] = $derived([
     { value: "draft", label: ui.text("ui_workflow_draft") },
     { value: "translated", label: ui.text("ui_workflow_translated") },
     { value: "needs-review", label: ui.text("ui_workflow_needs_review") },
     { value: "approved", label: ui.text("ui_workflow_approved") },
-  ];
+  ]);
 
   let {
     state: reviewState,
@@ -40,6 +43,7 @@
     qualityIssues,
     suggestions,
     onstatechange,
+    onconfirm,
     onnotechange,
     ondiscard,
     onterminology,
@@ -61,6 +65,8 @@
     qualityIssues: QualityIssue[];
     suggestions: TranslationSuggestion[];
     onstatechange: (state: EditorReviewState) => void;
+    /** Records the current state again for the current source text: the translator confirms a stale state. */
+    onconfirm: () => void;
     onnotechange: (note: string) => void;
     /** Discards the unsaved review changes of the workspace. */
     ondiscard: () => void;
@@ -92,15 +98,35 @@
       </Collapsible.Trigger>
     </Card.Header>
 
+    {#if stale}
+      <!-- The source text changed since the state was recorded: confirm it or mark it for review (#225 P20). -->
+      <div class="flex flex-col gap-2 border-t px-4 py-3" role="group" aria-label={ui.text("ui_workflow_source_changed")} data-testid="workflow-stale">
+        <p class="text-sm">{ui.text("ui_workflow_stale_explanation", { state: stateLabel })}</p>
+        <div class="flex flex-wrap gap-2">
+          <Button size="sm" {disabled} title={ui.text("ui_workflow_confirm_translation_title")} data-testid="workflow-confirm" onclick={() => { if (!disabled) onconfirm(); }}>
+            <CircleCheckBigIcon data-icon="inline-start" />
+            {ui.text("ui_workflow_confirm_translation")}
+          </Button>
+          {#if reviewState !== "needs-review"}
+            <Button variant="outline" size="sm" {disabled} data-testid="workflow-mark-needs-review" onclick={() => { if (!disabled) onstatechange("needs-review"); }}>
+              <FlagIcon data-icon="inline-start" />
+              {ui.text("ui_workflow_mark_needs_review")}
+            </Button>
+          {/if}
+        </div>
+      </div>
+    {/if}
+
     <Collapsible.Content>
       <Card.Content class="grid grid-cols-1 gap-4 border-t py-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(17rem,1fr)]">
         <div class="grid content-start gap-4">
           <div class="flex flex-wrap items-end gap-2">
       <Field.Field class="gap-1">
         <Field.Label for="workflow-status">{ui.text("ui_workflow_status")}</Field.Label>
+        <!-- A stale state is not selected: choosing it again records it anew for the current source text (#225 P20). -->
         <Select.Root
           type="single"
-          value={reviewState}
+          value={stale ? "" : reviewState}
           disabled={disabled}
           onValueChange={(value) => {
             if (disabled) return;
