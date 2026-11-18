@@ -179,6 +179,26 @@ internal sealed class Rmf2SemanticV5Tests
         Reject("{1 @note=$name}", "RTR0066");
         Reject("{#strong}{#em}x{/strong}{/em}", "RTR0061");
     }
+    [Test, DisplayName("RMF2 v5 reports an unreadable expression once and keeps reading after it")]
+    public void UnreadableExpressionRecovery()
+    {
+        foreach (var (source, expected) in new[]
+        {
+            // Each character that cannot start an operand, option or attribute used to add its own errors.
+            ("{{a {{{$n} b}}", new[] { "1:6 Expected a literal or variable operand." }),
+            ("{$n {%} x}", new[] { "1:5 Expected an option or attribute name.", "1:10 This pattern character must be escaped or removed." }),
+            // Errors before the unreadable part and in later expressions are still reported.
+            ("{$n:x} {$m %%} {$k foo}", new[] { "1:4 A function requires whitespace after its operand.", "1:12 Expected an option or attribute name.", "1:20 Options must follow a function or markup name and precede attributes.", "1:20 Options require a value." }),
+            ("{%%} }", new[] { "1:2 Expected a literal or variable operand.", "1:6 This pattern character must be escaped or removed." }),
+            ("{%%", new[] { "1:1 Unterminated MF2 expression.", "1:2 Expected a literal or variable operand." }),
+        })
+        {
+            var syntax = Mf2SyntaxReader.Read(new TranslationSource("message.mf2", Encoding.UTF8.GetBytes(source)));
+            string[] actual = syntax.Diagnostics.Select(d => d.Location!.Line + ":" + d.Location.Column + " " + d.Message).ToArray();
+            Assert.True(actual.SequenceEqual(expected), source + " reported:\n" + string.Join("\n", actual));
+            Assert.Equal(source, string.Concat(syntax.Tokens.Select(token => token.Raw)));
+        }
+    }
     [Test, DisplayName("RMF2 v5 distinguishes wildcard and quoted star and preserves NFC source")]
     public void WildcardAndNfc()
     {

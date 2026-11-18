@@ -271,7 +271,13 @@ internal static class Mf2SyntaxReader
             var options = new List<Mf2PropertySyntax>(); var attributes = new List<Mf2PropertySyntax>();
             if (_at < _text.Length && _text[_at] is '#' or '/')
             { int mark = _at; kind = _text[_at++] == '#' ? Mf2MarkupKind.Open : Mf2MarkupKind.Close; markup = Name(true); Token(kind == Mf2MarkupKind.Open ? Mf2SyntaxTokenKind.MarkupOpen : Mf2SyntaxTokenKind.MarkupClose, mark, markup); }
-            else if (_at < _text.Length && _text[_at] is not (':' or '}' or '@')) operand = Operand();
+            else if (_at < _text.Length && _text[_at] is not (':' or '}' or '@'))
+            {
+                int operandStart = _at; operand = Operand();
+                // A character that cannot start an operand makes the rest of the expression unreadable:
+                // report it once and resume after the expression instead of once per character.
+                if (_at == operandStart) SkipExpression();
+            }
             bool separated = Space();
             if (kind == Mf2MarkupKind.None && _at < _text.Length && _text[_at] == ':') { int from = _at++; function = Name(true); if (operand is not null && !separated) Error("A function requires whitespace after its operand.", from, _at); Token(Mf2SyntaxTokenKind.Function, from, function); separated = false; }
             while (_at < _text.Length && _text[_at] != '}')
@@ -279,11 +285,17 @@ internal static class Mf2SyntaxReader
                 _cancellation.ThrowIfCancellationRequested(); separated = Space() || separated; if (_at == _text.Length || _text[_at] == '}') break;
                 int from = _at;
                 if (_text[_at] == '/' && kind == Mf2MarkupKind.Open) { _at++; kind = Mf2MarkupKind.Standalone; Token(Mf2SyntaxTokenKind.Standalone, from); Space(); if (_at < _text.Length && _text[_at] != '}') Error("Standalone marker must end the expression.", from, _at); continue; }
+                bool attribute = _text[_at] == '@';
+                if (!StartsName(attribute ? _at + 1 : _at))
+                {
+                    // Not an option or attribute: one error, then skip to the closing brace (see the operand above).
+                    _at = Math.Max(_at, from + 1); Token(Mf2SyntaxTokenKind.Invalid, from); Error("Expected an option or attribute name.", from, _at);
+                    SkipExpression(); continue;
+                }
                 if (!separated) Error("Options and attributes require whitespace.", from, from);
                 separated = false;
-                bool attribute = _text[_at] == '@'; if (attribute) _at++;
+                if (attribute) _at++;
                 string name = Name(true);
-                if (_at == from || (attribute && _at == from + 1)) { _at = Math.Max(_at, from + 1); Token(Mf2SyntaxTokenKind.Invalid, from); Error("Expected an option or attribute name.", from, _at); continue; }
                 Token(attribute ? Mf2SyntaxTokenKind.Attribute : Mf2SyntaxTokenKind.Name, from, name); separated = Space();
                 Mf2OperandSyntax? value = null;
                 if (_at < _text.Length && _text[_at] == '=') { int equals = _at++; Token(Mf2SyntaxTokenKind.Equals, equals); Space(); value = Operand(); separated = false; if (attribute && value.Kind == Mf2OperandKind.Variable) Error("Attribute values must be literals.", from, _at); }
@@ -297,6 +309,18 @@ internal static class Mf2SyntaxReader
             else Error("Unterminated MF2 expression.", start, Math.Min(start + 1, _text.Length));
             if (kind == Mf2MarkupKind.None && operand is null && function is null) Error("An expression requires an operand or function.", start, _at);
             _expressions.Add(new Mf2ExpressionSyntax(operand, function, markup, kind, options.AsReadOnly(), attributes.AsReadOnly(), Location(start, _at)));
+        }
+        /// <summary>Skips an unreadable expression body up to, not including, its closing brace.</summary>
+        private void SkipExpression()
+        {
+            int start = _at;
+            while (_at < _text.Length && _text[_at] != '}') _at++;
+            if (_at > start) Token(Mf2SyntaxTokenKind.Invalid, start);
+        }
+        private bool StartsName(int at)
+        {
+            if (at < _text.Length && Bidi(_text[at])) at++;
+            return at < _text.Length && NameStart(Rune.GetRuneAt(_text, at).Value);
         }
         private Mf2OperandSyntax Operand()
         {
