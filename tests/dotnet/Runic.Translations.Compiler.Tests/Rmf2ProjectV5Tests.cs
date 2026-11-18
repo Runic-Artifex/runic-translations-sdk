@@ -474,4 +474,50 @@ internal sealed class Rmf2ProjectV5Tests
         try { TranslationCompiler.CompileRmf2ProjectV5(Project(), [], cancellationToken: canceled.Token); throw new InvalidOperationException("Canceled compilation proceeded."); }
         catch (OperationCanceledException) { }
     }
+    [Test, DisplayName("RMF2 v5 a stray brace in one plural variant stays within its message")]
+    public void StrayBraceStaysWithinMessage()
+    {
+        const string english = """
+notes {
+  deleteConfirm =
+    .input {$count :integer}
+    .input {$folder :string}
+    .match $count
+    one {{Delete one note from {$folder}?}}
+    * {{Delete {$count} notes from {$folder}?}}
+  rename = Rename
+}
+common {
+  cancel = Cancel
+}
+""";
+        const string german = """
+notes {
+  deleteConfirm =
+    .input {$count :integer}
+    .input {$folder :string}
+    .match $count
+    one {{Eine Notiz aus {$folder} löschen? {$oops}}
+    * {{{$count} Notizen aus {$folder} löschen?}}
+  rename = Umbenennen
+}
+common {
+  cancel = Abbrechen
+}
+""";
+        var result = Compile(english, german, ",\"locales\":[\"en\",\"de\"],\"validation\":{\"translationCompleteness\":\"warning\"}");
+        // The expression {$oops} closes at the first brace of }}, so the lone } is pattern text and the
+        // quoted pattern runs on into the next variant, whose {{{ cannot start an expression. Each yields
+        // one error; the unreadable expression is not reported again per character (it was 14 errors).
+        string[] actual = result.Diagnostics.Select(d => d.Id + " " + d.Location?.Path + ":" + d.Location?.Line + ":" + d.Location?.Column + " " + d.Message).ToArray();
+        string[] expected =
+        [
+            "RTR0066 translations/de.rmf2:6:52 This pattern character must be escaped or removed.",
+            "RTR0066 translations/de.rmf2:7:8 Expected a literal or variable operand.",
+        ];
+        Assert.True(actual.SequenceEqual(expected), "Unexpected diagnostics:\n" + string.Join("\n", actual));
+        // The rest of the file is read: the other messages and groups compile and are not reported as missing.
+        var fixedResult = Compile(english, german.Replace(" {$oops}}", "}}", StringComparison.Ordinal), ",\"locales\":[\"en\",\"de\"],\"validation\":{\"translationCompleteness\":\"warning\"}");
+        Assert.True(fixedResult.Success && fixedResult.Diagnostics.Count == 0, Errors(fixedResult));
+    }
 }
