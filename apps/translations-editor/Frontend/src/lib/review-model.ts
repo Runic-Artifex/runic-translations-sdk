@@ -157,7 +157,10 @@ export function qualityIssues(
   const keys = new Set(rows.map((row) => row.key));
   for (const diagnostic of diagnostics) {
     if (diagnostic.locale !== locale || diagnostic.key === undefined || !keys.has(diagnostic.key)) continue;
-    result.push({ kind: "diagnostic", key: diagnostic.key, locale, code: diagnostic.id, message: diagnostic.message, diagnostic });
+    // A stale review state's diagnostic tells the command-line user to run `review mark`; the editor shows its own
+    // hint (confirm or mark for review in the workflow panel) and keeps the diagnostic unchanged (#225 P20).
+    const message = diagnostic.id === "RTR0090" && ui !== undefined ? ui.text("ui_quality_stale") : diagnostic.message;
+    result.push({ kind: "diagnostic", key: diagnostic.key, locale, code: diagnostic.id, message, diagnostic });
   }
   for (const row of rows) {
     const sourceEntry = row.cells[sourceLocale]?.entry;

@@ -2,7 +2,14 @@ import { readFile } from "node:fs/promises";
 import ts from "typescript";
 
 const sourceUrl = new URL("../src/lib/command-palette.ts", import.meta.url);
-const source = await readFile(sourceUrl, "utf8");
+// The palette's one import, the shortcut notation, is inlined the same way.
+const transpileTs = (text, url) => ts.transpileModule(text, {
+  compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+  fileName: url.pathname,
+}).outputText;
+const shortcutLabelsUrl = new URL("../src/lib/shortcut-labels.ts", import.meta.url);
+const shortcutLabelsModule = `data:text/javascript;base64,${Buffer.from(transpileTs(await readFile(shortcutLabelsUrl, "utf8"), shortcutLabelsUrl)).toString("base64")}`;
+const source = (await readFile(sourceUrl, "utf8")).replaceAll('"./shortcut-labels"', JSON.stringify(shortcutLabelsModule));
 const transpiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
   fileName: sourceUrl.pathname,

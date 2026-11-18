@@ -2159,6 +2159,11 @@ ui {
 }
 ui {
   message {
+    heading_code_identifier = Bezeichner im Code
+  }
+}
+ui {
+  message {
     heading_delete = Löschen
   }
 }
@@ -2205,6 +2210,41 @@ ui {
 ui {
   message {
     toolbar_search_messages = Nachrichten suchen
+  }
+}
+ui {
+  message {
+    tree_group_label =
+      .input {$count :integer select=plural}
+      .match $count
+      one {{{$name}, eine Nachricht}}
+      * {{{$name}, {$count} Nachrichten}}
+
+  }
+}
+ui {
+  message {
+    tree_group_missing = {$count :integer} fehlend
+  }
+}
+ui {
+  message {
+    tree_group_review = {$count :integer} zu überprüfen
+  }
+}
+ui {
+  message {
+    tree_group_stale = {$count :integer} veraltet
+  }
+}
+ui {
+  message {
+    tree_selected_hidden = Die ausgewählte Nachricht ist durch den Filter ausgeblendet.
+  }
+}
+ui {
+  message {
+    tree_show_all = Alle Nachrichten anzeigen
   }
 }
 ui {
@@ -3705,7 +3745,7 @@ ui {
 }
 ui {
   quality {
-    stale = Der Ausgangstext wurde nach dem Speichern dieses Prüfstatus geändert.
+    stale = Der Ausgangstext wurde geändert, nachdem dieser Prüfstatus gespeichert wurde. Vergleiche die Übersetzung mit dem aktuellen Ausgangstext und bestätige sie oder markiere sie im Workflow-Bereich zur Prüfung.
   }
 }
 ui {
@@ -4001,12 +4041,73 @@ ui {
 }
 ui {
   validation {
+    blocking_heading = Fehler, die das Speichern verhindern
+  }
+}
+ui {
+  validation {
     compiler = Compiler
   }
 }
 ui {
   validation {
     errors = Fehler
+  }
+}
+ui {
+  validation {
+    file_position =
+      .input {$path :string}
+      .input {$line :integer}
+      .input {$column :integer}
+      {{Datei {$path}, Zeile {$line}, Spalte {$column}}}
+
+  }
+}
+ui {
+  validation {
+    message_counts = Diese Nachricht: {$errors}, {$warnings}
+  }
+}
+ui {
+  validation {
+    message_heading = Probleme in {$message} ({$locale})
+  }
+}
+ui {
+  validation {
+    message_none = Diese Nachricht hat keine Probleme.
+  }
+}
+ui {
+  validation {
+    other_warnings_heading =
+      .input {$count :integer}
+      {{Weitere Warnungen im Projekt ({$count})}}
+
+  }
+}
+ui {
+  validation {
+    place_line =
+      .input {$line :integer}
+      {{Zeile {$line}}}
+
+  }
+}
+ui {
+  validation {
+    place_message = in {$message} ({$locale})
+  }
+}
+ui {
+  validation {
+    place_message_line =
+      .input {$message :string}
+      .input {$locale :string}
+      .input {$line :integer}
+      {{in {$message} ({$locale}), Zeile {$line}}}
+
   }
 }
 ui {
@@ -4644,5 +4745,39 @@ ui {
 ui {
   translation {
     editor_starter_loading = Leere Übersetzung wird vorbereitet…
+  }
+}
+ui {
+  workflow {
+    stale_explanation =
+      .input {$state :string}
+      {{Der Ausgangstext wurde geändert, nachdem diese Nachricht als „{$state}“ markiert wurde. Vergleiche die Übersetzung mit dem aktuellen Ausgangstext im Bereich darunter und bestätige sie oder markiere sie zur Prüfung.}}
+  }
+}
+ui {
+  workflow {
+    confirm_translation = Übersetzung bestätigen
+  }
+}
+ui {
+  workflow {
+    confirm_translation_title = Erfasst den Status erneut für den aktuellen Ausgangstext; er wird mit den anderen Änderungen gespeichert.
+  }
+}
+ui {
+  workflow {
+    mark_needs_review = Zur Prüfung markieren
+  }
+}
+ui {
+  window {
+    title_product = Runic Translations Editor
+  }
+}
+ui {
+  window {
+    title_catalog =
+      .input {$catalog :string}
+      {{{$catalog} – Runic Translations Editor}}
   }
 }

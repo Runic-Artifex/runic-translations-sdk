@@ -111,6 +111,10 @@ try {
     }
   }));
   await page.goto(new URL("/", urlOrPrepare).href, { waitUntil: "domcontentloaded" });
+  // A message row of the namespace tree, by its flattened key (#225 M1), and a group row, by its dotted path.
+  const messageRow = key => page.locator(`[role="treeitem"][data-message-key="${key}"]`);
+  const groupRow = id => page.locator(`[role="treeitem"][data-group="${id}"]`);
+  const focusedRow = () => page.evaluate(() => document.activeElement?.getAttribute("data-row-id") ?? null);
   const select = async key => {
     await page.evaluate(() => {
       const bridge = window.__runicBridge;
@@ -134,7 +138,7 @@ try {
         }
       };
     });
-    await page.getByRole("button", { name: new RegExp(`^${key}:`) }).click();
+    await messageRow(key).click();
     await page.locator('textarea[spellcheck="true"]').first().waitFor();
   };
   const editor = () => page.locator('textarea[spellcheck="true"]').first();
@@ -181,6 +185,54 @@ try {
   await waitFor(async () => await saveState() === "Saved", "reverted edit is no unsaved change");
   assert.equal(await page.getByRole("button", { name: "Saved", exact: true }).isDisabled(), true, "Save stays disabled after a revert.");
   assert.ok((await readFile(diskPath, "utf8")).includes("cancel = Queued cancel from the real editor"));
+
+  // #225 M1: the message list is a namespace tree; B6 heading and P15 hidden-selection note.
+  stage = "message-tree";
+  const tree = page.getByRole("tree", { name: "Messages", exact: true });
+  assert.equal(await groupRow("common").getAttribute("aria-expanded"), "true", "The common group starts expanded.");
+  assert.match(await groupRow("common").getAttribute("aria-label"), /^common, 2 messages/);
+  assert.deepEqual(await tree.locator('[role="treeitem"][aria-level="2"]').evaluateAll(rows => rows.map(row => row.querySelector(".font-mono")?.textContent.trim())).then(texts => texts.slice(0, 2)),
+    ["cancel", "save"], "The group lists its messages by their last segment.");
+  await select("common_cancel");
+  assert.equal(await page.getByRole("heading", { level: 2, name: "common.cancel", exact: true }).count(), 1, "The heading shows the dotted path.");
+  assert.match(await page.getByTestId("message-code-identifier").textContent(), /^\s*Code identifier\s*common_cancel\s*$/,
+    "The code identifier is secondary text.");
+  // Keyboard: Left moves to the group, Left collapses, Right expands, Right enters, Down moves, Enter selects.
+  await messageRow("common_cancel").focus();
+  await page.keyboard.press("ArrowLeft");
+  assert.equal(await focusedRow(), "g:common", "Left moves from a message to its group.");
+  await page.keyboard.press("ArrowLeft");
+  await waitFor(async () => await groupRow("common").getAttribute("aria-expanded") === "false", "Left collapses the group");
+  assert.equal(await messageRow("common_cancel").count(), 0, "A collapsed group hides its messages.");
+  await page.keyboard.press("ArrowRight");
+  await messageRow("common_cancel").waitFor();
+  await page.keyboard.press("ArrowRight");
+  assert.equal(await focusedRow(), "m:common_cancel", "Right moves into an expanded group.");
+  await page.keyboard.press("ArrowDown");
+  assert.equal(await focusedRow(), "m:common_save");
+  await page.keyboard.press("Enter");
+  await page.getByRole("heading", { level: 2, name: "common.save", exact: true }).waitFor();
+  assert.equal(await messageRow("common_save").getAttribute("aria-selected"), "true");
+  await page.keyboard.press("Home");
+  assert.equal(await focusedRow(), "g:common", "Home moves to the first row.");
+  // A click collapses a group; a search expands the groups with matches and leaves the own state afterwards.
+  await groupRow("common").click();
+  await waitFor(async () => await messageRow("common_save").count() === 0, "a click collapses the group");
+  await select("files_selected");
+  await page.locator("#message-search").fill("Queued cancel");
+  await messageRow("common_cancel").waitFor();
+  assert.equal(await messageRow("files_selected").count(), 0, "The search hides the other messages.");
+  const hiddenNote = page.getByTestId("selected-message-hidden");
+  await hiddenNote.waitFor();
+  assert.match(await hiddenNote.textContent(), /Selected message is hidden by the filter\./);
+  assert.equal(await page.getByRole("heading", { level: 2, name: "files.selected", exact: true }).count(), 1, "The selection stays.");
+  await hiddenNote.getByRole("button", { name: "Show all messages", exact: true }).click();
+  await messageRow("files_selected").waitFor();
+  assert.equal(await page.locator("#message-search").inputValue(), "", "Show all clears the search.");
+  assert.equal(await hiddenNote.count(), 0);
+  assert.equal(await groupRow("common").getAttribute("aria-expanded"), "false", "The own collapse state is back after the search.");
+  await groupRow("common").click();
+  await messageRow("common_cancel").waitFor();
 
   stage = "plural-edit-preview-persistence";
   await select("files_selected");
@@ -271,7 +323,10 @@ try {
   const workflow = page.getByRole("button", { name: /^Workflow/ }).first();
   await workflow.getByText("Source changed", { exact: true }).waitFor();
   await workflow.click();
-  await page.getByText(/RTR0090.*predates a change to its source/).first().waitFor();
+  // The quality check names the editor's actions instead of the diagnostic's `runic-translations review mark` (#225 P20).
+  const staleCheck = page.getByRole("region", { name: "Quality checks", exact: true }).getByRole("button", { name: /^RTR0090/ });
+  await staleCheck.getByText(/confirm it or mark it for review in the workflow panel/).waitFor();
+  assert.doesNotMatch(await staleCheck.innerText(), /review mark/, "The workflow's quality check repeats the command-line instruction.");
   await page.locator("#workflow-status").click();
   await page.getByRole("option", { name: "Approved", exact: true }).click();
   await page.locator("#review-note").fill("Checked against the new source");
@@ -326,6 +381,62 @@ try {
     .find(item => item.key === "common_save" && item.locale === "en")?.note === "Recovered after reload", "recovered review note saved to the review file");
   await waitFor(async () => await saveState() === "Saved", "nothing unsaved after saving the recovered review change");
   if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "review-recovered-en.png"), fullPage: true });
+
+  // A stale approval (approved for source text that changed since) is re-confirmed in the editor (#225 P20): with
+  // "Confirm translation", or by choosing the same state again; the one save records it for the current source.
+  stage = "stale-approval-confirm";
+  const staleReview = JSON.parse(await readFile(reviewPath, "utf8"));
+  staleReview.entries.push(
+    { key: "common_cancel", locale: "en", state: "approved", sourceFingerprint: staleFingerprint },
+    { key: "files_selected", locale: "en", state: "approved", sourceFingerprint: staleFingerprint },
+  );
+  await writeFile(reviewPath, JSON.stringify(staleReview, null, 2) + "\n");
+  await reloadFiles();
+  await page.getByRole("button", { name: /^en / }).first().click();
+  await select("common_cancel");
+  assert.equal(await page.title(), "runic-hosted-e2e – Runic Translations Editor", "The window title names the catalog.");
+  const staleNotice = page.getByTestId("workflow-stale");
+  await staleNotice.getByText("The source text changed after this message was marked “Approved”.", { exact: false }).waitFor();
+  assert.equal(await staleNotice.getByRole("button", { name: "Mark needs review", exact: true }).count(), 1);
+  await staleNotice.getByRole("button", { name: "Confirm translation", exact: true }).click();
+  await staleNotice.waitFor({ state: "detached" });
+  await waitFor(async () => await saveState() === "Unsaved changes: review status", "the confirmation is an unsaved review change");
+  assert.equal(await page.title(), "• runic-hosted-e2e – Runic Translations Editor", "The window title marks unsaved work.");
+  await select("files_selected");
+  await page.getByTestId("workflow-stale").waitFor();
+  await page.getByRole("button", { name: /^Workflow/ }).first().click();
+  await page.locator("#workflow-status").click();
+  await page.getByRole("option", { name: "Approved", exact: true }).click();
+  await page.getByTestId("workflow-stale").waitFor({ state: "detached" });
+  if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "stale-confirmed-en.png"), fullPage: true });
+  await page.keyboard.press("Control+s");
+  await waitFor(async () => {
+    const entries = JSON.parse(await readFile(reviewPath, "utf8")).entries;
+    return ["common_cancel", "files_selected"].every(key => {
+      const entry = entries.find(item => item.key === key && item.locale === "en");
+      return entry?.state === "approved" && entry.sourceFingerprint?.startsWith("sha256:") && entry.sourceFingerprint !== staleFingerprint;
+    });
+  }, "both stale approvals recorded again for the current source");
+  await waitFor(async () => await saveState() === "Saved", "nothing unsaved after saving the confirmations");
+  assert.equal(await page.title(), "runic-hosted-e2e – Runic Translations Editor");
+
+  // The last locale and message of the catalog are restored on the next launch (#225 P24).
+  stage = "remembered-selection";
+  await page.getByRole("button", { name: /^fr / }).first().click();
+  await select("common_save");
+  await waitFor(async () => sentLocalState.some(entries => entries.some(entry =>
+    entry.key === "runic-translations:catalog-selection:1" && entry.value.includes('"locale":"fr","key":"common_save"'))), "native save of the selection");
+  // Its group is collapsed when the window closes: the restored message is revealed in the tree on the next launch.
+  await groupRow("common").click();
+  await waitFor(async () => await messageRow("common_save").count() === 0, "a click collapses the selected message's group");
+  await waitFor(async () => sentLocalState.some(entries => entries.some(entry =>
+    entry.key === "runic-translations:message-tree:1" && /"collapsed":\[[^\]]*"common"/.test(entry.value))), "native save of the collapsed group");
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("heading", { level: 2, name: "common.save", exact: true }).waitFor();
+  assert.equal(await page.getByRole("button", { name: /^fr / }).first().getAttribute("aria-pressed"), "true", "The locale was not restored.");
+  await waitFor(async () => await messageRow("common_save").getAttribute("aria-selected") === "true", "the restored message revealed and selected in the tree");
+  assert.equal(await groupRow("common").getAttribute("aria-expanded"), "true", "The restored message's group is expanded.");
+  await page.getByRole("button", { name: /^en / }).first().click();
 
   // The translate view (#225 P1, P8): another locale's editor shows the base locale's text read-only above it, one
   // block per variant with the variable as a chip; the base locale (de in this workspace) has no source panel, and the
@@ -456,6 +567,83 @@ try {
   assert.equal(await readFile(enPath, "utf8"), enSaved);
   assert.deepEqual(pageErrors, [], "The production editor reported uncaught browser errors for a missing translation.");
 
+  // The diagnostics panel (#225 P6, P12): with an error in the selected message and a warning in another message, the
+  // selected message's error is listed first under its heading and the other warnings are under a collapsed disclosure.
+  // An error in another message blocks saving, so it is listed without expanding anything.
+  stage = "scoped-diagnostics";
+  const reviewBefore = await readFile(reviewPath, "utf8");
+  const scopedReview = JSON.parse(reviewBefore);
+  scopedReview.entries.push({ key: "common_save", locale: "fr", state: "needs-review", sourceFingerprint: staleFingerprint });
+  await writeFile(reviewPath, JSON.stringify(scopedReview, null, 2) + "\n");
+  await reloadFiles();
+  await page.getByRole("button", { name: /^en / }).first().click();
+  await select("common_cancel");
+  await page.locator('[data-slot="toggle-group-item"]', { hasText: /^File$/ }).click();
+  const fileText = page.locator("#translation-value");
+  await waitFor(async () => (await fileText.inputValue()).startsWith(preservedComment), "file view of en.rmf2");
+  const enText = await fileText.inputValue();
+  assert.ok(enText.includes("  cancel = Cancel\n") && enText.includes("  save = Save\n"));
+  const brokenCancel = enText.replace("  cancel = Cancel\n", "  cancel = Cancel {$what :nosuch}\n");
+  await fileText.fill(brokenCancel);
+  const messageIssues = page.getByRole("region", { name: "Issues in common.cancel (en)", exact: true });
+  await waitFor(async () => await messageIssues.locator("[data-severity]").count() > 0, "the selected message's diagnostics");
+  assert.equal(await messageIssues.locator("[data-severity]").first().getAttribute("data-severity"), "error",
+    "The selected message's error is not listed first.");
+  assert.match(await messageIssues.locator("[data-severity]").first().textContent(), /Line 1/, "The error does not name its line in the message.");
+  const blockingIssues = page.getByTestId("diagnostics-blocking");
+  assert.equal(await blockingIssues.count(), 0, "Errors elsewhere are shown although the project has none.");
+  const otherIssues = page.getByTestId("diagnostics-other");
+  const disclosure = otherIssues.getByRole("button", { name: /^Other warnings in the project \(\d+\)$/ });
+  assert.equal(await disclosure.getAttribute("aria-expanded"), "false", "Other warnings are not collapsed.");
+  assert.equal(await otherIssues.locator("[data-severity]").count(), 0, "Collapsed warnings are listed.");
+  assert.match(await page.getByTestId("diagnostics-message-counts").textContent(), /^This message: (one error|\d+ errors), /);
+  if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "scoped-diagnostics-en.png"), fullPage: true });
+  await disclosure.focus();
+  await page.keyboard.press("Enter");
+  await waitFor(async () => await disclosure.getAttribute("aria-expanded") === "true", "expanded other warnings");
+  await otherIssues.getByRole("button", { name: /RTR0090.*in common\.save \(fr\)/ }).first().waitFor();
+  assert.deepEqual(await otherIssues.locator("[data-severity]").evaluateAll(items => [...new Set(items.map(item => item.getAttribute("data-severity")))]),
+    ["warning"], "The collapsed section holds warnings only.");
+  await disclosure.click();
+  await waitFor(async () => await disclosure.getAttribute("aria-expanded") === "false", "collapsed other warnings");
+  // An error in another message of the file: pinned under its own heading, visible while the warnings stay collapsed.
+  await fileText.fill(brokenCancel.replace("  save = Save\n", "  save = Save {$what :nosuch}\n"));
+  const elsewhere = page.getByRole("region", { name: "Errors that block saving", exact: true });
+  const saveError = elsewhere.getByRole("button", { name: /RTR0065.*in common\.save \(en\)/ });
+  await saveError.waitFor();
+  assert.equal(await saveError.isVisible(), true, "The other message's error is not visible without expanding.");
+  assert.equal(await disclosure.getAttribute("aria-expanded"), "false");
+  assert.equal(await otherIssues.locator("[data-severity]").count(), 0);
+  assert.equal(await messageIssues.locator("[data-severity]").first().getAttribute("data-severity"), "error");
+  if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "scoped-diagnostics-errors-en.png"), fullPage: true });
+  // A pinned error navigates to its message: the message is selected and revealed in the tree, and the error is now
+  // listed under that message's heading.
+  await saveError.click();
+  await waitFor(async () => await messageRow("common_save").getAttribute("aria-selected") === "true", "pinned error selects its message");
+  assert.equal(await messageRow("common_save").isVisible(), true, "The pinned error's message is not revealed in the tree.");
+  await page.getByRole("region", { name: "Issues in common.save (en)", exact: true })
+    .getByRole("button", { name: /RTR0065/ }).first().waitFor();
+  // A collapsed warning navigates to its message in its file's locale (French) too.
+  await disclosure.click();
+  await waitFor(async () => await disclosure.getAttribute("aria-expanded") === "true", "expanded other warnings again");
+  await otherIssues.getByRole("button", { name: /RTR0096.*in files\.deleted \(fr\)/ }).first().click();
+  await page.getByRole("region", { name: "Issues in files.deleted (fr)", exact: true }).getByRole("button", { name: /RTR0096/ }).first().waitFor();
+  await waitFor(async () => await messageRow("files_deleted").getAttribute("aria-selected") === "true", "warning selects its message");
+  assert.equal(await messageRow("files_deleted").isVisible(), true, "The warning's message is not revealed in the tree.");
+  // Back to the English file: revert the draft and the review file.
+  await page.getByRole("button", { name: /^en / }).first().click();
+  await messageRow("common_cancel").click();
+  await page.locator('[data-slot="toggle-group-item"]', { hasText: /^File$/ }).click();
+  await waitFor(async () => (await fileText.inputValue()).startsWith(preservedComment), "file view of the en.rmf2 draft");
+  await fileText.fill(enText);
+  await waitFor(async () => await saveState() === "Saved", "scoped-diagnostics edit reverted");
+  await writeFile(reviewPath, reviewBefore);
+  await reloadFiles();
+  await page.getByRole("button", { name: /^en / }).first().click();
+  await messageRow("common_cancel").click();
+  await page.locator('[data-slot="toggle-group-item"]', { hasText: /^Translation$/ }).click();
+  await editor().waitFor();
+
   // Unsaved edits have their own undo history (#225 P4). The pilot's case: ` {$oops` typed into a plural message's MF2
   // source. Ctrl+Z in the field restores the valid text, the error is gone, and the document is clean again because
   // it equals the saved text; Ctrl+Shift+Z brings the edit back.
@@ -583,6 +771,16 @@ try {
   await page.getByRole("region", { name: "Ausgangstext (Deutsch)", exact: true }).getByText("One edited file selected", { exact: true }).waitFor();
   assert.equal(await page.locator('[data-slot="toggle-group-item"]', { hasText: /^Datei$/ }).count(), 1, "The file tab is not named Datei.");
   if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "translate-view-de.png"), fullPage: true });
+  stage = "review-state-german-ui";
+  await select("common_cancel");
+  assert.equal((await page.getByTestId("workflow-state").textContent())?.trim(), "Freigegeben", "The approved badge is not German.");
+  await page.getByRole("button", { name: /^fr / }).first().click();
+  await select("common_cancel");
+  assert.equal((await page.getByTestId("workflow-state").textContent())?.trim(), "Übersetzt", "The translated badge is not German.");
+  for (const coverage of await page.getByTestId("locale-coverage").allTextContents())
+    assert.match(coverage.trim(), /^\d{1,3}\u00a0%$/, `Coverage ${coverage} is not whole percent in German format.`);
+  assert.equal(await page.title(), "runic-hosted-e2e – Runic Translations Editor");
+  await page.getByRole("button", { name: /^en / }).first().click();
 
   // A reload straight after a switch, as a user pressing F5 would. The reload ends the Bridge connection while the
   // native save is in flight: that must not surface as an uncaught `BridgeError: The Bridge is disconnected.`, and the

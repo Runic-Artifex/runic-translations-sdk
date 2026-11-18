@@ -8,6 +8,7 @@
   import { Spinner } from "#lib/components/ui/spinner/index.js";
   import * as Sidebar from "#lib/components/ui/sidebar/index.js";
   import { getUiText } from "#lib/ui-text.js";
+  import { shortcutLabel } from "#lib/shortcut-labels.js";
 
   let {
     saveDisabled,
@@ -56,10 +57,10 @@
   <div class="min-w-0 flex-1"></div>
 
   <div class="flex shrink-0 items-center gap-2">
-    <Button variant="ghost" size="icon-xs" disabled={!canUndo || historyBusy} onclick={onundo} aria-label={undoLabel} title={`${undoLabel} (Ctrl+Z)`}>
+    <Button variant="ghost" size="icon-xs" disabled={!canUndo || historyBusy} onclick={onundo} aria-label={undoLabel} title={`${undoLabel} (${shortcutLabel("Mod+Z")})`}>
       <Undo2Icon data-icon="inline-start" />
     </Button>
-    <Button variant="ghost" size="icon-xs" disabled={!canRedo || historyBusy} onclick={onredo} aria-label={redoLabel} title={`${redoLabel} (Ctrl+Shift+Z)`}>
+    <Button variant="ghost" size="icon-xs" disabled={!canRedo || historyBusy} onclick={onredo} aria-label={redoLabel} title={`${redoLabel} (${shortcutLabel("Mod+Shift+Z")})`}>
       <Redo2Icon data-icon="inline-start" />
     </Button>
     <!-- One state for all unsaved work: "Saved", or "Unsaved changes" naming what is unsaved. -->
@@ -84,7 +85,7 @@
         <SaveIcon data-icon="inline-start" />
       {/if}
       <span class="hidden sm:inline">{saving ? savingLabel : unsaved ? saveLabel : saveState}</span>
-      {#if unsaved}<Kbd.Root class="hidden xl:inline-flex">⌘ S</Kbd.Root>{/if}
+      {#if unsaved}<Kbd.Root class="hidden xl:inline-flex" data-testid="save-shortcut">{shortcutLabel("Mod+S")}</Kbd.Root>{/if}
     </Button>
   </div>
 </header>

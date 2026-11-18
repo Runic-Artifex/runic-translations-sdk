@@ -93,6 +93,16 @@ assert.equal(extraRows[0].cells.en.document.path, "feature/en/extra.mf2");
 assert.equal(extraRows[0].cells.de.document.path, "feature/de/extra.mf2",
   "A mounted extra key must use its existing non-default document as the physical template.");
 
+// Rows carry the compiler's logical path for the namespace tree (#225 M1), from the source locale or, for a key the
+// source lacks, from the locale that has it; without a compiler path, the key is the one segment.
+assert.deepEqual(rows[0].path, ["shop_greeting"], "A message without a compiler path is one segment.");
+const withPaths = structuredClone(uppercaseGrouped);
+withPaths.documents[1].entries[0].path = ["shop", "greeting"];
+withPaths.documents[2].entries[0].path = ["shop", "other"];
+assert.deepEqual(model.buildRows(withPaths, {}).map((row) => [row.key, row.path]),
+  [["shop_greeting", ["shop", "greeting"]], ["shop_other", ["shop", "other"]]],
+  "Messages of different files under one prefix keep their compiler paths.");
+
 console.log("PASS: mounted direct, extra-key, and uppercase grouped RMF2 rows synthesize or reuse canonical locale documents.");
 
 const compilerMetadata = {

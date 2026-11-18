@@ -3,6 +3,7 @@ import type { ThemeMode } from "./appearance";
 import type { EditorReviewState } from "./contracts";
 import type { EditorBridge } from "./editor-bridge";
 import type { UiDirection } from "./simulation";
+import { shortcutLabel, type ShortcutPlatform } from "./shortcut-labels";
 
 export type PaletteCommandGroupId = "workspace" | "document" | "review" | "view" | "help";
 
@@ -74,6 +75,8 @@ export interface EditorPaletteState {
   readonly pseudoLocalization: boolean;
   readonly uiDirection: UiDirection;
   readonly artifactPreviewOpen: boolean;
+  /** Whose shortcut notation the keybindings use (⌘ on macOS, Ctrl elsewhere); detected from the window when absent. */
+  readonly shortcutPlatform?: ShortcutPlatform;
 }
 
 const paletteGroupLabels: Record<PaletteCommandGroupId, string> = {
@@ -149,7 +152,7 @@ export function buildEditorCommandPalette(
     id: "document.save",
     title: (ui?.text("ui_palette_save_all") ?? "Save all changes"),
     group: "document",
-    keybinding: "Ctrl+S",
+    keybinding: shortcutLabel("Mod+S", state.shortcutPlatform),
     keywords: "write persist commit review workflow approve state terminology",
     disabled: !state.unsaved,
     bridge: "save",
@@ -159,7 +162,7 @@ export function buildEditorCommandPalette(
     id: "document.undo",
     title: state.undoTitle ?? (ui?.text("ui_palette_undo_saved_change") ?? "Undo saved change"),
     group: "document",
-    keybinding: "Ctrl+Z",
+    keybinding: shortcutLabel("Mod+Z", state.shortcutPlatform),
     keywords: "revert history back unsaved edit draft",
     disabled: !state.canUndo,
     bridge: "undo",
@@ -169,7 +172,7 @@ export function buildEditorCommandPalette(
     id: "document.redo",
     title: state.redoTitle ?? (ui?.text("ui_palette_redo_saved_change") ?? "Redo saved change"),
     group: "document",
-    keybinding: "Ctrl+Shift+Z",
+    keybinding: shortcutLabel("Mod+Shift+Z", state.shortcutPlatform),
     keywords: "history forward unsaved edit draft",
     disabled: !state.canRedo,
     bridge: "redo",
@@ -321,7 +324,7 @@ export function buildEditorCommandPalette(
     id: "view.toggle-pseudo-localization",
     title: state.pseudoLocalization ? (ui?.text("ui_palette_disable_pseudo_localization_simulation") ?? "Disable pseudo-localization simulation") : (ui?.text("ui_palette_enable_pseudo_localization_simulation") ?? "Enable pseudo-localization simulation"),
     group: "view",
-    keybinding: "Alt+P",
+    keybinding: shortcutLabel("Alt+P", state.shortcutPlatform),
     keywords: "pseudo fake accented brackets lengthening qa locale preview",
     run: actions.togglePseudoLocalization,
   });
@@ -329,7 +332,7 @@ export function buildEditorCommandPalette(
     id: "view.toggle-rtl-simulation",
     title: state.uiDirection === "rtl" ? (ui?.text("ui_palette_simulate_right_to_left_layout_off") ?? "Simulate right-to-left layout off") : (ui?.text("ui_palette_simulate_right_to_left_layout") ?? "Simulate right-to-left layout"),
     group: "view",
-    keybinding: "Alt+R",
+    keybinding: shortcutLabel("Alt+R", state.shortcutPlatform),
     keywords: "rtl ltr direction bidi mirror arabic hebrew layout",
     run: actions.toggleUiDirection,
   });
@@ -337,7 +340,7 @@ export function buildEditorCommandPalette(
     id: "view.toggle-artifact-preview",
     title: state.artifactPreviewOpen ? (ui?.text("ui_palette_hide_compiled_artifact_preview") ?? "Hide compiled artifact preview") : (ui?.text("ui_palette_show_compiled_artifact_preview") ?? "Show compiled artifact preview"),
     group: "view",
-    keybinding: "Alt+B",
+    keybinding: shortcutLabel("Alt+B", state.shortcutPlatform),
     keywords: "artifact compiled output side-by-side compare in-editor no launch",
     run: actions.toggleArtifactPreview,
   });

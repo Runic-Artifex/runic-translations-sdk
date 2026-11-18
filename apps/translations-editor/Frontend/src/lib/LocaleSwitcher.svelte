@@ -9,6 +9,7 @@
 	import { onMount } from "svelte";
 	import { getLocalEditorState, setLocalEditorState, subscribeLocalEditorState } from "./local-state";
 	import { getUiText } from "#lib/ui-text.js";
+	import { formatCoverage } from "#lib/coverage-format.js";
 
 	export interface LocaleSummary {
 		tag: string;
@@ -34,7 +35,12 @@
 		if (locale.missing !== undefined) parts.push(ui.text("ui_locale_status_missing", { count: String(locale.missing) }));
 		if (locale.stale !== undefined) parts.push(ui.text("ui_locale_status_stale", { count: String(locale.stale) }));
 		if (locale.completeness !== undefined) parts.push(ui.text(locale.completeness === "error" ? "ui_locale_status_policy_error" : locale.completeness === "warning" ? "ui_locale_status_policy_warning" : "ui_locale_status_policy_allow"));
-		return `${locale.percent}% · ${parts.join(" · ")}`;
+		return `${coverage(locale).exact} · ${parts.join(" · ")}`;
+	}
+
+	// Whole percent in the interface locale's format; the exact value is in the tooltip (#225 P16).
+	function coverage(locale: LocaleSummary) {
+		return formatCoverage({ percent: locale.percent, missing: locale.missing, total: locale.total }, uiLocale);
 	}
 
 	let {
@@ -46,6 +52,7 @@
 		activePseudoLocale,
 		onselectpseudo,
 		open = $bindable(true),
+		uiLocale = "en",
 	}: {
 		locales: LocaleSummary[];
 		selectedLocale: string;
@@ -57,6 +64,8 @@
 		activePseudoLocale?: string;
 		onselectpseudo?: (locale: string) => void;
 		open?: boolean;
+		/** The interface locale, whose percent format the coverage uses. */
+		uiLocale?: string;
 	} = $props();
 
 	const sidebar = Sidebar.useSidebar();
@@ -104,7 +113,7 @@
 							aria-current={selectedLocale === locale.tag ? "true" : undefined}
 							onclick={() => selectLocale(locale.tag)}
 							class="cursor-pointer"
-							aria-label={`${locale.tag} ${locale.name}, ${locale.isSource ? ui.text("ui_locale_source_language") : `${ui.text("ui_locale_falls_back_to")} ${locale.fallback ?? ui.text("ui_locale_no_language")}`}, ${locale.percent}% ${ui.text("ui_locale_translated")}`}
+							aria-label={`${locale.tag} ${locale.name}, ${locale.isSource ? ui.text("ui_locale_source_language") : `${ui.text("ui_locale_falls_back_to")} ${locale.fallback ?? ui.text("ui_locale_no_language")}`}, ${coverage(locale).text} ${ui.text("ui_locale_translated")}`}
 						>
 							{#snippet child({ props })}
 								<button type="button" {...props}>
@@ -122,7 +131,7 @@
 										</Item.Title>
 									</Item.Content>
 									<Item.Actions>
-										<Badge variant={locale.completeness === "error" && locale.missing ? "destructive" : "outline"} aria-label={`${locale.percent}% ${ui.text("ui_locale_translated")}`} title={coverageDetails(locale)}>{locale.percent}%</Badge>
+										<Badge variant={locale.completeness === "error" && locale.missing ? "destructive" : "outline"} aria-label={`${coverage(locale).text} ${ui.text("ui_locale_translated")}`} title={coverageDetails(locale)} data-testid="locale-coverage">{coverage(locale).text}</Badge>
 									</Item.Actions>
 								</button>
 							{/snippet}

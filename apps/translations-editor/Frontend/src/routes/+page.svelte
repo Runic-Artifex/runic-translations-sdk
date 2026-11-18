@@ -1,6 +1,6 @@
 <script lang="ts">
   import InlinePreview from "#lib/InlinePreview.svelte";
-  import { onMount, tick } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import { m } from "virtual:runic-translations/editor";
   import { baseLocale as uiBaseLocale, locales as uiLocales } from "virtual:runic-translations/editor/runtime";
   import { onBridgeConnection, onWindowLocale, windowLocale } from "@runic-artifex/views";
@@ -61,12 +61,13 @@
   import EditorToolbar from "#lib/EditorToolbar.svelte";
   import LocaleSwitcher from "#lib/LocaleSwitcher.svelte";
   import MessageHeading from "#lib/MessageHeading.svelte";
-  import MessageList, { type MessageListItem } from "#lib/MessageList.svelte";
+  import MessageList, { type MessageGroupCountKind, type MessageListItem } from "#lib/MessageList.svelte";
   import MessageToolbar, { type MessageFilter } from "#lib/MessageToolbar.svelte";
   import ReviewWorkflow from "#lib/ReviewWorkflow.svelte";
   import SidebarSectionPanels from "#lib/SidebarSectionPanels.svelte";
   import TranslationEditor from "#lib/TranslationEditor.svelte";
   import ValidationPanel from "#lib/ValidationPanel.svelte";
+  import { placeDiagnostics, type DiagnosticSources } from "#lib/diagnostic-scope.js";
   import WorkspacePanel from "#lib/WorkspacePanel.svelte";
   import MessageSquareTextIcon from "@lucide/svelte/icons/message-square-text";
   import PlusIcon from "@lucide/svelte/icons/plus";
@@ -112,6 +113,8 @@
     type TranslationRow,
   } from "#lib/resource-model.js";
   import { createMessageSearchIndex } from "#lib/message-search.js";
+  import { catalogSelectionStateKey, readCatalogSelection, writeCatalogSelection } from "#lib/catalog-selection.js";
+  import { editorWindowTitle } from "#lib/window-title.js";
   import {
     effectiveReviewState,
     bidiIssues,
@@ -304,6 +307,8 @@
   });
   let hasUnsavedRepair = $derived(repairDocument !== undefined && repairText !== repairDocument.content);
   let hasUnsavedWork = $derived(saveCoordinator.hasUnsaved || hasUnsavedRepair);
+  // "<catalog> – Runic Translations Editor", marked while work is unsaved; the product name without a catalog (#225 P14).
+  let windowTitle = $derived(editorWindowTitle(ui, snapshot?.pendingTransaction === undefined ? snapshot?.catalog?.id : undefined, hasUnsavedWork));
   // What the toolbar names as unsaved: text in some documents, review status, or both.
   let unsavedDetail = $derived.by(() => {
     const summary = saveCoordinator.unsavedSummary;
@@ -323,6 +328,8 @@
   // Version 1 editor approvals waiting to move into the review file are shown read-only.
   let reviewMutationBlocked = $derived(editorMutationBlocked || review.saving || snapshot?.review?.migrationPending === true);
   let rows = $derived(buildRows(snapshot, draftStore.drafts, draftStore.parsed));
+  // What the validation panel reads to name a diagnostic's message and its line in it (#225 P6, P12).
+  let diagnosticSources = $derived<DiagnosticSources>({ documents: snapshot?.documents ?? [], drafts: draftStore.drafts, parsed: draftStore.parsed });
   let messageSearch = $derived(createMessageSearchIndex(rows));
   // Coverage from runic-translations status (Tooling), the numbers of the command line, for the saved files.
   let localeSummaries = $derived.by(() => (snapshot?.catalog?.locales ?? []).map((locale) => {
@@ -426,6 +433,7 @@
     const rowReview = reviewIndex.get(reviewIdentity(row.key, selectedLocale));
     return {
       key: row.key,
+      path: row.path,
       preview: preview(cell?.entry, ui),
       missing: cell?.entry === undefined,
       structured: row.structured,
@@ -435,6 +443,12 @@
     };
   }));
   let selectedRow = $derived.by(() => rows.find((row) => row.key === selectedKey));
+  // #225 P15: the selection stays, but the list says when the search or filter hides it.
+  let selectedHiddenByFilter = $derived(selectedRow !== undefined && !visibleRows.some((row) => row.key === selectedKey));
+  // The counts a collapsed group names for the selected locale: those the current filter does not already imply.
+  let messageGroupCounts = $derived<MessageGroupCountKind[]>(
+    filter === "missing" || filter === "stale" || filter === "needs-review" ? [] : ["missing", "stale", "needsReview"],
+  );
   let currentCell = $derived(selectedRow?.cells[selectedLocale]);
   let sourceContext = $derived(selectedRow?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.context);
   let currentExamples = $derived(currentCell?.entry?.context?.examples.length ? currentCell.entry.context.examples : sourceContext?.examples ?? []);
@@ -733,6 +747,14 @@
       selectedLocale = next.catalog?.defaultLocale ?? next.catalog?.locales[0]?.tag ?? "";
     }
     const remembered = resetSelection && next.catalog ? catalogViews.get(catalogViewKey(next)) : undefined;
+    // Without a view of this session, the selection the catalog had when it was last open (#225 P24).
+    const stored = resetSelection && next.catalog && remembered === undefined
+      ? readCatalogSelection(getLocalEditorState(catalogSelectionStateKey), catalogViewKey(next))
+      : undefined;
+    if (stored) {
+      if (nextRows.some((row) => row.key === stored.key)) selectedKey = stored.key;
+      if (next.catalog?.locales.some((locale) => locale.tag === stored.locale)) selectedLocale = stored.locale;
+    }
     if (remembered) {
       if (nextRows.some((row) => row.key === remembered.key)) selectedKey = remembered.key;
       if (next.catalog?.locales.some((locale) => locale.tag === remembered.locale)) selectedLocale = remembered.locale;
@@ -993,6 +1015,12 @@
   function setCurrentReviewState(state: EditorReviewState): void {
     if (reviewMutationBlocked) return;
     review.setState(selectedKey, selectedLocale, state, previewController.samples, translatedIn(selectedKey, selectedLocale));
+  }
+
+  // The translator checked a stale state against the current source text and confirms it (#225 P20).
+  function confirmCurrentReview(): void {
+    if (reviewMutationBlocked) return;
+    review.confirm(selectedKey, selectedLocale, previewController.samples, translatedIn(selectedKey, selectedLocale));
   }
 
   function setCurrentReviewNote(note: string): void {
@@ -1475,6 +1503,8 @@
   async function selectDiagnostic(diagnostic: EditorDiagnostic): Promise<void> {
     const document = snapshot?.documents.find((candidate) => candidate.path === diagnostic.path);
     if (document === undefined) return;
+    // The message the diagnostic is about becomes the selected one, so the panel lists it under that message.
+    const about = placeDiagnostics([diagnostic], diagnosticSources)[0];
     const workspaceVersion = draftStore.workspaceGeneration;
     const content = repairDocument?.path === document.path ? repairText : draftStore.content(document.path, document.content);
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(content));
@@ -1500,6 +1530,8 @@
     const liveContent = repairDocument?.path === document.path ? repairText : draftStore.content(document.path, document.content);
     if (liveContent !== content) return;
     if (document.locale !== undefined) selectedLocale = document.locale;
+    // A diagnostic located in another locale's file (RTR0090 points at the base text) still selects its message there.
+    if (about?.key !== undefined && rows.some((row) => row.key === about.key)) selectedKey = about.key;
     selectedDocumentPath = document.path;
     selectedDocumentViewState = undefined;
     if (document.isMalformed) {
@@ -1695,6 +1727,25 @@
       projectBusy = false;
     }
   }
+
+  // The selected locale and message of the open catalog, restored on the next launch (#225 P24).
+  $effect(() => {
+    const current = snapshot;
+    const key = selectedKey;
+    const locale = selectedLocale;
+    if (current?.catalog === undefined || key === "" || locale === "") return;
+    untrack(() => {
+      const catalog = catalogViewKey(current);
+      const raw = getLocalEditorState(catalogSelectionStateKey);
+      const stored = readCatalogSelection(raw, catalog);
+      if (stored?.key === key && stored.locale === locale) return;
+      try {
+        setLocalEditorState(catalogSelectionStateKey, writeCatalogSelection(raw, catalog, { key, locale }));
+      } catch {
+        // Without the native state (a test page), the selection is not remembered.
+      }
+    });
+  });
 
   function rememberCatalogView(): void {
     if (snapshot?.catalog)
@@ -2098,7 +2149,7 @@
 </script>
 
 <svelte:head>
-  <title>{labels.title}</title>
+  <title>{windowTitle}</title>
     <meta name="description" content={ui.text("ui_page_meta_description")} />
 </svelte:head>
 <svelte:window onkeydown={handleKeyboard} onbeforeinput={handleBeforeInput} onbeforeunload={protectDraft} />
@@ -2321,6 +2372,7 @@
             activePseudoLocale={pseudoLocalization ? previewController.pseudoLocale : undefined}
             onselectpseudo={selectPseudoLocale}
             bind:open={languagesOpen}
+            {uiLocale}
           />
         {/snippet}
 
@@ -2329,6 +2381,11 @@
             items={messageListItems}
             {selectedKey}
             visibleCount={visibleRows.length}
+            catalogKey={snapshot === undefined ? "" : catalogViewKey(snapshot)}
+            filterKey={filter === "all" && query.trim() === "" ? "" : `${filter}\n${query.trim()}`}
+            groupCounts={messageGroupCounts}
+            selectedHidden={selectedHiddenByFilter}
+            onclearfilter={() => { filter = "all"; query = ""; }}
             reviewActionsDisabled={reviewMutationBlocked}
             noResultsLabel={labels.noResults}
             labels={{
@@ -2430,6 +2487,7 @@
         <div class="editor-content" lang={selectedLocale} dir={uiDirection}>
           <MessageHeading
             messageKey={selectedRow.key}
+            messagePath={selectedRow.path}
             description={selectedRow.description}
             tags={selectedRow.tags}
             locale={selectedLocale}
@@ -2453,6 +2511,7 @@
             qualityIssues={currentQuality}
             suggestions={memorySuggestions}
             onstatechange={setCurrentReviewState}
+            onconfirm={confirmCurrentReview}
             onnotechange={setCurrentReviewNote}
             ondiscard={discardReview}
             onterminology={() => terminologyDialogOpen = true}
@@ -2578,6 +2637,8 @@
             invalidLabel={labels.invalid}
             diagnosticsLabel={labels.diagnostics}
             schemaVersion={snapshot.catalog.schemaVersion}
+            sources={diagnosticSources}
+            selection={selectedRow === undefined ? undefined : { key: selectedRow.key, locale: selectedLocale }}
             onselect={(diagnostic) => void selectDiagnostic(diagnostic)}
             onfix={(diagnostic, fix) => void applyDiagnosticFix(diagnostic, fix)}
           />
@@ -2763,6 +2824,7 @@
         warningCount={repairValidation.diagnostics.filter(item => item.severity === "warning").length}
         validLabel={labels.valid} invalidLabel={labels.invalid} diagnosticsLabel={labels.diagnostics}
         schemaVersion={snapshot?.catalog?.schemaVersion ?? 1}
+        sources={{ documents: snapshot?.documents ?? [], drafts: { [repairDocument.path]: repairText } }}
         onselect={(diagnostic) => void selectDiagnostic(diagnostic)}
         onfix={(diagnostic, fix) => void applyDiagnosticFix(diagnostic, fix)} />
     {/if}

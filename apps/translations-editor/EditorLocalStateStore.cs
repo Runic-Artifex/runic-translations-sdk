@@ -25,9 +25,13 @@ internal static class EditorLocalStateStore
         "runic-translations.ui-direction",
         "runic-translations.ui-locale",
         "runic-translations:recent:1",
+        // The last selected locale and message of the most recent catalogs (one bounded record, not one entry per catalog).
+        "runic-translations:catalog-selection:1",
         "runic.sidebar.languages",
         "runic.sidebar.messages",
         "runic.sidebar.languages-share",
+        // Collapsed message groups of the most recent catalogs (one bounded record, not one entry per catalog).
+        "runic-translations:message-tree:1",
     };
 
     internal static EditorLocalStateSnapshot Load()
