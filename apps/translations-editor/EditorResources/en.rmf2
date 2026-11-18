@@ -3977,12 +3977,73 @@ ui {
 }
 ui {
   validation {
+    blocking_heading = Errors that block saving
+  }
+}
+ui {
+  validation {
     compiler = compiler
   }
 }
 ui {
   validation {
     errors = errors
+  }
+}
+ui {
+  validation {
+    file_position =
+      .input {$path :string}
+      .input {$line :integer}
+      .input {$column :integer}
+      {{File {$path}, line {$line}, column {$column}}}
+
+  }
+}
+ui {
+  validation {
+    message_counts = This message: {$errors}, {$warnings}
+  }
+}
+ui {
+  validation {
+    message_heading = Issues in {$message} ({$locale})
+  }
+}
+ui {
+  validation {
+    message_none = No issues in this message.
+  }
+}
+ui {
+  validation {
+    other_warnings_heading =
+      .input {$count :integer}
+      {{Other warnings in the project ({$count})}}
+
+  }
+}
+ui {
+  validation {
+    place_line =
+      .input {$line :integer}
+      {{Line {$line}}}
+
+  }
+}
+ui {
+  validation {
+    place_message = in {$message} ({$locale})
+  }
+}
+ui {
+  validation {
+    place_message_line =
+      .input {$message :string}
+      .input {$locale :string}
+      .input {$line :integer}
+      {{in {$message} ({$locale}), line {$line}}}
+
   }
 }
 ui {

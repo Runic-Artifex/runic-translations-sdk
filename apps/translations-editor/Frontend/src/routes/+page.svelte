@@ -67,6 +67,7 @@
   import SidebarSectionPanels from "#lib/SidebarSectionPanels.svelte";
   import TranslationEditor from "#lib/TranslationEditor.svelte";
   import ValidationPanel from "#lib/ValidationPanel.svelte";
+  import { placeDiagnostics, type DiagnosticSources } from "#lib/diagnostic-scope.js";
   import WorkspacePanel from "#lib/WorkspacePanel.svelte";
   import MessageSquareTextIcon from "@lucide/svelte/icons/message-square-text";
   import PlusIcon from "@lucide/svelte/icons/plus";
@@ -322,6 +323,8 @@
   // Version 1 editor approvals waiting to move into the review file are shown read-only.
   let reviewMutationBlocked = $derived(editorMutationBlocked || review.saving || snapshot?.review?.migrationPending === true);
   let rows = $derived(buildRows(snapshot, draftStore.drafts, draftStore.parsed));
+  // What the validation panel reads to name a diagnostic's message and its line in it (#225 P6, P12).
+  let diagnosticSources = $derived<DiagnosticSources>({ documents: snapshot?.documents ?? [], drafts: draftStore.drafts, parsed: draftStore.parsed });
   let messageSearch = $derived(createMessageSearchIndex(rows));
   // Coverage from runic-translations status (Tooling), the numbers of the command line, for the saved files.
   let localeSummaries = $derived.by(() => (snapshot?.catalog?.locales ?? []).map((locale) => {
@@ -1357,6 +1360,8 @@
   async function selectDiagnostic(diagnostic: EditorDiagnostic): Promise<void> {
     const document = snapshot?.documents.find((candidate) => candidate.path === diagnostic.path);
     if (document === undefined) return;
+    // The message the diagnostic is about becomes the selected one, so the panel lists it under that message.
+    const about = placeDiagnostics([diagnostic], diagnosticSources)[0];
     const workspaceVersion = draftStore.workspaceGeneration;
     const content = repairDocument?.path === document.path ? repairText : draftStore.content(document.path, document.content);
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(content));
@@ -1382,6 +1387,8 @@
     const liveContent = repairDocument?.path === document.path ? repairText : draftStore.content(document.path, document.content);
     if (liveContent !== content) return;
     if (document.locale !== undefined) selectedLocale = document.locale;
+    // A diagnostic located in another locale's file (RTR0090 points at the base text) still selects its message there.
+    if (about?.key !== undefined && rows.some((row) => row.key === about.key)) selectedKey = about.key;
     selectedDocumentPath = document.path;
     selectedDocumentViewState = undefined;
     if (document.isMalformed) {
@@ -2486,6 +2493,8 @@
             invalidLabel={labels.invalid}
             diagnosticsLabel={labels.diagnostics}
             schemaVersion={snapshot.catalog.schemaVersion}
+            sources={diagnosticSources}
+            selection={selectedRow === undefined ? undefined : { key: selectedRow.key, locale: selectedLocale }}
             onselect={(diagnostic) => void selectDiagnostic(diagnostic)}
             onfix={(diagnostic, fix) => void applyDiagnosticFix(diagnostic, fix)}
           />
@@ -2671,6 +2680,7 @@
         warningCount={repairValidation.diagnostics.filter(item => item.severity === "warning").length}
         validLabel={labels.valid} invalidLabel={labels.invalid} diagnosticsLabel={labels.diagnostics}
         schemaVersion={snapshot?.catalog?.schemaVersion ?? 1}
+        sources={{ documents: snapshot?.documents ?? [], drafts: { [repairDocument.path]: repairText } }}
         onselect={(diagnostic) => void selectDiagnostic(diagnostic)}
         onfix={(diagnostic, fix) => void applyDiagnosticFix(diagnostic, fix)} />
     {/if}
