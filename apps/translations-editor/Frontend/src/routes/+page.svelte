@@ -61,7 +61,7 @@
   import EditorToolbar from "#lib/EditorToolbar.svelte";
   import LocaleSwitcher from "#lib/LocaleSwitcher.svelte";
   import MessageHeading from "#lib/MessageHeading.svelte";
-  import MessageList, { type MessageListItem } from "#lib/MessageList.svelte";
+  import MessageList, { type MessageGroupCountKind, type MessageListItem } from "#lib/MessageList.svelte";
   import MessageToolbar, { type MessageFilter } from "#lib/MessageToolbar.svelte";
   import ReviewWorkflow from "#lib/ReviewWorkflow.svelte";
   import SidebarSectionPanels from "#lib/SidebarSectionPanels.svelte";
@@ -425,6 +425,7 @@
     const rowReview = reviewIndex.get(reviewIdentity(row.key, selectedLocale));
     return {
       key: row.key,
+      path: row.path,
       preview: preview(cell?.entry, ui),
       missing: cell?.entry === undefined,
       structured: row.structured,
@@ -434,6 +435,12 @@
     };
   }));
   let selectedRow = $derived.by(() => rows.find((row) => row.key === selectedKey));
+  // #225 P15: the selection stays, but the list says when the search or filter hides it.
+  let selectedHiddenByFilter = $derived(selectedRow !== undefined && !visibleRows.some((row) => row.key === selectedKey));
+  // The counts a collapsed group names for the selected locale: those the current filter does not already imply.
+  let messageGroupCounts = $derived<MessageGroupCountKind[]>(
+    filter === "missing" || filter === "stale" || filter === "needs-review" ? [] : ["missing", "stale", "needsReview"],
+  );
   let currentCell = $derived(selectedRow?.cells[selectedLocale]);
   let sourceContext = $derived(selectedRow?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.context);
   let currentExamples = $derived(currentCell?.entry?.context?.examples.length ? currentCell.entry.context.examples : sourceContext?.examples ?? []);
@@ -2224,6 +2231,11 @@
             items={messageListItems}
             {selectedKey}
             visibleCount={visibleRows.length}
+            catalogKey={snapshot === undefined ? "" : catalogViewKey(snapshot)}
+            filterKey={filter === "all" && query.trim() === "" ? "" : `${filter}\n${query.trim()}`}
+            groupCounts={messageGroupCounts}
+            selectedHidden={selectedHiddenByFilter}
+            onclearfilter={() => { filter = "all"; query = ""; }}
             reviewActionsDisabled={reviewMutationBlocked}
             noResultsLabel={labels.noResults}
             labels={{
@@ -2325,6 +2337,7 @@
         <div class="editor-content" lang={selectedLocale} dir={uiDirection}>
           <MessageHeading
             messageKey={selectedRow.key}
+            messagePath={selectedRow.path}
             description={selectedRow.description}
             tags={selectedRow.tags}
             locale={selectedLocale}

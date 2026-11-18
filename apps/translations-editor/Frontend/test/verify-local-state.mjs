@@ -61,10 +61,14 @@ assert.equal(persisted.get("runic-translations.theme-mode"), "light",
   "Queued writes must atomically publish the newest complete native projection.");
 assert.equal(persisted.get("runic-translations.theme-palette"), "fjord");
 assert.ok(saves >= 2, "Each changed projection must be sent through the native bridge.");
+localState.setLocalEditorState("runic-translations:message-tree:1", '{"version":1,"catalogs":[]}');
+await localState.flushLocalEditorState();
+assert.equal(persisted.get("runic-translations:message-tree:1"), '{"version":1,"catalogs":[]}',
+  "The collapsed message groups are editor-owned state.");
 assert.throws(() => localState.setLocalEditorState("unrelated.application", "keep me"), /not owned/,
   "The UI must not use the editor store for another application's data.");
 
-assert.equal(await localState.clearLocalEditorState(), 6,
+assert.equal(await localState.clearLocalEditorState(), 7,
   "Clear must remove every editor-owned native entry.");
 assert.deepEqual(localState.inspectLocalEditorState(), {
   entries: 0, bytes: 0, preferenceEntries: 0, recentProjectEntries: 0, draftEntries: 0, recovered: false,

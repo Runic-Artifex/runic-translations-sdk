@@ -2129,6 +2129,11 @@ ui {
 }
 ui {
   message {
+    heading_code_identifier = Bezeichner im Code
+  }
+}
+ui {
+  message {
     heading_delete = Löschen
   }
 }
@@ -2175,6 +2180,41 @@ ui {
 ui {
   message {
     toolbar_search_messages = Nachrichten suchen
+  }
+}
+ui {
+  message {
+    tree_group_label =
+      .input {$count :integer select=plural}
+      .match $count
+      one {{{$name}, eine Nachricht}}
+      * {{{$name}, {$count} Nachrichten}}
+
+  }
+}
+ui {
+  message {
+    tree_group_missing = {$count :integer} fehlend
+  }
+}
+ui {
+  message {
+    tree_group_review = {$count :integer} zu überprüfen
+  }
+}
+ui {
+  message {
+    tree_group_stale = {$count :integer} veraltet
+  }
+}
+ui {
+  message {
+    tree_selected_hidden = Die ausgewählte Nachricht ist durch den Filter ausgeblendet.
+  }
+}
+ui {
+  message {
+    tree_show_all = Alle Nachrichten anzeigen
   }
 }
 ui {
