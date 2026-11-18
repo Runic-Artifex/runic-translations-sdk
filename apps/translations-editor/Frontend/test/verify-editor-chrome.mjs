@@ -10,6 +10,7 @@ import { buildEditorCommandPalette } from "../src/lib/command-palette.ts";
 import { formatCoverage } from "../src/lib/coverage-format.ts";
 import { editorWindowTitle } from "../src/lib/window-title.ts";
 import { catalogSelectionLimits, catalogSelectionStateKey, readCatalogSelection, writeCatalogSelection } from "../src/lib/catalog-selection.ts";
+import { readPageSources } from "./page-sources.mjs";
 import { qualityIssues } from "../src/lib/review-model.ts";
 
 // P10: ⌘ on macOS, Ctrl elsewhere, from one helper.
@@ -82,7 +83,7 @@ assert.equal(editorWindowTitle(ui, "customer-product", true), "• customer-prod
 assert.equal(editorWindowTitle(ui, undefined, true), "Runic Translations Editor", "The welcome screen shows the product name.");
 uiLocale = "de";
 assert.equal(editorWindowTitle(ui, "customer-product", false), "customer-product – Runic Translations Editor", "The product name is not translated.");
-const page = await readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8");
+const page = await readPageSources();
 assert.match(page, /<title>\{windowTitle\}<\/title>/, "The page title is the window title.");
 assert.match(page, /editorWindowTitle\(ui, [^\n]*hasUnsavedWork\)/, "The title marks every kind of unsaved work.");
 
@@ -134,7 +135,8 @@ const [localStateTs, localStateCs] = await Promise.all([
 ]);
 assert.ok(localStateTs.includes(`"${catalogSelectionStateKey}"`) && localStateCs.includes(`"${catalogSelectionStateKey}"`),
   "The selection record is allow-listed in both local-state stores.");
-assert.match(page, /readCatalogSelection\(getLocalEditorState\(catalogSelectionStateKey\), catalogViewKey\(next\)\)/, "Opening a catalog restores its selection.");
-assert.match(page, /setLocalEditorState\(catalogSelectionStateKey, writeCatalogSelection\(/, "A selection change is remembered.");
+assert.match(page, /readCatalogSelection\(this\.#options\.storage\.get\(catalogSelectionStateKey\), catalogViewKey\(next\)\)/, "Opening a catalog restores its selection.");
+assert.match(page, /storage\.set\(catalogSelectionStateKey, writeCatalogSelection\(/, "A selection change is remembered.");
+assert.match(page, /\$effect\(\(\) => selection\.persistSelection\(\)\)/, "The selection is remembered as it changes.");
 
 console.log("PASS: shortcuts show the platform's modifier, coverage is whole percent in the UI locale, the window title names the catalog and unsaved work, review states are localized with the editor's stale hint, and the selection of each catalog is remembered.");

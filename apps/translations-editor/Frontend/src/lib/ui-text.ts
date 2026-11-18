@@ -71,3 +71,14 @@ export function displayNotice(value: UiMessage | undefined, ui: UiText): string 
   const text = ui.text(value.code, Object.keys(argumentsValue).length === 0 ? undefined : argumentsValue);
   return value.detail === undefined || value.code === "ui_backend_external_error" ? text : `${text} ${value.detail}`;
 }
+
+/** The text of an unexpected error, for the technical details of a notice. */
+export function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** The notice of a failed operation: the host's own notice, else the generic one with the error's text as its detail. */
+export function errorNotice(error: unknown): UiNotice {
+  if (error instanceof UiNoticeError) return error.notice;
+  return { ...notice("ui_backend_external_error"), detail: errorMessage(error) };
+}

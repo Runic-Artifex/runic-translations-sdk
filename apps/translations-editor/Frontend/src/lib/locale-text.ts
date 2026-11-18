@@ -10,3 +10,12 @@ import type { UiDirection } from "./simulation";
 export function localeDirection(locale: string): UiDirection {
   return textDirection(locale.trim());
 }
+
+/** The name of the language `tag` in the interface locale, or the tag itself where the runtime has no name for it. */
+export function localeDisplayName(tag: string, uiLocale: string): string {
+  try {
+    return new Intl.DisplayNames([uiLocale], { type: "language" }).of(tag) ?? tag;
+  } catch {
+    return tag;
+  }
+}

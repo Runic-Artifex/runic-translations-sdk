@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import ts from "typescript";
+import { readPageSources } from "./page-sources.mjs";
 
 const sourceUrl = new URL("../src/lib/ui-locale.ts", import.meta.url);
 const transpiled = ts.transpileModule(await readFile(sourceUrl, "utf8"), {
@@ -78,7 +79,7 @@ assert.ok(localState.includes(`"${uiLocaleStateKey}"`), "The page's local state 
 assert.ok(nativeStore.includes(`"${uiLocaleStateKey}"`), "The native local state does not accept the interface locale key.");
 
 // The page lists the catalog's locales and sets the window's locale instead of hard-coding EN and DE.
-const page = await readFile(new URL("../src/routes/+page.svelte", import.meta.url), "utf8");
+const page = await readPageSources();
 assert.doesNotMatch(page, /<option value="(?:en|de)">/, "The interface language picker hard-codes its locales.");
 assert.match(page, /\{#each uiLocales as locale/, "The interface language picker does not list the catalog's locales.");
 assert.match(page, /createWindowLocaleSync\(\{ current: windowLocale, send: \(locale\) => bridge\.setUiLocale\(locale\) \}\)/,

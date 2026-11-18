@@ -80,8 +80,15 @@ review edits stay in the browser UI so they can be discarded or recovered
 without changing the shared workspace. Persisted review state and workspace
 mutations remain in the compiler-backed session.
 
-The page (`Frontend/src/routes/+page.svelte`) keeps the layout, selection and
-dialogs and wires them to rune-based modules in `Frontend/src/lib/state/`:
+The page (`Frontend/src/routes/+page.svelte`) is the composition root. It
+creates the stores and controllers of `Frontend/src/lib/state/`, wires them to
+each other and to the bridge, derives what blocks the history and the editor
+while an operation runs, binds the keyboard shortcuts and the command palette,
+and lays out the screens and dialogs. Behaviour lives in the state modules;
+layout lives in the components, which take stores and controllers as props
+instead of deriving state again.
+
+The stores own the unsaved work and the host's answers:
 
 - `DraftStore` holds each document's draft, its generation, the compiler's
   parsed entries and the recovery copy. A draft is kept only while it differs
@@ -114,8 +121,53 @@ dialogs and wires them to rune-based modules in `Frontend/src/lib/state/`:
 - `PreviewController` owns the preview samples, the requested formatting locale
   and time zone, the debounced compiler requests and the pseudo-locale result.
 
-The stores take the bridge and the current snapshot as arguments, so the
-frontend checks exercise them without a host.
+The controllers own the page's logic, each with explicit inputs (the bridge
+methods it calls, the stores it changes, and getters for the snapshot and the
+blocking flags):
+
+- `WorkspaceController` holds the open snapshot, loads and opens workspaces
+  (with the unsaved-work confirmation), installs a snapshot into the stores,
+  keeps the recent projects and runs the one save's notices.
+  `RecoveryController` completes or rolls back a pending transaction and
+  restores or discards the work an earlier session left;
+  `ExternalChangesController` polls for changed files and merges one;
+  `RepairController` edits, validates and saves a malformed file;
+  `UnsavedWork` says what is unsaved and confirms dropping it.
+- `SelectionController` holds the selected message and locale, the editor mode
+  and text, and the list's filter and search, with the per-catalog views and
+  the selection stored for the next launch. `configureEditor` shows a
+  selection: it opens the document, sets the samples, starts the preview and
+  opens a missing translation's starter, in that order. Every navigation
+  (selecting, an undone step, a diagnostic, a reload) goes through it.
+- `MessageEditingController` routes the edits of the selected message (file
+  view, composer, authoring operations, "Copy source", quick fixes) to the
+  starter or the document's draft, and navigates from a diagnostic to its span.
+- `HistoryController` runs Undo and Redo one after another: the selected
+  document's unsaved step first, else the host's saved-change history.
+- `WorkspaceView` derives what the catalog shows for the selected locale
+  (coverage, quality findings, the message list and its filters, the selected
+  message's review) and applies the review actions.
+- `PreferencesController` keeps the interface locale, theme and simulations;
+  `ProjectWizardController`, `MutationController`, `InterchangeController`,
+  `LibraryController` and `AboutController` own their dialogs' state and host
+  calls; `EditorFeedback` holds the error and operation notices.
+
+The stores and controllers take the bridge and the current snapshot as
+arguments, so the frontend checks exercise them without a host.
+
+The components are split by screen and area. `Frontend/src/lib/screens/` holds
+the start screens (`LoadingScreen`, `FatalScreen`,
+`TransactionRecoveryScreen`, `WelcomeScreen`), the `WorkspaceNotices` about
+files on disk, and the workspace: `WorkspaceShell` lays out the sidebar
+(`WorkspaceSidebar`) and the inset with the toolbar, the
+`MessageEditorPane` (heading, review workflow, mode switch, translation
+editor), the `PreviewSection` (the rendered preview and the artifact panel)
+and the `ValidationArea`. `Frontend/src/lib/dialogs/` holds one component per
+dialog: project wizard, structural changes (`MutationDialog`), repair, open
+project, external change, About and diagnostics, terminology and quality
+report; the interchange and library dialogs are `InterchangeDialog` and
+`LibraryCatalogDialog` in `Frontend/src/lib/`. A layout change stays in these
+components.
 
 On the host, `EditorSession` is the façade behind the bridge: it adds the undo
 history of saved changes (which Undo and Redo use once no unsaved step is
