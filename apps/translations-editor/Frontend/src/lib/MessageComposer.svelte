@@ -9,7 +9,7 @@
   import { Input } from "#lib/components/ui/input/index.js";
   import { Textarea } from "#lib/components/ui/textarea/index.js";
   import PatternEditor from "./PatternEditor.svelte";
-  import { nextIdentifier, type InputType, type MessageInput } from "./message-composer";
+  import { nextIdentifier, variantTitle, type InputType, type MessageInput } from "./message-composer";
   import type { EditorMessageOperation, EditorMessageProjection } from "./contracts";
   import type { ResourceValue } from "./resource-model";
   import { localeDirection } from "#lib/locale-text.js";
@@ -76,8 +76,10 @@
   }
 
   function title(keys: string[]): string {
-    if (keys.length === 0) return ui.text("ui_composer_default_translation");
-    return keys.map((key, index) => `${authoring?.selectors[index]}: ${key === "*" ? ui.text("ui_composer_fallback") : key}`).join(" · ");
+    return variantTitle(keys, authoring?.selectors ?? [], {
+      defaultTranslation: ui.text("ui_composer_default_translation"),
+      fallback: ui.text("ui_composer_fallback"),
+    });
   }
 </script>
 
@@ -101,7 +103,7 @@
         {#if authoring?.reason}<span class="mt-1 block text-xs">{authoring.reason}</span>{/if}
       </p>
     {/if}
-    <Textarea value={source} rows={12} class="font-mono text-sm" aria-label={ui.text("ui_composer_message_source")} lang={locale} dir={localeDirection(locale)} oninput={(event) => changeSource(event.currentTarget.value)} />
+    <Textarea value={source} rows={12} class="font-mono text-sm" aria-label={ui.text("ui_composer_message_source")} spellcheck={false} lang={locale} dir={localeDirection(locale)} oninput={(event) => changeSource(event.currentTarget.value)} />
   {:else if authoring}
     {#if authoring.selectors.length === 0}
       <Button variant="outline" class="justify-self-start" disabled={authoringBusy} onclick={enablePluralForms}>

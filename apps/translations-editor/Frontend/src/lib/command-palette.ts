@@ -255,9 +255,9 @@ export function buildEditorCommandPalette(
   });
   push({
     id: "view.mode-raw",
-    title: (ui?.text("ui_palette_switch_to_raw_json_mode") ?? "Switch to source mode"),
+    title: (ui?.text("ui_palette_switch_to_raw_json_mode") ?? "Switch to file view"),
     group: "view",
-    keywords: "document source format json",
+    keywords: "file document source raw format json",
     disabled: state.editorMode === "raw",
     run: () => actions.setEditorMode("raw"),
   });

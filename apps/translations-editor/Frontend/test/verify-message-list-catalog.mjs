@@ -8,7 +8,7 @@ const page = await readFile(new URL("../src/routes/+page.svelte", import.meta.ur
 const [english, german] = await Promise.all([readUiMessages("en"), readUiMessages("de")]);
 const required = [
   "app_messages", "app_message_bulk_actions", "app_visible_messages", "app_mark_for_review", "app_approve_translations",
-  "app_add_message", "app_no_matching_messages", "app_missing_translation", "app_translated", "app_structured", "app_stale", "app_review",
+  "app_add_message", "app_no_matching_messages", "app_missing_translation", "app_translated", "app_structured", "app_plural", "app_variants", "app_formatted", "app_stale", "app_review",
 ];
 for (const key of required) {
   assert.equal(typeof english[key], "string", `English project omits ${key}.`);

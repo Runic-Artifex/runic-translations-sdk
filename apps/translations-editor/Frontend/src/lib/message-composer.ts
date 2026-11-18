@@ -181,3 +181,80 @@ export function parseMf2Slots(source: string): Mf2EditorSlot[] {
 export function serializeMf2Slots(slots: Mf2EditorSlot[]): string {
   return slots.map(slot => slot.text + (slot.token === undefined ? "" : slot.syntax ?? mf2VariableSyntax(slot.token))).join("");
 }
+
+/** The labels the composer gives a variant: its selector keys, with `*` named as the fallback case. */
+export interface VariantTitleLabels { defaultTranslation: string; fallback: string }
+
+/** A variant's title, as the composer and the source panel show it: `count: one · kind: Fallback`. */
+export function variantTitle(keys: readonly string[], selectors: readonly string[], labels: VariantTitleLabels): string {
+  if (keys.length === 0) return labels.defaultTranslation;
+  return keys.map((key, index) => `${selectors[index] ?? ""}: ${key === "*" ? labels.fallback : key}`).join(" · ");
+}
+
+/** A run of the read-only source text: plain text, a variable chip, or another placeholder (markup or a formatted value). */
+export type SourceSegment =
+  | { kind: "text"; text: string }
+  | { kind: "variable"; name: string; syntax: string }
+  | { kind: "placeholder"; syntax: string };
+
+export interface SourceBlock { id: string; keys: string[]; segments: SourceSegment[] }
+
+/**
+ * The base-language text of a message as the translate view shows it: one block per variant, with placeholders apart
+ * from the text; or the message source itself when the compiler has no visual projection of it.
+ */
+export type SourceTextView =
+  | { kind: "blocks"; selectors: string[]; blocks: SourceBlock[] }
+  | { kind: "source"; text: string };
+
+interface SourceEntryLike {
+  value: unknown;
+  authoring?: { supported: boolean; selectors: string[]; variants: { id: string; keys: string[]; pattern: string }[] };
+}
+
+export function sourceTextView(entry: SourceEntryLike | undefined): SourceTextView | undefined {
+  if (entry === undefined) return undefined;
+  const authoring = entry.authoring;
+  if (authoring?.supported === true && authoring.variants.length > 0) {
+    return {
+      kind: "blocks",
+      selectors: [...authoring.selectors],
+      blocks: authoring.variants.map(variant => ({ id: variant.id, keys: [...variant.keys], segments: sourceSegments(variant.pattern) })),
+    };
+  }
+  if (typeof entry.value !== "string") return { kind: "source", text: JSON.stringify(entry.value, null, 2) };
+  if (/^\s*\.(?:input|local|match)\b/.test(entry.value)) return { kind: "source", text: entry.value };
+  const quoted = /^\s*\{\{([\s\S]*)\}\}\s*$/.exec(entry.value);
+  return { kind: "blocks", selectors: [], blocks: [{ id: "pattern", keys: [], segments: sourceSegments(quoted?.[1] ?? entry.value) }] };
+}
+
+/** Splits an MF2 pattern into display text (escapes resolved) and placeholders; `{$name}` becomes a variable chip. */
+export function sourceSegments(pattern: string): SourceSegment[] {
+  const segments: SourceSegment[] = [];
+  const text = (value: string) => {
+    if (value === "") return;
+    const last = segments.at(-1);
+    if (last?.kind === "text") last.text += value;
+    else segments.push({ kind: "text", text: value });
+  };
+  for (let index = 0; index < pattern.length;) {
+    if (pattern[index] === "\\" && index + 1 < pattern.length) { text(pattern[index + 1]); index += 2; continue; }
+    if (pattern[index] !== "{") { text(pattern[index++]); continue; }
+    let end = index + 1;
+    let quoted = false;
+    for (; end < pattern.length; end += 1) {
+      if (pattern[end] === "\\") { end += 1; continue; }
+      if (pattern[end] === "|") quoted = !quoted;
+      if (!quoted && pattern[end] === "}") break;
+    }
+    if (end >= pattern.length) { text(pattern.slice(index)); break; }
+    const syntax = pattern.slice(index, end + 1);
+    const variable = /^\{\s*\$([\p{L}_][\p{L}\p{N}_-]*)\s*\}$/u.exec(syntax);
+    const literal = /^\{\s*\|((?:[^|\\]|\\.)*)\|\s*\}$/u.exec(syntax);
+    if (variable !== null) segments.push({ kind: "variable", name: variable[1], syntax: mf2VariableSyntax(variable[1]) });
+    else if (literal !== null) text(literal[1].replace(/\\(.)/gu, "$1"));
+    else segments.push({ kind: "placeholder", syntax });
+    index = end + 1;
+  }
+  return segments;
+}

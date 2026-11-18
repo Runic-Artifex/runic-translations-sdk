@@ -29,7 +29,7 @@
 
 <div class="grid gap-2">
   {#if sourceMode}
-    <Textarea value={visiblePattern} class="min-h-32 font-mono" aria-label={label} lang={locale} dir={localeDirection(locale)} oninput={(event) => changePattern(event.currentTarget.value)} />
+    <Textarea value={visiblePattern} class="min-h-32 font-mono" aria-label={label} spellcheck={false} lang={locale} dir={localeDirection(locale)} oninput={(event) => changePattern(event.currentTarget.value)} />
   {:else}
     <InlineMessageEditor value={visiblePattern} {inputs} {locale} {label} onchange={changePattern} {onensureinput} />
   {/if}

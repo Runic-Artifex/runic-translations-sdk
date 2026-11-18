@@ -131,3 +131,26 @@ assert.deepEqual(reported, { translated: 1, fallback: 1, missing: 1, total: 3, p
 assert.deepEqual(model.localeCoverage(undefined, statusRows, "de"), { translated: 1, fallback: 0, missing: 2, total: 3, percent: 33.33, fromStatus: false },
   "Without a status report the rows are counted, rounded down like status.");
 console.log("PASS: compiler authoring, semantic and translator context survive direct/grouped rows and reject stale drafts; locale coverage follows runic-translations status.");
+
+// The header names a resource layer only when it overrides a lower one (#225 P8), never the base layer.
+const layered = (layers) => ({ catalog: { layers } });
+assert.equal(model.overrideLayer(layered([{ name: "base", priority: 0 }]), "base"), undefined, "A single base layer is not named.");
+assert.equal(model.overrideLayer(layered([{ name: "base", priority: -10 }, { name: "application", priority: 100 }]), "base"), undefined);
+assert.equal(model.overrideLayer(layered([{ name: "base", priority: -10 }, { name: "application", priority: 100 }]), "application"), "application");
+assert.equal(model.overrideLayer(layered([{ name: "library", priority: 0 }, { name: "override", priority: 1 }]), "override"), "override");
+assert.equal(model.overrideLayer(layered([{ name: "library", priority: 0 }, { name: "override", priority: 1 }]), undefined), undefined);
+assert.equal(model.overrideLayer(undefined, "override"), undefined);
+
+// The message list names what makes a message structured (#225 P13): plural forms, other variants, or formatting.
+const authored = (selectorFunctions) => ({ key: "k", value: "", tags: [], structured: true,
+  authoring: { supported: true, selectors: selectorFunctions.map((_, index) => `s${index}`), selectorFunctions, inputs: [], variants: [] } });
+assert.equal(model.messageStructure([undefined, { key: "k", value: "Plain", tags: [], structured: false }]), undefined);
+assert.equal(model.messageStructure([authored(["plural"])]), "plural");
+assert.equal(model.messageStructure([authored(["string"]), authored(["ordinal"])]), "plural", "Any locale's plural selector makes it plural.");
+assert.equal(model.messageStructure([authored(["string"])]), "variants");
+assert.equal(model.messageStructure([authored([])]), "formatted", "Declared inputs or markup without selectors are formatting.");
+assert.equal(model.messageStructure([{ key: "k", value: ".input {$x :string}\n.match $x\n* {{Any}}", tags: [], structured: true }]), "variants");
+assert.equal(model.messageStructure([{ key: "k", value: "{#b}Bold{/b}", tags: [], structured: true }]), "formatted");
+const pluralRows = model.buildRows({ ...snapshot, documents: snapshot.documents }, {});
+assert.ok(pluralRows.every((row) => (row.structure !== undefined) === row.structured), "A row's structure is set exactly when it is structured.");
+console.log("PASS: only override layers are named, and structured messages are named plural, variants or formatted.");
