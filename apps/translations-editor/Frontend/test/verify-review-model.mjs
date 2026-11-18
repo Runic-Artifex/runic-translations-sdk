@@ -1,3 +1,4 @@
+// run-checks-bun-flags: --expose-gc
 import { readFile } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
 import ts from "typescript";
