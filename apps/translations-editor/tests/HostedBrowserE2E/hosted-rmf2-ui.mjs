@@ -644,6 +644,72 @@ try {
   await page.locator('[data-slot="toggle-group-item"]', { hasText: /^Translation$/ }).click();
   await editor().waitFor();
 
+  // Unsaved edits have their own undo history (#225 P4). The pilot's case: ` {$oops` typed into a plural message's MF2
+  // source. Ctrl+Z in the field restores the valid text, the error is gone, and the document is clean again because
+  // it equals the saved text; Ctrl+Shift+Z brings the edit back.
+  stage = "draft-undo-invalid-source";
+  const invalidField = () => page.locator('[data-slot="field"][data-invalid="true"]');
+  await select("files_selected");
+  await page.getByRole("button", { name: "Message source", exact: true }).first().click();
+  const validSource = await composerSource.inputValue();
+  assert.match(validSource, /\.match \$count/);
+  await composerSource.focus();
+  await composerSource.press("Control+End");
+  await page.keyboard.type(" {$oops");
+  await waitFor(async () => await saveState() === "Unsaved changes: text in one document", "the broken source is unsaved");
+  await waitFor(async () => await invalidField().count() > 0, "the broken source is shown as invalid");
+  await page.keyboard.press("Control+z");
+  await waitFor(async () => (await composerSource.inputValue()) === validSource, "Ctrl+Z in the field restores the valid source");
+  await waitFor(async () => await saveState() === "Saved", "the undone edit leaves the document clean");
+  await waitFor(async () => await invalidField().count() === 0, "no error after the undo");
+  assert.equal(await composerSource.evaluate(input => document.activeElement === input && input.selectionStart === input.value.length), true,
+    "The field keeps the focus, with the caret where the undone text was.");
+  assert.equal(await readFile(enPath, "utf8"), enSaved, "Undo wrote nothing.");
+  await page.keyboard.press("Control+Shift+z");
+  await waitFor(async () => await saveState() === "Unsaved changes: text in one document", "Ctrl+Shift+Z redoes the edit");
+  await waitFor(async () => await invalidField().count() > 0, "the redone source is invalid again");
+  await page.keyboard.press("Control+z");
+  await waitFor(async () => (await composerSource.inputValue()) === validSource && await saveState() === "Saved", "undone again");
+  await page.getByRole("button", { name: "Message source", exact: true }).first().click();
+  if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "draft-undo-en.png"), fullPage: true });
+
+  // The toolbar names the unsaved step by its dotted message path, as the command palette does. Undo works across a
+  // message switch and selects the message it changed; Ctrl+Z right after typing takes back what was typed.
+  stage = "draft-undo-toolbar";
+  const undoButton = page.getByRole("button", { name: /^Undo(:| saved change)/ });
+  const redoButton = page.getByRole("button", { name: /^Redo(:| saved change)/ });
+  await branchEditor().fill("One file chosen");
+  await waitFor(async () => (await undoButton.getAttribute("aria-label")) === "Undo: edit in files.selected", "the toolbar's Undo names the unsaved step");
+  assert.equal(await undoButton.getAttribute("title"), "Undo: edit in files.selected (Ctrl+Z)");
+  await page.keyboard.press("Control+k");
+  await page.getByRole("option", { name: /Undo: edit in files\.selected/ }).waitFor();
+  await page.keyboard.press("Escape");
+  await select("common_cancel");
+  await undoButton.click();
+  await waitFor(async () => (await branchEditor().count()) === 1 && (await branchEditor().inputValue()) === "One file selected",
+    "Undo selects files.selected and restores its text");
+  await waitFor(async () => await saveState() === "Saved", "the undone edit leaves the document clean");
+  await waitFor(async () => (await redoButton.getAttribute("aria-label")) === "Redo: edit in files.selected", "the toolbar's Redo names the undone step");
+  await redoButton.click();
+  await waitFor(async () => (await branchEditor().inputValue()) === "One file chosen", "Redo applies the edit again");
+  await branchEditor().fill("One file chosen now");
+  await branchEditor().press("Control+z");
+  await waitFor(async () => (await branchEditor().inputValue()) === "One file chosen", "Ctrl+Z right after typing takes back the typing");
+  await waitFor(async () => await saveState() === "Unsaved changes: text in one document", "the earlier edit is still unsaved");
+
+  // After a save Undo continues with the saved-change history, named as a saved change.
+  stage = "draft-undo-after-save";
+  await page.keyboard.press("Control+s");
+  await waitFor(async () => (await readFile(enPath, "utf8")).includes("one {{One file chosen}}"), "saved edit");
+  await waitFor(async () => await saveState() === "Saved", "nothing unsaved after the save");
+  await waitFor(async () => /^Undo saved change: .*en\.rmf2$/.test(await undoButton.getAttribute("aria-label") ?? ""),
+    "after a save the toolbar's Undo is the saved change");
+  await waitFor(async () => await undoButton.isEnabled(), "the saved change can be undone");
+  await undoButton.click();
+  await waitFor(async () => (await readFile(enPath, "utf8")) === enSaved, "Undo of the saved change restores en.rmf2");
+  await waitFor(async () => (await branchEditor().inputValue()) === "One file selected", "the editor shows the restored text");
+  assert.deepEqual(pageErrors, [], "The production editor reported uncaught browser errors while undoing.");
+
   // The interface language switch sets the window's locale through the ViewModel, the page follows it, and the
   // choice survives a reload from the native editor state.
   // Library catalogs (T5d): the library's text is layer 0, read-only; an override (layer 1) is written to

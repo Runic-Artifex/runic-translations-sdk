@@ -88,7 +88,16 @@ dialogs and wires them to rune-based modules in `Frontend/src/lib/state/`:
   from the saved text. Composer edits, authoring operations, raw-source
   validation and quick fixes run through its one queue per document; an answer
   is accepted only for the current workspace, draft generation and latest
-  request of its kind.
+  request of its kind. Its `DraftHistory` keeps the undo and redo steps of the
+  unsaved edits per document: each committed draft change records the
+  document's state before and after it (draft, the compiler's entries, starter
+  placements and the starters of `MessageDraftStore`); typing in one field
+  extends the latest step until a pause, the stacks are capped by steps and
+  bytes, and a change of the saved text (a save, an undone saved change)
+  clears them. Undo restores the earlier state, so a draft equal to the saved
+  text is dropped and the document is clean again.
+- `MessageDraftStore` holds the in-memory starters of missing translations
+  and places them into their document's draft once they have text.
 - `ReviewStore` holds review states, notes and terminology with the saved data
   the edits started from; it is dirty only while they differ from that data. It
   saves through the bridge against that revision, rebases the edits when
@@ -108,8 +117,9 @@ dialogs and wires them to rune-based modules in `Frontend/src/lib/state/`:
 The stores take the bridge and the current snapshot as arguments, so the
 frontend checks exercise them without a host.
 
-On the host, `EditorSession` is the façade behind the bridge: it adds undo
-history, confirmation tokens for destructive and import operations, and
+On the host, `EditorSession` is the façade behind the bridge: it adds the undo
+history of saved changes (which Undo and Redo use once no unsaved step is
+left), confirmation tokens for destructive and import operations, and
 workspace transactions. It calls one `EditorWorkspace`, a thin coordinator that
 owns the workspace gate and composes the services in `Workspace/`:
 

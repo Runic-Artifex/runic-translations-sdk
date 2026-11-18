@@ -5,7 +5,7 @@ import ts from "typescript";
 import { readUiMessages } from "./ui-messages.mjs";
 
 const keyboard = await loadModule(new URL("../src/lib/editor-keyboard.ts", import.meta.url));
-for (const [event, textEditingTarget, expected] of [
+for (const [event, textEditingTarget, expected, draftField = false] of [
   [key("z", { ctrlKey: true }), false, "undo"],
   [key("z", { ctrlKey: true, shiftKey: true }), false, "redo"],
   [key("y", { metaKey: true }), false, "redo"],
@@ -15,17 +15,33 @@ for (const [event, textEditingTarget, expected] of [
   [key("r", { altKey: true }), false, "toggle-right-to-left"],
   [key("b", { altKey: true }), false, "toggle-artifact-preview"],
   [key("z", { ctrlKey: true }), true, undefined],
+  [key("y", { ctrlKey: true }), true, undefined],
   [key("p", { altKey: true }), true, undefined],
+  // A draft field (composer pattern, message source, file view) has the editor's undo history (#225 P4).
+  [key("z", { ctrlKey: true }), true, "undo", true],
+  [key("Z", { ctrlKey: true, shiftKey: true }), true, "redo", true],
+  [key("y", { ctrlKey: true }), true, "redo", true],
+  [key("z", { metaKey: true }), true, "undo", true],
+  [key("z", { metaKey: true, shiftKey: true }), true, "redo", true],
+  // AltGr (Ctrl+Alt) types characters on some layouts; it is never undo.
+  [key("z", { ctrlKey: true, altKey: true }), true, undefined, true],
+  [key("z", { ctrlKey: true, altKey: true }), false, undefined],
+  [key("p", { altKey: true }), true, undefined, true],
+  [key("s", { ctrlKey: true }), true, "save", true],
 ]) {
-  assert.equal(keyboard.editorShortcut(event, textEditingTarget), expected,
+  assert.equal(keyboard.editorShortcut(event, textEditingTarget, draftField), expected,
     `Keyboard route for ${event.key} did not preserve the owned editor command boundary.`);
 }
 
 const componentEntries = await Promise.all([
   "CommandPalette.svelte",
   "EditorToolbar.svelte",
+  "InlineMessageEditor.svelte",
+  "MessageComposer.svelte",
   "MessageList.svelte",
   "MessageToolbar.svelte",
+  "PatternEditor.svelte",
+  "TranslationEditor.svelte",
 ].map(async (name) => [name, await readFile(new URL(`../src/lib/${name}`, import.meta.url), "utf8")]));
 const [english, german] = await Promise.all([
   readUiMessages("en"),
@@ -101,10 +117,25 @@ for (const key of ["app_messages", "app_message_bulk_actions", "app_add_message"
 }
 
 const editorToolbar = sources["EditorToolbar.svelte"];
-for (const key of ["ui_toolbar_undo_saved_change", "ui_toolbar_redo_saved_change"]) {
-  assert.match(editorToolbar, new RegExp(`aria-label=\\{[^}]*${key}`), `${key} is unnamed.`);
-  assert.equal(typeof english[key], "string", `English project omits ${key}.`);
-  assert.equal(typeof german[key], "string", `German project omits ${key}.`);
+assert.match(editorToolbar, /aria-label=\{undoLabel\} title=\{`\$\{undoLabel\} \(\$\{shortcutLabel\("Mod\+Z"\)\}\)`\}/, "Undo is unnamed or lacks its platform shortcut.");
+assert.match(editorToolbar, /aria-label=\{redoLabel\} title=\{`\$\{redoLabel\} \(\$\{shortcutLabel\("Mod\+Shift\+Z"\)\}\)`\}/, "Redo is unnamed or lacks its platform shortcut.");
+// Undo names the unsaved step it takes back, else the saved change (#225 P4); the palette shows the same names.
+for (const [key, en, de] of [
+  ["ui_toolbar_undo_saved_change", "Undo saved change", "Gespeicherte Änderung rückgängig machen"],
+  ["ui_toolbar_redo_saved_change", "Redo saved change", "Gespeicherte Änderung wiederholen"],
+  ["ui_toolbar_undo_saved_change_named", "Undo saved change: {$change}", "Gespeicherte Änderung rückgängig machen: {$change}"],
+  ["ui_toolbar_redo_saved_change_named", "Redo saved change: {$change}", "Gespeicherte Änderung wiederholen: {$change}"],
+  ["ui_toolbar_undo_unsaved", "Undo: {$change} in {$message}", "Rückgängig: {$change} in {$message}"],
+  ["ui_toolbar_redo_unsaved", "Redo: {$change} in {$message}", "Wiederholen: {$change} in {$message}"],
+  ["ui_history_change_edit", "edit", "Bearbeitung"],
+  ["ui_history_change_structure", "structure change", "Strukturänderung"],
+  ["ui_history_change_quick_fix", "quick fix", "Schnellkorrektur"],
+  ["ui_history_change_copy_source", "Copy source", "Ausgangstext übernehmen"],
+  ["ui_history_change_file_edit", "file edit", "Dateibearbeitung"],
+  ["ui_history_change_recovery", "draft recovery", "Entwurfswiederherstellung"],
+]) {
+  assert.match(english[key] ?? "", new RegExp(`${en.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`), `English ${key} changed or is missing.`);
+  assert.match(german[key] ?? "", new RegExp(`${de.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`), `German ${key} changed or is missing.`);
 }
 assert.match(editorToolbar, /aria-label=\{saving \? savingLabel/, "Save control is unnamed.");
 assertOrder(editorToolbar, "Undo2Icon", "Redo2Icon", "SaveIcon",
@@ -113,6 +144,29 @@ assertOrder(editorToolbar, "Undo2Icon", "Redo2Icon", "SaveIcon",
 const page = sources["+page.svelte"];
 assert.match(page, /<svelte:window onkeydown=\{handleKeyboard\}/,
   "Owned keyboard dispatch is not installed on the Editor window.");
+// Ctrl+Z in a draft field undoes the unsaved edit, not the field's browser history, and so does the browser's own undo.
+assert.match(page, /editorShortcut\(event, isTextEditingTarget\(event\.target\), draftField\(event\.target\) !== undefined\)/,
+  "Keyboard dispatch does not tell draft fields from other text fields.");
+assert.match(page, /onbeforeinput=\{handleBeforeInput\}/, "The browser's own undo of a draft field is not routed to the editor.");
+assert.match(page, /inputType === "historyUndo"[\s\S]*undo\(\)[\s\S]*inputType === "historyRedo"[\s\S]*redo\(\)/,
+  "historyUndo and historyRedo of a draft field are not the editor's undo and redo.");
+// The field's pending input reaches the draft before the step is taken back; then the field keeps focus and caret.
+assert.match(page, /async function stepHistory[\s\S]*?await draftStore\.settledAll\(\)[\s\S]*?draftStore\.undo\(path\)[\s\S]*?restoreCaret\(field, shown\)/,
+  "Undo does not flush the field's pending input first or does not restore the caret.");
+assert.match(page, /onundo=\{undo\}/, "The toolbar's Undo does not use the unsaved-edit history.");
+assert.match(page, /onredo=\{redo\}/, "The toolbar's Redo does not use the unsaved-edit history.");
+assert.match(page, /undoTitle: undoLabel,\s*redoTitle: redoLabel/, "The palette's Undo and Redo are not named as the toolbar's.");
+for (const [name, pattern] of [
+  ["TranslationEditor.svelte", /id="translation-value"\s*data-draft-field/],
+  ["MessageComposer.svelte", /<Textarea value=\{source\}[^>]*data-draft-field/],
+  ["PatternEditor.svelte", /<Textarea value=\{visiblePattern\}[^>]*data-draft-field/],
+  ["InlineMessageEditor.svelte", /<textarea[^>]*data-draft-field/],
+]) assert.match(sources[name], pattern, `${name} does not mark its draft field.`);
+// The composer's fields show the draft again after an undo: text typed before it belongs to an older revision.
+assert.match(sources["TranslationEditor.svelte"], /<MessageComposer[^>]*\{revision\}/, "The composer does not receive the history revision.");
+assert.match(sources["MessageComposer.svelte"], /<PatternEditor[^>]*\{revision\}/, "The pattern editor does not receive the history revision.");
+assert.match(sources["MessageComposer.svelte"], /pendingSource\.revision === revision/, "Typed message source outlives an undo.");
+assert.match(sources["PatternEditor.svelte"], /pendingPattern\.revision === revision/, "A typed pattern outlives an undo.");
 assert.match(page, /<main class="recovery-shell">[\s\S]*<h1>\{ui\.text\("ui_page_recovery_title"\)\}<\/h1>/,
   "Recovery view has no named primary heading.");
 assertOrder(page, 'ui.text("ui_page_recovery_restore_before")', 'ui.text("ui_page_recovery_complete")',

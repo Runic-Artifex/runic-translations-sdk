@@ -111,6 +111,20 @@ assert(JSON.stringify(simulatedTitles) === JSON.stringify([
   "Hide compiled artifact preview",
 ]), "Active simulation entries must offer the off action.");
 
+// The palette names Undo and Redo as the toolbar does: the unsaved step, else the saved change (#225 P4).
+const named = palette.buildEditorCommandPalette(actions, {
+  ...state, canRedo: true, undoTitle: "Undo: edit in files.selected", redoTitle: "Redo saved change: Save en.rmf2",
+});
+assert(named.find((command) => command.id === "document.undo").title === "Undo: edit in files.selected",
+  "The palette's Undo is not named after the unsaved step.");
+assert(named.find((command) => command.id === "document.redo").title === "Redo saved change: Save en.rmf2",
+  "The palette's Redo is not named after the saved change.");
+assert(named.find((command) => command.id === "document.redo").disabled !== true, "Redo with a step must be enabled.");
+assert(commands.find((command) => command.id === "document.undo").title === "Undo saved change",
+  "Without a name the palette's Undo is the saved-change undo.");
+commands.find((command) => command.id === "document.undo").run();
+assert(actions.calls.at(-1) === "undo", "The palette's Undo did not dispatch through the page's undo.");
+
 const blocked = palette.buildEditorCommandPalette(
   actions,
   { ...state, reviewEditable: false },

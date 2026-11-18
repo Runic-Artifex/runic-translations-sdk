@@ -86,6 +86,7 @@
   import type { MessageArtifact, PreviewFormatting, PreviewNode } from "#lib/message-composer.js";
   import { previewSampleOr } from "#lib/message-preview.js";
   import { DraftStore, type DraftOutcome } from "#lib/state/draft-store.svelte.js";
+  import { caretAfterChange, type DraftStep } from "#lib/state/draft-history.svelte.js";
   import { MessageDraftStore, type StarterOutcome, type StarterTarget } from "#lib/state/message-draft-store.svelte.js";
   import { DiagnosticsStore } from "#lib/state/diagnostics-store.svelte.js";
   import { PreviewController } from "#lib/state/preview-controller.svelte.js";
@@ -164,6 +165,10 @@
   let query = $state("");
   let mode = $state<EditorMode>("translation");
   let editorText = $state("");
+  // Advanced by each undo or redo of an unsaved edit: the composer's fields show the draft again.
+  let historyRevision = $state(0);
+  // Undo and redo run one after another, each after the edits typed before it reached the draft.
+  let draftHistoryChain = Promise.resolve();
   let sourceSelection = $state.raw<{ start: number; end: number; token: number }>();
   let selectionToken = 0;
   // Until the native state loads, the page shows the OS preference negotiated against the editor catalog.
@@ -479,6 +484,31 @@
   let currentStarter = $derived(currentStarterTarget === undefined ? undefined : messageDrafts.get(currentStarterTarget));
   let starterLoading = $derived(currentStarterTarget !== undefined && currentStarter === undefined && messageDrafts.isLoading(currentStarterTarget));
   let sourceAuthoring = $derived(selectedRow?.cells[snapshot?.catalog?.defaultLocale ?? ""]?.entry?.authoring);
+  // Unsaved edits have their own undo history (#225 P4), per document: Undo and Redo take the selected document's
+  // latest step, or else the latest of another document. Without an unsaved step they act on the saved changes.
+  let draftHistoryBlocked = $derived(
+    historyBusy || loading || saving || review.saving || mutationBusy || recoveryBusy || projectBusy || openingWorkspace ||
+    pickingWorkspace || repairBusy || interchangeBusy || mutationDialogOpen || projectDialogOpen || openDialogOpen ||
+    comparedExternalChange !== undefined || repairDocument !== undefined,
+  );
+  let draftUndoStep = $derived(draftStore.history.peekUndo(draftStore.history.undoTarget(currentDocument?.path)));
+  let draftRedoStep = $derived(draftStore.history.peekRedo(draftStore.history.redoTarget(currentDocument?.path)));
+  let canUndo = $derived(draftUndoStep !== undefined ? !draftHistoryBlocked : snapshot?.history?.canUndo === true && !historyBlocked);
+  let canRedo = $derived(draftRedoStep !== undefined ? !draftHistoryBlocked : snapshot?.history?.canRedo === true && !historyBlocked);
+  let undoLabel = $derived.by(() => {
+    if (draftUndoStep !== undefined) {
+      return ui.text("ui_toolbar_undo_unsaved", { change: historyChangeName(draftUndoStep), message: draftUndoStep.message ?? draftUndoStep.path });
+    }
+    const saved = snapshot?.history?.undoLabel;
+    return saved === undefined ? ui.text("ui_toolbar_undo_saved_change") : ui.text("ui_toolbar_undo_saved_change_named", { change: displayNotice(saved, ui) });
+  });
+  let redoLabel = $derived.by(() => {
+    if (draftRedoStep !== undefined) {
+      return ui.text("ui_toolbar_redo_unsaved", { change: historyChangeName(draftRedoStep), message: draftRedoStep.message ?? draftRedoStep.path });
+    }
+    const saved = snapshot?.history?.redoLabel;
+    return saved === undefined ? ui.text("ui_toolbar_redo_saved_change") : ui.text("ui_toolbar_redo_saved_change_named", { change: displayNotice(saved, ui) });
+  });
   let malformedDocuments = $derived(
     snapshot?.documents.filter((document) => document.isMalformed) ?? [],
   );
@@ -490,8 +520,8 @@
         createProject: openProjectWizard,
         openInterchange: () => interchangeOpen = true,
         saveAll: () => void saveAll(),
-        undo: () => void undoHistory(),
-        redo: () => void redoHistory(),
+        undo,
+        redo,
         focusMessageSearch: () => searchInput?.focus(),
         discardReview,
         setMessageReviewState: setCurrentReviewState,
@@ -520,8 +550,10 @@
         workspaceReady: snapshot !== undefined,
         searchAvailable: searchInput !== null,
         unsaved: saveCoordinator.hasUnsaved && !editorMutationBlocked,
-        canUndo: snapshot?.history?.canUndo === true && !historyBlocked,
-        canRedo: snapshot?.history?.canRedo === true && !historyBlocked,
+        canUndo,
+        canRedo,
+        undoTitle: undoLabel,
+        redoTitle: redoLabel,
         reviewEditable: selectedRow !== undefined && !reviewMutationBlocked &&
           snapshot?.review?.error === undefined,
         reviewDirty: review.dirty,
@@ -895,10 +927,13 @@
       return;
     }
     try {
+      const before = draftStore.capture(document.path);
       draftStore.set(document.path, value);
       draftStore.persist();
       // The file's own text now decides what its missing translations hold.
       messageDrafts.retain((target) => target.path !== document.path);
+      // Typing in the file view is one step per pause, like typing in the composer.
+      draftStore.recordStep(document.path, { kind: "file-edit", field: `${document.path}\u0000file` }, before);
       draftStore.validate(document.path, value, (outcome) => {
         if (outcome.kind === "applied") diagnosticsStore.record("validation", document.path, outcome.result);
         else if (outcome.kind === "failed") clientError = errorNotice(outcome.error);
@@ -1256,7 +1291,10 @@
     if (mode !== "raw") return;
     try {
       const formatted = formatJson(editorText);
+      // Formatting is a step of its own, not part of the typing before or after it.
+      draftStore.history.seal();
       edit(formatted);
+      draftStore.history.seal();
     } catch (error) {
       clientError = errorNotice(error);
     }
@@ -1290,16 +1328,121 @@
   }
 
   function handleKeyboard(event: KeyboardEvent): void {
-    const shortcut = editorShortcut(event, isTextEditingTarget(event.target));
+    const shortcut = editorShortcut(event, isTextEditingTarget(event.target), draftField(event.target) !== undefined);
     if (shortcut === undefined) return;
     event.preventDefault();
-    if (shortcut === "undo") void undoHistory();
-    else if (shortcut === "redo") void redoHistory();
+    if (shortcut === "undo") undo();
+    else if (shortcut === "redo") redo();
     else if (shortcut === "save") void saveAll();
     else if (shortcut === "toggle-command-search") commandPaletteOpen = !commandPaletteOpen;
     else if (shortcut === "toggle-pseudo-localization") togglePseudoLocalization();
     else if (shortcut === "toggle-right-to-left") toggleUiDirection();
     else toggleArtifactPreview();
+  }
+
+  // The browser's own undo of a draft field (from its context menu) is the editor's: the field is rewritten from the
+  // draft after each change, so the browser's undo stack of it is not the draft's.
+  function handleBeforeInput(event: InputEvent): void {
+    if (draftField(event.target) === undefined) return;
+    if (event.inputType === "historyUndo") {
+      event.preventDefault();
+      undo();
+    } else if (event.inputType === "historyRedo") {
+      event.preventDefault();
+      redo();
+    }
+  }
+
+  /** Ctrl+Z, the toolbar's and the palette's Undo: the latest unsaved edit, or without one the latest saved change. */
+  function undo(): void {
+    queueHistory("undo");
+  }
+
+  /** Ctrl+Shift+Z, Ctrl+Y, the toolbar's and the palette's Redo. */
+  function redo(): void {
+    queueHistory("redo");
+  }
+
+  function queueHistory(direction: "undo" | "redo"): void {
+    const field = draftField(document.activeElement);
+    const shown = field?.value;
+    draftHistoryChain = draftHistoryChain
+      .then(() => stepHistory(direction, field, shown))
+      .catch((error: unknown) => { clientError = errorNotice(error); });
+  }
+
+  async function stepHistory(direction: "undo" | "redo", field: DraftField | undefined, shown: string | undefined): Promise<void> {
+    // The edits typed before the key press reach the draft first, so the step they made is the one taken back.
+    await draftStore.settledAll();
+    const history = draftStore.history;
+    const path = direction === "undo" ? history.undoTarget(currentDocument?.path) : history.redoTarget(currentDocument?.path);
+    if (path === undefined) {
+      // Text a field shows that never reached the draft (a refused edit) gives way to the draft.
+      historyRevision += 1;
+      if (direction === "undo") await undoHistory();
+      else await redoHistory();
+      return;
+    }
+    if (draftHistoryBlocked) return;
+    const step = direction === "undo" ? draftStore.undo(path) : draftStore.redo(path);
+    if (step === undefined) return;
+    clientError = undefined;
+    operationMessage = undefined;
+    showStep(step);
+    historyRevision += 1;
+    // The restored text's entries and diagnostics: an error the undone edit caused leaves the panel.
+    void draftStore.refresh(path, (outcome) => {
+      if (outcome.kind === "failed") clientError = errorNotice(outcome.error);
+      else diagnosticsStore.record("validation", path, outcome.result);
+    });
+    await tick();
+    restoreCaret(field, shown);
+  }
+
+  /** Shows what an undone or redone step changed: its message and locale, or the file for a step of the whole file. */
+  function showStep(step: DraftStep): void {
+    diagnosticsStore.clear();
+    const locale = snapshot?.documents.find((candidate) => candidate.path === step.path)?.locale;
+    if (locale !== undefined && snapshot?.catalog?.locales.some((candidate) => candidate.tag === locale)) selectedLocale = locale;
+    if (step.key !== undefined && rows.some((row) => row.key === step.key)) selectedKey = step.key;
+    configureEditor(step.key === undefined ? "raw" : mode);
+  }
+
+  /**
+   * After an undo or redo the field keeps the focus with the caret where the text changed; a field that gave way (the
+   * step was in another message, or the composer's view changed) hands the focus to the editor's first field.
+   */
+  function restoreCaret(field: DraftField | undefined, shown: string | undefined): void {
+    if (field === undefined) return;
+    if (field.isConnected) {
+      field.focus();
+      if (shown !== undefined && field.value !== shown) {
+        const caret = caretAfterChange(shown, field.value);
+        field.setSelectionRange(caret, caret);
+      }
+      return;
+    }
+    document.querySelector<HTMLTextAreaElement | HTMLInputElement>("[data-draft-field]")?.focus();
+  }
+
+  type DraftField = HTMLTextAreaElement | HTMLInputElement;
+
+  /** A field whose text is a draft: the composer's patterns, the message source and the file view. */
+  function draftField(target: EventTarget | null): DraftField | undefined {
+    return (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) && target.closest("[data-draft-field]") !== null
+      ? target
+      : undefined;
+  }
+
+  function historyChangeName(step: DraftStep): string {
+    switch (step.kind) {
+      case "structure": return ui.text("ui_history_change_structure");
+      case "quick-fix": return ui.text("ui_history_change_quick_fix");
+      case "copy-source": return ui.text("ui_history_change_copy_source");
+      case "file-edit": return ui.text("ui_history_change_file_edit");
+      case "recovery": return ui.text("ui_history_change_recovery");
+      default: return ui.text("ui_history_change_edit");
+    }
   }
 
   async function undoHistory(): Promise<void> {
@@ -1432,7 +1575,7 @@
           if (mode === "translation") previewController.schedule(path, result.content, selectedKey, selectedLocale);
         }
       }
-    });
+    }, diagnostic.key);
   }
 
   function protectDraft(event: BeforeUnloadEvent): void {
@@ -2009,7 +2152,7 @@
   <title>{windowTitle}</title>
     <meta name="description" content={ui.text("ui_page_meta_description")} />
 </svelte:head>
-<svelte:window onkeydown={handleKeyboard} onbeforeunload={protectDraft} />
+<svelte:window onkeydown={handleKeyboard} onbeforeinput={handleBeforeInput} onbeforeunload={protectDraft} />
 
 {#snippet previewNodes(nodes: PreviewNode[])}
   <InlinePreview {nodes} />
@@ -2313,14 +2456,14 @@
         saveState={displayNotice(operationMessage ?? notice("app_saved"), ui)}
         unsaved={saveCoordinator.hasUnsaved}
         {unsavedDetail}
-        canUndo={snapshot.history?.canUndo === true && !historyBlocked}
-        canRedo={snapshot.history?.canRedo === true && !historyBlocked}
+        {canUndo}
+        {canRedo}
         {historyBusy}
-        undoLabel={snapshot.history?.undoLabel === undefined ? undefined : displayNotice(snapshot.history.undoLabel, ui)}
-        redoLabel={snapshot.history?.redoLabel === undefined ? undefined : displayNotice(snapshot.history.redoLabel, ui)}
+        {undoLabel}
+        {redoLabel}
         onsave={() => void saveAll()}
-        onundo={() => void undoHistory()}
-        onredo={() => void redoHistory()}
+        onundo={undo}
+        onredo={redo}
       />
 
       <div class="flex justify-end border-b px-4 py-2">
@@ -2409,6 +2552,7 @@
             onresourcechange={editResourceValue}
             onrawchange={edit}
             onformatraw={formatRaw}
+            revision={historyRevision}
           />
 
           {#if mode === "translation"}

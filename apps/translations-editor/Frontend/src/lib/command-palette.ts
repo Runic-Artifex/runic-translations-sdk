@@ -31,6 +31,7 @@ export interface EditorPaletteActions {
   openInterchange(): void;
   /** Saves all unsaved work: every unsaved document, then the review changes. */
   saveAll(): void;
+  /** Takes back the latest unsaved edit, or without one the latest saved change. */
   undo(): void;
   redo(): void;
   focusMessageSearch(): void;
@@ -66,6 +67,9 @@ export interface EditorPaletteState {
   readonly unsaved: boolean;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
+  /** The toolbar's names of Undo and Redo ("Undo: edit in files.selected"); without them the saved-change titles. */
+  readonly undoTitle?: string;
+  readonly redoTitle?: string;
   readonly reviewEditable: boolean;
   readonly reviewDirty: boolean;
   readonly pseudoLocalization: boolean;
@@ -156,20 +160,20 @@ export function buildEditorCommandPalette(
   });
   push({
     id: "document.undo",
-    title: (ui?.text("ui_palette_undo_saved_change") ?? "Undo saved change"),
+    title: state.undoTitle ?? (ui?.text("ui_palette_undo_saved_change") ?? "Undo saved change"),
     group: "document",
     keybinding: shortcutLabel("Mod+Z", state.shortcutPlatform),
-    keywords: "revert history back",
+    keywords: "revert history back unsaved edit draft",
     disabled: !state.canUndo,
     bridge: "undo",
     run: actions.undo,
   });
   push({
     id: "document.redo",
-    title: (ui?.text("ui_palette_redo_saved_change") ?? "Redo saved change"),
+    title: state.redoTitle ?? (ui?.text("ui_palette_redo_saved_change") ?? "Redo saved change"),
     group: "document",
     keybinding: shortcutLabel("Mod+Shift+Z", state.shortcutPlatform),
-    keywords: "history forward",
+    keywords: "history forward unsaved edit draft",
     disabled: !state.canRedo,
     bridge: "redo",
     run: actions.redo,

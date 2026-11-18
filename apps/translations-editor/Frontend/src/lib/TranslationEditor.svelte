@@ -42,6 +42,8 @@
     starterLoading?: boolean;
     /** Fills the starter of a missing translation from the source text; absent for an existing translation. */
     oncopysource?: () => void;
+    /** Advanced by an undo or redo: the composer's fields show the draft again, not the text typed before it. */
+    revision?: number;
   }
 
   let {
@@ -68,6 +70,7 @@
     lengthWarning,
     starterLoading = false,
     oncopysource,
+    revision = 0,
   }: Props = $props();
 
   const ui = getUiText();
@@ -131,7 +134,7 @@
           <p class="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground" role="status">{ui.text("ui_translation_editor_starter_loading")}</p>
         {:else}
           {#key identity}
-            <MessageComposer value={resourceValue} {locale} {authoring} {authoringBusy} {onoperation} onchange={onresourcechange} {maxLength} {oncopysource} />
+            <MessageComposer value={resourceValue} {locale} {authoring} {authoringBusy} {onoperation} onchange={onresourcechange} {maxLength} {oncopysource} {revision} />
           {/key}
         {/if}
       </div>
@@ -139,6 +142,7 @@
       <Textarea
         bind:ref={rawInput}
         id="translation-value"
+        data-draft-field
         class="field-sizing-fixed min-h-96 resize-y bg-card/70 px-5 py-4 font-mono text-xs leading-7 shadow-inner"
         value={value}
         placeholder={missing ? ui.text("ui_translation_editor_add_translation") : undefined}

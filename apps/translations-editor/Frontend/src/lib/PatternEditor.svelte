@@ -6,30 +6,32 @@
   import { localeDirection } from "./locale-text";
   import { getUiText } from "./ui-text";
 
-  let { pattern, inputs, locale, label, onchange, onensureinput }: {
+  let { pattern, inputs, locale, label, onchange, onensureinput, revision = 0 }: {
     pattern: string;
     inputs: Record<string, MessageInput>;
     locale: string;
     label: string;
     onchange: (pattern: string) => void;
     onensureinput?: (name: string, type: InputType) => void;
+    /** Advanced by an undo or redo: text typed before it gives way to `pattern`. */
+    revision?: number;
   } = $props();
   const ui = getUiText();
   let sourceMode = $state(false);
-  let pendingPattern = $state<string>();
-  let visiblePattern = $derived(pendingPattern ?? pattern);
+  let pendingPattern = $state<{ text: string; revision: number }>();
+  let visiblePattern = $derived(pendingPattern !== undefined && pendingPattern.revision === revision ? pendingPattern.text : pattern);
   $effect(() => {
-    if (pendingPattern !== undefined && pendingPattern === pattern) pendingPattern = undefined;
+    if (pendingPattern !== undefined && (pendingPattern.text === pattern || pendingPattern.revision !== revision)) pendingPattern = undefined;
   });
   function changePattern(next: string): void {
-    pendingPattern = next;
+    pendingPattern = { text: next, revision };
     onchange(next);
   }
 </script>
 
 <div class="grid gap-2">
   {#if sourceMode}
-    <Textarea value={visiblePattern} class="min-h-32 font-mono" aria-label={label} spellcheck={false} lang={locale} dir={localeDirection(locale)} oninput={(event) => changePattern(event.currentTarget.value)} />
+    <Textarea value={visiblePattern} class="min-h-32 font-mono" data-draft-field aria-label={label} spellcheck={false} lang={locale} dir={localeDirection(locale)} oninput={(event) => changePattern(event.currentTarget.value)} />
   {:else}
     <InlineMessageEditor value={visiblePattern} {inputs} {locale} {label} onchange={changePattern} {onensureinput} />
   {/if}

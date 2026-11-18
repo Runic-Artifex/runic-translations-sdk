@@ -40,8 +40,9 @@
     canUndo: boolean;
     canRedo: boolean;
     historyBusy: boolean;
-    undoLabel?: string;
-    redoLabel?: string;
+    /** What Undo takes back: "Undo: edit in files.selected" for an unsaved step, else the saved change it undoes. */
+    undoLabel: string;
+    redoLabel: string;
     onsave: () => void;
     onundo: () => void;
     onredo: () => void;
@@ -56,10 +57,10 @@
   <div class="min-w-0 flex-1"></div>
 
   <div class="flex shrink-0 items-center gap-2">
-    <Button variant="ghost" size="icon-xs" disabled={!canUndo || historyBusy} onclick={onundo} aria-label={undoLabel === undefined ? ui.text("ui_toolbar_undo_saved_change") : `${ui.text("ui_toolbar_undo")} ${undoLabel}`} title={undoLabel === undefined ? `${ui.text("ui_toolbar_undo_saved_change")} (Ctrl+Z)` : `${ui.text("ui_toolbar_undo")} ${undoLabel} (Ctrl+Z)`}>
+    <Button variant="ghost" size="icon-xs" disabled={!canUndo || historyBusy} onclick={onundo} aria-label={undoLabel} title={`${undoLabel} (${shortcutLabel("Mod+Z")})`}>
       <Undo2Icon data-icon="inline-start" />
     </Button>
-    <Button variant="ghost" size="icon-xs" disabled={!canRedo || historyBusy} onclick={onredo} aria-label={redoLabel === undefined ? ui.text("ui_toolbar_redo_saved_change") : `${ui.text("ui_toolbar_redo")} ${redoLabel}`} title={redoLabel === undefined ? `${ui.text("ui_toolbar_redo_saved_change")} (Ctrl+Shift+Z)` : `${ui.text("ui_toolbar_redo")} ${redoLabel} (Ctrl+Shift+Z)`}>
+    <Button variant="ghost" size="icon-xs" disabled={!canRedo || historyBusy} onclick={onredo} aria-label={redoLabel} title={`${redoLabel} (${shortcutLabel("Mod+Shift+Z")})`}>
       <Redo2Icon data-icon="inline-start" />
     </Button>
     <!-- One state for all unsaved work: "Saved", or "Unsaved changes" naming what is unsaved. -->
