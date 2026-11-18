@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
+import { bunFlags, discoverChecks, excluded } from "./run-checks.mjs";
 
 const [packageJson, fullVerification, viteConfig, rootPackageJson, runner] = await Promise.all([
   readFile(new URL("../package.json", import.meta.url), "utf8"),
@@ -23,8 +24,26 @@ const expandedCommand = expandScript("verify");
 
 assert.equal(typeof command, "string", "Frontend has no verify script.");
 assert.equal(frontend.packageManager, JSON.parse(rootPackageJson).packageManager, "Frontend must use the repository-pinned Bun release.");
-for (const test of ["verify-ui-catalog.mjs", "verify-keyboard-a11y.mjs", "verify-command-palette.mjs", "verify-w03-simulation.mjs", "verify-local-state.mjs", "verify-ui-locale.mjs", "verify-editor-bridge.ts", "verify-draft-store.mjs", "verify-draft-history.mjs", "verify-review-store.mjs", "verify-save-coordinator.mjs", "verify-diagnostics-store.mjs", "verify-diagnostic-scope.mjs", "verify-preview-controller.mjs", "verify-source-panel.mjs", "verify-length-limit.mjs", "verify-message-starter.mjs", "verify-message-tree.mjs", "verify-message-virtualization.mjs", "verify-editor-chrome.mjs"]) {
-  assert.match(expandedCommand, new RegExp(test.replace(".", "\\.")), `Frontend verification omits ${test}.`);
+// `verify:checks` is the runner, which runs every test/verify-* file except its declared exclusions; each exclusion
+// runs in the full verification instead.
+assert.equal(frontend.scripts?.["verify:checks"], "bun test/run-checks.mjs", "verify:checks must run the discovered checks.");
+assert.match(expandedCommand, /\bbun run --bun verify:checks\b/, "Frontend verification bypasses verify:checks.");
+const checks = discoverChecks().map(check => check.file);
+const testFiles = (await readdir(new URL("./", import.meta.url))).filter(file => file.startsWith("verify-"));
+for (const file of testFiles) {
+  if (excluded.has(file)) {
+    assert.ok(!checks.includes(file), `The check runner runs the excluded test/${file}.`);
+    assert.match(expandedCommand, new RegExp(`\\bbun test/${file.replaceAll(".", "\\.")}\\b`), `test/${file} is excluded from the runner and runs nowhere else.`);
+  } else {
+    assert.ok(checks.includes(file), `The check runner omits test/${file}; name it verify-<name>.mjs or verify-<name>.ts.`);
+  }
+}
+for (const file of excluded.keys()) assert.ok(testFiles.includes(file), `The runner excludes test/${file}, which does not exist.`);
+assert.ok(checks.includes(new URL(import.meta.url).pathname.split("/").pop()), "The check runner skips this wiring check.");
+// A test that needs the garbage collector declares the flag that exposes it.
+for (const file of checks) {
+  if (/\bglobalThis\.gc\(\)/.test(await readFile(new URL(file, import.meta.url), "utf8")))
+    assert.ok(bunFlags(file).includes("--expose-gc"), `test/${file} calls the garbage collector without a run-checks-bun-flags: --expose-gc line.`);
 }
 const verifyJob = Bun.YAML.parse(fullVerification).jobs["build-and-test"];
 assert.ok(verifyJob.steps.some(step => step.run === "bun eng/run.mjs test"),
