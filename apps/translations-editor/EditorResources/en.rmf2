@@ -2129,6 +2129,11 @@ ui {
 }
 ui {
   message {
+    heading_code_identifier = Code identifier
+  }
+}
+ui {
+  message {
     heading_delete = Delete
   }
 }
@@ -2175,6 +2180,41 @@ ui {
 ui {
   message {
     toolbar_search_messages = Search messages
+  }
+}
+ui {
+  message {
+    tree_group_label =
+      .input {$count :integer select=plural}
+      .match $count
+      one {{{$name}, one message}}
+      * {{{$name}, {$count} messages}}
+
+  }
+}
+ui {
+  message {
+    tree_group_missing = {$count :integer} missing
+  }
+}
+ui {
+  message {
+    tree_group_review = {$count :integer} to review
+  }
+}
+ui {
+  message {
+    tree_group_stale = {$count :integer} stale
+  }
+}
+ui {
+  message {
+    tree_selected_hidden = Selected message is hidden by the filter.
+  }
+}
+ui {
+  message {
+    tree_show_all = Show all messages
   }
 }
 ui {
@@ -4603,5 +4643,43 @@ ui {
 ui {
   library {
     project_changed_unsaved = A library catalog was added to runic.json "overrides". Your unsaved changes are kept; reload the workspace once they are saved.
+  }
+}
+ui {
+  composer {
+    copy_source = Copy source
+  }
+}
+ui {
+  composer {
+    copy_source_title = Fill each variant with the source text; placeholders stay placeholders.
+  }
+}
+ui {
+  count {
+    characters_limit =
+      .input {$count :integer}
+      .input {$limit :integer}
+      {{{$count} / {$limit}}}
+  }
+}
+ui {
+  count {
+    characters_limit_title =
+      .input {$count :integer}
+      .input {$limit :integer}
+      {{{$count} of at most {$limit} characters; placeholder values are not counted}}
+  }
+}
+ui {
+  translation {
+    editor_over_limit =
+      .input {$limit :integer}
+      {{This text is longer than its limit of {$limit} characters. Placeholder values are not counted.}}
+  }
+}
+ui {
+  translation {
+    editor_starter_loading = Preparing an empty translation…
   }
 }

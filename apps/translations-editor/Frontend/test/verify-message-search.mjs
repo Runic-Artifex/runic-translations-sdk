@@ -39,6 +39,7 @@ function row(index) {
   const key = `Group.Message${String(index).padStart(5, "0")}`;
   return {
     key,
+    path: ["Group", `Message${String(index).padStart(5, "0")}`],
     description: `Source description ${index}`,
     tags: [`locale-${index % 5}`, `section-${index % 19}`],
     structured: false,

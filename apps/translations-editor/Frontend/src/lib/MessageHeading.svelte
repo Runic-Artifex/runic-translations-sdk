@@ -8,6 +8,7 @@
 
   let {
     messageKey,
+    messagePath = [],
     description,
     tags,
     locale,
@@ -17,7 +18,10 @@
     onduplicate,
     ondelete,
   }: {
+    /** The flattened code identifier (`common_cancel`); Rename, Duplicate and Delete work on it. */
     messageKey: string;
+    /** The logical path (`["common", "cancel"]`), shown as the title `common.cancel`. */
+    messagePath?: readonly string[];
     description?: string;
     tags: string[];
     locale: string;
@@ -30,16 +34,18 @@
   } = $props();
 
   const ui = getUiText();
+  let dottedPath = $derived(messagePath.length > 0 ? messagePath.join(".") : messageKey);
 </script>
 
 <header class="mx-auto mb-6 flex max-w-[1000px] flex-col items-start justify-between gap-4 xl:flex-row xl:gap-8">
   <div class="min-w-0">
-    <div class="mb-2 flex flex-wrap items-center gap-2 font-mono text-xs text-muted-foreground">
-      {#each messageKey.split(".") as segment, index (`${segment}-${index}`)}
-        {#if index > 0}<span aria-hidden="true">/</span>{/if}<span>{segment}</span>
-      {/each}
-    </div>
-    <h2 class="font-serif text-4xl tracking-tight sm:text-5xl">{messageKey.split(".").at(-1)}</h2>
+    <h2 class="break-words font-serif text-3xl tracking-tight sm:text-4xl" data-testid="message-title">{dottedPath}</h2>
+    {#if dottedPath !== messageKey}
+      <p class="mt-1 flex flex-wrap items-baseline gap-1.5 text-xs text-muted-foreground" data-testid="message-code-identifier">
+        <span>{ui.text("ui_message_heading_code_identifier")}</span>
+        <code class="font-mono">{messageKey}</code>
+      </p>
+    {/if}
     {#if description}<p class="mt-2 max-w-2xl text-sm text-muted-foreground">{description}</p>{/if}
     {#if tags.length > 0}
       <div class="mt-3 flex flex-wrap gap-1.5">

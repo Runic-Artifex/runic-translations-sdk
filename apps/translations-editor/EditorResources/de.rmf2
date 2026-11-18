@@ -2129,6 +2129,11 @@ ui {
 }
 ui {
   message {
+    heading_code_identifier = Bezeichner im Code
+  }
+}
+ui {
+  message {
     heading_delete = Löschen
   }
 }
@@ -2175,6 +2180,41 @@ ui {
 ui {
   message {
     toolbar_search_messages = Nachrichten suchen
+  }
+}
+ui {
+  message {
+    tree_group_label =
+      .input {$count :integer select=plural}
+      .match $count
+      one {{{$name}, eine Nachricht}}
+      * {{{$name}, {$count} Nachrichten}}
+
+  }
+}
+ui {
+  message {
+    tree_group_missing = {$count :integer} fehlend
+  }
+}
+ui {
+  message {
+    tree_group_review = {$count :integer} zu überprüfen
+  }
+}
+ui {
+  message {
+    tree_group_stale = {$count :integer} veraltet
+  }
+}
+ui {
+  message {
+    tree_selected_hidden = Die ausgewählte Nachricht ist durch den Filter ausgeblendet.
+  }
+}
+ui {
+  message {
+    tree_show_all = Alle Nachrichten anzeigen
   }
 }
 ui {
@@ -4603,5 +4643,43 @@ ui {
 ui {
   library {
     project_changed_unsaved = Ein Bibliothekskatalog wurde zu "overrides" in runic.json hinzugefügt. Ihre ungespeicherten Änderungen bleiben erhalten; laden Sie den Arbeitsbereich neu, sobald sie gespeichert sind.
+  }
+}
+ui {
+  composer {
+    copy_source = Ausgangstext übernehmen
+  }
+}
+ui {
+  composer {
+    copy_source_title = Füllt jede Variante mit dem Ausgangstext; Platzhalter bleiben Platzhalter.
+  }
+}
+ui {
+  count {
+    characters_limit =
+      .input {$count :integer}
+      .input {$limit :integer}
+      {{{$count} / {$limit}}}
+  }
+}
+ui {
+  count {
+    characters_limit_title =
+      .input {$count :integer}
+      .input {$limit :integer}
+      {{{$count} von höchstens {$limit} Zeichen; Platzhalterwerte werden nicht gezählt}}
+  }
+}
+ui {
+  translation {
+    editor_over_limit =
+      .input {$limit :integer}
+      {{Dieser Text ist länger als seine Grenze von {$limit} Zeichen. Platzhalterwerte werden nicht gezählt.}}
+  }
+}
+ui {
+  translation {
+    editor_starter_loading = Leere Übersetzung wird vorbereitet…
   }
 }

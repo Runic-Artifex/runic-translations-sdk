@@ -18,6 +18,8 @@ if (urlOrPrepare === "--prepare") {
     catalog: "runic-hosted-e2e",
     code: { namespace: "Runic.HostedBrowserProof", className: "Messages" },
     baseLocale: "de", locales: ["de", "en", "fr"],
+    // files.deleted exists in the base locale only: the missing translations a translator starts from (#225 P2).
+    validation: { translationCompleteness: "allow" },
     overrides: [{ catalog: "acme.table", from: "Acme.Table" }],
   }, null, 2) + "\n");
   // T5d: the acme.table library of the build-time override tests, installed as a restore leaves it: a NuGet package
@@ -33,8 +35,10 @@ if (urlOrPrepare === "--prepare") {
   await writeFile(join(workspace, "obj", "project.assets.json"), JSON.stringify({ version: 3,
     libraries: { "Acme.Table/1.0.0": { type: "package", path: "acme.table/1.0.0", files: ["runic/acme.table/de.rmf2", "runic/acme.table/en.rmf2", "runic/acme.table/runic.json"] } },
     packageFolders: { [resolve(workspace, "..", "packages") + "/"]: {} } }));
+  // A plural with a length limit that only the base locale (de) has.
+  const deleted = "  @maxLength 24\n  deleted =\n    .input {$count :integer}\n    .match $count\n    one {{Eine Datei gelöscht}}\n    * {{{$count} Dateien gelöscht}}\n";
   for (const [locale, cancel, save] of [["de", "Abbrechen", "Speichern"], ["en", "Cancel", "Save"], ["fr", "Annuler", "Enregistrer"]])
-    await writeFile(join(workspace, `${locale}.rmf2`), `${preservedComment}common {\n  cancel = ${cancel}\n  save = ${save}\n}\nfiles {\n  # Context for a selected-file count.\n  @tags files selection\n  @example {"count":1}\n  @example {"count":2}\n  selected =\n    .input {$count :integer}\n    .match $count\n    one {{One file selected}}\n    * {{{$count} files selected}}\n}\n`);
+    await writeFile(join(workspace, `${locale}.rmf2`), `${preservedComment}common {\n  cancel = ${cancel}\n  save = ${save}\n}\nfiles {\n  # Context for a selected-file count.\n  @tags files selection\n  @example {"count":1}\n  @example {"count":2}\n  selected =\n    .input {$count :integer}\n    .match $count\n    one {{One file selected}}\n    * {{{$count} files selected}}\n${locale === "de" ? deleted : ""}}\n`);
   console.log(`prepared real-host RMF2 fixture: ${workspace}`);
   process.exit(0);
 }
@@ -107,6 +111,10 @@ try {
     }
   }));
   await page.goto(new URL("/", urlOrPrepare).href, { waitUntil: "domcontentloaded" });
+  // A message row of the namespace tree, by its flattened key (#225 M1), and a group row, by its dotted path.
+  const messageRow = key => page.locator(`[role="treeitem"][data-message-key="${key}"]`);
+  const groupRow = id => page.locator(`[role="treeitem"][data-group="${id}"]`);
+  const focusedRow = () => page.evaluate(() => document.activeElement?.getAttribute("data-row-id") ?? null);
   const select = async key => {
     await page.evaluate(() => {
       const bridge = window.__runicBridge;
@@ -130,7 +138,7 @@ try {
         }
       };
     });
-    await page.getByRole("button", { name: new RegExp(`^${key}:`) }).click();
+    await messageRow(key).click();
     await page.locator('textarea[spellcheck="true"]').first().waitFor();
   };
   const editor = () => page.locator('textarea[spellcheck="true"]').first();
@@ -177,6 +185,54 @@ try {
   await waitFor(async () => await saveState() === "Saved", "reverted edit is no unsaved change");
   assert.equal(await page.getByRole("button", { name: "Saved", exact: true }).isDisabled(), true, "Save stays disabled after a revert.");
   assert.ok((await readFile(diskPath, "utf8")).includes("cancel = Queued cancel from the real editor"));
+
+  // #225 M1: the message list is a namespace tree; B6 heading and P15 hidden-selection note.
+  stage = "message-tree";
+  const tree = page.getByRole("tree", { name: "Messages", exact: true });
+  assert.equal(await groupRow("common").getAttribute("aria-expanded"), "true", "The common group starts expanded.");
+  assert.match(await groupRow("common").getAttribute("aria-label"), /^common, 2 messages/);
+  assert.deepEqual(await tree.locator('[role="treeitem"][aria-level="2"]').evaluateAll(rows => rows.map(row => row.querySelector(".font-mono")?.textContent.trim())).then(texts => texts.slice(0, 2)),
+    ["cancel", "save"], "The group lists its messages by their last segment.");
+  await select("common_cancel");
+  assert.equal(await page.getByRole("heading", { level: 2, name: "common.cancel", exact: true }).count(), 1, "The heading shows the dotted path.");
+  assert.match(await page.getByTestId("message-code-identifier").textContent(), /^\s*Code identifier\s*common_cancel\s*$/,
+    "The code identifier is secondary text.");
+  // Keyboard: Left moves to the group, Left collapses, Right expands, Right enters, Down moves, Enter selects.
+  await messageRow("common_cancel").focus();
+  await page.keyboard.press("ArrowLeft");
+  assert.equal(await focusedRow(), "g:common", "Left moves from a message to its group.");
+  await page.keyboard.press("ArrowLeft");
+  await waitFor(async () => await groupRow("common").getAttribute("aria-expanded") === "false", "Left collapses the group");
+  assert.equal(await messageRow("common_cancel").count(), 0, "A collapsed group hides its messages.");
+  await page.keyboard.press("ArrowRight");
+  await messageRow("common_cancel").waitFor();
+  await page.keyboard.press("ArrowRight");
+  assert.equal(await focusedRow(), "m:common_cancel", "Right moves into an expanded group.");
+  await page.keyboard.press("ArrowDown");
+  assert.equal(await focusedRow(), "m:common_save");
+  await page.keyboard.press("Enter");
+  await page.getByRole("heading", { level: 2, name: "common.save", exact: true }).waitFor();
+  assert.equal(await messageRow("common_save").getAttribute("aria-selected"), "true");
+  await page.keyboard.press("Home");
+  assert.equal(await focusedRow(), "g:common", "Home moves to the first row.");
+  // A click collapses a group; a search expands the groups with matches and leaves the own state afterwards.
+  await groupRow("common").click();
+  await waitFor(async () => await messageRow("common_save").count() === 0, "a click collapses the group");
+  await select("files_selected");
+  await page.locator("#message-search").fill("Queued cancel");
+  await messageRow("common_cancel").waitFor();
+  assert.equal(await messageRow("files_selected").count(), 0, "The search hides the other messages.");
+  const hiddenNote = page.getByTestId("selected-message-hidden");
+  await hiddenNote.waitFor();
+  assert.match(await hiddenNote.textContent(), /Selected message is hidden by the filter\./);
+  assert.equal(await page.getByRole("heading", { level: 2, name: "files.selected", exact: true }).count(), 1, "The selection stays.");
+  await hiddenNote.getByRole("button", { name: "Show all messages", exact: true }).click();
+  await messageRow("files_selected").waitFor();
+  assert.equal(await page.locator("#message-search").inputValue(), "", "Show all clears the search.");
+  assert.equal(await hiddenNote.count(), 0);
+  assert.equal(await groupRow("common").getAttribute("aria-expanded"), "false", "The own collapse state is back after the search.");
+  await groupRow("common").click();
+  await messageRow("common_cancel").waitFor();
 
   stage = "plural-edit-preview-persistence";
   await select("files_selected");
@@ -366,6 +422,92 @@ try {
   await waitFor(async () => await saveState() === "Saved", "pattern box edit reverted");
   if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "translate-view-en.png"), fullPage: true });
 
+  // A missing translation (#225 P2) opens in the visual composer on an empty starter shaped for the target locale
+  // (French: one, many and the fallback), under the source text, with nothing pre-filled and nothing written; its
+  // length limit (P21) shows at the field.
+  stage = "missing-translation-starter";
+  const frPath = join(workspace, "fr.rmf2");
+  const frSaved = await readFile(frPath, "utf8");
+  const variantBox = title => page.getByRole("textbox", { name: new RegExp(`^Translation for count: ${title}`) }).first();
+  const characterCount = async () => (await page.getByTestId("character-count").textContent())?.trim();
+  await page.getByRole("button", { name: /^fr / }).first().click();
+  await select("files_deleted");
+  await variantBox("Fallback").waitFor();
+  await page.getByRole("region", { name: "Source text (German)", exact: true }).getByText("Eine Datei gelöscht", { exact: true }).waitFor();
+  assert.equal(await page.getByText("Visual editing is unavailable for this message.", { exact: false }).count(), 0,
+    "A missing translation opens in the visual composer.");
+  for (const title of ["one", "many", "Fallback"]) assert.equal(await variantBox(title).inputValue(), "", `The ${title} variant is not empty.`);
+  assert.equal(await page.getByRole("textbox", { name: /^Translation for count: (few|other|two)/ }).count(), 0, "The starter has categories French does not use.");
+  assert.equal((await page.getByTestId("workflow-state").textContent())?.trim(), "Not translated");
+  assert.equal(await characterCount(), "0 / 24");
+  assert.deepEqual((await page.getByTestId("variant-character-count").allTextContents()).map(item => item.trim()), ["0 / 24", "0 / 24", "0 / 24"]);
+  // The composer's MF2 source of the starter is the starter, not the base text.
+  const composerSource = page.getByRole("textbox", { name: "Message source", exact: true });
+  await page.getByRole("button", { name: "Message source", exact: true }).first().click();
+  assert.equal(await composerSource.inputValue(), ".input {$count :integer}\n.match $count\none {{}}\nmany {{}}\n* {{}}");
+  await page.getByRole("button", { name: "Message source", exact: true }).first().click();
+  await variantBox("one").waitFor();
+  assert.equal(await saveState(), "Saved", "An empty starter is no unsaved change.");
+  assert.equal(await readFile(frPath, "utf8"), frSaved);
+
+  // Typing makes it a normal unsaved draft; the counter follows the longest variant and warns over the limit.
+  await variantBox("one").fill("Un fichier supprimé");
+  await waitFor(async () => await saveState() === "Unsaved changes: text in one document", "a starter with text is unsaved");
+  await waitFor(async () => await characterCount() === "19 / 24", "counter of the typed variant");
+  await variantBox("many").fill("Beaucoup de fichiers supprimés");
+  await waitFor(async () => await characterCount() === "30 / 24", "counter over the limit");
+  assert.equal(await page.getByTestId("character-count").getAttribute("data-over-limit"), "true");
+  await page.getByTestId("length-limit").waitFor();
+  assert.match(await page.getByTestId("length-limit").textContent(), /24/);
+  await variantBox("many").fill("De nombreux fichiers");
+  await variantBox("Fallback").fill("Des fichiers supprimés");
+  await waitFor(async () => await characterCount() === "22 / 24", "counter back under the limit");
+  assert.equal(await page.getByTestId("length-limit").count(), 0);
+  assert.deepEqual((await page.getByTestId("variant-character-count").allTextContents()).map(item => item.trim()), ["19 / 24", "20 / 24", "22 / 24"]);
+  if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "missing-translation-fr.png"), fullPage: true });
+  // Ctrl+S writes the message into its existing group (P7).
+  await page.keyboard.press("Control+s");
+  await waitFor(async () => (await readFile(frPath, "utf8")).includes("deleted ="), "saved starter in fr.rmf2");
+  await waitFor(async () => await saveState() === "Saved", "nothing unsaved after saving the starter");
+  const frWritten = await readFile(frPath, "utf8");
+  assert.equal((frWritten.match(/^files \{$/gm) ?? []).length, 1, "The new message opened a second files group.");
+  const filesGroup = frWritten.slice(frWritten.indexOf("files {\n"));
+  assert.ok(filesGroup.indexOf("selected =") < filesGroup.indexOf("deleted =") && filesGroup.indexOf("deleted =") < filesGroup.lastIndexOf("\n}\n"),
+    "The message is written inside its group, after its sibling.");
+  for (const line of [".match $count", "one {{Un fichier supprimé}}", "many {{De nombreux fichiers}}", "* {{Des fichiers supprimés}}"])
+    assert.ok(filesGroup.includes(line), `fr.rmf2 lacks ${line}`);
+  assert.ok(frWritten.startsWith(frSaved.slice(0, frSaved.indexOf("files {\n"))), "The rest of fr.rmf2 changed.");
+  assert.notEqual((await page.getByTestId("workflow-state").textContent())?.trim(), "Not translated");
+
+  // A starter cleared back to empty leaves the document clean (#231): nothing to save, no empty translation.
+  stage = "missing-translation-clear";
+  const enPath = join(workspace, "en.rmf2");
+  const enSaved = await readFile(enPath, "utf8");
+  await page.getByRole("button", { name: /^en / }).first().click();
+  await select("files_deleted");
+  await variantBox("Fallback").waitFor();
+  assert.equal(await page.getByRole("textbox", { name: /^Translation for count: many/ }).count(), 0, "English has no many variant.");
+  await variantBox("one").fill("One file deleted");
+  await waitFor(async () => await saveState() === "Unsaved changes: text in one document", "typed English starter is unsaved");
+  await variantBox("one").fill("");
+  await waitFor(async () => await saveState() === "Saved", "a cleared starter leaves the document clean");
+  assert.equal(await readFile(enPath, "utf8"), enSaved);
+
+  // "Copy source" fills every variant from the German base text; the placeholder stays a placeholder. Restoring the
+  // untouched starter in its MF2 source leaves the document clean again.
+  stage = "missing-translation-copy-source";
+  await page.getByRole("button", { name: "Copy source", exact: true }).click();
+  await waitFor(async () => (await variantBox("one").inputValue()) === "Eine Datei gelöscht", "Copy source fills the one variant");
+  await waitFor(async () => await saveState() === "Unsaved changes: text in one document", "copied source is unsaved");
+  await page.getByRole("button", { name: "Message source", exact: true }).first().click();
+  await waitFor(async () => (await composerSource.inputValue()) === ".input {$count :integer}\n.match $count\none {{Eine Datei gelöscht}}\n* {{{$count} Dateien gelöscht}}",
+    "copied starter source with the placeholder as an expression");
+  await composerSource.fill(".input {$count :integer}\n.match $count\none {{}}\n* {{}}");
+  await waitFor(async () => await saveState() === "Saved", "the restored empty starter leaves the document clean");
+  await page.getByRole("button", { name: "Message source", exact: true }).first().click();
+  assert.equal(await readFile(enPath, "utf8"), enSaved);
+  assert.deepEqual(pageErrors, [], "The production editor reported uncaught browser errors for a missing translation.");
+
   // The diagnostics panel (#225 P6, P12): with an error in the selected message and a warning in another message, the
   // selected message's error is listed first under its heading and the other warnings are under a collapsed disclosure.
   // An error in another message blocks saving, so it is listed without expanding anything.
@@ -415,12 +557,31 @@ try {
   assert.equal(await otherIssues.locator("[data-severity]").count(), 0);
   assert.equal(await messageIssues.locator("[data-severity]").first().getAttribute("data-severity"), "error");
   if (reportDirectory) await page.screenshot({ path: join(reportDirectory, "scoped-diagnostics-errors-en.png"), fullPage: true });
+  // A pinned error navigates to its message: the message is selected and revealed in the tree, and the error is now
+  // listed under that message's heading.
+  await saveError.click();
+  await waitFor(async () => await messageRow("common_save").getAttribute("aria-selected") === "true", "pinned error selects its message");
+  assert.equal(await messageRow("common_save").isVisible(), true, "The pinned error's message is not revealed in the tree.");
+  await page.getByRole("region", { name: "Issues in common.save (en)", exact: true })
+    .getByRole("button", { name: /RTR0065/ }).first().waitFor();
+  // A collapsed warning navigates to its message in its file's locale (French) too.
+  await disclosure.click();
+  await waitFor(async () => await disclosure.getAttribute("aria-expanded") === "true", "expanded other warnings again");
+  await otherIssues.getByRole("button", { name: /RTR0096.*in files\.deleted \(fr\)/ }).first().click();
+  await page.getByRole("region", { name: "Issues in files.deleted (fr)", exact: true }).getByRole("button", { name: /RTR0096/ }).first().waitFor();
+  await waitFor(async () => await messageRow("files_deleted").getAttribute("aria-selected") === "true", "warning selects its message");
+  assert.equal(await messageRow("files_deleted").isVisible(), true, "The warning's message is not revealed in the tree.");
+  // Back to the English file: revert the draft and the review file.
+  await page.getByRole("button", { name: /^en / }).first().click();
+  await messageRow("common_cancel").click();
+  await page.locator('[data-slot="toggle-group-item"]', { hasText: /^File$/ }).click();
+  await waitFor(async () => (await fileText.inputValue()).startsWith(preservedComment), "file view of the en.rmf2 draft");
   await fileText.fill(enText);
   await waitFor(async () => await saveState() === "Saved", "scoped-diagnostics edit reverted");
   await writeFile(reviewPath, reviewBefore);
   await reloadFiles();
   await page.getByRole("button", { name: /^en / }).first().click();
-  await page.getByRole("button", { name: /^common_cancel:/ }).click();
+  await messageRow("common_cancel").click();
   await page.locator('[data-slot="toggle-group-item"]', { hasText: /^Translation$/ }).click();
   await editor().waitFor();
 

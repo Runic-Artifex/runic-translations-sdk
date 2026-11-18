@@ -22,6 +22,8 @@ const exactKeys = new Set([
   "runic.sidebar.languages",
   "runic.sidebar.messages",
   "runic.sidebar.languages-share",
+  // Collapsed message groups of the most recent catalogs (message-virtualization.ts `messageTreeStateKey`).
+  "runic-translations:message-tree:1",
 ]);
 // Recovery copies of unsaved work, per workspace and catalog: document drafts and review changes.
 const draftPrefixes = ["runic-translations:drafts:1:", "runic-translations:review-drafts:1:"];

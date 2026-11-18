@@ -53,7 +53,9 @@ export function createMessageSearchIndex(rows: readonly TranslationRow[]): Messa
 }
 
 function searchableText(row: TranslationRow): string {
+  // The dotted path (`common.cancel`), the code identifier (`common_cancel`), then the text.
   return normalize([
+    row.path.join("."),
     row.key,
     row.description ?? "",
     ...row.tags,

@@ -108,6 +108,47 @@ dialogs and wires them to rune-based modules in `Frontend/src/lib/state/`:
 The stores take the bridge and the current snapshot as arguments, so the
 frontend checks exercise them without a host.
 
+On the host, `EditorSession` is the façade behind the bridge: it adds undo
+history, confirmation tokens for destructive and import operations, and
+workspace transactions. It calls one `EditorWorkspace`, a thin coordinator that
+owns the workspace gate and composes the services in `Workspace/`:
+
+- `WorkspaceGate` is the one lock and the disposed flag. Every service takes
+  this same gate around each of its operations, so workspace operations run one
+  at a time. A service holding the gate calls only ungated members of the
+  others (for example the interchange commit reloads through
+  `WorkspaceLoader.LoadCoreAsync`), never another gated operation.
+- `WorkspaceFiles` holds the root and the path rules: containment and link
+  checks, the selected `runic.json` and project discovery, source enumeration,
+  atomic writes, and the byte, revision and path helpers the others share.
+- `WorkspaceChangeTracker` owns the file system watcher and the external-change
+  baseline (the revision of each source the editor last read or wrote) and
+  reconciles them with the disk in `CheckExternalChangesAsync`.
+- `WorkspaceStateReader` reads the project's files, optionally with one unsaved
+  document in place of its file, and compiles them. It caches the last
+  compilation and its pseudo-locale compilations by sources revision, records
+  the open catalog's ID and resets the change baseline on a full read.
+- `WorkspaceLoader` builds the `WorkspaceSnapshot` (catalog, documents,
+  diagnostics, review data, status, library catalogs) and the locale context.
+- `DiagnosticProjector` turns compiler and review-file diagnostics into the
+  contract's diagnostics with spans, quick fixes and their message row;
+  `EntryProjector` turns a document into message entries with the composer
+  projection, context and length limits.
+- `DocumentEditService` runs the draft transforms, which write nothing: text
+  and authoring operations, starter drafts of missing messages, quick fixes and
+  validation. `PreviewService` renders one message, also in a generated
+  pseudo-locale, and picks its primary diagnostic. `DocumentSaveService` writes
+  one document atomically against its expected revision.
+- `ReviewService` owns the review file: saving and deleting review data, the
+  revision the frontend has, and the entries other operations update (starter
+  drafts of an added locale, drafts a save promotes to translated, a removed
+  locale's entries).
+- `InterchangeService` exports and imports XLIFF and review JSON; an import is a
+  preview the session confirms and a commit that checks nothing changed since.
+- `MutationPlanner` plans structural changes as workspace transactions: RMF2
+  key creation, rename, duplicate and delete, locale and fallback changes, and
+  `.resx`/i18next catalog imports.
+
 Headless commands use the same workspace and compiler path as the interface:
 
 - `validate` reports compiler-backed workspace diagnostics;

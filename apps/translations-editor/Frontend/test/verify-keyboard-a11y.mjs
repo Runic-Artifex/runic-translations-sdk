@@ -76,6 +76,25 @@ const messages = sources["MessageList.svelte"];
 assert.match(messages, /<nav[\s\S]*aria-label=\{labels\.messages\}/, "Message navigation has no catalog-backed landmark name.");
 assert.match(messages, /aria-label=\{labels\.bulkActions\}/, "Message bulk actions are unnamed.");
 assert.match(messages, /aria-label=\{labels\.addMessage\}/, "Add-message control is unnamed.");
+// The message list is an ARIA tree (#225 M1): virtualized rows are flat tree items that state their level, position
+// and expansion, with one roving tab stop and the tree keyboard model.
+assert.match(messages, /role="tree"\s+aria-label=\{labels\.messages\}/, "The message tree is unnamed.");
+for (const attribute of ["aria-expanded={row.expanded}", "aria-level={row.level}", "aria-setsize={row.setSize}",
+  "aria-posinset={row.posInSet}", "aria-selected={selectedKey === row.key}", "tabindex={index === focusIndex ? 0 : -1}",
+  "onkeydown={handleTreeKeydown}"]) {
+  assert.ok(messages.includes(attribute), `Message tree items omit ${attribute}.`);
+}
+assert.equal(messages.match(/role="treeitem"/g)?.length, 2, "Group and message rows must both be tree items.");
+const treeKeyboard = messages.slice(messages.indexOf("function handleTreeKeydown"), messages.indexOf("function groupCountText"));
+for (const key of ["ArrowDown", "ArrowUp", "Home", "End", "ArrowRight", "ArrowLeft", "Enter", " "]) {
+  assert.ok(treeKeyboard.includes(`case "${key}":`), `The message tree does not handle ${JSON.stringify(key)}.`);
+}
+assert.match(treeKeyboard, /row\.kind === "group" && !row\.expanded\) setExpanded\(row, true\)/, "Right does not expand a collapsed group.");
+assert.match(treeKeyboard, /row\.kind === "group" && row\.expanded\) setExpanded\(row, false\)/, "Left does not collapse an expanded group.");
+assert.match(treeKeyboard, /row\.parentId !== undefined\) void focusRow\(rowIndex\.get\(row\.parentId\)/, "Left does not move to the parent group.");
+assert.match(treeKeyboard, /direction === "rtl"/, "Left and Right do not follow a right-to-left interface.");
+assert.match(messages, /if \(focusIndex < viewport\.start[\s\S]*if \(focusIndex >= viewport\.end/,
+  "The virtualized tree can lose its only tab stop when the focus row scrolls out of view.");
 for (const key of ["app_messages", "app_message_bulk_actions", "app_add_message"]) {
   assert.equal(typeof english[key], "string", `English project omits ${key}.`);
   assert.equal(typeof german[key], "string", `German project omits ${key}.`);

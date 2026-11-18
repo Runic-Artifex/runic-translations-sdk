@@ -3,42 +3,11 @@
 // language and direction, and a heading; never for the base locale itself.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { plugin } from "bun";
-import { compile, compileModule } from "svelte/compiler";
-import ts from "typescript";
+import { compile } from "svelte/compiler";
+import { html, text } from "./svelte-server-components.mjs";
 
-// UI text in a test: the key and its arguments, so the markup shows which message a label uses.
-globalThis.__runicTestUiText = {
-  text: (key, values) => values === undefined ? `[${key}]` : `[${key} ${Object.entries(values).map(([name, value]) => `${name}=${value}`).join(" ")}]`,
-};
-plugin({
-  name: "svelte-server-components",
-  setup(build) {
-    build.module("virtual:runic-translations/editor", () => ({ exports: { m: {} }, loader: "object" }));
-    build.onLoad({ filter: /\/src\/lib\/ui-text\.ts$/ }, async ({ path }) => ({
-      contents: (await readFile(path, "utf8")).replace("return useUiText();", "return globalThis.__runicTestUiText;"),
-      loader: "ts",
-    }));
-    // Rune modules of the editor and of its component libraries.
-    build.onLoad({ filter: /\.svelte\.(?:js|ts)$/ }, async ({ path }) => {
-      const source = await readFile(path, "utf8");
-      const javascript = path.endsWith(".ts") ? ts.transpileModule(source, {
-        compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, verbatimModuleSyntax: false }, fileName: path,
-      }).outputText : source;
-      return { contents: compileModule(javascript, { filename: path, generate: "server", dev: false }).js.code, loader: "js" };
-    });
-    build.onLoad({ filter: /\.svelte$/ }, async ({ path }) => {
-      const compiled = compile(await readFile(path, "utf8"), { filename: path, generate: "server", dev: false });
-      return { contents: compiled.js.code, loader: "js" };
-    });
-  },
-});
-
-const { render } = await import("svelte/server");
 const { default: SourceTextPanel } = await import("../src/lib/SourceTextPanel.svelte");
 const { default: TranslationEditor } = await import("../src/lib/TranslationEditor.svelte");
-const html = (component, props) => render(component, { props }).body.replace(/<!--[^>]*-->/g, "");
-const text = (markup) => markup.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
 
 // A simple message: one paragraph in the base locale, variables as chips.
 const simple = html(SourceTextPanel, {

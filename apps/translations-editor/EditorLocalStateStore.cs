@@ -28,6 +28,8 @@ internal static class EditorLocalStateStore
         "runic.sidebar.languages",
         "runic.sidebar.messages",
         "runic.sidebar.languages-share",
+        // Collapsed message groups of the most recent catalogs (one bounded record, not one entry per catalog).
+        "runic-translations:message-tree:1",
     };
 
     internal static EditorLocalStateSnapshot Load()
