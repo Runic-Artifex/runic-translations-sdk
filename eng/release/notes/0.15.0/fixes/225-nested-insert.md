@@ -1,0 +1,1 @@
+- Authoring a message under an existing group inserts it into that group instead of writing a second block for the same group (the translations editor and `CreateResource` both did this for nested keys).

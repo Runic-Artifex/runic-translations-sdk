@@ -159,12 +159,12 @@ internal sealed class Rmf2Workspace
             IReadOnlyList<string> local;
             try { local = LocalPath(document.Source.Path, logicalPath); }
             catch (TranslationAuthoringException) { continue; }
-            changes[document.Source.Path] = Rmf2ResourceWriter.AddMessage(document.Source, local, message);
+            changes[document.Source.Path] = Rmf2ResourceWriter.InsertMessage(document.Source, local, message);
         }
         if (changes.Count == 0)
         {
             var source = _sources.TryGetValue(path, out var existing) ? existing : new TranslationSource(path, Array.Empty<byte>());
-            changes[path] = Rmf2ResourceWriter.AddMessage(source, LocalPath(path, logicalPath), message);
+            changes[path] = Rmf2ResourceWriter.InsertMessage(source, LocalPath(path, logicalPath), message);
         }
         return Plan(changes);
     }
