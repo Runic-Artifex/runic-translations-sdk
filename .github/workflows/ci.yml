@@ -513,10 +513,31 @@ jobs:
           name: editor-hosted-packed
           path: artifacts/editor-hosted-packed
           if-no-files-found: ignore
+  # A minimal stdio LSP client, as Neovim or Helix is one, against the packed tool installed as a local tool and
+  # started with `dotnet tool run runic-translations -- lsp`, without initializationOptions (eng/lsp-smoke.mjs).
+  lsp-generic-client:
+    name: Language server / generic client
+    needs: train-feed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/train-feed
+        with:
+          active: ${{ needs.train-feed.outputs.active }}
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - run: bun eng/run.mjs lsp-smoke
   verify:
     name: verify
     if: always()
-    needs: [source-checks, train-feed, build-and-test, node-26, inline-browser, rmf2-document-example, vite-hmr, rmf2-native-aot, wpf, formatting-windows, formatting-macos, editor-windows, editor-macos, editor-e2e, editor-packed]
+    needs: [source-checks, train-feed, build-and-test, node-26, inline-browser, rmf2-document-example, vite-hmr, rmf2-native-aot, wpf, formatting-windows, formatting-macos, editor-windows, editor-macos, editor-e2e, editor-packed, lsp-generic-client]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
