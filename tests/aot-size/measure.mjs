@@ -24,7 +24,9 @@ const mstat = resolve(root, `tests/aot-size/Probe/obj/Release/net10.0/${rid}/nat
 
 // The measurements of one build from its executable size and its mstat records (MstatReader: kind, size, owner, name).
 // The probe's own records (owner AotSizeProbe) are its generated catalog: the locale data and the message table
-// (RvaFields), and the code.
+// (RvaFields), and the code, less the probe's application code: Main (Program, <Module>) and the method per message that
+// calls its accessor (Calls.*), which is what an application writes, not what the catalog adds (D077.16).
+export const isProbeCode = name => /^(Calls[.+]|Program\b|<Module>)/.test(name);
 export function measurement(executableBytes, records) {
   const result = { executableBytes, reflectionRuntimeBytes: 0, resourceBytes: 0, catalogDataBytes: 0, catalogCodeBytes: 0, catalogBytes: 0, overlayProviderBytes: 0, largeStringBytes: 0 };
   for (const line of records.split("\n")) {
@@ -41,7 +43,7 @@ export function measurement(executableBytes, records) {
     if (kind === "FrozenObjects" && name === "System.String" && bytes >= 4096) result.largeStringBytes += bytes;
     // Embedded manifest resources: Runic.Translations' CLDR data, or with RunicTranslationsCldrSubset the probe's subset.
     if (kind === "ManifestResources") result.resourceBytes += bytes;
-    if (owner === "AotSizeProbe") {
+    if (owner === "AotSizeProbe" && !isProbeCode(name)) {
       result.catalogBytes += bytes;
       if (kind === "RvaFields") result.catalogDataBytes += bytes;
       else if (kind === "Methods") result.catalogCodeBytes += bytes;
