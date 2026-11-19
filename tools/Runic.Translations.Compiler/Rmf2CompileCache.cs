@@ -20,9 +20,9 @@ internal sealed record Rmf2LinkContext(string ProjectPath, string ProjectHash, i
 /// </summary>
 internal sealed class Rmf2LinkState
 {
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string[]> _orders = new(StringComparer.OrdinalIgnoreCase);
-    internal string[]? KeyOrder(string locale) => _orders.TryGetValue(locale, out string[]? order) ? order : null;
-    internal void SetKeyOrder(string locale, string[] order) => _orders[locale] = order;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Rmf2KeyOrder> _orders = new(StringComparer.OrdinalIgnoreCase);
+    internal Rmf2KeyOrder? KeyOrder(string locale) => _orders.TryGetValue(locale, out Rmf2KeyOrder? order) ? order : null;
+    internal void SetKeyOrder(string locale, Rmf2KeyOrder order) => _orders[locale] = order;
     internal Rmf2CallerContractMemo? CallerContract;
     internal Rmf2MarkupExportMemo? MarkupExport;
     internal Rmf2ResultMemo? Last;
@@ -33,6 +33,8 @@ internal sealed class Rmf2LinkState
     internal Dictionary<Rmf2MessageContractV5, string>? CallerMessages;
 }
 internal sealed record Rmf2ReadableReferencesMemo(Rmf2MessageContractV5[] Contracts, List<(string Key, string Problem)> Problems);
+/// <summary>A locale's keys in the order a compile added them, and in ordinal order.</summary>
+internal sealed record Rmf2KeyOrder(string[] Added, string[] Sorted);
 internal sealed record Rmf2CallerContractMemo(string Catalog, Rmf2MessageContractV5[] Contracts, string[] Markup, string Json);
 internal sealed record Rmf2MarkupExportMemo(Rmf2MessageContractV5[] Contracts, string[] Used, Rmf2LocaleV5[] Locales, string Json);
 internal sealed record Rmf2ResultMemo(Rmf2SourceUnitV5[] Units, Rmf2ProjectCompilation Result);

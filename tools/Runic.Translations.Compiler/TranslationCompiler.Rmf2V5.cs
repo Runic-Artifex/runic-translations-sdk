@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -316,11 +317,15 @@ public static partial class TranslationCompiler
             if (!declaredLocales.Contains(locale)) diagnostics.Add("RTR0004", TranslationDiagnosticSeverity.Error, "Document locale '" + locale + "' is not declared.", project, config.Span);
         // Keys each locale declares, compiled or not: a message that failed to compile has reported
         // its own error, so RTR0010 and RTR0011 do not report it again as missing or extra.
-        var declaredKeys = locales.ToDictionary(locale => locale.Tag, locale => new HashSet<string>(state?.KeyOrder(locale.Tag)?.Length ?? 0, StringComparer.Ordinal), StringComparer.OrdinalIgnoreCase);
+        var declaredKeys = locales.ToDictionary(locale => locale.Tag, locale => new HashSet<string>(state?.KeyOrder(locale.Tag)?.Sorted.Length ?? 0, StringComparer.Ordinal), StringComparer.OrdinalIgnoreCase);
         var undeclaredKeys = new HashSet<string>(StringComparer.Ordinal);
+        // A file's messages are consecutive and share their locale string: its set is looked up once per file.
+        string? keysLocale = null; HashSet<string>? localeKeys = null;
         foreach (var source in extracted)
-            if (declaredKeys.TryGetValue(source.Locale, out var keys)) keys.Add(source.Key);
-            else undeclaredKeys.Add(source.Key);
+        {
+            if (!ReferenceEquals(source.Locale, keysLocale)) { keysLocale = source.Locale; localeKeys = declaredKeys.GetValueOrDefault(source.Locale) ?? undeclaredKeys; }
+            localeKeys!.Add(source.Key);
+        }
         if (DistinctKeys() > options.MaximumKeysPerCatalog)
             diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "Catalog key count exceeds the configured limit.", project, config.Span);
         // The number of distinct keys in all locales: the largest locale's, and those of the others it lacks.
@@ -351,14 +356,16 @@ public static partial class TranslationCompiler
         // The suggestions of RTR0011, needed only when a locale defines a key the base locale lacks.
         string[]? baseKeys = null;
         string[] BaseKeys() => baseKeys ??= extracted.Where(source => source.Locale == manifest.DefaultLocale).Select(source => source.Logical).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        // The base messages that compiled, added in the same sequence as the base locale's entries: the same key order.
         var canonical = new LocaleEntries(state?.KeyOrder(manifest.DefaultLocale));
         var extras = new SortedDictionary<string, Rmf2ProjectEntryV5>(StringComparer.Ordinal);
         // Lowering a message depends on that message (and, for a translation, its base-locale inputs) only: it runs in
         // parallel, and its results are applied in source order, as a sequential compile applies them.
         var baseSources = extracted.Where(source => source.Locale == manifest.DefaultLocale).ToArray();
         var baseLowered = CompilerParallel.Map(baseSources.Length, index => CompiledFor(baseSources[index], null) is null ? LowerSource(baseSources[index], null) : null, cancellationToken);
+        var baseEntries = entries[manifest.DefaultLocale];
         for (int index = 0; index < baseSources.Length; index++)
-            if (Compile(baseSources[index], null, baseLowered[index]) is { } entry) { canonical.Add(baseSources[index].Key, entry); entries[baseSources[index].Locale].Add(baseSources[index].Key, entry); }
+            if (Compile(baseSources[index], null, baseLowered[index]) is { } entry) { canonical.Add(baseSources[index].Key, entry); baseEntries.Add(baseSources[index].Key, entry); }
         var translationSources = extracted.Where(source => source.Locale != manifest.DefaultLocale).ToArray();
         // A translation of a base-locale key is lowered against that key's inputs, known now; one of an extra key waits
         // for the first locale that defines the key (below).
@@ -366,6 +373,7 @@ public static partial class TranslationCompiler
             canonical.TryGetValue(translationSources[index].Key, out var origin) && CompiledFor(translationSources[index], origin.Linked.Message.Inputs) is null
                 ? (Inputs: origin.Linked.Message.Inputs, Result: LowerSource(translationSources[index], origin.Linked.Message.Inputs)) : default,
             cancellationToken);
+        string? tableLocale = null; LocaleEntries? table = null;
         for (int translationIndex = 0; translationIndex < translationSources.Length; translationIndex++)
         {
             var source = translationSources[translationIndex];
@@ -384,7 +392,8 @@ public static partial class TranslationCompiler
             var lowered = translationLowered[translationIndex];
             if (Compile(source, callerInputs, lowered.Result is not null && ReferenceEquals(lowered.Inputs, callerInputs) ? lowered.Result : null) is { } entry)
             {
-                entries[source.Locale].Add(source.Key, entry);
+                if (!ReferenceEquals(source.Locale, tableLocale)) { tableLocale = source.Locale; table = entries[source.Locale]; }
+                table!.Add(source.Key, entry);
                 if (!canonical.ContainsKey(source.Key)) extras.TryAdd(source.Key, entry);
             }
         }
@@ -393,7 +402,7 @@ public static partial class TranslationCompiler
         // the content kind; every other locale is checked against it and normalized.
         var profiles = new Dictionary<Rmf2ProjectEntryV5, Rmf2DocumentAnalysisV5>(extracted.Count, ReferenceEqualityComparer.Instance);
         var kinds = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var pair in canonical.ToArray()) canonical[pair.Key] = Profile(pair.Value, null, entries[manifest.DefaultLocale]);
+        foreach (var pair in canonical.ToArray()) if (Profile(pair.Value, null, baseEntries) is var profiledEntry && !ReferenceEquals(profiledEntry, pair.Value)) canonical[pair.Key] = profiledEntry;
         foreach (var pair in extras.ToArray()) extras[pair.Key] = Profile(pair.Value, null, entries[pair.Value.Source.Locale]);
         foreach (var locale in entries.Values)
             foreach (string key in locale.Order)
@@ -655,7 +664,7 @@ public static partial class TranslationCompiler
         }
         if (Failed()) return Result();
         // The next compile of the session reuses the key orders while the keys are the same.
-        if (state is not null) foreach (var locale in entries) state.SetKeyOrder(locale.Key, locale.Value.Order);
+        if (state is not null) foreach (var locale in entries) state.SetKeyOrder(locale.Key, locale.Value.KeyOrder);
         var usedNames = new HashSet<string>(StringComparer.Ordinal);
         foreach (var locale in entries.Values)
             foreach (var entry in locale.UnorderedValues)
@@ -798,7 +807,7 @@ public static partial class TranslationCompiler
             }
             profiles[updated] = analysis;
             kinds.TryAdd(entry.Source.Key, analysis.Kind);
-            if (locale.TryGetValue(entry.Source.Key, out var current) && ReferenceEquals(current, entry)) locale[entry.Source.Key] = updated;
+            if (!ReferenceEquals(updated, entry) && locale.TryGetValue(entry.Source.Key, out var current) && ReferenceEquals(current, entry)) locale[entry.Source.Key] = updated;
             return updated;
         }
         void ValidatePair(Rmf2ProjectEntryV5 origin, Rmf2ProjectEntryV5 translated, IReadOnlyDictionary<string, Rmf2SlotV5> requirements)
@@ -1017,17 +1026,37 @@ public static partial class TranslationCompiler
     private sealed class LocaleEntries : IEnumerable<KeyValuePair<string, Rmf2ProjectEntryV5>>
     {
         private readonly Dictionary<string, Rmf2ProjectEntryV5> _byKey;
-        private readonly string[]? _previousOrder;
+        private readonly Rmf2KeyOrder? _previous;
         private string[]? _order;
+        // The keys in the order they were added, and whether that is still the previous compile's sequence so far.
+        private readonly List<string> _added;
+        private bool _sameSequence;
 
-        internal LocaleEntries(string[]? previousOrder = null)
+        internal LocaleEntries(Rmf2KeyOrder? previous = null)
         {
-            _previousOrder = previousOrder;
-            _byKey = new Dictionary<string, Rmf2ProjectEntryV5>(previousOrder?.Length ?? 0, StringComparer.Ordinal);
+            _previous = previous;
+            _byKey = new Dictionary<string, Rmf2ProjectEntryV5>(previous?.Sorted.Length ?? 0, StringComparer.Ordinal);
+            _added = new List<string>(previous?.Sorted.Length ?? 0);
+            _sameSequence = previous is not null;
         }
 
         internal int Count => _byKey.Count;
-        internal void Add(string key, Rmf2ProjectEntryV5 entry) { _byKey.Add(key, entry); _order = null; }
+        internal void Add(string key, Rmf2ProjectEntryV5 entry)
+        {
+            _byKey.Add(key, entry);
+            // Unchanged files add the same key strings in the same order: a reference comparison, rarely a string one.
+            if (_sameSequence)
+            {
+                string[] before = _previous!.Added;
+                int index = _added.Count;
+                _sameSequence = index < before.Length && (ReferenceEquals(before[index], key) || string.Equals(before[index], key, StringComparison.Ordinal));
+            }
+            _added.Add(key);
+            _order = null;
+        }
+
+        /// <summary>The key order to keep for the next compile of a session.</summary>
+        internal Rmf2KeyOrder KeyOrder => new(_added.ToArray(), Order);
         internal bool TryGetValue(string key, [System.Diagnostics.CodeAnalysis.MaybeNullWhen(false)] out Rmf2ProjectEntryV5 entry) => _byKey.TryGetValue(key, out entry);
         internal bool ContainsKey(string key) => _byKey.ContainsKey(key);
         internal Rmf2ProjectEntryV5 this[string key]
@@ -1042,7 +1071,8 @@ public static partial class TranslationCompiler
             get
             {
                 if (_order is not null) return _order;
-                if (_previousOrder is { } previous && previous.Length == _byKey.Count && Array.TrueForAll(previous, _byKey.ContainsKey)) return _order = previous;
+                if (_previous is { } previous && previous.Sorted.Length == _byKey.Count &&
+                    ((_sameSequence && _added.Count == previous.Added.Length) || Array.TrueForAll(previous.Sorted, _byKey.ContainsKey))) return _order = previous.Sorted;
                 var keys = new string[_byKey.Count];
                 _byKey.Keys.CopyTo(keys, 0);
                 Array.Sort(keys, StringComparer.Ordinal);
@@ -1103,8 +1133,8 @@ public static partial class TranslationCompiler
         var result = new List<Rmf2ProjectSourceV5>();
         var portable = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var spellings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        // Declarations by locale and logical path (the identity "locale:path" of RTR0054).
-        var identities = new Dictionary<(string Locale, string Logical), (bool Group, string Metadata, TextSourceLocation Location)>();
+        // Declarations by locale, then logical path (the identity "locale:path" of RTR0054).
+        var identities = new Dictionary<string, Dictionary<string, (bool Group, string Metadata, TextSourceLocation Location)>>(StringComparer.Ordinal);
         var pathKinds = new Dictionary<string, bool>(StringComparer.Ordinal);
         var generated = new Dictionary<string, string>(StringComparer.Ordinal);
         bool? groupedInput = null;
@@ -1200,6 +1230,7 @@ public static partial class TranslationCompiler
                 }
                 if (context is not null && unit is not null) unit.SetExtraction(context, extract);
             }
+            if (!identities.TryGetValue(locale, out var localeIdentities)) identities.Add(locale, localeIdentities = new(StringComparer.Ordinal));
             for (int index = 1; index <= mount.Length; index++)
             {
                 Register(string.Join(".", mount.Take(index)), true, "", DiagnosticBag.Location(source, new(0, 0)));
@@ -1209,21 +1240,24 @@ public static partial class TranslationCompiler
                 Register(item.Logical, item.Node.IsGroup, item.Metadata, item.Node.NameLocation);
                 if (item.Message is not { } extracted) continue;
                 string key = item.Key!, logical = item.Logical;
-                if (generated.TryGetValue(key, out string? previous) && previous != logical) diagnostics.Add("RTR0018", TranslationDiagnosticSeverity.Error, "Logical path '" + logical + "' collides with '" + previous + "' under canonical underscore keys.", item.Node.NameLocation);
-                generated[key] = logical;
+                ref string? previous = ref CollectionsMarshal.GetValueRefOrAddDefault(generated, key, out bool generatedBefore);
+                if (generatedBefore && previous != logical) diagnostics.Add("RTR0018", TranslationDiagnosticSeverity.Error, "Logical path '" + logical + "' collides with '" + previous + "' under canonical underscore keys.", item.Node.NameLocation);
+                previous = logical;
                 result.Add(extracted);
             }
             void Register(string logical, bool group, string metadata, TextSourceLocation location)
             {
-                if (pathKinds.TryGetValue(logical, out bool previousKind) && previousKind != group) diagnostics.Add("RTR0054", TranslationDiagnosticSeverity.Error, "Message/group collision for '" + logical + "' across locales.", location);
-                pathKinds[logical] = group;
-                var identity = (locale, logical);
-                if (identities.TryGetValue(identity, out var first) && (!group || !first.Group || (metadata.Length != 0 && first.Metadata.Length != 0)))
+                // One lookup per table: the slot is read and written in place.
+                ref bool kind = ref CollectionsMarshal.GetValueRefOrAddDefault(pathKinds, logical, out bool seen);
+                if (seen && kind != group) diagnostics.Add("RTR0054", TranslationDiagnosticSeverity.Error, "Message/group collision for '" + logical + "' across locales.", location);
+                kind = group;
+                ref var first = ref CollectionsMarshal.GetValueRefOrAddDefault(localeIdentities, logical, out bool declared);
+                if (declared && (!group || !first.Group || (metadata.Length != 0 && first.Metadata.Length != 0)))
                 {
                     diagnostics.Add("RTR0054", TranslationDiagnosticSeverity.Error, "Duplicate declaration '" + locale + ":" + logical + "'; first declaration: " + first.Location + ".", location);
                     diagnostics.Add("RTR0054", TranslationDiagnosticSeverity.Error, "Conflicting declaration '" + locale + ":" + logical + "': " + location + ".", first.Location);
                 }
-                else if (!identities.ContainsKey(identity) || metadata.Length != 0) identities[identity] = (group, metadata, location);
+                else if (!declared || metadata.Length != 0) first = (group, metadata, location);
             }
         }
         return result;

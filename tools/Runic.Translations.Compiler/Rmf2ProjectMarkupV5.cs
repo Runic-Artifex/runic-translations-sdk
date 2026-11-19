@@ -256,13 +256,8 @@ internal sealed class Rmf2ProjectMarkupV5
         // A later message with the same key replaces an earlier one, as the sorted dictionary this replaced did.
         var messagesByKey = new SortedDictionary<string, Rmf2MessageContractV5>(StringComparer.Ordinal);
         foreach (var message in messages) messagesByKey[message.Key] = message;
-        // Each locale's content locale by key, built once: a lookup per message and locale, not a scan of the locale.
-        var resolvedByLocale = locales?.Select(locale =>
-        {
-            var byKey = new Dictionary<string, string>(locale.ResolvedResources.Count, StringComparer.Ordinal);
-            foreach (var resource in locale.ResolvedResources) byKey.TryAdd(resource.Key, resource.ContentLocale);
-            return (locale.Tag, ByKey: byKey);
-        }).ToArray();
+        // Each locale's content locale by key: a walk of its resolved resources alongside the messages, both in key order.
+        var resolvedByLocale = locales?.Select(locale => (locale.Tag, ByKey: new ContentLocaleLookup(locale.ResolvedResources))).ToArray();
         string[] tags = locales?.Select(locale => locale.Tag).ToArray() ?? [];
         if (previous is not null && !previous.Tags.AsSpan().SequenceEqual(tags)) previous = null;
         if (next is not null) next.Tags = tags;
@@ -276,7 +271,7 @@ internal sealed class Rmf2ProjectMarkupV5
             if (resolvedByLocale is not null)
             {
                 contentLocales = new string?[resolvedByLocale.Length];
-                for (int index = 0; index < resolvedByLocale.Length; index++) contentLocales[index] = resolvedByLocale[index].ByKey.GetValueOrDefault(message.Key);
+                for (int index = 0; index < resolvedByLocale.Length; index++) contentLocales[index] = resolvedByLocale[index].ByKey.Find(message.Key);
             }
             if (!fragments)
             {
@@ -334,6 +329,35 @@ internal sealed class Rmf2ProjectMarkupV5
                 WriteStrings(target, "skeletons", message.Skeletons);
             }
             target.WriteEndObject();
+        }
+    }
+
+    // The content locale of each key of a locale's resolved resources, for keys asked in ascending ordinal order: the first
+    // resource of the key, as a dictionary of the first one would answer. Resources in key order (as a compile resolves them)
+    // are walked once; any others go through a dictionary.
+    private sealed class ContentLocaleLookup
+    {
+        private readonly IReadOnlyList<Rmf2TranslationV5> _resources;
+        private readonly Dictionary<string, string>? _byKey;
+        private int _cursor;
+
+        internal ContentLocaleLookup(IReadOnlyList<Rmf2TranslationV5> resources)
+        {
+            _resources = resources;
+            for (int index = 1; index < resources.Count; index++)
+                if (string.CompareOrdinal(resources[index - 1].Key, resources[index].Key) > 0)
+                {
+                    _byKey = new Dictionary<string, string>(resources.Count, StringComparer.Ordinal);
+                    foreach (var resource in resources) _byKey.TryAdd(resource.Key, resource.ContentLocale);
+                    break;
+                }
+        }
+
+        internal string? Find(string key)
+        {
+            if (_byKey is not null) return _byKey.GetValueOrDefault(key);
+            while (_cursor < _resources.Count && string.CompareOrdinal(_resources[_cursor].Key, key) < 0) _cursor++;
+            return _cursor < _resources.Count && string.Equals(_resources[_cursor].Key, key, StringComparison.Ordinal) ? _resources[_cursor].ContentLocale : null;
         }
     }
 
