@@ -24,6 +24,7 @@ move in lockstep: one Translations minor supports exactly one Command Line minor
 
 | Runic.CommandLine | Runic.Translations.CommandLine |
 | --- | --- |
+| 0.14.x | 0.15.x |
 | 0.13.x | 0.14.x, 0.13.x, 0.12.x, 0.11.x |
 | 0.12.x | 0.10.x |
 | 0.9.x (from 0.9.1) | 0.9.1 |
@@ -132,26 +133,23 @@ lacks is skipped and listed in `TranslationCatalogStatus.OverlayDiagnostics` wit
 `TranslationOverlayDiagnosticReason.UnknownKey`, and the framework's text is used. Removed keys are named in
 the release notes and in the key list.
 
-### The second path for command-line text (deprecated)
+### Messages named after command-line framework keys
 
-A message in your own catalog named after a framework key, such as `diagnostics.unknownOption`, also
-overrides the command-line text through `TranslationCommandTextResolver` (see
-[How keys are resolved](command-line.md#how-keys-are-resolved)). This second path is deprecated in 0.14 and
-removed in 0.15: from then on the resolver asks your catalog only for keys that are not framework keys, such
-as your `DescriptionKey` text, and the framework text returns. Unlike an override file it is not checked at
-build time and has no removed-key diagnostic. In 0.14:
+A message in your own catalog named after a framework key, such as `diagnostics.unknownOption`, has no
+effect: `TranslationCommandTextResolver` asks your catalog only for keys that are not framework keys, such as
+your `DescriptionKey` text (see [How keys are resolved](command-line.md#how-keys-are-resolved)). When the
+project references `Runic.Translations.CommandLine`, the build reports each such message as a warning,
+[`RTR0107`](diagnostics.md#rtr0107), which names the key.
 
-- the build reports each such message as a warning, [`RTR0107`](diagnostics.md#rtr0107), when the project
-  references `Runic.Translations.CommandLine`;
-- the resolver writes a trace warning once, the first time it uses such a message.
-
-To migrate, move each message to `overrides/runic-command-line/<locale>.rmf2` with the same name and inputs,
-add the `runic-command-line` entry to `overrides` as above, and use a context-based resolver with
-`.AddOverlays(AppTextCatalog.Overlays)` (see [Register both catalogs in one context](#register-both-catalogs-in-one-context)).
-The snapshot and manager constructors ignore overlays, so an application that overrides framework text
-switches to `new TranslationCommandTextResolver(context, AppTextCatalog.CatalogId)`, the
-`TranslationContextBuilder` constructor, or `AddRunicCommandLineTranslations()`. The build then checks every
-override against the framework catalog (`RTR0103`).
+Up to 0.14 such a message overrode the command-line text, a second override path that 0.14 deprecated and
+0.15 removed. To keep the text, move each message to `overrides/runic-command-line/<locale>.rmf2` with the
+same name and inputs, add the `runic-command-line` entry to `overrides` as above, and use a context-based
+resolver with `.AddOverlays(AppTextCatalog.Overlays)` (see
+[Register both catalogs in one context](#register-both-catalogs-in-one-context)). The snapshot and manager
+constructors ignore overlays, so an application that overrides framework text switches to
+`new TranslationCommandTextResolver(context, AppTextCatalog.CatalogId)`, the `TranslationContextBuilder`
+constructor, or `AddRunicCommandLineTranslations()`. The build then checks every override against the
+framework catalog (`RTR0103`).
 
 ## What has no text, and what stays English
 

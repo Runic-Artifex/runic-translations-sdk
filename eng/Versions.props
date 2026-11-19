@@ -2,4 +2,4 @@
      RuntimeDependencyRange gives the Runic.CommandLine dependency the -0.0 upper bound of every cross-repository range
      (D061.13), [0.13.0, 0.14.0-0.0) before 1.0, after NuGet generated the .nuspec. A -0.0 bound written here would make
      NuGet's pack see a prerelease dependency of a stable package (NU5104, an error in Verification builds). Lockstep:
-     each Translations minor supports exactly one Command Line minor (docs/guides/translations/command-line.md). --><RunicCommandLineVersion>0.13.0</RunicCommandLineVersion><Version Condition="'$(Version)' == ''">$(RunicTranslationsVersion)</Version><PackageVersion Condition="'$(PackageVersion)' == ''">$(RunicTranslationsVersion)</PackageVersion></PropertyGroup></Project>
+     each Translations minor supports exactly one Command Line minor (docs/guides/translations/command-line.md). --><RunicCommandLineVersion>0.14.0</RunicCommandLineVersion><Version Condition="'$(Version)' == ''">$(RunicTranslationsVersion)</Version><PackageVersion Condition="'$(PackageVersion)' == ''">$(RunicTranslationsVersion)</PackageVersion></PropertyGroup></Project>

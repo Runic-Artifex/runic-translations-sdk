@@ -261,7 +261,7 @@ internal sealed class CompositionTests
             "help {\n  usage = Aufruf\n  options = Optionen\n}\n", Owner: "C:/nuget/runic.translations.commandline/0.14.0/runic/runic-command-line/runic.json"),
     ];
 
-    [Test, DisplayName("an application message named after a runic-command-line key is RTR0107, the deprecated second override path")]
+    [Test, DisplayName("an application message named after a runic-command-line key has no effect and is RTR0107, naming the key")]
     public void FrameworkKeyMessagesWarn()
     {
         GeneratorRun run = GeneratorTestHost.Run(CommandLineInputs("commands {\n  greet = Greet a person\n}\nhelp {\n  usage = Synopsis\n}\n"));
@@ -273,13 +273,14 @@ internal sealed class CompositionTests
         Assert.Equal("translations/en.rmf2", warning.Location.GetLineSpan().Path, all);
         Assert.Equal("4:2", warning.Location.GetLineSpan().StartLinePosition.Line + ":" + warning.Location.GetLineSpan().StartLinePosition.Character, "the name of usage");
         string message = warning.GetMessage(System.Globalization.CultureInfo.InvariantCulture);
-        Assert.True(message.StartsWith("Message 'help.usage' is named after a runic-command-line key", StringComparison.Ordinal), message);
+        Assert.True(message.StartsWith("Message 'help.usage' has no effect: 'help.usage' is a runic-command-line key", StringComparison.Ordinal), message);
+        Assert.True(!message.Contains("deprecated", StringComparison.Ordinal), message);
         Assert.True(message.Contains("translations/overrides/runic-command-line/<locale>.rmf2", StringComparison.Ordinal), message);
         Assert.True(warning.Descriptor.HelpLinkUri.EndsWith("#rtr0107", StringComparison.Ordinal), "help link");
         // A warning only: the catalog is generated as before.
         Assert.True(run.SingleResult.GeneratedSources.Length > 0, "generated");
 
-        // The same message with runic.json overriding runic-command-line is still the second path.
+        // The same message with runic.json overriding runic-command-line still has no effect: overrides go in overrides/runic-command-line/.
         GeneratorRun declared = GeneratorTestHost.Run(CommandLineInputs("help {\n  usage = Synopsis\n}\n",
             ",\n  \"overrides\": [ { \"catalog\": \"runic-command-line\", \"from\": \"Runic.Translations.CommandLine\" } ]"));
         Assert.Equal(1, declared.SingleResult.Diagnostics.Count(static diagnostic => diagnostic.Id == "RTR0107"), string.Join("\n", declared.SingleResult.Diagnostics));

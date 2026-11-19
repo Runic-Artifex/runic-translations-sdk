@@ -85,7 +85,7 @@ public sealed class Rmf2SourceDiscovery : ITask
             {
                 string catalog = packed.GetMetadata("Catalog"), package = packed.GetMetadata("Package");
                 // runic-command-line also goes to the generator without an override, so it can report application messages
-                // named after its keys (RTR0107, the deprecated second override path).
+                // named after its keys, which have no effect (RTR0107).
                 if (!overridden.Contains(catalog) && !string.Equals(catalog, CommandLineCatalog, StringComparison.Ordinal)) continue;
                 string config = Path.GetFullPath(packed.ItemSpec), root = Path.GetDirectoryName(config)!;
                 if (!File.Exists(config)) continue;

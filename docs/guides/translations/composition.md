@@ -137,9 +137,9 @@ and rich message below it. The library's build checks the keys against its own c
 
 ### Runic.CommandLine apps
 
-`TranslationCommandTextResolver` treats the application's catalog as an overlay of the `runic-command-line` catalog,
-locale-first, and takes a context or a `TranslationContextBuilder` to apply overlays of the framework text, such as French
-packs. See [Translate a Runic.CommandLine app](command-line.md).
+`TranslationCommandTextResolver` takes framework text from the `runic-command-line` catalog and the application's own
+keys from the application's catalog, and takes a context or a `TranslationContextBuilder` to apply overlays of the
+framework text, such as the application's overrides or French packs. See [Translate a Runic.CommandLine app](command-line.md).
 
 ## Requested and resolved locales
 

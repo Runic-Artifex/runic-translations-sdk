@@ -24,9 +24,6 @@ diagnostics {
   unknownOption =
     .input {$arg0 :string}
     {{Keine solche Option: {$arg0}}}
-  missingArgument =
-    .input {$person :string}
-    {{Es fehlt {$person}}}
   quotaExceeded =
     .input {$arg0 :string}
     .input {$arg1 :integer}

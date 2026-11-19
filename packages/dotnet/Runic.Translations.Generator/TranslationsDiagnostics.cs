@@ -128,7 +128,7 @@ internal static class TranslationsDiagnostics
     internal static readonly DiagnosticDescriptor OverrideSetup = new(
         "RTR0104", "Library catalog to override is not available", "{0}", Category, DiagnosticSeverity.Error, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0104");
     internal static readonly DiagnosticDescriptor FrameworkKeyMessage = new(
-        "RTR0107", "Message overrides command-line framework text through the deprecated second path", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0107");
+        "RTR0107", "Message named after a command-line framework key has no effect", "{0}", Category, DiagnosticSeverity.Warning, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0107");
     internal static readonly DiagnosticDescriptor MessageNotReferenced = new(
         "RTR0100", "Message is not referenced from C# code", "{0}", Category, DiagnosticSeverity.Info, isEnabledByDefault: true, helpLinkUri: HelpLinkBase + "rtr0100", customTags: WellKnownDiagnosticTags.CompilationEnd);
 
