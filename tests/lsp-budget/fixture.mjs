@@ -44,8 +44,9 @@ export function featureSource(locale, messages) {
 
 export const featureName = index => `feature${String(index).padStart(2, "0")}`;
 
-// Writes runic.json and the features to `directory`, replacing what is there, and returns the file count.
-export function writeCatalog(directory, { features, messagesPerFeature, locales }) {
+// Writes runic.json and the features to `directory`, replacing what is there, and returns the file count. With `review`,
+// also a review file with stale German entries (RTR0090), so every validation compiles for review.
+export function writeCatalog(directory, { features, messagesPerFeature, locales }, { review = false } = {}) {
   const localeList = allLocales.slice(0, locales);
   rmSync(directory, { recursive: true, force: true });
   mkdirSync(directory, { recursive: true });
@@ -53,8 +54,7 @@ export function writeCatalog(directory, { features, messagesPerFeature, locales 
     schemaVersion: 1, catalog: "budget", code: { namespace: "Budget.Translations", className: "AppText" },
     baseLocale: localeList[0], locales: localeList,
   }, null, 2)}\n`);
-  // RUNIC_LSP_BUDGET_REVIEW=1: a review file with stale German entries (RTR0090), so validations compile for review.
-  if (process.env.RUNIC_LSP_BUDGET_REVIEW === "1" && localeList.includes("de"))
+  if (review && localeList.includes("de"))
     writeFileSync(resolve(directory, "budget.review.json"), `${JSON.stringify({ $schema: "runic.translations.interchange-review/2", catalog: "budget",
       entries: Array.from({ length: 10 }, (_, index) => ({ key: `feature01_s0_m${index}`, locale: "de", state: "approved",
         sourceFingerprint: "sha256:" + "0".repeat(64) })) }, null, 2)}\n`);

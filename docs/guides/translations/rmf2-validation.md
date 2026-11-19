@@ -164,7 +164,7 @@ The language server's large-catalog budgets measure what an editor user waits
 for, through the real child-process stdio entry point, on a catalog of
 20,000 messages in 10 locales: open to the first diagnostics, an edit to its
 diagnostics, hover and completion idle and while typing, a rename across the
-catalog, and memory. CI checks them in the *Language server / large-catalog
+catalog, and memory, with and without a review file. CI checks them in the *Language server / large-catalog
 budgets* job (`bun eng/run.mjs lsp-budget`); see
 [tests/lsp-budget](../../../tests/lsp-budget/README.md) and the
 [language server guide](language-server.md#performance). The budgets guard
