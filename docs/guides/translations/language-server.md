@@ -96,16 +96,16 @@ as after the document is saved, changes nothing.
 | Lifecycle | `initialize`, `initialized`, `shutdown`, `exit` |
 | Documents | `textDocument/didOpen`, `didChange`, `didClose`, `didSave`; `workspace/didChangeWatchedFiles`, `workspace/didChangeConfiguration` |
 | Diagnostics | `textDocument/publishDiagnostics` for the whole catalog while a file of the project is open, with links to the [diagnostics reference](diagnostics.md) when the client supports `codeDescription` |
-| Language features | `completion` (trigger characters `$ : # / =`), `hover`, `definition`, `references`, `documentSymbol`, `foldingRange`, `semanticTokens/full`, `formatting`, `rename`; with protocol 2 also `prepareRename` |
-| Code actions | `textDocument/codeAction` with `codeAction/resolve`: `quickfix`; with protocol 2 also `refactor.extract` and `refactor.inline` |
-| Server to client (protocol 2) | `client/registerCapability` (file watchers), `window/showMessageRequest` (a confirmation), `workspace/applyEdit` (command edits), `$/cancelRequest` (a cancelled confirmation or edit) |
+| Language features | `completion` (trigger characters `$ : # / =`), `hover`, `definition`, `references`, `documentSymbol`, `foldingRange`, `semanticTokens/full`, `formatting`, `rename` with `prepareRename` |
+| Code actions | `textDocument/codeAction` with `codeAction/resolve`: `quickfix`, `refactor.extract` and `refactor.inline` |
+| Server to client | `client/registerCapability` (file watchers), `window/showMessageRequest` (a confirmation), `workspace/applyEdit` (command edits), `$/cancelRequest` (a cancelled confirmation or edit) |
 | Commands | `workspace/executeCommand`: `runic.extractGroup`, `runic.inlineResource`, `runic.markReviewed`, `runic.preview`, `runic.renderPreview`, `runic.renameInput`, `runic.renameSlot`, `runic.renameResource` |
 | Runic requests | `runic/documentInfo` (project, catalog, base locale and locale of a file), `runic/message` (the resource at the cursor and its inputs, slots and locales), `runic/libraryCatalogs` and `runic/libraryDocument` (installed library catalogs, for [override sources](composition.md)) |
 
-Edits that create or delete files need the client's `create` and `delete`
-resource operations; without them, revision 1 refuses such commands and offers
-no Extract or Inline actions. Revision 2 needs only `create`, and replaces a
-deletion the client cannot apply (see [Client compatibility](#client-compatibility)). Edits that change `runic.json` need
+Edits that create files (Extract Group, Inline Resource) need the client's
+`create` resource operation; without it the server offers no Extract or Inline
+actions and refuses those commands. A deletion the client cannot apply is
+replaced by an edit that empties the file (see [Client compatibility](#client-compatibility)). Edits that change `runic.json` need
 `initializationOptions.runicConfigurationSync: true`, by which the client
 promises to send its unsaved `runic.json` buffers; without it the server refuses
 such refactors rather than overwrite unsaved configuration. A client that does
@@ -113,29 +113,41 @@ not open `runic.json` with this server, as most generic clients, leaves it out.
 
 ## Protocol revisions
 
-The client chooses the Runic protocol revision in `initialize`:
+The server speaks revision 2 of the Runic protocol and advertises it in
+`capabilities.experimental.runic.protocol`. A client needs no initialization
+option for it: `initializationOptions.runicProtocol` is ignored, so a client that
+sends none, `1` or a higher number gets revision 2. A later revision will be
+negotiated through `runicProtocol` and `experimental.runic`, never changed
+silently.
 
-| `initializationOptions` | Revision | Behaviour |
-| --- | --- | --- |
-| no `runicProtocol` | 1 | Translations 0.13 behaviour: refactorings are `runic.*` commands that return a `WorkspaceEdit`, the client collects names and destinations itself, and `serverInfo.version` is `1` |
-| `"runicProtocol": 2` | 2 | Standard LSP refactorings; the server applies command edits itself. A higher number also gets revision 2 |
 
-Revision 2 adds:
-
-| Area | Protocol 2 |
+| Area | Revision 2 |
 | --- | --- |
-| Negotiation | `capabilities.experimental.runic` is `{ "protocol": 2, "commands": [...], "requests": [...] }`, listing the `runic.*` commands and `runic/*` requests; `serverInfo.version` is the tool's version (`0.14.0`) |
+| Negotiation | `capabilities.experimental.runic` is `{ "protocol": 2, "commands": [...], "requests": [...] }`, listing the `runic.*` commands and `runic/*` requests; `serverInfo.version` is the tool's version (`0.15.0`) |
 | Rename (F2) | `renameProvider.prepareProvider`. `prepareRename` returns the name and its range for a resource or group name, an MF2 local or caller input (without its `$`) and a slot reference (`ref=` of `#link`, `#action` or `#icon`), and `null` elsewhere. `rename` renames inputs and slots in every locale's resource, and updates slot contracts in `runic.json` |
-| Rename in a mixed workspace | A resource rename in a workspace that contains application sources (`.cs`, `.ts`, `.svelte` and others) asks with `window/showMessageRequest` whether to rename in resource sources only, since Runic does not update call sites. The server asks whether or not the client advertises `window.showMessage`, because Visual Studio 2026 advertises no `window` capabilities but shows the request. Declining, or answering `null`, returns no edit. A client that answers the request with an error (such as `MethodNotFound`) gets the refusal, as in revision 1. A client that never answers leaves the rename waiting until the client cancels it |
+| Rename in a mixed workspace | A resource rename in a workspace that contains application sources (`.cs`, `.ts`, `.svelte` and others) asks with `window/showMessageRequest` whether to rename in resource sources only, since Runic does not update call sites. The server asks whether or not the client advertises `window.showMessage`, because Visual Studio 2026 advertises no `window` capabilities but shows the request. Declining, or answering `null`, returns no edit. A client that answers the request with an error (such as `MethodNotFound`) gets the refusal. A client that never answers leaves the rename waiting until the client cancels it |
 | Refactor code actions | `refactor.extract` on a group's name: "Extract group 'shop' to shop/en.rmf2". `refactor.inline` in a resource: one "Inline into ../en.rmf2" per resource of the same locale in an ancestor directory of its source root. A client with `textDocument.codeAction.resolveSupport` gets them without their edit, whatever properties it lists, and resolves them with `codeAction/resolve` against the document version and source revision they were offered for, like quick fixes; they answer `ContentModified` when the document changed since. A client without `resolveSupport` gets the edit in the action. Extract needs the client's `create` resource operation. Inline deletes the inlined file; for a client without `delete` it empties the file instead and says so in the title: "Inline into ../en.rmf2 (leaves en.rmf2 empty)". An empty resource adds nothing to the catalog; delete it when convenient |
-| Commands | `runic.renameResource`, `runic.renameInput`, `runic.renameSlot`, `runic.extractGroup` and `runic.inlineResource` apply their edit through `workspace/applyEdit` and return `null`. A client without `workspace.applyEdit` receives the `WorkspaceEdit`, as in revision 1. A refused edit fails the command with the client's `failureReason`. Like the code action, `runic.inlineResource` empties the inlined file for a client without `delete` |
+| Commands | `runic.renameResource`, `runic.renameInput`, `runic.renameSlot`, `runic.extractGroup` and `runic.inlineResource` apply their edit through `workspace/applyEdit` and return `null`. A client without `workspace.applyEdit` receives the `WorkspaceEdit`. A refused edit fails the command with the client's `failureReason`. Like the code action, `runic.inlineResource` empties the inlined file for a client without `delete` |
 | File watchers | With `workspace.didChangeWatchedFiles.dynamicRegistration`, the server registers watchers for `runic.json`, `*.rmf2`, `*.mf2`, `*.review.json` and the restore and install state of library catalogs (`obj/project.assets.json` and the npm, pnpm, Yarn and Bun lock and state files). A client without dynamic registration, or one that refuses it, gets the server's own watcher for the same files in its workspace folders (`rootUri`), with changes collected for 200 ms and handled as one `workspace/didChangeWatchedFiles`; events the client still forwards are handled as well. Source roots outside the workspace folders are not covered by either |
-| Errors | `MethodNotFound` (-32601) for an unknown request, `InvalidParams` (-32602) for malformed parameters, `RequestFailed` (-32803) for a request that cannot be carried out (revision 1 answers `null` and -32602) |
+| Errors | `MethodNotFound` (-32601) for an unknown request, `InvalidParams` (-32602) for malformed parameters, `RequestFailed` (-32803) for a request that cannot be carried out |
 
-**Transition.** Revision 1 stays for one minor release, so an editor extension
-from runic-editors 0.21 keeps working with the 0.14 tool. An extension that sends
-`runicProtocol: 2` to a 0.13 tool finds no `experimental.runic` and uses
-revision 1. Translations 0.15 is planned to remove revision 1's command results.
+**Revision 1 was removed in 0.15.** Translations 0.13 spoke only revision 1,
+and 0.14 kept it for a client without `runicProtocol: 2`. In revision 1 the
+`runic.*` refactoring commands returned their `WorkspaceEdit` for the client to
+apply, there was no `prepareRename` and there were no refactor code actions, every
+failure was `InvalidParams`, an unknown request answered `null`, and
+`serverInfo.version` was `1`. From 0.15 every client gets revision 2:
+
+- Runic DevKit 0.22 and later (VS Code and Visual Studio 2026) always ask for
+  revision 2 and are unaffected.
+- The Runic extensions of runic-editors 0.21 and earlier expect a refactoring
+  command (Rename Input, Rename Slot, Rename Resource, Extract Group, Inline
+  Resource from the command palette or menu) to return its edit. Against a 0.15
+  tool the server applies the edit itself through `workspace/applyEdit` and the
+  command returns `null`, which these extensions report as a failure after the
+  edit was made. Update the extension to 0.22 or later.
+- Other LSP clients get the standard refactorings, error codes and file watching
+  of revision 2 without configuration (see [Other editors](#other-editors)).
 
 ## Client compatibility
 
@@ -158,8 +170,8 @@ after Extract or Inline save the changed files (File > Save All).
 
 ## Other editors
 
-Any LSP client can run the server. Send `runicProtocol: 2`, so the refactorings
-work through the editor's own rename and code-action UI. Start the editor (or
+Any LSP client can run the server, with no initialization options; the
+refactorings work through the editor's own rename and code-action UI. Start the editor (or
 the server) from a directory below the tool manifest, since `dotnet tool run`
 looks for the manifest from its working directory.
 
@@ -171,18 +183,16 @@ vim.lsp.config("runic", {
   cmd = { "dotnet", "tool", "run", "runic-translations", "--", "lsp" },
   filetypes = { "rmf2", "mf2" },
   root_markers = { ".config/dotnet-tools.json", "runic.json" },
-  init_options = { runicProtocol = 2 },
 })
 vim.lsp.enable("runic")
 ```
 
-**Helix** (`languages.toml`; Helix sends `config` as `initializationOptions`):
+**Helix** (`languages.toml`):
 
 ```toml
 [language-server.runic]
 command = "dotnet"
 args = ["tool", "run", "runic-translations", "--", "lsp"]
-config = { runicProtocol = 2 }
 
 [[language]]
 name = "rmf2"
@@ -195,13 +205,11 @@ language-servers = ["runic"]
 **JetBrains IDEs** with [LSP4IJ](https://github.com/redhat-developer/lsp4ij):
 add a new language server with the command
 `dotnet tool run runic-translations -- lsp`, map the file name patterns `*.rmf2`
-and `*.mf2` to it, and set its initialization options to
-`{ "runicProtocol": 2 }`.
+and `*.mf2` to it.
 
 **Zed** adds language servers through extensions, and there is no Runic
 extension for Zed yet. An extension would declare a language for `rmf2` and `mf2`
-files, run the command above, and return `{ "runicProtocol": 2 }` as its
-initialization options.
+files and run the command above.
 
 These clients do not open `runic.json` with the server, so they leave out
 `runicConfigurationSync` and the server refuses refactors that would change

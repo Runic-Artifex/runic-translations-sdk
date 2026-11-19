@@ -95,23 +95,19 @@ internal sealed class Rmf2RefactorLspTests
         Assert.False(File.Exists(layout.Directory.Resolve("shop", "en.rmf2")), "Resolving wrote the extracted file.");
     }
 
-    [Test, DisplayName("LSP offers no refactor actions to protocol 1 or to clients without file operations")]
+    [Test, DisplayName("LSP offers no refactor actions to clients without file operations")]
     public void RefactorDegradation()
     {
         using Layout layout = CreateLayout();
         JsonObject withoutFiles = FullClientCapabilities();
         withoutFiles["workspace"]!["workspaceEdit"]!.AsObject().Remove("resourceOperations");
-        foreach ((JsonObject capabilities, int? protocol) in new[] { (FullClientCapabilities(), (int?)null), (withoutFiles, 2) })
-        {
-            using Session session = new(_ => { }, _ => { });
-            session.Request("initialize", Initialize(layout.Directory.Path, capabilities, protocol));
-            Open(session, layout.RootUri, Root);
-            Open(session, layout.SubUri, Sub);
-            Assert.Equal(0, Refactors(CodeActions(session, layout.RootUri, 1, 2)).Length, $"protocol {protocol}");
-            Assert.Equal(0, Refactors(CodeActions(session, layout.SubUri, 0, 0)).Length, $"protocol {protocol}");
-            // Protocol 1 answers a refactor-only request with nothing, as 0.13 did.
-            if (protocol is null) Assert.Equal(0, CodeActions(session, layout.RootUri, 1, 2, "refactor").Count);
-        }
+        using Session session = new(_ => { }, _ => { });
+        session.Request("initialize", Initialize(layout.Directory.Path, withoutFiles, protocol: 2));
+        Open(session, layout.RootUri, Root);
+        Open(session, layout.SubUri, Sub);
+        Assert.Equal(0, Refactors(CodeActions(session, layout.RootUri, 1, 2)).Length);
+        Assert.Equal(0, Refactors(CodeActions(session, layout.SubUri, 0, 0)).Length);
+        Assert.Equal(0, CodeActions(session, layout.RootUri, 1, 2, "refactor").Count);
     }
 
     [Test, DisplayName("LSP protocol 2 applies runic.* command edits through workspace/applyEdit")]
