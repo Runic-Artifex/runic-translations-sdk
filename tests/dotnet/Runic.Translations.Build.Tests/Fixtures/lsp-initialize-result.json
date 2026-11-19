@@ -1,0 +1,85 @@
+{
+  "capabilities": {
+    "positionEncoding": "utf-16",
+    "textDocumentSync": 2,
+    "documentSymbolProvider": true,
+    "semanticTokensProvider": {
+      "legend": {
+        "tokenTypes": [
+          "namespace",
+          "property",
+          "variable",
+          "function",
+          "keyword",
+          "string",
+          "comment",
+          "type"
+        ],
+        "tokenModifiers": []
+      },
+      "full": true
+    },
+    "referencesProvider": true,
+    "foldingRangeProvider": true,
+    "hoverProvider": true,
+    "definitionProvider": true,
+    "documentFormattingProvider": true,
+    "renameProvider": {
+      "prepareProvider": true
+    },
+    "codeActionProvider": {
+      "codeActionKinds": [
+        "quickfix",
+        "refactor.extract",
+        "refactor.inline"
+      ],
+      "resolveProvider": true
+    },
+    "executeCommandProvider": {
+      "commands": [
+        "runic.extractGroup",
+        "runic.inlineResource",
+        "runic.markReviewed",
+        "runic.preview",
+        "runic.renameInput",
+        "runic.renameSlot",
+        "runic.renameResource",
+        "runic.renderPreview"
+      ]
+    },
+    "completionProvider": {
+      "triggerCharacters": [
+        "$",
+        ":",
+        "#",
+        "/",
+        "="
+      ]
+    },
+    "experimental": {
+      "runic": {
+        "protocol": 2,
+        "commands": [
+          "runic.extractGroup",
+          "runic.inlineResource",
+          "runic.markReviewed",
+          "runic.preview",
+          "runic.renameInput",
+          "runic.renameSlot",
+          "runic.renameResource",
+          "runic.renderPreview"
+        ],
+        "requests": [
+          "runic/documentInfo",
+          "runic/libraryCatalogs",
+          "runic/libraryDocument",
+          "runic/message"
+        ]
+      }
+    }
+  },
+  "serverInfo": {
+    "name": "Runic RMF2",
+    "version": "(tool version)"
+  }
+}

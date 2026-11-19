@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Runic.Translations.Tool;
 using TUnit.Core;
@@ -120,6 +121,45 @@ internal sealed class Rmf2ProtocolLspTests
                 ["range"] = new JsonObject { ["start"] = Position(0, 0), ["end"] = Position(0, 5) }, ["context"] = new JsonObject { ["diagnostics"] = new JsonArray(), ["only"] = new JsonArray("refactor") } });
             Assert.Equal(0, actions["result"]!.AsArray().Count, actions.ToJsonString());
             Assert.Equal(0, session.ServerRequests.Count, string.Join("\n", session.ServerRequests.Select(frame => frame.ToJsonString())));
+        }
+    }
+
+    // The initialize result a generic client gets, with serverInfo.version replaced by a placeholder: the advertised
+    // standard LSP surface and experimental.runic that the compatibility promise covers (language-server.md#compatibility).
+    private static readonly string InitializeSnapshotPath = RepositoryPaths.Resolve("tests", "dotnet", "Runic.Translations.Build.Tests", "Fixtures", "lsp-initialize-result.json");
+    private const string ToolVersionPlaceholder = "(tool version)";
+    private static readonly JsonSerializerOptions SnapshotFormat = new() { WriteIndented = true };
+
+    private static string InitializeSnapshot(string root, JsonObject capabilities, JsonObject? initializationOptions)
+    {
+        using Session session = new(_ => { }, _ => { });
+        var args = new JsonObject { ["rootUri"] = new Uri(root).AbsoluteUri, ["capabilities"] = capabilities };
+        if (initializationOptions is not null) args["initializationOptions"] = initializationOptions.DeepClone();
+        JsonObject result = session.Request("initialize", args)["result"]!.AsObject();
+        Assert.Equal(Program.Version, result["serverInfo"]!["version"]!.GetValue<string>());
+        result["serverInfo"]!["version"] = ToolVersionPlaceholder;
+        return result.ToJsonString(SnapshotFormat).ReplaceLineEndings("\n") + "\n";
+    }
+
+    [Test, DisplayName("LSP initialize result, experimental.runic included, matches its golden snapshot")]
+    public void InitializeGolden()
+    {
+        var (temporary, _, _) = CreateProject();
+        using (temporary)
+        {
+            // A generic client: no initialization options and no capabilities.
+            string actual = InitializeSnapshot(temporary.Path, new JsonObject(), null);
+            if (Environment.GetEnvironmentVariable("RUNIC_UPDATE_LSP_SNAPSHOT") == "1") File.WriteAllText(InitializeSnapshotPath, actual);
+            Assert.Equal(File.ReadAllText(InitializeSnapshotPath).ReplaceLineEndings("\n"), actual,
+                "The initialize result changed. The compatibility promise allows additions only; review the change, then update " +
+                "Fixtures/lsp-initialize-result.json with RUNIC_UPDATE_LSP_SNAPSHOT=1 (docs/guides/translations/language-server.md#compatibility).");
+            // Every client gets the same surface; only positionEncoding follows the client's general.positionEncodings.
+            var options = new JsonObject { ["runicConfigurationSync"] = true, ["runicProtocol"] = 2 };
+            Assert.Equal(actual, InitializeSnapshot(temporary.Path, FullClientCapabilities(), options), "VS Code's capabilities changed the result.");
+            Assert.Equal(actual, InitializeSnapshot(temporary.Path, VisualStudioCapabilities(), options), "Visual Studio's capabilities changed the result.");
+            var utf8 = new JsonObject { ["general"] = new JsonObject { ["positionEncodings"] = new JsonArray("utf-8", "utf-16") } };
+            Assert.Equal(actual.Replace("\"positionEncoding\": \"utf-16\"", "\"positionEncoding\": \"utf-8\"", StringComparison.Ordinal),
+                InitializeSnapshot(temporary.Path, utf8, null), "A UTF-8 client changed more than positionEncoding.");
         }
     }
 

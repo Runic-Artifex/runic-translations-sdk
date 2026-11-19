@@ -735,9 +735,10 @@ runic-translations lsp
 ```
 
 `runic-translations lsp` is the [language server](language-server.md) the editor
-extensions run, and any other LSP client can run it too. It is hidden from help
-and, with its protocol subset and custom methods, outside the 1.0 compatibility
-rules for now; the production language server is 1.0 scope. The workspace it shares with the
+extensions run, and any other LSP client can run it too. It is hidden from help,
+and from 1.0 its standard LSP surface and the `experimental.runic` protocol are
+covered by the compatibility rules
+([what that covers](language-server.md#compatibility)). The workspace it shares with the
 Translations Editor is internal to the tool and the editor; it accepts unsaved
 buffers and revisions. Rename, format,
 extract-group, and inline-resource produce validated transaction plans. Extracting
