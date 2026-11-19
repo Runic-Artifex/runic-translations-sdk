@@ -8,11 +8,10 @@ using Runic.Translations.Tooling;
 
 namespace Runic.Translations.Tool;
 
-// Protocol 2's own file watching, for a client that cannot register watchers dynamically (Visual Studio 2026, which
+// The server's own file watching, for a client that cannot register watchers dynamically (Visual Studio 2026, which
 // sends `didChangeWatchedFiles: {}`, SPIKE-VS-0) or refuses the registration. The server watches its workspace roots for
 // the files WatchedFilePatterns names and queues the changes as one workspace/didChangeWatchedFiles notification, so an
 // external edit, a restore or a review-file update reaches the diagnostics as it does with a registering client.
-// Revision 1, and a client that registers the server's watchers, keep forwarding events themselves.
 internal sealed partial class Rmf2LanguageServer
 {
     // Serializes queueing between the reader and the watcher (Run's Enqueue), so the queue stays in revision order.

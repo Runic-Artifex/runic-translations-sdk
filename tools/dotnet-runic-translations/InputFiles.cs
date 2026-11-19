@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using Runic.Translations.Internal;
@@ -15,7 +16,8 @@ internal static class InputFiles
 {
     private const int MaximumDocumentBytes = 8 * 1024 * 1024;
 
-    internal static CompilerInputs ReadProject(string projectPath, TranslationSource? projectOverride = null)
+    // cache: reuse the contents of files that did not change since they were read (the language server).
+    internal static CompilerInputs ReadProject(string projectPath, TranslationSource? projectOverride = null, SourceFileCache? cache = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(projectPath);
         string currentDirectory = Path.GetFullPath(Environment.CurrentDirectory);
@@ -28,7 +30,7 @@ internal static class InputFiles
 
         string root = Path.GetDirectoryName(configPath)!;
         var messages = new List<TranslationSource>();
-        TranslationSource project = projectOverride ?? ReadSource(configPath, DisplayPath(configPath, currentDirectory));
+        TranslationSource project = projectOverride ?? ReadSource(configPath, DisplayPath(configPath, currentDirectory), cache);
         // A malformed manifest (invalid JSON, a non-object root, or a malformed
         // sourceRoots entry) yields no sources. The compiler reports the located
         // configuration diagnostic; ManifestError covers layouts it accepts.
@@ -38,13 +40,13 @@ internal static class InputFiles
         foreach (string sourceRoot in roots)
         foreach (string candidate in EnumerateFilesWithoutReparsePoints(sourceRoot, root, projectPath))
             if (IsSourceFile(candidate) && !layout.IsOverrideSource(Path.GetFullPath(candidate)))
-                messages.Add(ReadSource(candidate, DisplayPath(candidate, currentDirectory)));
+                messages.Add(ReadSource(candidate, DisplayPath(candidate, currentDirectory), cache));
         messages.Sort((left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
         var overrides = new List<TranslationSource>();
         if (layout.OverridesRoot is { } overridesRoot && Directory.Exists(overridesRoot))
         {
             foreach (string candidate in EnumerateFilesWithoutReparsePoints(overridesRoot, root, projectPath))
-                if (IsSourceFile(candidate)) overrides.Add(ReadSource(candidate, DisplayPath(candidate, currentDirectory)));
+                if (IsSourceFile(candidate)) overrides.Add(ReadSource(candidate, DisplayPath(candidate, currentDirectory), cache));
             overrides.Sort((left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
         }
         return new CompilerInputs(project, messages, roots, null, overrides);
@@ -69,6 +71,9 @@ internal static class InputFiles
         sources.Sort((left, right) => StringComparer.Ordinal.Compare(left.Path, right.Path));
         return sources;
     }
+
+    private static TranslationSource ReadSource(string fullPath, string displayPath, SourceFileCache? cache) =>
+        cache is null ? ReadSource(fullPath, displayPath) : cache.Read(fullPath, displayPath, ReadSource);
 
     private static TranslationSource ReadSource(string fullPath, string displayPath)
     {
@@ -136,4 +141,25 @@ internal static class InputFiles
     }
 
     private static string NormalizePath(string path) => path.Replace('\\', '/');
+
+    // File contents reused while a file's length and last write time are unchanged since it was read. The language server
+    // reads a project's sources for every workspace it builds, for each hover, completion and validation; a watched-file
+    // event clears the cache. Safe for the server's worker and validator threads at once.
+    internal sealed class SourceFileCache
+    {
+        private readonly ConcurrentDictionary<string, (long Length, long WriteTicks, TranslationSource Source)> _files = new(StringComparer.Ordinal);
+
+        internal TranslationSource Read(string fullPath, string displayPath, Func<string, string, TranslationSource> read)
+        {
+            var information = new FileInfo(fullPath);
+            long length = information.Exists ? information.Length : -1, ticks = information.Exists ? information.LastWriteTimeUtc.Ticks : -1;
+            if (_files.TryGetValue(fullPath, out var cached) && cached.Length == length && cached.WriteTicks == ticks && cached.Source.Path == displayPath)
+                return cached.Source;
+            TranslationSource source = read(fullPath, displayPath);
+            _files[fullPath] = (length, ticks, source);
+            return source;
+        }
+
+        internal void Clear() => _files.Clear();
+    }
 }

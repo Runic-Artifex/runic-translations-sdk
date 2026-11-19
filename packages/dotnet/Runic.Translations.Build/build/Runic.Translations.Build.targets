@@ -67,6 +67,9 @@
     <CompilerVisibleProperty Include="RunicTranslationsReportUnusedMessages" />
   </ItemGroup>
 
+  <!-- RunicApplicationLocale items from runic.json for Runic packaging; buildMultiTargeting imports it into the outer evaluation. -->
+  <Import Project="Runic.Translations.Build.Locales.targets" Condition="'$(_RunicTranslationsLocalesTargetsImported)' != 'true'" />
+
   <!-- At execution time the declared project items exist and transformed wildcard
        strings can be expanded by a fresh Include. Evaluation-time transforms retain
        wildcard characters literally. Run before compiler editorconfig generation. -->

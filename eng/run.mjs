@@ -377,8 +377,10 @@ async function main() {
     case "publish-editor": publishEditor(process.argv[3]); break;
     case "native-aot": testNativeAot(); break;
     case "audit": auditDependencies(); break;
+    // The language server's generic-client smoke with the packed tool (eng/lsp-smoke.mjs).
+    case "lsp-smoke": (await import("./lsp-smoke.mjs")).lspSmoke(version); break;
     default:
-      throw new Error("Use bootstrap, build, test, pack [version], pack-built [version], verify:candidate [version], verify-packages [version] (alias), verify-editor-packed [version], publish-editor <rid>, native-aot, or audit.");
+      throw new Error("Use bootstrap, build, test, pack [version], pack-built [version], verify:candidate [version], verify-packages [version] (alias), verify-editor-packed [version], publish-editor <rid>, native-aot, audit, or lsp-smoke [version].");
   }
 }
 
