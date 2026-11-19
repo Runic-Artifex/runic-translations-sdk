@@ -197,8 +197,24 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
         if (request.Workspace.Count > 0) return request.Workspace[0];
         if (request.Command == "validate") return Environment.CurrentDirectory;
         return opensPackagedExample
-            ? Path.Combine(AppContext.BaseDirectory, "ExampleWorkspace")
+            ? PackagedExampleWorkspace()
             : Environment.CurrentDirectory;
+    }
+
+    // The example workspace that ships with the editor. A macOS bundle from dotnet runic package keeps only code in
+    // Contents/MacOS and leaves a symbolic link there to the rest in Contents/Resources; the workspace checks refuse a
+    // path that crosses a link, so the example opens where the link leads.
+    internal static string PackagedExampleWorkspace()
+    {
+        string path = Path.Combine(AppContext.BaseDirectory, "ExampleWorkspace");
+        try
+        {
+            return Directory.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName ?? path;
+        }
+        catch (IOException)
+        {
+            return path;
+        }
     }
 
     // The hosted-web boot mode mirrors the packaged-example default of a bare
@@ -208,7 +224,7 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
     {
         if (request.WorkspacePath is not null) return request.WorkspacePath;
         if (request.Workspace.Count > 0) return request.Workspace[0];
-        return Path.Combine(AppContext.BaseDirectory, "ExampleWorkspace");
+        return EditorCommandLineOperations.PackagedExampleWorkspace();
     }
 
 #if RUNIC_EDITOR_SMOKE_TEST

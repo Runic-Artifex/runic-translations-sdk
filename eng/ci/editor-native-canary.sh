@@ -16,7 +16,9 @@ publish=$1 backend=$2 logs=$3 version=${4:-}
 mkdir -p "$logs"
 editor="${EDITOR_EXECUTABLE:-$publish/Runic.Translations.Editor}"
 [[ -f "$editor.exe" ]] && editor="$editor.exe"
-workspace="$publish/ExampleWorkspace"
+# The physical path: a macOS bundle's Contents/MacOS/ExampleWorkspace is a symbolic link to Contents/Resources, and the
+# editor refuses a workspace path that crosses a link.
+workspace="$(cd -P "$publish/ExampleWorkspace" && pwd)"
 
 "$editor" --version | tee "$logs/version.txt"
 if [[ -n "$version" ]]; then
