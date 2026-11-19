@@ -288,3 +288,10 @@ function cssBlock(source, selector) {
   }
   throw new Error(`${selector} is unclosed.`);
 }
+
+// The visual text box shows keyboard focus once: the box's ring (focus-within). Its text segments drop the page's global
+// textarea outline except in forced colours, which draw no box-shadow ring (#225 R9).
+const inlineEditor = sources["InlineMessageEditor.svelte"];
+assert.match(inlineEditor, /focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/, "The visual text box does not show its focus.");
+assert.match(inlineEditor, /@media not \(forced-colors: active\) \{\s*\[data-pattern-box\] textarea:focus-visible \{\s*outline: none;/,
+  "The visual text box draws a second focus ring around the focused segment, or hides it in forced colours.");
