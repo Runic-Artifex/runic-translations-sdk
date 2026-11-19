@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -119,5 +120,36 @@ internal sealed class DeflatedLocaleDataTests
         for (int index = 0; index < 3; index++)
             Assert.Equal("Hallo Ada", provider.GetSnapshotAsync("de").AsTask().GetAwaiter().GetResult().Format(Greeting, [new TextArgument("name", "Ada")]));
         Assert.Equal(1, reads, "inflations");
+    }
+
+    [Test, DisplayName("reading deflated locale data or text leaves none of its buffers in the shared array pool")]
+    public void LeavesNoPooledBuffer()
+    {
+        // A pooled buffer that goes back to ArrayPool.Shared stays in this thread's cache, so the next Rent of its size on
+        // the same thread returns it with the inflated bytes still in it. Plain arrays leave nothing for the pool to find.
+        // The marker is unique per run, so no array that another case left in the pool can contain it.
+        string marker = Guid.NewGuid().ToString("N");
+        byte[] json = Encoding.UTF8.GetBytes(Json.Replace("Grüße aus Köln", "Grüße " + marker, StringComparison.Ordinal));
+        byte[] deflated = Deflate(json);
+        byte[] text = Encoding.UTF8.GetBytes("{\"version\":2,\"marker\":\"" + marker + "\"}");
+        byte[] deflatedText = Deflate(text);
+        Assert.Equal(2, GeneratedCatalogSupport.ReadDeflatedValues(deflated, json.Length).Count);
+        Assert.Equal(Encoding.UTF8.GetString(text), GeneratedCatalogSupport.ReadDeflatedText(deflatedText, text.Length));
+
+        byte[] needle = Encoding.UTF8.GetBytes(marker);
+        foreach (int size in new[] { json.Length, deflated.Length, text.Length, deflatedText.Length })
+        {
+            byte[] rented = ArrayPool<byte>.Shared.Rent(size);
+            try
+            {
+                Assert.True(rented.AsSpan().IndexOf(needle) < 0, $"ArrayPool.Shared kept an inflate buffer of {rented.Length} bytes for a read of {size} bytes.");
+                Assert.True(rented.AsSpan().IndexOf(deflated) < 0 && rented.AsSpan().IndexOf(deflatedText) < 0,
+                    $"ArrayPool.Shared kept a copy of the DEFLATE data in an array of {rented.Length} bytes.");
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
     }
 }
