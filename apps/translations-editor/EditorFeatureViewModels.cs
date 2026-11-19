@@ -4,6 +4,7 @@ using ReactiveUI.Primitives;
 using ReactiveUI.Primitives.Concurrency;
 using Runic.Application.Views;
 using Runic.Navigation;
+using Runic.Platform;
 
 namespace Runic.Translations.Editor;
 
@@ -104,11 +105,12 @@ public sealed class EditorWorkspaceViewModel : EditorFeatureViewModel
     private string _listLocalesResultJson = "null";
     private string _describeLocaleResultJson = "null";
 
-    internal EditorWorkspaceViewModel(EditorSession session, EditorViewModel owner, ISequencer scheduler) : base(session, owner, scheduler)
+    /// <param name="files">The window's file dialogs, which own the workspace folder dialog (<see cref="EditorWorkspacePicker"/>).</param>
+    internal EditorWorkspaceViewModel(EditorSession session, EditorViewModel owner, ISequencer scheduler, IFileDialogs files) : base(session, owner, scheduler)
     {
         LoadCommand = CreateCommand(async argument => await Session.LoadAsync(), (result, value) => { LastLoad = result; LoadResultJson = value; });
         CheckExternalChangesCommand = CreateCommand(async argument => await Session.CheckExternalChangesAsync(), (result, value) => { LastCheckExternalChanges = result; CheckExternalChangesResultJson = value; });
-        EditorWorkspacePicker picker = Own(new EditorWorkspacePicker());
+        EditorWorkspacePicker picker = Own(new EditorWorkspacePicker(files));
         PickWorkspaceCommand = CreateCommand(async argument => await picker.PickAsync(CancellationToken.None), (result, value) => { LastPickWorkspace = result; PickWorkspaceResultJson = value; });
         PreviewMutationCommand = CreateCommand(argument => Task.FromResult(Session.PreviewMutation(Parse<EditorMutationRequest>(argument))), (result, value) => { LastPreviewMutation = result; PreviewMutationResultJson = value; });
         ApplyMutationCommand = CreateCommand(async argument => await Session.ApplyMutationAsync(Parse<EditorMutationRequest>(argument)), (result, value) => { LastApplyMutation = result; ApplyMutationResultJson = value; });
