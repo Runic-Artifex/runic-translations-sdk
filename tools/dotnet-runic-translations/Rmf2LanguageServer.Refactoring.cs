@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Text.Json.Nodes;
 using JsonValue = System.Text.Json.Nodes.JsonValue;
 using Runic.Translations.Authoring;
@@ -197,8 +196,8 @@ internal sealed partial class Rmf2LanguageServer
     private JsonObject? ApplyCommandEdit(string label, JsonObject edit)
     {
         if (_protocol < 2 || !_applyEditSupport) return edit;
-        // Never apply an edit computed from documents the client has changed since.
-        if (_processedRevision != Interlocked.Read(ref _latestRevision)) throw new ContentModifiedException();
+        // Never apply an edit computed from files the client has changed since (IsStale).
+        lock (_revisionGate) if (IsStale(_processedRevision)) throw new ContentModifiedException();
         JsonNode? result = ClientRequest("workspace/applyEdit", new JsonObject { ["label"] = label, ["edit"] = edit });
         if (result is not JsonObject response || response["applied"] is not JsonValue applied || !applied.TryGetValue(out bool done) || !done)
         {

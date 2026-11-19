@@ -73,6 +73,24 @@ files, take part in every request. Cancellation (`$/cancelRequest`) is processed
 while a request runs; cancelled and stale requests return protocol errors instead
 of obsolete results.
 
+A request is stale, and answered with `ContentModified` (-32801), only when a
+change the client sent while it was pending affects its result:
+
+- The outline, folding ranges, semantic tokens, formatting and `prepareRename`
+  depend on the request's document only.
+- Hover, completion, the code-action listing, `runic/message` and
+  `runic/documentInfo` also depend on the project: `runic.json`, the review
+  files, the restore and install state of library catalogs and
+  `workspace/didChangeConfiguration`.
+- Requests that return edits or locations in other files (`rename`,
+  `definition`, `references`, `codeAction/resolve`, `workspace/executeCommand`,
+  and a code-action listing with refactor edits) also depend on every file
+  below the directories of the catalogs they read, so an edit is never computed
+  from outdated text.
+
+A watched-file event for an open document whose file holds the document's text,
+as after the document is saved, changes nothing.
+
 | Area | Methods |
 | --- | --- |
 | Lifecycle | `initialize`, `initialized`, `shutdown`, `exit` |

@@ -52,7 +52,7 @@ internal sealed partial class Rmf2LanguageServer
     private readonly Dictionary<string, TaskCompletionSource<JsonObject>> _clientRequests = new(StringComparer.Ordinal);
     private long _nextClientRequest;
     private bool _readerStopped;
-    // Whether the current request had the client apply an edit (workspace/applyEdit).
+    // Whether the current request had the client apply an edit (workspace/applyEdit) or recorded a review.
     private bool _editApplied;
     // Review data per project and buffer group, for code actions and hover: the compilation with the open buffers, its
     // review compilation (TranslationReviewFile.ForReview), the fingerprints and the review file. Dropped when a buffer,
@@ -111,8 +111,24 @@ internal sealed partial class Rmf2LanguageServer
         _requestCancelled = requestCancelled;
     }
     private CancellationToken _requestCancellation;
+    // Every state notification (didOpen, didChange, didClose, didChangeWatchedFiles, didChangeConfiguration) gets the
+    // next state revision when it is queued; a request gets the revision of the state it is computed from.
     private long _latestRevision;
     private long _processedRevision;
+    // What each queued state notification changes, by the revision that changed it last (under _revisionGate): the
+    // buffer of a file (FileKey), the disk content of a resource file (a watched-file event), and the project as a
+    // whole (runic.json, review files, restore and install state, directories, a rescan or the configuration). A
+    // request whose result depends on none of these changes is answered, not refused with ContentModified (IsStale).
+    // Entries the worker has passed are dropped before each message, so these hold only queued changes.
+    private readonly Dictionary<string, long> _bufferChanges = new(PathComparer);
+    private readonly Dictionary<string, long> _diskChanges = new(PathComparer);
+    private long _projectChange;
+    // The current request (worker only): its method and parameters, the roots of the workspaces it compiled, and
+    // whether it built a WorkspaceEdit, which makes it depend on every file below those roots.
+    private string _requestMethod = "";
+    private JsonObject _requestParams = new();
+    private readonly HashSet<string> _requestRoots = new(PathComparer);
+    private bool _requestEdits;
     private sealed class ContentModifiedException : Exception { }
     private sealed class MethodNotFoundException(string method) : Exception("Unknown method '" + method + "'.") { }
     // The client answered a server-to-client request with an error.
@@ -145,7 +161,10 @@ internal sealed partial class Rmf2LanguageServer
             {
                 var request = item.Request; string method = request["method"]?.GetValue<string>() ?? "";
                 JsonNode? id = request["id"]?.DeepClone();
+                JsonObject parameters = request["params"] as JsonObject ?? new JsonObject();
                 _requestCancellation = item.Cancellation.Token; _processedRevision = item.Revision; _editApplied = false;
+                _requestMethod = method; _requestParams = parameters; _requestRoots.Clear(); _requestEdits = false;
+                lock (_revisionGate) ForgetProcessedChanges(item.Revision);
                 try
                 {
                     _requestCancellation.ThrowIfCancellationRequested();
@@ -155,16 +174,16 @@ internal sealed partial class Rmf2LanguageServer
                     _beforeRequest?.Invoke(method);
                     if (method == "exit") return _shutdown ? 0 : 1;
                     if (id is not null && _protocol >= 2 && !RequestMethods.Contains(method)) throw new MethodNotFoundException(method);
-                    JsonNode? result = Handle(method, request["params"] as JsonObject ?? new JsonObject());
+                    JsonNode? result = Handle(method, parameters);
                     lock (_revisionGate)
                     {
                         // Project discovery commits its replacement index under
                         // this same gate. Cancellation after that commit point
                         // is completion, not a cancelled partial transaction.
                         if (method != "initialize") _requestCancellation.ThrowIfCancellationRequested();
-                        // An edit the client has applied (workspace/applyEdit) changes its documents; the revisions that
-                        // follow are its own result, not a reason to discard the request's.
-                        if (id is not null && !_editApplied && (request["params"]?["textDocument"] is not null || method is "workspace/executeCommand" or "codeAction/resolve") && item.Revision != _latestRevision) throw new ContentModifiedException();
+                        // An edit the client has applied (workspace/applyEdit), or a review the server has recorded,
+                        // changes files; the revisions that follow are its own result, not a reason to discard it.
+                        if (id is not null && !_editApplied && (parameters["textDocument"] is not null || method is "workspace/executeCommand" or "codeAction/resolve") && IsStale(item.Revision)) throw new ContentModifiedException();
                         if (id is not null) Send(new JsonObject { ["jsonrpc"] = "2.0", ["id"] = id, ["result"] = result });
                     }
                 }
@@ -239,7 +258,8 @@ internal sealed partial class Rmf2LanguageServer
                 if (queue.IsAddingCompleted) { source.Dispose(); throw new IOException("Language server stopped."); }
                 long revision;
                 lock (_revisionGate) {
-                    if (method is "textDocument/didOpen" or "textDocument/didChange" or "textDocument/didClose" or "workspace/didChangeWatchedFiles" or "workspace/didChangeConfiguration") _latestRevision++;
+                    if (method is "textDocument/didOpen" or "textDocument/didChange" or "textDocument/didClose" or "workspace/didChangeWatchedFiles" or "workspace/didChangeConfiguration")
+                        RecordChange(method, request, ++_latestRevision);
                     revision = _latestRevision;
                     if (request["id"] is { } id) pending[id.ToJsonString()] = source;
                 }
@@ -1183,6 +1203,8 @@ internal sealed partial class Rmf2LanguageServer
         foreach (string file in sources.Keys)
             while (!IsWithin(root, file)) root = Path.GetDirectoryName(root)!;
         Rmf2Workspace workspace = _syntaxCache.Create(root, new TranslationSource(Path.GetFullPath(inputs.Project.Path), inputs.Project.GetUtf8Bytes()), sources.Values, _requestCancellation);
+        // A request that edits or locates across files depends on every file below this root (IsStale).
+        _requestRoots.Add(root);
         _projectLayouts[directory] = workspace.IsDirect;
         return workspace;
     }
@@ -1203,6 +1225,7 @@ internal sealed partial class Rmf2LanguageServer
     {
         if (!_configurationSync && plan.Edits.Any(edit => Path.GetFileName(edit.RelativePath) == "runic.json"))
             throw new TranslationAuthoringException("Refactor refused: this client does not synchronize unsaved runic.json buffers. Use the Translations Editor or VS Code for configuration-changing transactions.");
+        _requestRoots.Add(plan.Root); _requestEdits = true;
         var edits = new JsonArray();
         foreach (var edit in plan.Edits)
         {
@@ -1655,6 +1678,9 @@ internal sealed partial class Rmf2LanguageServer
                 TranslationReviewFile.SourcesOf(TranslationReviewFile.CurrentSources(review), [key]));
         }
         catch (TranslationInterchangeException exception) { throw new TranslationAuthoringException("The review was not recorded: " + exception.Message); }
+        // The review is recorded: the watched-file event of the review file that may follow is its result, and the
+        // request is answered, not refused with ContentModified.
+        _editApplied = true;
         _reviewViews.Clear();
         QueueGlobalDiagnosticsRefresh();
         FlushGlobalDiagnosticsRefresh();
