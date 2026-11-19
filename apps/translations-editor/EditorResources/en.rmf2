@@ -3480,6 +3480,16 @@ ui {
 }
 ui {
   palette {
+    switch_to_workbench = Switch to workbench
+  }
+}
+ui {
+  palette {
+    switch_to_list_view = Switch to list view
+  }
+}
+ui {
+  palette {
     theme =
       .input {$theme :string}
       {{Theme · {$theme}}}
