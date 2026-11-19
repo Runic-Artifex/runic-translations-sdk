@@ -424,7 +424,10 @@ internal sealed class Rmf2Workspace
             else if (change.Value is null) sources.Remove(change.Key);
             else if (change.Key.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase) || change.Key.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)) sources[change.Key] = new TranslationSource(change.Key, change.Value);
         }
-        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(project, sources.Values, null, _cancellationToken);
+        // The edited catalog, through the project's session when there is one: only the edited files are compiled again.
+        Rmf2ProjectCompilation compilation = Session is { } session
+            ? session.Preview(project, sources.Values, _cancellationToken)
+            : TranslationCompiler.CompileRmf2ProjectV5(project, sources.Values, null, _cancellationToken);
         if (!compilation.Success) throw new TranslationAuthoringException("The complete edited catalog is invalid: " + string.Join("; ", compilation.Diagnostics.Select(d => d.Message)));
         string catalogId = compilation.Project!.Id;
         return new TranslationWorkspaceTransactionPlan(_root, catalogId, edits.AsReadOnly(), compilation);

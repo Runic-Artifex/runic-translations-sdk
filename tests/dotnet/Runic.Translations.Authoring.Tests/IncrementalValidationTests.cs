@@ -29,6 +29,8 @@ internal sealed class IncrementalValidationTests
         var random = new Random(seed);
         var catalog = new RandomCatalog(random);
         var session = new TranslationValidationSession();
+        // The previews draw from their own generator, so the edit sequence of each seed stays as it was.
+        var previews = new Random(seed + 1000);
         int compiled = 0, diagnosed = 0;
         string last = "";
         for (int step = 0; step < 60; step++)
@@ -47,6 +49,13 @@ internal sealed class IncrementalValidationTests
             // A relaxed and a base-locale-only compile (the review compiles) through the same session.
             foreach (var options in new[] { new TranslationCompilerOptions { RelaxedValidation = true }, new TranslationCompilerOptions { RelaxedValidation = true, BaseLocaleOnly = true } })
                 AssertSame(TranslationCompiler.CompileRmf2ProjectV5(project, sources, options), session.Validate(project, sources, options, false).Compilation, context + (options.BaseLocaleOnly ? ", base locale only" : ", relaxed"));
+            // A hypothetical state (a refactoring's plan): one file replaced by a random edit of it. The preview equals a
+            // full compile of that state, and the next real validation, at the next step, still equals a full compile.
+            TranslationSource[] hypothetical = (TranslationSource[])sources.Clone();
+            int edited = previews.Next(hypothetical.Length);
+            hypothetical[edited] = new TranslationSource(hypothetical[edited].Path,
+                Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(hypothetical[edited].GetUtf8Bytes()).Replace(" m", " m" + step, StringComparison.Ordinal)));
+            AssertSame(TranslationCompiler.CompileRmf2ProjectV5(project, hypothetical), session.Preview(project, hypothetical), context + ", preview");
         }
         Assert.True(compiled > 0 && diagnosed > 0, $"the sequence covers compiled catalogs ({compiled}) and diagnostics ({diagnosed}); errors of the last step: {last}");
     }
