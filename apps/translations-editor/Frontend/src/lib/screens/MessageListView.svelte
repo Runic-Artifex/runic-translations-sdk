@@ -6,7 +6,8 @@
   import * as Empty from "#lib/components/ui/empty/index.js";
   import type { EditorCatalog } from "#lib/contracts.js";
   import type { EditorLabels } from "#lib/editor-labels.js";
-  import { inlineVariant, listMessageRows, type ListGroupRow, type ListMessageRow, type ListRowStateName } from "#lib/list-view.js";
+  import { inlineVariant, listMessageRows, type ListGroupRow, type ListMessageRow, type ListRow, type ListRowStateName } from "#lib/list-view.js";
+  import { ListRowHeights, listRowOffsets, listSlices, listWindow, type ListRowKind } from "#lib/list-virtualization.js";
   import { localeDirection } from "#lib/locale-text.js";
   import { authoringInputs, type SourceSegment, type SourceTextView } from "#lib/message-composer.js";
   import PatternEditor from "#lib/PatternEditor.svelte";
@@ -16,6 +17,7 @@
   import type { SelectionController } from "#lib/state/selection-controller.svelte.js";
   import type { WorkspaceView } from "#lib/state/workspace-view.svelte.js";
   import { getUiText, type UiMessage } from "#lib/ui-text.js";
+  import { unsavedTitleMarker } from "#lib/window-title.js";
 
   let {
     catalog,
@@ -84,6 +86,127 @@
   const structureLabel = (row: ListMessageRow): string | undefined => row.structure === undefined ? undefined : labels[row.structure];
 
   let grid = $state<HTMLElement | null>(null);
+  let scroller = $state<HTMLElement | null>(null);
+
+  // Virtualization: only the rows in view, some overscan and the row with the tab stop (also the edited row) are in the
+  // DOM; the rows left out are gaps of their height. Heights are measured as rows are shown (multi-line text, a row's
+  // editor), and a row not shown yet counts as the average of its kind.
+  const heights = new ListRowHeights();
+  let measured = $state(0);
+  let scrollTop = $state(0);
+  let viewportHeight = $state(0);
+  let headHeight = $state(0);
+  const rowPosition = $derived(new Map(rows.map((row, index) => [row.id, index])));
+  const offsets = $derived.by(() => {
+    void measured;
+    return listRowOffsets(rows, heights);
+  });
+  const pinnedIndex = $derived(focusKey === undefined ? undefined : rowPosition.get(`m:${focusKey}`));
+  type RenderedItem = { kind: "gap"; id: string; height: number } | { kind: "row"; id: string; row: ListRow; position: number };
+  const span = $derived(listWindow(offsets, scrollTop - headHeight, viewportHeight));
+  const rendered = $derived.by((): RenderedItem[] => {
+    let gaps = 0;
+    return listSlices(offsets, span, pinnedIndex === undefined ? [] : [pinnedIndex]).flatMap((slice): RenderedItem[] => slice.kind === "gap"
+      ? [{ kind: "gap" as const, id: `gap:${gaps++}`, height: slice.height }]
+      : rows.slice(slice.start, slice.end).map((row, offset) => ({ kind: "row" as const, id: row.id, row, position: slice.start + offset })));
+  });
+  const measuredRows = new WeakMap<Element, { id: string; kind: ListRowKind }>();
+  let resizeObserver: ResizeObserver | undefined;
+
+  // The rows in view stay where they are while rows are measured. Two things move them: a row shown for the first time
+  // above the viewport (scrolling up) is taller or shorter than its estimate, and a new average changes the estimate of
+  // the rows not shown above the window, the gap's height. The scroll position moves by both, once the gap is updated.
+  function measureRows(entries: ResizeObserverEntry[]): void {
+    const anchor = (scroller?.scrollTop ?? 0);
+    const start = span.start;
+    const gapBefore = offsets[start];
+    let shift = 0;
+    let changed = false;
+    for (const entry of entries) {
+      const target = measuredRows.get(entry.target);
+      if (target === undefined || !entry.target.isConnected) continue;
+      const height = entry.borderBoxSize?.[0]?.blockSize ?? entry.target.getBoundingClientRect().height;
+      if (height <= 0) continue;
+      const before = heights.height(target.id, target.kind);
+      if (!heights.set(target.id, target.kind, height)) continue;
+      changed = true;
+      const index = rowPosition.get(target.id);
+      if (index !== undefined && offsets[index] + before <= anchor) shift += height - before;
+    }
+    if (!changed) return;
+    measured += 1;
+    void tick().then(() => {
+      const correction = shift + (offsets[start] ?? gapBefore) - gapBefore;
+      if (correction !== 0 && scroller !== null) scroller.scrollTop += correction;
+      // A row being revealed moves while the rows around it are measured: it is revealed again once they are shown.
+      const target = revealing;
+      if (target === undefined) return;
+      if (performance.now() > target.until || target.key !== selection.selectedKey) revealing = undefined;
+      else reveal(target.key);
+    });
+  }
+
+  function measureRow(id: string, kind: ListRowKind) {
+    return (element: HTMLElement) => {
+      resizeObserver ??= new ResizeObserver(measureRows);
+      measuredRows.set(element, { id, kind });
+      resizeObserver.observe(element);
+      return () => {
+        resizeObserver?.unobserve(element);
+        measuredRows.delete(element);
+      };
+    };
+  }
+
+  $effect(() => () => resizeObserver?.disconnect());
+
+  // Another language or the source text's columns: the rows' heights change as a whole.
+  let measuredFor = "";
+  $effect(() => {
+    const signature = `${locale}\u0000${sourceText}`;
+    if (signature === measuredFor) return;
+    if (measuredFor !== "") {
+      heights.clear();
+      measured += 1;
+    }
+    measuredFor = signature;
+  });
+
+  // The row being revealed, for a moment after the selection changed: until the user scrolls, or measuring settles.
+  let revealing: { key: string; until: number } | undefined;
+
+  // The user scrolls: the list stops revealing the selection.
+  $effect(() => {
+    const element = scroller;
+    if (element === null) return;
+    const stop = (): void => { revealing = undefined; };
+    element.addEventListener("wheel", stop, { passive: true });
+    element.addEventListener("pointerdown", stop, { passive: true });
+    return () => {
+      element.removeEventListener("wheel", stop);
+      element.removeEventListener("pointerdown", stop);
+    };
+  });
+
+  function revealSoon(key: string): void {
+    revealing = { key, until: performance.now() + 1_000 };
+    reveal(key);
+  }
+
+  /** Scrolls the row of `key` into view; it is in the DOM, as the selected row is never left out. */
+  function reveal(key: string): void {
+    const element = rowElement(key);
+    if (element !== null) {
+      element.scrollIntoView({ block: "nearest" });
+      return;
+    }
+    const index = rowPosition.get(`m:${key}`);
+    if (index === undefined || scroller === null) return;
+    const top = offsets[index];
+    const bottom = offsets[index + 1];
+    if (top < scroller.scrollTop) scroller.scrollTop = top;
+    else if (headHeight + bottom > scroller.scrollTop + scroller.clientHeight) scroller.scrollTop = headHeight + bottom - scroller.clientHeight;
+  }
   // Whether the selected row is being edited. It stays on while Tab, Ctrl+Enter or Next moves to another row that is
   // edited in place.
   let editMode = $state(false);
@@ -105,7 +228,8 @@
     if (editMode && row !== undefined && pendingFocus?.key !== key && (active === null || active === document.body || grid?.contains(active) === true)) {
       pendingFocus = { key, last: false };
     }
-    void tick().then(() => rowElement(key)?.scrollIntoView({ block: "nearest" }));
+    // Rows measured once they are in view can move it: it is revealed again while they are (`measureRows`).
+    void tick().then(() => revealSoon(key));
   });
 
   // The field of the row that is to be edited, once it is there.
@@ -249,7 +373,120 @@
   {/if}
 {/snippet}
 
-<div class="list-scroller" data-testid="list-view">
+{#snippet unsavedMark()}
+  <span class="list-unsaved" role="img" aria-label={ui.text("ui_list_unsaved")} title={ui.text("ui_list_unsaved")} data-unsaved-mark>{unsavedTitleMarker.trim()}</span>
+{/snippet}
+
+{#snippet listRow(row: ListRow, position: number)}
+  {#if row.kind === "group"}
+    <div class="list-group" role="row" aria-rowindex={position + 2} data-list-group={row.group} {@attach measureRow(row.id, "group")}>
+      <div role="rowheader" aria-colspan={columnCount}>
+        <span class="font-mono">{groupLabel(row)}</span>
+        <span class="list-group-counts">{groupCounts(row)}</span>
+      </div>
+    </div>
+  {:else}
+    {@const index = rowIndex.get(row.key) ?? 0}
+    {@const selected = row.key === selection.selectedKey}
+    {@const editingThis = editingRow(row)}
+    <div
+      class={["list-row", selected && "list-current"]}
+      role="row"
+      aria-selected={selected}
+      aria-rowindex={position + 2}
+      data-list-row={row.key}
+      data-state={row.state?.name}
+      data-inline={row.inline}
+      data-unsaved={row.unsaved}
+      {@attach measureRow(row.id, "message")}
+    >
+      <div role="gridcell" tabindex="-1" class="list-path" title={row.dottedPath} onclick={(event) => cellClick(event, row, false)} onkeydown={(event) => cellKeydown(event, row, index)}>
+        {#if row.unsaved}{@render unsavedMark()}{/if}
+        <span class="font-mono">{row.dottedPath}</span>
+      </div>
+      {#if !sourceText}
+        <div role="gridcell" tabindex="-1" class="list-source" onclick={(event) => cellClick(event, row, false)} onkeydown={(event) => cellKeydown(event, row, index)}>
+          {#if row.source !== undefined}{@render textView(row.source, baseLocale)}{/if}
+        </div>
+      {/if}
+      <div
+        role="gridcell"
+        tabindex={row.key === focusKey && !editingThis ? 0 : -1}
+        class="list-text"
+        data-list-text
+        aria-readonly={!row.inline}
+        onclick={(event) => cellClick(event, row, true)}
+        onkeydown={(event) => cellKeydown(event, row, index)}
+      >
+        {#if editingThis}
+          {#if variant !== undefined}
+            <div inert={editingBlocked} class:opacity-60={editingBlocked} data-list-editor>
+              {#key `${selection.selectedDocumentPath}\u0000${row.key}\u0000${locale}`}
+                <PatternEditor
+                  compact
+                  pattern={variant.pattern}
+                  {inputs}
+                  {locale}
+                  {revision}
+                  sourceToggle={false}
+                  label={ui.text("ui_list_edit_label", { message: row.dottedPath, language: localeName(locale) })}
+                  onchange={(pattern) => void editing.applyAuthoringOperation({ kind: "set-pattern", variantId: variant.id, pattern })}
+                />
+              {/key}
+            </div>
+            {#if invalid}
+              <p class="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-destructive" role="status" data-testid="list-row-errors">
+                {ui.text("ui_list_has_errors")}
+                <Button variant="link" size="xs" class="h-auto p-0 text-xs" onclick={onopenworkbench}>{ui.text("ui_list_open_in_workbench")}</Button>
+              </p>
+            {/if}
+          {:else if selection.starterLoading || row.missing}
+            <p class="text-sm text-muted-foreground" role="status">{ui.text("ui_translation_editor_starter_loading")}</p>
+          {:else}
+            <Button variant="link" size="xs" class="h-auto p-0 text-xs" onclick={onopenworkbench}>{ui.text("ui_list_open_in_workbench")}</Button>
+          {/if}
+        {:else if row.text !== undefined}
+          {@render textView(row.text, locale)}
+          {#if !row.inline}
+            <span class="list-structure">
+              {#if structureLabel(row) !== undefined}<span>{structureLabel(row)}</span>{/if}
+              <PanelsTopLeftIcon class="size-3" aria-hidden="true" />
+              <span class="sr-only">{ui.text("ui_list_open_in_workbench")}</span>
+            </span>
+          {/if}
+        {:else}
+          <span class="list-missing">{ui.text("ui_resource_not_translated")}</span>
+          {#if !row.inline}
+            <span class="list-structure">
+              {#if structureLabel(row) !== undefined}<span>{structureLabel(row)}</span>{/if}
+              <PanelsTopLeftIcon class="size-3" aria-hidden="true" />
+              <span class="sr-only">{ui.text("ui_list_open_in_workbench")}</span>
+            </span>
+          {/if}
+        {/if}
+      </div>
+      {#if sourceText}
+        <div role="gridcell" tabindex="-1" class="list-note" onclick={(event) => cellClick(event, row, false)} onkeydown={(event) => cellKeydown(event, row, index)}>
+          {row.note ?? ""}
+        </div>
+      {:else if row.state !== undefined}
+        <div role="gridcell" tabindex="-1" class="list-state" onclick={(event) => cellClick(event, row, false)} onkeydown={(event) => cellKeydown(event, row, index)}>
+          <StateMark state={row.state.mark} />
+          <span>{labelsByState[row.state.name]}</span>
+        </div>
+      {/if}
+    </div>
+  {/if}
+{/snippet}
+
+<div
+  class="list-scroller"
+  data-testid="list-view"
+  bind:this={scroller}
+  bind:clientHeight={viewportHeight}
+  style:scroll-padding-top={`${headHeight}px`}
+  onscroll={(event) => scrollTop = event.currentTarget.scrollTop}
+>
   {#if messageRows.length === 0}
     <Empty.Root>
       <Empty.Header>
@@ -267,9 +504,11 @@
       aria-label={labels.messages}
       aria-describedby={helpId}
       aria-colcount={columnCount}
+      aria-rowcount={rows.length + 1}
       data-list-locale={locale}
+      data-list-rendered={rendered.length}
     >
-      <div class="list-head" role="row">
+      <div class="list-head" role="row" aria-rowindex={1} bind:offsetHeight={headHeight}>
         <div role="columnheader">{ui.text("ui_list_column_path")}</div>
         {#if sourceText}
           <div role="columnheader">{ui.text("ui_content_text")}</div>
@@ -281,101 +520,11 @@
         {/if}
       </div>
 
-      {#each rows as row (row.id)}
-        {#if row.kind === "group"}
-          <div class="list-group" role="row" data-list-group={row.group}>
-            <div role="rowheader" aria-colspan={columnCount}>
-              <span class="font-mono">{groupLabel(row)}</span>
-              <span class="list-group-counts">{groupCounts(row)}</span>
-            </div>
-          </div>
+      {#each rendered as item (item.id)}
+        {#if item.kind === "gap"}
+          <div class="list-gap" aria-hidden="true" style:height={`${item.height}px`}></div>
         {:else}
-          {@const index = rowIndex.get(row.key) ?? 0}
-          {@const selected = row.key === selection.selectedKey}
-          {@const editingThis = editingRow(row)}
-          <div
-            class={["list-row", selected && "list-current"]}
-            role="row"
-            aria-selected={selected}
-            data-list-row={row.key}
-            data-state={row.state?.name}
-            data-inline={row.inline}
-          >
-            <div role="gridcell" tabindex="-1" class="list-path" title={row.dottedPath} onclick={(event) => cellClick(event, row, false)} onkeydown={(event) => cellKeydown(event, row, index)}>
-              <span class="font-mono">{row.dottedPath}</span>
-            </div>
-            {#if !sourceText}
-              <div role="gridcell" tabindex="-1" class="list-source" onclick={(event) => cellClick(event, row, false)} onkeydown={(event) => cellKeydown(event, row, index)}>
-                {#if row.source !== undefined}{@render textView(row.source, baseLocale)}{/if}
-              </div>
-            {/if}
-            <div
-              role="gridcell"
-              tabindex={row.key === focusKey && !editingThis ? 0 : -1}
-              class="list-text"
-              data-list-text
-              aria-readonly={!row.inline}
-              onclick={(event) => cellClick(event, row, true)}
-              onkeydown={(event) => cellKeydown(event, row, index)}
-            >
-              {#if editingThis}
-                {#if variant !== undefined}
-                  <div inert={editingBlocked} class:opacity-60={editingBlocked} data-list-editor>
-                    {#key `${selection.selectedDocumentPath}\u0000${row.key}\u0000${locale}`}
-                      <PatternEditor
-                        compact
-                        pattern={variant.pattern}
-                        {inputs}
-                        {locale}
-                        {revision}
-                        sourceToggle={false}
-                        label={ui.text("ui_list_edit_label", { message: row.dottedPath, language: localeName(locale) })}
-                        onchange={(pattern) => void editing.applyAuthoringOperation({ kind: "set-pattern", variantId: variant.id, pattern })}
-                      />
-                    {/key}
-                  </div>
-                  {#if invalid}
-                    <p class="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-destructive" role="status" data-testid="list-row-errors">
-                      {ui.text("ui_list_has_errors")}
-                      <Button variant="link" size="xs" class="h-auto p-0 text-xs" onclick={onopenworkbench}>{ui.text("ui_list_open_in_workbench")}</Button>
-                    </p>
-                  {/if}
-                {:else if selection.starterLoading || row.missing}
-                  <p class="text-sm text-muted-foreground" role="status">{ui.text("ui_translation_editor_starter_loading")}</p>
-                {:else}
-                  <Button variant="link" size="xs" class="h-auto p-0 text-xs" onclick={onopenworkbench}>{ui.text("ui_list_open_in_workbench")}</Button>
-                {/if}
-              {:else if row.text !== undefined}
-                {@render textView(row.text, locale)}
-                {#if !row.inline}
-                  <span class="list-structure">
-                    {#if structureLabel(row) !== undefined}<span>{structureLabel(row)}</span>{/if}
-                    <PanelsTopLeftIcon class="size-3" aria-hidden="true" />
-                    <span class="sr-only">{ui.text("ui_list_open_in_workbench")}</span>
-                  </span>
-                {/if}
-              {:else}
-                <span class="list-missing">{ui.text("ui_resource_not_translated")}</span>
-                {#if !row.inline}
-                  <span class="list-structure">
-                    {#if structureLabel(row) !== undefined}<span>{structureLabel(row)}</span>{/if}
-                    <PanelsTopLeftIcon class="size-3" aria-hidden="true" />
-                    <span class="sr-only">{ui.text("ui_list_open_in_workbench")}</span>
-                  </span>
-                {/if}
-              {/if}
-            </div>
-            {#if sourceText}
-              <div role="gridcell" tabindex="-1" class="list-note" onclick={(event) => cellClick(event, row, false)} onkeydown={(event) => cellKeydown(event, row, index)}>
-                {row.note ?? ""}
-              </div>
-            {:else if row.state !== undefined}
-              <div role="gridcell" tabindex="-1" class="list-state" onclick={(event) => cellClick(event, row, false)} onkeydown={(event) => cellKeydown(event, row, index)}>
-                <StateMark state={row.state.mark} />
-                <span>{labelsByState[row.state.name]}</span>
-              </div>
-            {/if}
-          </div>
+          {@render listRow(item.row, item.position)}
         {/if}
       {/each}
     </div>
@@ -388,6 +537,8 @@
     min-width: 0;
     min-height: 0;
     overflow: auto;
+    /* The list keeps the rows in view in place itself while rows are measured (virtualization). */
+    overflow-anchor: none;
     scrollbar-color: var(--border) transparent;
     /* Comfortable rows; the compact density tightens them (D074.4). */
     --list-cell-block: 0.625rem;
@@ -443,8 +594,6 @@
   .list-row {
     min-height: var(--list-row-min);
     align-items: start;
-    content-visibility: auto;
-    contain-intrinsic-size: auto var(--list-row-min);
   }
   .list-row > div { cursor: default; outline: none; }
   .list-row > div:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); border-radius: var(--radius-control, 4px); }
@@ -452,6 +601,14 @@
   .list-current { background: var(--card); box-shadow: inset 2px 0 0 var(--paint); }
   .list-path { color: var(--muted-foreground); font-size: var(--ui-text-xs); overflow-wrap: anywhere; padding-top: calc(var(--list-cell-block) + 0.2rem) !important; }
   .list-source { color: var(--foreground); }
+  /* The unsaved mark: the window title's marker, before the path of a message with unsaved work. */
+  .list-unsaved {
+    display: inline-block;
+    margin-inline-end: 0.35rem;
+    color: var(--foreground);
+    font-weight: 700;
+    line-height: 1;
+  }
   .list-text { cursor: text !important; }
   .list-missing { color: var(--muted-foreground); font-style: italic; font-size: var(--message-text); }
   .list-structure {

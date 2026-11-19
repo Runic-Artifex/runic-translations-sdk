@@ -57,6 +57,8 @@ export interface ListMessageRow {
   readonly structure?: MessageStructure;
   /** The developers' note (the message's description). */
   readonly note?: string;
+  /** Whether the message has unsaved work in the selected locale: text that differs from disk, or a review change. */
+  readonly unsaved: boolean;
 }
 
 export interface ListGroupRow {
@@ -81,6 +83,8 @@ export interface ListRowOptions {
   readonly sourceText: boolean;
   /** The review state of a translated or missing message in the selected locale, and whether it is outdated. */
   readonly review: (key: string, translated: boolean) => { state: EditorReviewState; stale: boolean };
+  /** Whether the message has unsaved work in the selected locale; none when absent. */
+  readonly unsaved?: (key: string) => boolean;
 }
 
 /** The display path of a row: its logical path, or its key when the compiler has not described it. */
@@ -144,6 +148,7 @@ export function buildListRows(rows: readonly TranslationRow[], options: ListRowO
       inline: editsInline(row, entry, options.sourceText ? undefined : sourceEntry),
       structure: row.structure,
       note: row.description ?? entry?.description ?? sourceEntry?.description,
+      unsaved: options.unsaved?.(row.key) ?? false,
     });
   }
   closeHeader();
