@@ -256,7 +256,8 @@ internal static class Rmf2ResourceReader
             var node = new Rmf2ResourceNode(path, isGroup ? null : body.ToString(), comments.ToArray(), properties.ToArray(),
                 Location(at, at + nameLength), Location(statementStart, extentEnd), map.Build());
             // The message's bytes are the UTF-8 encoding of its text, which the syntax shares.
-            if (!isGroup) node.MessageSyntax = Mf2SyntaxReader.Read(TranslationSource.Owned(source.Path, Encoding.UTF8.GetBytes(node.Message!)), options, node.Message, cancellationToken);
+            // Without its token stream, which a compile does not read: the syntax reads it when an authoring tool asks.
+            if (!isGroup) node.MessageSyntax = Mf2SyntaxReader.Read(TranslationSource.Owned(source.Path, Encoding.UTF8.GetBytes(node.Message!)), options, node.Message, false, cancellationToken);
             nodes.Add(node);
             foreach (string property in properties)
             {
