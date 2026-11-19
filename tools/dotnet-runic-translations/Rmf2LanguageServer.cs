@@ -1614,6 +1614,9 @@ internal sealed partial class Rmf2LanguageServer
         Rmf2ProjectCompilation compilation = workspace.Validate();
         TranslationSource projectSource = workspace.ProjectSource;
         IReadOnlyList<TranslationSource> sources = workspace.Sources.ToArray();
+        // The review compiles of a catalog that does not compile (TranslationReviewFile.ForReview) reuse the session's file
+        // units and memos (#276), instead of two full compiles.
+        TranslationValidationSession? session = workspace.Session;
         // The catalog names the review file. runic.json has it even when the catalog does not compile.
         string? catalog = compilation.Project?.Id ?? (TranslationCompiler.ReadProjectManifest(projectSource, out _)?.Id is { Length: > 0 } id ? id : null);
         string? path = catalog is not null && TranslationReviewFile.IsFileName(catalog) ? TranslationReviewFile.PathFor(Path.Combine(project, "runic.json"), catalog) : null;
@@ -1631,12 +1634,12 @@ internal sealed partial class Rmf2LanguageServer
         if (file is not null || error is not null)
         {
             // A review file's stale entries are diagnostics (RTR0090): compile for review now, cancellable, off the worker.
-            Rmf2ProjectCompilation computed = TranslationReviewFile.ForReview(compilation, projectSource, sources, null, cancellationToken);
+            Rmf2ProjectCompilation computed = TranslationReviewFile.ForReview(compilation, projectSource, sources, session, null, cancellationToken);
             review = () => computed;
         }
         // Without a review file only a request asks for it, later, on the worker; the validation's cancellation source is
         // disposed by then.
-        else review = () => TranslationReviewFile.ForReview(compilation, projectSource, sources, null, CancellationToken.None);
+        else review = () => TranslationReviewFile.ForReview(compilation, projectSource, sources, session, null, CancellationToken.None);
         var view = new ReviewView(stamp, compilation, review, path, file, error, failure);
         if (view.HasReviewFile) _ = view.Fingerprints;
         return view;
@@ -1737,8 +1740,10 @@ internal sealed partial class Rmf2LanguageServer
         CompilerInputs inputs = InputFiles.ReadProject(projectDirectory, null);
         var projectSource = new TranslationSource(Path.GetFullPath(inputs.Project.Path), inputs.Project.GetUtf8Bytes());
         TranslationSource[] sources = inputs.Messages.Select(source => new TranslationSource(Path.GetFullPath(source.Path), source.GetUtf8Bytes())).ToArray();
-        Rmf2ProjectCompilation review = TranslationReviewFile.ForReview(TranslationCompiler.CompileRmf2ProjectV5(projectSource, sources, null, _requestCancellation),
-            projectSource, sources, null, _requestCancellation);
+        // Through the project's validation session (#276), which reuses the units of the files the buffers did not change.
+        TranslationValidationSession session = _syntaxCache.Session(projectSource.Path);
+        Rmf2ProjectCompilation review = TranslationReviewFile.ForReview(session.Validate(projectSource, sources, _requestCancellation).Compilation,
+            projectSource, sources, session, null, _requestCancellation);
         if (!review.Success || review.Project is not { } project)
             throw new TranslationAuthoringException("Fix the errors in runic.json or the base locale before recording a review.");
         if (locale == project.DefaultLocale || !project.Locales.Any(item => item.Tag == locale))
