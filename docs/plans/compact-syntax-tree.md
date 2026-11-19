@@ -1,7 +1,8 @@
-# Compact syntax tree: API impact (proposal, awaiting approval)
+# Compact syntax tree: API impact (Option A chosen)
 
-Recorded 2026-11-19 for tr#271, step 3 (memory). It isn't implemented: the language server and the Translations Editor
-(D074) consume the models below, and a breaking change needs the maintainer's approval first.
+Recorded 2026-11-19 for tr#271, step 3 (memory). **Decision (maintainer, 2026-11-19): Option A, as step 5 of #271,
+within D077.10. Option B is on hold:** it touches the language server's and the Translations Editor's (D074) areas, and is
+decided only after A, once the server's own caches are measured, if the 20k memory budget still misses.
 
 ## Where the memory is
 
@@ -22,7 +23,7 @@ What remains is mostly objects, not data. A message carries about 5–7 `TextSou
 for each node, expression, operand, option, declaration, variant and key. It also carries its own `TranslationSource`
 (path, and a copy of the message's UTF-8 bytes), and the records and lists that hold them.
 
-## Option A: compact inside, same API (no breaking change)
+## Option A: compact inside, same API (no breaking change); chosen
 
 The syntax records keep their types and members. They store compact spans (start and length in the message, as
 integers) and a shared line index, and create the `TextSourceLocation` a member returns when it's read.
@@ -37,7 +38,7 @@ integers) and a shared line index, and create the `TextSourceLocation` a member 
 - **Risk:** low, but positional records stop being plain records. Their constructors become internal factories,
   constructed only inside the compiler.
 
-## Option B: a compact syntax model (breaking)
+## Option B: a compact syntax model (breaking); on hold
 
 The syntax records (`Mf2SyntaxToken`, `Mf2OperandSyntax`, `Mf2PropertySyntax`, `Mf2ExpressionSyntax`,
 `Mf2DeclarationSyntax`, `Mf2VariantSyntax`, `Mf2MatchSyntax`, `Rmf2ResourceNode`) expose a value-type span, such as
