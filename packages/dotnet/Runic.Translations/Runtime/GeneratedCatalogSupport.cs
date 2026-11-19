@@ -65,9 +65,10 @@ public static class GeneratedCatalogSupport
 
     /// <summary>
     /// Reads the direct values that a generated catalog embeds for one locale as raw DEFLATE data (RFC 1951) of the
-    /// compiler's UTF-8 JSON (RMF2 runtime ABI 4). The JSON is inflated into a pooled buffer, read as
-    /// <see cref="ReadValues(ReadOnlySpan{byte})"/> reads it, and the buffer returned: the generated catalog calls this once
-    /// per locale, on the locale's first use.
+    /// compiler's UTF-8 JSON (RMF2 runtime ABI 4). The JSON is inflated into an array of exactly
+    /// <paramref name="length"/> bytes and read as <see cref="ReadValues(ReadOnlySpan{byte})"/> reads it; only the values
+    /// stay in memory, as no buffer is kept in a pool. The generated catalog calls this once per locale, on the locale's
+    /// first use.
     /// </summary>
     /// <param name="deflatedUtf8Json">The DEFLATE data.</param>
     /// <param name="length">The length of the inflated JSON in bytes, which the data must match exactly.</param>
