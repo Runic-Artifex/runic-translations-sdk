@@ -679,14 +679,17 @@ internal sealed class Rmf2DiagnosticLspTests
             var start = new ProcessStartInfo("dotnet") { WorkingDirectory = directory, RedirectStandardInput = true,
                 RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
             start.ArgumentList.Add(RepositoryPaths.ToolAssembly); start.ArgumentList.Add("lsp");
+            // Responses follow the diagnostics of the changes before them, so tests can read diagnostics after a request.
+            start.Environment[Rmf2LanguageServer.SettleDiagnosticsVariable] = "1";
             _process = Process.Start(start) ?? throw new InvalidOperationException("Could not start LSP.");
             _errors = _process.StandardError.ReadToEndAsync();
         }
-        internal Session(Action<string> beforeRequest, Action<string> requestCancelled)
+        // settleDiagnostics: false for tests of background validation itself.
+        internal Session(Action<string> beforeRequest, Action<string> requestCancelled, bool settleDiagnostics = true)
         {
             _serverInput = new Rmf2LspBenchmark.BlockingByteStream();
             Rmf2LspBenchmark.BlockingByteStream output = _serverOutput = new Rmf2LspBenchmark.BlockingByteStream();
-            var server = Server = new Rmf2LanguageServer(_serverInput, output, beforeRequest, requestCancelled);
+            var server = Server = new Rmf2LanguageServer(_serverInput, output, beforeRequest, requestCancelled, settleDiagnostics);
             _server = Task.Run(() => {
                 try { return server.Run(); }
                 finally { output.CompleteWriting(); }
