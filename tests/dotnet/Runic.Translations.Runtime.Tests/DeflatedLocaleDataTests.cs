@@ -152,4 +152,59 @@ internal sealed class DeflatedLocaleDataTests
             }
         }
     }
+
+    // RMF2 runtime ABI 5: a locale in the binary encoding, version 1, a pool of "de" and "Grüße aus Köln", default locale
+    // 0, and one plain message (ID 0, flags 1, text 1).
+    private static byte[] Binary()
+    {
+        byte[] text = Encoding.UTF8.GetBytes("Grüße aus Köln");
+        return [1, 2, 2, (byte)'d', (byte)'e', (byte)text.Length, .. text, 0, 1, 0, 1, 1];
+    }
+
+    [Test, DisplayName("deflated binary locale data (RMF2 ABI 5) reads and formats through a catalog, built on first format")]
+    public void BinaryRoundTrip()
+    {
+        byte[] binary = Binary();
+        IReadOnlyList<CompiledTranslationValue> values = GeneratedCatalogSupport.ReadDeflatedBinaryValues(Deflate(binary), binary.Length);
+        Assert.Equal(1, values.Count, "values");
+        Assert.True(values[0].Message!.IsRmf2V5, "The deferred message is not RMF2.");
+        Assert.Equal("de", values[0].Message!.ContentLocale, "content locale before the first format");
+        var catalog = new CompiledTranslationCatalog("deflated", "de", [CompiledTranslationDefinition.FromRmf2Inputs("farewell", [])],
+            [GeneratedCatalogSupport.CreateDeferredLocale("de", null, () => GeneratedCatalogSupport.ReadDeflatedBinaryValues(Deflate(binary), binary.Length))]);
+        ITranslationSnapshot snapshot = new CompiledTranslationProvider(catalog).GetSnapshotAsync("de").AsTask().GetAwaiter().GetResult();
+        Assert.Equal("Grüße aus Köln", snapshot.Format(Farewell, []), "formatted");
+    }
+
+    [Test, DisplayName("binary locale data and inflated data that do not match their length, or claim more than DEFLATE can expand to, are refused")]
+    public void BinaryRefusesWrongLength()
+    {
+        byte[] binary = Binary();
+        byte[] deflated = Deflate(binary);
+        foreach (int length in new[] { binary.Length - 1, binary.Length + 1, -1, 0, DeflatedLocaleData.MaximumLength + 1 })
+            Assert.Equal(TranslationPackFailureReason.Malformed,
+                Assert.Throws<TranslationPackException>(() => GeneratedCatalogSupport.ReadDeflatedBinaryValues(deflated, length), "length").Reason);
+        Assert.True(binary.AsSpan().SequenceEqual(GeneratedCatalogSupport.InflateData(deflated, binary.Length)), "InflateData");
+        // A few bytes cannot ask for a large array: DEFLATE expands at most 1,032 times.
+        Assert.Throws<TranslationPackException>(() => GeneratedCatalogSupport.InflateData([0x03, 0x00], 1_000_000), "invalid length");
+        Assert.Throws<TranslationPackException>(() => GeneratedCatalogSupport.InflateData([0xFF, 0xFF, 0xFF], 3), "DEFLATE");
+        // JSON is not binary locale data.
+        byte[] json = Encoding.UTF8.GetBytes(Json);
+        Assert.Throws<TranslationPackException>(() => GeneratedCatalogSupport.ReadDeflatedBinaryValues(Deflate(json), json.Length), "encoding version");
+    }
+
+    [Test, DisplayName("reading deflated binary locale data leaves none of its buffers in the shared array pool")]
+    public void BinaryLeavesNoPooledBuffer()
+    {
+        string marker = Guid.NewGuid().ToString("N");
+        byte[] text = Encoding.UTF8.GetBytes(marker);
+        byte[] binary = [1, 2, 2, (byte)'d', (byte)'e', (byte)text.Length, .. text, 0, 1, 0, 1, 1];
+        byte[] deflated = Deflate(binary);
+        Assert.Equal(1, GeneratedCatalogSupport.ReadDeflatedBinaryValues(deflated, binary.Length).Count, "values");
+        foreach (int size in new[] { binary.Length, deflated.Length })
+        {
+            byte[] rented = ArrayPool<byte>.Shared.Rent(size);
+            try { Assert.True(rented.AsSpan().IndexOf(text) < 0 && rented.AsSpan().IndexOf(deflated) < 0, "ArrayPool.Shared kept a buffer of " + rented.Length + " bytes."); }
+            finally { ArrayPool<byte>.Shared.Return(rented); }
+        }
+    }
 }

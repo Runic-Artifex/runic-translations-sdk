@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
@@ -158,14 +159,60 @@ public sealed class CompiledTextMessage
 
     private CompiledTextMessage(CompiledRmf2Message message)
     {
-        Rmf2V5 = message ?? throw new ArgumentNullException(nameof(message));
+        _rmf2V5 = message ?? throw new ArgumentNullException(nameof(message));
         _nodes = []; _selectors = []; _variants = [];
         Rmf2 = true; ContentLocale = message.ContentLocale;
     }
 
+    private CompiledTextMessage(GeneratedLocaleBinary binary, int offset, string contentLocale)
+    {
+        _binary = binary;
+        _binaryOffset = offset;
+        _nodes = []; _selectors = []; _variants = [];
+        Rmf2 = true; ContentLocale = contentLocale;
+    }
+
+    /// <summary>
+    /// A message of a generated catalog's binary locale data (RMF2 runtime ABI 5) that GeneratedLocaleBinary.Read
+    /// checked, whose model is built on its first use (D077.16).
+    /// </summary>
+    internal static CompiledTextMessage FromGeneratedBinary(GeneratedLocaleBinary binary, int offset, string contentLocale) =>
+        new(binary, offset, contentLocale);
+
+    private CompiledRmf2Message? _rmf2V5;
+    private readonly GeneratedLocaleBinary? _binary;
+    private readonly int _binaryOffset;
+
     /// <summary>The separate v5 model, or null for legacy constructors.</summary>
+    /// <remarks>A generated catalog's message is built from its embedded data on the first read, once.</remarks>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public CompiledRmf2Message? Rmf2V5 { get; }
+    public CompiledRmf2Message? Rmf2V5
+    {
+        get
+        {
+            CompiledRmf2Message? message = Volatile.Read(ref _rmf2V5);
+            if (message is not null || _binary is null) return message;
+            // Decoding is a pure function of immutable data: concurrent first reads may both decode, and all of them
+            // return the model that was published first.
+            message = _binary.Decode(_binaryOffset);
+            return Interlocked.CompareExchange(ref _rmf2V5, message, null) ?? message;
+        }
+    }
+
+    /// <summary>Compares the caller inputs of a deferred message that is not built yet with its definition's, without building it.</summary>
+    internal bool TryMatchDeferredInputs(TranslationPlaceholderDescriptor[] descriptors, out bool matches)
+    {
+        matches = false;
+        if (_binary is null || Volatile.Read(ref _rmf2V5) is not null) return false;
+        matches = _binary.InputsMatch(_binaryOffset, descriptors);
+        return true;
+    }
+
+    /// <summary>Whether this is a v5 message, without building a deferred model.</summary>
+    internal bool IsRmf2V5 => _binary is not null || _rmf2V5 is not null;
+
+    /// <summary>The CLDR data embedded with a v5 message, without building a deferred model.</summary>
+    internal Rmf2FormatData? Rmf2FormatData => _binary is not null ? _binary.FormatData : _rmf2V5?.FormatData;
 
     /// <summary>Creates a simple compiled pattern.</summary>
     internal CompiledTextMessage(IReadOnlyList<CompiledTextMessageNode> nodes)
@@ -344,6 +391,7 @@ internal static class CompiledTextMessageRuntime
 
     internal static bool MatchesContract(CompiledTextMessage message, TranslationPlaceholderDescriptor[] descriptors)
     {
+        if (message.TryMatchDeferredInputs(descriptors, out bool matches)) return matches;
         if (message.Rmf2V5 is { } v5)
         {
             if (v5.InputArray.Length != descriptors.Length) return false;

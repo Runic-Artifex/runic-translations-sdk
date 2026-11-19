@@ -274,7 +274,7 @@ public sealed class CompiledTranslationCatalog
     internal static Rmf2FormatData? FormatData(LocaleValues values)
     {
         foreach (CompiledTextMessage? message in values.Messages)
-            if (message?.Rmf2V5?.FormatData is { } data) return data;
+            if (message?.Rmf2FormatData is { } data) return data;
         return null;
     }
 

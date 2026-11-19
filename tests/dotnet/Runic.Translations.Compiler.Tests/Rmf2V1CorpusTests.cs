@@ -278,8 +278,10 @@ internal sealed class Rmf2V1CorpusTests
     // Re-pinned for merging runic-sdk#1109 (C#) with #212 (ESM), in both digests.
     // Re-pinned for D077.16: an accessor with one input calls a shared body per input type (__Format_string and so on),
     // several inputs and reference fallback arguments are collection expressions, in both digests (C# only).
-    private const string EncodedOutputDigest = "a9c9a09df3c05da03e53f9cdd3c29736a9fa8a1f69511f57e2ebc685e80eb52a";
-    private const string HiddenEncodedOutputDigest = "a7f36f07d727373f02ef3708bf568a73de97a2777ee1aecbcfa9a54fee8774b4";
+    // Re-pinned for D077.16, RMF2 ABI 5: the C# embeds each locale's binary locale data and the message table as DEFLATE
+    // data (GeneratedCatalogSupport.ReadDeflatedBinaryValues, InflateData) and requires ABI 5, in both digests (C# only).
+    private const string EncodedOutputDigest = "fda88bb199565ac72d283fa275c7f426c2d32702a9c06c0d680d83bc61e91445";
+    private const string HiddenEncodedOutputDigest = "9436ab426b43d55276aad7ad163b02bbf4e0cb3142cff82c87e9043fe633d925";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

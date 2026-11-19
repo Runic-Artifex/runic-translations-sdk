@@ -10,18 +10,18 @@ internal static class TranslationOutputRenderer
     internal const int EsmAbiVersion = 4;
     internal const int WebModuleManifestVersion = 3;
 
-    internal static TranslationGeneratedOutput RenderRmf2V5CSharpKeys(Rmf2ProjectV5 project, bool readableSurface = true, bool rmf2Abi4 = true) =>
-        Rmf2CSharpOutputRendererV5.RenderKeys(RequireProject(project), readableSurface, rmf2Abi4);
+    internal static TranslationGeneratedOutput RenderRmf2V5CSharpKeys(Rmf2ProjectV5 project, bool readableSurface = true, int rmf2Abi = Rmf2ProjectV5.CSharpRuntimeAbiVersion) =>
+        Rmf2CSharpOutputRendererV5.RenderKeys(RequireProject(project), readableSurface, rmf2Abi);
 
-    internal static TranslationGeneratedOutput RenderRmf2V5CSharpAccessors(Rmf2ProjectV5 project, bool readableSurface = true, bool composition = true, bool rmf2Abi4 = true) =>
-        Rmf2CSharpOutputRendererV5.RenderAccessors(RequireProject(project), readableSurface, composition, rmf2Abi4);
+    internal static TranslationGeneratedOutput RenderRmf2V5CSharpAccessors(Rmf2ProjectV5 project, bool readableSurface = true, bool composition = true, int rmf2Abi = Rmf2ProjectV5.CSharpRuntimeAbiVersion) =>
+        Rmf2CSharpOutputRendererV5.RenderAccessors(RequireProject(project), readableSurface, composition, rmf2Abi);
 
-    internal static TranslationGeneratedOutput RenderRmf2V5CSharpCatalogData(Rmf2ProjectV5 project, bool rmf2Abi4 = true) =>
-        Rmf2CSharpOutputRendererV5.RenderCatalogData(RequireProject(project), rmf2Abi4);
+    internal static TranslationGeneratedOutput RenderRmf2V5CSharpCatalogData(Rmf2ProjectV5 project, int rmf2Abi = Rmf2ProjectV5.CSharpRuntimeAbiVersion) =>
+        Rmf2CSharpOutputRendererV5.RenderCatalogData(RequireProject(project), rmf2Abi);
 
     internal static TranslationGeneratedOutput RenderRmf2V5CSharpRegistration(Rmf2ProjectV5 project, bool composition = true, bool runtimeAbiCall = true,
-        bool readableSurface = true, IReadOnlyList<Rmf2ProjectV5>? overlays = null, bool rmf2Abi4 = true) =>
-        Rmf2CSharpOutputRendererV5.RenderRegistration(RequireProject(project), composition, runtimeAbiCall, readableSurface, overlays, rmf2Abi4);
+        bool readableSurface = true, IReadOnlyList<Rmf2ProjectV5>? overlays = null, int rmf2Abi = Rmf2ProjectV5.CSharpRuntimeAbiVersion) =>
+        Rmf2CSharpOutputRendererV5.RenderRegistration(RequireProject(project), composition, runtimeAbiCall, readableSurface, overlays, rmf2Abi);
 
     internal static TranslationGeneratedOutput RenderRmf2V5CSharpReadable(Rmf2ProjectV5 project) =>
         Rmf2CSharpOutputRendererV5.RenderReadable(RequireProject(project));

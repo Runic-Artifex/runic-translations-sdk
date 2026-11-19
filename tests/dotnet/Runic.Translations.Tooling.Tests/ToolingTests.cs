@@ -333,7 +333,7 @@ internal sealed class ToolingTests
             compilation.CallerFingerprint is null || compilation.SourceHash is null ||
             compilation.ExecutionProfile != "rmf2-execution-v2" ||
             compilation.MessageGrammarVersion != 5 ||
-            compilation.RuntimeAbiVersion != 4)
+            compilation.RuntimeAbiVersion != 5)
             throw new InvalidOperationException("The public compilation result omitted selected contract metadata.");
         return compilation;
     }

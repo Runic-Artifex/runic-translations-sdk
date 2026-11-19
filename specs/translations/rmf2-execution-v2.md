@@ -799,7 +799,7 @@ linking has already resolved element identities and validated markup option and
 slot schemas. The [v5 project linker](rmf2-project-v5.md) performs that
 validation without converting v5 messages through the v4 model.
 
-The ESM `rmf2RuntimeAbiVersion` is **3** (the .NET runtime's is **4**, below); legacy `RuntimeAbiVersion = 1` and
+The ESM `rmf2RuntimeAbiVersion` is **3** (the .NET runtime's is **5**, below); legacy `RuntimeAbiVersion = 1` and
 `MessageGrammarVersion = 2` remain unchanged. Generated v5 consumers must embed
 the literal requirement **3**, then call `EnsureRmf2RuntimeAbi(3)` or
 `SupportsRmf2RuntimeAbi(3)`. These methods execute against the loaded runtime
@@ -829,10 +829,85 @@ one formatting body per result kind and create their arguments with the typed
 returns the same JSON as before, inflated with
 `GeneratedCatalogSupport.ReadDeflatedText(data, length)` from DEFLATE data
 instead of a string literal. The runtime's `Rmf2RuntimeAbiVersion` is **4** and its
-`MinimumRmf2RuntimeAbiVersion` stays **3**, so it runs both. The source
-generator emits ABI 4 when the referenced runtime runs it and ABI 3, with the
-JSON as is, otherwise. ESM output, external packs and the caller contract keep
-ABI 3.
+`MinimumRmf2RuntimeAbiVersion` stays **3**, so it runs both. ESM output,
+external packs and the caller contract keep ABI 3.
+
+RMF2 ABI **5** (Runic Translations 0.15) again changes only how generated C#
+stores a catalog. It embeds each locale in the
+[binary encoding](#generated-locale-data-binary-encoding) below as raw DEFLATE
+data with its inflated length, read by
+`GeneratedCatalogSupport.ReadDeflatedBinaryValues(data, length)` (or
+`(data, length, formats)`) on the locale's first use, and the message table as
+raw DEFLATE data, inflated once with `GeneratedCatalogSupport.InflateData(data,
+length)` when the catalog or its keys first read it. Both inflate into an array
+of exactly the declared length, which must be at most 1,032 times the DEFLATE
+data (RFC 1951's largest expansion) and at most 64 MiB. The runtime checks the
+whole locale when it reads it and builds each message's model on its first
+format; a message that is never formatted keeps only its bytes. The runtime's
+`Rmf2RuntimeAbiVersion` is **5** and its `MinimumRmf2RuntimeAbiVersion` stays
+**3**, so it runs ABI 3, 4 and 5 code. The source generator emits the newest of
+ABI 5, 4 and 3 that the referenced runtime runs: ABI 4 for a 0.14 runtime and
+ABI 3, with the JSON as is, before 0.14. ESM output, external packs and the
+caller contract keep ABI 3.
+
+### Generated locale data, binary encoding
+
+The inflated data of one locale (RMF2 ABI 5). It describes the same values as
+the JSON of ABI 4, `[[id, {"contentLocale", "ast"}], ...]`, and a reader builds
+the same model from it. It is embedded, compiler-written data, but readers fail
+closed: anything below that does not hold is `TranslationPackException` with
+reason `Malformed`, and no reader allocates an array with more elements than
+there are bytes left in the data.
+
+- `u8` is one byte; `varint` an unsigned LEB128 integer of at most 5 bytes whose
+  value is at most 2³¹ − 1 (a fifth byte above `0x07` is malformed); `str` a
+  `varint` index into the string pool, below its count.
+- `count(n, m)` is a `varint` list length of at most `n`, where the bytes left
+  after it hold at least `m` bytes per element.
+
+```text
+locale       = version:u8(1) pool default:str messages:count(∞, 2) message* end-of-data
+pool         = count(∞, 1) ( length:varint utf8:byte[length] )*   ; strict UTF-8, each string once
+message      = idDelta:varint flags:u8 [locale:str] ( text:str | body )
+               ; id = previous id + 1 + idDelta, previous starting at -1, at most 2³¹ − 1
+               ; flags bit 0 PLAIN: the message is one variant without keys whose one node is text:str,
+               ;   without inputs, declarations or selectors; bit 1 LOCALE: locale:str is its contentLocale,
+               ;   otherwise the contentLocale is default; bits 2 to 7 are 0
+body         = inputs declarations selectors variants
+inputs       = count(32, 2)  ( name:str type )*
+declarations = count(256, 3) ( kind:u8 name:str expression )*      ; kind 0 "input", 1 "local"
+selectors    = count(16, 4)  ( value type function:u8 )*           ; function 0 "exact", 1 "plural", 2 "ordinal"
+variants     = count(256, 2) ( keys nodes )*                        ; at least one variant
+keys         = count(16, 1)  key*
+key          = 0                                                    ; wildcard
+             | 1 value:str                                          ; literal
+             | 2 value:str canonical:str                            ; literal with its canonical form
+nodes        = count(4096, 2) node*
+node         = 0 text:str
+             | 1 expression
+             | (2 | 3 | 4) name:str options annotations             ; markup "open", "close", "standalone"
+expression   = operand:value valueType:type function:varint options annotations
+               ; function 0 is none, otherwise the pool index + 1
+options      = count(256, 3) ( name:str value )*
+annotations  = count(256, 2) ( name:str present:u8 [value] )*       ; present 0 or 1; the value is a literal
+value        = 0 name:str                                           ; "input"
+             | 1 name:str                                           ; "local"
+             | 2 text:str                                           ; "string-literal"
+             | 3 text:str canonical:str                             ; "number-literal"
+type         = u8: 0 string, 1 int64, 2 decimal, 3 boolean, 4 date, 5 time, 6 datetime, 7 guid, 8 list
+```
+
+- A message's caller inputs are its contract's, as in the JSON. A PLAIN message
+  has none.
+- As the JSON reader does, a reader limits the open markup events of a variant
+  to a depth of 16 and the UTF-8 bytes of a variant's text nodes to 65,536 (a
+  PLAIN message's text included), and a text to 65,536 UTF-16 code units.
+- The compiler writes the pool in descending order of use, then in ordinal
+  order, and `default` is the content locale most messages have (the ordinally
+  first of equally frequent ones), so the encoding of a locale depends only on
+  its values. Readers do not rely on that order.
+- Example: one plain message `0` with the text `hello` in a locale `en` is
+  `01 02 02 65 6E 05 68 65 6C 6C 6F 00 01 00 01 01`.
 
 The source generator, CLI, MSBuild integration, and Vite plugin emit the v5
 contract for .NET/C# and ESM, including strict v5 pack readers and web manifest
