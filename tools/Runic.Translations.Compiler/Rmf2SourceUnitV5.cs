@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Threading;
 
@@ -64,6 +65,18 @@ internal sealed class Rmf2SourceUnitV5
         try { message = StrictJsonParser.StrictUtf8.GetString(source.Bytes); }
         catch (DecoderFallbackException) { message = null; }
         return new(source, options, null, message, message is null ? null : Mf2SyntaxReader.Read(source, options, cancellationToken));
+    }
+
+    private int _messageCount = -1;
+
+    /// <summary>The number of messages in the source (not groups).</summary>
+    internal int MessageCount
+    {
+        get
+        {
+            if (_messageCount < 0) _messageCount = Resource?.Nodes.Count(node => !node.IsGroup) ?? (DirectMessage is null ? 0 : 1);
+            return _messageCount;
+        }
     }
 
     /// <summary>Whether this unit was built from exactly these bytes at this path, with any options.</summary>
