@@ -6,3 +6,6 @@
     finishes. Hover shows the contract of the latest finished validation.
   - A catalog that does not compile is no longer compiled a second time for its review state unless it has a review
     file, and saved sources are not read again for every request.
+  - Hover, completion, definition and references keep one compiled workspace per project between requests and parse an
+    edited document once. In that catalog, a hover or completion after five keystrokes takes about 10 ms instead of
+    about 40 ms.
