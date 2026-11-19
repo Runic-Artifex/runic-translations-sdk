@@ -1,4 +1,5 @@
-# Application text, keyed by DescriptionKey, plus overrides of framework text.
+# Application text, keyed by DescriptionKey. help.usage and diagnostics.unknownOption are named after framework keys,
+# which has no effect since Runic Translations 0.15: the framework text is shown (ResolverTests).
 commands {
   greet = Greet a person
   storeShow = Show the store
@@ -23,14 +24,9 @@ help {
   usage = Synopsis
 }
 diagnostics {
-  # Binds the framework argument by position.
   unknownOption =
     .input {$arg0 :string}
     {{No such option: {$arg0}}}
-  # Declares an input the framework never supplies, so the built-in text is used.
-  missingArgument =
-    .input {$person :string}
-    {{Missing {$person}}}
   # An application diagnostic with positional arguments.
   quotaExceeded =
     .input {$arg0 :string}

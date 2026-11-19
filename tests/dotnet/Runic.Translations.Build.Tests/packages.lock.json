@@ -128,12 +128,12 @@
       "dotnet-runic-translations": {
         "type": "Project",
         "dependencies": {
-          "Runic.CommandLine": "[0.13.0, )",
-          "Runic.CommandLine.Spectre": "[0.13.0, )",
-          "Runic.Translations": "[0.11.0, )",
-          "Runic.Translations.Authoring": "[0.11.0, )",
-          "Runic.Translations.Compiler": "[0.11.0, )",
-          "Runic.Translations.Tooling": "[0.11.0, )"
+          "Runic.CommandLine": "[0.14.0, )",
+          "Runic.CommandLine.Spectre": "[0.14.0, )",
+          "Runic.Translations": "[0.15.0, )",
+          "Runic.Translations.Authoring": "[0.15.0, )",
+          "Runic.Translations.Compiler": "[0.15.0, )",
+          "Runic.Translations.Tooling": "[0.15.0, )"
         }
       },
       "runic.translations": {
@@ -142,7 +142,7 @@
       "runic.translations.authoring": {
         "type": "Project",
         "dependencies": {
-          "Runic.Translations.Compiler": "[0.11.0, )"
+          "Runic.Translations.Compiler": "[0.15.0, )"
         }
       },
       "runic.translations.compiler": {
@@ -153,17 +153,17 @@
       },
       "Runic.CommandLine": {
         "type": "CentralTransitive",
-        "requested": "[0.13.0, )",
-        "resolved": "0.13.0",
-        "contentHash": "e+ti3rQj4dBrjwjWQ0qju59o9RK6J1Sxa8XcBf80Plv+lfP7e0dJvsDRbg/yCO8rqP+qRzU4fmbVU6d1UfBmNA=="
+        "requested": "[0.14.0, )",
+        "resolved": "0.14.0",
+        "contentHash": "vPaQIDf55SgGM0eCGCTdK2kWFoiKgxsps4WvlowWJUFCEF7x5dsnAvKPgDbUlJ5SnHH5DTyyuTm3ISYj1WauWw=="
       },
       "Runic.CommandLine.Spectre": {
         "type": "CentralTransitive",
-        "requested": "[0.13.0, )",
-        "resolved": "0.13.0",
-        "contentHash": "Eom+rgzZ0F3LJMREYrhUuOeXfLbwxBKhRzjiUlto/HPdANsiadv0oVkjl8f7eTAapyuATZzfA9vwCe/9Umf5Mg==",
+        "requested": "[0.14.0, )",
+        "resolved": "0.14.0",
+        "contentHash": "ijwz8azLpZMGRdn6e8q1f3Ow1TMDBN3GY01v6WJQFhMVO9VNXaJL1U9G1ajGEmUZj+Uns6588ukLHUpHRuabsw==",
         "dependencies": {
-          "Runic.CommandLine": "[0.13.0]",
+          "Runic.CommandLine": "[0.14.0]",
           "Spectre.Console": "[0.57.2, 0.58.0)"
         }
       }

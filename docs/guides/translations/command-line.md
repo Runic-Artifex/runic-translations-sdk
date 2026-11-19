@@ -88,39 +88,32 @@ ships English and German, with your build-time overrides
 (`translations/overrides/runic-command-line/<locale>.rmf2`) when you use a
 context; see [Framework text](framework-text.md#overrides).
 
-Your catalog still overlays framework text in 0.14: a message in your catalog,
-found through `ITranslationSnapshot.TryGetKey`, overrides the framework text,
-such as `help { usage = Synopsis }`. This second override path is deprecated and
-removed in 0.15, when the resolver no longer asks your catalog for framework
-keys. The build reports such a message as
-[`RTR0107`](diagnostics.md#rtr0107), and the resolver writes a trace warning
-once when it uses one; move the message to an override file as described in
-[The second path for command-line text](framework-text.md#the-second-path-for-command-line-text-deprecated).
-Until then, precedence is locale-first. For each locale
-of the requested locale's fallback chain (`de-CH`, then `de`, then the default
-locale), your message is tried before the framework's, and only then the next
-locale. So when German is requested, the built-in German `Aufruf` beats an
-English-only `help.usage` override that your catalog reaches only by falling
-back to English (possible when `translationCompleteness` is relaxed), while a
-German override in your catalog beats the built-in German. A key that neither
-catalog has in any locale returns nothing, and Runic.CommandLine writes its
-English text.
+Your catalog translates only your own keys, such as your `DescriptionKey`
+values. The resolver never asks it for a framework key, so a message in your
+catalog named after one, such as `help { usage = Synopsis }`, has no effect: the
+build reports it as [`RTR0107`](diagnostics.md#rtr0107), which names the key.
+Up to 0.14 such a message overrode the framework text, a second override path
+that 0.14 deprecated and 0.15 removed; move it to an override file as described
+in [Framework text](framework-text.md#overrides). For each key, framework text
+follows the framework catalog's fallback chain (`de-CH`, then `de`, then the
+default locale) with your overrides and overlays applied, and your own text
+follows your catalog's. A key without text returns nothing, and
+Runic.CommandLine writes its English text.
 
-Before 0.9.0 your catalog always came first, so an English override could hide
-the built-in German text.
-
-The built-in catalogs have no `faults.RCLI4001` message. Runic.CommandLine shows
-the more specific `diagnostics.prompt-*` text for that fault, and would show a
-`faults.RCLI4001` message instead whenever that text is the English one. Your
-catalog can define it only through the deprecated second path, and an override
-file cannot, since the framework catalog has no such message.
+Every framework key has a message in the built-in catalogs. Since
+Runic.CommandLine 0.14, the `RCLI4001` fault (a prompt that cannot be asked)
+always shows the more specific `diagnostics.prompt-*` text, and the
+`faults.RCLI4001` key is retired; to change that text, override the
+`diagnostics.prompt*` messages.
 
 A message receives the framework's arguments through inputs named after them,
 as listed in the
 [framework text key table](https://github.com/Runic-Artifex/runic-cli-sdk/blob/main/docs/guides/command-line/text-keys.md),
 or after their position, `{$arg0}`, `{$arg1}` and so on. A message may use only
 some arguments. The resolver skips a message that declares an input the
-framework does not supply or that fails to format, and tries the next source.
+framework does not supply or that fails to format, and Runic.CommandLine then
+writes its English text. In an override file
+(`translations/overrides/runic-command-line/de.rmf2`):
 
 ```rmf2
 diagnostics {
@@ -175,9 +168,8 @@ TextResolver = new TranslationCommandTextResolver(catalogs, CliTextCatalog.Catal
 The packs are the `runic-command-line.fr.locale-v5.json` artifacts that
 `runic-translations generate --emit-json` writes for a project whose catalog is
 `runic-command-line`; their messages use the framework message names
-(`help.usage`, `diagnostics.unknownOption`) and the inputs of the built-in messages. Your own catalog can still
-translate framework keys too in 0.14, through the deprecated second path above; a French message in your
-catalog and one in the overlay are both French, so your catalog wins.
+(`help.usage`, `diagnostics.unknownOption`) and the inputs of the built-in messages. Your own catalog
+cannot translate framework keys: a message there named after one has no effect (`RTR0107`).
 
 ## Packages and versions
 
@@ -192,6 +184,7 @@ from that release's `CommandTextKeys`.
 
 | Runic.Translations.CommandLine | Runic.CommandLine |
 | --- | --- |
+| 0.15.x | 0.14.x |
 | 0.14.x | 0.13.x |
 | 0.13.x | 0.13.x |
 | 0.12.x | 0.13.x |

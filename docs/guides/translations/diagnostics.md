@@ -736,17 +736,18 @@ which only its owners can publish to.
 
 ## RTR0107
 
-Message overrides command-line framework text through the deprecated second path.
+Message named after a command-line framework key has no effect.
 A warning when the project references `Runic.Translations.CommandLine`
 and its own catalog has a message named after a `runic-command-line` key, such
-as `help.usage` or `diagnostics.unknownOption`. `TranslationCommandTextResolver`
-shows such a message in place of the framework text in 0.14, and also writes a
-trace warning once per resolver when it does. Runic Translations 0.15 no longer
-asks the application's catalog for framework keys, so the framework text
-returns.
+as `help.usage` or `diagnostics.unknownOption`; the warning names the key.
+`TranslationCommandTextResolver` takes framework text only from the
+`runic-command-line` catalog and its overlays, so it never shows such a message.
+Up to Runic Translations 0.14 the message overrode the framework text, a second
+override path that 0.14 deprecated and 0.15 removed.
 
-Move the message to `translations/overrides/runic-command-line/<locale>.rmf2`,
-list `{ "catalog": "runic-command-line", "from": "Runic.Translations.CommandLine" }`
+To change the framework text, move the message to
+`translations/overrides/runic-command-line/<locale>.rmf2`, list
+`{ "catalog": "runic-command-line", "from": "Runic.Translations.CommandLine" }`
 in runic.json `overrides`, and register `AppTextCatalog.Overlays` with a
 context-based resolver, as in
 [Framework text](framework-text.md#overrides). The build then checks the key

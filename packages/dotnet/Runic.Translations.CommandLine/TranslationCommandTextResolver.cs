@@ -22,16 +22,12 @@ namespace Runic.Translations.CommandLine;
 /// </para>
 /// <para>
 /// Framework text comes from the <c>runic-command-line</c> catalog (<see cref="CatalogRegistration"/>), which ships English
-/// and German, with the application's build-time overrides (<c>translations/overrides/runic-command-line/</c>) when a
-/// context registers them. The application's catalog translates its own description keys. It still overlays framework
-/// text too, but that second override path is deprecated: the build reports such messages as <c>RTR0107</c>, the resolver
-/// writes a trace warning once, and Runic Translations 0.15 no longer asks the application's catalog for framework keys.
-/// Precedence is locale-first: for each locale of the requested locale's fallback chain, the
-/// application's message is tried before the framework's, and only then the next locale. The built-in German text
-/// therefore beats an English application override when German is requested. Other locales come from overlays of
-/// <c>runic-command-line</c> in a <see cref="TranslationContext"/>, or from the application's catalog. A key that neither
-/// has returns <see langword="null"/>, and Runic.CommandLine writes its English text. A message whose inputs do not fit
-/// the supplied arguments, or that fails to format, is skipped the same way.
+/// and German, with the application's build-time overrides (<c>translations/overrides/runic-command-line/</c>) and other
+/// overlays when a context registers them; other locales come from such overlays too. The application's catalog
+/// translates only the application's own keys, such as its description keys. It is never asked for a framework key: a
+/// message in it named after one has no effect, and the build reports it as <c>RTR0107</c>. A key without text returns
+/// <see langword="null"/>, and Runic.CommandLine writes its English text. A message whose inputs do not fit the supplied
+/// arguments, or that fails to format, is skipped the same way.
 /// </para>
 /// <para>
 /// The locale is the invocation culture for the parameterless constructor and for a
@@ -58,13 +54,9 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
     private readonly ConcurrentDictionary<string, TranslationContext>? _contexts;
     private int _reportedCulture;
     private int _reportedLocale;
-    private int _reportedOverride;
 
     /// <summary>Where the culture-mismatch warning goes besides the trace; <see langword="null"/> for standard error. Tests set it.</summary>
     internal TextWriter? WarningOutput { get; init; }
-
-    /// <summary>Where the deprecated-override warning goes; <see langword="null"/> for <see cref="Trace.TraceWarning(string)"/>. Tests set it.</summary>
-    internal Action<string>? TraceWarning { get; init; }
 
     /// <summary>Creates a resolver with only the built-in framework text, in the invocation culture.</summary>
     public TranslationCommandTextResolver()
@@ -84,7 +76,7 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
     /// The context. When it registers <see cref="CatalogRegistration"/>, framework text comes from that catalog with the
     /// context's overlays applied (for example a French overlay); otherwise from the built-in catalog in the context's locale.
     /// </param>
-    /// <param name="applicationCatalogId">The catalog of the application's own text, which overlays the framework text, or <see langword="null"/> for none.</param>
+    /// <param name="applicationCatalogId">The catalog of the application's own text, such as its description keys, or <see langword="null"/> for none.</param>
     /// <exception cref="ArgumentException">The context does not register <paramref name="applicationCatalogId"/>.</exception>
     public TranslationCommandTextResolver(ITranslationContext context, string? applicationCatalogId)
     {
@@ -101,7 +93,7 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
     /// framework text comes from the built-in catalog. The resolver builds one context per invocation culture; do not change
     /// the builder afterwards.
     /// </param>
-    /// <param name="applicationCatalogId">The catalog of the application's own text, which overlays the framework text, or <see langword="null"/> for none.</param>
+    /// <param name="applicationCatalogId">The catalog of the application's own text, such as its description keys, or <see langword="null"/> for none.</param>
     public TranslationCommandTextResolver(TranslationContextBuilder catalogs, string? applicationCatalogId)
     {
         _catalogs = catalogs ?? throw new ArgumentNullException(nameof(catalogs));
@@ -126,28 +118,14 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
         // The argument names come from the Runic.CommandLine release this adapter is built and packed against (lockstep),
         // so a framework key and its inputs cannot drift between the two packages.
         IReadOnlyList<string>? frameworkArguments = CommandTextKeys.Find(key)?.Arguments;
-        IReadOnlyList<string> names = frameworkArguments ?? [];
         (ITranslationSnapshot? application, ITranslationSnapshot? framework, string requested) = Layers(culture);
-        bool frameworkKey = frameworkArguments is not null;
-        if (frameworkKey) ReportMissingFrameworkLocale(application, framework, requested);
+        if (frameworkArguments is null)
+            return application is not null && TryFormat(application, name, [], arguments, out string? applicationText) ? applicationText : null;
 
-        string? text = null;
-        int rank = int.MaxValue;
-        if (application is not null && TryFormat(application, name, names, arguments, out string? applicationText, out string? content))
-        {
-            if (frameworkKey) ReportApplicationOverride(name);
-            text = applicationText;
-            rank = Rank(requested, content!);
-            // The application's text in the requested locale itself cannot be beaten.
-            if (rank == 0) return text;
-        }
-
-        // The framework catalog wins only with a locale strictly closer to the request: at equal distance, the
-        // application's text overlays it.
-        if (frameworkKey && framework is not null && TryFormat(framework, name, names, arguments, out string? frameworkText, out content) &&
-            (text is null || Rank(requested, content!) < rank))
-            return frameworkText;
-        return text;
+        // A framework key comes only from the framework catalog with its overlays, never from the application's catalog
+        // (the second override path, removed in 0.15; the build reports such a message as RTR0107).
+        ReportMissingFrameworkLocale(application, framework, requested);
+        return framework is not null && TryFormat(framework, name, frameworkArguments, arguments, out string? frameworkText) ? frameworkText : null;
     }
 
     /// <summary>Gets the message name for a text key: each hyphen is removed and the letter after it capitalized.</summary>
@@ -267,22 +245,6 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
         }
     }
 
-    // Reports once when the application's catalog supplies text for a framework key: the second override path (D061.5), which
-    // is deprecated in 0.14 and removed in 0.15, after which only translations/overrides/runic-command-line/ (an overlay of the
-    // framework catalog) changes framework text. A trace warning only: it is the developer's to act on, and the build already
-    // reports the same messages as RTR0107, so a shipped app's users see nothing on standard error.
-    private void ReportApplicationOverride(string name)
-    {
-        if (Volatile.Read(ref _reportedOverride) != 0 || Interlocked.Exchange(ref _reportedOverride, 1) != 0) return;
-        (TraceWarning ?? DefaultTraceWarning)(
-            $"Runic.Translations.CommandLine: the application's catalog overrides the framework text '{name}' by naming its message after a " +
-            $"{CatalogId} key. This override path is deprecated and is removed in Runic Translations 0.15, which then shows the framework text. " +
-            $"Move the message to translations/overrides/{CatalogId}/<locale>.rmf2, list {{ \"catalog\": \"{CatalogId}\", \"from\": \"Runic.Translations.CommandLine\" }} " +
-            "in runic.json \"overrides\", and register AppTextCatalog.Overlays with a context-based resolver (docs/guides/translations/framework-text.md#overrides).");
-    }
-
-    private static void DefaultTraceWarning(string message) => Trace.TraceWarning(message);
-
     private static bool SameLanguage(string left, string right) =>
         Language(left).Equals(Language(right), StringComparison.OrdinalIgnoreCase);
 
@@ -292,55 +254,9 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
         return end < 0 ? tag : tag.AsSpan(0, end);
     }
 
-    // How far a message's content locale is from the requested locale in its fallback chain: 0 for the locale itself, an
-    // even step per removed subtag for a truncation parent (de for de-CH), an odd step in between for another locale of the
-    // same language (a CLDR parent such as en-001 for en-AU, or zh-Hant for zh-TW), and int.MaxValue for another language,
-    // such as a catalog's default locale.
-    //
-    // It is a lexical estimate, not the provider's fallback chain: providers do not expose their chain through
-    // ITranslationSnapshot (the compiled catalog's is internal, and an application may bring its own snapshot), so content
-    // locales are assumed to lie on the request's chain, which negotiation and CLDR parents ensure today. The one
-    // same-language case that cannot be on the chain, another explicit script (sr-Cyrl content for an sr-Latn request),
-    // ranks as another language.
-    internal static int Rank(string requested, string content)
-    {
-        if (string.Equals(requested, content, StringComparison.OrdinalIgnoreCase)) return 0;
-        if (requested.Length == 0 || content.Length == 0 || !SameLanguage(requested, content)) return int.MaxValue;
-        if (Script(requested) is { Length: > 0 } requestedScript && Script(content) is { Length: > 0 } contentScript &&
-            !requestedScript.Equals(contentScript, StringComparison.OrdinalIgnoreCase))
-            return int.MaxValue;
-        int distance = 2 * (Subtags(requested) - Subtags(content));
-        if (requested.Length > content.Length && requested[content.Length] == '-' &&
-            requested.StartsWith(content, StringComparison.OrdinalIgnoreCase))
-            return distance;
-        return Math.Max(1, distance - 1);
-    }
-
-    // The explicit script subtag (the 4-letter second subtag), or empty.
-    private static ReadOnlySpan<char> Script(string tag)
-    {
-        int start = tag.AsSpan().IndexOfAny('-', '_');
-        if (start < 0) return [];
-        ReadOnlySpan<char> rest = tag.AsSpan(start + 1);
-        int end = rest.IndexOfAny('-', '_');
-        ReadOnlySpan<char> subtag = end < 0 ? rest : rest[..end];
-        if (subtag.Length != 4) return [];
-        foreach (char character in subtag) if (!char.IsAsciiLetter(character)) return [];
-        return subtag;
-    }
-
-    private static int Subtags(string tag)
-    {
-        int count = 1;
-        foreach (char character in tag) if (character == '-') count++;
-        return count;
-    }
-
-    private static bool TryFormat(ITranslationSnapshot snapshot, string name, IReadOnlyList<string> names, IReadOnlyList<string> arguments, out string? text,
-        out string? contentLocale)
+    private static bool TryFormat(ITranslationSnapshot snapshot, string name, IReadOnlyList<string> names, IReadOnlyList<string> arguments, out string? text)
     {
         text = null;
-        contentLocale = null;
         if (!snapshot.TryGetKey(name, out TranslationKey key) ||
             !snapshot.TryGetPlaceholders(key, out ReadOnlyMemory<TranslationPlaceholderDescriptor> placeholders))
             return false;
@@ -356,8 +272,6 @@ public sealed class TranslationCommandTextResolver : ICommandTextResolver
             }
 
             text = snapshot.Format(key, values);
-            if (!snapshot.TryGetContentLocale(key, out string? content)) content = snapshot.Locale;
-            contentLocale = content;
             return true;
         }
         catch (Exception exception) when (exception is TranslationFormatException or TranslationNotFoundException or ArgumentException)

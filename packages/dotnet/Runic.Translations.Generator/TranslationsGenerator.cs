@@ -76,7 +76,7 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
                 string.Equals(value?.Trim(), "true", StringComparison.OrdinalIgnoreCase))
             .WithTrackingName("TranslationPseudoLocales");
         // The message names of a referenced runic-command-line catalog, compiled only when its packed files change, so the link
-        // can report application messages named after them (RTR0107, the deprecated second override path).
+        // can report application messages named after them, which have no effect (RTR0107).
         IncrementalValueProvider<string> frameworkKeys = inputs
             .Where(static input => input.Kind is InputKind.PackedProject or InputKind.PackedMf2)
             .Collect()
@@ -362,9 +362,10 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             .Select(static message => string.Join(".", message.Path)).Distinct(StringComparer.Ordinal).OrderBy(static name => name, StringComparer.Ordinal));
     }
 
-    // RTR0107: an application message named after a runic-command-line key overrides that framework text through
-    // TranslationCommandTextResolver, the second override path (D061.5). It is deprecated in 0.14 and removed in 0.15, so the
-    // message moves to translations/overrides/runic-command-line/, which the build checks.
+    // RTR0107: an application message named after a runic-command-line key has no effect. TranslationCommandTextResolver
+    // overrode the framework text with it until 0.14 (the second override path, D061.5); since 0.15 it asks only the
+    // framework catalog for framework keys, so the message moves to translations/overrides/runic-command-line/, which the
+    // build checks, or is renamed (D077.1).
     private static void ReportFrameworkKeyMessages(Rmf2ProjectV5 linked, string frameworkKeys, Dictionary<string, SourceText> sourceTexts,
         ImmutableArray<Diagnostic>.Builder diagnostics)
     {
@@ -377,10 +378,10 @@ public sealed class TranslationsGenerator : IIncrementalGenerator
             Rmf2TranslationV5? source = linked.Locales.OrderBy(locale => string.Equals(locale.Tag, linked.DefaultLocale, StringComparison.Ordinal) ? 0 : 1)
                 .SelectMany(static locale => locale.DirectResources)
                 .FirstOrDefault(translation => string.Equals(translation.Key, message.Key, StringComparison.Ordinal));
-            string text = "Message '" + name + "' is named after a " + CommandLineCatalog + " key, so TranslationCommandTextResolver shows it in place of " +
-                "the framework text. This override path is deprecated and is removed in Runic Translations 0.15. Move the message to translations/overrides/" +
-                CommandLineCatalog + "/<locale>.rmf2 and list { \"catalog\": \"" + CommandLineCatalog + "\", \"from\": \"Runic.Translations.CommandLine\" } " +
-                "in runic.json \"overrides\"; rename it if it is your own text.";
+            string text = "Message '" + name + "' has no effect: '" + name + "' is a " + CommandLineCatalog + " key, and TranslationCommandTextResolver " +
+                "takes framework text only from the " + CommandLineCatalog + " catalog since Runic Translations 0.15. To change that text, move the message " +
+                "to translations/overrides/" + CommandLineCatalog + "/<locale>.rmf2 and list { \"catalog\": \"" + CommandLineCatalog + "\", \"from\": " +
+                "\"Runic.Translations.CommandLine\" } in runic.json \"overrides\"; rename it if it is your own text.";
             var diagnostic = new TranslationDiagnostic("RTR0107", TranslationDiagnosticSeverity.Warning, text,
                 source?.SourceLocation ?? new TextSourceLocation("", 0, 0, 1, 1, 1, 1));
             diagnostics.Add(CreateDiagnostic(diagnostic, sourceTexts));

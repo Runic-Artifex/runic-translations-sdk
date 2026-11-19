@@ -253,14 +253,14 @@ static void Check(string actual, string expected) { if (actual != expected) thro
   assert.notEqual(rejected.status, 0, "an unknown override key must fail the build");
   assert.match(rejected.stdout, /overrides[\\/]acme\.table[\\/]en\.rmf2\(1,1\): error RTR0103: Catalog 'acme\.table' has no message 'emtpy'/);
 
-  // The deprecated second override path: a framework key in the application's own catalog is RTR0107, a warning that this
-  // project's TreatWarningsAsErrors turns into an error, in the application's source.
+  // A framework key in the application's own catalog has no effect since 0.15 (the second override path is gone): RTR0107,
+  // a warning that this project's TreatWarningsAsErrors turns into an error, in the application's source, names the key.
   writeFileSync(join(app, "translations", "overrides", "acme.table", "en.rmf2"), "empty = Nothing to show\n");
   writeFileSync(join(app, "translations", "en.rmf2"), "title = Shop\nhelp {\n  usage = Synopsis\n}\n");
   writeFileSync(join(app, "translations", "fr.rmf2"), "title = Boutique\nhelp {\n  usage = Synopsis\n}\n");
-  const secondPath = spawnSync("dotnet", ["build", "App.csproj", "--configuration", "Release", "--no-restore"], { cwd: app, env: { ...process.env, ...environment }, encoding: "utf8" });
-  assert.notEqual(secondPath.status, 0, "RTR0107 is a warning, and TreatWarningsAsErrors fails the build");
-  assert.match(secondPath.stdout, /translations[\\/]en\.rmf2\(3,3\): error RTR0107: Message 'help\.usage' is named after a runic-command-line key/);
+  const frameworkKey = spawnSync("dotnet", ["build", "App.csproj", "--configuration", "Release", "--no-restore"], { cwd: app, env: { ...process.env, ...environment }, encoding: "utf8" });
+  assert.notEqual(frameworkKey.status, 0, "RTR0107 is a warning, and TreatWarningsAsErrors fails the build");
+  assert.match(frameworkKey.stdout, /translations[\\/]en\.rmf2\(3,3\): error RTR0107: Message 'help\.usage' has no effect: 'help\.usage' is a runic-command-line key/);
 }
 
 // Vite dependencies: "auto" (T1e): an npm library packs its catalog (package.json#runicTranslations, the packed runic.json and

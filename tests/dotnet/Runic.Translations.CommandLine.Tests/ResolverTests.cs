@@ -61,13 +61,6 @@ internal sealed partial class ResolverTests
             item.GetProperty("message").ValueKind == JsonValueKind.Null ? null : item.GetProperty("message").GetString())).ToArray();
     }
 
-    // Keys the catalog leaves to the framework's own text ("message": null in text-keys.json): Runic.CommandLine uses
-    // faults.RCLI4001 only when the diagnostics.prompt-* text resolves to its English text, so a built-in message would
-    // replace that more specific text in English. The application catalog may still define it.
-    private static string[] WithoutBuiltInText => PackedKeys().Where(static key => key.Message is null).Select(static key => key.Key).ToArray();
-
-    private static IEnumerable<CommandTextKey> TranslatedKeys => CommandTextKeys.All.Where(static key => !WithoutBuiltInText.Contains(key.Key));
-
     [Test, DisplayName("the compiled catalog covers text-keys.json of the referenced Command Line, key for key")]
     public void CatalogCoversCommandLineKeys()
     {
@@ -76,8 +69,10 @@ internal sealed partial class ResolverTests
         Assert.Equal(string.Join("|", CommandTextKeys.All.Select(static key => key.ToString())),
             string.Join("|", packed.Select(static key => key.Arguments.Length == 0 ? key.Key : key.Key + "(" + string.Join(", ", key.Arguments) + ")")),
             "text-keys.json against CommandTextKeys.All");
-        // The documented exception; Command Line may name more keys without a catalog message in text-keys.json.
-        Assert.True(WithoutBuiltInText.Contains("faults.RCLI4001"), "faults.RCLI4001 has a catalog message: " + string.Join("|", WithoutBuiltInText));
+        // Every key has a catalog message since Command Line 0.14, which retired faults.RCLI4001 (RCLI4001 shows the
+        // diagnostics.prompt-* text).
+        Assert.Equal("", string.Join("|", packed.Where(static key => key.Message is null).Select(static key => key.Key)), "keys without a catalog message");
+        Assert.False(packed.Any(static key => key.Key == "faults.RCLI4001"), "text-keys.json still lists faults.RCLI4001");
 
         CompiledTranslationDefinition[] definitions = CommandLineTextCatalogData.CreateDefinition().Definitions.ToArray();
         string[] expected = packed.Where(static key => key.Message is not null).Select(static key => key.Message!.Replace('.', '_'))
@@ -98,13 +93,7 @@ internal sealed partial class ResolverTests
     {
         var resolver = new TranslationCommandTextResolver();
         string[] identical = ["help.minimum", "help.maximum"];
-        foreach (string key in WithoutBuiltInText)
-        {
-            Assert.Equal(null, resolver.Resolve(key, CultureInfo.GetCultureInfo("en"), []));
-            Assert.Equal(null, resolver.Resolve(key, CultureInfo.GetCultureInfo("de"), []));
-        }
-
-        foreach (CommandTextKey key in TranslatedKeys)
+        foreach (CommandTextKey key in CommandTextKeys.All)
         {
             string[] arguments = key.Arguments.Select(static name => "<" + name + ">").ToArray();
             string? english = resolver.Resolve(key.Key, CultureInfo.GetCultureInfo("en"), arguments);
@@ -134,7 +123,7 @@ internal sealed partial class ResolverTests
     {
         var resolver = new TranslationCommandTextResolver();
         // Every English framework sentence and label of more than one word.
-        string[] english = TranslatedKeys
+        string[] english = CommandTextKeys.All
             .Select(item => resolver.Resolve(item.Key, CultureInfo.GetCultureInfo("en"), item.Arguments.Select(static name => "\u0001").ToArray())!)
             .SelectMany(static text => text.Split('\u0001'))
             .Select(static fragment => fragment.Trim(' ', '.', '(', ')', '\'', '?', ':'))
@@ -180,8 +169,8 @@ internal sealed partial class ResolverTests
         Assert.True(json.Output.Contains("Name benötigt eine Antwort, aber bei JSON-Ausgabe wird nie nachgefragt.", StringComparison.Ordinal), json.Output);
     }
 
-    [Test, DisplayName("the application catalog comes first and binds arguments by name or position")]
-    public async Task ApplicationCatalogFirst()
+    [Test, DisplayName("the application catalog translates its own keys and binds arguments by position")]
+    public async Task ApplicationCatalog()
     {
         ITranslationSnapshot snapshot = await TestTextCatalog.CreateProvider().GetSnapshotAsync("de");
         var resolver = new TranslationCommandTextResolver(snapshot);
@@ -190,14 +179,11 @@ internal sealed partial class ResolverTests
         Result help = await Run(resolver, "de", "greet", "--help");
         Assert.True(help.Output.Contains("Grüßt eine Person", StringComparison.Ordinal), help.Output);
         Assert.True(help.Output.Contains("Wie oft gegrüßt wird", StringComparison.Ordinal), help.Output);
-        // The application overrides help.usage; other labels come from the built-in catalog.
-        Assert.True(help.Output.Contains("Übersicht", StringComparison.Ordinal) && !help.Output.Contains("Aufruf", StringComparison.Ordinal), help.Output);
+        // Framework labels come from the built-in catalog, also help.usage, which the application's catalog names (no effect).
+        Assert.True(help.Output.Contains("Aufruf", StringComparison.Ordinal) && !help.Output.Contains("Übersicht", StringComparison.Ordinal), help.Output);
         Assert.True(help.Output.Contains("Optionen", StringComparison.Ordinal), help.Output);
-
-        // {$arg0} binds the first argument.
         Result unknown = await Run(resolver, "de", "greet", "Ada", "--bogus");
-        Assert.True(unknown.Error.Contains("Keine solche Option: --bogus", StringComparison.Ordinal), unknown.Error);
-        // The application message declares an input the framework does not supply, so the built-in text is used.
+        Assert.True(unknown.Error.Contains("Die Option '--bogus' ist unbekannt.", StringComparison.Ordinal), unknown.Error);
         Result missing = await Run(resolver, "de", "greet");
         Assert.True(missing.Error.Contains("Das Argument <name> fehlt.", StringComparison.Ordinal), missing.Error);
 
@@ -209,32 +195,21 @@ internal sealed partial class ResolverTests
         Assert.Equal("Optionen", resolver.Resolve("help.options", CultureInfo.GetCultureInfo("en"), []));
     }
 
-    [Test, DisplayName("framework text from the application's catalog, the deprecated second path, still works and is reported once")]
-    public async Task ApplicationOverrideReportedOnce()
+    [Test, DisplayName("a message in the application's catalog named after a framework key has no effect")]
+    public async Task ApplicationMessageForFrameworkKeyHasNoEffect()
     {
-        ITranslationSnapshot snapshot = await TestTextCatalog.CreateProvider().GetSnapshotAsync("de");
-        var reports = new List<string>();
-        var resolver = new TranslationCommandTextResolver(snapshot) { TraceWarning = reports.Add };
+        // The test catalog names help.usage (Übersicht, Synopsis) and diagnostics.unknownOption (Keine solche Option: …),
+        // the second override path that Runic Translations 0.15 removed. The build reports such messages as RTR0107.
         CultureInfo german = CultureInfo.GetCultureInfo("de");
-
-        // The application's own text and the framework's built-in text report nothing.
-        Assert.Equal("Grüßt eine Person", resolver.Resolve("commands.greet", german, []));
-        Assert.Equal("Optionen", resolver.Resolve("help.options", german, []));
-        Assert.Equal(0, reports.Count, string.Join("\n", reports));
-
-        // help.usage and diagnostics.unknown-option come from the application's catalog: one report, naming the first.
-        Assert.Equal("Übersicht", resolver.Resolve("help.usage", german, []));
-        Assert.Equal("Keine solche Option: --bogus", resolver.Resolve("diagnostics.unknown-option", german, ["--bogus"]));
-        Assert.Equal(1, reports.Count, string.Join("\n", reports));
-        Assert.True(reports[0].StartsWith("Runic.Translations.CommandLine: the application's catalog overrides the framework text 'help.usage'", StringComparison.Ordinal), reports[0]);
-        Assert.True(reports[0].Contains("removed in Runic Translations 0.15", StringComparison.Ordinal), reports[0]);
-        Assert.True(reports[0].Contains("translations/overrides/runic-command-line/<locale>.rmf2", StringComparison.Ordinal), reports[0]);
-
-        // An application message for an application key that only looks like a framework group is not a framework key.
-        var quiet = new List<string>();
-        Assert.Equal("disk hat sein Kontingent von 5 überschritten.",
-            new TranslationCommandTextResolver(snapshot) { TraceWarning = quiet.Add }.Resolve("diagnostics.quota-exceeded", german, ["disk", "5"]));
-        Assert.Equal(0, quiet.Count, string.Join("\n", quiet));
+        ITranslationSnapshot snapshot = await TestTextCatalog.CreateProvider().GetSnapshotAsync("de");
+        var resolver = new TranslationCommandTextResolver(snapshot);
+        Assert.True(snapshot.TryGetKey("help.usage", out _), "the test catalog no longer names help.usage");
+        Assert.Equal("Aufruf", resolver.Resolve("help.usage", german, []));
+        Assert.Equal("Die Option '--bogus' ist unbekannt.", resolver.Resolve("diagnostics.unknown-option", german, ["--bogus"]));
+        Assert.Equal("Usage", new TranslationCommandTextResolver(await TestTextCatalog.CreateProvider().GetSnapshotAsync("en"))
+            .Resolve("help.usage", CultureInfo.GetCultureInfo("en"), []));
+        // An application key that only looks like a framework group is the application's.
+        Assert.Equal("disk hat sein Kontingent von 5 überschritten.", resolver.Resolve("diagnostics.quota-exceeded", german, ["disk", "5"]));
     }
 
     [Test, DisplayName("a manager-backed resolver follows locale switches")]
@@ -243,10 +218,10 @@ internal sealed partial class ResolverTests
         ITranslationManager manager = await TestTextCatalog.CreateManagerAsync("en");
         var resolver = new TranslationCommandTextResolver(manager);
         CultureInfo culture = CultureInfo.InvariantCulture;
-        Assert.Equal("Synopsis", resolver.Resolve("help.usage", culture, []));
+        Assert.Equal("Greet a person", resolver.Resolve("commands.greet", culture, []));
         Assert.Equal("Options", resolver.Resolve("help.options", culture, []));
         await manager.SetLocaleAsync("de");
-        Assert.Equal("Übersicht", resolver.Resolve("help.usage", culture, []));
+        Assert.Equal("Grüßt eine Person", resolver.Resolve("commands.greet", culture, []));
         Assert.Equal("Optionen", resolver.Resolve("help.options", culture, []));
         Assert.Throws<ArgumentNullException>(() => _ = new TranslationCommandTextResolver((ITranslationManager)null!));
         Assert.Throws<ArgumentNullException>(() => _ = new TranslationCommandTextResolver((ITranslationSnapshot)null!));
