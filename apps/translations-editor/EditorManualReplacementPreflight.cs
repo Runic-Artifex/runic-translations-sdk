@@ -22,7 +22,15 @@ internal static class EditorManualReplacementPreflight
             if (current.RuntimeIdentifier != replacement.RuntimeIdentifier) return Ineligible("RID-MISMATCH");
             if (current.Channel != replacement.Channel) return Ineligible("CHANNEL-MISMATCH");
             if (current.SourceRevision != replacement.SourceRevision || current.SourceTree != replacement.SourceTree) return Ineligible("SOURCE-MISMATCH");
-            return JsonSerializer.Serialize(new { schema = "runic.manual-replacement-preflight/1", result = "manual-replacement-eligible", runtimeIdentifier = current.RuntimeIdentifier, guidance = "Verify the displayed archives and perform the replacement yourself; this command does not replace, install, delete, download, or roll back anything." });
+            return EditorJsonText.Write(writer =>
+            {
+                writer.WriteStartObject();
+                writer.WriteString("schema", "runic.manual-replacement-preflight/1");
+                writer.WriteString("result", "manual-replacement-eligible");
+                writer.WriteString("runtimeIdentifier", current.RuntimeIdentifier);
+                writer.WriteString("guidance", "Verify the displayed archives and perform the replacement yourself; this command does not replace, install, delete, download, or roll back anything.");
+                writer.WriteEndObject();
+            });
         }
         catch (PreflightException exception) { return Ineligible(exception.Code); }
         catch (Exception) { return Ineligible("MALFORMED-INPUT"); }
@@ -102,7 +110,16 @@ internal static class EditorManualReplacementPreflight
 
     private static string Hash(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
     private static bool IsGit(string value) => value.Length == 40 && value.All(static character => character is >= 'a' and <= 'f' or >= '0' and <= '9');
-    private static string Ineligible(string code) => JsonSerializer.Serialize(new { schema = "runic.manual-replacement-preflight/1", result = "manual-replacement-ineligible", diagnostics = new[] { code } });
+    private static string Ineligible(string code) => EditorJsonText.Write(writer =>
+    {
+        writer.WriteStartObject();
+        writer.WriteString("schema", "runic.manual-replacement-preflight/1");
+        writer.WriteString("result", "manual-replacement-ineligible");
+        writer.WriteStartArray("diagnostics");
+        writer.WriteStringValue(code);
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+    });
     private sealed record Candidate(string RuntimeIdentifier, string Channel, string SourceRevision, string SourceTree, string SourceRepository, string ArchiveName, string ArchiveHash, string StagingChecksumsHash, Dictionary<string, string> StagingFiles);
     private sealed class PreflightException(string code) : Exception { internal string Code { get; } = code; }
 }

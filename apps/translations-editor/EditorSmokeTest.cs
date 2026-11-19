@@ -5,6 +5,7 @@ using ReactiveUI.Primitives;
 using ReactiveUI.Primitives.Signals;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
 using Runic.Translations.Internal;
 using Runic.Translations.Tooling;
@@ -46,8 +47,8 @@ internal static partial class EditorSmokeTest
         Require(draft.Content.StartsWith("# Warenkorbkontext\n@tag checkout\n@example {\"count\":1}\n@example {\"count\":2}\n", StringComparison.Ordinal), "Untouched metadata wasn't retained byte-for-byte.");
         var changed = draft.Entries.Single();
         Require(changed.Context?.Examples.Count == 2, "Draft examples were dropped.");
-        var one = await session.PreviewMessageAsync(document.Path, draft.Content, "de", "cart", JsonSerializer.Serialize(changed.Context!.Examples[0])).ConfigureAwait(false);
-        var many = await session.PreviewMessageAsync(document.Path, draft.Content, "de", "cart", JsonSerializer.Serialize(changed.Context.Examples[1])).ConfigureAwait(false);
+        var one = await session.PreviewMessageAsync(document.Path, draft.Content, "de", "cart", JsonSerializer.Serialize(changed.Context!.Examples[0], EditorSmokeJsonContext.Default.IReadOnlyDictionaryStringString)).ConfigureAwait(false);
+        var many = await session.PreviewMessageAsync(document.Path, draft.Content, "de", "cart", JsonSerializer.Serialize(changed.Context.Examples[1], EditorSmokeJsonContext.Default.IReadOnlyDictionaryStringString)).ConfigureAwait(false);
         Require(one.RenderedJson?.Contains("Genau ein Artikel", StringComparison.Ordinal) == true && many.RenderedJson?.Contains("Viele Artikel", StringComparison.Ordinal) == true,
             "Selected canonical examples didn't choose the expected plural branches.");
         var stale = await session.ApplyAuthoringOperationAsync(document.Path, draft.Content, "cart", entry.Authoring.Revision,
@@ -176,7 +177,7 @@ internal static partial class EditorSmokeTest
         var changed = draft.Entries.Single();
         Require(changed.Context?.Tags.Single() == "checkout" && changed.Context.Examples.Single()["count"] == "1", "Unsaved mounted context/examples weren't retained.");
         var preview = await session.PreviewMessageAsync(document.Path, draft.Content, "en", entry.Key,
-            JsonSerializer.Serialize(changed.Context!.Examples.Single())).ConfigureAwait(false);
+            JsonSerializer.Serialize(changed.Context!.Examples.Single(), EditorSmokeJsonContext.Default.IReadOnlyDictionaryStringString)).ConfigureAwait(false);
         Require(preview.RenderedJson?.Contains("Exactly one item", StringComparison.Ordinal) == true, "Mounted selected example wasn't previewed canonically.");
     }
 
@@ -235,11 +236,11 @@ internal static partial class EditorSmokeTest
         EditorLocaleDescription negotiated = await session.DescribeLocaleAsync("zh-TW").ConfigureAwait(false);
         Require(negotiated is { UnsupportedLocale: "parentsThenDefault", Matches.Tags: ["zh-TW", ..], SuggestedMatches: { } parents } &&
             parents.Tags.Contains("zh-TW") && parents.Tags.Contains("zh-HK") && parents.Tags.Contains("zh-Hant") && !parents.Tags.Contains("zh"),
-            "The requested tags under parentsThenDefault differ: " + JsonSerializer.Serialize(negotiated.SuggestedMatches?.Tags));
+            "The requested tags under parentsThenDefault differ: " + JsonSerializer.Serialize(negotiated.SuggestedMatches?.Tags, EditorSmokeJsonContext.Default.IReadOnlyListString));
         await File.WriteAllTextAsync(manifestPath, manifestText.Replace("\"pseudoLocales\"", "\"runtime\":{\"unsupportedLocale\":\"exact\"},\"pseudoLocales\"", StringComparison.Ordinal)).ConfigureAwait(false);
         EditorLocaleDescription exact = await session.DescribeLocaleAsync("zh-TW").ConfigureAwait(false);
         Require(exact is { UnsupportedLocale: "exact", Matches.Tags: ["zh-TW"], SuggestedMatches.Tags: ["zh-Hant"] },
-            "Under exact, a locale must serve only its own tag: " + JsonSerializer.Serialize(exact.Matches?.Tags) + " " + JsonSerializer.Serialize(exact.SuggestedMatches?.Tags));
+            "Under exact, a locale must serve only its own tag: " + JsonSerializer.Serialize(exact.Matches?.Tags, EditorSmokeJsonContext.Default.IReadOnlyListString) + " " + JsonSerializer.Serialize(exact.SuggestedMatches?.Tags, EditorSmokeJsonContext.Default.IReadOnlyListString));
         await File.WriteAllTextAsync(manifestPath, manifestText).ConfigureAwait(false);
         Require(russian.Cardinal.SequenceEqual(["one", "few", "many", "other"]) && russian.Direction == "ltr" && EditorLocales.Describe("fa").Direction == "rtl",
             "Plural categories or direction came from somewhere other than the SDK's CLDR data.");
@@ -273,7 +274,7 @@ internal static partial class EditorSmokeTest
             "The copied starter didn't get ru's plural categories: " + russian);
         // The starter copies are drafts: ru's coverage starts at 0 %, not 100 %; saving an edited one records it translated.
         Require(added.Snapshot?.Status?.Locales.SingleOrDefault(locale => locale.Locale == "ru") is { Translated: 0, Missing: 1, Coverage: 0 },
-            "A new language's starter copies counted as translated: " + JsonSerializer.Serialize(added.Snapshot?.Status?.Locales.Select(locale => locale.Locale + " " + locale.Coverage)));
+            "A new language's starter copies counted as translated: " + JsonSerializer.Serialize(added.Snapshot?.Status?.Locales.Select(locale => locale.Locale + " " + locale.Coverage), EditorSmokeJsonContext.Default.IEnumerableString));
         Require((await File.ReadAllTextAsync(Path.Combine(project, "locales.review.json")).ConfigureAwait(false)).Contains("\"draft\"", StringComparison.Ordinal), "The starter copies weren't recorded as drafts.");
         EditorDocument starter = added.Snapshot!.Documents.Single(document => document.Path == "ru.rmf2");
         EditorOperationResult translated = await session.SaveAsync(starter.Path, starter.Content.Replace("One file", "Один файл", StringComparison.Ordinal), starter.Revision).ConfigureAwait(false);
@@ -898,8 +899,15 @@ internal static partial class EditorSmokeTest
                 EditorDocument routedGerman = loaded.Documents.Single(document => document.Path == german.Path);
                 await ExecuteRouteAsync(editor.DocumentTools.TransformDocumentCommand,
                     () => editor.DocumentTools.TransformDocumentResultJson,
-                    JsonSerializer.Serialize(new { path = routedGerman.Path, content = routedGerman.Content,
-                        key = "application_title", value = "ViewModel edit" }));
+                    EditorJsonText.Write(writer =>
+                    {
+                        writer.WriteStartObject();
+                        writer.WriteString("path", routedGerman.Path);
+                        writer.WriteString("content", routedGerman.Content);
+                        writer.WriteString("key", "application_title");
+                        writer.WriteString("value", "ViewModel edit");
+                        writer.WriteEndObject();
+                    }));
                 Require(editor.DocumentTools.LastTransformDocument?.Success == true,
                     "The document tools ViewModel did not publish its typed draft.");
                 var review = new EditorReviewSaveRequest(loaded.Review?.Revision,
@@ -1230,7 +1238,7 @@ internal static partial class EditorSmokeTest
     // given, replaces only its own entry, and removes what it wrote.
     private static void DesktopEntryJourney(string dataHome)
     {
-        const string id = "eu.runic-artifex.TranslationsEditor";
+        const string id = "eu.runicartifex.TranslationsEditor";
         string icon = Path.Combine(dataHome, "source", "icon.png");
         Directory.CreateDirectory(Path.GetDirectoryName(icon)!);
         // The smallest square PNG header the installer reads its size from: 64×64.
@@ -1294,3 +1302,9 @@ internal static partial class EditorSmokeTest
             $"Browse did not use the editor window's folder dialog: {editor.Workspace.PickWorkspaceResultJson}");
     }
 }
+
+// The smoke test's own JSON, source-generated so that it also runs in a NativeAOT build of the editor, as its packages are.
+[JsonSerializable(typeof(IReadOnlyDictionary<string, string>))]
+[JsonSerializable(typeof(IReadOnlyList<string>))]
+[JsonSerializable(typeof(IEnumerable<string>))]
+internal sealed partial class EditorSmokeJsonContext : JsonSerializerContext;

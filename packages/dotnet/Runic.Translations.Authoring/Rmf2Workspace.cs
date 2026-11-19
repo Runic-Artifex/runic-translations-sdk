@@ -27,6 +27,7 @@ internal sealed class Rmf2Workspace
     private readonly bool _direct;
     private readonly Dictionary<string, TranslationSource> _sources;
     private readonly Dictionary<string, Rmf2ResourceDocument> _syntax = new(StringComparer.Ordinal);
+    private readonly Rmf2WorkspaceCache? _cache;
     private static readonly UTF8Encoding Utf8 = new(false, true);
     public Rmf2Workspace(string root, TranslationSource project, IEnumerable<TranslationSource> sources) : this(root, project, sources, CancellationToken.None) { }
     public Rmf2Workspace(string root, TranslationSource project, IEnumerable<TranslationSource> sources, CancellationToken cancellationToken)
@@ -34,7 +35,7 @@ internal sealed class Rmf2Workspace
     internal Rmf2Workspace(string root, TranslationSource project, IEnumerable<TranslationSource> sources, Rmf2WorkspaceCache? cache, CancellationToken cancellationToken)
     {
         _cancellationToken = cancellationToken; cancellationToken.ThrowIfCancellationRequested();
-        _root = Path.GetFullPath(root); _project = project;
+        _root = Path.GetFullPath(root); _project = project; _cache = cache;
         _projectDirectory = Path.GetDirectoryName(Path.GetFullPath(_project.Path, _root))!;
         using var config = JsonDocument.Parse(Utf8Bom.Skip(_project.GetUtf8Bytes()));
         // An unsaved or hand-edited runic.json may be malformed. Construction
@@ -68,13 +69,12 @@ internal sealed class Rmf2Workspace
         else _mounts.Add((_projectDirectory, Array.Empty<string>()));
         _sources = sources.ToDictionary(s => s.Path, StringComparer.Ordinal);
         _direct = _sources.Values.Any(source => source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase));
-        foreach (var source in _sources.Values)
-        {
-            if (!source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase) && !source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)) continue;
-            _syntax.Add(source.Path, cache?.Read(source, cancellationToken) ?? (source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)
-                ? Rmf2ResourceReader.ReadDirect(source, cancellationToken: _cancellationToken)
-                : Rmf2ResourceReader.Read(source, cancellationToken: _cancellationToken)));
-        }
+        // Each file is read on its own, in parallel; the documents are added in source order.
+        TranslationSource[] resources = _sources.Values.Where(source => source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase) || source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)).ToArray();
+        Rmf2ResourceDocument[] documents = CompilerParallel.Map(resources.Length, index => cache?.Read(_project.Path, resources[index], cancellationToken) ?? (resources[index].Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)
+            ? Rmf2ResourceReader.ReadDirect(resources[index], cancellationToken: _cancellationToken)
+            : Rmf2ResourceReader.Read(resources[index], cancellationToken: _cancellationToken)), cancellationToken);
+        for (int index = 0; index < resources.Length; index++) _syntax.Add(resources[index].Path, documents[index]);
     }
     public IReadOnlyList<Rmf2ResourceDocument> Documents => _syntax.Values.OrderBy(d => d.Source.Path, StringComparer.Ordinal).ToArray();
     public string BaseLocale => _baseLocale;
@@ -97,7 +97,16 @@ internal sealed class Rmf2Workspace
             .SelectMany(document => document.Nodes.Where(node => !node.IsGroup && LogicalPath(document.Source.Path, node).SequenceEqual(logical, StringComparer.Ordinal))).FirstOrDefault();
         return LanguageService.Complete(origin.MessageSyntax, byteOffset, baseMessage?.MessageSyntax);
     }
-    internal Rmf2ProjectCompilation Validate() => TranslationCompiler.CompileRmf2ProjectV5(_project, _sources.Values, null, _cancellationToken);
+    /// <summary>
+    /// Compiles the catalog. A workspace of a <see cref="Rmf2WorkspaceCache"/> validates through its project's session, which
+    /// reuses the work of earlier validations; the result is the same either way.
+    /// </summary>
+    internal Rmf2ProjectCompilation Validate() => Session is { } session
+        ? session.Validate(_project, _sources.Values, _cancellationToken).Compilation
+        : TranslationCompiler.CompileRmf2ProjectV5(_project, _sources.Values, null, _cancellationToken);
+
+    /// <summary>The validation session of this workspace's project, when the workspace comes from a <see cref="Rmf2WorkspaceCache"/>.</summary>
+    internal TranslationValidationSession? Session => _cache?.Session(_project.Path);
 
     /// <summary>The runic.json source this workspace compiles.</summary>
     internal TranslationSource ProjectSource => _project;
@@ -281,7 +290,7 @@ internal sealed class Rmf2Workspace
                 {
                     segment++;
                     if (renamedMounts.Contains(mountIndex) && segment == logicalPath.Count - 1)
-                        edits.Add((bom + (int)reader.TokenStartIndex, (int)(reader.BytesConsumed - reader.TokenStartIndex), JsonSerializer.SerializeToUtf8Bytes(newName)));
+                        edits.Add((bom + (int)reader.TokenStartIndex, (int)(reader.BytesConsumed - reader.TokenStartIndex), Rmf2ResourceWriter.JsonStringUtf8(newName)));
                 }
             }
             changes[_project.Path] = Rmf2ResourceWriter.Replace(bytes, edits);
@@ -415,7 +424,10 @@ internal sealed class Rmf2Workspace
             else if (change.Value is null) sources.Remove(change.Key);
             else if (change.Key.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase) || change.Key.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)) sources[change.Key] = new TranslationSource(change.Key, change.Value);
         }
-        Rmf2ProjectCompilation compilation = TranslationCompiler.CompileRmf2ProjectV5(project, sources.Values, null, _cancellationToken);
+        // The edited catalog, through the project's session when there is one: only the edited files are compiled again.
+        Rmf2ProjectCompilation compilation = Session is { } session
+            ? session.Preview(project, sources.Values, _cancellationToken)
+            : TranslationCompiler.CompileRmf2ProjectV5(project, sources.Values, null, _cancellationToken);
         if (!compilation.Success) throw new TranslationAuthoringException("The complete edited catalog is invalid: " + string.Join("; ", compilation.Diagnostics.Select(d => d.Message)));
         string catalogId = compilation.Project!.Id;
         return new TranslationWorkspaceTransactionPlan(_root, catalogId, edits.AsReadOnly(), compilation);

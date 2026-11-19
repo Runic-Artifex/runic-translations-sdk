@@ -276,8 +276,14 @@ internal sealed class Rmf2V1CorpusTests
     // Re-pinned for #212: runtime.js declares the catalog's pseudoLocales (none here) and leaves them out of locale fallback
     // and negotiation, in both digests (ESM only).
     // Re-pinned for merging runic-sdk#1109 (C#) with #212 (ESM), in both digests.
-    private const string EncodedOutputDigest = "8d9cd94a3f7ddc5251266db89b3e96f7f6dddac3ef204872b198db98d8b63282";
-    private const string HiddenEncodedOutputDigest = "a9dd42662e9e3f793295594e2c5ad50d9e860d776fe0ad17c483b6ff23426450";
+    // Re-pinned for D077.16: an accessor with one input calls a shared body per input type (__Format_string and so on),
+    // several inputs and reference fallback arguments are collection expressions, in both digests (C# only).
+    // Re-pinned for D077.16, RMF2 ABI 5: the C# embeds each locale's binary locale data and the message table as DEFLATE
+    // data (GeneratedCatalogSupport.ReadDeflatedBinaryValues, InflateData) and requires ABI 5, in both digests (C# only).
+    // Re-pinned for D077.16, markup contract v3: the C# of RMF2 ABI 5 and dynamic.js embed the contract without its
+    // default-shaped entries, in both digests (C# and ESM).
+    private const string EncodedOutputDigest = "4d1c9a6206bc77c5ffd8afa06a0e7105af94aa3aa465b71ecb8ac802c5c5a38b";
+    private const string HiddenEncodedOutputDigest = "4d9dba0775447ea87d838bfe355f118878ee3252818faa7ca34b90f98d298cfa";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

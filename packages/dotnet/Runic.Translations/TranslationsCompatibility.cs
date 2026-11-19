@@ -25,10 +25,12 @@ public static class TranslationsCompatibility
     /// DEFLATE data (<see cref="GeneratedCatalogSupport.ReadDeflatedValues(System.ReadOnlySpan{byte}, int)"/>) and a
     /// message table that the definitions, keys and external-pack contracts are read from
     /// (<see cref="GeneratedCatalogSupport.ReadDefinitions"/>, <see cref="GeneratedCatalogSupport.CreateKeys"/>), with
-    /// typed argument factories; this runtime still runs version 3 code, which embeds the JSON itself and has code per
-    /// message.
+    /// typed argument factories. Version 5 embeds the locale data in a binary encoding as DEFLATE data
+    /// (<see cref="GeneratedCatalogSupport.ReadDeflatedBinaryValues(System.ReadOnlySpan{byte}, int)"/>) and the message
+    /// table as DEFLATE data (<see cref="GeneratedCatalogSupport.InflateData"/>). This runtime still runs version 4 code
+    /// and version 3 code, which embeds the JSON itself and has code per message.
     /// </summary>
-    public const int Rmf2RuntimeAbiVersion = 4;
+    public const int Rmf2RuntimeAbiVersion = 5;
 
     /// <summary>The oldest RMF2 ABI this runtime still runs; earlier ones predate the RMF2 v5 carrier.</summary>
     public const int MinimumRmf2RuntimeAbiVersion = 3;

@@ -50,7 +50,10 @@ The CLI `schema` command also exports both v5 schemas for offline validation;
 schema distribution alone does not change a project's source representation.
 Resource syntax remains version 1. The exported markup contract is version 2:
 every contract carries `placement` and `children`, and options may use the
-bounded `integer` type. Packs with another markup contract version are rejected
+bounded `integer` type. Since 0.15 generated output and packs carry version 3,
+which leaves out the entries of the default shape
+([markup contract version 3](../../../specs/translations/rmf2-execution-v2.md#markup-contract-version-3)),
+and runtimes accept both. Packs with another markup contract version are rejected
 as `RTR0023/markup-contract-version-mismatch` and must be rebuilt.
 
 The v5 pack path is explicitly dispatched by artifact version, grammar and

@@ -40,6 +40,10 @@ assert.deepEqual(
   ["draft", true],
   "A note on a missing translation records no state, only the implicit one.",
 );
+// The list view marks the messages whose review entry for the selected locale has an unsaved change.
+assert.deepEqual(review.changedKeys("de"), ["common_cancel"]);
+assert.deepEqual(review.changedKeys("fr"), ["common_cancel"]);
+assert.deepEqual(review.changedKeys("it"), []);
 review.mark(["common_save", "dashboard_welcome"], "fr", "needs-review");
 assert.equal(review.index.get("common_save\u0000fr").state, "needs-review");
 assert.deepEqual(review.message, { code: "ui_count_review_marked", args: [{ name: "count", number: 2 }, { name: "state", value: "needs-review" }] });
@@ -54,6 +58,7 @@ assert.equal(saves[0].expectedRevision, "mock-review-1");
 assert.equal(saves[0].original.length, 2, "The save names the data the edits started from.");
 assert.equal(saves[0].entries.length, 6, "Two saved entries and four new ones (cancel de/fr, save fr, welcome fr).");
 assert.equal(review.dirty, false);
+assert.deepEqual(review.changedKeys("fr"), [], "Saved review changes stay marked.");
 assert.equal(review.saving, false);
 assert.notEqual(review.revision, "mock-review-1");
 assert.deepEqual(review.message, { code: "ui_feedback_workflow_saved", args: [] });

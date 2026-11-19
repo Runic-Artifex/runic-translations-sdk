@@ -2,6 +2,7 @@ import type { UiText } from "./ui-text";
 import type { ThemeMode } from "./appearance";
 import type { EditorReviewState } from "./contracts";
 import type { EditorBridge } from "./editor-bridge";
+import type { WorkspaceLayout } from "./list-view";
 import type { NextMessageKind } from "./next-message";
 import type { ProjectKind, TextRole } from "./project-kind";
 import type { UiDirection } from "./simulation";
@@ -52,6 +53,8 @@ export interface EditorPaletteActions {
   showAbout(): void;
   createDiagnosticBundle(): void;
   setEditorMode(mode: "translation" | "raw"): void;
+  /** Shows the workbench or the side-by-side list (D074.1), as the toolbar's Workbench | List switch does. */
+  setLayout(layout: WorkspaceLayout): void;
   selectLocale(locale: string): void;
   setUiLocale(locale: string): void;
   setThemeMode(mode: ThemeMode): void;
@@ -66,6 +69,8 @@ export interface EditorPaletteState {
   readonly locales: ReadonlyArray<{ tag: string; name: string }>;
   readonly selectedLocale: string;
   readonly editorMode: "translation" | "raw";
+  /** The view the editor shows: the workbench, or the side-by-side list. The workbench when absent. */
+  readonly layout?: WorkspaceLayout;
   readonly uiLocale: string;
   /** The editor catalog's locales with their names in their own language, which the interface language commands list. */
   readonly uiLocales: ReadonlyArray<{ tag: string; name: string }>;
@@ -361,6 +366,22 @@ export function buildEditorCommandPalette(
     keywords: "file document source raw format json",
     disabled: state.editorMode === "raw",
     run: () => actions.setEditorMode("raw"),
+  });
+  push({
+    id: "view.layout-workbench",
+    title: (ui?.text("ui_palette_switch_to_workbench") ?? "Switch to workbench"),
+    group: "view",
+    keywords: "view layout tree editor rail single message",
+    disabled: !state.workspaceReady || (state.layout ?? "workbench") === "workbench",
+    run: () => actions.setLayout("workbench"),
+  });
+  push({
+    id: "view.layout-list",
+    title: (ui?.text("ui_palette_switch_to_list_view") ?? "Switch to list view"),
+    group: "view",
+    keywords: "view layout list table grid side-by-side bulk rows",
+    disabled: !state.workspaceReady || state.layout === "list",
+    run: () => actions.setLayout("list"),
   });
   for (const locale of state.locales) {
     push({

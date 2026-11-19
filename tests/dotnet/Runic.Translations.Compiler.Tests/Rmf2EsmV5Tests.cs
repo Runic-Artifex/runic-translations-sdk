@@ -265,7 +265,7 @@ internal sealed class Rmf2EsmV5Tests
                 import { bindMarkup, createInlineRenderer, defineMarkup, rmf2RuntimeAbiVersion } from "./app.esm-v5/runtime.js";
                 import { rmf2Contract } from "./app.esm-v5/dynamic.js";
                 const check=(condition,message)=>{if(!condition)throw new Error(message);};
-                check(rmf2RuntimeAbiVersion===3&&rmf2Contract.version===2,"contract markers");
+                check(rmf2RuntimeAbiVersion===3&&rmf2Contract.version===3,"contract markers");
                 const exported=rmf2Contract.contracts["app:step"];
                 check(exported.placement==="inline"&&exported.children==="inline"&&exported.options.level.minimum===1&&exported.options.level.maximum===6,"exported integer contract");
                 const step=defineMarkup({name:"app:step",kind:"paired",placement:"inline",children:"inline",interactive:false,plainText:"children",options:{level:{type:"integer",values:[],default:"1",literalOnly:false,minimum:1,maximum:6}}});
@@ -784,6 +784,9 @@ internal sealed class Rmf2EsmV5Tests
             new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(json)),
             sources.Select(source => new TranslationSource("translations/" + source.Locale + ".rmf2", Encoding.UTF8.GetBytes(source.Source))).ToArray());
         Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Message)));
+        // Every project the conformance corpora compile here also reads identically from the binary locale data of
+        // RMF2 ABI 5 and from the JSON of ABI 4 (D077.16).
+        Rmf2GeneratedLocaleBinaryTests.AssertBinaryMatchesJson(result.Project!);
         return result.Project!;
     }
 

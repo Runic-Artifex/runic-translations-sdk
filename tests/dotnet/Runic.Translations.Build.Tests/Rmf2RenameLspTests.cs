@@ -147,7 +147,7 @@ internal sealed class Rmf2RenameLspTests
         }
     }
 
-    [Test, DisplayName("LSP keeps the mixed-workspace refusal for clients that fail showMessageRequest and for protocol 1")]
+    [Test, DisplayName("LSP keeps the mixed-workspace refusal for clients that fail showMessageRequest")]
     public void MixedWorkspaceRefusal()
     {
         var (temporary, englishUri, _) = CreateRenameProject(application: true);
@@ -166,23 +166,6 @@ internal sealed class Rmf2RenameLspTests
                 Assert.Equal(-32803, refused["error"]!["code"]!.GetValue<int>(), refused.ToJsonString());
                 Assert.Contains("Rename refused: this workspace contains application", refused["error"]!["message"]!.GetValue<string>());
                 Assert.Equal("window/showMessageRequest", session.ServerRequests.Single()["method"]!.GetValue<string>());
-            }
-            // Protocol 1 refuses as 0.13 did, even when the client could answer a question, and F2 on an input
-            // stays refused.
-            using (Session session = new(_ => { }, _ => { }))
-            {
-                session.OnServerRequest = _ => new JsonObject { ["result"] = new JsonObject { ["title"] = "Rename in resource sources" } };
-                JsonNode initialize = session.Request("initialize", Initialize(temporary.Path, FullClientCapabilities(), protocol: null));
-                Assert.True(initialize["result"]!["capabilities"]!["renameProvider"]!.GetValue<bool>(), "Protocol 1 changed renameProvider.");
-                Open(session, englishUri, English);
-                JsonNode refused = session.Request("textDocument/rename", RenameArgs(englishUri, At(English, "title"), "heading"));
-                Assert.Equal(-32602, refused["error"]!["code"]!.GetValue<int>(), refused.ToJsonString());
-                Assert.Contains("Rename refused: this workspace contains application", refused["error"]!["message"]!.GetValue<string>());
-                JsonNode input = session.Request("textDocument/rename", RenameArgs(englishUri, At(English, "{$name}", 2), "person"));
-                Assert.Contains("caller-input changes require a catalog-wide plan", input["error"]!["message"]!.GetValue<string>());
-                JsonNode prepare = session.Request("textDocument/prepareRename", new JsonObject { ["textDocument"] = Document(englishUri), ["position"] = At(English, "title") });
-                Assert.True(prepare["error"] is null && prepare["result"] is null, "Protocol 1 answered prepareRename: " + prepare.ToJsonString());
-                Assert.Equal(0, session.ServerRequests.Count);
             }
         }
     }

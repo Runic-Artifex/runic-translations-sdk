@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using Runic.Translations.Authoring;
 using Runic.Translations.Compiler;
 
 namespace Runic.Translations.Tooling;
@@ -197,15 +198,26 @@ internal static class TranslationReviewFile
     /// the base message.
     /// </summary>
     internal static Rmf2ProjectCompilation ForReview(Rmf2ProjectCompilation compilation, TranslationSource project,
-        IEnumerable<TranslationSource> sources, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default)
+        IEnumerable<TranslationSource> sources, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default) =>
+        ForReview(compilation, project, sources, null, options, cancellationToken);
+
+    /// <summary>
+    /// <see cref="ForReview(Rmf2ProjectCompilation, TranslationSource, IEnumerable{TranslationSource}, TranslationCompilerOptions?, CancellationToken)"/>
+    /// through a validation session, whose file units and memos the relaxed compiles reuse; the result is the same.
+    /// </summary>
+    internal static Rmf2ProjectCompilation ForReview(Rmf2ProjectCompilation compilation, TranslationSource project,
+        IEnumerable<TranslationSource> sources, TranslationValidationSession? session, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(compilation);
         if (compilation.Success && compilation.Project is not null) return compilation;
         TranslationSource[] all = sources.ToArray();
-        TranslationCompilerOptions basis = options ?? new TranslationCompilerOptions();
-        Rmf2ProjectCompilation relaxed = TranslationCompiler.CompileRmf2ProjectV5(project, all, With(basis, baseLocaleOnly: false), cancellationToken);
+        TranslationCompilerOptions basis = options ?? session?.Options ?? new TranslationCompilerOptions();
+        Rmf2ProjectCompilation Compile(TranslationCompilerOptions with) => session is null
+            ? TranslationCompiler.CompileRmf2ProjectV5(project, all, with, cancellationToken)
+            : session.Validate(project, all, with, false, cancellationToken).Compilation;
+        Rmf2ProjectCompilation relaxed = Compile(With(basis, baseLocaleOnly: false));
         if (relaxed.Success && relaxed.Project is not null) return relaxed;
-        return TranslationCompiler.CompileRmf2ProjectV5(project, all, With(basis, baseLocaleOnly: true), cancellationToken);
+        return Compile(With(basis, baseLocaleOnly: true));
 
         static TranslationCompilerOptions With(TranslationCompilerOptions options, bool baseLocaleOnly) => new()
         {
@@ -393,7 +405,7 @@ internal sealed class TranslationXliffImportPlan
         Rmf2LocaleV5 target = project.Locales.SingleOrDefault(locale => locale.Tag == import.TargetLocale)
             ?? throw new TranslationInterchangeException("XLIFF21-TARGET-LOCALE", $"The catalog has no locale '{import.TargetLocale}'.");
         var existing = target.DirectResources.ToDictionary(static resource => resource.Key,
-            static resource => System.Text.Encoding.UTF8.GetString(resource.Message.Syntax.Source.GetUtf8Bytes()), StringComparer.Ordinal);
+            static resource => resource.Message.Syntax.Text, StringComparer.Ordinal);
         var messages = import.Messages.ToDictionary(static message => message.MessageId,
             static message => System.Text.Encoding.UTF8.GetString(message.Bytes.Span).TrimEnd('\n'), StringComparer.Ordinal);
         var values = new Dictionary<string, string>(StringComparer.Ordinal);

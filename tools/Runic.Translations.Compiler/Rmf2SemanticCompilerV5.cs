@@ -22,6 +22,16 @@ internal static class Rmf2SemanticCompilerV5
         => new Lowerer(Mf2SyntaxReader.Read(source, options, cancellationToken), options, cancellationToken,
             inputs.ToDictionary(input => input.Name, input => input.Type, StringComparer.Ordinal)).Lower();
 
+    /// <summary>
+    /// Lowers a message from its MF2 syntax, read from the UTF-8 bytes of the message, so a caller that has already read
+    /// the syntax (the RMF2 reader reads every message's) does not read it again. The result is the same as
+    /// <see cref="Compile"/> or, with <paramref name="callerInputs"/>, <see cref="CompileWithCallerContract"/> of those bytes.
+    /// </summary>
+    internal static Rmf2SemanticResultV5 Lower(Mf2SyntaxDocument syntax, IReadOnlyList<Rmf2InputV5>? callerInputs,
+        TranslationCompilerOptions options, CancellationToken cancellationToken)
+        => new Lowerer(syntax, options, cancellationToken,
+            callerInputs?.ToDictionary(input => input.Name, input => input.Type, StringComparer.Ordinal)).Lower();
+
     private sealed record Symbol(string Kind, string ValueType, string Selection, IReadOnlyList<string> Inputs);
     private sealed class Lowerer(Mf2SyntaxDocument syntax, TranslationCompilerOptions options, CancellationToken cancellation,
         IReadOnlyDictionary<string, string>? callerTypes = null)
@@ -36,7 +46,8 @@ internal static class Rmf2SemanticCompilerV5
         {
             foreach (var diagnostic in syntax.Diagnostics) _diagnostics.Add(diagnostic.Id, diagnostic.Severity, diagnostic.Message, diagnostic.Location);
             if (HasErrors()) return Result(null);
-            foreach (var diagnostic in Mf2SyntaxReader.ValidateDataModel(syntax).Concat(Mf2SyntaxReader.ValidateInlineProfile(syntax))) _diagnostics.Add(diagnostic.Id, diagnostic.Severity, diagnostic.Message, diagnostic.Location);
+            foreach (var diagnostic in Mf2SyntaxReader.ValidateDataModel(syntax)) _diagnostics.Add(diagnostic.Id, diagnostic.Severity, diagnostic.Message, diagnostic.Location);
+            foreach (var diagnostic in Mf2SyntaxReader.ValidateInlineProfile(syntax)) _diagnostics.Add(diagnostic.Id, diagnostic.Severity, diagnostic.Message, diagnostic.Location);
             if (HasErrors()) return Result(null);
             // Seed signatures only after declaration validation: prior references
             // cannot be retroactively bound by a later input declaration. Locals
@@ -110,24 +121,24 @@ internal static class Rmf2SemanticCompilerV5
                 var seen = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var variant in syntax.Variants)
                 {
-                    var keys = variant.Keys.Select((raw, index) => Key(raw, selectors[index], variant.KeyLocations[index])).ToArray();
+                    var keys = variant.Keys.Select((raw, index) => Key(raw, selectors[index], variant.KeySpans[index])).ToArray();
                     string vector = string.Concat(keys.Select(key => {
                         string normalized = key.Kind == "wildcard" ? "*" : "=" + (key.Canonical ?? key.Value!.Normalize(NormalizationForm.FormC));
                         return normalized.Length.ToString(CultureInfo.InvariantCulture) + ":" + normalized;
                     }));
                     if (!seen.Add(vector)) DataError("Duplicate normalized variant key vector.", variant.Location);
-                    variants.Add(new(keys, Pattern(variant.PatternLocation.StartByte + 2, variant.PatternLocation.StartByte + variant.PatternLocation.LengthBytes - 2)));
+                    variants.Add(new(keys, Pattern(variant.PatternSpan.From + 2, variant.PatternSpan.To - 2)));
                 }
             }
             else
             {
-                var opening = syntax.Tokens.FirstOrDefault(t => t.Kind == Mf2SyntaxTokenKind.PatternStart);
-                var closing = syntax.Tokens.LastOrDefault(t => t.Kind == Mf2SyntaxTokenKind.PatternEnd);
-                variants.Add(new(Array.Empty<Rmf2KeyV5>(), Pattern(opening is null ? 0 : opening.Location.StartByte + 2, closing?.Location.StartByte ?? syntax.Source.Bytes.Length)));
+                // A quoted body inside its {{ }}, else the whole simple message.
+                variants.Add(new(Array.Empty<Rmf2KeyV5>(), syntax.Body is { } body ? Pattern(body.From + 2, body.To - 2) : Pattern(0, syntax.Text.Length)));
             }
             if (_inputs.Count > options.MaximumPlaceholdersPerValue || _inputs.Count > 32 || selectors.Count > 16 || variants.Count > 256 || declarations.Count > 256)
                 Error("Message exceeds the v5 input, selector, variant or declaration limit.", syntax.Tokens[0].Location);
-            return Result(HasErrors() ? null : new(syntax, _inputs.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => new Rmf2InputV5(p.Key, p.Value)).ToArray(), declarations, selectors, variants));
+            return Result(HasErrors() ? null : new(syntax, _inputs.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => new Rmf2InputV5(p.Key, p.Value)).ToArray(),
+                Mf2SyntaxDocument.Compact(declarations), Mf2SyntaxDocument.Compact(selectors), Mf2SyntaxDocument.Compact(variants)));
         }
 
         private (Rmf2ExpressionV5 Expression, Symbol Symbol) Expression(Mf2ExpressionSyntax expression)
@@ -185,27 +196,28 @@ internal static class Rmf2SemanticCompilerV5
             return (new(operand, inherited.ValueType, expression.Function, loweredOptions, Annotations(expression)), new("local", inherited.ValueType, selection, dependencies.Order(StringComparer.Ordinal).ToArray()));
         }
 
-        private List<Rmf2NodeV5> Pattern(int from, int to)
+        // The nodes of the pattern between two character offsets of the message: the text between its expressions,
+        // unescaped, and the expressions. The message is valid (Lower returns before on a syntax error), so outside its
+        // expressions a pattern holds text only (with a simple message's leading whitespace), as its tokens are.
+        private IReadOnlyList<Rmf2NodeV5> Pattern(int from, int to)
         {
-            var nodes = new List<Rmf2NodeV5>(); var text = new StringBuilder();
-            var expressions = syntax.Expressions.ToDictionary(expression => expression.Location.StartByte);
-            int consumed = from;
-            foreach (var token in syntax.Tokens)
+            var nodes = new List<Rmf2NodeV5>();
+            string message = syntax.Text;
+            int at = from;
+            foreach (var expression in syntax.Expressions)
             {
                 cancellation.ThrowIfCancellationRequested();
-                if (token.Location.StartByte < consumed || token.Location.StartByte >= to) continue;
-                if (token.Kind is Mf2SyntaxTokenKind.Text or Mf2SyntaxTokenKind.Whitespace) { text.Append(Unescape(token.Raw)); continue; }
-                if (token.Kind != Mf2SyntaxTokenKind.ExpressionStart) continue;
-                Flush();
-                var expression = expressions[token.Location.StartByte]; consumed = expression.Location.StartByte + expression.Location.LengthBytes;
+                int start = expression.Span.From;
+                if (start < at || start >= to) continue;
+                if (start > at) nodes.Add(new Rmf2TextV5(Unescape(message.Substring(at, start - at))));
+                at = expression.Span.To;
                 if (expression.MarkupKind == Mf2MarkupKind.None) nodes.Add(new Rmf2ExpressionNodeV5(Expression(expression).Expression));
                 else nodes.Add(new Rmf2MarkupV5(expression.MarkupName!, expression.MarkupKind.ToString().ToLowerInvariant(),
                     expression.Options.Select(property => new Rmf2OptionV5(property.Name, Value(property.Value!, null))).ToArray(), Annotations(expression)));
             }
-            Flush();
+            if (to > at) nodes.Add(new Rmf2TextV5(Unescape(message.Substring(at, to - at))));
             if (nodes.Count > 4096) Error("A pattern exceeds the v5 node limit.", syntax.Tokens[0].Location);
-            return nodes;
-            void Flush() { if (text.Length != 0) { nodes.Add(new Rmf2TextV5(text.ToString())); text.Clear(); } }
+            return Mf2SyntaxDocument.Compact(nodes);
         }
 
         private Rmf2ValueV5 Value(Mf2OperandSyntax operand, string? expectedType)
@@ -236,24 +248,24 @@ internal static class Rmf2SemanticCompilerV5
         private Rmf2AnnotationV5[] Annotations(Mf2ExpressionSyntax expression) => expression.Attributes.Select(property =>
             new Rmf2AnnotationV5(property.Name, property.Value is null ? null : Value(property.Value, null))).ToArray();
 
-        private Rmf2KeyV5 Key(string raw, Rmf2SelectorV5 selector, TextSourceLocation location)
+        private Rmf2KeyV5 Key(string raw, Rmf2SelectorV5 selector, Mf2Span span)
         {
             if (raw == "*") return new("wildcard");
             string value = raw.StartsWith('|') ? Unescape(raw.Substring(1, raw.Length - 2)) : raw;
             string normalized = value.Normalize(NormalizationForm.FormC);
             if (!raw.StartsWith('|') && raw.Length != 0 && (char.IsAsciiDigit(raw[0]) || raw[0] == '-') && !Rmf2DecimalV5.TryCanonicalize(raw, out _))
-                DataError("Malformed or out-of-domain numeric variant key.", location);
+                DataError("Malformed or out-of-domain numeric variant key.", span.Location);
             if (selector.Type is "int64" or "decimal")
             {
                 if (Rmf2DecimalV5.TryCanonicalize(normalized, out string number))
                 {
-                    if (selector.Type == "int64" && !long.TryParse(number, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out _)) DataError("An integer selector requires an int64 exact key.", location);
+                    if (selector.Type == "int64" && !long.TryParse(number, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out _)) DataError("An integer selector requires an int64 exact key.", span.Location);
                     return new("literal", value, number);
                 }
                 if (selector.Function is not ("plural" or "ordinal") || normalized is not ("zero" or "one" or "two" or "few" or "many" or "other"))
-                    DataError("A numeric selector key must be a portable exact number or an enabled plural category.", location);
+                    DataError("A numeric selector key must be a portable exact number or an enabled plural category.", span.Location);
             }
-            else if (selector.Type == "boolean" && normalized is not ("true" or "false")) DataError("A boolean selector key must be true, false or wildcard.", location);
+            else if (selector.Type == "boolean" && normalized is not ("true" or "false")) DataError("A boolean selector key must be true, false or wildcard.", span.Location);
             return new("literal", value);
         }
         private static bool AcceptsOperand(Rmf2ValueV5 value, string actual, string expected)
@@ -278,6 +290,7 @@ internal static class Rmf2SemanticCompilerV5
         private static string DefaultSelection(string type) => type is "int64" or "decimal" ? "plural" : type is "string" or "boolean" ? "exact" : "none";
         private static string Unescape(string value)
         {
+            if (!value.Contains('\\')) return value;
             var result = new StringBuilder();
             for (int index = 0; index < value.Length; index++) { if (value[index] == '\\' && index + 1 < value.Length) index++; result.Append(value[index]); }
             return result.ToString();
@@ -286,7 +299,12 @@ internal static class Rmf2SemanticCompilerV5
         internal const string UnknownFormatDiagnostic = "RTR0101";
         private void Error(string message, TextSourceLocation location) => _diagnostics.Add("RTR0065", TranslationDiagnosticSeverity.Error, message, location);
         private void DataError(string message, TextSourceLocation location) => _diagnostics.Add("RTR0067", TranslationDiagnosticSeverity.Error, message, location);
-        private bool HasErrors() => _diagnostics.Items.Any(diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error);
+        private bool HasErrors()
+        {
+            foreach (var diagnostic in _diagnostics.Items)
+                if (diagnostic.Severity == TranslationDiagnosticSeverity.Error) return true;
+            return false;
+        }
         private Rmf2SemanticResultV5 Result(Rmf2MessageV5? message) => new(message, Array.AsReadOnly(_diagnostics.ToSortedArray()));
     }
 }

@@ -173,6 +173,22 @@ for (const key of ["ArrowDown", "ArrowUp", "Home", "End", "Enter"]) {
 assert.match(listKeyboard, /event\.key === "Escape"[\s\S]*?stopEditing\(row\)/, "Escape does not leave the list's editing.");
 assert.match(listKeyboard, /event\.key !== "Tab"[\s\S]*?moveTo\(target, true, event\.shiftKey\)/, "Tab does not go on to the next row's text.");
 assert.match(listView, /\.list-row > div:focus-visible \{ box-shadow: inset 0 0 0 2px var\(--ring\)/, "The list's cells do not show their focus.");
+// Virtualized, the grid still tells assistive technology how many rows it has and where each shown row is; the
+// row with the tab stop stays in the DOM; a row's unsaved mark has a name in both languages, as do the palette's
+// commands for the view.
+assert.match(listView, /aria-rowcount=\{rows\.length \+ 1\}/, "The virtualized list grid does not count its rows.");
+assert.match(listView, /role="row"\s+aria-selected=\{selected\}\s+aria-rowindex=\{position \+ 2\}/, "A virtualized row does not say where it is.");
+assert.match(listView, /listSlices\(offsets, span, pinnedIndex === undefined \? \[\] : \[pinnedIndex\]\)/, "The list's tab stop can leave the DOM.");
+assert.match(listView, /class="list-gap" aria-hidden="true"/, "The space of the rows left out is exposed.");
+assert.match(listView, /role="img" aria-label=\{ui\.text\("ui_list_unsaved"\)\}/, "The unsaved mark has no accessible name.");
+for (const [key, en, de] of [
+  ["ui_list_unsaved", "Unsaved changes", "Ungespeicherte Änderungen"],
+  ["ui_palette_switch_to_list_view", "Switch to list view", "Zur Listenansicht wechseln"],
+  ["ui_palette_switch_to_workbench", "Switch to workbench", "Zur Werkbank wechseln"],
+]) {
+  assert.equal(english[key], en, `English ${key} changed or is missing.`);
+  assert.equal(german[key], de, `German ${key} changed or is missing.`);
+}
 assert.match(sources["lib/screens/WorkspaceShell.svelte"], /role="group" aria-label=\{ui\.text\("ui_view_label"\)\}[\s\S]*?aria-pressed=\{layout === option\.value\}/,
   "The view switch is unnamed or does not say which view is shown.");
 
@@ -288,3 +304,10 @@ function cssBlock(source, selector) {
   }
   throw new Error(`${selector} is unclosed.`);
 }
+
+// The visual text box shows keyboard focus once: the box's ring (focus-within). Its text segments drop the page's global
+// textarea outline except in forced colours, which draw no box-shadow ring (#225 R9).
+const inlineEditor = sources["InlineMessageEditor.svelte"];
+assert.match(inlineEditor, /focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/, "The visual text box does not show its focus.");
+assert.match(inlineEditor, /@media not \(forced-colors: active\) \{\s*\[data-pattern-box\] textarea:focus-visible \{\s*outline: none;/,
+  "The visual text box draws a second focus ring around the focused segment, or hides it in forced colours.");

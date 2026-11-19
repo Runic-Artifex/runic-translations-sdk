@@ -256,7 +256,7 @@ internal sealed class OverlayTranslationProvider : ITranslationProvider, ITransl
             return false;
         }
 
-        if (!_markup.Messages.TryGetValue(message.Key, out Rmf2MarkupContract.Message? linked))
+        if (!_markup.TryGetMessage(message.Key, out Rmf2MarkupContract.Message? linked))
         {
             reason = TranslationOverlayDiagnosticReason.IncompatibleMarkup;
             return false;

@@ -1,77 +1,168 @@
-# Source builds and archive guidance
+# Downloads, packages and releases
 
-The supported way to use Runic Translations Editor is to build it from the SDK
-source, as described in the [editor README](../README.md). SDK package publication
-does not create an Editor archive.
+Runic Translations Editor has releases of its own, built from this repository's source
+by [`release-editor.yml`](../../../.github/workflows/release-editor.yml) and attached to
+a GitHub release tagged `editor-v<version>` (D078). Each release has packages for
+`linux-x64`, `osx-arm64` and `win-x64`, each with a sibling `.sha256` file. You can
+also [build the editor from source](../README.md#build-from-source).
 
-If an archive is produced for `linux-x64`, `win-x64`, or `osx-arm64`, it should be
-self-contained: the .NET runtime, the Runic Desktop host with its native server
-library for that runtime identifier, the static SvelteKit application, launchers,
-example workspace, license, third-party notices (including the native server's crate
-list), per-file manifest, and sibling SHA-256 checksum travel together. Users should
-not need an SDK, Node.js installation, package-registry authentication, or a separate
-.NET runtime to start it. The window's WebView comes from the system: GTK 4.12 or newer
-with WebKitGTK 6 on Linux (Ubuntu and Debian: `libwebkitgtk-6.0-4`), the Microsoft Edge
-WebView2 Runtime on Windows, and WKWebView on macOS. Without it, `edit` opens the
-editor in an installed browser instead and says why on standard error.
+## Versions
 
-Archive verification should exercise the artifact a user receives, not only its
-staging directory: compare reproducible archive digests, verify its checksum,
-extract it into a clean directory, verify every file against `package-manifest.json`,
-and run executable, launcher, and editor-smoke validation. The executable and
-manifest should identify the version, channel, source revision, and runtime
-identifier used to build them.
+The editor has its own version line, plain `0.y.z` before 1.0, starting at 0.1.0. It
+is independent of the version of the Runic Translations packages
+(`RunicTranslationsVersion` in `eng/Versions.props`): an editor release is built from
+the Translations source of the same commit, and the editor's release notes say which
+Translations release that matches. The version is `RunicTranslationsEditorVersion` in
+[`Directory.Build.props`](../Directory.Build.props). `--version`, **About &
+diagnostics** and diagnostic bundles show it with the update channel (`preview`
+before 1.0), the source revision and the runtime identifier:
 
-## Download, trust, and updates
-
-No public Editor archive is currently claimed. An archive should provide one
-same-named `.sha256` file and clear platform instructions.
-
-On Linux:
-
-```bash
-sha256sum -c Runic.Translations.Editor-1.0.0-preview.N-linux-x64.tar.gz.sha256
-tar -xzf Runic.Translations.Editor-1.0.0-preview.N-linux-x64.tar.gz
-./Runic.Translations.Editor/runic-translations-editor edit /path/to/workspace
+```text
+$ runic-translations-editor --version
+Runic Translations Editor 0.1.0+<commit>
+Channel: preview
+Commit: <commit>
+Runtime: linux-x64
 ```
 
-On macOS:
+The editor's releases are never marked "Latest" on GitHub, so that slot stays with
+the SDK's releases, and before 1.0 they are prereleases, as the SDK's are. Its notes
+are in `eng/release/notes/editor/` ([Release notes](../../../eng/release/README.md#release-notes)).
 
-```bash
-shasum -a 256 Runic.Translations.Editor-1.0.0-preview.N-osx-arm64.tar.gz
-# Compare the printed digest with the first field in the sibling .sha256 file.
-tar -xzf Runic.Translations.Editor-1.0.0-preview.N-osx-arm64.tar.gz
-./Runic.Translations.Editor/runic-translations-editor edit /path/to/workspace
-```
+## What a release contains
 
-On Windows PowerShell:
+| File | Built with | Contents |
+| --- | --- | --- |
+| `runic-translations-editor_<version>_amd64.deb` | `dotnet runic package deb` | The editor in `/usr/lib/eu.runicartifex.TranslationsEditor`, `/usr/bin/Runic.Translations.Editor`, the desktop entry, icon and AppStream metadata. Depends on `libgtk-4-1` and `libwebkitgtk-6.0-4` (Ubuntu 24.04, Debian 13). |
+| `runic-translations-editor-<version>-1.x86_64.rpm` | `dotnet runic package rpm` | The same files. Requires `webkitgtk6.0` (Fedora). |
+| `runic-translations-editor-<version>-x86_64.AppImage` | `dotnet runic package appimage` | The same files in an AppImage, which uses the system's GTK 4 and WebKitGTK 6. |
+| `runic-translations-editor-<version>-linux-x64.tar.gz` | the deb's files | The application folder with the `runic-translations-editor` launcher and `package-manifest.json`. |
+| `runic-translations-editor-<version>-osx-arm64.dmg` | `dotnet runic package macos` | `Runic Translations Editor.app`, ad-hoc signed, for Apple silicon. |
+| `runic-translations-editor-<version>-win-x64.zip` | `dotnet publish --self-contained` | The application folder with the `runic-translations-editor.cmd` launcher and `package-manifest.json`. |
+
+The Linux and macOS editors are NativeAOT executables, made by runic-sdk's
+`dotnet runic package` at the runic-sdk version the editor is built on
+(`RunicSdkDependencyVersion`). The Windows editor is a self-contained .NET
+application. None needs an SDK, Node.js or a separate .NET runtime. Every package
+carries the static editor frontend, the example workspace, the licence, the
+third-party notices and the preview notice. The window's WebView comes from the
+system: GTK 4.12 or newer with WebKitGTK 6 on Linux, the Microsoft Edge WebView2
+Runtime on Windows, and WKWebView on macOS. Without it, `edit` opens the editor in
+an installed browser instead and says why on standard error.
+
+There is no Flatpak: building one installs the GNOME runtime and SDK from Flathub on
+every release build, and its sandbox would need filesystem permissions of its own for
+an editor that writes workspaces anywhere on disk. There is no MSIX either, because
+Windows installs only signed MSIX packages.
+
+### Checksums and the package manifest
+
+`<file>.sha256` holds one line, `<sha256>  <file>`, as `sha256sum` writes it. The
+`.tar.gz` and `.zip` archives also hold `package-manifest.json`
+(`runic.translations.editor-package/1`): the version, channel, runtime identifier,
+repository, source commit and tree, and the size and SHA-256 of every other file in
+the archive. The release workflow writes it from the built editor's own `--version`
+and refuses a build that reports another version or commit.
+
+## Download and install
+
+Check the download first. On Linux, `sha256sum -c <file>.sha256`; on macOS,
+`shasum -a 256 -c <file>.sha256`; in Windows PowerShell:
 
 ```powershell
-$actual = (Get-FileHash .\Runic.Translations.Editor-1.0.0-preview.N-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
-$expected = (Get-Content .\Runic.Translations.Editor-1.0.0-preview.N-win-x64.zip.sha256).Split(' ')[0]
+$file = 'runic-translations-editor-0.1.0-win-x64.zip'
+$actual = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
+$expected = (Get-Content "$file.sha256").Split(' ')[0]
 if ($actual -ne $expected) { throw 'Checksum mismatch' }
-Expand-Archive .\Runic.Translations.Editor-1.0.0-preview.N-win-x64.zip
-.\Runic.Translations.Editor\runic-translations-editor.cmd edit C:\path\to\workspace
 ```
 
+**Debian and Ubuntu:** `sudo apt install ./runic-translations-editor_0.1.0_amd64.deb`.
+**Fedora:** `sudo dnf install ./runic-translations-editor-0.1.0-1.x86_64.rpm`. Both
+add the editor to the applications menu and `Runic.Translations.Editor` to the
+`PATH`; remove them with `sudo apt remove runic-translations-editor` or
+`sudo dnf remove runic-translations-editor`.
+
+**AppImage:** install WebKitGTK 6 (`libwebkitgtk-6.0-4` on Debian and Ubuntu,
+`webkitgtk6.0` on Fedora, `libwebkitgtk-6_0-4` on openSUSE, `webkitgtk-6.0` on Arch
+Linux), then `chmod +x` the file and run it. A tool such as Gear Lever or
+AppImageLauncher adds it to the applications menu. Without FUSE 2, run it with
+`--appimage-extract-and-run`.
+
+**Linux archive:**
+
+```bash
+tar -xzf runic-translations-editor-0.1.0-linux-x64.tar.gz
+./runic-translations-editor-0.1.0-linux-x64/runic-translations-editor edit /path/to/workspace
+./runic-translations-editor-0.1.0-linux-x64/runic-translations-editor desktop-entry install
+```
+
+**macOS:** open the disk image and drag **Runic Translations Editor** to
+Applications. The bundle is ad-hoc signed, not with a Developer ID, and not
+notarized, so Gatekeeper refuses the first start of a downloaded copy ("cannot be
+opened because Apple cannot check it for malicious software"). After checking the
+checksum, either open **System Settings → Privacy & Security**, find the message
+about Runic Translations Editor and choose **Open Anyway** (macOS asks once more),
+or remove the quarantine attribute:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Runic Translations Editor.app"
+```
+
+**Windows:** extract the zip (in PowerShell,
+`Expand-Archive runic-translations-editor-0.1.0-win-x64.zip -DestinationPath .`) and
+start `runic-translations-editor-0.1.0-win-x64\runic-translations-editor.cmd`. The
+files are not code-signed, so Microsoft Defender SmartScreen may show "Windows
+protected your PC" for a downloaded file: choose **More info**, then **Run anyway**.
+Unblocking the zip before extracting it (**Properties → Unblock**, or
+`Unblock-File` in PowerShell) avoids the question for every file.
+
 The launcher accepts `edit [workspace]` and `validate [workspace]`; without
-arguments it edits the current directory. A workspace contains one `runic.json`
+arguments it edits the current directory. Started from the applications menu, the
+editor opens its example workspace. A workspace contains one `runic.json`
 translation project, which can use direct MF2 or grouped RMF2 resources.
 
-## Availability and trust
+## Trust and updates
 
-This repository is the authority for Editor source and any Editor archive. The
-[Runic Translations](https://github.com/Runic-Artifex/runic-translations)
-repository publishes compiler/runtime/tool packages consumed here, but does not
-package or release this application.
+The packages are unsigned (D078.4): there is no paid code-signing certificate or
+Apple Developer ID behind them, and macOS packages are not notarized. What you can
+check is the `.sha256` file of each download, the `package-manifest.json` of an
+archive, and the source commit that `--version` reports, which the release's tag
+names. Where a machine's policy forbids unsigned
+applications, build the editor from source.
 
-The editor performs no update request and never changes itself. Replacing an
-extracted archive is a manual action. No public signing, notarization, or automatic
-update capability is claimed.
+The editor performs no update request and never changes itself. To update, install
+the new package over the old one, or replace an extracted archive. The deb and rpm
+are not served from a package repository, so `apt upgrade` and `dnf upgrade` do not
+update them. Preferences, recent projects and drafts stay in the per-user state
+described below.
 
-Windows may show an unknown-publisher warning. macOS Gatekeeper may prevent an
-unsigned archive from starting under the machine's policy. Do not bypass those
-controls; use a source build when policy forbids an unsigned archive.
+## Releasing the editor
+
+Every step that publishes needs the maintainer's go-ahead, each time.
+
+1. **Prepare.** In a pull request, set `RunicTranslationsEditorVersion` in
+   `apps/translations-editor/Directory.Build.props`, write the introduction in
+   `eng/release/notes/editor/<version>/_intro.md`, run
+   `bun eng/release/notes.mjs --editor assemble <version>`, review the assembled
+   `eng/release/notes/editor/<version>.md` and commit it with the removed fragments.
+   The pull request's **Release editor** run builds and checks every package as a dry run.
+2. **Merge** it once every check has passed.
+3. **Tag**, with the maintainer's approval: `git tag editor-v<version> <commit>` on that
+   `main` commit and `git push origin editor-v<version>`. The tag starts **Release
+   editor** and nothing else; the SDK's CI and Publish preview do not run for
+   `editor-v*` tags. The workflow refuses a tag that does not name the editor's
+   version, and notes that are still fragments.
+4. **Review the draft.** After the packages of all three systems have been built,
+   installed or extracted, and opened on their runners, the workflow creates a draft
+   release named after the tag, with the editor's notes, as a prerelease before 1.0,
+   and not marked Latest. Download and try the packages.
+5. **Publish** the draft from the releases page, with the maintainer's approval.
+
+**Release editor** can also be dispatched: with **dry-run** (the default) it builds and
+checks every package of a branch or tag without releasing; dispatched on an
+`editor-v<version>` tag with **dry-run** off, it drafts that tag's release, for
+example after a failed run. A rerun replaces the assets of a draft and never changes a
+published release.
 
 ## Validation and reviewable diffs
 

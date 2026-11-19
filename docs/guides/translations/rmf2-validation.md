@@ -160,25 +160,15 @@ Native layout, browser layout, GC pauses and end-to-end language-server transpor
 are outside these measurements. The syntax cache has a separately tested bounded
 capacity and reuses only byte-identical resource snapshots.
 
-The transport-level LSP measurement is opt-in and has its workload and generous
-pass/fail limits checked into
-`tests/benchmarks/translations/rmf2-lsp/baseline-v2.json`:
-
-```sh
-dotnet run -c Release --project tests/dotnet/Runic.Translations.Build.Tests -- --treenode-filter "/*/*/Rmf2LspBenchmark/*" --output detailed
-```
-
-The benchmark is an `[Explicit]` case of the Build test suite, so other runs of
-the suite skip it; `--output detailed` prints its JSON report. It measures a v5 2,000-message catalog and a ranged
-incremental edit through the real child-process stdio entry point (three samples,
-reporting medians). Queued cancellation uses the same framed protocol over
-in-process streams with internal worker and cancellation-observed hooks, so the
-reader has cancelled the queued target before the worker resumes. The production
-stdio entry point supplies neither hook and exposes no test barrier protocol
-method.
-CI runs the same command as a deterministic, workload-specific regression guard
-with generous upper bounds; those bounds are not a latency promise. Host-only
-Visual Studio UI/layout time is outside the measurement.
+The language server's large-catalog budgets measure what an editor user waits
+for, through the real child-process stdio entry point, on a catalog of
+20,000 messages in 10 locales: open to the first diagnostics, an edit to its
+diagnostics, hover and completion idle and while typing, a rename across the
+catalog, and memory, with and without a review file. CI checks them in the *Language server / large-catalog
+budgets* job (`bun eng/run.mjs lsp-budget`); see
+[tests/lsp-budget](../../../tests/lsp-budget/README.md) and the
+[language server guide](language-server.md#performance). The budgets guard
+against regressions on CI's runner and are not a latency promise.
 
 ## Interchange boundary
 

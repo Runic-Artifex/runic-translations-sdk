@@ -65,9 +65,10 @@ public static class GeneratedCatalogSupport
 
     /// <summary>
     /// Reads the direct values that a generated catalog embeds for one locale as raw DEFLATE data (RFC 1951) of the
-    /// compiler's UTF-8 JSON (RMF2 runtime ABI 4). The JSON is inflated into a pooled buffer, read as
-    /// <see cref="ReadValues(ReadOnlySpan{byte})"/> reads it, and the buffer returned: the generated catalog calls this once
-    /// per locale, on the locale's first use.
+    /// compiler's UTF-8 JSON (RMF2 runtime ABI 4). The JSON is inflated into an array of exactly
+    /// <paramref name="length"/> bytes and read as <see cref="ReadValues(ReadOnlySpan{byte})"/> reads it; only the values
+    /// stay in memory, as no buffer is kept in a pool. The generated catalog calls this once per locale, on the locale's
+    /// first use.
     /// </summary>
     /// <param name="deflatedUtf8Json">The DEFLATE data.</param>
     /// <param name="length">The length of the inflated JSON in bytes, which the data must match exactly.</param>
@@ -82,6 +83,36 @@ public static class GeneratedCatalogSupport
     /// <exception cref="TranslationPackException">The data does not inflate to <paramref name="length"/> bytes, or is not in the compiler's form.</exception>
     public static IReadOnlyList<CompiledTranslationValue> ReadDeflatedValues(ReadOnlySpan<byte> deflatedUtf8Json, int length, ReadOnlySpan<byte> formatData) =>
         DeflatedLocaleData.Read(deflatedUtf8Json, length, Rmf2FormatData.Parse(formatData));
+
+    /// <summary>
+    /// Reads the direct values that a generated catalog embeds for one locale as raw DEFLATE data (RFC 1951) of the
+    /// compiler's binary encoding (RMF2 runtime ABI 5; <c>specs/translations/rmf2-execution-v2.md</c>, "Generated locale
+    /// data, binary encoding"). The whole locale is checked when it is read; each message's model is built on its first
+    /// format. The generated catalog calls this once per locale, on the locale's first use.
+    /// </summary>
+    /// <param name="deflatedData">The DEFLATE data.</param>
+    /// <param name="length">The length of the inflated data in bytes, which the data must match exactly.</param>
+    /// <exception cref="TranslationPackException">The data does not inflate to <paramref name="length"/> bytes, or is not in the compiler's form.</exception>
+    public static IReadOnlyList<CompiledTranslationValue> ReadDeflatedBinaryValues(ReadOnlySpan<byte> deflatedData, int length) =>
+        DeflatedLocaleData.ReadBinary(deflatedData, length, null);
+
+    /// <summary>
+    /// Reads the direct values that a generated catalog embeds for one locale in the binary encoding as raw DEFLATE data,
+    /// with the pinned CLDR currency, unit and compact-notation data the compiler selected for them; see
+    /// <see cref="ReadDeflatedBinaryValues(ReadOnlySpan{byte}, int)"/>.
+    /// </summary>
+    /// <exception cref="TranslationPackException">The data does not inflate to <paramref name="length"/> bytes, or is not in the compiler's form.</exception>
+    public static IReadOnlyList<CompiledTranslationValue> ReadDeflatedBinaryValues(ReadOnlySpan<byte> deflatedData, int length, ReadOnlySpan<byte> formatData) =>
+        DeflatedLocaleData.ReadBinary(deflatedData, length, Rmf2FormatData.Parse(formatData));
+
+    /// <summary>
+    /// Inflates data that a generated catalog embeds as raw DEFLATE data (RMF2 runtime ABI 5), such as its message table,
+    /// into a new array of exactly <paramref name="length"/> bytes.
+    /// </summary>
+    /// <param name="deflatedData">The DEFLATE data.</param>
+    /// <param name="length">The length of the inflated data in bytes, which the data must match exactly.</param>
+    /// <exception cref="TranslationPackException">The data does not inflate to <paramref name="length"/> bytes.</exception>
+    public static byte[] InflateData(ReadOnlySpan<byte> deflatedData, int length) => DeflatedLocaleData.InflateExact(deflatedData, length);
 
     /// <summary>
     /// Inflates UTF-8 text that a generated catalog embeds as raw DEFLATE data (RMF2 runtime ABI 4), such as its

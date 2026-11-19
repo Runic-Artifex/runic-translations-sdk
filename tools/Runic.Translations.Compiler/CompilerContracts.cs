@@ -72,6 +72,21 @@ public sealed class TranslationSource
         _utf8Bytes = (byte[])utf8Bytes.Clone();
     }
 
+    // A source over bytes the caller has just created and never changes: no defensive copy.
+    private TranslationSource(string path, byte[] utf8Bytes, bool owned)
+    {
+        Path = NormalizePath(path);
+        _utf8Bytes = utf8Bytes;
+    }
+
+    /// <summary>A source that takes ownership of <paramref name="utf8Bytes"/>, which the caller never changes afterwards.</summary>
+    internal static TranslationSource Owned(string path, byte[] utf8Bytes)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(utf8Bytes);
+        return new TranslationSource(path, utf8Bytes, owned: true);
+    }
+
     public string Path { get; }
 
     /// <summary>Returns a copy of the UTF-8 source, a new array on every call.</summary>

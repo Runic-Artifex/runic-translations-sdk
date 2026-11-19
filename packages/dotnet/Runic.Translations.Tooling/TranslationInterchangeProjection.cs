@@ -84,6 +84,80 @@ internal sealed record TranslationInterchangePlaceholder(string Name, string Typ
 
 internal static class TranslationInterchangeProjectionAdapter
 {
+    // The source fingerprints of a compiled project (immutable), and of one canonical message by its contract and base
+    // resource, which a validation session keeps for an unchanged key: only changed messages are fingerprinted again.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Rmf2ProjectV5, IReadOnlyDictionary<string, string>> ProjectFingerprints = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Rmf2MessageContractV5, UnitFingerprint> UnitFingerprints = new();
+    private sealed record UnitFingerprint(Rmf2TranslationV5 Source, string Fingerprint);
+    // What a fingerprint is computed from, besides the key, and the fingerprint: a reparsed file gives its unchanged messages
+    // new contracts and resources, whose fingerprints are the ones of the same content in the catalog's last fingerprints.
+    private sealed record FingerprintInput(string Raw, bool Document, bool Structured, IReadOnlyList<Rmf2InputV5> Inputs, string Fingerprint)
+    {
+        internal bool Matches(string raw, bool document, bool structured, IReadOnlyList<Rmf2InputV5> inputs) =>
+            Document == document && Structured == structured && string.Equals(Raw, raw, StringComparison.Ordinal) && Inputs.SequenceEqual(inputs);
+    }
+    // The inputs of the last fingerprints of each of the latest catalogs (by catalog ID), most recent last.
+    private static readonly List<(string Catalog, Dictionary<string, FingerprintInput> Inputs)> RecentInputs = new();
+    private const int MaximumRecentCatalogs = 8;
+
+    /// <summary>
+    /// The per-unit source fingerprint of every canonical key, as <see cref="TranslationInterchangeProjection.SourceFingerprints"/>
+    /// of <see cref="From(Rmf2ProjectCompilation)"/> computes it, without projecting the translations.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, string> SourceFingerprints(Rmf2ProjectCompilation compilation)
+    {
+        ArgumentNullException.ThrowIfNull(compilation);
+        if (!compilation.Success)
+            throw new TranslationInterchangeException("XLIFF21-COMPILATION", "XLIFF export requires a successful compiler result.");
+        if (compilation.Project is not { } project)
+            throw new TranslationInterchangeException("XLIFF21-CATALOG", "XLIFF export requires exactly one compiled catalog.");
+        if (ProjectFingerprints.TryGetValue(project, out IReadOnlyDictionary<string, string>? cached)) return cached;
+        Rmf2LocaleV5 sourceLocale = project.Locales.Single(locale =>
+            string.Equals(locale.Tag, project.DefaultLocale, StringComparison.Ordinal));
+        var sourceByKey = sourceLocale.DirectResources.ToDictionary(static resource => resource.Key, StringComparer.Ordinal);
+        var fingerprints = new Dictionary<string, string>(project.CanonicalMessages.Count, StringComparer.Ordinal);
+        Dictionary<string, FingerprintInput>? previous = null;
+        lock (RecentInputs)
+            foreach (var recent in RecentInputs)
+                if (recent.Catalog == project.Id) previous = recent.Inputs;
+        var inputs = new Dictionary<string, FingerprintInput>(project.CanonicalMessages.Count, StringComparer.Ordinal);
+        foreach (Rmf2MessageContractV5 contract in project.CanonicalMessages.OrderBy(static contract => contract.Key, StringComparer.Ordinal))
+        {
+            if (!sourceByKey.TryGetValue(contract.Key, out Rmf2TranslationV5? source))
+                throw new TranslationInterchangeException("XLIFF21-CANONICAL", "The compiled v5 project is missing a direct canonical source resource.");
+            string raw = RawSyntax(source.Message);
+            bool document = contract.Content == Rmf2DocumentProfileV5.Document, structured = IsStructured(source.Message);
+            if (!UnitFingerprints.TryGetValue(contract, out UnitFingerprint? unit) || !ReferenceEquals(unit.Source, source))
+            {
+                string fingerprint = previous is not null && previous.TryGetValue(contract.Key, out FingerprintInput? prior) && prior.Matches(raw, document, structured, contract.Inputs)
+                    ? prior.Fingerprint : Fingerprint(contract.Key, raw, document || structured, contract.Inputs);
+                UnitFingerprints.AddOrUpdate(contract, unit = new(source, fingerprint));
+            }
+            fingerprints.Add(contract.Key, unit.Fingerprint);
+            inputs.Add(contract.Key, new(raw, document, structured, contract.Inputs, unit.Fingerprint));
+        }
+        lock (RecentInputs)
+        {
+            RecentInputs.RemoveAll(recent => recent.Catalog == project.Id);
+            if (RecentInputs.Count == MaximumRecentCatalogs) RecentInputs.RemoveAt(0);
+            RecentInputs.Add((project.Id, inputs));
+        }
+        IReadOnlyDictionary<string, string> result = new System.Collections.ObjectModel.ReadOnlyDictionary<string, string>(fingerprints);
+        ProjectFingerprints.AddOrUpdate(project, result);
+        return result;
+
+        // As From computes a canonical unit's SourceFingerprint.
+        static string Fingerprint(string key, string raw, bool whole, IReadOnlyList<Rmf2InputV5> inputs)
+        {
+            IReadOnlyList<TranslationInterchangePiece>? pieces = whole ? null : TranslationInterchangePattern.Decompose(raw);
+            TranslationInterchangePlaceholder[] placeholders = inputs
+                .OrderBy(static input => input.Name, StringComparer.Ordinal)
+                .Select(static input => new TranslationInterchangePlaceholder(input.Name, input.Type, string.Empty))
+                .ToArray();
+            return TranslationInterchangeFingerprint.UnitSource(key, raw, pieces, placeholders);
+        }
+    }
+
     internal static TranslationInterchangeProjection From(Rmf2ProjectCompilation compilation)
     {
         ArgumentNullException.ThrowIfNull(compilation);
@@ -202,7 +276,7 @@ internal static class TranslationInterchangeProjectionAdapter
     }
 
     private static string RawSyntax(Rmf2MessageV5 message) =>
-        Encoding.UTF8.GetString(message.Syntax.Source.GetUtf8Bytes());
+        message.Syntax.Text;
 
     // Profile v3: placeholders are plain (exchanged as <ph>); declarations and selectors are exchanged as a selector
     // view (DecomposeSelector) when their patterns are plain; markup is structured.

@@ -25,11 +25,11 @@
       "class": "total",
       "build": "m200-l2",
       "margin": 0.02,
-      "note": "linux-x64 executable bytes of the probe with 200 messages × 2 locales, less the catalog's own mstat records: the runtime, the framework and their metadata. 3,418,992 on main before #216 (T1); 3,069,346 before the message table (D072.2, T3), whose UTF-8 keys replace the catalog's UTF-16 key and input literals, which mstat counts here; 3,052,362 before the CLDR tables and plural rules became data (D072.2, T4). Since runic-sdk#1109 the probe registers its catalog in a translation context (TranslationContextBuilder), as Runic applications do (2,974,522 before that, with CreateManagerAsync). The limit is the measured value plus 2 %",
+      "note": "linux-x64 executable bytes of the probe with 200 messages × 2 locales, less the catalog's own mstat records: the runtime, the framework and their metadata. 3,418,992 on main before #216 (T1); 3,069,346 before the message table (D072.2, T3), whose UTF-8 keys replace the catalog's UTF-16 key and input literals, which mstat counts here; 3,052,362 before the CLDR tables and plural rules became data (D072.2, T4). Since runic-sdk#1109 the probe registers its catalog in a translation context (TranslationContextBuilder), as Runic applications do (2,974,522 before that, with CreateManagerAsync). Since D077.16 it also holds the probe's own code, which is left out of the catalog's records: Main and one non-inlined Calls method per message (3,028,343 before, when Main called every accessor itself; 3,048,960 before the shared one-input accessor bodies, whose callers now hold the inlined accessors). The limit is the measured value plus 2 %; 3,043,939 before RMF2 ABI 5 (D077.16), whose binary locale reader replaces the generated-data JSON reader; 3,009,412 before markup contract v3, whose reading adds about 600 bytes",
       "measured": [
-        3028343
+        3009997
       ],
-      "limit": 3088910
+      "limit": 3070197
     },
     "aot/translations/per-message-bytes": {
       "class": "O(n)",
@@ -42,12 +42,12 @@
         "m800-l2"
       ],
       "margin": 0.02,
-      "note": "mstat bytes of the catalog's own records (locale data and generated code) with 200 and 800 messages in 2 locales; the slope is the cost per message. Before #217, with the locale JSON embedded as is: 229,752 at 200 (1,149 per message); deflated (D072.2, T2): 84,678 → 338,167 (422 per message, 408 of it code); with the message table and shared accessor bodies (T3): 110 per message, of which the table is about 11; since runic-sdk#1109 also the deflated markup contract, about 3 per message (113 in all)",
+      "note": "mstat bytes of the catalog's own records (locale data and generated code) with 200 and 800 messages in 2 locales; the slope is the cost per message. Before #217, with the locale JSON embedded as is: 229,752 at 200 (1,149 per message); deflated (D072.2, T2): 84,678 → 338,167 (422 per message, 408 of it code); with the message table and shared accessor bodies (T3): 110 per message, of which the table is about 11; since runic-sdk#1109 also the deflated markup contract, about 3 per message (113 in all, 24,353 → 92,197). Since D077.16 the probe calls each accessor from its own non-inlined Calls method, and the probe's code (Main, Calls.*) is left out: before, about 46 of the 113 were the probe's call sites in a 3,000-line Main and the readable members that ILC stopped inlining there, so the budget moved with ILC's inlining. The catalog's own cost: 67 per message, about 30 of it data (table 12, two locales 15, contract 3) and the rest typed accessors (16,024 → 56,317). Since D077.16 a one-input accessor calls one shared body per input type and inlines into its caller, and several inputs are a collection expression: the catalog's code is a constant 1,598 (the shared bodies), so the slope is its data, about 30 per message; the probe's executable grows by 143 per message instead of 198. Since RMF2 ABI 5 (D077.16) the locale data is the binary encoding and the message table is DEFLATE data: 8,757 → 26,520 (29.6 per message) before, 16.6 per message after; with markup contract v3, whose default entries are left out, 5,291 → 13,655 (13.9 per message; 16.6 with v2)",
       "measured": [
-        24353,
-        92197
+        5291,
+        13655
       ],
-      "limit": 94041
+      "limit": 13929
     },
     "aot/translations/per-locale-message-bytes": {
       "class": "O(n)",
@@ -60,12 +60,12 @@
         "m200-l10"
       ],
       "margin": 0.1,
-      "note": "mstat bytes of the catalog's RvaFields for 200 messages in 2 and 10 locales: the locale data, the message table and the deflated markup contract (since runic-sdk#1109), which does not grow with the locales (about 2.2 KB here, since T3); the slope is the cost per message and locale. Before #217: 149,044 at 2 locales and 819,390 at 10 (419 per message and extra locale); before T3, without the table: 3,960 and 20,964. Each locale's plurals have a variant per CLDR integer category (fixture.mjs). Deflate compresses scripts unevenly (ar, ja, ru), so the margin is 10 %",
+      "note": "mstat bytes of the catalog's RvaFields for 200 messages in 2 and 10 locales: the locale data, the message table and the deflated markup contract (since runic-sdk#1109), which does not grow with the locales (about 2.2 KB here, since T3); the slope is the cost per message and locale. Before #217: 149,044 at 2 locales and 819,390 at 10 (419 per message and extra locale); before T3, without the table: 3,960 and 20,964. Each locale's plurals have a variant per CLDR integer category (fixture.mjs). Deflate compresses scripts unevenly (ar, ja, ru), so the margin is 10 %. Since RMF2 ABI 5 (D077.16), binary locale data and a deflated message table: 6,847 → 23,946 before (10.7 per message and extra locale), 7.8 after; with markup contract v3, 3,235 → 15,710",
       "measured": [
-        6847,
-        23946
+        3235,
+        15710
       ],
-      "limit": 26341
+      "limit": 17281
     },
     "aot/translations/reflection-runtime-bytes": {
       "class": "total",

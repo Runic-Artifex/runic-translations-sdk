@@ -3480,6 +3480,16 @@ ui {
 }
 ui {
   palette {
+    switch_to_workbench = Zur Werkbank wechseln
+  }
+}
+ui {
+  palette {
+    switch_to_list_view = Zur Listenansicht wechseln
+  }
+}
+ui {
+  palette {
     theme =
       .input {$theme :string}
       {{Darstellung · {$theme}}}
@@ -5205,6 +5215,11 @@ ui {
 ui {
   list {
     keyboard_help = Mit Pfeil nach oben und unten wechseln Sie die Zeile. Die Eingabetaste bearbeitet den Text oder öffnet ihn in der Werkbank, Escape beendet die Bearbeitung und Tab geht zur nächsten Zeile.
+  }
+}
+ui {
+  list {
+    unsaved = Ungespeicherte Änderungen
   }
 }
 ui {

@@ -14,7 +14,7 @@ execution profiles and cannot be mixed in one project.
 | Authoring representation | Direct `.mf2` or grouped `.rmf2` files |
 | Message grammar and normalized AST | 5 (`rmf2-execution-v2`) |
 | Resolved locale artifact | 5 |
-| Runtime/generated-code ABI | RMF2 ABI 3 (markup contract v2); generated C# 4 (deflated locale data, message table), runtime runs 3 and 4 |
+| Runtime/generated-code ABI | RMF2 ABI 3 (markup contract v2); generated C# 5 (binary locale data and message table as DEFLATE data), runtime runs 3, 4 and 5 |
 | ESM ABI | 4 (`web-module-manifest-v3`) |
 | Transport contract | 2 ([text references](transport-v2.md); reads 1) |
 
