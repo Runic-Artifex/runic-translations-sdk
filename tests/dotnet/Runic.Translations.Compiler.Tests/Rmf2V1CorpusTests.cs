@@ -276,8 +276,10 @@ internal sealed class Rmf2V1CorpusTests
     // Re-pinned for #212: runtime.js declares the catalog's pseudoLocales (none here) and leaves them out of locale fallback
     // and negotiation, in both digests (ESM only).
     // Re-pinned for merging runic-sdk#1109 (C#) with #212 (ESM), in both digests.
-    private const string EncodedOutputDigest = "8d9cd94a3f7ddc5251266db89b3e96f7f6dddac3ef204872b198db98d8b63282";
-    private const string HiddenEncodedOutputDigest = "a9dd42662e9e3f793295594e2c5ad50d9e860d776fe0ad17c483b6ff23426450";
+    // Re-pinned for D077.16: an accessor with one input calls a shared body per input type (__Format_string and so on),
+    // several inputs and reference fallback arguments are collection expressions, in both digests (C# only).
+    private const string EncodedOutputDigest = "a9c9a09df3c05da03e53f9cdd3c29736a9fa8a1f69511f57e2ebc685e80eb52a";
+    private const string HiddenEncodedOutputDigest = "a7f36f07d727373f02ef3708bf568a73de97a2777ee1aecbcfa9a54fee8774b4";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]
