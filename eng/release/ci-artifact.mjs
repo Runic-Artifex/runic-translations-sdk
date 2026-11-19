@@ -191,6 +191,38 @@ function existingRelease(version, source, spawn) {
   return found;
 }
 
+// Precedence of two SemVer versions without the "v": negative, zero or positive.
+export function compareVersions(a, b) {
+  const parse = version => {
+    const [core, pre] = version.split("+")[0].split(/-(.*)/s);
+    return { core: core.split(".").map(Number), pre: pre === undefined ? [] : pre.split(".") };
+  };
+  const x = parse(a), y = parse(b);
+  for (let i = 0; i < 3; i++) if (x.core[i] !== y.core[i]) return x.core[i] - y.core[i];
+  if (!x.pre.length || !y.pre.length) return y.pre.length - x.pre.length;
+  for (let i = 0; i < Math.max(x.pre.length, y.pre.length); i++) {
+    const [p, q] = [x.pre[i], y.pre[i]];
+    if (p === undefined || q === undefined) return p === undefined ? -1 : 1;
+    if (p === q) continue;
+    const [m, n] = [/^\d+$/.test(p), /^\d+$/.test(q)];
+    if (m && n) return Number(p) - Number(q);
+    if (m !== n) return m ? -1 : 1;
+    return p < q ? -1 : 1;
+  }
+  return 0;
+}
+
+// The SDK tag released before this version: the highest v<version> tag below it.
+// GitHub would otherwise start the generated notes at the latest release before the
+// new tag, which can be an editor-v* release (D078.2, #278). undefined when none exists.
+export function previousTag(version, spawn = spawnSync) {
+  const result = spawn("gh", ["api", "--paginate", `repos/${REPOSITORY}/git/matching-refs/tags/v`, "--jq", ".[].ref"], { encoding: "utf8" });
+  if (result.status !== 0) throw ghFailure("Tag listing", result);
+  return result.stdout.split("\n").map(ref => /^refs\/tags\/v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/.exec(ref.trim())?.[1])
+    .filter(found => found !== undefined && compareVersions(found, version) < 0)
+    .sort(compareVersions).map(found => `v${found}`).at(-1);
+}
+
 // GitHub marks every release before 1.0 as a prerelease, and from 1.0 every version with a
 // prerelease suffix (1.0.0-rc.1); a stable version from 1.0.0 is a full release.
 export const githubPrerelease = version => /^0\./.test(version) || version.split("+")[0].includes("-");
@@ -199,8 +231,10 @@ export function releaseCheck(version, source, spawn = spawnSync) {
   releaseNotes(version);
   const found = existingRelease(version, source, spawn);
   if (found?.isDraft) return `Would resume the draft release v${version} for ${source} (${found.url}).`;
-  return found ? `GitHub release v${version} already exists for ${source} (${found.url}); a rerun keeps it.`
-    : `Would create the ${githubPrerelease(version) ? "prerelease" : "release"} v${version} at ${source}.`;
+  if (found) return `GitHub release v${version} already exists for ${source} (${found.url}); a rerun keeps it.`;
+  const start = previousTag(version, spawn);
+  return `Would create the ${githubPrerelease(version) ? "prerelease" : "release"} v${version} at ${source}, `
+    + (start ? `its generated notes starting at ${start}.` : "with generated notes from the start of the history.");
 }
 
 // A rerun after a partial publication keeps a release of this exact tag and commit,
@@ -218,7 +252,8 @@ export function releaseNotes(version, directory = resolve(root, "eng/release/not
   return existsSync(path) ? path : undefined;
 }
 
-// gh puts the --notes-file text before the notes that --generate-notes adds.
+// gh puts the --notes-file text before the notes that --generate-notes adds; those
+// start at the previous SDK tag, never at an editor-v* tag.
 export function createRelease(version, source, files, spawn = spawnSync, notes = releaseNotes(version)) {
   const tag = `v${version}`;
   const found = existingRelease(version, source, spawn);
@@ -226,8 +261,11 @@ export function createRelease(version, source, files, spawn = spawnSync, notes =
     if (spawn("gh", args, { stdio: "inherit" }).status !== 0) throw new Error(`Could not ${what} GitHub release ${tag}.`);
   };
   const prerelease = githubPrerelease(version);
-  if (!found) gh(["release", "create", tag, ...files, "--repo", REPOSITORY, "--target", source, ...(prerelease ? ["--prerelease"] : []), "--generate-notes",
-    ...(notes ? ["--notes-file", notes] : [])], "create");
+  if (!found) {
+    const start = previousTag(version, spawn);
+    gh(["release", "create", tag, ...files, "--repo", REPOSITORY, "--target", source, ...(prerelease ? ["--prerelease"] : []), "--generate-notes",
+      ...(start ? ["--notes-start-tag", start] : []), ...(notes ? ["--notes-file", notes] : [])], "create");
+  }
   else {
     const present = new Set((found.assets ?? []).map(asset => asset.name));
     const missing = files.filter(file => !present.has(basename(file)));

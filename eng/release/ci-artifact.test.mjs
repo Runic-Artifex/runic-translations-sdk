@@ -3,7 +3,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ARTIFACT, CI_WORKFLOW, REPOSITORY, createRelease, githubPrerelease, releaseNotes, findCiPackages, prepare, refuseTrainFeed, releaseCheck, selectArtifact, scan, selectCiRun, verify } from "./ci-artifact.mjs";
+import { ARTIFACT, CI_WORKFLOW, REPOSITORY, compareVersions, createRelease, githubPrerelease, previousTag, releaseNotes, findCiPackages, prepare, refuseTrainFeed, releaseCheck, selectArtifact, scan, selectCiRun, verify } from "./ci-artifact.mjs";
 
 const sha = "a".repeat(40);
 const run = (id, extra = {}) => ({ id, head_sha: sha, event: "push", head_branch: "main", path: CI_WORKFLOW,
@@ -90,7 +90,8 @@ with tarfile.open(d+'/npm/runic-artifex-translations-svelte-'+v+'.tgz','w:gz') a
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
-const fakeGh = ({ release = false, tag, draft = false, assets = [], target = sha, annotated = false, tagError = false, releaseError = false } = {}) => {
+const fakeGh = ({ release = false, tag, draft = false, assets = [], target = sha, annotated = false, tagError = false, releaseError = false,
+  tags = ["v1.2.2"], listError = false } = {}) => {
   const calls = [];
   const spawn = (command, args) => {
     calls.push([command, ...args]);
@@ -98,6 +99,10 @@ const fakeGh = ({ release = false, tag, draft = false, assets = [], target = sha
       if (releaseError) return { status: 1, stdout: "", stderr: "HTTP 502: Bad Gateway" };
       return release ? { status: 0, stdout: JSON.stringify({ url: "u", isDraft: draft, targetCommitish: target, assets: assets.map(name => ({ name })) }) }
         : { status: 1, stdout: "", stderr: "release not found" };
+    }
+    if (args[0] === "api" && args.includes(`repos/${REPOSITORY}/git/matching-refs/tags/v`)) {
+      if (listError) return { status: 1, stdout: "", stderr: "gh: Server Error (HTTP 502)" };
+      return { status: 0, stdout: tags.map(name => `refs/tags/${name}\n`).join("") };
     }
     if (args[0] === "api") {
       if (tagError) return { status: 1, stdout: "", stderr: "gh: Server Error (HTTP 502)" };
@@ -114,7 +119,10 @@ const writes = calls => calls.some(c => c[1] === "release" && ["create", "upload
 test("the release check only reads and accepts only a release of this exact commit", () => {
   const { spawn, calls } = fakeGh();
   expect(releaseCheck("1.2.3", sha, spawn)).toContain("Would create");
-  expect(calls.map(c => c.slice(0, 3))).toEqual([["gh", "release", "view"], ["gh", "api", `repos/${REPOSITORY}/git/ref/tags/v1.2.3`]]);
+  expect(calls.map(c => c.slice(0, 3))).toEqual([["gh", "release", "view"], ["gh", "api", `repos/${REPOSITORY}/git/ref/tags/v1.2.3`],
+    ["gh", "api", "--paginate"]]);
+  expect(releaseCheck("1.2.3", sha, fakeGh().spawn)).toContain("its generated notes starting at v1.2.2");
+  expect(releaseCheck("1.2.3", sha, fakeGh({ tags: [] }).spawn)).toContain("from the start of the history");
   expect(releaseCheck("1.2.3", sha, fakeGh({ tag: sha }).spawn)).toContain("Would create");
   expect(releaseCheck("1.2.3", sha, fakeGh({ release: true, tag: sha }).spawn)).toContain("already exists for");
   expect(releaseCheck("1.2.3", sha, fakeGh({ release: true, draft: true }).spawn)).toContain("resume the draft");
@@ -136,7 +144,8 @@ test("only a 404 means absent; other lookup errors stop before writing", () => {
 test("an annotated tag resolves to its commit", () => {
   const { spawn, calls } = fakeGh({ tag: sha, annotated: true });
   expect(releaseCheck("1.2.3", sha, spawn)).toContain("Would create");
-  expect(calls.filter(c => c[1] === "api").map(c => c[2])).toEqual([`repos/${REPOSITORY}/git/ref/tags/v1.2.3`, `repos/${REPOSITORY}/git/tags/${"e".repeat(40)}`]);
+  expect(calls.filter(c => c[1] === "api").map(c => c.at(-3))).toEqual([`repos/${REPOSITORY}/git/ref/tags/v1.2.3`, `repos/${REPOSITORY}/git/tags/${"e".repeat(40)}`,
+    `repos/${REPOSITORY}/git/matching-refs/tags/v`]);
 });
 
 test("a rerun keeps a release of this commit, never modifies a published one and resumes a matching draft", () => {
@@ -167,6 +176,38 @@ test("a rerun keeps a release of this commit, never modifies a published one and
   ({ spawn, calls } = fakeGh({ release: true, tag: "b".repeat(40) }));
   expect(() => createRelease("1.2.3", sha, files, spawn)).toThrow("belongs to");
   expect(writes(calls)).toBe(false);
+});
+
+test("generated notes start at the previous SDK tag, never at an editor tag", () => {
+  // matching-refs/tags/v lists only v* tags; an editor-v* release is never a candidate.
+  const tags = ["v0.9.0", "v0.14.0", "v0.13.0", "v0.6.0-preview.7", "v0.15.0", "v0.16.0", "v1.0.0-rc.1", "vnext", "v0.14"];
+  const { spawn, calls } = fakeGh({ tags });
+  expect(previousTag("0.15.0", spawn)).toBe("v0.14.0");
+  expect(calls.at(-1)).toEqual(["gh", "api", "--paginate", `repos/${REPOSITORY}/git/matching-refs/tags/v`, "--jq", ".[].ref"]);
+  expect(previousTag("1.0.0-rc.2", fakeGh({ tags }).spawn)).toBe("v1.0.0-rc.1");
+  expect(previousTag("1.0.0", fakeGh({ tags }).spawn)).toBe("v1.0.0-rc.1");
+  expect(previousTag("0.7.0-preview.1", fakeGh({ tags }).spawn)).toBe("v0.6.0-preview.7");
+  expect(previousTag("0.6.0-preview.7", fakeGh({ tags }).spawn)).toBeUndefined();
+  for (const [a, b] of [["0.9.0", "0.10.0"], ["1.0.0-rc.1", "1.0.0"], ["1.0.0-rc.2", "1.0.0-rc.10"], ["1.0.0-alpha", "1.0.0-alpha.1"],
+    ["1.0.0-1", "1.0.0-alpha"], ["0.7.0-preview.4", "0.8.0"]]) expect([a, b, Math.sign(compareVersions(a, b))]).toEqual([a, b, -1]);
+  expect(compareVersions("0.15.0", "0.15.0+build")).toBe(0);
+
+  let created = fakeGh({ tags: ["v1.3.0", "v1.4.0"] });
+  createRelease("1.5.0", sha, ["p/nuget/A.nupkg"], created.spawn, "eng/release/notes/1.5.0.md");
+  const create = created.calls.at(-1);
+  expect(create[create.indexOf("--notes-start-tag") + 1]).toBe("v1.4.0");
+  expect(create.indexOf("--notes-start-tag")).toBeGreaterThan(create.indexOf("--generate-notes"));
+  created = fakeGh({ tags: [] });
+  createRelease("1.5.0", sha, ["p/nuget/A.nupkg"], created.spawn, undefined);
+  expect(created.calls.at(-1)).not.toContain("--notes-start-tag");
+  // A failed listing stops before the release is created, as does any other lookup error.
+  created = fakeGh({ listError: true });
+  expect(() => createRelease("1.5.0", sha, ["p/nuget/A.nupkg"], created.spawn, undefined)).toThrow("Tag listing failed");
+  expect(writes(created.calls)).toBe(false);
+  // A rerun that finds a release of this commit does not list tags.
+  created = fakeGh({ release: true, draft: true, assets: ["A.nupkg"] });
+  createRelease("1.5.0", sha, ["p/nuget/A.nupkg"], created.spawn, undefined);
+  expect(created.calls.some(c => c.includes("--paginate"))).toBe(false);
 });
 
 test("GitHub marks 0.y.z and prereleases as prereleases and a stable version from 1.0.0 as a release", () => {
