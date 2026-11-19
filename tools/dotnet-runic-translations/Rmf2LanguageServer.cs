@@ -98,6 +98,12 @@ internal sealed partial class Rmf2LanguageServer
     private readonly Dictionary<string, (string? Project, Exception? Error)> _bufferProjects = new(StringComparer.Ordinal);
     private const int MaximumProjectIndexEntries = 100_000;
     private bool _globalDiagnosticsRefreshPending;
+    // Projects whose open buffers changed and that FlushDiagnostics has not validated yet: a burst of keystrokes is
+    // validated once, at the state of its last change (#271).
+    private readonly SortedSet<string> _pendingValidations = new(PathComparer);
+    // Project validations run, for tests that check that queued changes are validated once.
+    private int _validations;
+    internal int Validations => Volatile.Read(ref _validations);
     private bool _projectIndexRescanPending;
     private static readonly UTF8Encoding Utf8 = new(false, true);
     internal Rmf2LanguageServer(Stream input, Stream output, Action<string>? beforeRequest = null,
@@ -407,7 +413,7 @@ internal sealed partial class Rmf2LanguageServer
             // Do this before looking for textDocument: workspace notifications
             // intentionally have no document field.
             QueueGlobalDiagnosticsRefresh(rescanWorkspace: method == "workspace/didChangeWatchedFiles");
-            FlushGlobalDiagnosticsRefresh();
+            FlushDiagnostics();
             return null;
         }
         if (method == "runic/libraryCatalogs") return LibraryCatalogs(args);
@@ -494,18 +500,16 @@ internal sealed partial class Rmf2LanguageServer
                 {
                     // The closed file is still a project file: while its project has open buffers,
                     // its saved content is validated again and its diagnostics stay in the Problems view.
-                    string[] remaining = BufferUris(closedProject).ToArray();
-                    if (remaining.Length > 0) ValidateAndPublish(closedProject, remaining);
-                    else ClearProjectFileDiagnostics(closedProject);
+                    _pendingValidations.Add(closedProject);
                 }
             }
-            finally { FlushGlobalDiagnosticsRefresh(); }
+            finally { FlushDiagnostics(); }
             return null;
         }
         if (method == "textDocument/didOpen")
         {
             try { Update(uri, document["text"]!.GetValue<string>(), document["version"]!.GetValue<int>()); }
-            finally { FlushGlobalDiagnosticsRefresh(); }
+            finally { FlushDiagnostics(); }
             return null;
         }
         if (!_buffers.TryGetValue(uri, out Buffer? buffer)) throw new InvalidOperationException("Document is not open.");
@@ -525,7 +529,7 @@ internal sealed partial class Rmf2LanguageServer
                 }
                 Update(uri, text, version);
             }
-            finally { FlushGlobalDiagnosticsRefresh(); }
+            finally { FlushDiagnostics(); }
             return null;
         }
         if (method == "runic/documentInfo") return DocumentInfo(uri);
@@ -1241,13 +1245,14 @@ internal sealed partial class Rmf2LanguageServer
             PublishDiagnostics(Array.Empty<TranslationDiagnostic>(), [uri], null);
             return;
         }
-        ValidateAndPublish(project, BufferUris(project).ToArray());
+        _pendingValidations.Add(project);
     }
 
     // Validates one project with its open buffers overlaid and publishes the result for every
     // project file: the open buffers and, from disk, the closed files that carry diagnostics.
     private void ValidateAndPublish(string project, IReadOnlyCollection<string> group)
     {
+        Interlocked.Increment(ref _validations);
         IReadOnlyList<TranslationDiagnostic> diagnostics = Array.Empty<TranslationDiagnostic>();
         try
         {
@@ -1273,15 +1278,32 @@ internal sealed partial class Rmf2LanguageServer
         _projectIndexRescanPending |= rescanWorkspace;
     }
 
-    private void FlushGlobalDiagnosticsRefresh()
+    // Validates what the processed state changes left pending, once no newer state change is queued: a burst of
+    // keystrokes, watcher events or configuration changes is validated once, at the state of its last change, instead
+    // of once per change (#271). Waiting loses nothing: a validation made while a newer revision is queued would only
+    // have its publications held in the outbox until that revision is processed (Run). Every state notification ends
+    // here, so the newest one always validates. A validation that fails stays pending for the next change.
+    private void FlushDiagnostics()
     {
-        if (!_globalDiagnosticsRefreshPending || _processedRevision != Interlocked.Read(ref _latestRevision)) return;
-        bool rescanWorkspace = _projectIndexRescanPending;
-        RefreshDiagnostics(rescanWorkspace);
-        if (rescanWorkspace) _projectIndexRescanPending = false;
-        // A state revision queued meanwhile does not lose these results: its
-        // publications wait in the outbox until the newest revision sends them.
-        _globalDiagnosticsRefreshPending = false;
+        if (_processedRevision != Interlocked.Read(ref _latestRevision)) return;
+        if (_globalDiagnosticsRefreshPending)
+        {
+            bool rescanWorkspace = _projectIndexRescanPending;
+            // The refresh validates every project with open buffers and clears those without.
+            RefreshDiagnostics(rescanWorkspace);
+            if (rescanWorkspace) _projectIndexRescanPending = false;
+            _globalDiagnosticsRefreshPending = false;
+            _pendingValidations.Clear();
+            return;
+        }
+        foreach (string project in _pendingValidations.ToArray())
+        {
+            string[] group = BufferUris(project).ToArray();
+            // A project whose last buffer closed meanwhile no longer owns diagnostics in the client.
+            if (group.Length > 0) ValidateAndPublish(project, group);
+            else ClearProjectFileDiagnostics(project);
+            _pendingValidations.Remove(project);
+        }
     }
 
     private void RefreshDiagnostics(bool rescanWorkspace)
@@ -1645,7 +1667,7 @@ internal sealed partial class Rmf2LanguageServer
         _editApplied = true;
         _reviewViews.Clear();
         QueueGlobalDiagnosticsRefresh();
-        FlushGlobalDiagnosticsRefresh();
+        FlushDiagnostics();
         return null;
     }
 
