@@ -11,9 +11,10 @@ namespace Runic.Translations.Compiler;
 internal sealed class Rmf2ResourceNode
 {
     internal Rmf2ResourceNode(string[] path, string? message, string[] comments, string[] properties,
-        TextSourceLocation name, TextSourceLocation extent, int[] map)
-    { Path = Array.AsReadOnly(path); Message = message; Comments = Array.AsReadOnly(comments);
-      Properties = Array.AsReadOnly(properties); NameLocation = name; Location = extent; MessageByteMap = Array.AsReadOnly(map); }
+        TextSourceLocation name, TextSourceLocation extent, IReadOnlyList<int> map)
+    { Path = Array.AsReadOnly(path); Message = message; Comments = comments.Length == 0 ? NoStrings : Array.AsReadOnly(comments);
+      Properties = properties.Length == 0 ? NoStrings : Array.AsReadOnly(properties); NameLocation = name; Location = extent; MessageByteMap = map; }
+    private static readonly IReadOnlyList<string> NoStrings = Array.AsReadOnly(Array.Empty<string>());
     public IReadOnlyList<string> Path { get; }
     public string Key => string.Join("_", Path);
     public string? Message { get; }
@@ -43,7 +44,6 @@ internal sealed class Rmf2ResourceDocument
 internal static class Rmf2ResourceReader
 {
     internal static readonly Regex Identifier = new("^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant);
-    private static readonly Regex Structural = new("^([A-Za-z_][A-Za-z0-9_]*)[ ]*(=|\\{)(.*)$", RegexOptions.CultureInvariant);
 
     /// <summary>Analyzes each extracted MF2 body while retaining recoverable resource symbols.</summary>
     public static Rmf2ResourceDocument Analyze(TranslationSource source, TranslationCompilerOptions? options = null,
@@ -104,7 +104,7 @@ internal static class Rmf2ResourceReader
         TextSourceLocation name = DiagnosticBag.Location(source, new ByteSpan(0, 0));
         TextSourceLocation location = DiagnosticBag.Location(source, new ByteSpan(0, source.Bytes.Length));
         var node = new Rmf2ResourceNode([key], message, [], [], name, location,
-            Enumerable.Range(0, source.Bytes.Length + 1).ToArray()) { MessageSyntax = syntax };
+            Rmf2ByteMap.Identity(source.Bytes.Length + 1)) { MessageSyntax = syntax };
         return new Rmf2ResourceDocument(source, [node], diagnostics.ToSortedArray());
     }
 
@@ -122,13 +122,14 @@ internal static class Rmf2ResourceReader
         try { text = StrictJsonParser.StrictUtf8.GetString(source.Bytes); }
         catch (DecoderFallbackException)
         { diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "RMF2 requires valid UTF-8.", source, new ByteSpan(0, 0)); return Result(); }
-        var lines = new List<(int Start, string Text, int End)>();
+        // Each line as its start, its length without a trailing CR, and the start of the next line.
+        var lines = new List<(int Start, int Length, int End)>();
         int start = text.StartsWith('\uFEFF') ? 1 : 0;
         for (int i = start; i <= text.Length; i++)
         {
             if (i != text.Length && text[i] != '\n') continue;
             int end = i > start && text[i - 1] == '\r' ? i - 1 : i;
-            lines.Add((start, text.Substring(start, end - start), i < text.Length ? i + 1 : i)); start = i + 1;
+            lines.Add((start, end - start, i < text.Length ? i + 1 : i)); start = i + 1;
         }
         var bytes = new int[text.Length + 1];
         int count = 0;
@@ -141,12 +142,28 @@ internal static class Rmf2ResourceReader
         bytes[text.Length] = count;
         TextSourceLocation Location(int from, int to)
         {
-            int line = lines.FindLastIndex(l => l.Start <= from), last = lines.FindLastIndex(l => l.Start <= to);
+            int line = LastLineAtOrBefore(from), last = LastLineAtOrBefore(to);
             line = Math.Max(line, 0); last = Math.Max(last, 0);
             return new(source.Path, bytes[from], bytes[to] - bytes[from], line + 1, from - lines[line].Start + 1, last + 1, to - lines[last].Start + 1);
         }
+        // The last line that starts at or before a character offset (-1 when none): lines are in ascending start order.
+        int LastLineAtOrBefore(int offset)
+        {
+            int low = 0, high = lines.Count - 1, found = -1;
+            while (low <= high)
+            {
+                int middle = low + ((high - low) >> 1);
+                if (lines[middle].Start <= offset) { found = middle; low = middle + 1; }
+                else high = middle - 1;
+            }
+            return found;
+        }
         void Error(string message, int from, int to) => diagnostics.Add("RTR0050", TranslationDiagnosticSeverity.Error, message, Location(from, to));
-        var groups = new Stack<(Rmf2ResourceNode Node, int Indent, int Start)>();
+        // Each open group with its logical path, the parent path of its entries.
+        var groups = new Stack<(Rmf2ResourceNode Node, int Indent, int Start, string Logical)>();
+        // The extracted message text and its byte map, reused from node to node.
+        var body = new StringBuilder();
+        var map = new Rmf2ByteMap.Builder();
         var indents = new Dictionary<string, int>(StringComparer.Ordinal);
         var comments = new List<string>(); var properties = new List<string>();
         int attachedStart = -1, attachedIndent = -1;
@@ -158,20 +175,21 @@ internal static class Rmf2ResourceReader
         for (int i = 0; i < lines.Count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var line = lines[i]; string trim = line.Text.TrimStart(' '); int indent = line.Text.Length - trim.Length;
+            var line = lines[i]; ReadOnlySpan<char> lineText = text.AsSpan(line.Start, line.Length);
+            int indent = LeadingSpaces(lineText); ReadOnlySpan<char> trim = lineText[indent..];
             if (trim.Length == 0) { ClearAttachment(true); continue; }
             int at = line.Start + indent;
-            if (trim.StartsWith('\t')) { Error("Tabs are not allowed in structural indentation.", at, at + 1); ClearAttachment(true); continue; }
+            if (trim[0] == '\t') { Error("Tabs are not allowed in structural indentation.", at, at + 1); ClearAttachment(true); continue; }
             if (attachedIndent >= 0 && attachedIndent != indent) ClearAttachment(true);
-            if (trim.StartsWith('#') || trim.StartsWith('@'))
+            if (trim[0] is '#' or '@')
             {
                 if (attachedStart < 0) { attachedStart = line.Start; attachedIndent = indent; }
-                if (trim.StartsWith('#'))
-                { if (properties.Count > 0) Error("Comments must precede attached properties.", at, line.Start + line.Text.Length); comments.Add(trim.Substring(1).TrimStart()); }
-                else properties.Add(trim.Substring(1));
+                if (trim[0] == '#')
+                { if (properties.Count > 0) Error("Comments must precede attached properties.", at, line.Start + line.Length); comments.Add(trim[1..].TrimStart().ToString()); }
+                else properties.Add(trim[1..].ToString());
                 continue;
             }
-            if (trim == "}")
+            if (trim is "}")
             {
                 ClearAttachment(true);
                 if (groups.Count == 0) Error("Unexpected group closing brace.", at, at + 1);
@@ -183,47 +201,52 @@ internal static class Rmf2ResourceReader
                 }
                 continue;
             }
-            Match match = Structural.Match(trim);
-            if (!match.Success) { Error("Expected 'name = message', 'name {' or '}'.", at, line.Start + line.Text.Length); ClearAttachment(true); continue; }
+            // name = message, or name {: an identifier, spaces, then '=' or '{' (the Structural pattern).
+            int nameLength = StructuralName(trim, out int operatorIndex);
+            if (nameLength == 0) { Error("Expected 'name = message', 'name {' or '}'.", at, line.Start + line.Length); ClearAttachment(true); continue; }
             if (groups.Count > 0 && indent <= groups.Peek().Indent) Error("Group contents must be indented deeper than their opening.", at, at);
-            string[] path = groups.Reverse().Select(g => g.Node.Path[^1]).Append(match.Groups[1].Value).ToArray();
-            string parent = string.Join(".", path.Take(path.Length - 1));
+            string[] path = new string[groups.Count + 1];
+            int segment = groups.Count - 1;
+            foreach (var group in groups) path[segment--] = group.Node.Path[^1];
+            path[^1] = trim[..nameLength].ToString();
+            string parent = groups.Count == 0 ? "" : groups.Peek().Logical;
             if (indents.TryGetValue(parent, out int expected) && expected != indent) Error("Siblings require consistent structural indentation.", at, at);
             else indents[parent] = indent;
-            bool isGroup = match.Groups[2].Value == "{";
-            string rest = match.Groups[3].Value;
+            bool isGroup = trim[operatorIndex] == '{';
+            int restIndex = operatorIndex + 1;
+            ReadOnlySpan<char> rest = trim[restIndex..];
             int statementStart = attachedStart < 0 ? line.Start : attachedStart;
             int extentEnd = line.End;
-            var map = new List<int>(); var body = new StringBuilder();
+            body.Clear(); map.Clear();
             if (isGroup)
-            { if (rest.Trim().Length != 0) Error("Group opening must occupy its own structural line.", at, line.Start + line.Text.Length); }
+            { if (rest.Trim().Length != 0) Error("Group opening must occupy its own structural line.", at, line.Start + line.Length); }
             else if (rest.Trim(' ').Length != 0)
             {
-                int bodyStart = at + match.Groups[3].Index;
+                int bodyStart = at + restIndex;
                 // One conventional separator space is framing; additional spaces are content.
                 if (text[bodyStart] == ' ') bodyStart++;
-                Append(bodyStart, line.Start + line.Text.Length);
+                Append(bodyStart, line.Start + line.Length);
             }
             else
             {
                 int margin = -1, lastContent = i, firstContent = -1, endLine = i + 1;
                 for (; endLine < lines.Count; endLine++)
                 {
-                    string content = lines[endLine].Text;
+                    ReadOnlySpan<char> content = text.AsSpan(lines[endLine].Start, lines[endLine].Length);
                     if (content.Trim(' ').Length == 0) continue;
-                    int leading = content.Length - content.TrimStart(' ').Length;
+                    int leading = LeadingSpaces(content);
                     if (leading <= indent) break;
                     if (margin < 0) { margin = leading; firstContent = endLine; }
                     if (leading < margin) Error("Multiline content falls between the entry indentation and its margin.", lines[endLine].Start, lines[endLine].Start + leading);
                     lastContent = endLine;
                 }
-                if (firstContent < 0) Error("An assignment without a body is incomplete; use {{}} for empty text.", at, line.Start + line.Text.Length);
+                if (firstContent < 0) Error("An assignment without a body is incomplete; use {{}} for empty text.", at, line.Start + line.Length);
                 else
                 {
                     for (int j = firstContent; j <= lastContent; j++)
                     {
-                        if (j > firstContent) { body.Append('\n'); map.Add(bytes[lines[j - 1].Start + lines[j - 1].Text.Length]); }
-                        Append(lines[j].Start + Math.Min(margin, lines[j].Text.Length), lines[j].Start + lines[j].Text.Length);
+                        if (j > firstContent) { body.Append('\n'); map.Add(bytes[lines[j - 1].Start + lines[j - 1].Length]); }
+                        Append(lines[j].Start + Math.Min(margin, lines[j].Length), lines[j].Start + lines[j].Length);
                     }
                     extentEnd = lines[lastContent].End;
                 }
@@ -231,12 +254,13 @@ internal static class Rmf2ResourceReader
             }
             if (!isGroup) map.Add(map.Count == 0 ? bytes[at + trim.Length] : bytes[extentEnd > 0 && text[extentEnd - 1] == '\n' ? (extentEnd > 1 && text[extentEnd - 2] == '\r' ? extentEnd - 2 : extentEnd - 1) : extentEnd]);
             var node = new Rmf2ResourceNode(path, isGroup ? null : body.ToString(), comments.ToArray(), properties.ToArray(),
-                Location(at, at + match.Groups[1].Length), Location(statementStart, extentEnd), map.ToArray());
-            if (!isGroup) node.MessageSyntax = Mf2SyntaxReader.Read(new TranslationSource(source.Path, Encoding.UTF8.GetBytes(node.Message!)), options, cancellationToken);
+                Location(at, at + nameLength), Location(statementStart, extentEnd), map.Build());
+            if (!isGroup) node.MessageSyntax = Mf2SyntaxReader.Read(TranslationSource.Owned(source.Path, Encoding.UTF8.GetBytes(node.Message!)), options, cancellationToken);
             nodes.Add(node);
             foreach (string property in properties)
             {
-                string name = property.Split(' ', 2)[0];
+                int space = property.IndexOf(' ');
+                string name = space < 0 ? property : property[..space];
                 if (isGroup && (name == "example" || name == "param" || name == "maxLength")) Error("@example, @param and @maxLength attach only to messages.", statementStart, at);
                 if (name != "example" && name != "param" && name != "maxLength") diagnostics.Add("RTR0051", TranslationDiagnosticSeverity.Warning, "Unknown metadata @" + name + " is preserved without execution.", Location(statementStart, at));
             }
@@ -244,15 +268,37 @@ internal static class Rmf2ResourceReader
             if (isGroup)
             {
                 if (groups.Count >= options.MaximumDepth) { Error("RMF2 group depth exceeds configured limit.", at, at); break; }
-                groups.Push((node, indent, statementStart));
+                groups.Push((node, indent, statementStart, string.Join(".", path)));
             }
             if (nodes.Count > options.MaximumKeysPerCatalog) { Error("RMF2 node count exceeds configured limit.", at, at); break; }
             if (map.Count > options.MaximumValueBytes + 1) Error("RMF2 message exceeds configured byte limit.", at, at);
             void Append(int from, int to)
-            { body.Append(text, from, to - from); for (int b = bytes[from]; b < bytes[to]; b++) map.Add(b); }
+            { body.Append(text, from, to - from); map.AddRange(bytes[from], bytes[to]); }
         }
         ClearAttachment(true);
         foreach (var group in groups) Error("Unclosed RMF2 group.", group.Start, group.Start);
         return Result();
+    }
+
+    private static int LeadingSpaces(ReadOnlySpan<char> line)
+    {
+        int count = 0;
+        while (count < line.Length && line[count] == ' ') count++;
+        return count;
+    }
+
+    // The length of the name of a structural line (^([A-Za-z_][A-Za-z0-9_]*)[ ]*(=|\{)(.*)$), with the index of its '=' or
+    // '{'; 0 when the line is not structural.
+    private static int StructuralName(ReadOnlySpan<char> line, out int operatorIndex)
+    {
+        operatorIndex = -1;
+        if (line.Length == 0 || !(char.IsAsciiLetter(line[0]) || line[0] == '_')) return 0;
+        int length = 1;
+        while (length < line.Length && (char.IsAsciiLetterOrDigit(line[length]) || line[length] == '_')) length++;
+        int index = length;
+        while (index < line.Length && line[index] == ' ') index++;
+        if (index == line.Length || line[index] is not ('=' or '{')) return 0;
+        operatorIndex = index;
+        return length;
     }
 }
