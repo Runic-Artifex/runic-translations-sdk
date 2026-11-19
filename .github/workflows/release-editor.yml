@@ -170,6 +170,8 @@ jobs:
           cat ./*.sha256
       - name: Permit the WebKit sandbox on Ubuntu
         run: eng/ci/permit-webkit-sandbox.sh
+      # Each window opens as runic-sdk's GTK 4 checks open theirs: Xvfb with a D-Bus session and in-memory settings.
+      # Without the session bus the WebKitGTK 6 page never connects to the editor (presentation-connection-timeout).
       - name: Install the deb and open the editor
         timeout-minutes: 5
         run: |
@@ -182,7 +184,7 @@ jobs:
           test -f "/usr/share/icons/hicolor/512x512/apps/$APP_ID.png"
           appstreamcli validate --no-net "/usr/share/metainfo/$APP_ID.metainfo.xml"
           test "$(readlink -f /usr/bin/Runic.Translations.Editor)" = "/usr/lib/$APP_ID/Runic.Translations.Editor"
-          GDK_BACKEND=x11 xvfb-run -a bash eng/ci/editor-native-canary.sh "/usr/lib/$APP_ID" gtk4-webkitgtk6 artifacts/editor-canary/deb "$VERSION"
+          GDK_BACKEND=x11 GSETTINGS_BACKEND=memory xvfb-run -a dbus-run-session -- bash eng/ci/editor-native-canary.sh "/usr/lib/$APP_ID" gtk4-webkitgtk6 artifacts/editor-canary/deb "$VERSION"
           sudo dpkg -r runic-translations-editor
       # The rpm installs on Fedora; on Ubuntu its requirement is checked and its files are extracted and started.
       - name: Check the rpm, extract it and open the editor
@@ -195,7 +197,7 @@ jobs:
           mkdir -p "$root"
           rpm2cpio "$rpm" | (cd "$root" && cpio -idm --quiet)
           desktop-file-validate "$root/usr/share/applications/$APP_ID.desktop"
-          GDK_BACKEND=x11 xvfb-run -a bash eng/ci/editor-native-canary.sh "$root/usr/lib/$APP_ID" gtk4-webkitgtk6 artifacts/editor-canary/rpm "$VERSION"
+          GDK_BACKEND=x11 GSETTINGS_BACKEND=memory xvfb-run -a dbus-run-session -- bash eng/ci/editor-native-canary.sh "$root/usr/lib/$APP_ID" gtk4-webkitgtk6 artifacts/editor-canary/rpm "$VERSION"
       - name: Open the AppImage
         timeout-minutes: 5
         env:
@@ -206,7 +208,7 @@ jobs:
           root="$RUNNER_TEMP/squashfs-root"
           desktop-file-validate "$root/$APP_ID.desktop"
           test -x "$root/AppRun"
-          EDITOR_EXECUTABLE="$appimage" GDK_BACKEND=x11 xvfb-run -a \
+          EDITOR_EXECUTABLE="$appimage" GDK_BACKEND=x11 GSETTINGS_BACKEND=memory xvfb-run -a dbus-run-session -- \
             bash eng/ci/editor-native-canary.sh "$root/usr/lib/$APP_ID" gtk4-webkitgtk6 artifacts/editor-canary/appimage "$VERSION"
       - name: Extract the tar.gz and open the editor
         timeout-minutes: 5
@@ -218,7 +220,7 @@ jobs:
           tar -C "$clean" -xzf "artifacts/editor-release/$name.tar.gz"
           bun eng/release/editor-release.mjs verify-manifest "$clean/$name"
           "$clean/$name/runic-translations-editor" --version | head -n 1 | grep -qx "Runic Translations Editor ${VERSION}+$(git rev-parse HEAD)"
-          GDK_BACKEND=x11 xvfb-run -a bash eng/ci/editor-native-canary.sh "$clean/$name" gtk4-webkitgtk6 artifacts/editor-canary/tar "$VERSION"
+          GDK_BACKEND=x11 GSETTINGS_BACKEND=memory xvfb-run -a dbus-run-session -- bash eng/ci/editor-native-canary.sh "$clean/$name" gtk4-webkitgtk6 artifacts/editor-canary/tar "$VERSION"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: editor-linux-x64
