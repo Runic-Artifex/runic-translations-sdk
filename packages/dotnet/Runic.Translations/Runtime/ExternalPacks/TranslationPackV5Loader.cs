@@ -39,7 +39,7 @@ internal static class TranslationPackV5Loader
             if (root["markupContract"].ValueKind != JsonValueKind.Object ||
                 !root["markupContract"].TryGetProperty("version", out JsonElement markupVersion) ||
                 markupVersion.ValueKind != JsonValueKind.Number || !markupVersion.TryGetInt32(out int markupVersionNumber) ||
-                markupVersionNumber != Rmf2MarkupContract.Version)
+                markupVersionNumber is not (Rmf2MarkupContract.Version or Rmf2MarkupContract.CompactVersion))
                 throw Error("The external pack was built for another Runic markup contract and must be rebuilt with the current compiler.", TranslationPackFailureReason.MarkupContractVersionMismatch);
             string catalog = String(root["catalog"]), locale = String(root["locale"]), fingerprint = String(root["contractFingerprint"]);
             if (!TranslationPackValidation.IsCatalog(catalog)) throw Error("The external pack catalog identifier is invalid.");
@@ -50,7 +50,9 @@ internal static class TranslationPackV5Loader
             // The fingerprint proves compatibility with generated code. Trust in
             // the bytes remains exclusively the caller's integrity policy.
             if (!string.Equals(fingerprint, contract.ContractFingerprint, StringComparison.Ordinal)) throw Error("The external pack fingerprint does not match the generated contract.", TranslationPackFailureReason.ContractFingerprintMismatch);
-            if (root["markupContract"].GetRawText() != contract.Rmf2MarkupContract)
+            // The same contract in version 2 or 3 (D077.16): a release's catalog of markup contract v3 loads the v2 packs
+            // written for it, and the other way round.
+            if (!Rmf2MarkupContract.SameContract(root["markupContract"].GetRawText(), contract.Rmf2MarkupContract!, contract.Messages.Select(static message => message.Key.Name)))
                 throw Error("The RMF2 markup contract differs from the trusted catalog.", TranslationPackFailureReason.ArgumentContractMismatch);
             // The pack's contract equals the trusted one byte for byte, so a link failure means the
             // trusted contract itself is not a valid markup contract v2, not that the AST is malformed.
@@ -112,7 +114,7 @@ internal static class TranslationPackV5Loader
             if (root["markupContract"].ValueKind != JsonValueKind.Object ||
                 !root["markupContract"].TryGetProperty("version", out JsonElement markupVersion) ||
                 markupVersion.ValueKind != JsonValueKind.Number || !markupVersion.TryGetInt32(out int markupVersionNumber) ||
-                markupVersionNumber != Rmf2MarkupContract.Version)
+                markupVersionNumber is not (Rmf2MarkupContract.Version or Rmf2MarkupContract.CompactVersion))
                 throw Error("The overlay pack was built for another Runic markup contract and must be rebuilt with the current compiler.", TranslationPackFailureReason.MarkupContractVersionMismatch);
             string catalog = String(root["catalog"]), locale = String(root["locale"]), fingerprint = String(root["contractFingerprint"]);
             if (!TranslationPackValidation.IsCatalog(catalog)) throw Error("The overlay pack catalog identifier is invalid.");
@@ -139,7 +141,7 @@ internal static class TranslationPackV5Loader
                 Dictionary<string, JsonElement> wrapper = Members(property.Value, ["contentLocale", "ast"]);
                 string contentLocale = String(wrapper["contentLocale"]);
                 if (!TranslationPackValidation.IsCanonicalLocale(contentLocale) ||
-                    !markup.Messages.TryGetValue(property.Name, out Rmf2MarkupContract.Message? linked) ||
+                    !markup.TryGetMessage(property.Name, out Rmf2MarkupContract.Message? linked) ||
                     !linked.ContentLocales.TryGetValue(locale, out string? declared) || declared != contentLocale)
                     throw Error("RMF2 effective content locale mismatch.", TranslationPackFailureReason.ArgumentContractMismatch);
                 CompiledRmf2Message overlayMessage = ReadAst(wrapper["ast"], null, limits, contentLocale);

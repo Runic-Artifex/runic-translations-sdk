@@ -12,8 +12,8 @@ emission.
 
 Project schema v1 remains unchanged apart from the additive markup `placement`
 member and `integer` option type; artifact v5 does not imply a project schema
-version bump. The exported markup contract is version 2 (see
-[execution v2](rmf2-execution-v2.md)). The linker infers direct `.mf2`
+version bump. The exported markup contract is version 3, version 2 without its
+default-shaped entries (see [execution v2](rmf2-execution-v2.md#markup-contract-version-3)). The linker infers direct `.mf2`
 versus grouped `.rmf2` sources and rejects mixed representations. It uses the
 existing locale, mount, completeness, extra-key, empty-value and runtime policies.
 

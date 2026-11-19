@@ -1410,7 +1410,7 @@ export function freezeGeneratedMessage(data, value) {
 function dynamicContract(tables, key) {
   let contracts = dynamicContracts.get(tables); if (!contracts) dynamicContracts.set(tables, contracts = new Map());
   let contract = contracts.get(key);
-  if (!contract) { const markup = tables.rmf2Contract.messages?.[key]; contract = contractOf({ ...markup, key, structured: tables.messageContracts[key].structured, inputs: tables.messageContracts[key].inputs, contentLocales: markup?.contentLocales ?? {} }); contracts.set(key, contract); }
+  if (!contract) { const markup = contractEntry(tables.rmf2Contract, key); contract = contractOf({ ...markup, key, structured: tables.messageContracts[key].structured, inputs: tables.messageContracts[key].inputs, contentLocales: markup?.contentLocales ?? {} }); contracts.set(key, contract); }
   return contract;
 }
 
@@ -1419,7 +1419,7 @@ export function decodeLocaleArtifactV5(value, tables) {
   const captured = snapshotJson(value, limits.maximumDepth, limits.maximumDocumentBytes);
   if (!captured.ok) return failure(`RTR0023/${captured.reason}`);
   const snapshot = captured.value;
-  const envelope = validateEnvelope(snapshot, tables.rmf2Contract); if (envelope) return failure(envelope);
+  const envelope = validateEnvelope(snapshot, tables); if (envelope) return failure(envelope);
   const entries = [];
   for (const [key, message] of Object.entries(snapshot.messages)) {
     if (!Object.hasOwn(tables.messageContracts, key)) return failure("RTR0023/unknown-key");
@@ -1546,12 +1546,12 @@ export function installOverlayV5(value, tables, options) {
   // A locale the catalog declares keeps the catalog's chain, so a library release that adds the locale keeps the overlay working.
   if (!declared && fallback !== null) for (const entry of state.entries)
     if (entry.locale === locale && entry.fallback !== null && entry.fallback !== fallback) throw new RangeError(`Locale '${locale}' is already added with fallback '${entry.fallback}'.`);
-  const own = new Map(), copies = new Map(), diagnostics = [], markup = snapshot.markupContract.messages;
+  const own = new Map(), copies = new Map(), diagnostics = [];
   for (const key of Object.keys(snapshot.messages)) {
     const message = snapshot.messages[key];
     if (!isRecord(message) || typeof message.contentLocale !== "string" || canonicalLocale(message.contentLocale) !== message.contentLocale || !isRecord(message.ast)) return failure("RTR0023/malformed-pattern");
     // The artifact's own contract states each message's content locale and kind.
-    const linked = isRecord(markup) && Object.hasOwn(markup, key) && isRecord(markup[key]) ? markup[key] : undefined;
+    const linked = contractEntry(snapshot.markupContract, key);
     if (!linked || !isRecord(linked.contentLocales) || linked.contentLocales[locale] !== message.contentLocale) return failure("RTR0023/argument-contract-mismatch");
     const copy = message.contentLocale !== locale;
     // A fallback copy (a build with relaxed completeness) is not application text for a locale the catalog declares.
@@ -1611,7 +1611,8 @@ function validateOverlayEnvelope(value) {
   if (!members.every(name => Object.hasOwn(value, name))) return "RTR0023/malformed";
   if (value.artifactVersion !== 5) return "RTR0023/artifact-version-mismatch";
   if (value.messageGrammarVersion !== 5 || value.profile !== profile) return "RTR0023/message-grammar-version-mismatch";
-  if (!isRecord(value.markupContract) || value.markupContract.version !== 2) return "RTR0023/markup-contract-version-mismatch";
+  if (!isRecord(value.markupContract) || (value.markupContract.version !== 2 && value.markupContract.version !== 3)) return "RTR0023/markup-contract-version-mismatch";
+  if (!validContractLocales(value.markupContract)) return "RTR0023/malformed";
   if (value.catalog !== catalog) return "RTR0023/catalog-mismatch";
   if (typeof value.contractFingerprint !== "string" || !/^sha256:[0-9a-f]{64}$/.test(value.contractFingerprint)) return "RTR0023/malformed";
   if (typeof value.locale !== "string" || canonicalLocale(value.locale) !== value.locale) return "RTR0023/locale-mismatch";
@@ -1665,18 +1666,59 @@ export function decodeWireValue(value, type) {
   } catch { return failure(); }
 }
 
-function validateEnvelope(value, rmf2Contract) {
+// Markup contract v3 (D077.16) is v2 without the message entries of the default shape, with the catalog's locales instead:
+// a message it does not list has no slots, is not structured, has inline content without skeletons, and each locale is its
+// own content locale. Version 2 lists every message and has no locales.
+function validContractLocales(contract) {
+  if (contract.version === 2) return !Object.hasOwn(contract, "locales");
+  return Array.isArray(contract.locales) && contract.locales.every((locale, index) => typeof locale === "string" && canonicalLocale(locale) === locale &&
+    (index === 0 || contract.locales[index - 1] < locale));
+}
+
+// @runic-markup-contract-start
+function defaultContractEntry(locales) {
+  return { slots: {}, structured: false, contentLocales: Object.fromEntries(locales.map(locale => [locale, locale])), content: "inline", skeletons: [] };
+}
+
+// The entry of a message of the catalog: the listed one, or in v3 the default one. Callers check that the key is the catalog's.
+function contractEntry(contract, key) {
+  const messages = contract?.messages;
+  if (isRecord(messages) && Object.hasOwn(messages, key)) return isRecord(messages[key]) ? messages[key] : undefined;
+  return contract?.version === 3 && Array.isArray(contract.locales) ? defaultContractEntry(contract.locales) : undefined;
+}
+
+// A contract in version 2, as the compiler writes it: a v3 contract with the default entry of each of the catalog's keys
+// it does not list, in ordinal key order.
+function expandContract(contract, keys) {
+  if (!isRecord(contract) || contract.version !== 3 || !Array.isArray(contract.locales) || !isRecord(contract.messages)) return contract;
+  const messages = {};
+  for (const key of [...new Set([...keys, ...Object.keys(contract.messages)])].sort((left, right) => left < right ? -1 : left > right ? 1 : 0))
+    messages[key] = Object.hasOwn(contract.messages, key) ? contract.messages[key] : defaultContractEntry(contract.locales);
+  return { version: 2, contracts: contract.contracts, messages };
+}
+
+// Two contracts of one catalog are the same in version 2 or 3: equal, or equal once each is written in version 2. A v3
+// catalog loads the v2 packs written for it and the other way round (.NET Rmf2MarkupContract.SameContract).
+function sameMarkupContract(left, right, keys) {
+  if (JSON.stringify(left) === JSON.stringify(right)) return true;
+  return JSON.stringify(expandContract(left, keys)) === JSON.stringify(expandContract(right, keys));
+}
+// @runic-markup-contract-end
+
+function validateEnvelope(value, tables) {
+  const rmf2Contract = tables.rmf2Contract;
   const members=["artifactVersion","messageGrammarVersion","profile","catalog","locale","contractFingerprint","messages","markupContract"];
   if (!isRecord(value)) return "RTR0023/malformed";
   if (Object.keys(value).some(name=>!members.includes(name)&&name!=="formatData")) return "RTR0023/unknown-member";
   if (!members.every(name=>Object.hasOwn(value,name))) return "RTR0023/malformed";
   if (value.artifactVersion !== 5) return "RTR0023/artifact-version-mismatch";
   if (value.messageGrammarVersion !== 5 || value.profile !== profile) return "RTR0023/message-grammar-version-mismatch";
-  if (!isRecord(value.markupContract) || value.markupContract.version !== 2) return "RTR0023/markup-contract-version-mismatch";
+  if (!isRecord(value.markupContract) || (value.markupContract.version !== 2 && value.markupContract.version !== 3)) return "RTR0023/markup-contract-version-mismatch";
+  if (!validContractLocales(value.markupContract)) return "RTR0023/malformed";
   if (value.catalog !== catalog) return "RTR0023/catalog-mismatch"; if (value.contractFingerprint !== contractFingerprint) return "RTR0023/contract-fingerprint-mismatch";
   if (typeof value.locale !== "string" || !localeSet.has(value.locale) || canonicalLocale(value.locale) !== value.locale) return "RTR0023/locale-mismatch";
   if (!isRecord(value.messages)) return "RTR0023/malformed"; if (Object.keys(value.messages).length > limits.maximumMessages) return "RTR0023/limit-exceeded";
-  if (JSON.stringify(value.markupContract) !== JSON.stringify(rmf2Contract)) return "RTR0023/argument-contract-mismatch";
+  if (!sameMarkupContract(value.markupContract, rmf2Contract, Object.keys(tables.messageContracts))) return "RTR0023/argument-contract-mismatch";
   return null;
 }
 

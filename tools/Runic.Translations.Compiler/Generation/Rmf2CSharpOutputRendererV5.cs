@@ -111,7 +111,8 @@ internal static class Rmf2CSharpOutputRendererV5
         WriteLocaleData(writer, project, table, rmf2Abi);
         if (rmf2Abi4)
         {
-            byte[] contract = System.Text.Encoding.UTF8.GetBytes(project.MarkupContract);
+            // RMF2 ABI 5: markup contract version 3 (D077.16); a runtime of 0.14 reads only version 2.
+            byte[] contract = System.Text.Encoding.UTF8.GetBytes(rmf2Abi >= 5 ? project.CompactMarkupContract : project.MarkupContract);
             writer.Line("// The markup contract JSON (" + className.Replace("CatalogData", "Catalog") + ".Rmf2MarkupContract) as DEFLATE data, inflated when it is read.");
             writer.Line("internal static int MarkupContractLength => " + contract.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) + ";");
             WriteBytes(writer, "MarkupContractData", Deflate(contract), "internal");
@@ -177,7 +178,7 @@ internal static class Rmf2CSharpOutputRendererV5
             else writer.Line("CatalogId, DefaultLocale, ContractFingerprint, static () => Rmf2MarkupContract, CreateProvider);");
             writer.Unindent();
             writer.Blank();
-            if (overlays is not null) RenderOverlays(writer, overlays);
+            if (overlays is not null) RenderOverlays(writer, overlays, compactContract: rmf2Abi >= 5);
         }
         writer.Line("public static global::Runic.Translations.ITranslationProvider CreateProvider("); writer.Indent();
         writer.Line("global::Runic.Translations.ITextValueFormatter? valueFormatter = null,");
@@ -280,7 +281,7 @@ internal static class Rmf2CSharpOutputRendererV5
 
     // runic.json "overrides": one compiled overlay per library catalog. Each locale's overlay pack (a locale artifact v5 with
     // only the overridden messages) is a UTF-8 literal, so loading it is a parse without I/O or allocation of the data.
-    private static void RenderOverlays(GenerationWriter writer, IReadOnlyList<Rmf2ProjectV5> overlays)
+    private static void RenderOverlays(GenerationWriter writer, IReadOnlyList<Rmf2ProjectV5> overlays, bool compactContract)
     {
         writer.Line("/// <summary>");
         writer.Line("/// The overrides of library catalogs that runic.json declares in <c>overrides</c>, compiled from translations/overrides:");
@@ -299,7 +300,7 @@ internal static class Rmf2CSharpOutputRendererV5
             writer.Line("global::Runic.Translations.TranslationOverlay.FromCompiled(" + GenerationSupport.CSharpString(overlay.Id) + ", " + added + ", static locale => locale switch");
             writer.Line("{"); writer.Indent();
             foreach (string locale in overlay.OverlayKeys.Keys.OrderBy(locale => locale, StringComparer.Ordinal))
-                writer.Line(GenerationSupport.CSharpString(locale) + " => " + GenerationSupport.CSharpString(Rmf2LocaleArtifactV5.RenderOverlay(overlay, locale).Text) + "u8,");
+                writer.Line(GenerationSupport.CSharpString(locale) + " => " + GenerationSupport.CSharpString(Rmf2LocaleArtifactV5.RenderOverlay(overlay, locale, compactContract).Text) + "u8,");
             writer.Line("_ => default,");
             writer.Unindent(); writer.Line("}),");
         }

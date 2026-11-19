@@ -64,7 +64,11 @@
       "type": "object",
       "properties": {
         "version": {
-          "const": 2
+          "enum": [
+            2,
+            3
+          ],
+          "description": "Markup contract version: 2 lists every message; 3 (Runic Translations 0.15, D077.16) omits the entries of the default shape and lists the catalog's locales."
         },
         "contracts": {
           "type": "object",
@@ -231,6 +235,15 @@
             ],
             "additionalProperties": false
           }
+        },
+        "locales": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "description": "Version 3 only: the catalog's locales in ordinal order. A message the contract does not list has no slots, is not structured, has inline content without skeletons, and each of these locales is its own content locale."
         }
       },
       "required": [
@@ -238,7 +251,30 @@
         "contracts",
         "messages"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "version": {
+                "const": 3
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "locales"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "locales"
+              ]
+            }
+          }
+        }
+      ]
     },
     "formatData": {
       "description": "The pinned CLDR data the messages need: number records when they format numbers, dates or times (numbers), and currency, unit and compact data when they use :currency, :unit or compact notation (the compiler's selection of specs/translations/cldr/runic-formats-48.2.json for the content locales' languages). Both runtimes check it with the rules of rmf2-execution-v2.md, Embedded format data, which are stricter than this schema.",

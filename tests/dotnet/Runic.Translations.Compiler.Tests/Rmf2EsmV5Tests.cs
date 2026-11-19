@@ -265,7 +265,7 @@ internal sealed class Rmf2EsmV5Tests
                 import { bindMarkup, createInlineRenderer, defineMarkup, rmf2RuntimeAbiVersion } from "./app.esm-v5/runtime.js";
                 import { rmf2Contract } from "./app.esm-v5/dynamic.js";
                 const check=(condition,message)=>{if(!condition)throw new Error(message);};
-                check(rmf2RuntimeAbiVersion===3&&rmf2Contract.version===2,"contract markers");
+                check(rmf2RuntimeAbiVersion===3&&rmf2Contract.version===3,"contract markers");
                 const exported=rmf2Contract.contracts["app:step"];
                 check(exported.placement==="inline"&&exported.children==="inline"&&exported.options.level.minimum===1&&exported.options.level.maximum===6,"exported integer contract");
                 const step=defineMarkup({name:"app:step",kind:"paired",placement:"inline",children:"inline",interactive:false,plainText:"children",options:{level:{type:"integer",values:[],default:"1",literalOnly:false,minimum:1,maximum:6}}});

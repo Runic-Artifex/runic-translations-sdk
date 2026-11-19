@@ -20,22 +20,24 @@ internal static class Rmf2LocaleArtifactV5
         return project.FormatData(items.Select(item => item.ContentLocale).Append(locale.Tag), items.Select(item => item.Message), numbers: true);
     }
 
-    internal static TranslationGeneratedOutput Render(Rmf2ProjectV5 project, string localeTag) => Render(project, localeTag, null);
+    // compactContract: markup contract version 3, which runtimes of this release read; false writes version 2 for an earlier
+    // runtime, such as the overlays generated C# of RMF2 ABI 3 and 4 embeds.
+    internal static TranslationGeneratedOutput Render(Rmf2ProjectV5 project, string localeTag, bool compactContract = true) => Render(project, localeTag, null, compactContract);
 
     /// <summary>
     /// Renders the overlay pack of one locale of a library catalog compiled with override sources
     /// (<c>TranslationCompiler.CompileRmf2OverlayV5</c>): a locale artifact v5 with only the overridden messages, which the
     /// runtimes load as an overlay (.NET <c>TranslationOverlay</c>, ESM <c>installOverlay</c>) and check key by key.
     /// </summary>
-    internal static TranslationGeneratedOutput RenderOverlay(Rmf2ProjectV5 project, string localeTag)
+    internal static TranslationGeneratedOutput RenderOverlay(Rmf2ProjectV5 project, string localeTag, bool compactContract = true)
     {
         ArgumentNullException.ThrowIfNull(project);
         if (!project.OverlayKeys.TryGetValue(localeTag, out IReadOnlyList<string>? keys))
             throw new ArgumentException("Locale '" + localeTag + "' has no override messages in catalog '" + project.Id + "'.", nameof(localeTag));
-        return Render(project, localeTag, new HashSet<string>(keys, StringComparer.Ordinal));
+        return Render(project, localeTag, new HashSet<string>(keys, StringComparer.Ordinal), compactContract);
     }
 
-    private static TranslationGeneratedOutput Render(Rmf2ProjectV5 project, string localeTag, HashSet<string>? only)
+    private static TranslationGeneratedOutput Render(Rmf2ProjectV5 project, string localeTag, HashSet<string>? only, bool compactContract)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(localeTag);
@@ -74,7 +76,8 @@ internal static class Rmf2LocaleArtifactV5
             }
             writer.WriteEndObject();
             writer.WritePropertyName("markupContract");
-            using (JsonDocument markup = JsonDocument.Parse(project.MarkupContract)) markup.RootElement.WriteTo(writer);
+            // Markup contract version 3, which runtimes of this release read (D077.16); version 2 for an earlier runtime.
+            using (JsonDocument markup = JsonDocument.Parse(compactContract ? project.CompactMarkupContract : project.MarkupContract)) markup.RootElement.WriteTo(writer);
             // The CLDR data the messages need (D055.4): number records when they format numbers, dates or times, so an
             // overlay that adds a language formats correctly on a catalog without it, and currency, unit and compact data
             // when they use those functions.

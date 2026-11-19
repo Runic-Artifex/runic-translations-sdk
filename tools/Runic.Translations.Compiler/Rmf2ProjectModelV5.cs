@@ -109,6 +109,22 @@ internal sealed record Rmf2ProjectV5(string Id, string CodeNamespace, string Cla
     internal const int CSharpDeflatedJsonRuntimeAbiVersion = 4;
     internal const int MarkupContractVersion = 2;
 
+    // MarkupContract in version 3, computed once per contract on first use (a `with` copy that changes MarkupContract or
+    // Locales recomputes it): what generated code of RMF2 ABI 5, ESM output and packs of this release carry.
+    private (string Source, IReadOnlyList<Rmf2LocaleV5> Locales, string Compact)? _compactMarkupContract;
+
+    /// <summary>The markup contract in version 3 (<see cref="Rmf2MarkupContractV3"/>); <see cref="MarkupContract"/> is version 2.</summary>
+    internal string CompactMarkupContract
+    {
+        get
+        {
+            if (_compactMarkupContract is { } cached && ReferenceEquals(cached.Source, MarkupContract) && ReferenceEquals(cached.Locales, Locales)) return cached.Compact;
+            string compact = Rmf2MarkupContractV3.Compact(MarkupContract, Locales.Select(static locale => locale.Tag));
+            _compactMarkupContract = (MarkupContract, Locales, compact);
+            return compact;
+        }
+    }
+
     // code.referenceFallbackText in runic.json: generated C# reference factories carry the base-locale text.
     internal bool ReferenceFallbackText { get; init; } = true;
     /// <summary>The <c>validation.pluralCategories</c> policy of each locale, for tools that check translations they import.</summary>
