@@ -61,7 +61,7 @@ internal sealed class Mf2SyntaxDocument
         {
             if (Volatile.Read(ref _tokens) is { } tokens) return tokens;
             if (Volatile.Read(ref _released) is { } released && released.TryGetTarget(out tokens)) return tokens;
-            tokens = Mf2SyntaxReader.Read(Source, _options, CancellationToken.None, _text).Tokens;
+            tokens = Mf2SyntaxReader.Read(Source, _options, _text, CancellationToken.None).Tokens;
             Volatile.Write(ref _released, new WeakReference<IReadOnlyList<Mf2SyntaxToken>>(tokens));
             return tokens;
         }
@@ -106,11 +106,11 @@ internal sealed class Mf2SyntaxDocument
 internal static class Mf2SyntaxReader
 {
     public static Mf2SyntaxDocument Read(TranslationSource source, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default) =>
-        Read(source, options, cancellationToken, null);
+        Read(source, options, null, cancellationToken);
 
     /// <param name="text">The source's text, when the caller has it (it is the UTF-8 decoding of the bytes): the syntax
     /// shares it instead of decoding the bytes again.</param>
-    internal static Mf2SyntaxDocument Read(TranslationSource source, TranslationCompilerOptions? options, CancellationToken cancellationToken, string? text)
+    internal static Mf2SyntaxDocument Read(TranslationSource source, TranslationCompilerOptions? options, string? text, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(source); options ??= new TranslationCompilerOptions();
         return new Reader(source, options, cancellationToken, text).Read();
