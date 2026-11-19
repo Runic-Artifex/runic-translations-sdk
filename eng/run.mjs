@@ -81,6 +81,16 @@ function buildEditor() {
   run("dotnet", ["build", workspace.editor.project, "--configuration", configuration, "-p:RunicTranslationsBuildMode=Verification", editorSmokeTestBuild, "--nologo"]);
 }
 
+// Publishes the editor for one runtime (linux-x64, win-x64, osx-arm64), framework-dependent, to artifacts/editor-<rid>,
+// as the README's publish command does. The frontend consumes the built web packages; the publish builds the
+// Translations projects it references. CI's native editor canaries on Windows and macOS start this output.
+function publishEditor(rid) {
+  assert.match(rid ?? "", /^(linux|win|osx)-(x64|arm64)$/, "Name the runtime: publish-editor linux-x64|win-x64|osx-arm64.");
+  buildWeb();
+  run("dotnet", ["publish", workspace.editor.project, "--configuration", configuration, "--runtime", rid, "--self-contained", "false",
+    "--output", resolve(root, "artifacts", `editor-${rid}`), "--nologo"]);
+}
+
 function verifyEditorFrontend() {
   const editorDirectory = dirname(resolve(root, workspace.editor.project));
   run("bun", ["run", "--bun", "verify:built"], resolve(editorDirectory, "Frontend"), {
@@ -364,10 +374,11 @@ async function main() {
       await (await import("./verify-packages.mjs")).verifyPackages(version ?? workspace.version);
       break;
     case "verify-editor-packed": verifyEditorPacked(version); break;
+    case "publish-editor": publishEditor(process.argv[3]); break;
     case "native-aot": testNativeAot(); break;
     case "audit": auditDependencies(); break;
     default:
-      throw new Error("Use bootstrap, build, test, pack [version], pack-built [version], verify:candidate [version], verify-packages [version] (alias), verify-editor-packed [version], native-aot, or audit.");
+      throw new Error("Use bootstrap, build, test, pack [version], pack-built [version], verify:candidate [version], verify-packages [version] (alias), verify-editor-packed [version], publish-editor <rid>, native-aot, or audit.");
   }
 }
 
