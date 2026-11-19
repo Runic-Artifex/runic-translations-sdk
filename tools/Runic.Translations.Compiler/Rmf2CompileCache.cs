@@ -7,8 +7,9 @@ using System.Threading;
 namespace Runic.Translations.Compiler;
 
 /// <summary>
-/// Everything a compile reads besides the message sources: runic.json and the options. Memos are valid only within one
-/// link context (docs/plans/incremental-validation.md).
+/// Everything a compile reads besides the message sources: runic.json and the options (docs/plans/incremental-validation.md).
+/// A session keeps a link state per context; the extracted messages and their memos are shared by the contexts that differ
+/// only in relaxed validation (<see cref="Rmf2CompileCache"/>).
 /// </summary>
 internal sealed record Rmf2LinkContext(string ProjectPath, string ProjectHash, int MaximumDocumentBytes, int MaximumDepth,
     int MaximumKeysPerCatalog, int MaximumValueBytes, int MaximumPlaceholdersPerValue, int MaximumLocalesPerCatalog,
@@ -37,7 +38,7 @@ internal sealed record Rmf2ReadableReferencesMemo(Rmf2MessageContractV5[] Contra
 internal sealed record Rmf2KeyOrder(string[] Added, string[] Sorted);
 internal sealed record Rmf2CallerContractMemo(string Catalog, Rmf2MessageContractV5[] Contracts, string[] Markup, string Json);
 internal sealed record Rmf2MarkupExportMemo(Rmf2MessageContractV5[] Contracts, string[] Used, Rmf2LocaleV5[] Locales, string Json);
-internal sealed record Rmf2ResultMemo(Rmf2SourceUnitV5[] Units, Rmf2ProjectCompilation Result);
+internal sealed record Rmf2ResultMemo(Rmf2SourceUnitV5[] Units, Rmf2ProjectCompilation Result, bool PolicyReported);
 
 /// <summary>What one cached compile reused and what it computed again.</summary>
 internal sealed record Rmf2CompileStatistics(int Files, int FilesRead, int Messages, int MessagesCompiled, int PairsChecked);
@@ -47,6 +48,8 @@ internal sealed class Rmf2CompileCounters
 {
     internal int MessagesCompiled;
     internal int PairsChecked;
+    // Whether a validation policy reported a diagnostic (also one replayed from a memo).
+    internal bool PolicyReported;
 }
 
 /// <summary>
@@ -64,6 +67,15 @@ internal sealed class Rmf2CompileCache
     private readonly object _gate = new();
     private Dictionary<string, Rmf2SourceUnitV5> _units = new(StringComparer.Ordinal);
     private readonly List<(Rmf2LinkContext Context, Rmf2LinkState State)> _contexts = new();
+    // The contexts the extracted messages and their memos are kept for: a link context without relaxed validation. A
+    // relaxed compile (a review compile, which allows every validation policy, or reads the base locale only) reads the
+    // same messages and reuses the memos of a full compile without the policies' diagnostics, so it does not extract and
+    // check the whole catalog again.
+    private readonly List<Rmf2LinkContext> _sourceContexts = new();
+    // The last full compile of the real state when it failed without a diagnostic of a validation policy. A relaxed compile
+    // differs from a full one only where a policy is read, and each such read reports a diagnostic or skips it: of the same
+    // files, it reports the same diagnostics and fails at the same point, so its result is that one.
+    private (Rmf2LinkContext Context, Rmf2SourceUnitV5[] Units, Rmf2ProjectCompilation Result)? _failedWithoutPolicy;
 
     /// <param name="options">The size limits the file units are read with; a compile with other limits reuses nothing.</param>
     internal Rmf2CompileCache(TranslationCompilerOptions? options = null) => Options = options ?? new TranslationCompilerOptions();
@@ -149,20 +161,39 @@ internal sealed class Rmf2CompileCache
             options.MaximumPlaceholdersPerValue, options.MaximumLocalesPerCatalog, options.RelaxedValidation, options.BaseLocaleOnly, pseudoLocales));
         // Nothing changed since the last compile of this context: its result is this one's.
         var units = Array.ConvertAll(found, unit => unit!);
+        bool full = !context.RelaxedValidation && !context.BaseLocaleOnly;
         if (record && state.Last is { } last && last.Units.AsSpan().SequenceEqual(units))
         {
+            if (full) Remember(last.Result, last.PolicyReported);
             statistics = new(materialized.Length, 0, last.Units.Sum(MessageCount), 0, 0);
             return last.Result;
         }
+        // A relaxed compile (not base-locale-only) of the files of a full compile that failed without a policy diagnostic.
+        if (context.RelaxedValidation && !context.BaseLocaleOnly)
+        {
+            (Rmf2LinkContext Context, Rmf2SourceUnitV5[] Units, Rmf2ProjectCompilation Result)? failed;
+            lock (_gate) failed = _failedWithoutPolicy;
+            if (failed is { } same && same.Context.Equals(context with { RelaxedValidation = false }) && same.Units.AsSpan().SequenceEqual(units))
+            {
+                statistics = new(materialized.Length, 0, units.Sum(MessageCount), 0, 0);
+                return same.Result;
+            }
+        }
         var counters = new Rmf2CompileCounters();
-        Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5Cached(project, materialized, lookup, options, pseudoLocales, context, state, counters, cancellationToken);
-        if (record) state.Last = new(units, result);
+        Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5Cached(project, materialized, lookup, options, pseudoLocales, SourceContext(context), state, counters, cancellationToken);
+        if (record) state.Last = new(units, result, counters.PolicyReported);
+        if (record && full) Remember(result, counters.PolicyReported);
         // The new files' messages are compiled and memoized: their token streams are read again only when asked for.
         foreach (int index in missing) found[index]!.ReleaseTokens();
         statistics = new(materialized.Length, missing.Length,
             current.Values.Sum(MessageCount),
             counters.MessagesCompiled, counters.PairsChecked);
         return result;
+
+        void Remember(Rmf2ProjectCompilation compilation, bool policyReported)
+        {
+            lock (_gate) _failedWithoutPolicy = compilation.Project is null && !policyReported ? (context, units, compilation) : null;
+        }
     }
 
     // One instance per distinct context, so memos compare contexts by reference, with its state; the oldest of more than
@@ -176,6 +207,20 @@ internal sealed class Rmf2CompileCache
             if (_contexts.Count == MaximumContexts) _contexts.RemoveAt(0);
             _contexts.Add((context, new Rmf2LinkState()));
             return _contexts[^1];
+        }
+    }
+
+    // The one instance of the context without relaxed validation; the oldest of more than four is forgotten.
+    private Rmf2LinkContext SourceContext(Rmf2LinkContext context)
+    {
+        Rmf2LinkContext full = context with { RelaxedValidation = false, BaseLocaleOnly = false };
+        lock (_gate)
+        {
+            int index = _sourceContexts.FindIndex(item => item.Equals(full));
+            if (index >= 0) return _sourceContexts[index];
+            if (_sourceContexts.Count == MaximumContexts) _sourceContexts.RemoveAt(0);
+            _sourceContexts.Add(full);
+            return full;
         }
     }
 

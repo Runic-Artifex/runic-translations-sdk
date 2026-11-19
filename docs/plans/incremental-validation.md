@@ -69,6 +69,18 @@ uses it at each stage:
 and base-locale-only validation, and pseudo-locale generation. A memo of another context is never used. A change to
 runic.json therefore relinks every message, but it reuses every parse.
 
+**Review compiles.** The relaxed and base-locale-only compiles (`TranslationReviewFile.ForReview`, after a full compile
+that failed) differ from a full compile only where a validation policy is read: every policy reads as `allow`, and the
+base-locale-only one leaves out the translation files. They keep their own link state (2 to 6 above), but share the full
+compile's extracted messages and memos (the link context without relaxed validation), so they neither extract the
+catalog again nor keep a second copy of it:
+- the memos whose checks read a policy (a message's compile, a pair's checks) record whether their compile was relaxed,
+  and their diagnostics without the policies' (`AddPolicyDiagnostic` marks them). A relaxed compile replays a full
+  compile's memo without those; a full compile does not reuse a relaxed one. The other memos read no policy.
+- a relaxed compile of the files of a full compile that failed without any policy diagnostic has that compile's
+  result: each policy read reports a diagnostic or skips it, so with none reported, both compiles report the same
+  diagnostics and fail at the same point.
+
 **Dependencies** are not tracked by hand. Each memo is keyed by the identities of the objects it was computed from. A
 changed file gets a new unit, so its messages get new entries. Every pair and key memo that involved them misses, and
 every other memo hits. A changed base message changes its inputs, so its translations' memo keys miss. Their files

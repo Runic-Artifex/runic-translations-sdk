@@ -566,6 +566,7 @@ public static partial class TranslationCompiler
         TranslationDiagnosticSeverity severity = policy == TranslationPolicy.Warning ? TranslationDiagnosticSeverity.Warning : TranslationDiagnosticSeverity.Error;
         if (subject is { } about) diagnostics.Add(id, severity, message, source, span, about.Key, about.Locale);
         else diagnostics.Add(id, severity, message, source, span);
+        diagnostics.MarkPolicy();
     }
 
     // The closest base-locale path for RTR0011: the same path ignoring case and separators, else
