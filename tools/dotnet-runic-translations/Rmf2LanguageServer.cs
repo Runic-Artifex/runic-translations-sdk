@@ -21,6 +21,8 @@ namespace Runic.Translations.Tool;
 internal sealed partial class Rmf2LanguageServer
 {
     private readonly Rmf2WorkspaceCache _syntaxCache = new();
+    // The saved sources of the projects, reused while a file's length and write time are unchanged (#271).
+    private readonly InputFiles.SourceFileCache _sourceFiles = new();
     private readonly Dictionary<string, Buffer> _buffers = new(StringComparer.Ordinal);
     private readonly Stream _input;
     private readonly Stream _output;
@@ -370,7 +372,7 @@ internal sealed partial class Rmf2LanguageServer
     {
         if (method is "textDocument/didOpen" or "textDocument/didChange" or "textDocument/didClose" or "textDocument/didSave" or
             "workspace/didChangeWatchedFiles" or "workspace/didChangeConfiguration") _reviewViews.Clear();
-        if (method is "workspace/didChangeWatchedFiles" or "workspace/didChangeConfiguration") _dependencies.Clear();
+        if (method is "workspace/didChangeWatchedFiles" or "workspace/didChangeConfiguration") { _dependencies.Clear(); _sourceFiles.Clear(); }
         if (method == ValidatedMethod) { ApplyValidations(); return null; }
         if (method == "initialize")
         {
@@ -685,7 +687,7 @@ internal sealed partial class Rmf2LanguageServer
             // background the last one applied (#271). Before the first validation it shows the source alone.
             ReviewView? view = CurrentReviewView(hoverProject, BufferUris(hoverProject).ToArray()) ?? _lastReviewViews.GetValueOrDefault(hoverProject);
             Rmf2ProjectCompilation? compiled = view?.Compilation;
-            if (view is not null && !entry.IsGroup)
+            if (view is { HasReviewFile: true } && !entry.IsGroup)
                 reviewState = Rmf2ReviewFileState.Describe(view.Review.Project?.DefaultLocale, view.Fingerprints, view.File, view.Error, key, locale);
             if (compiled is { Success: true } && !entry.IsGroup)
             {
@@ -1176,7 +1178,7 @@ internal sealed partial class Rmf2LanguageServer
         if (!IsRegularManifestFile(projectPath))
             throw new InvalidOperationException("Translation project manifests must be regular non-linked runic.json files.");
         Buffer? projectBuffer = snapshot.ProjectBuffer;
-        CompilerInputs inputs = InputFiles.ReadProject(directory, projectBuffer is null ? null : new TranslationSource(projectPath, Utf8.GetBytes(projectBuffer.Text)));
+        CompilerInputs inputs = InputFiles.ReadProject(directory, projectBuffer is null ? null : new TranslationSource(projectPath, Utf8.GetBytes(projectBuffer.Text)), _sourceFiles);
         var sources = inputs.Messages.Select(s => new TranslationSource(Path.GetFullPath(s.Path), s.GetUtf8Bytes())).ToDictionary(s => s.Path, SourcePathComparer);
         // A project outside every workspace root was reached through the
         // explicit-command ancestor rule, not through the bounded index.
@@ -1531,9 +1533,27 @@ internal sealed partial class Rmf2LanguageServer
     }
     private static JsonObject EmptyRange() => new() {
         ["start"] = new JsonObject { ["line"] = 0, ["character"] = 0 }, ["end"] = new JsonObject { ["line"] = 0, ["character"] = 0 } };
-    private sealed record ReviewView(string Stamp, Rmf2ProjectCompilation Compilation, Rmf2ProjectCompilation Review,
-        IReadOnlyDictionary<string, string>? Fingerprints, string? ReviewPath, TranslationInterchangeReview? File, string? Error,
-        TranslationInterchangeException? ReadFailure);
+    // The review compilation and its source fingerprints are computed on first use (#271): a catalog that does not
+    // compile costs a second compilation for them (TranslationReviewFile.ForReview), which only a review file, hover's
+    // review state, "Mark reviewed" and the review quick fixes need.
+    private sealed class ReviewView(string stamp, Rmf2ProjectCompilation compilation, Func<Rmf2ProjectCompilation> review, string? reviewPath,
+        TranslationInterchangeReview? file, string? error, TranslationInterchangeException? readFailure)
+    {
+        private readonly Lazy<(Rmf2ProjectCompilation Review, IReadOnlyDictionary<string, string>? Fingerprints)> _review = new(() => {
+            Rmf2ProjectCompilation compiled = review();
+            return (compiled, compiled is { Success: true, Project: not null } ? TranslationInterchange.ComputeSourceFingerprints(compiled) : null);
+        }, LazyThreadSafetyMode.ExecutionAndPublication);
+        internal string Stamp { get; } = stamp;
+        internal Rmf2ProjectCompilation Compilation { get; } = compilation;
+        internal Rmf2ProjectCompilation Review => _review.Value.Review;
+        internal IReadOnlyDictionary<string, string>? Fingerprints => _review.Value.Fingerprints;
+        internal string? ReviewPath { get; } = reviewPath;
+        internal TranslationInterchangeReview? File { get; } = file;
+        internal string? Error { get; } = error;
+        internal TranslationInterchangeException? ReadFailure { get; } = readFailure;
+        // Whether a review file exists, readable or not: only then does the review compilation matter for diagnostics.
+        internal bool HasReviewFile => File is not null || Error is not null;
+    }
 
     // The review data of a project compiled with the buffers of group, cached (see _reviewViews). The review compilation
     // is the compilation itself when it succeeded, else the same sources without validation policies, else the base
@@ -1559,9 +1579,10 @@ internal sealed partial class Rmf2LanguageServer
     private static ReviewView BuildReviewView(string project, Rmf2Workspace workspace, CancellationToken cancellationToken)
     {
         Rmf2ProjectCompilation compilation = workspace.Validate();
-        Rmf2ProjectCompilation review = TranslationReviewFile.ForReview(compilation, workspace.ProjectSource, workspace.Sources, null, cancellationToken);
-        IReadOnlyDictionary<string, string>? fingerprints = review is { Success: true, Project: not null } ? TranslationInterchange.ComputeSourceFingerprints(review) : null;
-        string? catalog = review.Project?.Id ?? compilation.Project?.Id;
+        TranslationSource projectSource = workspace.ProjectSource;
+        IReadOnlyList<TranslationSource> sources = workspace.Sources.ToArray();
+        // The catalog names the review file. runic.json has it even when the catalog does not compile.
+        string? catalog = compilation.Project?.Id ?? (TranslationCompiler.ReadProjectManifest(projectSource, out _)?.Id is { Length: > 0 } id ? id : null);
         string? path = catalog is not null && TranslationReviewFile.IsFileName(catalog) ? TranslationReviewFile.PathFor(Path.Combine(project, "runic.json"), catalog) : null;
         string stamp = ReviewStamp(path);
         TranslationInterchangeReview? file = null;
@@ -1573,7 +1594,19 @@ internal sealed partial class Rmf2LanguageServer
             catch (TranslationInterchangeException exception) { failure = exception; error = exception.Message; }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { error = exception.Message; }
         }
-        return new ReviewView(stamp, compilation, review, fingerprints, path, file, error, failure);
+        Func<Rmf2ProjectCompilation> review;
+        if (file is not null || error is not null)
+        {
+            // A review file's stale entries are diagnostics (RTR0090): compile for review now, cancellable, off the worker.
+            Rmf2ProjectCompilation computed = TranslationReviewFile.ForReview(compilation, projectSource, sources, null, cancellationToken);
+            review = () => computed;
+        }
+        // Without a review file only a request asks for it, later, on the worker; the validation's cancellation source is
+        // disposed by then.
+        else review = () => TranslationReviewFile.ForReview(compilation, projectSource, sources, null, CancellationToken.None);
+        var view = new ReviewView(stamp, compilation, review, path, file, error, failure);
+        if (view.HasReviewFile) _ = view.Fingerprints;
+        return view;
     }
 
     private static string ReviewStamp(string? path)
@@ -1609,11 +1642,11 @@ internal sealed partial class Rmf2LanguageServer
             string path = LocalPath(uri);
             var source = new TranslationSource(path, Utf8.GetBytes(buffer.Text));
             IReadOnlyList<Rmf2DiagnosticQuickFix> fixes = Rmf2DiagnosticActions.GetProjectQuickFixes(view.Compilation, source, _requestCancellation);
-            IReadOnlyList<TranslationReviewStaleEntry> stale = [];
+            TranslationReviewStaleEntry[] stale = [];
             if (view.File is { } review && view.Fingerprints is not null)
                 stale = TranslationReviewFile.Stale(view.Review, review).Where(entry => PathComparer.Equals(FileKey(entry.Location.Path), FileKey(path)) &&
                     UnsavedReviewFiles(project, view.Review.Project, null, entry.Entry.Key, entry.Entry.Locale).Count == 0).ToArray();
-            return (fixes, stale, view.Review.Project);
+            return (fixes, stale, stale.Length > 0 ? view.Review.Project : null);
         }
         catch (Exception error) when (error is ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or InvalidOperationException or IOException or FormatException or TranslationInterchangeException or TranslationAuthoringException or System.Text.Json.JsonException)
         {
