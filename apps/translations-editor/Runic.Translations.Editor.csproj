@@ -56,7 +56,8 @@
        WKWebView, which Runic.Desktop itself hosts. -->
   <ItemGroup Condition="'$(RunicNativeProvider)' == 'Linux'">
     <PackageReference Include="Runic.Desktop.Gtk4" />
-    <!-- The workspace folder picker uses the portal's unparented FileChooser (EditorWorkspacePicker). -->
+    <!-- serve, whose window has no native owner, picks the workspace folder with the portal's unparented FileChooser
+         (EditorWorkspacePicker). -->
     <PackageReference Include="Runic.Platform.Linux.Portal" />
   </ItemGroup>
 

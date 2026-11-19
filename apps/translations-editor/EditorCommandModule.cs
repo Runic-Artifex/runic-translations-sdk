@@ -28,9 +28,11 @@ namespace Runic.Translations.Editor;
 /// exit code 1) instead of crashing with an unhandled directory exception.
 /// </para>
 /// </remarks>
+[CommandGroup("desktop-entry", Description = "Install or remove the editor's Linux desktop entry and icon.")]
 internal static class EditorCommandModule
 {
-    private static readonly string[] Commands = ["edit", "validate", "diagnostics", "export", "report", "import", "serve"];
+    private static readonly string[] Commands = ["edit", "validate", "diagnostics", "export", "report", "import", "serve",
+        "desktop-entry install", "desktop-entry uninstall"];
 
     /// <summary>
     /// Creates the single parser-neutral editor command catalog. <c>--format human|json</c> selects the output, as in
@@ -219,6 +221,25 @@ internal static class EditorCommandModule
             false,
             context.OutputMode,
             ContinueOnMainThread: MainThreadContinuation(context)));
+
+    /// <summary>
+    /// Writes the editor's Linux desktop entry and icon for the current user (<see cref="EditorDesktopEntry"/>), so the
+    /// desktop shows the editor's window with its icon and lists it with the applications. Nothing else writes them.
+    /// </summary>
+    [Command("desktop-entry install", Description = "Install the editor's desktop entry and icon for the current user (Linux).")]
+    [CommandResult("runic.editor.command/1", typeof(EditorCommandJsonContext))]
+    public static Task<CommandOutcome<EditorCommandResult>> InstallDesktopEntry(
+        [FromServices] IEditorCommandOperations operations,
+        CommandExecutionContext context) =>
+        operations.ExecuteAsync(new EditorCommandRequest("desktop-entry install", [], null, false, false, false, context.OutputMode));
+
+    /// <summary>Removes the desktop entry and icon that <c>desktop-entry install</c> wrote.</summary>
+    [Command("desktop-entry uninstall", Description = "Remove the editor's desktop entry and icon (Linux).")]
+    [CommandResult("runic.editor.command/1", typeof(EditorCommandJsonContext))]
+    public static Task<CommandOutcome<EditorCommandResult>> UninstallDesktopEntry(
+        [FromServices] IEditorCommandOperations operations,
+        CommandExecutionContext context) =>
+        operations.ExecuteAsync(new EditorCommandRequest("desktop-entry uninstall", [], null, false, false, false, context.OutputMode));
 
     // The Runic Desktop host runs on the process main thread (GTK 4 on Linux, AppKit on macOS), which a command does not
     // run on. Under CommandApp.Run (Program.Main) the command hands the host's start back to that thread.

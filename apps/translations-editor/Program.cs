@@ -38,6 +38,7 @@ internal static class Program
           runic-translations-editor report [<workspace>] --interchange xliff|review --source <path> [--workspace <path>]
           runic-translations-editor import [<workspace>] --interchange xliff|review --source <path> --apply [--workspace <path>]
           runic-translations-editor serve [<workspace>] [--workspace <path>]
+          runic-translations-editor desktop-entry install | uninstall
           runic-translations-editor help | --help | -h
           runic-translations-editor --version
 
@@ -47,6 +48,9 @@ internal static class Program
         start; `--browser` opens an installed browser instead. `serve` opens no window: it
         prints RUNIC_APPLICATION_URL=<url>, which one browser can open, and serves until a
         line is read from standard input or the process is stopped.
+        `desktop-entry install` writes the Linux desktop entry and icon for the current user
+        below $XDG_DATA_HOME (~/.local/share), so the desktop shows the editor's icon;
+        `desktop-entry uninstall` removes them. No other command writes them.
         Validation uses the same compiler path and diagnostics as editor load and save.
         `report` is the read-only, reviewable import preview. `import --apply` previews
         and then applies one import in the same process; it never accepts a reusable token.
@@ -156,6 +160,8 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
 {
     public async Task<CommandOutcome<EditorCommandResult>> ExecuteAsync(EditorCommandRequest request)
     {
+        if (request.Command is "desktop-entry install" or "desktop-entry uninstall")
+            return DesktopEntry(install: request.Command == "desktop-entry install");
         string workspacePath = ResolveWorkspace(request);
         if (request.Command == "validate")
             return await ValidateWorkspaceAsync(request, workspacePath).ConfigureAwait(false);
@@ -232,11 +238,11 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
             workspacePath,
             new RunicDesktopHostOptions
             {
-                WindowOptions = RunicDesktopHost.DefaultWindowOptions with
+                WindowOptions = WithEditorIcon(RunicDesktopHost.DefaultWindowOptions with
                 {
                     Browser = BrowserKind.Embedded,
                     PresentationPolicy = DesktopPresentationPolicy.RequestedOnly,
-                },
+                }),
             },
             "REDIT0008",
             "Native shell capability unavailable",
@@ -283,7 +289,7 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
                         Browser = BrowserKind.Any,
                         PresentationPolicy = DesktopPresentationPolicy.RequestedOnly,
                     }
-                    : RunicDesktopHost.DefaultWindowOptions,
+                    : WithEditorIcon(RunicDesktopHost.DefaultWindowOptions),
                 // The window opens where it last closed, with its size and maximized state, on a monitor that exists now
                 // (#225 P24). Without a stored placement it opens at 1440×900.
                 Placement = window => window is EditorWindow ? EditorWindowPlacements.Read() : null,
@@ -348,14 +354,23 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
     {
         try
         {
-            using var services = EditorServices.Create(workspacePath);
-            DesktopHostOptions options = new() { DiagnosticSink = ReportDiagnostic };
-            if (waitForConnection) options = options with { WaitForConnection = true };
+            ServiceProvider services = EditorServices.Create(workspacePath);
+            try
+            {
+                DesktopHostOptions options = new() { DiagnosticSink = ReportDiagnostic };
+                if (waitForConnection) options = options with { WaitForConnection = true };
 #if RUNIC_PLATFORM_Linux
-            // GTK 4 with WebKitGTK 6, under the editor's application ID. Windows uses WebView2 and macOS WKWebView.
-            options = options.WithGtk4(ApplicationId);
+                // GTK 4 with WebKitGTK 6, under the editor's application ID. Windows uses WebView2 and macOS WKWebView.
+                options = options.WithGtk4(ApplicationId);
 #endif
-            return RunicDesktopHost.Run(services, options, hostOptions, application);
+                return RunicDesktopHost.Run(services, options, hostOptions, application);
+            }
+            finally
+            {
+                // The platform services (AddRunicPlatformServices) include application services, such as the desktop
+                // settings, that only dispose asynchronously. The host has stopped, so this thread may wait for them.
+                services.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
@@ -377,9 +392,49 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
             .FirstOrDefault(static attribute => attribute.Key == "ApplicationId")?.Value
         ?? throw new InvalidOperationException("The editor's project file sets no ApplicationId.");
 
+    // The window's icon where Runic Desktop sets it from a file: on macOS the packaged PNG becomes the Dock icon. GTK 4
+    // takes a window's icon from the icon theme by its app ID instead (desktop-entry install), and the Windows window
+    // icon needs an .ico file, which the editor does not ship yet.
+    private static DesktopWindowOptions WithEditorIcon(DesktopWindowOptions options) =>
+        OperatingSystem.IsMacOS() && File.Exists(EditorDesktopEntry.PackagedIcon()) ? options with { IconFile = EditorDesktopEntry.PackagedIcon() } : options;
+
     private static RunicWindowOptions EditorWindowOptions() => new() { ContentRoot = EditorUiRoot(), StartPage = "index.html" };
     private static string EditorUiRoot() => Path.Combine(AppContext.BaseDirectory, "www");
     private static bool EditorUiAvailable() => File.Exists(Path.Combine(EditorUiRoot(), "index.html"));
+
+    // desktop-entry install|uninstall: the user's Linux desktop entry and icon (EditorDesktopEntry).
+    private static CommandOutcome<EditorCommandResult> DesktopEntry(bool install)
+    {
+        if (!OperatingSystem.IsLinux())
+            return CommandOutcome.Failure<EditorCommandResult>(CommandExitCategory.Unavailable, new CommandFault("REDIT0010",
+                "The desktop entry is for Linux desktops; on Windows and macOS the editor's window carries its icon."));
+        if (EditorDesktopEntry.UserDataHome() is not { } dataHome)
+            return CommandOutcome.Failure<EditorCommandResult>(CommandExitCategory.Unavailable, new CommandFault("REDIT0010",
+                "Neither XDG_DATA_HOME nor the home directory names a fully qualified directory."));
+        var entry = new EditorDesktopEntry(ApplicationId, dataHome);
+        try
+        {
+            if (install)
+            {
+                IReadOnlyList<string> written = entry.Install(EditorDesktopEntry.CurrentCommand(), EditorDesktopEntry.ProductName(),
+                    EditorDesktopEntry.ProductDescription(), EditorDesktopEntry.PackagedIcon());
+                return CommandOutcome.Success(new EditorCommandResult("Installed the desktop entry and icon:\n  " + string.Join("\n  ", written)));
+            }
+            IReadOnlyList<string> removed = entry.Uninstall();
+            return CommandOutcome.Success(new EditorCommandResult(removed.Count == 0
+                ? "No desktop entry or icon of the editor was installed."
+                : "Removed the desktop entry and icon:\n  " + string.Join("\n  ", removed)));
+        }
+        catch (EditorDesktopEntryException exception)
+        {
+            return CommandOutcome.Failure<EditorCommandResult>(CommandExitCategory.CommandFailure, new CommandFault("REDIT0010", exception.Message));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return CommandOutcome.Failure<EditorCommandResult>(CommandExitCategory.CommandFailure,
+                new CommandFault("REDIT0010", $"The desktop entry could not be {(install ? "installed" : "removed")}: {exception.Message}"));
+        }
+    }
 
     private static async Task<CommandOutcome<EditorCommandResult>> ValidateWorkspaceAsync(EditorCommandRequest request, string workspacePath)
     {

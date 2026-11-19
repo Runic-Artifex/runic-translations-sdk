@@ -3,6 +3,7 @@ using ReactiveUI.Primitives.Concurrency;
 using Runic.Application.Views;
 using Runic.Application.Views.ReactiveUI;
 using Runic.Navigation;
+using Runic.Platform;
 using ReactiveUI.Primitives;
 
 namespace Runic.Translations.Editor;
@@ -25,7 +26,7 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
     internal static readonly TimeSpan DefaultCloseQuestionTimeout = TimeSpan.FromSeconds(30);
 
     internal EditorViewModel(EditorSession session, IRunicModelContext modelContext, ISequencer scheduler,
-        IRunicWindowLocale windowLocale, IRunicWindowContext window, TimeSpan? closeQuestionTimeout = null)
+        IRunicWindowLocale windowLocale, IRunicWindowContext window, IFileDialogs files, TimeSpan? closeQuestionTimeout = null)
     {
         _session = session;
         _modelContext = modelContext;
@@ -42,7 +43,7 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
         // The page negotiates the interface locale against the editor catalog and the stored choice, then sets it
         // here; the window's pages and its native surfaces follow the window's locale.
         SetUiLocaleCommand = ReactiveCommand.Create<string>(SetUiLocale, outputScheduler: _scheduler);
-        Workspace = new EditorWorkspaceViewModel(session, this, _scheduler);
+        Workspace = new EditorWorkspaceViewModel(session, this, _scheduler, files);
         DocumentTools = new EditorDocumentToolsViewModel(session, this, _scheduler);
         Review = new EditorReviewViewModel(session, this, _scheduler);
         Interchange = new EditorInterchangeViewModel(session, this, _scheduler);

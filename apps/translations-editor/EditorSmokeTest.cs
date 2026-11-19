@@ -778,7 +778,9 @@ internal static partial class EditorSmokeTest
         string container = Path.Combine(Path.GetTempPath(), $"runic-editor-smoke-{Guid.NewGuid():N}");
         try
         {
-            WorkspacePickerSelection();
+            await WorkspacePickerJourneyAsync(Path.Combine(container, "picker")).ConfigureAwait(false);
+            await WindowFolderDialogJourneyAsync(Path.Combine(container, "window-dialog")).ConfigureAwait(false);
+            DesktopEntryJourney(Path.Combine(container, "desktop-entry"));
             await AuthoringJourneyAsync(Path.Combine(container, "authoring")).ConfigureAwait(false);
             await MessageDraftJourneyAsync(Path.Combine(container, "message-drafts")).ConfigureAwait(false);
             await MountedContextJourneyAsync(Path.Combine(container, "mounted-context")).ConfigureAwait(false);
@@ -830,10 +832,11 @@ internal static partial class EditorSmokeTest
             await using var windowProvider = windowServices.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             await using var windowScope = windowProvider.CreateAsyncScope();
             var windowLocale = windowScope.ServiceProvider.GetRequiredService<IRunicWindowLocale>();
+            await using var windowPlatform = new RunicTestPlatform();
             using (var editor = new EditorViewModel(new EditorSession(project),
                 windowScope.ServiceProvider.GetRequiredService<IRunicModelContext>(),
                 windowScope.ServiceProvider.GetRequiredService<ISequencer>(), windowLocale,
-                windowScope.ServiceProvider.GetRequiredService<IRunicWindowContext>()))
+                windowScope.ServiceProvider.GetRequiredService<IRunicWindowContext>(), windowPlatform.FileDialogs))
             using (var window = RunicWindowTestHost.Create(windowScope.ServiceProvider, editor))
             {
                 // The page's language switch sets the window's locale, which reaches the page as a locale push; a
@@ -1140,28 +1143,122 @@ internal static partial class EditorSmokeTest
         throw new InvalidOperationException("The window did not push a locale to the page.");
     }
 
-    // The Linux picker tries the portal first and falls back to zenity only when the portal showed no dialog. Checked
-    // without opening a dialog.
-    private static void WorkspacePickerSelection()
+    // The workspace folder dialog is the window's (IFileDialogs, owned by the editor window); only a window without a
+    // native owner, as in serve, falls back to the platform's dialogs without one. Checked with scripted dialogs.
+    private static async Task WorkspacePickerJourneyAsync(string directory)
     {
-        Require(EditorWorkspacePicker.PortalOutcome(
-                new PickerResult<IDirectoryLease>.Unavailable(PlatformUnavailableReason.BackendUnavailable)) is null,
-            "A missing FileChooser portal did not fall back to the system dialog.");
-        Require(EditorWorkspacePicker.PortalOutcome(new PickerResult<IDirectoryLease>.Dismissed()) is { Ok: false, Cancelled: true, Message: null },
-            "A dismissed portal dialog was not reported as cancelled.");
-        EditorWorkspacePickerResult? failed = EditorWorkspacePicker.PortalOutcome(new PickerResult<IDirectoryLease>.Failed(
+        Directory.CreateDirectory(directory);
+        string chosen = Path.GetFullPath(directory);
+        await using var window = new RunicTestPlatform();
+        await using var fallback = new RunicTestPlatform();
+        int fallbacks = 0;
+        using var picker = new EditorWorkspacePicker(window.FileDialogs, () => { fallbacks++; return fallback.FileDialogs; });
+
+        window.FileDialogs.EnqueueOpenDirectory(chosen);
+        Require(await picker.PickAsync(CancellationToken.None).ConfigureAwait(false) is { Ok: true, Cancelled: false, Message: null } selected &&
+            selected.Directory == chosen, "The window's folder dialog did not choose the workspace.");
+        Require(window.FileDialogs.Calls is [{ Kind: RunicFileDialogKind.OpenDirectory, DirectoryOptions.OwnerPolicy: OwnerPolicy.PreferOwner }] &&
+            fallbacks == 0, "The workspace was not chosen through the window's own folder dialog.");
+
+        window.FileDialogs.EnqueueDismissed();
+        Require(await picker.PickAsync(CancellationToken.None).ConfigureAwait(false) is { Ok: false, Cancelled: true, Message: null },
+            "A dismissed folder dialog was not reported as cancelled.");
+
+        window.FileDialogs.EnqueueFailed(PlatformFailureCode.ResourceBusy);
+        Require(await picker.PickAsync(CancellationToken.None).ConfigureAwait(false) is
+            { Ok: false, Cancelled: false, Message: { Code: "ui_backend_picker_failed" } busy } && busy.Args.Single() is { Name: "reason", Value: "ResourceBusy" },
+            "A folder dialog that failed was not reported with its reason.");
+        EditorWorkspacePickerResult failed = EditorWorkspacePicker.Outcome(new PickerResult<IDirectoryLease>.Failed(
             PlatformFailureCode.PermissionDenied, PlatformDiagnostic.FromErrno(13)));
         Require(failed is { Ok: false, Cancelled: false, Message: { Code: "ui_backend_picker_failed" } notice } &&
             notice.Args.Single() is { Name: "reason", Value: "PermissionDenied" } && notice.Detail?.StartsWith("errno 13", StringComparison.Ordinal) == true,
-            $"A folder the picker could not open was not reported with its reason: {failed?.Message}");
-        Require(EditorWorkspacePicker.CreateZenityStartInfo(static _ => false) is null,
-            "The fallback offered zenity although it is not installed.");
-        var zenity = EditorWorkspacePicker.CreateZenityStartInfo(static path => path == "/usr/bin/zenity");
-        Require(zenity is { FileName: "/usr/bin/zenity" } && zenity.ArgumentList.SequenceEqual(["--file-selection", "--directory"]),
-            "The fallback does not open zenity's folder dialog.");
-        if (OperatingSystem.IsLinux())
-            Require(EditorWorkspacePicker.CreateStartInfo(static path => path == "/usr/bin/zenity")?.FileName == "/usr/bin/zenity" &&
-                EditorWorkspacePicker.CreateStartInfo(static _ => false) is null,
-                "The Linux system dialog is not the zenity fallback.");
+            $"A folder the picker could not open was not reported with its reason: {failed.Message}");
+
+        // A window whose dialogs cannot show (no FileChooser portal, no session bus) has no other dialog to try: the page
+        // asks for the path instead.
+        window.FileDialogs.EnqueueUnavailable(PlatformUnavailableReason.BackendUnavailable);
+        Require(await picker.PickAsync(CancellationToken.None).ConfigureAwait(false) is
+            { Ok: false, Cancelled: false, Message.Code: "ui_backend_picker_unavailable" } && fallbacks == 0,
+            "A window without folder dialogs was not reported as unavailable, or fell back to dialogs without an owner.");
+
+        // serve: the window has no native owner, so the dialog shows without one.
+        window.FileDialogs.EnqueueUnavailable(PlatformUnavailableReason.OwnerUnavailable);
+        fallback.FileDialogs.EnqueueOpenDirectory(chosen);
+        Require(await picker.PickAsync(CancellationToken.None).ConfigureAwait(false) is { Ok: true } served && served.Directory == chosen &&
+            fallbacks == 1 && fallback.FileDialogs.Calls is [{ Kind: RunicFileDialogKind.OpenDirectory, DirectoryOptions.OwnerPolicy: OwnerPolicy.PreferOwner }],
+            "A window without a native owner did not fall back to the folder dialog without an owner.");
+        using var withoutFallback = new EditorWorkspacePicker(window.FileDialogs, static () => null);
+        window.FileDialogs.EnqueueUnavailable(PlatformUnavailableReason.OwnerUnavailable);
+        Require(await withoutFallback.PickAsync(CancellationToken.None).ConfigureAwait(false) is
+            { Ok: false, Cancelled: false, Message.Code: "ui_backend_picker_unavailable" },
+            "Without dialogs without an owner, a window without one was not reported as unavailable.");
+    }
+
+    // desktop-entry install|uninstall writes the Linux desktop entry and hicolor icon under the data directory it is
+    // given, replaces only its own entry, and removes what it wrote.
+    private static void DesktopEntryJourney(string dataHome)
+    {
+        const string id = "eu.runic-artifex.TranslationsEditor";
+        string icon = Path.Combine(dataHome, "source", "icon.png");
+        Directory.CreateDirectory(Path.GetDirectoryName(icon)!);
+        // The smallest square PNG header the installer reads its size from: 64×64.
+        byte[] png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, (byte)'I', (byte)'H', (byte)'D', (byte)'R', 0, 0, 0, 64, 0, 0, 0, 64, 8, 6, 0, 0, 0];
+        File.WriteAllBytes(icon, png);
+        var entry = new EditorDesktopEntry(id, dataHome);
+        string program = Path.Combine(dataHome, "Editor Build", "Runic.Translations.Editor");
+        IReadOnlyList<string> written = entry.Install([program], "Runic Translations Editor", "An editor.", icon);
+        string desktop = Path.Combine(dataHome, "applications", id + ".desktop");
+        string installedIcon = Path.Combine(dataHome, "icons", "hicolor", "64x64", "apps", id + ".png");
+        Require(written.SequenceEqual([desktop, installedIcon]) && File.ReadAllBytes(installedIcon).SequenceEqual(png),
+            "The desktop entry and icon were not written where the desktop looks for them.");
+        string[] lines = File.ReadAllLines(desktop);
+        Require(lines[0] == "[Desktop Entry]" && lines.Contains("Type=Application") && lines.Contains("Name=Runic Translations Editor") &&
+            lines.Contains($"Exec=\"{program}\" %f") && lines.Contains($"TryExec={program}") && lines.Contains($"Icon={id}") &&
+            lines.Contains($"StartupWMClass={id}") && lines.Contains(EditorDesktopEntry.MarkerKey + "=true"),
+            "The desktop entry does not name the editor, its icon and its app ID: " + string.Join(" | ", lines));
+        Require(EditorDesktopEntry.QuoteArgument("/opt/a$b%c") == "\"/opt/a\\$b%%c\"" && EditorDesktopEntry.EscapeString("\\") == "\\\\",
+            "Exec arguments are not quoted by the Desktop Entry Specification.");
+
+        // A second install replaces the editor's own files, also when the icon changed size.
+        png[19] = 128; png[23] = 128;
+        File.WriteAllBytes(icon, png);
+        entry.Install([program], "Runic Translations Editor", "An editor.", icon);
+        Require(!File.Exists(installedIcon) && File.Exists(Path.Combine(dataHome, "icons", "hicolor", "128x128", "apps", id + ".png")),
+            "Installing again left the previous icon size behind.");
+        Require(entry.Uninstall().Count == 2 && !File.Exists(desktop) && entry.Uninstall().Count == 0,
+            "Uninstalling did not remove exactly what the install wrote.");
+
+        // Another desktop entry of that name, such as a package's, is neither replaced nor removed.
+        Directory.CreateDirectory(Path.GetDirectoryName(desktop)!);
+        File.WriteAllText(desktop, "[Desktop Entry]\nType=Application\nName=Packaged\nExec=editor\n");
+        static bool Refused(Action action)
+        {
+            try { action(); return false; }
+            catch (EditorDesktopEntryException) { return true; }
+        }
+        Require(Refused(() => entry.Install([program], "n", "c", icon)) && Refused(() => entry.Uninstall()) &&
+            File.ReadAllText(desktop).Contains("Name=Packaged", StringComparison.Ordinal),
+            "A desktop entry the editor did not write was replaced or removed.");
+        Require(EditorDesktopEntry.PngSize("not a png"u8) is null, "A file that is not a PNG was installed as the icon.");
+    }
+
+    // The editor's window scope (EditorServices) gives the workspace picker the window's dialogs.
+    private static async Task WindowFolderDialogJourneyAsync(string project)
+    {
+        await TranslationProjectWriter.CreateAsync(TranslationProjectScaffolder.Render(
+            new TranslationProjectCreationRequest(project, "window-dialog", "en", "Smoke.Translations", "SmokeText",
+                [new TranslationProjectLocale("de", "en")]))).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), "title = Title\n").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "de.rmf2"), "title = Titel\n").ConfigureAwait(false);
+        string chosen = Path.GetFullPath(project);
+        await using var services = EditorServices.Create(project, configure: static services => services.AddRunicTestPlatform());
+        await using var window = await RunicWindowTestHost.CreateWindowAsync<EditorWindow>(services).ConfigureAwait(false);
+        RunicTestPlatform platform = window.Services.GetRequiredService<RunicTestPlatform>();
+        platform.FileDialogs.EnqueueOpenDirectory(chosen);
+        var editor = (EditorViewModel)window.ViewModel;
+        await ExecuteRouteAsync(editor.Workspace.PickWorkspaceCommand, () => editor.Workspace.PickWorkspaceResultJson, "{}");
+        Require(editor.Workspace.LastPickWorkspace is { Ok: true } picked && picked.Directory == chosen &&
+            platform.FileDialogs.Calls is [{ Kind: RunicFileDialogKind.OpenDirectory }],
+            $"Browse did not use the editor window's folder dialog: {editor.Workspace.PickWorkspaceResultJson}");
     }
 }
