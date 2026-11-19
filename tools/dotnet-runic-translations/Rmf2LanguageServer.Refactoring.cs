@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Text.Json.Nodes;
 using JsonValue = System.Text.Json.Nodes.JsonValue;
 using Runic.Translations.Authoring;
@@ -10,7 +9,7 @@ using Runic.Translations.Compiler;
 
 namespace Runic.Translations.Tool;
 
-// Protocol 2's standard LSP refactorings: F2 (prepareRename and rename) on resources, MF2 locals, caller inputs and slot
+// The standard LSP refactorings: F2 (prepareRename and rename) on resources, MF2 locals, caller inputs and slot
 // references, Extract Group and Inline Resource as refactor code actions, and runic.* commands applied through
 // workspace/applyEdit. They reuse the workspace's transaction plans, so they edit exactly what the runic.* commands edit.
 internal sealed partial class Rmf2LanguageServer
@@ -62,11 +61,11 @@ internal sealed partial class Rmf2LanguageServer
         return new JsonObject { ["range"] = Range(buffer, location), ["placeholder"] = target.Name };
     }
 
-    // textDocument/rename under protocol 2. A resource rename in a workspace that contains application sources asks
+    // textDocument/rename. A resource rename in a workspace that contains application sources asks
     // the user with window/showMessageRequest instead of refusing, because Runic does not rewrite call sites. The
     // server asks whether or not the client advertises window.showMessage: Visual Studio 2026 advertises no `window`
     // capabilities yet shows the request as an InfoBar (SPIKE-VS-0). A client that answers with an error (such as
-    // MethodNotFound) gets the refusal, as in revision 1; declining, or answering null, returns no edit.
+    // MethodNotFound) gets the refusal; declining, or answering null, returns no edit.
     private JsonObject? StandardRename(string uri, Rmf2ResourceNode? entry, int atByte, string newName)
     {
         RenameTarget target = RenameTargetAt(entry, atByte)
@@ -186,19 +185,19 @@ internal sealed partial class Rmf2LanguageServer
         return resolved;
     }
 
-    // Whether the client can apply a protocol 2 plan's file creations and deletions. A deletion it cannot apply is
+    // Whether the client can apply a plan's file creations and deletions. A deletion it cannot apply is
     // sent as an edit that empties the file (WorkspaceEdit's emptyInsteadOfDelete), which only Inline Resource does.
     private bool SupportsResourceOperations(TranslationWorkspaceTransactionPlan plan) =>
         (_createFiles || plan.Edits.All(edit => edit.Kind != TranslationWorkspaceEditKind.Create)) &&
         (_deleteFiles || plan.Edits.All(edit => edit.Kind != TranslationWorkspaceEditKind.Delete));
 
-    // Protocol 2: the server applies a runic.* command's edit with workspace/applyEdit and answers null, as LSP expects
-    // of commands. Protocol 1, and a client without applyEdit, receive the WorkspaceEdit as the result.
+    // The server applies a runic.* command's edit with workspace/applyEdit and answers null, as LSP expects of
+    // commands. A client without applyEdit receives the WorkspaceEdit as the result.
     private JsonObject? ApplyCommandEdit(string label, JsonObject edit)
     {
-        if (_protocol < 2 || !_applyEditSupport) return edit;
-        // Never apply an edit computed from documents the client has changed since.
-        if (_processedRevision != Interlocked.Read(ref _latestRevision)) throw new ContentModifiedException();
+        if (!_applyEditSupport) return edit;
+        // Never apply an edit computed from files the client has changed since (IsStale).
+        lock (_revisionGate) if (IsStale(_processedRevision)) throw new ContentModifiedException();
         JsonNode? result = ClientRequest("workspace/applyEdit", new JsonObject { ["label"] = label, ["edit"] = edit });
         if (result is not JsonObject response || response["applied"] is not JsonValue applied || !applied.TryGetValue(out bool done) || !done)
         {

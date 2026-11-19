@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Runic.Translations.Tool;
 using TUnit.Core;
@@ -9,16 +10,13 @@ using Session = Runic.Translations.Build.Tests.Rmf2DiagnosticLspTests.Session;
 
 namespace Runic.Translations.Build.Tests;
 
-// The versioned Runic protocol (experimental.runic): protocol 2 after the runicProtocol opt-in, and the protocol 1
-// behaviour of Translations 0.13 without it, which runic-editors 0.21 relies on for one minor (D069.3, D070.1).
+// The versioned Runic protocol (experimental.runic). Every session speaks protocol 2: revision 1, the behaviour of
+// Translations 0.13 for a client without the runicProtocol opt-in, was removed in 0.15 (D069.3, D070.1, #263).
 internal sealed class Rmf2ProtocolLspTests
 {
     internal const string Project = """{"schemaVersion":1,"catalog":"app","code":{"namespace":"Example","className":"Text"},"baseLocale":"en","locales":["en","de"]}""";
 
-    // The capabilities Translations 0.13 advertised, byte for byte.
-    internal const string Protocol1Capabilities = """{"positionEncoding":"utf-16","textDocumentSync":2,"documentSymbolProvider":true,"semanticTokensProvider":{"legend":{"tokenTypes":["namespace","property","variable","function","keyword","string","comment","type"],"tokenModifiers":[]},"full":true},"referencesProvider":true,"foldingRangeProvider":true,"hoverProvider":true,"definitionProvider":true,"documentFormattingProvider":true,"renameProvider":true,"codeActionProvider":{"codeActionKinds":["quickfix"],"resolveProvider":true},"executeCommandProvider":{"commands":["runic.extractGroup","runic.inlineResource","runic.markReviewed","runic.preview","runic.renameInput","runic.renameSlot","runic.renameResource","runic.renderPreview"]},"completionProvider":{"triggerCharacters":["$",":","#","/","="]}}""";
-
-    // Every client capability protocol 2 can use, so a protocol 1 session shows that it ignores them.
+    // Every client capability protocol 2 can use.
     internal static JsonObject FullClientCapabilities() => new() {
         ["workspace"] = new JsonObject {
             ["applyEdit"] = true,
@@ -62,41 +60,106 @@ internal sealed class Rmf2ProtocolLspTests
     internal static void Flush(Session session, string uri) =>
         session.Request("textDocument/documentSymbol", new JsonObject { ["textDocument"] = Document(uri) });
 
-    [Test, DisplayName("LSP without the runicProtocol opt-in keeps the protocol 1 behaviour of Translations 0.13")]
-    public void Protocol1Transition()
+    [Test, DisplayName("LSP speaks protocol 2 to a client that sends no runicProtocol or asks for revision 1 (#263)")]
+    public void Protocol1Removed()
     {
         var (temporary, englishUri, _) = CreateProject();
         using (temporary)
         {
+            string expected;
+            using (Session session = new(_ => { }, _ => { }))
+                expected = session.Request("initialize", Initialize(temporary.Path, FullClientCapabilities(), protocol: 2))["result"]!.ToJsonString();
+            foreach (int? requested in new int?[] { null, 1 })
+            {
+                using Session session = new(_ => { }, _ => { });
+                session.OnServerRequest = request => request["method"]!.GetValue<string>() == "workspace/applyEdit"
+                    ? new JsonObject { ["result"] = new JsonObject { ["applied"] = true } } : new JsonObject { ["result"] = null };
+                JsonNode initialize = session.Request("initialize", Initialize(temporary.Path, FullClientCapabilities(), protocol: requested));
+                // The same capabilities, experimental.runic.protocol 2 and the tool's version as for a protocol 2 client.
+                Assert.Equal(expected, initialize["result"]!.ToJsonString(), "runicProtocol " + (requested?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "absent"));
+                Open(session, englishUri, "title = Hello {$name}\n");
+                Flush(session, englishUri);
+
+                // Standard error codes, F2 with prepareRename.
+                JsonNode unknown = session.Request("textDocument/inlayHint", new JsonObject { ["textDocument"] = Document(englishUri) });
+                Assert.Equal(-32601, unknown["error"]!["code"]!.GetValue<int>(), unknown.ToJsonString());
+                JsonNode prepare = session.Request("textDocument/prepareRename", new JsonObject { ["textDocument"] = Document(englishUri), ["position"] = Position(0, 16) });
+                Assert.Equal("name", prepare["result"]!["placeholder"]!.GetValue<string>(), prepare.ToJsonString());
+
+                // A refactoring command applies its edit through workspace/applyEdit and answers null; it no longer
+                // returns the WorkspaceEdit to a client that can apply edits.
+                JsonNode rename = session.Request("workspace/executeCommand", new JsonObject {
+                    ["command"] = "runic.renameInput", ["arguments"] = new JsonArray(englishUri, "title", "name", "person") });
+                Assert.True(rename["error"] is null && rename["result"] is null, rename.ToJsonString());
+                JsonNode applied = session.ServerRequests.Single(request => request["method"]!.GetValue<string>() == "workspace/applyEdit");
+                Assert.Contains("{$person}", applied["params"]!["edit"]!.ToJsonString());
+            }
+        }
+    }
+
+    [Test, DisplayName("LSP gives a generic client without initialization options the standard refactorings (#263)")]
+    public void GenericClient()
+    {
+        var (temporary, englishUri, germanUri) = CreateProject();
+        using (temporary)
+        {
             using Session session = new(_ => { }, _ => { });
-            session.OnServerRequest = _ => new JsonObject { ["result"] = null };
-            JsonNode initialize = session.Request("initialize", Initialize(temporary.Path, FullClientCapabilities(), protocol: null));
-            Assert.Equal(Protocol1Capabilities, initialize["result"]!["capabilities"]!.ToJsonString());
-            Assert.Equal("""{"name":"Runic RMF2","version":"1"}""", initialize["result"]!["serverInfo"]!.ToJsonString());
-            session.Notify("initialized", new JsonObject());
+            // As Neovim or Helix with a plain configuration: no initializationOptions, no applyEdit, no resource operations.
+            JsonNode initialize = session.Request("initialize", new JsonObject { ["rootUri"] = new Uri(temporary.Path).AbsoluteUri, ["capabilities"] = new JsonObject() });
+            Assert.Equal(2, initialize["result"]!["capabilities"]!["experimental"]!["runic"]!["protocol"]!.GetValue<int>());
             Open(session, englishUri, "title = Hello {$name}\n");
             Flush(session, englishUri);
-
-            // Unknown requests answer null and every failure is InvalidParams, as in 0.13.
-            JsonNode unknown = session.Request("textDocument/inlayHint", new JsonObject { ["textDocument"] = Document(englishUri) });
-            Assert.True(unknown["error"] is null && unknown["result"] is null, unknown.ToJsonString());
-            JsonNode refused = session.Request("textDocument/rename", new JsonObject { ["textDocument"] = Document(englishUri), ["position"] = Position(1, 0), ["newName"] = "x" });
-            Assert.Equal(-32602, refused["error"]!["code"]!.GetValue<int>(), refused.ToJsonString());
-
-            // The refactoring commands return their WorkspaceEdit; nothing is applied by the server.
-            JsonNode rename = session.Request("workspace/executeCommand", new JsonObject {
-                ["command"] = "runic.renameResource", ["arguments"] = new JsonArray(englishUri, new JsonArray("title"), "heading") });
-            JsonArray changes = rename["result"]!["documentChanges"]!.AsArray();
-            Assert.Equal(2, changes.Count, rename.ToJsonString());
-            Assert.True(changes.All(change => change!["textDocument"] is not null && change["edits"]![0]!["newText"]!.GetValue<string>().StartsWith("heading = ", StringComparison.Ordinal)), rename.ToJsonString());
-            Assert.Equal(1, changes.Single(change => change!["textDocument"]!["uri"]!.GetValue<string>() == englishUri)!["textDocument"]!["version"]!.GetValue<int>());
-            JsonNode input = session.Request("workspace/executeCommand", new JsonObject {
+            JsonNode rename = session.Request("textDocument/rename", new JsonObject { ["textDocument"] = Document(englishUri), ["position"] = Position(0, 16), ["newName"] = "person" });
+            Assert.Equal(germanUri + "|" + englishUri, string.Join("|", rename["result"]!["documentChanges"]!.AsArray()
+                .Select(change => change!["textDocument"]!["uri"]!.GetValue<string>()).Order(StringComparer.Ordinal)), rename.ToJsonString());
+            // Without workspace.applyEdit a command returns its WorkspaceEdit for the client to apply.
+            JsonNode command = session.Request("workspace/executeCommand", new JsonObject {
                 ["command"] = "runic.renameInput", ["arguments"] = new JsonArray(englishUri, "title", "name", "person") });
-            Assert.Contains("{$person}", input["result"]!["documentChanges"]!.ToJsonString());
-
-            // No watcher registration and no other server-to-client request.
+            Assert.Contains("{$person}", command["result"]!["documentChanges"]!.ToJsonString());
+            // Extract Group and Inline Resource need the create operation; without it the client gets no refactor actions.
+            JsonNode actions = session.Request("textDocument/codeAction", new JsonObject { ["textDocument"] = Document(englishUri),
+                ["range"] = new JsonObject { ["start"] = Position(0, 0), ["end"] = Position(0, 5) }, ["context"] = new JsonObject { ["diagnostics"] = new JsonArray(), ["only"] = new JsonArray("refactor") } });
+            Assert.Equal(0, actions["result"]!.AsArray().Count, actions.ToJsonString());
             Assert.Equal(0, session.ServerRequests.Count, string.Join("\n", session.ServerRequests.Select(frame => frame.ToJsonString())));
-            Assert.Equal("Hello {$name}", File.ReadAllText(temporary.Resolve("en.rmf2"))[8..^1]);
+        }
+    }
+
+    // The initialize result a generic client gets, with serverInfo.version replaced by a placeholder: the advertised
+    // standard LSP surface and experimental.runic that the compatibility promise covers (language-server.md#compatibility).
+    private static readonly string InitializeSnapshotPath = RepositoryPaths.Resolve("tests", "dotnet", "Runic.Translations.Build.Tests", "Fixtures", "lsp-initialize-result.json");
+    private const string ToolVersionPlaceholder = "(tool version)";
+    private static readonly JsonSerializerOptions SnapshotFormat = new() { WriteIndented = true };
+
+    private static string InitializeSnapshot(string root, JsonObject capabilities, JsonObject? initializationOptions)
+    {
+        using Session session = new(_ => { }, _ => { });
+        var args = new JsonObject { ["rootUri"] = new Uri(root).AbsoluteUri, ["capabilities"] = capabilities };
+        if (initializationOptions is not null) args["initializationOptions"] = initializationOptions.DeepClone();
+        JsonObject result = session.Request("initialize", args)["result"]!.AsObject();
+        Assert.Equal(Program.Version, result["serverInfo"]!["version"]!.GetValue<string>());
+        result["serverInfo"]!["version"] = ToolVersionPlaceholder;
+        return result.ToJsonString(SnapshotFormat).ReplaceLineEndings("\n") + "\n";
+    }
+
+    [Test, DisplayName("LSP initialize result, experimental.runic included, matches its golden snapshot")]
+    public void InitializeGolden()
+    {
+        var (temporary, _, _) = CreateProject();
+        using (temporary)
+        {
+            // A generic client: no initialization options and no capabilities.
+            string actual = InitializeSnapshot(temporary.Path, new JsonObject(), null);
+            if (Environment.GetEnvironmentVariable("RUNIC_UPDATE_LSP_SNAPSHOT") == "1") File.WriteAllText(InitializeSnapshotPath, actual);
+            Assert.Equal(File.ReadAllText(InitializeSnapshotPath).ReplaceLineEndings("\n"), actual,
+                "The initialize result changed. The compatibility promise allows additions only; review the change, then update " +
+                "Fixtures/lsp-initialize-result.json with RUNIC_UPDATE_LSP_SNAPSHOT=1 (docs/guides/translations/language-server.md#compatibility).");
+            // Every client gets the same surface; only positionEncoding follows the client's general.positionEncodings.
+            var options = new JsonObject { ["runicConfigurationSync"] = true, ["runicProtocol"] = 2 };
+            Assert.Equal(actual, InitializeSnapshot(temporary.Path, FullClientCapabilities(), options), "VS Code's capabilities changed the result.");
+            Assert.Equal(actual, InitializeSnapshot(temporary.Path, VisualStudioCapabilities(), options), "Visual Studio's capabilities changed the result.");
+            var utf8 = new JsonObject { ["general"] = new JsonObject { ["positionEncodings"] = new JsonArray("utf-8", "utf-16") } };
+            Assert.Equal(actual.Replace("\"positionEncoding\": \"utf-16\"", "\"positionEncoding\": \"utf-8\"", StringComparison.Ordinal),
+                InitializeSnapshot(temporary.Path, utf8, null), "A UTF-8 client changed more than positionEncoding.");
         }
     }
 
@@ -214,30 +277,6 @@ internal sealed class Rmf2ProtocolLspTests
             Assert.Equal("client/registerCapability", session.ServerRequests.Single()["method"]!.GetValue<string>());
             File.WriteAllText(temporary.Resolve("de.rmf2"), BrokenGerman);
             WaitForDiagnostics(session, englishUri, germanUri);
-        }
-    }
-
-    [Test, DisplayName("LSP without the runicProtocol opt-in gives Visual Studio 2026 the protocol 1 behaviour, without server file watching")]
-    public void VisualStudioProtocol1()
-    {
-        var (temporary, englishUri, germanUri) = CreateProject();
-        using (temporary)
-        {
-            using Session session = new(_ => { }, _ => { });
-            JsonNode initialize = session.Request("initialize", Initialize(temporary.Path, VisualStudioCapabilities(), protocol: null));
-            Assert.Equal(Protocol1Capabilities, initialize["result"]!["capabilities"]!.ToJsonString());
-            session.Notify("initialized", new JsonObject());
-            Open(session, englishUri, "title = Hello {$name}\n");
-            Flush(session, englishUri);
-            // Revision 1 clients forward file events themselves (FilesToWatch in Visual Studio).
-            File.WriteAllText(temporary.Resolve("de.rmf2"), BrokenGerman);
-            Thread.Sleep(Rmf2LanguageServer.WatchDelay * 5);
-            Flush(session, englishUri);
-            Assert.True(LatestDiagnostics(session, germanUri) is not { Count: > 0 }, "Protocol 1 watched files itself.");
-            session.Notify("workspace/didChangeWatchedFiles", new JsonObject { ["changes"] = new JsonArray(new JsonObject { ["uri"] = germanUri, ["type"] = 2 }) });
-            Flush(session, englishUri);
-            Assert.True(LatestDiagnostics(session, germanUri) is { Count: > 0 }, "A forwarded change was not picked up.");
-            Assert.Equal(0, session.ServerRequests.Count);
         }
     }
 }
