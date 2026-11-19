@@ -664,8 +664,8 @@ internal sealed class Rmf2DiagnosticLspTests
         private readonly Process? _process;
         private readonly Task<string> _errors;
         // In-process mode: the server runs on this test's streams with request hooks.
-        private readonly Rmf2LspBenchmark.BlockingByteStream? _serverInput;
-        private readonly Rmf2LspBenchmark.BlockingByteStream? _serverOutput;
+        private readonly BlockingByteStream? _serverInput;
+        private readonly BlockingByteStream? _serverOutput;
         private readonly Task<int>? _server;
         private int _nextId;
         private bool _disposed;
@@ -687,8 +687,8 @@ internal sealed class Rmf2DiagnosticLspTests
         // settleDiagnostics: false for tests of background validation itself.
         internal Session(Action<string> beforeRequest, Action<string> requestCancelled, bool settleDiagnostics = true)
         {
-            _serverInput = new Rmf2LspBenchmark.BlockingByteStream();
-            Rmf2LspBenchmark.BlockingByteStream output = _serverOutput = new Rmf2LspBenchmark.BlockingByteStream();
+            _serverInput = new BlockingByteStream();
+            BlockingByteStream output = _serverOutput = new BlockingByteStream();
             var server = Server = new Rmf2LanguageServer(_serverInput, output, beforeRequest, requestCancelled, settleDiagnostics);
             _server = Task.Run(() => {
                 try { return server.Run(); }
