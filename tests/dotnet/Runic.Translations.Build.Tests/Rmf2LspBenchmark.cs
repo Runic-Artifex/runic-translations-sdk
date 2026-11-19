@@ -157,6 +157,7 @@ internal sealed class Rmf2LspBenchmark
                 var start = new ProcessStartInfo("dotnet") { WorkingDirectory = workingDirectory, RedirectStandardInput = true, RedirectStandardOutput = true };
                 start.ArgumentList.Add(RepositoryPaths.ToolAssembly);
                 start.ArgumentList.Add("lsp");
+                start.Environment[Rmf2LanguageServer.SettleDiagnosticsVariable] = "1";
                 _process = Process.Start(start) ?? throw new InvalidOperationException("Could not start the RMF2 language server.");
             }
             else
