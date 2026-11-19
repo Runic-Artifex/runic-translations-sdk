@@ -5157,3 +5157,68 @@ ui {
     hide_source = Quelltext ausblenden
   }
 }
+ui {
+  view {
+    label = Ansicht
+  }
+}
+ui {
+  view {
+    workbench = Werkbank
+  }
+}
+ui {
+  view {
+    list = Liste
+  }
+}
+ui {
+  list {
+    column_path = Pfad
+  }
+}
+ui {
+  list {
+    column_state = Status
+  }
+}
+ui {
+  list {
+    state_outdated = Veraltet
+  }
+}
+ui {
+  list {
+    top_level = Oberste Ebene
+  }
+}
+ui {
+  list {
+    open_in_workbench = In der Werkbank öffnen
+  }
+}
+ui {
+  list {
+    edit_label = {$message} auf {$language}
+  }
+}
+ui {
+  list {
+    keyboard_help = Mit Pfeil nach oben und unten wechseln Sie die Zeile. Die Eingabetaste bearbeitet den Text oder öffnet ihn in der Werkbank, Escape beendet die Bearbeitung und Tab geht zur nächsten Zeile.
+  }
+}
+ui {
+  list {
+    has_errors = Der Text enthält Fehler. Öffnen Sie ihn in der Werkbank, um sie zu sehen.
+  }
+}
+ui {
+  content {
+    count_texts =
+      .input {$count :integer select=plural}
+      .match $count
+      one {{{$count} Text}}
+      * {{{$count} Texte}}
+
+  }
+}

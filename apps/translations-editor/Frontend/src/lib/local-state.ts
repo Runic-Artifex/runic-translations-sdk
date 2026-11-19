@@ -16,6 +16,8 @@ const exactKeys = new Set([
   "runic-translations.theme-mode",
   // Comfortable or compact (appearance.ts `densityKey`).
   "runic-translations.density",
+  // The workbench or the list (list-view.ts `workspaceLayoutKey`).
+  "runic-translations.workspace-layout",
   "runic-translations.pseudo-localization",
   "runic-translations.ui-direction",
   "runic-translations.ui-locale",

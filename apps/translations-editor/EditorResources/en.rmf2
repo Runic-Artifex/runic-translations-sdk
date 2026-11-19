@@ -5157,3 +5157,68 @@ ui {
     hide_source = Hide source
   }
 }
+ui {
+  view {
+    label = View
+  }
+}
+ui {
+  view {
+    workbench = Workbench
+  }
+}
+ui {
+  view {
+    list = List
+  }
+}
+ui {
+  list {
+    column_path = Path
+  }
+}
+ui {
+  list {
+    column_state = State
+  }
+}
+ui {
+  list {
+    state_outdated = Outdated
+  }
+}
+ui {
+  list {
+    top_level = Top level
+  }
+}
+ui {
+  list {
+    open_in_workbench = Open in the workbench
+  }
+}
+ui {
+  list {
+    edit_label = {$message} in {$language}
+  }
+}
+ui {
+  list {
+    keyboard_help = Up and Down move between rows. Enter edits the text or opens it in the workbench, Escape stops editing, and Tab goes to the next row.
+  }
+}
+ui {
+  list {
+    has_errors = The text has errors. Open it in the workbench to see them.
+  }
+}
+ui {
+  content {
+    count_texts =
+      .input {$count :integer select=plural}
+      .match $count
+      one {{{$count} text}}
+      * {{{$count} texts}}
+
+  }
+}

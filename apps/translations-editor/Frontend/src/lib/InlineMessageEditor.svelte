@@ -35,6 +35,7 @@
     onchange,
     onensureinput,
     onupdateformat,
+    compact = false,
   }: {
     value: string;
     locale: string;
@@ -43,6 +44,8 @@
     onchange: (value: string) => void;
     onensureinput?: (name: string, type: InputType) => void;
     onupdateformat?: (name: string, format: string) => void;
+    /** One line high, for a row of the list view (D074.1); the composer's box is taller. */
+    compact?: boolean;
   } = $props();
 
   const ui = getUiText();
@@ -314,8 +317,14 @@
 <div class="overflow-hidden rounded-pane border border-(--field-border) bg-card focus-within:border-ring focus-within:ring-1 focus-within:ring-ring">
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
-    class="flex min-h-32 cursor-text flex-wrap content-start items-start gap-x-1 gap-y-2 px-4 py-3"
+    class="flex cursor-text flex-wrap content-start items-start gap-x-1 gap-y-2"
     role="group"
+    class:min-h-32={!compact}
+    class:px-4={!compact}
+    class:py-3={!compact}
+    class:min-h-9={compact}
+    class:px-2={compact}
+    class:py-1={compact}
     aria-label={label}
     data-pattern-box
     onmousedown={focusEnd}

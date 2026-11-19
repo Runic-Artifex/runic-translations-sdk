@@ -157,6 +157,25 @@ for (const key of ["app_messages", "app_message_bulk_actions", "app_add_message"
   assert.equal(typeof german[key], "string", `German project omits ${key}.`);
 }
 
+// The side-by-side list (D074.1) is an ARIA grid with one tab stop on the current row's text: Up/Down (Home/End) move
+// between rows, Enter edits or opens the row, Escape leaves editing and Tab goes on to the next row's text. Every cell
+// shows its focus; the view switch says which view is shown.
+const listView = sources["lib/screens/MessageListView.svelte"];
+assert.match(listView, /role="grid"\s+aria-label=\{labels\.messages\}\s+aria-describedby=\{helpId\}/, "The list grid is unnamed.");
+assert.match(listView, /<p id=\{helpId\} class="sr-only">\{ui\.text\("ui_list_keyboard_help"\)\}<\/p>/, "The list's keys are not described.");
+assert.equal(listView.match(/role="columnheader"/g)?.length, 6, "The list's columns are not headed.");
+assert.match(listView, /role="row"\s+aria-selected=\{selected\}/, "The list's current row is not exposed as selected.");
+assert.match(listView, /tabindex=\{row\.key === focusKey && !editingThis \? 0 : -1\}/, "The list grid has no single tab stop.");
+const listKeyboard = listView.slice(listView.indexOf("function cellKeydown"), listView.indexOf("function cellClick"));
+for (const key of ["ArrowDown", "ArrowUp", "Home", "End", "Enter"]) {
+  assert.ok(listKeyboard.includes(`case "${key}":`), `The list does not handle ${JSON.stringify(key)}.`);
+}
+assert.match(listKeyboard, /event\.key === "Escape"[\s\S]*?stopEditing\(row\)/, "Escape does not leave the list's editing.");
+assert.match(listKeyboard, /event\.key !== "Tab"[\s\S]*?moveTo\(target, true, event\.shiftKey\)/, "Tab does not go on to the next row's text.");
+assert.match(listView, /\.list-row > div:focus-visible \{ box-shadow: inset 0 0 0 2px var\(--ring\)/, "The list's cells do not show their focus.");
+assert.match(sources["lib/screens/WorkspaceShell.svelte"], /role="group" aria-label=\{ui\.text\("ui_view_label"\)\}[\s\S]*?aria-pressed=\{layout === option\.value\}/,
+  "The view switch is unnamed or does not say which view is shown.");
+
 const editorToolbar = sources["EditorToolbar.svelte"];
 assert.match(editorToolbar, /aria-label=\{undoLabel\} title=\{`\$\{undoLabel\} \(\$\{shortcutLabel\("Mod\+Z"\)\}\)`\}/, "Undo is unnamed or lacks its platform shortcut.");
 assert.match(editorToolbar, /aria-label=\{redoLabel\} title=\{`\$\{redoLabel\} \(\$\{shortcutLabel\("Mod\+Shift\+Z"\)\}\)`\}/, "Redo is unnamed or lacks its platform shortcut.");

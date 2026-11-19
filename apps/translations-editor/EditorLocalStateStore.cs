@@ -22,6 +22,8 @@ internal static class EditorLocalStateStore
         "runic-translations.theme-mode",
         // Comfortable or compact.
         "runic-translations.density",
+        // The workbench or the list.
+        "runic-translations.workspace-layout",
         "runic-translations.pseudo-localization",
         "runic-translations.ui-direction",
         "runic-translations.ui-locale",

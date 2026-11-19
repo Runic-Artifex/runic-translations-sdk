@@ -1,7 +1,21 @@
 import type { ResourceValue } from "./resource-model";
 
-import type { StructuredMessage, MessageInput, MessageFormat, MessagePatternNode, MessageVariant } from "./message-model";
+import type { EditorMessageProjection } from "./contracts";
+import type { StructuredMessage, MessageInput, MessageFormat, MessagePatternNode, MessageVariant, InputType } from "./message-model";
 export * from "./message-model";
+
+/** The type a projection's input has in the pattern editor, from its declared type and its formatter. */
+export function authoringInputType(type: string, fn?: string): InputType {
+  if (fn === "integer") return "int64";
+  if (fn === "number") return "decimal";
+  if (fn === "datetime") return "instant";
+  return ["string", "bool", "int64", "decimal", "date", "time", "instant", "uuid"].includes(type) ? type as InputType : "string";
+}
+
+/** The inputs the pattern editor offers for a projection: each input by name, with its type. */
+export function authoringInputs(authoring: Pick<EditorMessageProjection, "inputs"> | undefined): Record<string, MessageInput> {
+  return Object.fromEntries((authoring?.inputs ?? []).map((input) => [input.name, { type: authoringInputType(input.type, input.function) }]));
+}
 
 export function toStructuredMessage(value: ResourceValue | undefined): StructuredMessage {
   if (isStructuredMessage(value)) return structuredClone(value);

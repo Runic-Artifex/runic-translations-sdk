@@ -6,7 +6,7 @@
   import { localeDirection } from "./locale-text";
   import { getUiText } from "./ui-text";
 
-  let { pattern, inputs, locale, label, onchange, onensureinput, revision = 0, sourceToggle = true }: {
+  let { pattern, inputs, locale, label, onchange, onensureinput, revision = 0, sourceToggle = true, compact = false }: {
     pattern: string;
     inputs: Record<string, MessageInput>;
     locale: string;
@@ -17,6 +17,8 @@
     revision?: number;
     /** Whether the pattern offers its own MF2 source; a content-editing project (D074.2) has one link for the message. */
     sourceToggle?: boolean;
+    /** One line high, for a row of the list view (D074.1). */
+    compact?: boolean;
   } = $props();
   const ui = getUiText();
   let sourceMode = $state(false);
@@ -35,7 +37,7 @@
   {#if sourceMode && sourceToggle}
     <Textarea value={visiblePattern} class="min-h-32 font-mono" data-draft-field aria-label={label} spellcheck={false} lang={locale} dir={localeDirection(locale)} oninput={(event) => changePattern(event.currentTarget.value)} />
   {:else}
-    <InlineMessageEditor value={visiblePattern} {inputs} {locale} {label} onchange={changePattern} {onensureinput} />
+    <InlineMessageEditor value={visiblePattern} {inputs} {locale} {label} onchange={changePattern} {onensureinput} {compact} />
   {/if}
   {#if sourceToggle}
     <Button variant="ghost" size="sm" class="justify-self-start" aria-pressed={sourceMode} onclick={() => sourceMode = !sourceMode}>{ui.text("ui_composer_message_source")}</Button>
