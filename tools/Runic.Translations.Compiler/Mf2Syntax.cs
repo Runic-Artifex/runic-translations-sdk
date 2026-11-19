@@ -101,11 +101,12 @@ internal readonly record struct Mf2Span(Mf2SourceMap Map, int From, int To)
 /// <summary>Full original bytes, a contiguous token stream and parsed expressions for authoring tools.</summary>
 internal sealed class Mf2SyntaxDocument
 {
-    internal Mf2SyntaxDocument(TranslationSource source, List<Mf2SyntaxToken> tokens, List<Mf2ExpressionSyntax> expressions,
+    internal Mf2SyntaxDocument(TranslationSource source, List<Mf2SyntaxToken>? tokens, List<Mf2ExpressionSyntax> expressions,
         List<Mf2DeclarationSyntax> declarations, List<Mf2VariantSyntax> variants, Mf2MatchSyntax? match, TranslationDiagnostic[] diagnostics,
-        TranslationCompilerOptions? options = null, string? text = null)
+        TranslationCompilerOptions? options = null, string? text = null, Mf2Span? body = null)
     {
-        _tokens = tokens.AsReadOnly(); Expressions = Compact(expressions); Declarations = Compact(declarations); Variants = Compact(variants); Match = match;
+        // Without a token stream (a compile's reader, which needs none), Tokens reads it when asked.
+        _tokens = tokens?.AsReadOnly(); Body = body; Expressions = Compact(expressions); Declarations = Compact(declarations); Variants = Compact(variants); Match = match;
         Diagnostics = diagnostics.Length == 0 ? NoDiagnostics : Array.AsReadOnly(diagnostics);
         _options = options; _text = text;
         // A message read from its text keeps the text (which it shares with its resource node), not a copy of its bytes,
@@ -170,6 +171,18 @@ internal sealed class Mf2SyntaxDocument
         Volatile.Write(ref _released, new WeakReference<IReadOnlyList<Mf2SyntaxToken>>(tokens));
         Volatile.Write(ref _tokens, null);
     }
+    /// <summary>The quoted pattern of a complex message without a matcher, <c>{{…}}</c>; null for a simple message or a matcher.</summary>
+    internal Mf2Span? Body { get; }
+
+    /// <summary>Whether the reader reported an error (the token-free checks below read valid messages only).</summary>
+    internal bool HasErrors
+    {
+        get
+        {
+            foreach (TranslationDiagnostic diagnostic in Diagnostics) if (diagnostic.Severity == TranslationDiagnosticSeverity.Error) return true;
+            return false;
+        }
+    }
     public IReadOnlyList<Mf2ExpressionSyntax> Expressions { get; }
     public IReadOnlyList<Mf2DeclarationSyntax> Declarations { get; }
     public IReadOnlyList<Mf2VariantSyntax> Variants { get; }
@@ -203,10 +216,14 @@ internal static class Mf2SyntaxReader
 
     /// <param name="text">The source's text, when the caller has it (it is the UTF-8 decoding of the bytes): the syntax
     /// shares it instead of decoding the bytes again.</param>
-    internal static Mf2SyntaxDocument Read(TranslationSource source, TranslationCompilerOptions? options, string? text, CancellationToken cancellationToken)
+    internal static Mf2SyntaxDocument Read(TranslationSource source, TranslationCompilerOptions? options, string? text, CancellationToken cancellationToken) =>
+        Read(source, options, text, true, cancellationToken);
+
+    /// <param name="tokens">Whether to keep the token stream: a compile needs none (its document reads it when asked).</param>
+    internal static Mf2SyntaxDocument Read(TranslationSource source, TranslationCompilerOptions? options, string? text, bool tokens, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(source); options ??= new TranslationCompilerOptions();
-        return new Reader(source, options, cancellationToken, text).Read();
+        return new Reader(source, options, cancellationToken, text, tokens).Read();
     }
     /// <summary>Checks declaration and matcher constraints independently of syntax and target support.</summary>
     private static readonly IReadOnlyList<TranslationDiagnostic> NoDiagnostics = Array.AsReadOnly(Array.Empty<TranslationDiagnostic>());
@@ -229,7 +246,15 @@ internal static class Mf2SyntaxReader
             bool selfOption = declaration.Kind == "input" && declaration.Expression.Options.Any(option =>
                 option.Value is { Kind: Mf2OperandKind.Variable } value && value.Value == declaration.Name);
             if (previousVariables.Contains(declaration.Name) || selfOption) Error("Duplicate declaration '" + declaration.Name + "'.", declaration.NameLocation);
-            foreach (var token in syntax.Tokens.Where(t => t.Kind == Mf2SyntaxTokenKind.Variable && t.Location.StartByte >= declaration.Expression.Location.StartByte && t.Location.StartByte < declaration.Expression.Location.StartByte + declaration.Expression.Location.LengthBytes))
+            // The variables of the declaration's expression: in a valid message, its variable operand and option values (an
+            // attribute value is a literal), which are its variable tokens; otherwise the tokens.
+            if (!syntax.HasErrors)
+            {
+                if (declaration.Expression.Operand is { Kind: Mf2OperandKind.Variable } operand) Reference(operand.Value, operand.Span);
+                foreach (var option in declaration.Expression.Options)
+                    if (option.Value is { Kind: Mf2OperandKind.Variable } value) Reference(value.Value, value.Span);
+            }
+            else foreach (var token in syntax.Tokens.Where(t => t.Kind == Mf2SyntaxTokenKind.Variable && t.Location.StartByte >= declaration.Expression.Location.StartByte && t.Location.StartByte < declaration.Expression.Location.StartByte + declaration.Expression.Location.LengthBytes))
             {
                 if (locals.Contains(token.Value) && !declared.Contains(token.Value)) Error("Local '" + token.Value + "' is referenced before its declaration.", token.Location);
                 previousVariables.Add(token.Value);
@@ -251,6 +276,11 @@ internal static class Mf2SyntaxReader
         }
         return Array.AsReadOnly(diagnostics.ToSortedArray());
         void Error(string message, TextSourceLocation location) => diagnostics.Add("RTR0067", TranslationDiagnosticSeverity.Error, message, location);
+        void Reference(string name, Mf2Span span)
+        {
+            if (locals.Contains(name) && !declared.Contains(name)) Error("Local '" + name + "' is referenced before its declaration.", span.Location);
+            previousVariables.Add(name);
+        }
     }
     private static string DecodeVariantKey(string raw)
     {
@@ -274,6 +304,25 @@ internal static class Mf2SyntaxReader
         if (!markup) return NoDiagnostics;
         var diagnostics = new DiagnosticBag(); var stack = new Stack<Mf2ExpressionSyntax>();
         int expressionIndex = 0;
+        if (!syntax.HasErrors)
+        {
+            // A valid message's tokens: its expressions in order, and the end of each quoted pattern (a variant's or the
+            // body's) after the expressions it holds.
+            int variant = 0;
+            int PatternEnd() => variant < syntax.Variants.Count ? syntax.Variants[variant].PatternSpan.To - 2 : syntax.Body is { } body ? body.To - 2 : int.MaxValue;
+            foreach (var expression in syntax.Expressions)
+            {
+                while (expression.Span.From > PatternEnd()) { Finish(); if (variant < syntax.Variants.Count) variant++; else break; }
+                if (expression.MarkupKind == Mf2MarkupKind.Open) stack.Push(expression);
+                else if (expression.MarkupKind == Mf2MarkupKind.Close)
+                {
+                    if (stack.Count == 0 || stack.Peek().MarkupName != expression.MarkupName)
+                        Error("The inline renderer requires balanced, non-overlapping markup.", expression.Location);
+                    else stack.Pop();
+                }
+            }
+            Finish(); return Array.AsReadOnly(diagnostics.ToSortedArray());
+        }
         foreach (var token in syntax.Tokens)
         {
             if (token.Kind == Mf2SyntaxTokenKind.PatternEnd) Finish();
@@ -298,36 +347,35 @@ internal static class Mf2SyntaxReader
         private readonly TranslationCompilerOptions _options;
         private readonly CancellationToken _cancellation;
         private readonly DiagnosticBag _diagnostics = new();
-        private readonly List<Mf2SyntaxToken> _tokens = new();
+        private readonly List<Mf2SyntaxToken>? _tokens;
         private readonly List<Mf2ExpressionSyntax> _expressions = new();
         private readonly List<Mf2DeclarationSyntax> _declarations = new();
         private readonly List<Mf2VariantSyntax> _variants = new();
-        private readonly List<int> _lineStarts = new() { 0 };
+        // The first character of each line, made by the first location (most messages need none).
+        private List<int>? _lineStarts;
+        private Mf2Span? _body;
         private Mf2MatchSyntax? _match;
         private string _text = "";
-        // The UTF-8 offset of every UTF-16 index; null when the text is ASCII, whose offsets are the indexes.
+        // The UTF-8 offset of every UTF-16 index, made by the first location of a text that is not ASCII (whose offsets
+        // are the indexes).
         private int[]? _bytes;
+        private bool _ascii = true;
         private int _at;
         private readonly string? _given;
-        internal Reader(TranslationSource source, TranslationCompilerOptions options, CancellationToken cancellation, string? text = null)
-        { _source = source; _options = options; _cancellation = cancellation; _given = text; }
+        internal Reader(TranslationSource source, TranslationCompilerOptions options, CancellationToken cancellation, string? text = null, bool tokens = true)
+        { _source = source; _options = options; _cancellation = cancellation; _given = text; _tokens = tokens ? new() : null; }
         internal Mf2SyntaxDocument Read()
         {
             _cancellation.ThrowIfCancellationRequested();
             if (_source.Bytes.Length > _options.MaximumValueBytes) { _diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "MF2 source exceeds the configured byte limit.", _source, new ByteSpan(0, 0)); return Result(); }
             try { _text = _given ?? StrictJsonParser.StrictUtf8.GetString(_source.Bytes); }
             catch (DecoderFallbackException) { _diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "MF2 requires valid UTF-8.", _source, new ByteSpan(0, 0)); return Result(); }
-            if (_source.Bytes.Length != _text.Length)
-            {
-                _bytes = new int[_text.Length + 1];
-                for (int i = 0, b = 0; i < _text.Length;) { Rune rune = Rune.GetRuneAt(_text, i); for (int j = 0; j < rune.Utf16SequenceLength; j++) _bytes[i + j] = b; i += rune.Utf16SequenceLength; b += rune.Utf8SequenceLength; _bytes[i] = b; }
-            }
-            for (int i = 0; i < _text.Length; i++) if (_text[i] == '\n') _lineStarts.Add(i + 1);
+            _ascii = _source.Bytes.Length == _text.Length;
             Space();
             bool complex = Starts(".") || Starts("{{");
             while (Starts(".input") || Starts(".local")) { ReadDeclaration(); Space(); }
             if (Starts(".match")) ReadMatcher();
-            else if (Starts("{{")) ReadPattern(true);
+            else if (Starts("{{")) { int body = _at; ReadPattern(true); _body = Span(body, _at); }
             else if (complex) { Error("A complex message requires a quoted pattern or matcher.", _at, _at); Recover(); }
             else ReadPattern(false);
             if (complex) { Space(); if (_at < _text.Length) { Error("Unexpected content after the complex message.", _at, _at + 1); Recover(); } }
@@ -546,9 +594,23 @@ internal static class Mf2SyntaxReader
             return required;
         }
         private bool Starts(string value) => _text.AsSpan(_at).StartsWith(value, StringComparison.Ordinal);
-        private void Token(Mf2SyntaxTokenKind kind, int from, string? value = null) { string raw = _text.Substring(from, _at - from); _tokens.Add(new Mf2SyntaxToken(kind, raw, value ?? raw, Location(from, _at))); }
+        private void Token(Mf2SyntaxTokenKind kind, int from, string? value = null)
+        {
+            if (_tokens is null) return;
+            string raw = _text.Substring(from, _at - from); _tokens.Add(new Mf2SyntaxToken(kind, raw, value ?? raw, Location(from, _at)));
+        }
         private TextSourceLocation Location(int from, int to)
         {
+            if (_lineStarts is null)
+            {
+                _lineStarts = new() { 0 };
+                for (int i = 0; i < _text.Length; i++) if (_text[i] == '\n') _lineStarts.Add(i + 1);
+            }
+            if (!_ascii && _bytes is null)
+            {
+                _bytes = new int[_text.Length + 1];
+                for (int i = 0, b = 0; i < _text.Length;) { Rune rune = Rune.GetRuneAt(_text, i); for (int j = 0; j < rune.Utf16SequenceLength; j++) _bytes[i + j] = b; i += rune.Utf16SequenceLength; b += rune.Utf8SequenceLength; _bytes[i] = b; }
+            }
             int line = _lineStarts.BinarySearch(from); if (line < 0) line = ~line - 1;
             int endLine = _lineStarts.BinarySearch(to); if (endLine < 0) endLine = ~endLine - 1;
             int fromByte = _bytes is null ? from : _bytes[from], toByte = _bytes is null ? to : _bytes[to];
@@ -556,8 +618,8 @@ internal static class Mf2SyntaxReader
         }
         // A node's extent, made a location when read (Mf2SourceMap), with the values Location computes.
         private Mf2SourceMap? _map;
-        private Mf2Span Span(int from, int to) => new(_map ??= new Mf2SourceMap(_source.Path, _text, _bytes is null), from, to);
+        private Mf2Span Span(int from, int to) => new(_map ??= new Mf2SourceMap(_source.Path, _text, _ascii), from, to);
         private void Error(string message, int from, int to) => _diagnostics.Add("RTR0066", TranslationDiagnosticSeverity.Error, message, Location(from, to));
-        private Mf2SyntaxDocument Result() => new(_source, _tokens, _expressions, _declarations, _variants, _match, _diagnostics.ToSortedArray(), _options, _given);
+        private Mf2SyntaxDocument Result() => new(_source, _tokens, _expressions, _declarations, _variants, _match, _diagnostics.ToSortedArray(), _options, _given, _body);
     }
 }

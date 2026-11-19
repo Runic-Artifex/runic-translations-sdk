@@ -127,14 +127,13 @@ internal static class Rmf2SemanticCompilerV5
                         return normalized.Length.ToString(CultureInfo.InvariantCulture) + ":" + normalized;
                     }));
                     if (!seen.Add(vector)) DataError("Duplicate normalized variant key vector.", variant.Location);
-                    variants.Add(new(keys, Pattern(variant.PatternSpan.StartByte + 2, variant.PatternSpan.EndByte - 2)));
+                    variants.Add(new(keys, Pattern(variant.PatternSpan.From + 2, variant.PatternSpan.To - 2)));
                 }
             }
             else
             {
-                var opening = syntax.Tokens.FirstOrDefault(t => t.Kind == Mf2SyntaxTokenKind.PatternStart);
-                var closing = syntax.Tokens.LastOrDefault(t => t.Kind == Mf2SyntaxTokenKind.PatternEnd);
-                variants.Add(new(Array.Empty<Rmf2KeyV5>(), Pattern(opening is null ? 0 : opening.Location.StartByte + 2, closing?.Location.StartByte ?? syntax.ByteLength)));
+                // A quoted body inside its {{ }}, else the whole simple message.
+                variants.Add(new(Array.Empty<Rmf2KeyV5>(), syntax.Body is { } body ? Pattern(body.From + 2, body.To - 2) : Pattern(0, syntax.Text.Length)));
             }
             if (_inputs.Count > options.MaximumPlaceholdersPerValue || _inputs.Count > 32 || selectors.Count > 16 || variants.Count > 256 || declarations.Count > 256)
                 Error("Message exceeds the v5 input, selector, variant or declaration limit.", syntax.Tokens[0].Location);
@@ -197,44 +196,28 @@ internal static class Rmf2SemanticCompilerV5
             return (new(operand, inherited.ValueType, expression.Function, loweredOptions, Annotations(expression)), new("local", inherited.ValueType, selection, dependencies.Order(StringComparer.Ordinal).ToArray()));
         }
 
-        private Dictionary<int, Mf2ExpressionSyntax>? _expressionsByStart;
-        private StringBuilder? _text;
-
+        // The nodes of the pattern between two character offsets of the message: the text between its expressions,
+        // unescaped, and the expressions. The message is valid (Lower returns before on a syntax error), so outside its
+        // expressions a pattern holds text only (with a simple message's leading whitespace), as its tokens are.
         private IReadOnlyList<Rmf2NodeV5> Pattern(int from, int to)
         {
             var nodes = new List<Rmf2NodeV5>();
-            // The text of the current run: its single piece, or the builder once a second piece joins it.
-            string? piece = null; StringBuilder? text = null;
-            var expressions = _expressionsByStart ??= syntax.Expressions.ToDictionary(expression => expression.Span.StartByte);
-            int consumed = from;
-            foreach (var token in syntax.Tokens)
+            string message = syntax.Text;
+            int at = from;
+            foreach (var expression in syntax.Expressions)
             {
                 cancellation.ThrowIfCancellationRequested();
-                if (token.Location.StartByte < consumed || token.Location.StartByte >= to) continue;
-                if (token.Kind is Mf2SyntaxTokenKind.Text or Mf2SyntaxTokenKind.Whitespace)
-                {
-                    string value = Unescape(token.Raw);
-                    if (text is not null) text.Append(value);
-                    else if (piece is null) piece = value;
-                    else { text = (_text ??= new StringBuilder()).Clear().Append(piece).Append(value); piece = null; }
-                    continue;
-                }
-                if (token.Kind != Mf2SyntaxTokenKind.ExpressionStart) continue;
-                Flush();
-                var expression = expressions[token.Location.StartByte]; consumed = expression.Span.EndByte;
+                int start = expression.Span.From;
+                if (start < at || start >= to) continue;
+                if (start > at) nodes.Add(new Rmf2TextV5(Unescape(message.Substring(at, start - at))));
+                at = expression.Span.To;
                 if (expression.MarkupKind == Mf2MarkupKind.None) nodes.Add(new Rmf2ExpressionNodeV5(Expression(expression).Expression));
                 else nodes.Add(new Rmf2MarkupV5(expression.MarkupName!, expression.MarkupKind.ToString().ToLowerInvariant(),
                     expression.Options.Select(property => new Rmf2OptionV5(property.Name, Value(property.Value!, null))).ToArray(), Annotations(expression)));
             }
-            Flush();
+            if (to > at) nodes.Add(new Rmf2TextV5(Unescape(message.Substring(at, to - at))));
             if (nodes.Count > 4096) Error("A pattern exceeds the v5 node limit.", syntax.Tokens[0].Location);
             return Mf2SyntaxDocument.Compact(nodes);
-            void Flush()
-            {
-                if (text is not null) { if (text.Length != 0) nodes.Add(new Rmf2TextV5(text.ToString())); text = null; }
-                else if (piece is { Length: > 0 }) nodes.Add(new Rmf2TextV5(piece));
-                piece = null;
-            }
         }
 
         private Rmf2ValueV5 Value(Mf2OperandSyntax operand, string? expectedType)
