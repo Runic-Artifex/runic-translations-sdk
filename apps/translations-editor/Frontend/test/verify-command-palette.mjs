@@ -224,6 +224,32 @@ const sourceMatch = palette.filterCommands(commands, "source").map((entry) => en
 assert(sourceMatch[0] === "view.mode-raw",
   "Direct source-mode text should surface raw-mode ahead of incidental matches.");
 
+// The list view (D074.1) has palette commands beside the toolbar's Workbench | List switch: the one for the view
+// shown is disabled, each runs the switch, and neither has a shortcut (no natural one is free).
+{
+  const layoutCommand = (layout, id) => palette.buildEditorCommandPalette(actions, { ...state, layout }).find((entry) => entry.id === id);
+  assert(layoutCommand(undefined, "view.layout-workbench")?.disabled === true, "Switch to workbench is offered in the workbench.");
+  assert(layoutCommand(undefined, "view.layout-list")?.disabled === false, "Switch to list view is not offered in the workbench.");
+  assert(layoutCommand("list", "view.layout-list")?.disabled === true, "Switch to list view is offered in the list.");
+  assert(layoutCommand("list", "view.layout-workbench")?.disabled === false, "Switch to workbench is not offered in the list.");
+  assert(layoutCommand(undefined, "view.layout-list").title === "Switch to list view" &&
+    layoutCommand("list", "view.layout-workbench").title === "Switch to workbench", "The view commands' titles changed.");
+  assert(layoutCommand(undefined, "view.layout-list").keybinding === undefined && layoutCommand("list", "view.layout-workbench").keybinding === undefined,
+    "The view commands gained a shortcut.");
+  layoutCommand(undefined, "view.layout-list").run();
+  assert(actions.calls.at(-1) === "setLayout:list", "Switch to list view did not run the view switch.");
+  layoutCommand("list", "view.layout-workbench").run();
+  assert(actions.calls.at(-1) === "setLayout:workbench", "Switch to workbench did not run the view switch.");
+  assert(palette.filterCommands(commands, "list view")[0]?.id === "view.layout-list", "Searching \"list view\" does not find the command first.");
+  const keyed = { text: (key) => `<${key}>` };
+  const localized = palette.buildEditorCommandPalette(actions, state, keyed);
+  assert(localized.find((entry) => entry.id === "view.layout-list")?.title === "<ui_palette_switch_to_list_view>" &&
+    localized.find((entry) => entry.id === "view.layout-workbench")?.title === "<ui_palette_switch_to_workbench>",
+  "The view commands do not take their titles from the editor's catalog.");
+  assert(palette.buildEditorCommandPalette(actions, { ...state, workspaceReady: false }).find((entry) => entry.id === "view.layout-list")?.disabled === true,
+    "Switch to list view is offered without a workspace.");
+}
+
 const grouped = palette.groupCommands(commands);
 assert(grouped.map((group) => group.id).join(",") ===
   ["workspace", "document", "review", "view", "help"].join(","),
@@ -269,6 +295,7 @@ function stubActions() {
     showAbout: record("showAbout"),
     createDiagnosticBundle: record("createDiagnosticBundle"),
     setEditorMode: (mode) => calls.push(`setEditorMode:${mode}`),
+    setLayout: (layout) => calls.push(`setLayout:${layout}`),
     selectLocale: (locale) => calls.push(`selectLocale:${locale}`),
     setUiLocale: (locale) => calls.push(`setUiLocale:${locale}`),
     setThemeMode: (mode) => calls.push(`setThemeMode:${mode}`),
