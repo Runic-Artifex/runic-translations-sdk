@@ -99,11 +99,14 @@ internal sealed record Rmf2ProjectV5(string Id, string CodeNamespace, string Cla
     internal const int MessageGrammarVersion = 5;
     // The RMF2 runtime ABI of the ESM runtime, the web module manifest and the caller contract.
     internal const int RuntimeAbiVersion = 3;
-    // The .NET RMF2 runtime ABI of generated C#: 4 embeds each locale's data as DEFLATE data
-    // (GeneratedCatalogSupport.ReadDeflatedValues) and reads the definitions, keys and external-pack contracts from one
-    // message table (GeneratedCatalogSupport.ReadDefinitions, CreateKeys, CreatePackContract) with shared accessor bodies;
-    // 3, for a referenced runtime before 0.14, embeds the JSON itself and writes code per message.
-    internal const int CSharpRuntimeAbiVersion = 4;
+    // The .NET RMF2 runtime ABI of generated C#: 5 (0.15) embeds each locale's data in the binary encoding as DEFLATE data
+    // (GeneratedCatalogSupport.ReadDeflatedBinaryValues) and the message table as DEFLATE data; 4 (0.14) embeds each
+    // locale's JSON as DEFLATE data (GeneratedCatalogSupport.ReadDeflatedValues) and reads the definitions, keys and
+    // external-pack contracts from one message table (GeneratedCatalogSupport.ReadDefinitions, CreateKeys,
+    // CreatePackContract) with shared accessor bodies; 3, for a referenced runtime before 0.14, embeds the JSON itself and
+    // writes code per message. The generator emits the newest one the referenced runtime runs.
+    internal const int CSharpRuntimeAbiVersion = 5;
+    internal const int CSharpDeflatedJsonRuntimeAbiVersion = 4;
     internal const int MarkupContractVersion = 2;
 
     // code.referenceFallbackText in runic.json: generated C# reference factories carry the base-locale text.

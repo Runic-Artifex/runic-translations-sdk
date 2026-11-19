@@ -185,7 +185,7 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
     {
         if (TryGetKeyIndex(key, out int index) && _messages[index] is CompiledTextMessage message)
         {
-            contentLocale = message.Rmf2V5?.ContentLocale ?? message.ContentLocale ?? Locale;
+            contentLocale = message.ContentLocale ?? Locale;
             return true;
         }
 
@@ -230,7 +230,7 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
             return literal;
         }
 
-        if (message.Rmf2V5 is null) ValidateArguments(_definitions[index], arguments);
+        if (!message.IsRmf2V5) ValidateArguments(_definitions[index], arguments);
         string text = CompiledTextMessageRuntime.Format(message, arguments, Locale, _valueFormatter, requestedLocale: RequestedLocale,
             bidiIsolation: _catalog.BidiIsolation);
         ReportFallback(index, message);
@@ -245,8 +245,8 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         // A v5 caller contract is structured when any locale for the key uses
         // markup. Plain locale variants must therefore remain consumable via
         // that contract-wide FormatContent surface.
-        if (!message.HasMarkup && message.Rmf2V5 is null) throw new TranslationFormatException("The resource does not produce structured content.");
-        if (message.Rmf2V5 is null) ValidateArguments(_definitions[index], arguments);
+        if (!message.IsRmf2V5 && !message.HasMarkup) throw new TranslationFormatException("The resource does not produce structured content.");
+        if (!message.IsRmf2V5) ValidateArguments(_definitions[index], arguments);
         LocalizedTextContent content = CompiledTextMessageRuntime.FormatContent(message, arguments, Locale, _valueFormatter, requestedLocale: RequestedLocale,
             bidiIsolation: _catalog.BidiIsolation);
         ReportFallback(index, message);
@@ -277,7 +277,7 @@ public sealed class CompiledTranslationSnapshot : ITranslationSnapshot
         for (int i = 0; i < messages.Length; i++)
         {
             CompiledTextMessage? message = messages[i];
-            if (message is not null && message.Rmf2V5 is null && message.VariantArray.Length == 0 && definitions[i].PlaceholderArray.Length == 0)
+            if (message is not null && !message.IsRmf2V5 && message.VariantArray.Length == 0 && definitions[i].PlaceholderArray.Length == 0)
             {
                 result[i] = CompiledTextMessageRuntime.RenderLiteral(message);
             }

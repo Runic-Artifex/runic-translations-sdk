@@ -6,8 +6,8 @@ using System.IO.Compression;
 namespace Runic.Translations;
 
 /// <summary>
-/// The locale data of a generated catalog for RMF2 runtime ABI 4: the compiler's UTF-8 JSON as raw DEFLATE data, about a
-/// tenth of its size (D072.2). It is inflated on the locale's first use into an array of exactly the inflated length,
+/// The locale data of a generated catalog as raw DEFLATE data: for RMF2 runtime ABI 4 the compiler's UTF-8 JSON, about a
+/// tenth of its size (D072.2), for ABI 5 its binary encoding (<see cref="GeneratedLocaleBinary"/>). It is inflated on the locale's first use into an array of exactly the inflated length,
 /// which becomes garbage once the values are read, so only the values stay in memory.
 /// </summary>
 /// <remarks>
@@ -28,6 +28,30 @@ internal static class DeflatedLocaleData
         Inflate(deflated, buffer);
         return CompiledTranslationLocale.ReadRmf2Values(buffer, formatData);
     }
+
+    /// <summary>
+    /// Reads a locale's binary data (RMF2 runtime ABI 5). The values keep the inflated array, from which each message is
+    /// built on its first format, so it is not shared with anything.
+    /// </summary>
+    internal static IReadOnlyList<CompiledTranslationValue> ReadBinary(ReadOnlySpan<byte> deflated, int length, Rmf2FormatData? formatData) =>
+        GeneratedLocaleBinary.Read(InflateExact(deflated, length), formatData);
+
+    /// <summary>
+    /// Inflates into a new array of exactly <paramref name="length"/> bytes. The length must be one the DEFLATE data can
+    /// reach, at most 1,032 times its size (RFC 1951's largest expansion), so a few bytes cannot ask for a large array.
+    /// </summary>
+    internal static byte[] InflateExact(ReadOnlySpan<byte> deflated, int length)
+    {
+        if (length is < 0 or > MaximumLength || length > (long)deflated.Length * MaximumExpansion + MaximumExpansion)
+            throw new TranslationPackException("The generated data declares an invalid length.", TranslationPackFailureReason.Malformed);
+        byte[] buffer = new byte[length];
+        Inflate(deflated, buffer);
+        return buffer;
+    }
+
+    // RFC 1951: a length/distance pair of at most 3 bits (fixed Huffman codes, the shortest) yields 258 bytes, so DEFLATE
+    // data expands at most about 1,032 times.
+    private const int MaximumExpansion = 1032;
 
     /// <summary>Inflates UTF-8 text, such as a generated catalog's markup contract (RMF2 runtime ABI 4).</summary>
     internal static string ReadText(ReadOnlySpan<byte> deflated, int length)

@@ -784,6 +784,9 @@ internal sealed class Rmf2EsmV5Tests
             new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(json)),
             sources.Select(source => new TranslationSource("translations/" + source.Locale + ".rmf2", Encoding.UTF8.GetBytes(source.Source))).ToArray());
         Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(item => item.Message)));
+        // Every project the conformance corpora compile here also reads identically from the binary locale data of
+        // RMF2 ABI 5 and from the JSON of ABI 4 (D077.16).
+        Rmf2GeneratedLocaleBinaryTests.AssertBinaryMatchesJson(result.Project!);
         return result.Project!;
     }
 

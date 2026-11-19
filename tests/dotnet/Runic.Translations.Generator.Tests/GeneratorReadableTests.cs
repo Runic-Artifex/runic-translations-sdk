@@ -496,7 +496,7 @@ internal sealed class GeneratorReadableTests
         // readable counterpart leave completion lists, and Registration also creates the readable surface. Without the
         // readable surface they stay visible. The runtime differs only in the readable surface; both have the composition
         // surface and the version rule.
-        GeneratorRun old = GeneratorTestHost.Run(RuntimeReferenceMode.Rmf2V4CompositionVersionRule, ProjectInput(), EnglishInput(), GermanInput());
+        GeneratorRun old = GeneratorTestHost.Run(RuntimeReferenceMode.Rmf2V5CompositionVersionRule, ProjectInput(), EnglishInput(), GermanInput());
         const string ReadableFactory = "CreateProvider,\n        static manager => new global::@Example.@Translations.@AppText(manager).Messages);";
         Assert.True(run.SingleResult.GeneratedSources.Single(static item => item.HintName == "AppText.Registration.g.cs").SourceText.ToString()
             .ReplaceLineEndings("\n").Contains(ReadableFactory, StringComparison.Ordinal), "Registration creates the readable surface");
