@@ -6,14 +6,38 @@ Translate and review the same MessageFormat 2 project that application builds co
 
 Runic Translations Editor is a companion to [Runic Translations](../../packages/dotnet/Runic.Translations/README.md). The editor manages workspaces; the compiler, schema, runtime, CLI, and language integrations are published by the SDK.
 
-See the [editor architecture](docs/architecture.md), [source-build and future
-archive guidance](docs/editor-distribution.md), and [usability-study protocol](docs/translator-usability-test.md).
+See the [editor architecture](docs/architecture.md), [downloads, packages and
+releases](docs/editor-distribution.md), and [usability-study protocol](docs/translator-usability-test.md).
+
+## Install
+
+The editor has releases of its own, with its own version (0.1.0 is the first), tagged
+`editor-v<version>` on this repository's
+[releases page](https://github.com/Runic-Artifex/runic-translations-sdk/releases). Each
+release has, with a sibling `.sha256` file for every download:
+
+| System | Download | Install |
+| --- | --- | --- |
+| Debian, Ubuntu (x64) | `runic-translations-editor_<version>_amd64.deb` | `sudo apt install ./runic-translations-editor_<version>_amd64.deb` |
+| Fedora (x64) | `runic-translations-editor-<version>-1.x86_64.rpm` | `sudo dnf install ./runic-translations-editor-<version>-1.x86_64.rpm` |
+| Other Linux (x64) | `runic-translations-editor-<version>-x86_64.AppImage` | `chmod +x` it and run it |
+| Linux (x64), unpacked | `runic-translations-editor-<version>-linux-x64.tar.gz` | Extract it and run `runic-translations-editor` |
+| macOS (Apple silicon) | `runic-translations-editor-<version>-osx-arm64.dmg` | Drag the application to Applications |
+| Windows (x64) | `runic-translations-editor-<version>-win-x64.zip` | Extract it and run `runic-translations-editor.cmd` |
+
+The packages are unsigned: macOS and Windows warn before the first start. The
+[distribution guide](docs/editor-distribution.md#download-and-install) has the
+checksum, Gatekeeper and SmartScreen steps. On Linux the editor uses the system's GTK 4
+and WebKitGTK 6, which the deb and rpm install with it. The deb, rpm and AppImage
+install their own desktop entry and icon; [`desktop-entry install`](#build-from-source)
+is for a source build and the `.tar.gz` archive. The deb and rpm put the command
+`Runic.Translations.Editor` on the `PATH`.
 
 ## Availability and local commands
 
-Standalone Editor distributions are not part of the SDK packages. Build the editor from
-source using the commands below. The examples here use the executable produced by
-that build; SDK package publication does not imply an Editor download.
+You can also build the editor from source with the commands below. The examples here
+use the executable produced by that build, or the `runic-translations-editor`
+launcher of an archive; the SDK's packages do not include the editor.
 
 Open the directory containing `translations/runic.json`, or the translations
 directory itself. The editor uses the same compiler path as MSBuild and Vite.
@@ -383,8 +407,9 @@ workspace directory instead.
 
 On Linux the window's icon comes from the desktop: on Wayland the compositor looks up
 the desktop entry named after the app ID, `eu.runicartifex.TranslationsEditor`, and
-its icon. Until one is installed the window shows a generic icon. Install it for
-your user with
+its icon. The deb, rpm and AppImage install that entry and icon themselves. For a
+source build or the `.tar.gz` archive, until one is installed the window shows a
+generic icon. Install it for your user with
 
 ```sh
 runic-translations-editor desktop-entry install
@@ -403,6 +428,13 @@ writes into your home directory. Desktops pick the entry up at once or after a n
 login (KDE Plasma: `kbuildsycoca6`). On macOS the editor sets the Dock icon from its
 packaged icon when the window opens. On Windows the window and the executable show
 the default icon for now.
+
+Until 0.1.0 the application ID was `eu.runic-artifex.TranslationsEditor`; runic-sdk's
+packages take only letters and digits in each part of the ID. If you installed the
+desktop entry from such a build, remove it with that build's
+`desktop-entry uninstall`, or delete
+`~/.local/share/applications/eu.runic-artifex.TranslationsEditor.desktop` and
+`~/.local/share/icons/hicolor/*/apps/eu.runic-artifex.TranslationsEditor.png`.
 
 `edit --native-shell-canary` opens the native window without a browser fallback,
 closes it as soon as its page has connected, and prints one JSON line

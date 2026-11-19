@@ -1,0 +1,414 @@
+name: Release editor
+
+# The Translations Editor's own releases (D078.2-D078.5; apps/translations-editor/docs/editor-distribution.md). Each
+# job builds one system's packages from this commit, installs or extracts them on its runner and opens the editor's
+# native window (eng/ci/editor-native-canary.sh). A tag editor-v<version> then creates a draft GitHub release that is
+# never marked Latest, so that slot stays with the SDK's releases; the maintainer reviews and publishes the draft.
+# A dispatch (dry-run by default) or a pull request that changes the pipeline builds and checks everything without
+# releasing; a dispatch on an editor-v tag with dry-run off drafts that tag's release.
+# The packages are unsigned (D078.4), so the workflow uses no secrets.
+on:
+  push:
+    tags: ["editor-v*"]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Build and check every package without creating a release
+        type: boolean
+        default: true
+  pull_request:
+    paths:
+      - .github/workflows/release-editor.yml
+      - apps/translations-editor/Directory.Build.props
+      - apps/translations-editor/Runic.Translations.Editor.csproj
+      - apps/translations-editor/packaging/**
+      - apps/translations-editor/launchers/**
+      - eng/ci/editor-native-canary.sh
+      - eng/release/editor-release.mjs
+      - eng/release/notes/editor/**
+
+concurrency:
+  group: release-editor-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+jobs:
+  # The editor's version, the tag check and the release notes: assembled notes for a release, the fragments
+  # assembled as a preview otherwise.
+  prepare:
+    name: Version and notes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - name: Read the editor's version
+        id: version
+        env:
+          # A tag push, or a dispatch on a tag with dry-run off; never a pull request or a branch.
+          RELEASE: ${{ github.repository == 'Runic-Artifex/runic-translations-sdk' && startsWith(github.ref, 'refs/tags/editor-v') && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && !inputs.dry-run)) }}
+        run: |
+          version=$(bun eng/release/editor-release.mjs version)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "release=$RELEASE" >> "$GITHUB_OUTPUT"
+          echo "The editor's version is $version; release: $RELEASE."
+      - name: Check the tag
+        if: steps.version.outputs.release == 'true'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: bun eng/release/editor-release.mjs check-tag "$TAG"
+      - name: Write the release notes
+        env:
+          RELEASE: ${{ steps.version.outputs.release }}
+        run: |
+          mkdir -p artifacts/editor-release
+          if [ "$RELEASE" = true ]; then
+            bun eng/release/editor-release.mjs notes artifacts/editor-release/notes.md --release
+          else
+            bun eng/release/editor-release.mjs notes artifacts/editor-release/notes.md
+          fi
+          cat artifacts/editor-release/notes.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: editor-release-notes
+          path: artifacts/editor-release/notes.md
+          if-no-files-found: error
+
+  # deb, rpm and AppImage from runic-sdk's dotnet runic package, at the runic-sdk version the editor is built on
+  # (RunicSdkDependencyVersion), each a NativeAOT build of the editor; and a .tar.gz of the same files for systems
+  # without those formats. No Flatpak: flatpak-builder installs the GNOME runtime and SDK from Flathub on every run,
+  # well over a gigabyte, and the sandbox would need its own filesystem permissions for an editor that writes
+  # workspaces anywhere on disk; the deb, rpm and AppImage already use the system's GTK 4 and WebKitGTK 6.
+  linux-x64:
+    name: linux-x64 / deb, rpm, AppImage, tar.gz
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      PROJECT: apps/translations-editor/Runic.Translations.Editor.csproj
+      APP_ID: eu.runicartifex.TranslationsEditor
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      # rpmbuild, the desktop entry and AppStream checks, NativeAOT's clang and zlib, and the runtime the installed
+      # deb depends on (GTK 4, WebKitGTK 6) with Xvfb for its window.
+      - name: Install the packaging tools and the editor's runtime
+        uses: ./.github/actions/apt-install
+        with:
+          packages: rpm desktop-file-utils appstream clang zlib1g-dev libgtk-4-1 libwebkitgtk-6.0-4 xvfb dbus-x11 at-spi2-core
+          install-recommends: "false"
+      # appimagetool and the type2 runtime, pinned by release and SHA-256 as in runic-sdk's packaging job, so packaging
+      # downloads nothing; both AppImages run with APPIMAGE_EXTRACT_AND_RUN, because the runner has no FUSE 2.
+      - name: Download appimagetool and the AppImage runtime
+        env:
+          APPIMAGETOOL: https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+          APPIMAGE_RUNTIME: https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64
+          APPIMAGE_RUNTIME_SHA256: 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
+        run: |
+          tools="$RUNNER_TEMP/appimage-tools"
+          mkdir -p "$tools"
+          eng/ci/retry.sh 3 120 curl -fsSL -o "$tools/appimagetool" "$APPIMAGETOOL"
+          eng/ci/retry.sh 3 120 curl -fsSL -o "$tools/runtime-x86_64" "$APPIMAGE_RUNTIME"
+          printf '%s  %s\n' "$APPIMAGETOOL_SHA256" "$tools/appimagetool" "$APPIMAGE_RUNTIME_SHA256" "$tools/runtime-x86_64" | sha256sum -c -
+          chmod +x "$tools/appimagetool"
+          echo "$tools" >> "$GITHUB_PATH"
+      - name: Install dotnet runic
+        run: bash eng/ci/install-dotnet-runic.sh "$RUNNER_TEMP/dotnet-runic"
+      - run: bun install --frozen-lockfile
+      - name: Build the web packages the editor's frontend uses
+        run: bun eng/run.mjs build-web
+      - name: Package the deb, rpm and AppImage
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          for target in deb rpm appimage; do
+            "$RUNNER_TEMP/dotnet-runic/dotnet-runic" package "$target" --project "$PROJECT" --output-directory "artifacts/package/$target"
+          done
+          out=artifacts/editor-release
+          mkdir -p "$out"
+          cp "artifacts/package/deb/runic-translations-editor_${VERSION}_amd64.deb" "$out/"
+          cp "artifacts/package/rpm/runic-translations-editor-${VERSION}-1.x86_64.rpm" "$out/"
+          cp "artifacts/package/appimage/Runic_Translations_Editor-${VERSION}-x86_64.AppImage" "$out/runic-translations-editor-${VERSION}-x86_64.AppImage"
+          chmod +x "$out/runic-translations-editor-${VERSION}-x86_64.AppImage"
+      # The archive holds the deb's application folder with package-manifest.json; the launcher and
+      # `desktop-entry install` make it a desktop application.
+      - name: Make the tar.gz archive
+        run: |
+          name="runic-translations-editor-${VERSION}-linux-x64"
+          tree="$RUNNER_TEMP/deb-tree"
+          dpkg-deb -x "artifacts/editor-release/runic-translations-editor_${VERSION}_amd64.deb" "$tree"
+          mkdir -p "$RUNNER_TEMP/archive"
+          cp -a "$tree/usr/lib/$APP_ID" "$RUNNER_TEMP/archive/$name"
+          bun eng/release/editor-release.mjs manifest "$RUNNER_TEMP/archive/$name" linux-x64
+          tar -C "$RUNNER_TEMP/archive" --sort=name --owner=0 --group=0 --numeric-owner -czf "artifacts/editor-release/$name.tar.gz" "$name"
+      - name: Write the checksums
+        run: |
+          cd artifacts/editor-release
+          bun ../../eng/release/editor-release.mjs checksum ./*.deb ./*.rpm ./*.AppImage ./*.tar.gz
+          cat ./*.sha256
+      - name: Permit the WebKit sandbox on Ubuntu
+        run: eng/ci/permit-webkit-sandbox.sh
+      - name: Install the deb and open the editor
+        timeout-minutes: 5
+        run: |
+          deb="artifacts/editor-release/runic-translations-editor_${VERSION}_amd64.deb"
+          test "$(dpkg-deb -f "$deb" Depends)" = 'libc6, libgtk-4-1, libwebkitgtk-6.0-4'
+          sudo dpkg -i "$deb"
+          desktop-file-validate "/usr/share/applications/$APP_ID.desktop"
+          grep -qx "StartupWMClass=$APP_ID" "/usr/share/applications/$APP_ID.desktop"
+          grep -qx 'Categories=Development;Translation;' "/usr/share/applications/$APP_ID.desktop"
+          test -f "/usr/share/icons/hicolor/512x512/apps/$APP_ID.png"
+          appstreamcli validate --no-net "/usr/share/metainfo/$APP_ID.metainfo.xml"
+          test "$(readlink -f /usr/bin/Runic.Translations.Editor)" = "/usr/lib/$APP_ID/Runic.Translations.Editor"
+          GDK_BACKEND=x11 xvfb-run -a bash eng/ci/editor-native-canary.sh "/usr/lib/$APP_ID" gtk4-webkitgtk6 artifacts/editor-canary/deb "$VERSION"
+          sudo dpkg -r runic-translations-editor
+      # The rpm installs on Fedora; on Ubuntu its requirement is checked and its files are extracted and started.
+      - name: Check the rpm, extract it and open the editor
+        timeout-minutes: 5
+        run: |
+          rpm="artifacts/editor-release/runic-translations-editor-${VERSION}-1.x86_64.rpm"
+          test "$(rpm -qp --requires "$rpm" | grep -v '^rpmlib(')" = webkitgtk6.0
+          test "$(rpm -qp --queryformat '%{LICENSE}' "$rpm")" = MIT
+          root="$RUNNER_TEMP/rpm-root"
+          mkdir -p "$root"
+          rpm2cpio "$rpm" | (cd "$root" && cpio -idm --quiet)
+          desktop-file-validate "$root/usr/share/applications/$APP_ID.desktop"
+          GDK_BACKEND=x11 xvfb-run -a bash eng/ci/editor-native-canary.sh "$root/usr/lib/$APP_ID" gtk4-webkitgtk6 artifacts/editor-canary/rpm "$VERSION"
+      - name: Open the AppImage
+        timeout-minutes: 5
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          appimage="$PWD/artifacts/editor-release/runic-translations-editor-${VERSION}-x86_64.AppImage"
+          (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract >/dev/null)
+          root="$RUNNER_TEMP/squashfs-root"
+          desktop-file-validate "$root/$APP_ID.desktop"
+          test -x "$root/AppRun"
+          EDITOR_EXECUTABLE="$appimage" GDK_BACKEND=x11 xvfb-run -a \
+            bash eng/ci/editor-native-canary.sh "$root/usr/lib/$APP_ID" gtk4-webkitgtk6 artifacts/editor-canary/appimage "$VERSION"
+      - name: Extract the tar.gz and open the editor
+        timeout-minutes: 5
+        run: |
+          name="runic-translations-editor-${VERSION}-linux-x64"
+          bun eng/release/editor-release.mjs verify-checksum "artifacts/editor-release/$name.tar.gz"
+          clean="$RUNNER_TEMP/clean-tar"
+          mkdir -p "$clean"
+          tar -C "$clean" -xzf "artifacts/editor-release/$name.tar.gz"
+          bun eng/release/editor-release.mjs verify-manifest "$clean/$name"
+          "$clean/$name/runic-translations-editor" --version | head -n 1 | grep -qx "Runic Translations Editor ${VERSION}+$(git rev-parse HEAD)"
+          GDK_BACKEND=x11 xvfb-run -a bash eng/ci/editor-native-canary.sh "$clean/$name" gtk4-webkitgtk6 artifacts/editor-canary/tar "$VERSION"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: editor-linux-x64
+          path: artifacts/editor-release
+          if-no-files-found: error
+      - name: Retain the editor canary logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: editor-canary-linux-x64
+          path: artifacts/editor-canary
+          if-no-files-found: ignore
+
+  # A self-contained dotnet publish, zipped with the runic-translations-editor.cmd launcher and package-manifest.json.
+  # Not an MSIX: Windows installs only signed MSIX packages (D078.4).
+  win-x64:
+    name: win-x64 / zip
+    needs: prepare
+    runs-on: windows-2025
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # runic-sdk I-176: WebView2's fresh profile under TEMP waits for its cookie database on C:; RUNNER_TEMP is on D:.
+      - name: Temporary files on the runner's local disk
+        shell: pwsh
+        run: |
+          "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+          "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - name: Build the web packages the editor's frontend uses
+        run: bun eng/run.mjs build-web
+      - name: Publish the editor self-contained for win-x64
+        run: |
+          name="runic-translations-editor-${VERSION}-win-x64"
+          dotnet publish apps/translations-editor/Runic.Translations.Editor.csproj --configuration Release --runtime win-x64 \
+            --self-contained true -p:PublishDocumentationFiles=false -p:PublishReferencesDocumentationFiles=false \
+            --output "$RUNNER_TEMP/archive/$name" --nologo
+          find "$RUNNER_TEMP/archive/$name" -name '*.pdb' -delete
+          bun eng/release/editor-release.mjs manifest "$RUNNER_TEMP/archive/$name" win-x64
+      - name: Make the zip archive and its checksum
+        run: |
+          name="runic-translations-editor-${VERSION}-win-x64"
+          mkdir -p artifacts/editor-release
+          # Windows' tar is bsdtar, which writes a zip for a .zip name with -a.
+          (cd "$RUNNER_TEMP/archive" && tar -a -cf "$GITHUB_WORKSPACE/artifacts/editor-release/$name.zip" "$name")
+          cd artifacts/editor-release
+          bun ../../eng/release/editor-release.mjs checksum "$name.zip"
+          cat ./*.sha256
+      - name: Extract the zip and open the editor (WebView2)
+        timeout-minutes: 5
+        run: |
+          name="runic-translations-editor-${VERSION}-win-x64"
+          bun eng/release/editor-release.mjs verify-checksum "artifacts/editor-release/$name.zip"
+          clean="$RUNNER_TEMP/clean-zip"
+          mkdir -p "$clean"
+          pwsh -NoProfile -Command "Expand-Archive -LiteralPath 'artifacts/editor-release/$name.zip' -DestinationPath '$clean'"
+          bun eng/release/editor-release.mjs verify-manifest "$clean/$name"
+          cmd //c "$(cygpath -w "$clean/$name/runic-translations-editor.cmd")" --version | head -n 1 | tr -d '\r' \
+            | grep -qx "Runic Translations Editor ${VERSION}+$(git rev-parse HEAD)"
+          bash eng/ci/editor-native-canary.sh "$clean/$name" webview2 artifacts/editor-canary "$VERSION"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: editor-win-x64
+          path: artifacts/editor-release
+          if-no-files-found: error
+      - name: Retain the editor canary logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: editor-canary-win-x64
+          path: artifacts/editor-canary
+          if-no-files-found: ignore
+
+  # dotnet runic package macos: the NativeAOT editor in an ad-hoc signed bundle in a disk image, both without a
+  # Developer ID (D078.4). The bundle is copied out of the mounted image as a user would install it.
+  osx-arm64:
+    name: osx-arm64 / dmg
+    needs: prepare
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - name: Install dotnet runic
+        run: bash eng/ci/install-dotnet-runic.sh "$RUNNER_TEMP/dotnet-runic"
+      - run: bun install --frozen-lockfile
+      - name: Build the web packages the editor's frontend uses
+        run: bun eng/run.mjs build-web
+      - name: Package the disk image
+        run: |
+          "$RUNNER_TEMP/dotnet-runic/dotnet-runic" package macos --project apps/translations-editor/Runic.Translations.Editor.csproj \
+            --output-directory artifacts/package/macos
+          mkdir -p artifacts/editor-release
+          cp "artifacts/package/macos/Runic Translations Editor-${VERSION}.dmg" "artifacts/editor-release/runic-translations-editor-${VERSION}-osx-arm64.dmg"
+          cd artifacts/editor-release
+          bun ../../eng/release/editor-release.mjs checksum ./*.dmg
+          cat ./*.sha256
+      - name: Install the bundle from the disk image and open the editor (WKWebView)
+        timeout-minutes: 5
+        run: |
+          dmg="artifacts/editor-release/runic-translations-editor-${VERSION}-osx-arm64.dmg"
+          bun eng/release/editor-release.mjs verify-checksum "$dmg"
+          mount="$RUNNER_TEMP/editor-dmg"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$dmg"
+          applications="$RUNNER_TEMP/Applications"
+          mkdir -p "$applications"
+          ditto "$mount/Runic Translations Editor.app" "$applications/Runic Translations Editor.app"
+          hdiutil detach "$mount"
+          app="$applications/Runic Translations Editor.app"
+          codesign --verify --deep --strict "$app"
+          codesign -dv "$app" 2>&1 | grep -q 'Signature=adhoc'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = eu.runicartifex.TranslationsEditor
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "$VERSION"
+          bash eng/ci/editor-native-canary.sh "$app/Contents/MacOS" wkwebview artifacts/editor-canary "$VERSION"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: editor-osx-arm64
+          path: artifacts/editor-release
+          if-no-files-found: error
+      - name: Retain the editor canary logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: editor-canary-osx-arm64
+          path: artifacts/editor-canary
+          if-no-files-found: ignore
+
+  # Only for a tag editor-v<version> in this repository, after every package passed: a draft release named after the
+  # tag, with the editor's notes, never marked Latest. 0.y.z releases are prereleases, as the SDK's are. A rerun
+  # replaces the assets of a draft and refuses a published release. Publishing the draft is the maintainer's step.
+  release:
+    name: Draft the GitHub release
+    needs: [prepare, linux-x64, win-x64, osx-arm64]
+    if: needs.prepare.outputs.release == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # The one group of every workflow that publishes (eng/release/publish.test.mjs): never beside an SDK publication.
+    concurrency:
+      group: publish-preview
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: artifacts
+          pattern: editor-*
+          merge-multiple: true
+      - name: Check the assets against their checksums
+        run: |
+          cd artifacts
+          for file in *.sha256; do sha256sum -c "$file"; done
+      - name: Create or update the draft release
+        run: |
+          cd artifacts
+          assets=()
+          for file in *; do [ "$file" = notes.md ] || assets+=("$file"); done
+          flags=(--draft --latest=false)
+          if [[ "$VERSION" == 0.* ]]; then flags+=(--prerelease); fi
+          if state=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null); then
+            if [ "$state" != true ]; then echo "::error::The release $TAG is published already; it is not changed."; exit 1; fi
+            gh release upload "$TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" "${assets[@]}" --repo "$GITHUB_REPOSITORY" --verify-tag "${flags[@]}" \
+              --title "$TAG" --notes-file notes.md
+          fi
+          echo "Drafted $TAG: review it and publish it from the releases page." >> "$GITHUB_STEP_SUMMARY"

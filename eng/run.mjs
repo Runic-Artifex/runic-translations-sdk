@@ -391,12 +391,15 @@ async function main() {
       break;
     case "verify-editor-packed": verifyEditorPacked(version); break;
     case "publish-editor": publishEditor(process.argv[3]); break;
+    // The web packages the editor's frontend consumes, before dotnet runic package or dotnet publish builds the editor
+    // (.github/workflows/release-editor.yml).
+    case "build-web": buildWeb(); break;
     case "native-aot": testNativeAot(); break;
     case "audit": auditDependencies(); break;
     // The language server's generic-client smoke with the packed tool (eng/lsp-smoke.mjs).
     case "lsp-smoke": (await import("./lsp-smoke.mjs")).lspSmoke(version); break;
     default:
-      throw new Error("Use bootstrap, build, test, pack [version], pack-built [version], verify:candidate [version], verify-packages [version] (alias), verify-editor-packed [version], publish-editor <rid>, native-aot, audit, or lsp-smoke [version].");
+      throw new Error("Use bootstrap, build, test, pack [version], pack-built [version], verify:candidate [version], verify-packages [version] (alias), verify-editor-packed [version], publish-editor <rid>, build-web, native-aot, audit, or lsp-smoke [version].");
   }
 }
 
