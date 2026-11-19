@@ -546,7 +546,7 @@ internal sealed class Rmf2IntegrationTests
             File.WriteAllText(temporary.Resolve("de.rmf2"), "x = Guten Tag\n");
             string uri = new Uri(temporary.Resolve("en.rmf2")).AbsoluteUri;
             var start = new ProcessStartInfo("dotnet") { WorkingDirectory = temporary.Path, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
-            start.ArgumentList.Add(RepositoryPaths.ToolAssembly); start.ArgumentList.Add("lsp");
+            start.ArgumentList.Add(RepositoryPaths.ToolAssembly); start.ArgumentList.Add("lsp"); start.Environment[Rmf2LanguageServer.SettleDiagnosticsVariable] = "1";
             using var process = Process.Start(start)!;
             var frames = new List<JsonNode>(); var frameGate = new object();
             var output = Task.Run(() => {
@@ -724,7 +724,7 @@ internal sealed class Rmf2IntegrationTests
         File.WriteAllText(sourcePath, "title = Disk\n");
         string uri = new Uri(sourcePath).AbsoluteUri;
         var start = new ProcessStartInfo("dotnet") { WorkingDirectory = temporary.Path, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        start.ArgumentList.Add(RepositoryPaths.ToolAssembly); start.ArgumentList.Add("lsp");
+        start.ArgumentList.Add(RepositoryPaths.ToolAssembly); start.ArgumentList.Add("lsp"); start.Environment[Rmf2LanguageServer.SettleDiagnosticsVariable] = "1";
         using var process = Process.Start(start)!;
         var frames = new List<JsonNode>(); var frameGate = new object();
         var output = Task.Run(() => {
@@ -861,7 +861,7 @@ internal sealed class Rmf2IntegrationTests
         }
 
         var start = new ProcessStartInfo("dotnet") { WorkingDirectory = temporary.Path, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
-        start.ArgumentList.Add(RepositoryPaths.ToolAssembly); start.ArgumentList.Add("lsp");
+        start.ArgumentList.Add(RepositoryPaths.ToolAssembly); start.ArgumentList.Add("lsp"); start.Environment[Rmf2LanguageServer.SettleDiagnosticsVariable] = "1";
         using var process = Process.Start(start)!;
         var frames = new List<JsonNode>(); var frameGate = new object();
         var output = Task.Run(() => {

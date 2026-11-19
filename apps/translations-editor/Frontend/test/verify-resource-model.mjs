@@ -163,4 +163,27 @@ assert.equal(model.messageStructure([{ key: "k", value: ".input {$x :string}\n.m
 assert.equal(model.messageStructure([{ key: "k", value: "{#b}Bold{/b}", tags: [], structured: true }]), "formatted");
 const pluralRows = model.buildRows({ ...snapshot, documents: snapshot.documents }, {});
 assert.ok(pluralRows.every((row) => (row.structure !== undefined) === row.structured), "A row's structure is set exactly when it is structured.");
+// The list view's unsaved marks: the messages of a locale whose text in an unsaved draft differs from the saved
+// document, by message; an edit back to the saved text is no change, and the compiler's parse of the draft counts.
+{
+  const rmf2 = (content, entries) => ({
+    path: "translations/de.rmf2", content, revision: "de", isManifest: false, isMalformed: false, locale: "de", layer: "base", entries,
+  });
+  const entry = (key, content) => ({ key, content, valueStartByte: 0, valueLengthBytes: content.length, path: key.split("_") });
+  const saved = rmf2("common {\n  cancel = Abbrechen\n  save = Sichern\n}\n", [entry("common_cancel", "Abbrechen"), entry("common_save", "Sichern")]);
+  const workspace = { ...snapshot, documents: [snapshot.documents[0], snapshot.documents[1], saved] };
+  const draft = "common {\n  cancel = Abbrechen\n  save = Speichern\n  close = Zu\n}\n";
+  const parsed = { [saved.path]: { content: draft, entries: [entry("common_cancel", "Abbrechen"), entry("common_save", "Speichern"), entry("common_close", "Zu")] } };
+  assert.deepEqual([...model.unsavedMessageKeys(workspace, { [saved.path]: draft }, parsed, "de")].sort(), ["common_close", "common_save"],
+    "The changed and the added message are not unsaved, or an unchanged one is.");
+  assert.deepEqual([...model.unsavedMessageKeys(workspace, { [saved.path]: draft }, parsed, "en")], [], "Another locale's draft marks the selected one.");
+  assert.deepEqual([...model.unsavedMessageKeys(workspace, {}, {}, "de")], [], "A message without a draft is unsaved.");
+  // Until the compiler parsed the draft, its messages are the saved ones, as the rows show them.
+  assert.deepEqual([...model.unsavedMessageKeys(workspace, { [saved.path]: draft }, {}, "de")], []);
+  // A message the draft removes is unsaved; a direct .mf2 file compares its whole text.
+  const removed = "common {\n  cancel = Abbrechen\n}\n";
+  assert.deepEqual([...model.unsavedMessageKeys(workspace, { [saved.path]: removed }, { [saved.path]: { content: removed, entries: [entry("common_cancel", "Abbrechen")] } }, "de")],
+    ["common_save"]);
+  assert.deepEqual([...model.unsavedMessageKeys(workspace, { "feature/en/greeting.mf2": "Hi\n" }, {}, "en")], ["shop_greeting"]);
+}
 console.log("PASS: only override layers are named, and structured messages are named plural, variants or formatted.");

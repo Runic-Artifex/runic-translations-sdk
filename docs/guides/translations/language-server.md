@@ -141,6 +141,23 @@ change the client sent while it was pending affects its result:
 A watched-file event for an open document whose file holds the document's text,
 as after the document is saved, changes nothing.
 
+The catalog is validated in the background. A burst of changes is validated
+once, at its last change, and a newer change cancels a validation that is still
+running, so `textDocument/publishDiagnostics` arrives after the changes it
+describes, carries the document's latest version, and never follows a
+publication of a newer version. Requests do not wait for validation:
+
+- Completion, the outline, folding, semantic tokens, formatting,
+  `prepareRename`, `runic/message` and `runic/documentInfo` never need it.
+- Hover shows the message's compiled contract and review state from the latest
+  finished validation, which can be a few changes old while a newer one runs,
+  and none of them before the first validation of the catalog finishes.
+- The code-action listing offers the catalog's own quick fixes (RTR0095,
+  **Mark … reviewed**) once the validation of the current text has finished; a
+  client asks again when the diagnostics change.
+- Rename, refactorings, `runic.*` commands and `codeAction/resolve` compute
+  their edits from the current text, and compile the catalog when they need to.
+
 | Area | Methods |
 | --- | --- |
 | Lifecycle | `initialize`, `initialized`, `shutdown`, `exit` |

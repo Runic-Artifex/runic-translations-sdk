@@ -679,14 +679,17 @@ internal sealed class Rmf2DiagnosticLspTests
             var start = new ProcessStartInfo("dotnet") { WorkingDirectory = directory, RedirectStandardInput = true,
                 RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
             start.ArgumentList.Add(RepositoryPaths.ToolAssembly); start.ArgumentList.Add("lsp");
+            // Responses follow the diagnostics of the changes before them, so tests can read diagnostics after a request.
+            start.Environment[Rmf2LanguageServer.SettleDiagnosticsVariable] = "1";
             _process = Process.Start(start) ?? throw new InvalidOperationException("Could not start LSP.");
             _errors = _process.StandardError.ReadToEndAsync();
         }
-        internal Session(Action<string> beforeRequest, Action<string> requestCancelled)
+        // settleDiagnostics: false for tests of background validation itself.
+        internal Session(Action<string> beforeRequest, Action<string> requestCancelled, bool settleDiagnostics = true)
         {
             _serverInput = new Rmf2LspBenchmark.BlockingByteStream();
             Rmf2LspBenchmark.BlockingByteStream output = _serverOutput = new Rmf2LspBenchmark.BlockingByteStream();
-            var server = Server = new Rmf2LanguageServer(_serverInput, output, beforeRequest, requestCancelled);
+            var server = Server = new Rmf2LanguageServer(_serverInput, output, beforeRequest, requestCancelled, settleDiagnostics);
             _server = Task.Run(() => {
                 try { return server.Run(); }
                 finally { output.CompleteWriting(); }
@@ -714,6 +717,19 @@ internal sealed class Rmf2DiagnosticLspTests
                 JsonNode frame = Task.Run(ReadFrame).WaitAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
                 if (frame["method"] is not null && frame["id"] is not null) { HandleServerRequest(frame); continue; }
                 if (frame["method"] is null && frame["id"]?.GetValue<int>() == id) return frame;
+                Publications.Add(frame);
+            }
+        }
+        // The first publication, among those read so far and those that follow, that matches; it stays in Publications.
+        internal JsonNode WaitForPublication(Func<JsonNode, bool> predicate)
+        {
+            int index = 0;
+            while (true)
+            {
+                for (; index < Publications.Count; index++)
+                    if (Publications[index]["method"]?.GetValue<string>() == "textDocument/publishDiagnostics" && predicate(Publications[index])) return Publications[index];
+                JsonNode frame = Task.Run(ReadFrame).WaitAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
+                if (frame["method"] is not null && frame["id"] is not null) { HandleServerRequest(frame); continue; }
                 Publications.Add(frame);
             }
         }

@@ -21,6 +21,8 @@ namespace Runic.Translations.Tool;
 internal sealed partial class Rmf2LanguageServer
 {
     private readonly Rmf2WorkspaceCache _syntaxCache = new();
+    // The saved sources of the projects, reused while a file's length and write time are unchanged (#271).
+    private readonly InputFiles.SourceFileCache _sourceFiles = new();
     private readonly Dictionary<string, Buffer> _buffers = new(StringComparer.Ordinal);
     private readonly Stream _input;
     private readonly Stream _output;
@@ -106,15 +108,20 @@ internal sealed partial class Rmf2LanguageServer
     internal int Validations => Volatile.Read(ref _validations);
     private bool _projectIndexRescanPending;
     private static readonly UTF8Encoding Utf8 = new(false, true);
+    // settleDiagnostics: answer each request only after the diagnostics of every change before it (SettleValidations).
     internal Rmf2LanguageServer(Stream input, Stream output, Action<string>? beforeRequest = null,
-        Action<string>? requestCancelled = null)
+        Action<string>? requestCancelled = null, bool settleDiagnostics = false)
     {
+        _settleDiagnostics = settleDiagnostics;
         _input = input;
         _output = output;
         _beforeRequest = beforeRequest;
         _requestCancelled = requestCancelled;
     }
     private CancellationToken _requestCancellation;
+    private readonly bool _settleDiagnostics;
+    // The test-only environment variable that makes the stdio server settle diagnostics before each response.
+    internal const string SettleDiagnosticsVariable = "RUNIC_TRANSLATIONS_LSP_SETTLE_DIAGNOSTICS";
     // Every state notification (didOpen, didChange, didClose, didChangeWatchedFiles, didChangeConfiguration) gets the
     // next state revision when it is queued; a request gets the revision of the state it is computed from.
     private long _latestRevision;
@@ -175,6 +182,12 @@ internal sealed partial class Rmf2LanguageServer
                     // never supplies a hook or exposes a barrier method.
                     _beforeRequest?.Invoke(method);
                     if (method == "exit") return _shutdown ? 0 : 1;
+                    if (_settleDiagnostics && id is not null && method is not ("initialize" or "shutdown"))
+                    {
+                        SettleValidations();
+                        // Their publications go out before the response, as when validation ran on the worker.
+                        lock (_revisionGate) if (item.Revision == _latestRevision) SendPublications();
+                    }
                     if (id is not null && !RequestMethods.Contains(method)) throw new MethodNotFoundException(method);
                     JsonNode? result = Handle(method, parameters);
                     lock (_revisionGate)
@@ -207,6 +220,7 @@ internal sealed partial class Rmf2LanguageServer
             }
             return 0;
         });
+        _enqueueValidated = () => Enqueue(new JsonObject { ["jsonrpc"] = "2.0", ["method"] = ValidatedMethod, ["params"] = new JsonObject() }, ValidatedMethod);
         _enqueueWatchedFiles = changes => Enqueue(new JsonObject { ["jsonrpc"] = "2.0", ["method"] = "workspace/didChangeWatchedFiles", ["params"] = new JsonObject { ["changes"] = changes } }, "workspace/didChangeWatchedFiles");
         try
         {
@@ -244,6 +258,7 @@ internal sealed partial class Rmf2LanguageServer
             // No response can arrive any more: a request the worker is waiting on fails instead of hanging.
             FailClientRequests();
             StopFileWatching();
+            StopValidator();
             lock (_enqueueGate) queue.CompleteAdding();
             worker.GetAwaiter().GetResult();
         }
@@ -357,7 +372,8 @@ internal sealed partial class Rmf2LanguageServer
     {
         if (method is "textDocument/didOpen" or "textDocument/didChange" or "textDocument/didClose" or "textDocument/didSave" or
             "workspace/didChangeWatchedFiles" or "workspace/didChangeConfiguration") _reviewViews.Clear();
-        if (method is "workspace/didChangeWatchedFiles" or "workspace/didChangeConfiguration") _dependencies.Clear();
+        if (method is "workspace/didChangeWatchedFiles" or "workspace/didChangeConfiguration") { _dependencies.Clear(); _sourceFiles.Clear(); }
+        if (method == ValidatedMethod) { ApplyValidations(); return null; }
         if (method == "initialize")
         {
             _configurationSync = args["initializationOptions"]?["runicConfigurationSync"]?.GetValue<bool>() == true;
@@ -402,7 +418,7 @@ internal sealed partial class Rmf2LanguageServer
             if (data["refactor"] is not null) return ResolveRefactor(args, actionUri, data);
             string fixId = data["fixId"]?.GetValue<string>() ?? throw new ArgumentException("Missing quick-fix ID.");
             Rmf2DiagnosticQuickFix? fix = Rmf2DiagnosticActions.GetQuickFixes(actionBuffer.Syntax, _requestCancellation)
-                .Concat(ProjectQuickFixes(actionUri, actionBuffer).Fixes).FirstOrDefault(candidate => candidate.Id == fixId);
+                .Concat(ProjectQuickFixes(actionUri, actionBuffer, compile: true).Fixes).FirstOrDefault(candidate => candidate.Id == fixId);
             if (fix is null) throw new ContentModifiedException();
             return QuickFixAction(actionUri, actionBuffer, fix, args["isPreferred"]?.GetValue<bool>() == true);
         }
@@ -501,6 +517,7 @@ internal sealed partial class Rmf2LanguageServer
                     // The closed file is still a project file: while its project has open buffers,
                     // its saved content is validated again and its diagnostics stay in the Problems view.
                     _pendingValidations.Add(closedProject);
+                    CancelValidation(closedProject);
                 }
             }
             finally { FlushDiagnostics(); }
@@ -548,7 +565,7 @@ internal sealed partial class Rmf2LanguageServer
             bool AtEdit(Rmf2DiagnosticQuickFix fix) => fix.StartByte <= to && from <= fix.StartByte + fix.LengthBytes;
             // Document repairs, then project repairs (RTR0095: add the missing plural variants) and, for a stale
             // review entry (RTR0090), "mark reviewed", which records the current source in the review file.
-            (IReadOnlyList<Rmf2DiagnosticQuickFix> projectFixes, IReadOnlyList<TranslationReviewStaleEntry> stale, Rmf2ProjectV5? reviewed) = ProjectQuickFixes(uri, buffer);
+            (IReadOnlyList<Rmf2DiagnosticQuickFix> projectFixes, IReadOnlyList<TranslationReviewStaleEntry> stale, Rmf2ProjectV5? reviewed) = ProjectQuickFixes(uri, buffer, compile: false);
             Rmf2DiagnosticQuickFix[] fixes = Rmf2DiagnosticActions.GetQuickFixes(buffer.Syntax, _requestCancellation).Concat(projectFixes).Where(fix => fix.Location.StartByte <= to &&
                 from <= fix.Location.StartByte + fix.Location.LengthBytes || AtEdit(fix)).ToArray();
             // Several fixes can share one diagnostic (one RTR0078 join per line break, all reported at
@@ -666,23 +683,22 @@ internal sealed partial class Rmf2LanguageServer
                         .FirstOrDefault();
             }
             string hoverProject = ProjectDirectory(path, allowExternalAncestor: true);
-            ReviewView view = ReviewViewOf(hoverProject, BufferUris(hoverProject).ToArray(), workspace);
-            Rmf2ProjectCompilation compiled = view.Compilation;
-            if (!entry.IsGroup)
-                reviewState = Rmf2ReviewFileState.Describe(view.Review.Project?.DefaultLocale, view.Fingerprints, view.File, view.Error, key, locale);
-            if (compiled.Success && !entry.IsGroup)
+            // Hover never compiles: it reads the catalog's current review data, or while a newer validation runs in the
+            // background the last one applied (#271). Before the first validation it shows the source alone.
+            HoverFacts? facts = CurrentReviewView(hoverProject, BufferUris(hoverProject).ToArray())?.Hover ?? _lastHoverFacts.GetValueOrDefault(hoverProject);
+            if (facts?.Review is { } review && !entry.IsGroup)
+                reviewState = Rmf2ReviewFileState.Describe(review.BaseLocale, review.Fingerprints, review.File, review.Error, key, locale);
+            if (facts is { Compiled: true } && !entry.IsGroup)
             {
-                Rmf2ProjectV5 project = compiled.Project!;
-                Rmf2TranslationV5? value = project.Locales.FirstOrDefault(item => item.Tag == locale)?.ResolvedResources.FirstOrDefault(item => item.Key == key);
-                Rmf2MessageContractV5? contract = project.CanonicalMessages.Concat(project.ExtraMessages).FirstOrDefault(item => item.Key == key);
-                if (value is not null) contractLines.Add("Content locale: " + value.ContentLocale);
+                bool localeCompiled = facts.Locales.TryGetValue(locale, out var localeFacts);
+                Rmf2MessageContractV5? contract = facts.Contracts.GetValueOrDefault(key);
+                if (localeCompiled && localeFacts.ContentLocales.TryGetValue(key, out string? contentLocale)) contractLines.Add("Content locale: " + contentLocale);
                 if (contract is { Inputs.Count: > 0 }) contractLines.Add("Inputs: " + string.Join(", ", contract.Inputs.Select(input => "$" + input.Name + ": " + input.Type)));
                 if (contract is not null) contractLines.Add("Content: " + contract.Content);
                 // The locked block structure translations must keep, one skeleton per distinct source variant.
                 if (contract is { Content: Rmf2DocumentProfileV5.Document })
                     contractLines.Add("Structure: " + string.Join(" | ", contract.Skeletons.Select(skeleton => skeleton.Length == 0 ? "(empty)" : skeleton)));
-                string? fallback = project.Locales.FirstOrDefault(item => item.Tag == locale)?.FallbackTag;
-                if (fallback is not null) contractLines.Add("Fallback: " + fallback);
+                if (localeCompiled && localeFacts.Fallback is { } fallback) contractLines.Add("Fallback: " + fallback);
             }
             string content = new Rmf2HoverContent {
                 Summary = summary, BaseLocale = workspace.BaseLocale, BaseText = baseEntry?.Message,
@@ -1132,19 +1148,40 @@ internal sealed partial class Rmf2LanguageServer
     private Rmf2Workspace Workspace(string directory, IReadOnlyCollection<string> group)
     {
         _requestCancellation.ThrowIfCancellationRequested();
+        (Rmf2Workspace workspace, string root) = BuildWorkspace(SnapshotOf(directory, group), _requestCancellation);
+        // A request that edits or locates across files depends on every file below this root (IsStale).
+        _requestRoots.Add(root);
+        _projectLayouts[directory] = workspace.IsDirect;
+        return workspace;
+    }
+
+    // A project's open buffers as one immutable state: what a workspace is built from, on the worker or off it.
+    private sealed record WorkspaceSnapshot(string Directory, Buffer? ProjectBuffer, (string Path, Buffer Buffer)[] Buffers);
+
+    private WorkspaceSnapshot SnapshotOf(string directory, IReadOnlyCollection<string> group)
+    {
+        TryGetBuffer(Path.Combine(directory, "runic.json"), out _, out Buffer? projectBuffer);
+        return new WorkspaceSnapshot(directory, projectBuffer, group.Select(uri => (LocalPath(uri), _buffers[uri])).ToArray());
+    }
+
+    // Builds a project's workspace from a snapshot and the files on disk, and returns the root that contains its sources.
+    // It reads only the snapshot, the disk, _workspaceRoots (set once, in initialize) and the locked syntax cache, so the
+    // background validator runs it too (Rmf2LanguageServer.Validation.cs).
+    private (Rmf2Workspace Workspace, string Root) BuildWorkspace(WorkspaceSnapshot snapshot, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        string directory = snapshot.Directory;
         string projectPath = Path.Combine(directory, "runic.json");
         if (!IsRegularManifestFile(projectPath))
             throw new InvalidOperationException("Translation project manifests must be regular non-linked runic.json files.");
-        TryGetBuffer(projectPath, out _, out Buffer? projectBuffer);
-        CompilerInputs inputs = InputFiles.ReadProject(directory, projectBuffer is null ? null : new TranslationSource(projectPath, Utf8.GetBytes(projectBuffer.Text)));
+        Buffer? projectBuffer = snapshot.ProjectBuffer;
+        CompilerInputs inputs = InputFiles.ReadProject(directory, projectBuffer is null ? null : new TranslationSource(projectPath, Utf8.GetBytes(projectBuffer.Text)), _sourceFiles);
         var sources = inputs.Messages.Select(s => new TranslationSource(Path.GetFullPath(s.Path), s.GetUtf8Bytes())).ToDictionary(s => s.Path, SourcePathComparer);
         // A project outside every workspace root was reached through the
         // explicit-command ancestor rule, not through the bounded index.
         bool externalProject = !IsInsideWorkspaceRoot(directory);
-        foreach (string uri in group)
+        foreach ((string file, Buffer buffer) in snapshot.Buffers)
         {
-            Buffer buffer = _buffers[uri];
-            string file = LocalPath(uri);
             if (externalProject || !IsInsideWorkspaceRoot(file))
             {
                 // Buffers of an external project, and loose buffers outside
@@ -1168,11 +1205,7 @@ internal sealed partial class Rmf2LanguageServer
         string root = directory;
         foreach (string file in sources.Keys)
             while (!IsWithin(root, file)) root = Path.GetDirectoryName(root)!;
-        Rmf2Workspace workspace = _syntaxCache.Create(root, new TranslationSource(Path.GetFullPath(inputs.Project.Path), inputs.Project.GetUtf8Bytes()), sources.Values, _requestCancellation);
-        // A request that edits or locates across files depends on every file below this root (IsStale).
-        _requestRoots.Add(root);
-        _projectLayouts[directory] = workspace.IsDirect;
-        return workspace;
+        return (_syntaxCache.Create(root, new TranslationSource(Path.GetFullPath(inputs.Project.Path), inputs.Project.GetUtf8Bytes()), sources.Values, cancellationToken), root);
     }
 
     private IEnumerable<string> BufferUris(string projectDirectory)
@@ -1246,34 +1279,13 @@ internal sealed partial class Rmf2LanguageServer
             return;
         }
         _pendingValidations.Add(project);
-    }
-
-    // Validates one project with its open buffers overlaid and publishes the result for every
-    // project file: the open buffers and, from disk, the closed files that carry diagnostics.
-    private void ValidateAndPublish(string project, IReadOnlyCollection<string> group)
-    {
-        Interlocked.Increment(ref _validations);
-        IReadOnlyList<TranslationDiagnostic> diagnostics = Array.Empty<TranslationDiagnostic>();
-        try
-        {
-            diagnostics = WithReviewDiagnostics(ReviewViewOf(project, group));
-            diagnostics = [.. diagnostics, .. LibraryDiagnostics(project, group)];
-            // A later failure after recovery is worth reporting again.
-            foreach (string uri in group) _reportedBufferFailures.Remove(uri);
-        }
-        catch (Exception error) when (error is ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or InvalidOperationException or IOException or FormatException or OverflowException or TranslationFormatException or TranslationPackException or TranslationContractException or System.Text.Json.JsonException or TranslationAuthoringException)
-        {
-            foreach (string uri in group) ReportBufferFailure(uri, error);
-            if (TryGetBuffer(Path.Combine(project, "runic.json"), out string? configUri, out Buffer? config))
-                diagnostics = ConfigDiagnostics(new TranslationSource(LocalPath(configUri), Utf8.GetBytes(config.Text)));
-            // The overrides of library catalogs are checked against the libraries, not the application's catalog.
-            diagnostics = [.. diagnostics, .. LibraryDiagnostics(project, group)];
-        }
-        PublishDiagnostics(diagnostics, group, project);
+        CancelValidation(project);
     }
 
     private void QueueGlobalDiagnosticsRefresh(bool rescanWorkspace = false)
     {
+        // Every project is validated again once the refresh runs.
+        CancelValidation(null);
         _globalDiagnosticsRefreshPending = true;
         _projectIndexRescanPending |= rescanWorkspace;
     }
@@ -1300,7 +1312,7 @@ internal sealed partial class Rmf2LanguageServer
         {
             string[] group = BufferUris(project).ToArray();
             // A project whose last buffer closed meanwhile no longer owns diagnostics in the client.
-            if (group.Length > 0) ValidateAndPublish(project, group);
+            if (group.Length > 0) ScheduleValidation(project, group);
             else ClearProjectFileDiagnostics(project);
             _pendingValidations.Remove(project);
         }
@@ -1321,7 +1333,7 @@ internal sealed partial class Rmf2LanguageServer
         // A project without open buffers no longer owns diagnostics in the client.
         foreach (string project in _projectFileDiagnostics.Keys.Where(project => !groups.ContainsKey(project)).ToArray())
             ClearProjectFileDiagnostics(project);
-        foreach (var group in groups) ValidateAndPublish(group.Key, group.Value);
+        foreach (var group in groups) ScheduleValidation(group.Key, group.Value.ToArray());
         // An unresolved buffer has no project whose catalog diagnostics can be
         // attributed safely. Publish only its own syntax diagnostics.
         foreach (string uri in unresolved) PublishDiagnostics(Array.Empty<TranslationDiagnostic>(), [uri], null);
@@ -1518,22 +1530,92 @@ internal sealed partial class Rmf2LanguageServer
     }
     private static JsonObject EmptyRange() => new() {
         ["start"] = new JsonObject { ["line"] = 0, ["character"] = 0 }, ["end"] = new JsonObject { ["line"] = 0, ["character"] = 0 } };
-    private sealed record ReviewView(string Stamp, Rmf2ProjectCompilation Compilation, Rmf2ProjectCompilation Review,
-        IReadOnlyDictionary<string, string>? Fingerprints, string? ReviewPath, TranslationInterchangeReview? File, string? Error,
-        TranslationInterchangeException? ReadFailure);
+    // The review compilation and its source fingerprints are computed on first use (#271): a catalog that does not
+    // compile costs a second compilation for them (TranslationReviewFile.ForReview), which only a review file, hover's
+    // review state, "Mark reviewed" and the review quick fixes need.
+    private sealed class ReviewView(string stamp, Rmf2ProjectCompilation compilation, Func<Rmf2ProjectCompilation> review, string? reviewPath,
+        TranslationInterchangeReview? file, string? error, TranslationInterchangeException? readFailure)
+    {
+        private readonly Lazy<(Rmf2ProjectCompilation Review, IReadOnlyDictionary<string, string>? Fingerprints)> _review = new(() => {
+            Rmf2ProjectCompilation compiled = review();
+            return (compiled, compiled is { Success: true, Project: not null } ? TranslationInterchange.ComputeSourceFingerprints(compiled) : null);
+        }, LazyThreadSafetyMode.ExecutionAndPublication);
+        internal string Stamp { get; } = stamp;
+        internal Rmf2ProjectCompilation Compilation { get; } = compilation;
+        internal Rmf2ProjectCompilation Review => _review.Value.Review;
+        internal IReadOnlyDictionary<string, string>? Fingerprints => _review.Value.Fingerprints;
+        internal string? ReviewPath { get; } = reviewPath;
+        private HoverFacts? _hover;
+        // What hover shows from this validation (HoverFacts); the validator computes it, a request on first use.
+        internal HoverFacts Hover => _hover ??= HoverFacts.Of(this);
+        internal TranslationInterchangeReview? File { get; } = file;
+        internal string? Error { get; } = error;
+        internal TranslationInterchangeException? ReadFailure { get; } = readFailure;
+        // Whether a review file exists, readable or not: only then does the review compilation matter for diagnostics.
+        internal bool HasReviewFile => File is not null || Error is not null;
+    }
 
     // The review data of a project compiled with the buffers of group, cached (see _reviewViews). The review compilation
     // is the compilation itself when it succeeded, else the same sources without validation policies, else the base
     // locale alone, so RTR0090, hover's review state and "Mark reviewed" work while translations are incomplete.
     private ReviewView ReviewViewOf(string project, IReadOnlyCollection<string> group, Rmf2Workspace? workspace = null)
     {
-        string cacheKey = project + "\n" + string.Join("\n", group.Order(StringComparer.Ordinal));
-        if (_reviewViews.TryGetValue(cacheKey, out ReviewView? cached) && cached.Stamp == ReviewStamp(cached.ReviewPath)) return cached;
+        if (CurrentReviewView(project, group) is { } cached) return cached;
         workspace ??= Workspace(project, group);
+        ReviewView view = BuildReviewView(project, workspace, _requestCancellation);
+        _reviewViews[ReviewCacheKey(project, group)] = view;
+        return view;
+    }
+
+    // What hover shows from a validation: the compiled contracts, the content locale of each message per locale, the
+    // fallback locales and the review state. Kept per project while a newer validation runs, instead of the whole
+    // compilation, so the server holds one compiled catalog at a time (#271).
+    private sealed class HoverFacts
+    {
+        private HoverFacts() { }
+        internal bool Compiled { get; private init; }
+        internal Dictionary<string, Rmf2MessageContractV5> Contracts { get; private init; } = new();
+        internal Dictionary<string, (string? Fallback, Dictionary<string, string> ContentLocales)> Locales { get; private init; } = new();
+        internal (string? BaseLocale, IReadOnlyDictionary<string, string>? Fingerprints, TranslationInterchangeReview? File, string? Error)? Review { get; private init; }
+
+        internal static HoverFacts Of(ReviewView view)
+        {
+            Rmf2ProjectV5? project = view.Compilation.Success ? view.Compilation.Project : null;
+            var contracts = new Dictionary<string, Rmf2MessageContractV5>(StringComparer.Ordinal);
+            var locales = new Dictionary<string, (string? Fallback, Dictionary<string, string> ContentLocales)>(StringComparer.Ordinal);
+            if (project is not null)
+            {
+                foreach (Rmf2MessageContractV5 contract in project.CanonicalMessages.Concat(project.ExtraMessages)) contracts.TryAdd(contract.Key, contract);
+                foreach (Rmf2LocaleV5 locale in project.Locales)
+                {
+                    var contentLocales = new Dictionary<string, string>(StringComparer.Ordinal);
+                    foreach (Rmf2TranslationV5 resource in locale.ResolvedResources) contentLocales.TryAdd(resource.Key, resource.ContentLocale);
+                    locales.TryAdd(locale.Tag, (locale.FallbackTag, contentLocales));
+                }
+            }
+            return new HoverFacts {
+                Compiled = project is not null, Contracts = contracts, Locales = locales,
+                Review = view.HasReviewFile ? (view.Review.Project?.DefaultLocale, view.Fingerprints, view.File, view.Error) : null,
+            };
+        }
+    }
+
+    private static string ReviewCacheKey(string project, IReadOnlyCollection<string> group) =>
+        project + "\n" + string.Join("\n", group.Order(StringComparer.Ordinal));
+
+    // The review data of the project with exactly these buffers in their current state, when a validation or a request
+    // has computed it since the last change, else null.
+    private ReviewView? CurrentReviewView(string project, IReadOnlyCollection<string> group) =>
+        _reviewViews.TryGetValue(ReviewCacheKey(project, group), out ReviewView? cached) && cached.Stamp == ReviewStamp(cached.ReviewPath) ? cached : null;
+
+    // Compiles a workspace and reads its review file. It touches no server state, so the background validator runs it.
+    private static ReviewView BuildReviewView(string project, Rmf2Workspace workspace, CancellationToken cancellationToken)
+    {
         Rmf2ProjectCompilation compilation = workspace.Validate();
-        Rmf2ProjectCompilation review = TranslationReviewFile.ForReview(compilation, workspace.ProjectSource, workspace.Sources, null, _requestCancellation);
-        IReadOnlyDictionary<string, string>? fingerprints = review is { Success: true, Project: not null } ? TranslationInterchange.ComputeSourceFingerprints(review) : null;
-        string? catalog = review.Project?.Id ?? compilation.Project?.Id;
+        TranslationSource projectSource = workspace.ProjectSource;
+        IReadOnlyList<TranslationSource> sources = workspace.Sources.ToArray();
+        // The catalog names the review file. runic.json has it even when the catalog does not compile.
+        string? catalog = compilation.Project?.Id ?? (TranslationCompiler.ReadProjectManifest(projectSource, out _)?.Id is { Length: > 0 } id ? id : null);
         string? path = catalog is not null && TranslationReviewFile.IsFileName(catalog) ? TranslationReviewFile.PathFor(Path.Combine(project, "runic.json"), catalog) : null;
         string stamp = ReviewStamp(path);
         TranslationInterchangeReview? file = null;
@@ -1545,8 +1627,18 @@ internal sealed partial class Rmf2LanguageServer
             catch (TranslationInterchangeException exception) { failure = exception; error = exception.Message; }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { error = exception.Message; }
         }
-        var view = new ReviewView(stamp, compilation, review, fingerprints, path, file, error, failure);
-        _reviewViews[cacheKey] = view;
+        Func<Rmf2ProjectCompilation> review;
+        if (file is not null || error is not null)
+        {
+            // A review file's stale entries are diagnostics (RTR0090): compile for review now, cancellable, off the worker.
+            Rmf2ProjectCompilation computed = TranslationReviewFile.ForReview(compilation, projectSource, sources, null, cancellationToken);
+            review = () => computed;
+        }
+        // Without a review file only a request asks for it, later, on the worker; the validation's cancellation source is
+        // disposed by then.
+        else review = () => TranslationReviewFile.ForReview(compilation, projectSource, sources, null, CancellationToken.None);
+        var view = new ReviewView(stamp, compilation, review, path, file, error, failure);
+        if (view.HasReviewFile) _ = view.Fingerprints;
         return view;
     }
 
@@ -1569,21 +1661,25 @@ internal sealed partial class Rmf2LanguageServer
 
     // The project repairs for one open buffer and its stale review entries whose "Mark reviewed" can run now (the files
     // with the key's base message and translation are saved), from its project compiled with the open buffers.
-    private (IReadOnlyList<Rmf2DiagnosticQuickFix> Fixes, IReadOnlyList<TranslationReviewStaleEntry> Stale, Rmf2ProjectV5? Reviewed) ProjectQuickFixes(string uri, Buffer buffer)
+    // The listing (compile: false) offers them only from the current validation, so it never waits for a compilation;
+    // the client asks again when the validation publishes its diagnostics. Resolving an action (compile: true) needs the
+    // exact edit, so it compiles when the validation of the current state has not finished.
+    private (IReadOnlyList<Rmf2DiagnosticQuickFix> Fixes, IReadOnlyList<TranslationReviewStaleEntry> Stale, Rmf2ProjectV5? Reviewed) ProjectQuickFixes(string uri, Buffer buffer, bool compile)
     {
         string? project = BufferProject(uri, out _);
         if (project is null) return ([], [], null);
         try
         {
-            ReviewView view = ReviewViewOf(project, BufferUris(project).ToArray());
+            string[] group = BufferUris(project).ToArray();
+            if ((compile ? ReviewViewOf(project, group) : CurrentReviewView(project, group)) is not { } view) return ([], [], null);
             string path = LocalPath(uri);
             var source = new TranslationSource(path, Utf8.GetBytes(buffer.Text));
             IReadOnlyList<Rmf2DiagnosticQuickFix> fixes = Rmf2DiagnosticActions.GetProjectQuickFixes(view.Compilation, source, _requestCancellation);
-            IReadOnlyList<TranslationReviewStaleEntry> stale = [];
+            TranslationReviewStaleEntry[] stale = [];
             if (view.File is { } review && view.Fingerprints is not null)
                 stale = TranslationReviewFile.Stale(view.Review, review).Where(entry => PathComparer.Equals(FileKey(entry.Location.Path), FileKey(path)) &&
                     UnsavedReviewFiles(project, view.Review.Project, null, entry.Entry.Key, entry.Entry.Locale).Count == 0).ToArray();
-            return (fixes, stale, view.Review.Project);
+            return (fixes, stale, stale.Length > 0 ? view.Review.Project : null);
         }
         catch (Exception error) when (error is ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or InvalidOperationException or IOException or FormatException or TranslationInterchangeException or TranslationAuthoringException or System.Text.Json.JsonException)
         {

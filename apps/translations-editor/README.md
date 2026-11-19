@@ -88,6 +88,24 @@ composer, the message source and the file view, but not in the search field, a
 menu or a dialog; on macOS ⌥↑ and ⌥↓ keep moving the caret in a text field, so
 there they work outside text fields only. AltGr is never one of them.
 
+### The list view
+
+The toolbar's **Workbench | List** switch shows the selected language's messages
+as a list for bulk translation (D074.1): one row per message in the order of the
+message tree, under its namespace, with the dotted path, the source text, the
+translation and its state. The command palette (Ctrl+K) has **Switch to list
+view** and **Switch to workbench** too; they have no shortcut. The list follows
+the sidebar's search and filter and shares the selection with the workbench. A
+message whose text is one pattern is edited in its row: Up and Down (Home, End)
+move between rows, Enter edits, Escape stops editing and Tab (Shift+Tab) goes on
+to the next (previous) row's text. A message with plural forms or other
+structure opens in the workbench. A row whose message has unsaved work, text
+that differs from the file on disk or a changed review state, shows the window
+title's unsaved mark (•, named "Unsaved changes" for screen readers) before its
+path; Save, and editing the text back to the saved text, clear it. Only the rows
+in view are rendered, so the list stays fast with tens of thousands of messages;
+screen readers still hear the position of each row in the whole list.
+
 ### One-language projects
 
 A project whose `runic.json` declares one language, its base locale, is a

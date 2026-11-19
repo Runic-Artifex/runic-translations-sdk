@@ -122,6 +122,38 @@ export function buildRows(
   });
 }
 
+/**
+ * The messages of `locale` whose text in an unsaved draft differs from the saved document (the list view's unsaved
+ * mark). Only documents with a draft are read, and a draft is kept only while it differs from the saved text (P17),
+ * so a message edited back to its saved text is not unsaved. A message the draft adds or removes is unsaved.
+ */
+export function unsavedMessageKeys(
+  snapshot: WorkspaceSnapshot | undefined,
+  drafts: Record<string, string>,
+  parsedDrafts: Record<string, { content: string; entries: EditorMessageEntry[] }>,
+  locale: string,
+): Set<string> {
+  const keys = new Set<string>();
+  if (snapshot === undefined) return keys;
+  const fingerprint = (entry: ResourceEntry): string =>
+    `${typeof entry.value === "string" ? entry.value : JSON.stringify(entry.value)}\u0000${entry.description ?? ""}`;
+  for (const document of snapshot.documents) {
+    const content = drafts[document.path];
+    if (content === undefined || document.isManifest || document.locale !== locale) continue;
+    const parsed = parsedDrafts[document.path];
+    // Until the compiler has parsed the draft, its entries are the saved ones (as `buildRows` shows them).
+    if (parsed?.content !== content && document.path.toLowerCase().endsWith(".rmf2")) continue;
+    const saved = new Map(flattenDocument(document.content, document.path, document.entries).map((entry) => [entry.key, fingerprint(entry)]));
+    const current = flattenDocument(content, document.path, parsed?.content === content ? parsed.entries : document.entries);
+    for (const entry of current) {
+      if (saved.get(entry.key) !== fingerprint(entry)) keys.add(entry.key);
+      saved.delete(entry.key);
+    }
+    for (const key of saved.keys()) keys.add(key);
+  }
+  return keys;
+}
+
 /** The structure of a message over its locales: plural if any locale selects on a plural or ordinal category. */
 export function messageStructure(entries: readonly (ResourceEntry | undefined)[]): MessageStructure | undefined {
   const structured = entries.filter((entry): entry is ResourceEntry => entry?.structured === true);

@@ -3480,6 +3480,16 @@ ui {
 }
 ui {
   palette {
+    switch_to_workbench = Switch to workbench
+  }
+}
+ui {
+  palette {
+    switch_to_list_view = Switch to list view
+  }
+}
+ui {
+  palette {
     theme =
       .input {$theme :string}
       {{Theme · {$theme}}}
@@ -5205,6 +5215,11 @@ ui {
 ui {
   list {
     keyboard_help = Up and Down move between rows. Enter edits the text or opens it in the workbench, Escape stops editing, and Tab goes to the next row.
+  }
+}
+ui {
+  list {
+    unsaved = Unsaved changes
   }
 }
 ui {
