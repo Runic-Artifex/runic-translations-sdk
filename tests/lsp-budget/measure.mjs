@@ -1,11 +1,13 @@
 // The language server's large-catalog budgets (tests/lsp-budget/README.md): writes the catalog that budgets.json
 // describes, starts the built tool's `lsp` over stdio as an editor does, measures what an editor user waits for, and
 // checks the budgets.
-//   bun tests/lsp-budget/measure.mjs [--update] [--samples <n>] [--repeats <n>] [--features <n>]
-// --update rewrites each budget's measured value and limit from this run (the limit is the measured value times the
-// entry's `headroom`). --features changes the catalog's size (features × 1,000 messages) for a local comparison; the
-// budgets apply to budgets.json's size only. The report goes to standard output and, in GitHub Actions, to the job
-// summary; the measurements to artifacts/lsp-budget/results.json.
+//   bun tests/lsp-budget/measure.mjs [--update] [--samples <n>] [--repeats <n>] [--features <n>] [--no-review]
+// The same session is measured over the catalog and, for budgets.json's `review` budgets, over the catalog with a review
+// file (--no-review skips it). --update rewrites each budget's measured value and limit from this run (the limit is the
+// measured value times the entry's `headroom`, and at least its `minimum`). --samples sets both catalogs' sample count. --features changes the
+// catalog's size (features × 1,000 messages) for a local comparison; the budgets apply to budgets.json's size only. The
+// report goes to standard output and, in GitHub Actions, to the job summary; the measurements to
+// artifacts/lsp-budget/results.json.
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -242,11 +244,14 @@ export const metrics = {
 const format = (name, value) => name.endsWith("-bytes") || name.includes("-bytes-")
   ? `${(value / (1 << 20)).toFixed(0)} MiB` : `${Math.round(value).toLocaleString("en-US")} ms`;
 
-function table(catalog, results) {
-  const lines = [`## Language server budgets (${(catalog.features * catalog.messagesPerFeature).toLocaleString("en-US")} messages × ${catalog.locales} locales, ${os.availableParallelism()} processors)`, "",
+// A target cell: the target, and "met" when this run's value is within it at the size the targets are for.
+const targetCell = (name, result, sized) => result.target === null ? "–" : `${format(name, result.target)}${sized && result.value <= result.target ? ", met" : ""}`;
+
+function table(catalog, variant, results, sized) {
+  const lines = [`## Language server budgets${variant.review ? ", with a review file" : ""} (${(catalog.features * catalog.messagesPerFeature).toLocaleString("en-US")} messages × ${catalog.locales} locales, ${os.availableParallelism()} processors)`, "",
     "| Budget | Value | Limit | Target (#271) | Status |", "| --- | ---: | ---: | ---: | --- |"];
   for (const [name, result] of Object.entries(results))
-    lines.push(`| \`${name}\` | ${format(name, result.value)} | ${result.limit === null ? "–" : format(name, result.limit)} | ${result.target === null ? "–" : format(name, result.target)} | ${result.status} |`);
+    lines.push(`| \`${name}\` | ${format(name, result.value)} | ${result.limit === null ? "–" : format(name, result.limit)} | ${targetCell(name, result, sized)} | ${result.status} |`);
   return `${lines.join("\n")}\n`;
 }
 
@@ -255,10 +260,18 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const updating = args.includes("--update");
   const budgets = JSON.parse(readFileSync(budgetsFile, "utf8"));
   const option = name => args.includes(name) ? Number(args[args.indexOf(name) + 1]) : undefined;
-  const samples = option("--samples") || budgets.samples;
+  // The targets are for budgets.json's catalog size.
+  const sized = !option("--features") || option("--features") === budgets.catalog.features;
   if (option("--features")) budgets.catalog.features = option("--features");
   if (option("--repeats")) budgets.repeats = option("--repeats");
-  for (const name of Object.keys(budgets.cases)) if (!metrics[name]) throw new Error(`budgets.json has ${name}, which measure.mjs does not measure.`);
+  // The catalog's budgets, and the same catalog with a review file.
+  const variants = [{ review: false, samples: budgets.samples, cases: budgets.cases }];
+  if (budgets.review && !args.includes("--no-review"))
+    variants.push({ review: true, samples: budgets.review.samples, cases: budgets.review.cases });
+  for (const variant of variants) {
+    if (option("--samples")) variant.samples = option("--samples");
+    for (const name of Object.keys(variant.cases)) if (!metrics[name]) throw new Error(`budgets.json has ${name}, which measure.mjs does not measure.`);
+  }
   for (const name of Object.keys(metrics)) if (!budgets.cases[name]) throw new Error(`${name} has no entry in budgets.json.`);
   assert.equal(process.platform, "linux", "The language server budgets measure memory through /proc: run them on Linux.");
 
@@ -268,44 +281,52 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   }
   mkdirSync(output, { recursive: true });
   const directory = resolve(output, "catalog");
-  const files = writeCatalog(directory, budgets.catalog);
-  console.log(`Wrote ${files} resource files: ${budgets.catalog.features} features × ${budgets.catalog.messagesPerFeature} messages × ${budgets.catalog.locales} locales.`);
-
-  const measured = [];
-  for (let index = 0; index < samples; index++) {
-    const result = await sample(directory, budgets.catalog, budgets.repeats);
-    console.log(`Sample ${index + 1}: open ${Math.round(result.openMs)} ms, edit ${result.editMs.map(Math.round).join("/")} ms, hover ${result.hoverMs.map(Math.round).join("/")} ms, ` +
-      `completion ${result.completionMs.map(Math.round).join("/")} ms, while typing: hover ${result.hoverTypingMs.map(Math.round).join("/")} ms, ` +
-      `completion ${result.completionTypingMs.map(Math.round).join("/")} ms, diagnostics ${result.typingDiagnosticsMs.map(Math.round).join("/")} ms, rename ${Math.round(result.renameMs)} ms, ` +
-      `resident ${(result.residentBytes / (1 << 20)).toFixed(0)} MiB, peak ${(result.peakResidentBytes / (1 << 20)).toFixed(0)} MiB`);
-    measured.push(result);
-  }
-  rmSync(directory, { recursive: true, force: true });
-
-  const results = {};
+  const report = { schema: 2, catalog: budgets.catalog, processors: os.availableParallelism() };
   const failures = [];
-  for (const [name, entry] of Object.entries(budgets.cases)) {
-    const value = metrics[name](measured);
-    let failure = null;
-    if (!updating && entry.limit === undefined) failure = `${name} has no limit in budgets.json; run bun tests/lsp-budget/measure.mjs --update.`;
-    else if (!updating && value > entry.limit) failure = `${name} is ${format(name, value)}, over its limit ${format(name, entry.limit)}.`;
-    // Well under its limit: not a failure, but the budget can be lowered (a run on the CI runner, then --update).
-    const improved = !failure && !updating && entry.measured !== undefined && value < 0.5 * entry.measured;
-    results[name] = { value, limit: updating ? null : entry.limit ?? null, target: entry.target ?? null,
-      status: failure ? "failed" : updating ? "recorded" : improved ? "ok, improved: lower the budget" : "ok", failure };
-    if (failure) failures.push(failure);
-    if (updating) {
-      entry.measured = Math.round(value);
-      entry.limit = Math.ceil(value * entry.headroom);
+  let summary = "";
+  for (const variant of variants) {
+    const files = writeCatalog(directory, budgets.catalog, { review: variant.review });
+    console.log(`Wrote ${files} resource files${variant.review ? " and a review file" : ""}: ${budgets.catalog.features} features × ${budgets.catalog.messagesPerFeature} messages × ${budgets.catalog.locales} locales.`);
+    const measured = [];
+    for (let index = 0; index < variant.samples; index++) {
+      const result = await sample(directory, budgets.catalog, budgets.repeats);
+      console.log(`Sample ${index + 1}${variant.review ? " (review file)" : ""}: open ${Math.round(result.openMs)} ms, edit ${result.editMs.map(Math.round).join("/")} ms, hover ${result.hoverMs.map(Math.round).join("/")} ms, ` +
+        `completion ${result.completionMs.map(Math.round).join("/")} ms, while typing: hover ${result.hoverTypingMs.map(Math.round).join("/")} ms, ` +
+        `completion ${result.completionTypingMs.map(Math.round).join("/")} ms, diagnostics ${result.typingDiagnosticsMs.map(Math.round).join("/")} ms, rename ${Math.round(result.renameMs)} ms, ` +
+        `resident ${(result.residentBytes / (1 << 20)).toFixed(0)} MiB, peak ${(result.peakResidentBytes / (1 << 20)).toFixed(0)} MiB`);
+      measured.push(result);
     }
+    rmSync(directory, { recursive: true, force: true });
+
+    const results = {};
+    for (const [name, entry] of Object.entries(variant.cases)) {
+      const value = metrics[name](measured);
+      let failure = null;
+      const label = variant.review ? `${name} (review file)` : name;
+      if (!updating && entry.limit === undefined) failure = `${label} has no limit in budgets.json; run bun tests/lsp-budget/measure.mjs --update.`;
+      else if (!updating && value > entry.limit) failure = `${label} is ${format(name, value)}, over its limit ${format(name, entry.limit)}.`;
+      // Well under its limit: not a failure, but the budget can be lowered (a run on the CI runner, then --update), unless
+      // the limit is its minimum.
+      const improved = !failure && !updating && entry.measured !== undefined && value < 0.5 * entry.measured &&
+        entry.limit > (entry.minimum ?? 0);
+      results[name] = { value, limit: updating ? null : entry.limit ?? null, target: entry.target ?? null,
+        status: failure ? "failed" : updating ? "recorded" : improved ? "ok, improved: lower the budget" : "ok", failure };
+      if (failure) failures.push(failure);
+      if (updating) {
+        entry.measured = Math.round(value);
+        entry.limit = Math.max(Math.ceil(value * entry.headroom), entry.minimum ?? 0);
+      }
+    }
+    // The catalog's results keep schema 1's places (cases, samples); the review file's go under `review`.
+    if (variant.review) report.review = { cases: results, samples: measured };
+    else Object.assign(report, { cases: results, samples: measured });
+    summary += `${summary ? "\n" : ""}${table(budgets.catalog, variant, results, sized)}`;
   }
-  writeFileSync(resolve(output, "results.json"), `${JSON.stringify({ schema: 1, catalog: budgets.catalog, processors: os.availableParallelism(),
-    cases: results, samples: measured }, null, 2)}\n`);
+  writeFileSync(resolve(output, "results.json"), `${JSON.stringify(report, null, 2)}\n`);
   if (updating) {
     writeFileSync(budgetsFile, `${JSON.stringify(budgets, null, 2)}\n`);
     console.log(`Updated ${budgetsFile}.`);
   }
-  const summary = table(budgets.catalog, results);
   console.log(summary);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
   for (const failure of failures) console.error(failure);

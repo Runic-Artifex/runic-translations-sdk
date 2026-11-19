@@ -310,34 +310,38 @@ to the client, which applies them.
 ## Performance
 
 CI measures the server on a catalog of **20,000 messages in 10 locales** (200
-resource files of 1,000 messages) on its Linux runner (ubuntu-24.04, 4
-processors), and fails when a measurement exceeds its budget
-([tests/lsp-budget](../../../tests/lsp-budget/README.md)). The budgets are
-the slowest of three runs times a margin for a shared runner's variance:
-about 2× for what takes seconds, 3× for hover and completion while typing, and
-6× for idle requests of a few milliseconds.
+resource files of 1,000 messages), once as it is and once with a review file,
+on its Linux runner (ubuntu-24.04, 4 processors), and fails when a measurement
+exceeds its budget ([tests/lsp-budget](../../../tests/lsp-budget/README.md)).
+The budgets are the slowest of six runs on 4 processors times a margin for a
+shared runner's variance: 2–2.25× for what takes seconds, 3× for hover,
+completion and diagnostics while typing, 6× for idle requests (but at least
+25 ms for an idle request and 50 ms while typing), and 1.25–1.5× for memory.
 
-| Measurement | Budget (4 processors) | Measured, 4 processors | Measured, 12 processors |
+| Measurement | Budget (4 processors) | Measured, 4 processors | Measured, CI runner |
 | --- | ---: | ---: | ---: |
-| Open to the first diagnostics | 11.2 s | 5.0–6.4 s | 4.4 s |
-| An edit to its diagnostics | 1.3 s | 0.6 s | 0.56 s |
-| The last of five keystrokes to its diagnostics | 161 ms | 56–80 ms | 61 ms |
-| Hover after five keystrokes | 175 ms | 39–58 ms | 27 ms |
-| Completion after five keystrokes | 214 ms | 43–71 ms | 50 ms |
-| Hover and completion, idle | 78–84 ms | 10–27 ms | 15 ms |
-| Rename of a resource (10 files) | 6.4 s | 2.9–3.6 s | 2.9 s |
-| Resident memory after open | 1,411 MiB | 1,103–1,129 MiB | 1,139 MiB |
-| Peak resident memory | 3,435 MiB | 2,497–2,642 MiB | 2,527 MiB |
+| Open to the first diagnostics | 10.4 s | 4.0–4.6 s | 6.0–6.9 s |
+| An edit to its diagnostics | 1.4 s | 0.38–0.68 s | 0.61–0.70 s |
+| The last of five keystrokes to its diagnostics | 363 ms | 37–121 ms | 98–122 ms |
+| Hover after five keystrokes | 50 ms | 3–9 ms | 3–4 ms |
+| Completion after five keystrokes | 50 ms | 7–14 ms | 7–8 ms |
+| Hover and completion, idle | 25–31 ms | 1–5 ms | 1–6 ms |
+| Rename of a resource (10 files) | 1.5 s | 0.56–0.75 s | 0.82–0.86 s |
+| Resident memory after open | 968 MiB | 754–774 MiB | 799–809 MiB |
+| Peak resident memory | 2,407 MiB | 1,308–1,604 MiB | 1,420–1,424 MiB |
 
-The 4-processor column is three runs; the 12-processor column is medians of
-two rounds per size (#271).
+The 4-processor column is six runs pinned to four processors of a 24-thread
+workstation; the CI runner's column is two runs of the budget job, all at the
+same commit. On 12 processors, open takes about 3.7 s, an edit about 0.45 s and
+a rename about 0.65 s (#271).
 
 - **Scaling.** Smaller catalogs are faster: at 2,000 messages × 10 locales an
-  edit's diagnostics take about 0.2 s and open about 2 s.
+  edit's diagnostics take about 0.1 s and open under 1 s.
 - **Review files.** A catalog with a review file (`<catalog>.review.json`)
-  validates more slowly while the review state is computed for every message.
-  At 20,000 × 10, an edit's diagnostics take about 3 s on 12 processors.
-  Hover, completion and rename are not affected.
+  computes the review state with every validation. At 20,000 × 10 on 4
+  processors, open takes 4.3–8.7 s and an edit's diagnostics 0.4–0.7 s; hover,
+  completion, rename and memory are as without one. Its budgets are in
+  `tests/lsp-budget/budgets.json` under `review`.
 
 ## Tests
 
