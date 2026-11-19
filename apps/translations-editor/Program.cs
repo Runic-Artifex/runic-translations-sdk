@@ -271,7 +271,8 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
                 {
                     DesktopWindow? native = DesktopPlatformServices.GetDesktopWindow(window);
                     presentation = native is { IsFallback: false } ? native.Browser.ToString() : "none";
-                    connected = RunicDesktopHost.GetSurface(window)?.ConnectionCount > 0;
+                    connected = RunicDesktopHost.GetSurface(window) is { } surface
+                        && await WaitForConnectedPageAsync(surface, TimeSpan.FromSeconds(10)).ConfigureAwait(false);
                     closed = await window.CloseAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
                 }
                 Console.WriteLine(EditorJsonText.Write(writer =>
@@ -290,6 +291,29 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
                 return presentation == nameof(BrowserKind.Embedded) && connected && closed.Drained ? 0 : CommandExitCodes.Unavailable;
             },
             waitForConnection: true));
+
+    // The host's open waits for the page's first connection, but a reload disconnects it for a moment and the count can
+    // be zero then (DesktopSurface.ConnectionCount), so the canary waits for a connected page rather than reading the
+    // count once. A page that was reconnecting is reported on standard error.
+    private static async Task<bool> WaitForConnectedPageAsync(DesktopSurface surface, TimeSpan timeout)
+    {
+        var connected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using IDisposable subscription = surface.SubscribeConnectionEvents(connection =>
+        {
+            if (connection.Kind == DesktopConnectionEventKind.Connected) connected.TrySetResult();
+        });
+        if (surface.ConnectionCount > 0) return true;
+        Console.Error.WriteLine("The page had no connection after the window opened; waiting for it to reconnect.");
+        try
+        {
+            await connected.Task.WaitAsync(timeout).ConfigureAwait(false);
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+    }
 
     private static Task<CommandOutcome<EditorCommandResult>> OpenEditorAsync(
         string workspacePath,
