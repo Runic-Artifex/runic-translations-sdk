@@ -45,14 +45,14 @@ internal static partial class Mf2MessageParser
             }
             var variants = syntax.Variants.Select(variant => new CompiledMessageVariant(
                 selectors.Select((selector, index) => (selector.Name, Value: DecodeKey(variant.Keys[index]))).ToDictionary(p => p.Name, p => p.Value, StringComparer.Ordinal),
-                Pattern(variant.PatternLocation.StartByte + 2, variant.PatternLocation.StartByte + variant.PatternLocation.LengthBytes - 2))).ToArray();
+                Pattern(variant.PatternSpan.StartByte + 2, variant.PatternSpan.EndByte - 2))).ToArray();
             message = new CompiledMessagePattern(Array.Empty<CompiledMessageNode>(), selectors, variants);
         }
         else
         {
             var opening = syntax.Tokens.FirstOrDefault(t => t.Kind == Mf2SyntaxTokenKind.PatternStart);
             var closing = syntax.Tokens.LastOrDefault(t => t.Kind == Mf2SyntaxTokenKind.PatternEnd);
-            message = opening is null ? Pattern(0, syntax.Source.Bytes.Length) : Pattern(opening.Location.StartByte + 2, closing!.Location.StartByte);
+            message = opening is null ? Pattern(0, syntax.ByteLength) : Pattern(opening.Location.StartByte + 2, closing!.Location.StartByte);
         }
         foreach (string input in used)
             if (!HasInputDeclaration(declarations, input)) declarations.Add(input, Declaration.CreateInput(input, input, TranslationArgumentType.String, "none", null));
@@ -66,14 +66,14 @@ internal static partial class Mf2MessageParser
         {
             var root = new List<CompiledMessageNode>(); var current = root;
             var parents = new Stack<List<CompiledMessageNode>>();
-            var expressions = syntax.Expressions.ToDictionary(e => e.Location.StartByte);
+            var expressions = syntax.Expressions.ToDictionary(e => e.Span.StartByte);
             int consumed = from;
             foreach (var token in syntax.Tokens)
             {
                 if (token.Location.StartByte < consumed || token.Location.StartByte >= to) continue;
                 if (token.Kind is Mf2SyntaxTokenKind.Text or Mf2SyntaxTokenKind.Whitespace) { current.Add(new CompiledMessageText(Unescape(token.Raw))); continue; }
                 if (token.Kind != Mf2SyntaxTokenKind.ExpressionStart) continue;
-                var expression = expressions[token.Location.StartByte]; consumed = expression.Location.StartByte + expression.Location.LengthBytes;
+                var expression = expressions[token.Location.StartByte]; consumed = expression.Span.EndByte;
                 if (expression.MarkupKind == Mf2MarkupKind.Close) { current = parents.Pop(); continue; }
                 if (expression.MarkupName is string tag)
                 {

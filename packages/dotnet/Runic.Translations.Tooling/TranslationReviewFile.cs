@@ -405,7 +405,7 @@ internal sealed class TranslationXliffImportPlan
         Rmf2LocaleV5 target = project.Locales.SingleOrDefault(locale => locale.Tag == import.TargetLocale)
             ?? throw new TranslationInterchangeException("XLIFF21-TARGET-LOCALE", $"The catalog has no locale '{import.TargetLocale}'.");
         var existing = target.DirectResources.ToDictionary(static resource => resource.Key,
-            static resource => System.Text.Encoding.UTF8.GetString(resource.Message.Syntax.Source.GetUtf8Bytes()), StringComparer.Ordinal);
+            static resource => resource.Message.Syntax.Text, StringComparer.Ordinal);
         var messages = import.Messages.ToDictionary(static message => message.MessageId,
             static message => System.Text.Encoding.UTF8.GetString(message.Bytes.Span).TrimEnd('\n'), StringComparer.Ordinal);
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
