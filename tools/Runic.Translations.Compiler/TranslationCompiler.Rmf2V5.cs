@@ -478,13 +478,15 @@ public static partial class TranslationCompiler
                     }
                     if (translated.Linked.Names.Count != 0) (names ??= new SortedSet<string>(StringComparer.Ordinal)).UnionWith(translated.Linked.Names);
                 }
-                else if (locale.Tag != manifest.DefaultLocale && !declaredKeys[locale.Tag].Contains(pair.Key))
+                // An allowed gap (also every gap of a relaxed or base-locale-only compile) reports nothing: nothing to build.
+                else if (locale.Tag != manifest.DefaultLocale && !declaredKeys[locale.Tag].Contains(pair.Key) &&
+                    manifest.Policy(locale.Tag, ValidationMembers.TranslationCompleteness) is var completeness && completeness != TranslationPolicy.Allow)
                 {
                     string message = "Locale '" + locale.Tag + "' does not translate '" + pair.Value.Source.Logical + "' from base locale '" + manifest.DefaultLocale + "'.";
                     if (groupedFiles.TryGetValue(ProjectDirectory(pair.Value.Source.Source.Path) + "\0" + locale.Tag, out var file))
-                        AddPolicyDiagnostic("RTR0010", manifest.Policy(locale.Tag, ValidationMembers.TranslationCompleteness), message, file, new(0, 0), diagnostics, (pair.Key, locale.Tag));
+                        AddPolicyDiagnostic("RTR0010", completeness, message, file, new(0, 0), diagnostics, (pair.Key, locale.Tag));
                     else
-                        AddPolicyDiagnostic("RTR0010", manifest.Policy(locale.Tag, ValidationMembers.TranslationCompleteness), message, project, locale.Span, diagnostics, (pair.Key, locale.Tag));
+                        AddPolicyDiagnostic("RTR0010", completeness, message, project, locale.Span, diagnostics, (pair.Key, locale.Tag));
                 }
             }
             string[] markupNames = names?.ToArray() ?? [];
