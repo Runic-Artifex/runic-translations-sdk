@@ -55,7 +55,32 @@ public static partial class TranslationCompiler
         private string? _logical;
         /// <summary>The logical path, <c>common.cancel</c>, joined once.</summary>
         internal string Logical => _logical ??= string.Join(".", Path);
+        /// <summary>
+        /// The memos of a cached compile (<see cref="Rmf2CompileCache"/>), which reuses this object while its file and the
+        /// link context are unchanged; null in any other compile. Each memo is an immutable object replaced as a whole,
+        /// so overlapping compiles read either the old or the new one.
+        /// </summary>
+        internal Rmf2SourceMemoV5? Memo { get; init; }
     }
+
+    // The memoized results of one extracted message in a cached compile, each with the diagnostics it reported, keyed by
+    // the identity of the inputs it was computed from (see docs/plans/incremental-validation.md).
+    private sealed class Rmf2SourceMemoV5
+    {
+        internal CompiledMemo? Compiled;
+        internal ProfiledMemo? Profiled;
+        internal RequiredMemo? Required;
+        internal PairedMemo? Paired;
+        internal TranslatedMemo? Translated;
+        internal ContractMemo? Contracted;
+    }
+    private sealed record ContractMemo(Rmf2ProjectEntryV5 Origin, IReadOnlyDictionary<string, Rmf2SlotV5> Requirements, string[] Names, int Id,
+        Rmf2MessageContractV5 Contract, string? ReadableProblem);
+    private sealed record CompiledMemo(IReadOnlyList<Rmf2InputV5>? Inputs, Rmf2ProjectEntryV5? Entry, TranslationDiagnostic[] Diagnostics);
+    private sealed record ProfiledMemo(Rmf2ProjectEntryV5 Entry, string? ExpectedKind, Rmf2ProjectEntryV5 Updated, Rmf2DocumentAnalysisV5 Analysis, TranslationDiagnostic[] Diagnostics);
+    private sealed record RequiredMemo(Rmf2ProjectEntryV5 Origin, IReadOnlyDictionary<string, Rmf2SlotV5> Requirements, TranslationDiagnostic[] Diagnostics);
+    private sealed record PairedMemo(Rmf2ProjectEntryV5 Origin, Rmf2ProjectEntryV5 Translated, IReadOnlyDictionary<string, Rmf2SlotV5> Requirements, TranslationDiagnostic[] Diagnostics);
+    private sealed record TranslatedMemo(Rmf2ProjectEntryV5 Entry, Rmf2TranslationV5 Translation, TranslationDiagnostic[] ContentDiagnostics);
     private sealed record Rmf2ProjectEntryV5(Rmf2ProjectSourceV5 Source, Rmf2LinkedMarkupV5 Linked)
     {
         internal Rmf2TranslationV5 Translation => new(Source.Key, Source.Locale, Linked.Message, Source.Node.NameLocation,
@@ -156,13 +181,28 @@ public static partial class TranslationCompiler
             false, Materialize(overrideSources), locales);
     }
 
+    // The compile of Rmf2CompileCache: its units, link context and memo-miss counters.
+    internal static Rmf2ProjectCompilation CompileRmf2ProjectV5Cached(TranslationSource project, TranslationSource[] sources,
+        IReadOnlyDictionary<TranslationSource, Rmf2SourceUnitV5> units, TranslationCompilerOptions options, bool pseudoLocales,
+        Rmf2LinkContext context, Rmf2CompileCounters counters, CancellationToken cancellationToken) =>
+        CompileRmf2ProjectV5(project, sources, units, options, cancellationToken, pseudoLocales, context: context, counters: counters);
+
     private static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project, TranslationSource[] sources,
         IReadOnlyDictionary<TranslationSource, Rmf2SourceUnitV5>? units, TranslationCompilerOptions options, CancellationToken cancellationToken,
         bool pseudoLocales = false, TranslationSource[]? overlaySources = null, IReadOnlyCollection<string>? keepLocales = null,
-        IReadOnlyCollection<string>? simulatedPseudoLocales = null)
+        IReadOnlyCollection<string>? simulatedPseudoLocales = null, Rmf2LinkContext? context = null, Rmf2CompileCounters? counters = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var diagnostics = new DiagnosticBag();
+        // A memoized computation runs with its own bag, and its diagnostics are replayed at the same point of the compile.
+        TranslationDiagnostic[] Capture(Action compute)
+        {
+            var saved = diagnostics;
+            diagnostics = new DiagnosticBag();
+            try { compute(); return diagnostics.Items.ToArray(); }
+            finally { diagnostics = saved; }
+        }
+        void Replay(TranslationDiagnostic[] items) { foreach (var item in items) diagnostics.Append(item); }
         Rmf2ProjectCompilation Result(Rmf2ProjectV5? value = null) => new(value, Array.AsReadOnly(diagnostics.ToSortedArray()));
         bool Failed() => diagnostics.Items.Any(d => d.Severity == TranslationDiagnosticSeverity.Error);
         if (RejectDuplicateSourcePaths(new[] { project }, sources, diagnostics)) return Result();
@@ -198,7 +238,7 @@ public static partial class TranslationCompiler
         // A relaxed compile (review fingerprints) applies no validation policy; a base-locale-only one also reads no translation.
         if (options.RelaxedValidation || options.BaseLocaleOnly) manifest.Relaxed = true;
         var extracted = ReadRmf2ProjectSourcesV5(project, sources, units, config, discovered, diagnostics, options, cancellationToken,
-            options.BaseLocaleOnly ? manifest.DefaultLocale : null);
+            options.BaseLocaleOnly ? manifest.DefaultLocale : null, context);
         var overlayExtracted = overlaySources is null ? new List<Rmf2ProjectSourceV5>() : ReadRmf2OverlaySourcesV5(overlaySources, diagnostics, options, cancellationToken);
         if (discovered.Count > options.MaximumLocalesPerCatalog)
             diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "Locale count exceeds the configured limit.", project, manifest.DefaultLocaleSpan);
@@ -227,23 +267,32 @@ public static partial class TranslationCompiler
             if (declaredKeys.TryGetValue(source.Locale, out var keys)) keys.Add(source.Key);
         // RTR0010 points at the locale's grouped file beside the base-locale file of the message.
         var groupedFiles = new Dictionary<string, TranslationSource>(StringComparer.OrdinalIgnoreCase);
+        TranslationSource? previousFile = null;
         foreach (var source in extracted)
+        {
+            // Once per file: a file's messages are consecutive.
+            if (ReferenceEquals(source.Source, previousFile)) continue;
+            previousFile = source.Source;
             if (source.Source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
                 groupedFiles.TryAdd(ProjectDirectory(source.Source.Path) + "\0" + source.Locale, source.Source);
-        string[] baseKeys = extracted.Where(source => source.Locale == manifest.DefaultLocale).Select(source => source.Logical).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        }
+        // The suggestions of RTR0011, needed only when a locale defines a key the base locale lacks.
+        string[]? baseKeys = null;
+        string[] BaseKeys() => baseKeys ??= extracted.Where(source => source.Locale == manifest.DefaultLocale).Select(source => source.Logical).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         var canonical = new SortedDictionary<string, Rmf2ProjectEntryV5>(StringComparer.Ordinal);
         var extras = new SortedDictionary<string, Rmf2ProjectEntryV5>(StringComparer.Ordinal);
         // Lowering a message depends on that message (and, for a translation, its base-locale inputs) only: it runs in
         // parallel, and its results are applied in source order, as a sequential compile applies them.
         var baseSources = extracted.Where(source => source.Locale == manifest.DefaultLocale).ToArray();
-        var baseLowered = CompilerParallel.Map(baseSources.Length, index => LowerSource(baseSources[index], null), cancellationToken);
+        var baseLowered = CompilerParallel.Map(baseSources.Length, index => CompiledFor(baseSources[index], null) is null ? LowerSource(baseSources[index], null) : null, cancellationToken);
         for (int index = 0; index < baseSources.Length; index++)
             if (Compile(baseSources[index], null, baseLowered[index]) is { } entry) { canonical.Add(baseSources[index].Key, entry); entries[baseSources[index].Locale].Add(baseSources[index].Key, entry); }
         var translationSources = extracted.Where(source => source.Locale != manifest.DefaultLocale).ToArray();
         // A translation of a base-locale key is lowered against that key's inputs, known now; one of an extra key waits
         // for the first locale that defines the key (below).
         var translationLowered = CompilerParallel.Map(translationSources.Length, index =>
-            canonical.TryGetValue(translationSources[index].Key, out var origin) ? (Inputs: origin.Linked.Message.Inputs, Result: LowerSource(translationSources[index], origin.Linked.Message.Inputs)) : default,
+            canonical.TryGetValue(translationSources[index].Key, out var origin) && CompiledFor(translationSources[index], origin.Linked.Message.Inputs) is null
+                ? (Inputs: origin.Linked.Message.Inputs, Result: LowerSource(translationSources[index], origin.Linked.Message.Inputs)) : default,
             cancellationToken);
         for (int translationIndex = 0; translationIndex < translationSources.Length; translationIndex++)
         {
@@ -254,7 +303,7 @@ public static partial class TranslationCompiler
             if (origin is null && manifest.Policy(source.Locale, ValidationMembers.ExtraLocaleKeys) != TranslationPolicy.Allow && !declaredKeys[manifest.DefaultLocale].Contains(source.Key))
             {
                 string logical = source.Logical;
-                string? suggestion = SuggestKey(logical, baseKeys);
+                string? suggestion = SuggestKey(logical, BaseKeys());
                 AddPolicyDiagnostic("RTR0011", manifest.Policy(source.Locale, ValidationMembers.ExtraLocaleKeys), "Locale '" + source.Locale + "' defines '" + logical + "', which base locale '" + manifest.DefaultLocale + "' does not define." +
                     (suggestion is null ? "" : " Did you mean '" + suggestion + "'?"), source.Source, new(source.Node.NameLocation.StartByte, source.Node.NameLocation.LengthBytes), diagnostics);
             }
@@ -281,16 +330,35 @@ public static partial class TranslationCompiler
         var contracts = new List<Rmf2MessageContractV5>();
         foreach (var pair in canonical)
         {
-            var requirements = markup.Requirements(pair.Key, pair.Value.Linked, pair.Value.Source.Node.NameLocation, diagnostics);
+            IReadOnlyDictionary<string, Rmf2SlotV5> requirements;
+            if (pair.Value.Source.Memo is not { } baseMemo) requirements = markup.Requirements(pair.Key, pair.Value.Linked, pair.Value.Source.Node.NameLocation, diagnostics);
+            else
+            {
+                if (baseMemo.Required is not { } required || !ReferenceEquals(required.Origin, pair.Value))
+                {
+                    IReadOnlyDictionary<string, Rmf2SlotV5>? computed = null;
+                    var reported = Capture(() => computed = markup.Requirements(pair.Key, pair.Value.Linked, pair.Value.Source.Node.NameLocation, diagnostics));
+                    baseMemo.Required = required = new(pair.Value, computed!, reported);
+                }
+                Replay(required.Diagnostics);
+                requirements = required.Requirements;
+            }
             var names = new SortedSet<string>(StringComparer.Ordinal);
             foreach (var locale in locales)
             {
                 if (entries[locale.Tag].TryGetValue(pair.Key, out var translated))
                 {
-                    ValidateCallerContract(pair.Value, translated);
-                    Rmf2ProjectMarkupV5.ValidateSlots(pair.Value.Source.Logical, requirements, translated.Linked, translated.Source.Node.NameLocation, diagnostics);
-                    if (!ReferenceEquals(translated, pair.Value)) { ValidateStructure(pair.Value, translated); ValidateInputParity(pair.Value, translated); }
-                    ValidateMaxLength(pair.Value, translated);
+                    // The checks of a translation against its base message depend on the two entries and the key's slot requirements.
+                    if (translated.Source.Memo is not { } pairMemo) ValidatePair(pair.Value, translated, requirements);
+                    else
+                    {
+                        if (pairMemo.Paired is not { } paired || !ReferenceEquals(paired.Origin, pair.Value) || !ReferenceEquals(paired.Translated, translated) || !ReferenceEquals(paired.Requirements, requirements))
+                        {
+                            if (counters is not null) counters.PairsChecked++;
+                            pairMemo.Paired = paired = new(pair.Value, translated, requirements, Capture(() => ValidatePair(pair.Value, translated, requirements)));
+                        }
+                        Replay(paired.Diagnostics);
+                    }
                     names.UnionWith(translated.Linked.Names);
                 }
                 else if (locale.Tag != manifest.DefaultLocale && !declaredKeys[locale.Tag].Contains(pair.Key))
@@ -302,13 +370,24 @@ public static partial class TranslationCompiler
                         AddPolicyDiagnostic("RTR0010", manifest.Policy(locale.Tag, ValidationMembers.TranslationCompleteness), message, project, locale.Span, diagnostics, (pair.Key, locale.Tag));
                 }
             }
+            string[] markupNames = names.ToArray();
+            // The contract and its readable-name check depend on the base entry, the slots, the markup names and the position.
+            if (pair.Value.Source.Memo?.Contracted is { } contracted && ReferenceEquals(contracted.Origin, pair.Value) && ReferenceEquals(contracted.Requirements, requirements) &&
+                contracted.Id == contracts.Count && contracted.Names.AsSpan().SequenceEqual(markupNames))
+            {
+                contracts.Add(contracted.Contract);
+                if (contracted.ReadableProblem is { } problem) diagnostics.Add(Rmf2ReadableNamesV1.DiagnosticId, TranslationDiagnosticSeverity.Warning, problem, pair.Value.Source.Node.NameLocation);
+                continue;
+            }
             contracts.Add(new(contracts.Count, pair.Key, Array.AsReadOnly(pair.Value.Source.Path), pair.Value.Linked.Message.Inputs,
-                requirements, names.Count != 0, names.ToArray(), profiles[pair.Value].Kind, profiles[pair.Value].Skeletons));
+                requirements, names.Count != 0, markupNames, profiles[pair.Value].Kind, profiles[pair.Value].Skeletons));
             // The readable C# surface leaves out a message with a reserved or clashing name;
             // its encoded member stays. Reported by every host because `code` is required.
+            string? readable = null;
             if (Rmf2ReadableNamesV1.SupportsClassName(manifest.ClassName) &&
                 !Rmf2ReadableNamesV1.TryCreate(manifest.ClassName, contracts[^1], out _, out string? readableProblem))
-                diagnostics.Add(Rmf2ReadableNamesV1.DiagnosticId, TranslationDiagnosticSeverity.Warning, readableProblem!, pair.Value.Source.Node.NameLocation);
+                diagnostics.Add(Rmf2ReadableNamesV1.DiagnosticId, TranslationDiagnosticSeverity.Warning, readable = readableProblem!, pair.Value.Source.Node.NameLocation);
+            if (pair.Value.Source.Memo is { } contractMemo) contractMemo.Contracted = new(pair.Value, requirements, markupNames, contracts.Count - 1, contracts[^1], readable);
         }
         // A reference factory whose readable name is another factory's encoded name keeps its encoded name.
         var referenceProblems = new List<(string Key, string Problem)>();
@@ -429,23 +508,38 @@ public static partial class TranslationCompiler
         var translations = new Dictionary<Rmf2ProjectEntryV5, Rmf2TranslationV5>(ReferenceEqualityComparer.Instance);
         Rmf2TranslationV5 TranslationOf(Rmf2ProjectEntryV5 entry)
         {
-            if (!translations.TryGetValue(entry, out var translation)) translations.Add(entry, translation = entry.Translation);
+            if (!translations.TryGetValue(entry, out var translation))
+                translations.Add(entry, translation = entry.Source.Memo?.Translated is { } memo && ReferenceEquals(memo.Entry, entry) ? memo.Translation : entry.Translation);
             return translation;
+        }
+        // The content-locale checks of a resolved resource depend on the resource only.
+        void CheckContentLocale(Rmf2ProjectEntryV5 entry, Rmf2TranslationV5 resource)
+        {
+            if (entry.Source.Memo is not { } memo) { ValidateContentLocale(resource); return; }
+            if (memo.Translated is not { } translated || !ReferenceEquals(translated.Entry, entry) || !ReferenceEquals(translated.Translation, resource))
+                memo.Translated = translated = new(entry, resource, Capture(() => ValidateContentLocale(resource)));
+            Replay(translated.ContentDiagnostics);
         }
         foreach (var locale in locales)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var resolved = new SortedDictionary<string, Rmf2TranslationV5>(StringComparer.Ordinal);
+            var resolved = new SortedDictionary<string, Rmf2ProjectEntryV5>(StringComparer.Ordinal);
             LocaleModel? current = locale;
             var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             while (current is not null && visited.Add(current.Tag))
             {
-                foreach (var entry in entries[current.Tag]) if (!resolved.ContainsKey(entry.Key)) resolved.Add(entry.Key, TranslationOf(entry.Value));
+                foreach (var entry in entries[current.Tag]) resolved.TryAdd(entry.Key, entry.Value);
                 current = current.Fallback is not null && byTag.TryGetValue(current.Fallback, out var next) ? next : null;
             }
             // Formatters use the resource's content locale, including fallback.
-            foreach (var resource in resolved.Values) ValidateContentLocale(resource);
-            linkedLocales.Add(new(locale.Tag, locale.Fallback, entries[locale.Tag].Values.Select(TranslationOf).ToArray(), resolved.Values.ToArray()));
+            var resources = new Rmf2TranslationV5[resolved.Count];
+            int resourceIndex = 0;
+            foreach (var entry in resolved.Values)
+            {
+                var resource = resources[resourceIndex++] = TranslationOf(entry);
+                CheckContentLocale(entry, resource);
+            }
+            linkedLocales.Add(new(locale.Tag, locale.Fallback, entries[locale.Tag].Values.Select(TranslationOf).ToArray(), resources));
         }
         if (Failed()) return Result();
         var usedNames = entries.Values.SelectMany(locale => locale.Values).SelectMany(entry => entry.Linked.Names).ToHashSet(StringComparer.Ordinal);
@@ -491,9 +585,25 @@ public static partial class TranslationCompiler
             var syntax = source.Node.MessageSyntax ?? Mf2SyntaxReader.Read(TranslationSource.Owned(source.Source.Path, Encoding.UTF8.GetBytes(source.Node.Message!)), options, cancellationToken);
             return Rmf2SemanticCompilerV5.Lower(syntax, callerInputs, options, cancellationToken);
         }
+        // The memoized compile of a source against these caller inputs (by identity), or null.
+        CompiledMemo? CompiledFor(Rmf2ProjectSourceV5 source, IReadOnlyList<Rmf2InputV5>? callerInputs) =>
+            source.Memo?.Compiled is { } memo && ReferenceEquals(memo.Inputs, callerInputs) ? memo : null;
         Rmf2ProjectEntryV5? Compile(Rmf2ProjectSourceV5 source, IReadOnlyList<Rmf2InputV5>? callerInputs, Rmf2SemanticResultV5? lowered = null)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (source.Memo is not { } memo) return CompileNow(source, callerInputs, lowered);
+            if (CompiledFor(source, callerInputs) is not { } compiled)
+            {
+                Rmf2ProjectEntryV5? entry = null;
+                if (counters is not null) counters.MessagesCompiled++;
+                var reported = Capture(() => entry = CompileNow(source, callerInputs, lowered));
+                memo.Compiled = compiled = new(callerInputs, entry, reported);
+            }
+            Replay(compiled.Diagnostics);
+            return compiled.Entry;
+        }
+        Rmf2ProjectEntryV5? CompileNow(Rmf2ProjectSourceV5 source, IReadOnlyList<Rmf2InputV5>? callerInputs, Rmf2SemanticResultV5? lowered)
+        {
             Rmf2SemanticResultV5 result = lowered ?? LowerSource(source, callerInputs);
             foreach (var diagnostic in result.Diagnostics)
             {
@@ -511,12 +621,36 @@ public static partial class TranslationCompiler
         }
         Rmf2ProjectEntryV5 Profile(Rmf2ProjectEntryV5 entry, string? expectedKind, SortedDictionary<string, Rmf2ProjectEntryV5> locale)
         {
-            var analysis = Rmf2DocumentProfileV5.Analyze(entry.Source.Logical, entry.Linked.Message, expectedKind, markup.Contracts, entry.Source.Node.NameLocation, diagnostics);
-            var updated = entry with { Linked = entry.Linked with { Message = analysis.Message } };
+            Rmf2DocumentAnalysisV5 analysis;
+            Rmf2ProjectEntryV5 updated;
+            if (entry.Source.Memo is not { } memo)
+            {
+                analysis = Rmf2DocumentProfileV5.Analyze(entry.Source.Logical, entry.Linked.Message, expectedKind, markup.Contracts, entry.Source.Node.NameLocation, diagnostics);
+                updated = entry with { Linked = entry.Linked with { Message = analysis.Message } };
+            }
+            else
+            {
+                if (memo.Profiled is not { } profiled || !ReferenceEquals(profiled.Entry, entry) || profiled.ExpectedKind != expectedKind)
+                {
+                    Rmf2DocumentAnalysisV5? computed = null;
+                    var reported = Capture(() => computed = Rmf2DocumentProfileV5.Analyze(entry.Source.Logical, entry.Linked.Message, expectedKind, markup.Contracts, entry.Source.Node.NameLocation, diagnostics));
+                    memo.Profiled = profiled = new(entry, expectedKind, entry with { Linked = entry.Linked with { Message = computed!.Message } }, computed, reported);
+                }
+                Replay(profiled.Diagnostics);
+                analysis = profiled.Analysis;
+                updated = profiled.Updated;
+            }
             profiles[updated] = analysis;
             kinds.TryAdd(entry.Source.Key, analysis.Kind);
             if (locale.TryGetValue(entry.Source.Key, out var current) && ReferenceEquals(current, entry)) locale[entry.Source.Key] = updated;
             return updated;
+        }
+        void ValidatePair(Rmf2ProjectEntryV5 origin, Rmf2ProjectEntryV5 translated, IReadOnlyDictionary<string, Rmf2SlotV5> requirements)
+        {
+            ValidateCallerContract(origin, translated);
+            Rmf2ProjectMarkupV5.ValidateSlots(origin.Source.Logical, requirements, translated.Linked, translated.Source.Node.NameLocation, diagnostics);
+            if (!ReferenceEquals(translated, origin)) { ValidateStructure(origin, translated); ValidateInputParity(origin, translated); }
+            ValidateMaxLength(origin, translated);
         }
         // Structure is locked (RTR0074): every translated document variant must match one of
         // the source skeletons. RTR0071 flags a match against a different key tuple's variant.
@@ -716,9 +850,12 @@ public static partial class TranslationCompiler
         return length;
     }
 
+    // One node of a file as a compile extracts it: its paths and, for a message, the source the compile links.
+    private sealed record Rmf2NodeExtractV5(Rmf2ResourceNode Node, string Logical, string Identity, string Metadata, string? Key, Rmf2ProjectSourceV5? Message);
+
     private static List<Rmf2ProjectSourceV5> ReadRmf2ProjectSourcesV5(TranslationSource project, TranslationSource[] sources,
         IReadOnlyDictionary<TranslationSource, Rmf2SourceUnitV5>? units, JsonValue config, HashSet<string> locales, DiagnosticBag diagnostics, TranslationCompilerOptions options, CancellationToken cancellationToken,
-        string? onlyLocale = null)
+        string? onlyLocale = null, Rmf2LinkContext? context = null)
     {
         string directory = ProjectDirectory(project.Path);
         var mounts = new List<(string Root, string[] Prefix)>();
@@ -800,14 +937,17 @@ public static partial class TranslationCompiler
             spellings[locale] = spelling; locales.Add(locale);
             string[] mount = matches[0].Prefix.Concat(namespaceParts).ToArray();
             Rmf2SourceUnitV5? unit = units is not null && units.TryGetValue(source, out var match) ? match : null;
-            IReadOnlyList<Rmf2ResourceNode> nodes;
+            // A cached compile reuses a file's extracted nodes while the file and the link context (which decides the
+            // mounts) are unchanged, so its messages keep their identity and memos from one compile to the next.
+            var extract = context is not null && unit is not null ? unit.Extraction(context) as Rmf2NodeExtractV5[] : null;
+            IReadOnlyList<Rmf2ResourceNode>? nodes = null;
             if (grouped)
             {
                 var resource = unit?.Resource ?? read[sourceIndex] ?? Rmf2ResourceReader.Read(source, options, cancellationToken);
                 foreach (var diagnostic in resource.Diagnostics) diagnostics.Add(diagnostic.Id, diagnostic.Severity, diagnostic.Message, diagnostic.Location);
                 nodes = resource.Nodes;
             }
-            else
+            else if (extract is null)
             {
                 string? message = unit?.DirectMessage;
                 if (message is null)
@@ -821,20 +961,36 @@ public static partial class TranslationCompiler
                 node.MessageSyntax = unit?.DirectSyntax ?? Mf2SyntaxReader.Read(source, options, cancellationToken);
                 nodes = new[] { node };
             }
-            for (int index = 1; index <= mount.Length; index++) Register(mount.Take(index).ToArray(), true, "", DiagnosticBag.Location(source, new(0, 0)));
-            foreach (var node in nodes)
+            if (extract is null)
             {
-                string[] path = mount.Concat(node.Path).ToArray();
-                Register(path, node.IsGroup, string.Join("\n", node.Comments.Concat(node.Properties)), node.NameLocation);
-                if (node.IsGroup) continue;
-                string key = string.Join("_", path), logical = string.Join(".", path);
-                if (generated.TryGetValue(key, out string? previous) && previous != logical) diagnostics.Add("RTR0018", TranslationDiagnosticSeverity.Error, "Logical path '" + logical + "' collides with '" + previous + "' under canonical underscore keys.", node.NameLocation);
-                generated[key] = logical;
-                result.Add(new(key, path, locale, source, node, unit));
+                extract = new Rmf2NodeExtractV5[nodes!.Count];
+                for (int index = 0; index < extract.Length; index++)
+                {
+                    var node = nodes[index];
+                    string[] path = mount.Concat(node.Path).ToArray();
+                    string logical = string.Join(".", path);
+                    string? key = node.IsGroup ? null : string.Join("_", path);
+                    extract[index] = new(node, logical, locale + ":" + logical, string.Join("\n", node.Comments.Concat(node.Properties)), key,
+                        key is null ? null : new Rmf2ProjectSourceV5(key, path, locale, source, node, unit) { Memo = context is null ? null : new() });
+                }
+                if (context is not null && unit is not null) unit.SetExtraction(context, extract);
             }
-            void Register(string[] path, bool group, string metadata, TextSourceLocation location)
+            for (int index = 1; index <= mount.Length; index++)
             {
-                string logical = string.Join(".", path), identity = locale + ":" + logical;
+                string logical = string.Join(".", mount.Take(index));
+                Register(logical, locale + ":" + logical, true, "", DiagnosticBag.Location(source, new(0, 0)));
+            }
+            foreach (var item in extract)
+            {
+                Register(item.Logical, item.Identity, item.Node.IsGroup, item.Metadata, item.Node.NameLocation);
+                if (item.Message is not { } extracted) continue;
+                string key = item.Key!, logical = item.Logical;
+                if (generated.TryGetValue(key, out string? previous) && previous != logical) diagnostics.Add("RTR0018", TranslationDiagnosticSeverity.Error, "Logical path '" + logical + "' collides with '" + previous + "' under canonical underscore keys.", item.Node.NameLocation);
+                generated[key] = logical;
+                result.Add(extracted);
+            }
+            void Register(string logical, string identity, bool group, string metadata, TextSourceLocation location)
+            {
                 if (pathKinds.TryGetValue(logical, out bool previousKind) && previousKind != group) diagnostics.Add("RTR0054", TranslationDiagnosticSeverity.Error, "Message/group collision for '" + logical + "' across locales.", location);
                 pathKinds[logical] = group;
                 if (identities.TryGetValue(identity, out var first) && (!group || !first.Group || (metadata.Length != 0 && first.Metadata.Length != 0)))

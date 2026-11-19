@@ -19,7 +19,9 @@ namespace Runic.Translations.Compiler;
 /// </remarks>
 internal sealed class Rmf2SourceUnitV5
 {
-    private readonly Dictionary<(string Message, string Contract), Rmf2SemanticResultV5> _lowered = new();
+    // Lock-free reads: the messages of one file are lowered in parallel.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<(string Message, string Contract), Rmf2SemanticResultV5> _lowered = new();
+    private int _memoCount;
     private readonly object _gate = new();
     private readonly int _memoLimit;
     private int _loweringCount;
@@ -64,6 +66,32 @@ internal sealed class Rmf2SourceUnitV5
         return new(source, options, null, message, message is null ? null : Mf2SyntaxReader.Read(source, options, cancellationToken));
     }
 
+    /// <summary>Whether this unit was built from exactly these bytes at this path, with any options.</summary>
+    internal bool HasBytesOf(TranslationSource source) =>
+        string.Equals(source.Path, Source.Path, StringComparison.Ordinal) &&
+        (ReferenceEquals(source, Source) || source.Bytes.AsSpan().SequenceEqual(Source.Bytes));
+
+    // The nodes a cached compile extracted from this unit, per link context (Rmf2CompileCache); at most four contexts.
+    private readonly List<(object Context, object Extraction)> _extractions = new();
+
+    internal object? Extraction(object context)
+    {
+        lock (_gate)
+            foreach (var item in _extractions)
+                if (ReferenceEquals(item.Context, context)) return item.Extraction;
+        return null;
+    }
+
+    internal void SetExtraction(object context, object extraction)
+    {
+        lock (_gate)
+        {
+            _extractions.RemoveAll(item => ReferenceEquals(item.Context, context));
+            if (_extractions.Count == 4) _extractions.RemoveAt(0);
+            _extractions.Add((context, extraction));
+        }
+    }
+
     /// <summary>Whether this unit was built from exactly these bytes, at this path, with these options.</summary>
     internal bool Matches(TranslationSource source, TranslationCompilerOptions options) =>
         ReferenceEquals(options, Options) &&
@@ -78,21 +106,21 @@ internal sealed class Rmf2SourceUnitV5
         CancellationToken cancellationToken)
     {
         var key = (message, callerInputs is null ? string.Empty : Signature(callerInputs));
-        lock (_gate)
-        {
-            if (_lowered.TryGetValue(key, out Rmf2SemanticResultV5? cached)) return cached;
-        }
+        if (_lowered.TryGetValue(key, out Rmf2SemanticResultV5? cached)) return cached;
 
         Interlocked.Increment(ref _loweringCount);
         syntax ??= Mf2SyntaxReader.Read(TranslationSource.Owned(Source.Path, Encoding.UTF8.GetBytes(message)), Options, cancellationToken);
         Rmf2SemanticResultV5 result = Rmf2SemanticCompilerV5.Lower(syntax, callerInputs, Options, cancellationToken);
-        lock (_gate)
+        // A translated message is normally lowered against one caller contract at a time. Keep the
+        // memo bounded when the base-locale inputs change repeatedly during one unit's lifetime.
+        if (Interlocked.Increment(ref _memoCount) > _memoLimit)
         {
-            // A translated message is normally lowered against one caller contract at a time. Keep the
-            // memo bounded when the base-locale inputs change repeatedly during one unit's lifetime.
-            if (_lowered.Count >= _memoLimit) _lowered.Clear();
-            _lowered[key] = result;
+            lock (_gate)
+            {
+                if (Volatile.Read(ref _memoCount) > _memoLimit) { _lowered.Clear(); Volatile.Write(ref _memoCount, 0); }
+            }
         }
+        _lowered[key] = result;
         return result;
     }
 
