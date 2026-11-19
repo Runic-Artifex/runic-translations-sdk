@@ -275,8 +275,10 @@ jobs:
         run: |
           name="runic-translations-editor-${VERSION}-win-x64"
           mkdir -p artifacts/editor-release
-          # Windows' tar is bsdtar, which writes a zip for a .zip name with -a.
-          (cd "$RUNNER_TEMP/archive" && tar -a -cf "$GITHUB_WORKSPACE/artifacts/editor-release/$name.zip" "$name")
+          # Windows' own tar (bsdtar) writes a zip for a .zip name with -a. Git Bash's tar is GNU tar, which reads the
+          # drive letter of D:\a\... as a remote host, so call System32's by its path.
+          bsdtar="$(cygpath -u "$SYSTEMROOT")/System32/tar.exe"
+          (cd "$RUNNER_TEMP/archive" && "$bsdtar" -a -cf "$(cygpath -w "$GITHUB_WORKSPACE/artifacts/editor-release/$name.zip")" "$name")
           cd artifacts/editor-release
           bun ../../eng/release/editor-release.mjs checksum "$name.zip"
           cat ./*.sha256

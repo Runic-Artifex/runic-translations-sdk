@@ -283,7 +283,7 @@ internal static class Rmf2ResourceWriter
 
     // The JSON string literal JsonSerializer.Serialize(value) writes, through the same writer, so a trimmed or NativeAOT
     // host (the Translations Editor's packages) needs no reflection-based serialization.
-    private static byte[] JsonStringUtf8(string value)
+    internal static byte[] JsonStringUtf8(string value)
     {
         var buffer = new System.Buffers.ArrayBufferWriter<byte>();
         using (var writer = new Utf8JsonWriter(buffer)) writer.WriteStringValue(value);

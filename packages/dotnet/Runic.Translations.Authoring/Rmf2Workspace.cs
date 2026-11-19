@@ -281,7 +281,7 @@ internal sealed class Rmf2Workspace
                 {
                     segment++;
                     if (renamedMounts.Contains(mountIndex) && segment == logicalPath.Count - 1)
-                        edits.Add((bom + (int)reader.TokenStartIndex, (int)(reader.BytesConsumed - reader.TokenStartIndex), JsonSerializer.SerializeToUtf8Bytes(newName)));
+                        edits.Add((bom + (int)reader.TokenStartIndex, (int)(reader.BytesConsumed - reader.TokenStartIndex), Rmf2ResourceWriter.JsonStringUtf8(newName)));
                 }
             }
             changes[_project.Path] = Rmf2ResourceWriter.Replace(bytes, edits);
