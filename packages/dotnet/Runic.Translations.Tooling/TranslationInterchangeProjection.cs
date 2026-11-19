@@ -84,6 +84,54 @@ internal sealed record TranslationInterchangePlaceholder(string Name, string Typ
 
 internal static class TranslationInterchangeProjectionAdapter
 {
+    // The source fingerprints of a compiled project (immutable), and of one canonical message by its contract and base
+    // resource, which a validation session keeps for an unchanged key: only changed messages are fingerprinted again.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Rmf2ProjectV5, IReadOnlyDictionary<string, string>> ProjectFingerprints = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Rmf2MessageContractV5, UnitFingerprint> UnitFingerprints = new();
+    private sealed record UnitFingerprint(Rmf2TranslationV5 Source, string Fingerprint);
+
+    /// <summary>
+    /// The per-unit source fingerprint of every canonical key, as <see cref="TranslationInterchangeProjection.SourceFingerprints"/>
+    /// of <see cref="From(Rmf2ProjectCompilation)"/> computes it, without projecting the translations.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, string> SourceFingerprints(Rmf2ProjectCompilation compilation)
+    {
+        ArgumentNullException.ThrowIfNull(compilation);
+        if (!compilation.Success)
+            throw new TranslationInterchangeException("XLIFF21-COMPILATION", "XLIFF export requires a successful compiler result.");
+        if (compilation.Project is not { } project)
+            throw new TranslationInterchangeException("XLIFF21-CATALOG", "XLIFF export requires exactly one compiled catalog.");
+        if (ProjectFingerprints.TryGetValue(project, out IReadOnlyDictionary<string, string>? cached)) return cached;
+        Rmf2LocaleV5 sourceLocale = project.Locales.Single(locale =>
+            string.Equals(locale.Tag, project.DefaultLocale, StringComparison.Ordinal));
+        var sourceByKey = sourceLocale.DirectResources.ToDictionary(static resource => resource.Key, StringComparer.Ordinal);
+        var fingerprints = new Dictionary<string, string>(project.CanonicalMessages.Count, StringComparer.Ordinal);
+        foreach (Rmf2MessageContractV5 contract in project.CanonicalMessages.OrderBy(static contract => contract.Key, StringComparer.Ordinal))
+        {
+            if (!sourceByKey.TryGetValue(contract.Key, out Rmf2TranslationV5? source))
+                throw new TranslationInterchangeException("XLIFF21-CANONICAL", "The compiled v5 project is missing a direct canonical source resource.");
+            if (!UnitFingerprints.TryGetValue(contract, out UnitFingerprint? unit) || !ReferenceEquals(unit.Source, source))
+                UnitFingerprints.AddOrUpdate(contract, unit = new(source, Fingerprint(contract, source)));
+            fingerprints.Add(contract.Key, unit.Fingerprint);
+        }
+        IReadOnlyDictionary<string, string> result = new System.Collections.ObjectModel.ReadOnlyDictionary<string, string>(fingerprints);
+        ProjectFingerprints.AddOrUpdate(project, result);
+        return result;
+
+        // As From computes a canonical unit's SourceFingerprint.
+        static string Fingerprint(Rmf2MessageContractV5 contract, Rmf2TranslationV5 source)
+        {
+            string raw = RawSyntax(source.Message);
+            bool document = contract.Content == Rmf2DocumentProfileV5.Document;
+            IReadOnlyList<TranslationInterchangePiece>? pieces = document || IsStructured(source.Message) ? null : TranslationInterchangePattern.Decompose(raw);
+            TranslationInterchangePlaceholder[] placeholders = contract.Inputs
+                .OrderBy(static input => input.Name, StringComparer.Ordinal)
+                .Select(static input => new TranslationInterchangePlaceholder(input.Name, input.Type, string.Empty))
+                .ToArray();
+            return TranslationInterchangeFingerprint.UnitSource(contract.Key, raw, pieces, placeholders);
+        }
+    }
+
     internal static TranslationInterchangeProjection From(Rmf2ProjectCompilation compilation)
     {
         ArgumentNullException.ThrowIfNull(compilation);

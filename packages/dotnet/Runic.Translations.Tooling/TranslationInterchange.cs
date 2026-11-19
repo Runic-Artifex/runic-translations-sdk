@@ -57,7 +57,7 @@ public static class TranslationInterchange
     /// contract (input names and types). Review entries record it to tell when a translation predates a source change.
     /// </summary>
     public static IReadOnlyDictionary<string, string> ComputeSourceFingerprints(Rmf2ProjectCompilation compilation) =>
-        TranslationInterchangeProjectionAdapter.From(compilation).SourceFingerprints;
+        TranslationInterchangeProjectionAdapter.SourceFingerprints(compilation);
 
     internal static TranslationInterchangeProjection PreflightXliff21(
         Rmf2ProjectCompilation compilation) =>
