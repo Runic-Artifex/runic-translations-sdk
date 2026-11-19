@@ -7,6 +7,7 @@ import "./svelte-modules.mjs";
 
 const { buildListRows, inlineVariant, listMessageRows, readWorkspaceLayout, workspaceLayoutKey } = await import("../src/lib/list-view.ts");
 const { PreferencesController } = await import("../src/lib/state/preferences-controller.svelte.ts");
+const { ListRowHeights, listRowAt, listRowEstimates, listRowOffsets, listSlices, listWindow, listOverscanRows } = await import("../src/lib/list-virtualization.ts");
 
 const pattern = (text) => ({ supported: true, selectors: [], variants: [{ id: "v0", keys: [], pattern: text }] });
 const plural = (one, other) => ({
@@ -80,6 +81,54 @@ assert.equal(german.find((item) => item.key === "files_selected").inline, false)
 assert.deepEqual(buildListRows([rows[0], rows[4]], { locale: "en", baseLocale: "de", sourceText: false, review })
   .map((item) => item.kind === "group" ? `# ${item.group}` : item.key), ["# common", "common_cancel", "# ", "zeta"]);
 
+// The unsaved mark: a row says whether its message has unsaved work in the selected locale; none by default.
+assert.ok(listMessageRows(english).every((item) => item.unsaved === false), "A row is unsaved without unsaved work.");
+const marked = listMessageRows(buildListRows(rows, { locale: "en", baseLocale: "de", sourceText: false, review, unsaved: (key) => key === "common_save" }));
+assert.deepEqual(marked.filter((item) => item.unsaved).map((item) => item.key), ["common_save"]);
+
+// Virtualization: heights are measured per row; a row not measured yet counts as the average of its kind.
+{
+  const heights = new ListRowHeights();
+  const many = Array.from({ length: 20_000 }, (_, index) => index % 50 === 0
+    ? { id: `g:${index}`, kind: "group" }
+    : { id: `m:${index}`, kind: "message" });
+  let offsets = listRowOffsets(many, heights);
+  assert.equal(offsets.length, many.length + 1);
+  assert.equal(offsets[1], listRowEstimates.group);
+  assert.equal(offsets[2], listRowEstimates.group + listRowEstimates.message);
+  assert.equal(heights.set("m:1", "message", 100), true);
+  assert.equal(heights.set("m:1", "message", 100.2), false, "A sub-pixel change is not a new height.");
+  assert.equal(heights.estimate("message"), 100, "Unmeasured messages are not estimated by the measured ones.");
+  heights.set("m:2", "message", 60);
+  assert.equal(heights.estimate("message"), 80);
+  assert.equal(heights.height("m:1", "message"), 100);
+  heights.set("m:1", "message", 40);
+  assert.equal(heights.estimate("message"), 50, "A row measured again replaces its earlier height in the average.");
+  offsets = listRowOffsets(many, heights);
+  assert.equal(offsets[3] - offsets[2], 60);
+  // The window: the rows in view and the overscan on both sides, found by binary search.
+  assert.equal(listRowAt(offsets, 0), 0);
+  assert.equal(listRowAt(offsets, offsets[500] + 1), 500);
+  assert.equal(listRowAt(offsets, offsets.at(-1) + 1_000), many.length - 1, "A position past the end is the last row.");
+  const span = listWindow(offsets, offsets[500], offsets[510] - offsets[500]);
+  assert.deepEqual(span, { start: 500 - listOverscanRows, end: 510 + listOverscanRows });
+  assert.deepEqual(listWindow(offsets, -50, 100), { start: 0, end: listRowAt(offsets, 49) + 1 + listOverscanRows });
+  assert.deepEqual(listWindow(listRowOffsets([], heights), 0, 500), { start: 0, end: 0 });
+  // The slices: gaps of exactly the left-out rows' height, the window, and a pinned row (the tab stop or the edited
+  // row) kept outside it, so the focus stays in the DOM while it scrolls out of view.
+  const slices = listSlices(offsets, span, [3, 505, 19_999]);
+  assert.deepEqual(slices.map((slice) => slice.kind === "gap" ? "gap" : `${slice.start}-${slice.end}`),
+    ["gap", "3-4", "gap", `${span.start}-${span.end}`, "gap", "19999-20000"]);
+  assert.equal(slices[0].height, offsets[3]);
+  assert.equal(slices[2].height, offsets[span.start] - offsets[4]);
+  assert.equal(slices.reduce((total, slice) => total + (slice.kind === "gap" ? slice.height : offsets[slice.end] - offsets[slice.start]), 0), offsets.at(-1),
+    "The gaps and rows do not add up to the list's height.");
+  assert.deepEqual(listSlices(offsets, { start: 0, end: 10 }, [10]).map((slice) => slice.kind === "gap" ? "gap" : `${slice.start}-${slice.end}`),
+    ["0-11", "gap"], "A pinned row next to the window joins it.");
+  heights.clear();
+  assert.equal(heights.estimate("message"), listRowEstimates.message);
+}
+
 // The view is a preference: the workbench by default, the list once chosen, stored in the native editor state.
 assert.equal(workspaceLayoutKey, "runic-translations.workspace-layout");
 assert.equal(readWorkspaceLayout(null), "workbench");
@@ -118,6 +167,20 @@ assert.match(list, /editing\.applyAuthoringOperation\(\{ kind: "set-pattern", va
   "The list does not edit through the composer's operation.");
 assert.match(list, /<PatternEditor\s+compact/, "The list does not reuse the pattern editor.");
 assert.match(list, /\{revision\}/, "The list's fields do not follow undo and redo.");
+// Virtualized: only the rendered window and the pinned tab stop are rows in the DOM, the grid says how many rows it
+// has and where each shown row is, and each shown row is measured.
+assert.match(list, /aria-rowcount=\{rows\.length \+ 1\}/, "The grid does not count its rows.");
+assert.equal(list.match(/aria-rowindex=\{position \+ 2\}/g)?.length, 2, "A shown row does not say where it is.");
+assert.match(list, /class="list-head" role="row" aria-rowindex=\{1\}/);
+assert.match(list, /\{#each rendered as item \(item\.id\)\}/, "The list renders every row.");
+assert.match(list, /const pinnedIndex = \$derived\(focusKey === undefined \? undefined : rowPosition\.get\(`m:\$\{focusKey\}`\)\)/,
+  "The row with the tab stop (and the edited row) can leave the DOM.");
+assert.match(list, /\{@attach measureRow\(row\.id, "message"\)\}/, "The list's rows are not measured.");
+assert.doesNotMatch(list, /content-visibility/, "The rows' heights are guessed by the browser instead of measured.");
+// The unsaved mark: the window title's marker with an accessible name, before the path.
+assert.match(list, /role="img" aria-label=\{ui\.text\("ui_list_unsaved"\)\} title=\{ui\.text\("ui_list_unsaved"\)\} data-unsaved-mark>\{unsavedTitleMarker\.trim\(\)\}/,
+  "The unsaved mark is not the title's marker or has no name.");
+assert.match(list, /\{#if row\.unsaved\}\{@render unsavedMark\(\)\}\{\/if\}/);
 assert.match(list, /:global\(:root\[data-density="compact"\]\) \.list-scroller/, "The density does not apply to the list's rows.");
 const shell = await readFile(new URL("../src/lib/screens/WorkspaceShell.svelte", import.meta.url), "utf8");
 assert.match(shell, /role="group" aria-label=\{ui\.text\("ui_view_label"\)\}/, "The view switch is unnamed.");
