@@ -76,7 +76,7 @@ internal sealed class Mf2SourceMap(string path, string text, bool ascii)
     }
 
     // The UTF-8 offset of a character offset; an offset inside a surrogate pair is the pair's first byte, as the reader maps it.
-    private int ByteOffset(int offset)
+    internal int ByteOffset(int offset)
     {
         if (ascii) return offset;
         int bytes = 0;
@@ -94,6 +94,9 @@ internal sealed class Mf2SourceMap(string path, string text, bool ascii)
 internal readonly record struct Mf2Span(Mf2SourceMap Map, int From, int To)
 {
     public TextSourceLocation Location => Map.Location(From, To);
+    // The UTF-8 offsets of Location, without its lines and columns: what lowering needs, computed without allocating.
+    public int StartByte => Map.ByteOffset(From);
+    public int EndByte => Map.ByteOffset(To);
 }
 /// <summary>Full original bytes, a contiguous token stream and parsed expressions for authoring tools.</summary>
 internal sealed class Mf2SyntaxDocument
@@ -105,9 +108,10 @@ internal sealed class Mf2SyntaxDocument
         _tokens = tokens.AsReadOnly(); Expressions = Compact(expressions); Declarations = Compact(declarations); Variants = Compact(variants); Match = match;
         Diagnostics = diagnostics.Length == 0 ? NoDiagnostics : Array.AsReadOnly(diagnostics);
         _options = options; _text = text;
-        // A message read from its text keeps the text (which it shares with its resource node), not a copy of its bytes.
+        // A message read from its text keeps the text (which it shares with its resource node), not a copy of its bytes,
+        // nor a weak handle to them: one per message makes every collection slower, and few messages are asked for bytes.
         if (text is null) _source = source;
-        else { _path = source.Path; _releasedSource = new WeakReference<TranslationSource>(source); }
+        else _path = source.Path;
     }
 
     private readonly TranslationSource? _source;
@@ -127,6 +131,12 @@ internal sealed class Mf2SyntaxDocument
         }
     }
     private static readonly IReadOnlyList<TranslationDiagnostic> NoDiagnostics = Array.AsReadOnly(Array.Empty<TranslationDiagnostic>());
+
+    /// <summary>The length of <see cref="Source"/> in UTF-8 bytes, without making it.</summary>
+    internal int ByteLength => _source?.Bytes.Length ?? Encoding.UTF8.GetByteCount(_text!);
+
+    /// <summary>The message text: the UTF-8 of <see cref="Source"/> decoded, without making it.</summary>
+    internal string Text => _text ?? Encoding.UTF8.GetString(_source!.Bytes);
 
     /// <summary>A list as a read-only array of its items: the shared empty array when it has none.</summary>
     internal static IReadOnlyList<T> Compact<T>(List<T> items) => items.Count == 0 ? Array.Empty<T>() : Array.AsReadOnly(items.ToArray());

@@ -130,7 +130,7 @@ internal static class TranslationInterchangePattern
         else
         {
             if (syntax.Variants.Count == 0 || syntax.Variants.Count != compiled.Variants.Count) return null;
-            headerEnd = syntax.Variants[0].KeyLocations.Count == 0 ? syntax.Variants[0].Location.StartByte : syntax.Variants[0].KeyLocations[0].StartByte;
+            headerEnd = syntax.Variants[0].KeySpans.Count == 0 ? syntax.Variants[0].Span.StartByte : syntax.Variants[0].KeySpans[0].StartByte;
             foreach (Mf2VariantSyntax variant in syntax.Variants)
             {
                 TextSourceLocation pattern = variant.PatternLocation;
