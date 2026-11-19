@@ -631,7 +631,12 @@ internal sealed partial class Rmf2LanguageServer
         }
         int offset = args["position"] is JsonNode position ? Offset(buffer.Text, position) : 0;
         int atByte = Utf8.GetByteCount(buffer.Text.AsSpan(0, offset));
-        Rmf2ResourceNode? entry = buffer.Syntax.Nodes.LastOrDefault(n => n.Location.StartByte <= atByte && atByte <= n.Location.StartByte + n.Location.LengthBytes);
+        // Read requests find the message in the read workspace's document of the buffer, which Rmf2Workspace.Update has
+        // just read: its nodes are the buffer's (Rmf2ResourceReader.Analyze is Read plus a second parse of every message
+        // for diagnostics), so a request after typing parses the document once instead of twice (#271).
+        Rmf2ResourceDocument syntax = method is "textDocument/hover" or "textDocument/completion" or "textDocument/definition" or
+            "textDocument/references" or "runic/message" ? ReadWorkspaceDocument(LocalPath(uri), uri) ?? buffer.Syntax : buffer.Syntax;
+        Rmf2ResourceNode? entry = syntax.Nodes.LastOrDefault(n => n.Location.StartByte <= atByte && atByte <= n.Location.StartByte + n.Location.LengthBytes);
         // An override source of a library catalog: completion, hover and definition come from the packed library.
         if (method is "textDocument/hover" or "textDocument/completion" or "textDocument/definition" && OverrideContextOf(uri) is { } library)
             return method switch
@@ -1186,6 +1191,15 @@ internal sealed partial class Rmf2LanguageServer
         _readWorkspaces[project] = new ReadWorkspaceEntry(workspace, root, groupKey, group.ToDictionary(item => item, item => _buffers[item].Version, StringComparer.Ordinal));
         _requestRoots.Add(root);
         return workspace;
+    }
+
+    // The read workspace's document of an open buffer in a project, at the buffer's text; null when the workspace does not
+    // compile the buffer (a loose buffer, a library override source), whose own syntax the caller reads instead.
+    private Rmf2ResourceDocument? ReadWorkspaceDocument(string path, string uri)
+    {
+        if (BufferProject(uri, out _) is null) return null;
+        // BuildWorkspace keys a buffer's source by its LocalPath, so the document's path is the buffer's.
+        return ReadWorkspace(path, uri).Documents.FirstOrDefault(document => string.Equals(document.Source.Path, path, StringComparison.Ordinal));
     }
 
     // Brings a kept workspace to the buffers' current text; false when one cannot be updated in place (it is rebuilt).

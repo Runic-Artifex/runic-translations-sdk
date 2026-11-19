@@ -127,6 +127,9 @@ internal sealed partial class Rmf2LanguageServer
                 _beforeRequest?.Invoke(ValidationHook);
                 // On the validation scheduler, so the compiler's parallel loops leave a core to the request worker.
                 outcome = Task.Factory.StartNew(() => {
+                    // The buffers' own syntax (Buffer.Syntax, parsed once on first use): the diagnostics publication, the
+                    // outline and semantic tokens need it; parsed here, off the request worker, which then finds it ready.
+                    foreach ((_, Buffer buffer) in job.Snapshot.Buffers) _ = buffer.Syntax;
                     (Rmf2Workspace workspace, _) = BuildWorkspace(job.Snapshot, cancellation.Token);
                     ReviewView view = BuildReviewView(job.Project, workspace, cancellation.Token);
                     // Off the worker: what hover will keep of this validation once a newer one runs.
