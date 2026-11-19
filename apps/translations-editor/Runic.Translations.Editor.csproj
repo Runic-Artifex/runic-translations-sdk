@@ -18,8 +18,18 @@
     <Description>A focused desktop editor for Runic Translations workspaces.</Description>
     <!-- The application ID, in one place: the GTK application ID and desktop entry name on Linux, the bundle identifier
          on macOS and the package name on Windows. Program.cs reads it from the assembly. -->
-    <ApplicationId>eu.runic-artifex.TranslationsEditor</ApplicationId>
+    <ApplicationId>eu.runicartifex.TranslationsEditor</ApplicationId>
     <ApplicationTitle>Runic Translations Editor</ApplicationTitle>
+    <!-- The identity of the editor's packages, which runic-sdk's dotnet runic package reads (docs/packaging.md there;
+         .github/workflows/release-editor.yml, docs/editor-distribution.md). The Linux desktop entry and AppStream
+         metadata, with the categories and licence, are the overrides in packaging/linux. #270's
+         RunicTranslationsFillApplicationLocales declares the languages of EditorResources/runic.json. -->
+    <RunicPackageName>runic-translations-editor</RunicPackageName>
+    <RunicPackageIcon>Frontend/static/brand/icon.png</RunicPackageIcon>
+    <RunicApplicationPublisher>CN=Runic Artifex</RunicApplicationPublisher>
+    <RunicMacApplicationCategory>public.app-category.developer-tools</RunicMacApplicationCategory>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>$(RepositoryUrl)/tree/main/apps/translations-editor</PackageProjectUrl>
     <IsPackable>false</IsPackable>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <ImplicitUsings>enable</ImplicitUsings>

@@ -1,13 +1,14 @@
 # Runic Translations Editor availability and limits
 
-Standalone Editor distributions are not part of the SDK packages. No public Editor
-archive, signing, notarization or automatic update capability is claimed.
-Build and run the editor from the SDK source as described in [README.md](README.md).
+The editor has releases of its own, with its own version, tagged `editor-v<version>`
+in the Runic Translations SDK repository: deb, rpm, AppImage and `.tar.gz` packages
+for Linux, a disk image for macOS and a zip for Windows, each with a `.sha256` file.
+They are unsigned and not notarized, and the editor has no automatic update. You can
+also build and run the editor from the SDK source as described in [README.md](README.md).
+The SDK's packages do not include the editor; their publication policy is documented
+in [eng/release](../../eng/release/README.md).
 
-SDK package publication does not imply an Editor archive. The SDK's package
-publication policy is documented in [eng/release](../../eng/release/README.md).
-
-The source-built Editor is the public demonstration for English and German
+The Editor is the public demonstration for English and German
 localization and parameterized MF2 count messages. Its resources use grouped
 RMF2 documents declared by `runic.json`.
 
@@ -28,8 +29,8 @@ editor never updates itself; no application download is implied by SDK package
 publication.
 
 See the [RMF2 guide](../../docs/guides/translations/rmf2.md) for package
-scope and compatibility. Any future Editor archive should include its own artifact
-inventory, checksum, and platform instructions; see the [distribution guidance](docs/editor-distribution.md).
+scope and compatibility. The [distribution guide](docs/editor-distribution.md) describes
+each package, its checksum and package manifest, and the steps for each system.
 
 Direct MF2 sources remain supported as the alternate source representation.
 

@@ -197,8 +197,24 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
         if (request.Workspace.Count > 0) return request.Workspace[0];
         if (request.Command == "validate") return Environment.CurrentDirectory;
         return opensPackagedExample
-            ? Path.Combine(AppContext.BaseDirectory, "ExampleWorkspace")
+            ? PackagedExampleWorkspace()
             : Environment.CurrentDirectory;
+    }
+
+    // The example workspace that ships with the editor. A macOS bundle from dotnet runic package keeps only code in
+    // Contents/MacOS and leaves a symbolic link there to the rest in Contents/Resources; the workspace checks refuse a
+    // path that crosses a link, so the example opens where the link leads.
+    internal static string PackagedExampleWorkspace()
+    {
+        string path = Path.Combine(AppContext.BaseDirectory, "ExampleWorkspace");
+        try
+        {
+            return Directory.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName ?? path;
+        }
+        catch (IOException)
+        {
+            return path;
+        }
     }
 
     // The hosted-web boot mode mirrors the packaged-example default of a bare
@@ -208,7 +224,7 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
     {
         if (request.WorkspacePath is not null) return request.WorkspacePath;
         if (request.Workspace.Count > 0) return request.Workspace[0];
-        return Path.Combine(AppContext.BaseDirectory, "ExampleWorkspace");
+        return EditorCommandLineOperations.PackagedExampleWorkspace();
     }
 
 #if RUNIC_EDITOR_SMOKE_TEST
@@ -255,24 +271,49 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
                 {
                     DesktopWindow? native = DesktopPlatformServices.GetDesktopWindow(window);
                     presentation = native is { IsFallback: false } ? native.Browser.ToString() : "none";
-                    connected = RunicDesktopHost.GetSurface(window)?.ConnectionCount > 0;
+                    connected = RunicDesktopHost.GetSurface(window) is { } surface
+                        && await WaitForConnectedPageAsync(surface, TimeSpan.FromSeconds(10)).ConfigureAwait(false);
                     closed = await window.CloseAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
                 }
-                var evidence = new
+                Console.WriteLine(EditorJsonText.Write(writer =>
                 {
-                    schema = "runic.translations.editor-native-shell/4",
-                    host = "desktop",
-                    presentation,
-                    backend = NativeBackend(),
-                    applicationId = ApplicationId,
-                    packagedUiPresent = true,
-                    bridgeConnected = connected,
-                    cleanup = closed.Drained ? "closed-disposed" : "closed-undrained",
-                };
-                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(evidence));
+                    writer.WriteStartObject();
+                    writer.WriteString("schema", "runic.translations.editor-native-shell/4");
+                    writer.WriteString("host", "desktop");
+                    writer.WriteString("presentation", presentation);
+                    writer.WriteString("backend", NativeBackend());
+                    writer.WriteString("applicationId", ApplicationId);
+                    writer.WriteBoolean("packagedUiPresent", true);
+                    writer.WriteBoolean("bridgeConnected", connected);
+                    writer.WriteString("cleanup", closed.Drained ? "closed-disposed" : "closed-undrained");
+                    writer.WriteEndObject();
+                }));
                 return presentation == nameof(BrowserKind.Embedded) && connected && closed.Drained ? 0 : CommandExitCodes.Unavailable;
             },
             waitForConnection: true));
+
+    // The host's open waits for the page's first connection, but a reload disconnects it for a moment and the count can
+    // be zero then (DesktopSurface.ConnectionCount), so the canary waits for a connected page rather than reading the
+    // count once. A page that was reconnecting is reported on standard error.
+    private static async Task<bool> WaitForConnectedPageAsync(DesktopSurface surface, TimeSpan timeout)
+    {
+        var connected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using IDisposable subscription = surface.SubscribeConnectionEvents(connection =>
+        {
+            if (connection.Kind == DesktopConnectionEventKind.Connected) connected.TrySetResult();
+        });
+        if (surface.ConnectionCount > 0) return true;
+        Console.Error.WriteLine("The page had no connection after the window opened; waiting for it to reconnect.");
+        try
+        {
+            await connected.Task.WaitAsync(timeout).ConfigureAwait(false);
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+    }
 
     private static Task<CommandOutcome<EditorCommandResult>> OpenEditorAsync(
         string workspacePath,
@@ -399,7 +440,9 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
         OperatingSystem.IsMacOS() && File.Exists(EditorDesktopEntry.PackagedIcon()) ? options with { IconFile = EditorDesktopEntry.PackagedIcon() } : options;
 
     private static RunicWindowOptions EditorWindowOptions() => new() { ContentRoot = EditorUiRoot(), StartPage = "index.html" };
-    private static string EditorUiRoot() => Path.Combine(AppContext.BaseDirectory, "www");
+    // The packaged web UI where Runic Desktop looks for it: www beside the editor, or a macOS bundle's
+    // Contents/Resources/www, where dotnet runic package puts it (Apple expects only code in Contents/MacOS).
+    internal static string EditorUiRoot() => new RunicWindowOptions().ResolveContentRoot();
     private static bool EditorUiAvailable() => File.Exists(Path.Combine(EditorUiRoot(), "index.html"));
 
     // desktop-entry install|uninstall: the user's Linux desktop entry and icon (EditorDesktopEntry).
