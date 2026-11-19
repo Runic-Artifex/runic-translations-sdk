@@ -74,13 +74,18 @@ public static partial class TranslationCompiler
         internal PairedMemo? Paired;
         internal TranslatedMemo? Translated;
         internal ContractMemo? Contracted;
+        internal SignatureMemo? Signed;
     }
     private sealed record ContractMemo(Rmf2ProjectEntryV5 Origin, IReadOnlyDictionary<string, Rmf2SlotV5> Requirements, string[] Names, int Id,
         Rmf2MessageContractV5 Contract, string? ReadableProblem);
     private sealed record CompiledMemo(IReadOnlyList<Rmf2InputV5>? Inputs, Rmf2ProjectEntryV5? Entry, TranslationDiagnostic[] Diagnostics);
     private sealed record ProfiledMemo(Rmf2ProjectEntryV5 Entry, string? ExpectedKind, Rmf2ProjectEntryV5 Updated, Rmf2DocumentAnalysisV5 Analysis, TranslationDiagnostic[] Diagnostics);
     private sealed record RequiredMemo(Rmf2ProjectEntryV5 Origin, IReadOnlyDictionary<string, Rmf2SlotV5> Requirements, TranslationDiagnostic[] Diagnostics);
-    private sealed record PairedMemo(Rmf2ProjectEntryV5 Origin, Rmf2ProjectEntryV5 Translated, IReadOnlyDictionary<string, Rmf2SlotV5> Requirements, TranslationDiagnostic[] Diagnostics);
+    // OriginSignature: what the pair checks read from the base entry, so a reparsed base file whose message is unchanged
+    // for them keeps its translations' checks (null for document content, whose structure check reads more).
+    private sealed record PairedMemo(Rmf2ProjectEntryV5 Origin, Rmf2ProjectEntryV5 Translated, IReadOnlyDictionary<string, Rmf2SlotV5> Requirements, TranslationDiagnostic[] Diagnostics,
+        string? OriginSignature = null);
+    private sealed record SignatureMemo(Rmf2ProjectEntryV5 Origin, IReadOnlyDictionary<string, Rmf2SlotV5> Requirements, string? Signature);
     private sealed record TranslatedMemo(Rmf2ProjectEntryV5 Entry, Rmf2TranslationV5 Translation, TranslationDiagnostic[] ContentDiagnostics);
     private sealed record Rmf2ProjectEntryV5(Rmf2ProjectSourceV5 Source, Rmf2LinkedMarkupV5 Linked)
     {
@@ -434,10 +439,13 @@ public static partial class TranslationCompiler
                     if (translated.Source.Memo is not { } pairMemo) ValidatePair(pair.Value, translated, requirements);
                     else
                     {
-                        if (pairMemo.Paired is not { } paired || !ReferenceEquals(paired.Origin, pair.Value) || !ReferenceEquals(paired.Translated, translated) || !ReferenceEquals(paired.Requirements, requirements))
+                        if (pairMemo.Paired is not { } paired || !ReferenceEquals(paired.Translated, translated) ||
+                            !((ReferenceEquals(paired.Origin, pair.Value) && ReferenceEquals(paired.Requirements, requirements)) ||
+                              (paired.OriginSignature is { } signature && signature == OriginSignature(pair.Value, requirements))))
                         {
                             if (counters is not null) counters.PairsChecked++;
-                            pairMemo.Paired = paired = new(pair.Value, translated, requirements, Capture(() => ValidatePair(pair.Value, translated, requirements)));
+                            pairMemo.Paired = paired = new(pair.Value, translated, requirements, Capture(() => ValidatePair(pair.Value, translated, requirements)),
+                                ReferenceEquals(translated, pair.Value) ? null : OriginSignature(pair.Value, requirements));
                         }
                         Replay(paired.Diagnostics);
                     }
@@ -809,6 +817,27 @@ public static partial class TranslationCompiler
             kinds.TryAdd(entry.Source.Key, analysis.Kind);
             if (!ReferenceEquals(updated, entry) && locale.TryGetValue(entry.Source.Key, out var current) && ReferenceEquals(current, entry)) locale[entry.Source.Key] = updated;
             return updated;
+        }
+        // Everything ValidatePair reads from the base entry and the requirements, as text: the logical path, the caller
+        // inputs, the slot requirements, the displayed inputs and the @maxLength; null for document content.
+        string? OriginSignature(Rmf2ProjectEntryV5 origin, IReadOnlyDictionary<string, Rmf2SlotV5> requirements)
+        {
+            if (origin.Source.Memo is not { } memo) return null;
+            if (memo.Signed is { } signed && ReferenceEquals(signed.Origin, origin) && ReferenceEquals(signed.Requirements, requirements)) return signed.Signature;
+            string? signature = null;
+            if (profiles[origin].Kind != Rmf2DocumentProfileV5.Document)
+            {
+                var text = new StringBuilder(origin.Source.Logical).Append('\u0001');
+                foreach (var input in origin.Linked.Message.Inputs) text.Append(input.Name).Append('\u0002').Append(input.Type).Append('\u0003');
+                text.Append('\u0001');
+                foreach (var slot in requirements) text.Append(slot.Key).Append('\u0002').Append(slot.Value.Kind).Append('\u0002').Append(slot.Value.Min.ToString(CultureInfo.InvariantCulture)).Append('\u0002').Append(slot.Value.Max.ToString(CultureInfo.InvariantCulture)).Append('\u0003');
+                text.Append('\u0001');
+                foreach (string name in DisplayedInputs(origin.Linked.Message)) text.Append(name).Append('\u0003');
+                text.Append('\u0001').Append(MaxLengthV5(origin.Source.Node.Properties)?.ToString(CultureInfo.InvariantCulture));
+                signature = text.ToString();
+            }
+            memo.Signed = new(origin, requirements, signature);
+            return signature;
         }
         void ValidatePair(Rmf2ProjectEntryV5 origin, Rmf2ProjectEntryV5 translated, IReadOnlyDictionary<string, Rmf2SlotV5> requirements)
         {

@@ -39,11 +39,29 @@ internal static class Rmf2ReadableNamesV1
         TranslationCompiler.IsIdentifier(name) ? name : Rmf2GeneratedNamesV1.Identifier(name);
 
     /// <summary>Resolves a canonical message's readable names, or explains why the message is left out.</summary>
+    // The names of a contract for a class name, kept as long as the contract: a validation session reuses its contracts,
+    // and the readable names of every contract are asked for by each compile.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Rmf2MessageContractV5, Created> Names = new();
+    private sealed record Created(string ClassName, bool Success, Rmf2ReadableMessageV1? Message, string? Problem);
+
     internal static bool TryCreate(string className, Rmf2MessageContractV5 contract,
         out Rmf2ReadableMessageV1? message, out string? problem)
     {
         ArgumentException.ThrowIfNullOrEmpty(className);
         ArgumentNullException.ThrowIfNull(contract);
+        if (!Names.TryGetValue(contract, out Created? created) || created.ClassName != className)
+        {
+            bool success = TryCreateNames(className, contract, out Rmf2ReadableMessageV1? names, out string? reason);
+            Names.AddOrUpdate(contract, created = new(className, success, names, reason));
+        }
+        message = created.Message;
+        problem = created.Problem;
+        return created.Success;
+    }
+
+    private static bool TryCreateNames(string className, Rmf2MessageContractV5 contract,
+        out Rmf2ReadableMessageV1? message, out string? problem)
+    {
         message = null;
         string key = contract.Key, logical = Rmf2MessageKeys.Logical(contract.Path);
         if (ObjectMembers.Contains(key, StringComparer.Ordinal) || FacadeMembers.Contains(key, StringComparer.Ordinal) ||
