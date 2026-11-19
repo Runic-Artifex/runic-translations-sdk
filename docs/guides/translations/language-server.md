@@ -108,9 +108,8 @@ dotnet tool run runic-translations -- lsp
 The server speaks LSP over standard input and output (`Content-Length` framing,
 JSON-RPC 2.0) and takes no other arguments. It reads the workspace folders (or
 `rootUri`) from `initialize`, finds each `runic.json` below them, and follows
-declared `sourceRoots`. The editors run it only in trusted workspaces, because it
-runs the workspace's own tool; other clients have no such gate, so open only
-repositories you trust with them. For development against a build of this
+declared `sourceRoots`. Because it runs the workspace's own tool, open only
+repositories you trust (see [Workspace trust](#workspace-trust)). For development against a build of this
 repository, the extensions accept the path of the built
 `dotnet-runic-translations.dll` instead (see their READMEs).
 
@@ -269,10 +268,36 @@ Save `runic.json` and use the Translations Editor or VS Code for those. Preview
 (`runic.preview`, `runic.renderPreview`) is a custom command that needs editor
 UI, which only the Runic extensions provide.
 
+### Workspace trust
+
+`dotnet tool run runic-translations -- lsp` runs the tool that the repository's
+`.config/dotnet-tools.json` names, in the version it pins, restored from the
+package sources the repository's `NuGet.config` may add. Opening a repository
+with a client that starts the server therefore runs code the repository chose,
+as any project-local language server does (rust-analyzer, OmniSharp).
+
+- Runic DevKit for VS Code starts the server only in a trusted workspace
+  (VS Code's workspace trust).
+- Runic DevKit for Visual Studio and generic clients (Neovim, Helix, LSP4IJ,
+  Zed) have no such gate: they start the server whenever a resource file is
+  opened. Open only repositories you trust with them, or start the editor where
+  it does not run language servers automatically.
+
+The server itself starts no processes, loads no code from the workspace and
+makes no network requests. It reads the workspace's catalogs and the restore
+state of library catalogs. It writes files only when a command asks it to:
+`runic.markReviewed` writes the review file, and refactorings send their edits
+to the client, which applies them.
+
 ## Tests
 
 The protocol is covered by the `Rmf2*LspTests` suites in
 `tests/dotnet/Runic.Translations.Build.Tests` (see
-[RMF2 validation](rmf2-validation.md#language-service-checks)). runic-editors
+[RMF2 validation](rmf2-validation.md#language-service-checks)). CI's
+*Language server / generic client* job (`bun eng/run.mjs lsp-smoke`) packs the
+tool, installs it as a local tool in a new project and drives it with a minimal
+stdio LSP client (`tests/lsp-generic-client/client.mjs`) through the command
+above, without initialization options: `initialize`, diagnostics, hover,
+completion, `prepareRename` and rename, a quick fix, and shutdown. runic-editors
 runs its extension-host and native Visual Studio tests against the released tool
 from NuGet.
