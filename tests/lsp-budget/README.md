@@ -42,15 +42,15 @@ the largest sample. `results.json` in `artifacts/lsp-budget/` keeps each sample'
 ## Budget entries
 
 ```json
-"lsp/rename-ms": { "target": 3000, "headroom": 2, "measured": 741, "limit": 1482 }
+"lsp/rename-ms": { "target": 3000, "headroom": 2, "measured": 747, "limit": 1494 }
 "lsp/hover-ms": { "headroom": 6, "minimum": 25, "measured": 1, "limit": 25 }
 ```
 
 - `measured` and `limit` are written by `--update`: the limit is the measured value times `headroom`, and at least
   `minimum`.
 - `headroom` and `minimum` cover a shared CI runner's variance and are written by hand. `headroom` is 6 for idle requests,
-  3 for requests while typing, 2 for what takes seconds (the runner's open has varied by a third between runs of the
-  same code), and 1.25–1.3 for memory. Hover and completion take a few milliseconds, which a runner's scheduling or a
+  3 for requests and diagnostics while typing, 2 for what takes seconds and 2.25 for open (the runner's open has varied
+  by a third between runs), 1.25 for resident memory and 1.5 for peak memory, which a garbage collection's timing moves. Hover and completion take a few milliseconds, which a runner's scheduling or a
   garbage collection can multiply: their `minimum` is 25 ms, and 50 ms while typing, #271's target.
 - The committed values come from three runs on four processors (`taskset -c 12-15`), each budget's slowest.
 - `target` is #271's goal for the size the budgets measure, shown beside the limit in the report, with "met" when the

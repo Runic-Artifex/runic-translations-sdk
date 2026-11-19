@@ -314,24 +314,24 @@ resource files of 1,000 messages), once as it is and once with a review file,
 on its Linux runner (ubuntu-24.04, 4 processors), and fails when a measurement
 exceeds its budget ([tests/lsp-budget](../../../tests/lsp-budget/README.md)).
 The budgets are the slowest of six runs on 4 processors times a margin for a
-shared runner's variance: 2× for what takes seconds, 3× for hover and
-completion while typing and 6× for idle requests, but at least 25 ms for an
-idle request and 50 ms while typing.
+shared runner's variance: 2–2.25× for what takes seconds, 3× for hover,
+completion and diagnostics while typing, 6× for idle requests (but at least
+25 ms for an idle request and 50 ms while typing), and 1.25–1.5× for memory.
 
 | Measurement | Budget (4 processors) | Measured, 4 processors | Measured, CI runner |
 | --- | ---: | ---: | ---: |
-| Open to the first diagnostics | 9.3 s | 4.0–4.6 s | 6.0 s |
-| An edit to its diagnostics | 1.4 s | 0.38–0.68 s | 0.61 s |
-| The last of five keystrokes to its diagnostics | 242 ms | 37–121 ms | 98 ms |
-| Hover after five keystrokes | 50 ms | 3–9 ms | 4 ms |
-| Completion after five keystrokes | 50 ms | 7–14 ms | 7 ms |
+| Open to the first diagnostics | 10.4 s | 4.0–4.6 s | 6.0–6.9 s |
+| An edit to its diagnostics | 1.4 s | 0.38–0.68 s | 0.61–0.70 s |
+| The last of five keystrokes to its diagnostics | 363 ms | 37–121 ms | 98–122 ms |
+| Hover after five keystrokes | 50 ms | 3–9 ms | 3–4 ms |
+| Completion after five keystrokes | 50 ms | 7–14 ms | 7–8 ms |
 | Hover and completion, idle | 25–31 ms | 1–5 ms | 1–6 ms |
-| Rename of a resource (10 files) | 1.5 s | 0.56–0.75 s | 0.82 s |
-| Resident memory after open | 968 MiB | 754–774 MiB | 809 MiB |
-| Peak resident memory | 2,086 MiB | 1,308–1,604 MiB | 1,420 MiB |
+| Rename of a resource (10 files) | 1.5 s | 0.56–0.75 s | 0.82–0.86 s |
+| Resident memory after open | 968 MiB | 754–774 MiB | 799–809 MiB |
+| Peak resident memory | 2,407 MiB | 1,308–1,604 MiB | 1,420–1,424 MiB |
 
 The 4-processor column is six runs pinned to four processors of a 24-thread
-workstation; the CI runner's column is one run of the budget job, both at the
+workstation; the CI runner's column is two runs of the budget job, all at the
 same commit. On 12 processors, open takes about 3.7 s, an edit about 0.45 s and
 a rename about 0.65 s (#271).
 

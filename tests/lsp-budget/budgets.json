@@ -10,9 +10,9 @@
   "cases": {
     "lsp/open-to-diagnostics-ms": {
       "target": 5000,
-      "headroom": 2,
+      "headroom": 2.25,
       "measured": 4629,
-      "limit": 9259
+      "limit": 10416
     },
     "lsp/edit-to-diagnostics-ms": {
       "target": 500,
@@ -54,9 +54,9 @@
     },
     "lsp/typing-to-diagnostics-ms": {
       "target": 500,
-      "headroom": 2,
+      "headroom": 3,
       "measured": 121,
-      "limit": 242
+      "limit": 363
     },
     "lsp/rename-ms": {
       "target": 3000,
@@ -71,9 +71,9 @@
       "limit": 1015116800
     },
     "lsp/peak-resident-bytes": {
-      "headroom": 1.3,
+      "headroom": 1.5,
       "measured": 1682276352,
-      "limit": 2186959258
+      "limit": 2523414528
     }
   },
   "review": {
@@ -81,9 +81,9 @@
     "cases": {
       "lsp/open-to-diagnostics-ms": {
         "target": 5000,
-        "headroom": 2,
+        "headroom": 2.25,
         "measured": 8722,
-        "limit": 17445
+        "limit": 19625
       },
       "lsp/edit-to-diagnostics-ms": {
         "target": 500,
@@ -125,9 +125,9 @@
       },
       "lsp/typing-to-diagnostics-ms": {
         "target": 500,
-        "headroom": 2,
+        "headroom": 3,
         "measured": 90,
-        "limit": 180
+        "limit": 270
       },
       "lsp/rename-ms": {
         "target": 3000,
@@ -142,9 +142,9 @@
         "limit": 1013729280
       },
       "lsp/peak-resident-bytes": {
-        "headroom": 1.3,
+        "headroom": 1.5,
         "measured": 1495265280,
-        "limit": 1943844864
+        "limit": 2242897920
       }
     }
   }
