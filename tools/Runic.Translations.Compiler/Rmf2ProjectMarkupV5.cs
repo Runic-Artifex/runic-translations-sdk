@@ -59,8 +59,24 @@ internal sealed class Rmf2ProjectMarkupV5
         void Error(string message) => diagnostics.Add("RTR0060", TranslationDiagnosticSeverity.Error, message, project, config.Span);
     }
 
+    private static readonly IReadOnlyDictionary<string, int> NoOccurrences = ReadOnlyDictionary<string, int>.Empty;
+
     internal Rmf2LinkedMarkupV5 Link(Rmf2MessageV5 message, TextSourceLocation location, DiagnosticBag diagnostics)
     {
+        // Most messages have no markup: nothing to resolve or check, no slots, and an empty occurrence count per variant.
+        bool markup = false;
+        foreach (var variant in message.Variants)
+        {
+            foreach (var node in variant.Nodes)
+                if (node is Rmf2MarkupV5) { markup = true; break; }
+            if (markup) break;
+        }
+        if (!markup)
+        {
+            var empty = new IReadOnlyDictionary<string, int>[message.Variants.Count];
+            Array.Fill(empty, NoOccurrences);
+            return new(message with { }, ReadOnlyDictionary<string, string>.Empty, Array.AsReadOnly(empty), Array.Empty<string>());
+        }
         var slots = new SortedDictionary<string, string>(StringComparer.Ordinal);
         var names = new SortedSet<string>(StringComparer.Ordinal);
         var counts = new List<IReadOnlyDictionary<string, int>>();
@@ -185,6 +201,13 @@ internal sealed class Rmf2ProjectMarkupV5
             };
         }
         var exportedMessages = new SortedDictionary<string, object>(StringComparer.Ordinal);
+        // Each locale's content locale by key, built once: a lookup per message and locale, not a scan of the locale.
+        var resolvedByLocale = locales?.Select(locale =>
+        {
+            var byKey = new Dictionary<string, string>(locale.ResolvedResources.Count, StringComparer.Ordinal);
+            foreach (var resource in locale.ResolvedResources) byKey.TryAdd(resource.Key, resource.ContentLocale);
+            return (locale.Tag, ByKey: byKey);
+        }).ToArray();
         foreach (var message in messages)
         {
             var slots = new SortedDictionary<string, object>(StringComparer.Ordinal);
@@ -195,8 +218,8 @@ internal sealed class Rmf2ProjectMarkupV5
             else
             {
                 var contentLocales = new SortedDictionary<string, string>(StringComparer.Ordinal);
-                foreach (var locale in locales)
-                    if (locale.ResolvedResources.FirstOrDefault(resource => resource.Key == message.Key) is { } resource) contentLocales[locale.Tag] = resource.ContentLocale;
+                foreach (var locale in resolvedByLocale!)
+                    if (locale.ByKey.TryGetValue(message.Key, out string? contentLocale)) contentLocales[locale.Tag] = contentLocale;
                 exportedMessages[message.Key] = new { slots, structured = message.Structured, contentLocales, content = message.Content, skeletons = message.Skeletons };
             }
         }

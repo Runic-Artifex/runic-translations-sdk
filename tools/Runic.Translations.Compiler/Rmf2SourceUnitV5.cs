@@ -71,6 +71,10 @@ internal sealed class Rmf2SourceUnitV5
         source.Bytes.AsSpan().SequenceEqual(Source.Bytes);
 
     internal Rmf2SemanticResultV5 Lower(string message, IReadOnlyList<Rmf2InputV5>? callerInputs,
+        CancellationToken cancellationToken) => Lower(message, null, callerInputs, cancellationToken);
+
+    /// <param name="syntax">The message's MF2 syntax as this unit's reader read it, or null to read it here.</param>
+    internal Rmf2SemanticResultV5 Lower(string message, Mf2SyntaxDocument? syntax, IReadOnlyList<Rmf2InputV5>? callerInputs,
         CancellationToken cancellationToken)
     {
         var key = (message, callerInputs is null ? string.Empty : Signature(callerInputs));
@@ -80,10 +84,8 @@ internal sealed class Rmf2SourceUnitV5
         }
 
         Interlocked.Increment(ref _loweringCount);
-        var input = new TranslationSource(Source.Path, Encoding.UTF8.GetBytes(message));
-        Rmf2SemanticResultV5 result = callerInputs is null
-            ? Rmf2SemanticCompilerV5.Compile(input, Options, cancellationToken)
-            : Rmf2SemanticCompilerV5.CompileWithCallerContract(input, callerInputs, Options, cancellationToken);
+        syntax ??= Mf2SyntaxReader.Read(TranslationSource.Owned(Source.Path, Encoding.UTF8.GetBytes(message)), Options, cancellationToken);
+        Rmf2SemanticResultV5 result = Rmf2SemanticCompilerV5.Lower(syntax, callerInputs, Options, cancellationToken);
         lock (_gate)
         {
             // A translated message is normally lowered against one caller contract at a time. Keep the

@@ -73,9 +73,13 @@ internal static class Mf2SyntaxReader
         return new Reader(source, options, cancellationToken).Read();
     }
     /// <summary>Checks declaration and matcher constraints independently of syntax and target support.</summary>
+    private static readonly IReadOnlyList<TranslationDiagnostic> NoDiagnostics = Array.AsReadOnly(Array.Empty<TranslationDiagnostic>());
+
     public static IReadOnlyList<TranslationDiagnostic> ValidateDataModel(Mf2SyntaxDocument syntax)
     {
         ArgumentNullException.ThrowIfNull(syntax);
+        // Only declarations and a matcher have data-model constraints.
+        if (syntax.Declarations.Count == 0 && syntax.Match is null) return NoDiagnostics;
         var diagnostics = new DiagnosticBag();
         var declared = new HashSet<string>(StringComparer.Ordinal);
         var previousVariables = new HashSet<string>(StringComparer.Ordinal);
@@ -127,6 +131,11 @@ internal static class Mf2SyntaxReader
     public static IReadOnlyList<TranslationDiagnostic> ValidateInlineProfile(Mf2SyntaxDocument syntax)
     {
         ArgumentNullException.ThrowIfNull(syntax);
+        // Only opening and closing markup can be unbalanced.
+        bool markup = false;
+        foreach (var expression in syntax.Expressions)
+            if (expression.MarkupKind is Mf2MarkupKind.Open or Mf2MarkupKind.Close) { markup = true; break; }
+        if (!markup) return NoDiagnostics;
         var diagnostics = new DiagnosticBag(); var stack = new Stack<Mf2ExpressionSyntax>();
         int expressionIndex = 0;
         foreach (var token in syntax.Tokens)
@@ -160,7 +169,8 @@ internal static class Mf2SyntaxReader
         private readonly List<int> _lineStarts = new() { 0 };
         private Mf2MatchSyntax? _match;
         private string _text = "";
-        private int[] _bytes = Array.Empty<int>();
+        // The UTF-8 offset of every UTF-16 index; null when the text is ASCII, whose offsets are the indexes.
+        private int[]? _bytes;
         private int _at;
         internal Reader(TranslationSource source, TranslationCompilerOptions options, CancellationToken cancellation)
         { _source = source; _options = options; _cancellation = cancellation; }
@@ -170,8 +180,11 @@ internal static class Mf2SyntaxReader
             if (_source.Bytes.Length > _options.MaximumValueBytes) { _diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "MF2 source exceeds the configured byte limit.", _source, new ByteSpan(0, 0)); return Result(); }
             try { _text = StrictJsonParser.StrictUtf8.GetString(_source.Bytes); }
             catch (DecoderFallbackException) { _diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "MF2 requires valid UTF-8.", _source, new ByteSpan(0, 0)); return Result(); }
-            _bytes = new int[_text.Length + 1];
-            for (int i = 0, b = 0; i < _text.Length;) { Rune rune = Rune.GetRuneAt(_text, i); for (int j = 0; j < rune.Utf16SequenceLength; j++) _bytes[i + j] = b; i += rune.Utf16SequenceLength; b += rune.Utf8SequenceLength; _bytes[i] = b; }
+            if (_source.Bytes.Length != _text.Length)
+            {
+                _bytes = new int[_text.Length + 1];
+                for (int i = 0, b = 0; i < _text.Length;) { Rune rune = Rune.GetRuneAt(_text, i); for (int j = 0; j < rune.Utf16SequenceLength; j++) _bytes[i + j] = b; i += rune.Utf16SequenceLength; b += rune.Utf8SequenceLength; _bytes[i] = b; }
+            }
             for (int i = 0; i < _text.Length; i++) if (_text[i] == '\n') _lineStarts.Add(i + 1);
             Space();
             bool complex = Starts(".") || Starts("{{");
@@ -324,10 +337,12 @@ internal static class Mf2SyntaxReader
         }
         private Mf2OperandSyntax Operand()
         {
-            int start = _at; var value = new StringBuilder(); bool quoted = _at < _text.Length && _text[_at] == '|';
+            int start = _at; bool quoted = _at < _text.Length && _text[_at] == '|';
             Mf2OperandKind kind = Mf2OperandKind.String;
+            string text;
             if (quoted)
             {
+                var value = new StringBuilder();
                 _at++; bool closed = false;
                 while (_at < _text.Length)
                 {
@@ -335,16 +350,40 @@ internal static class Mf2SyntaxReader
                     if (ch == '\\') { if (_at >= _text.Length || _text[_at] is not ('\\' or '{' or '}' or '|')) Error("Invalid MF2 escape.", _at - 1, _at); if (_at < _text.Length) ch = _text[_at++]; } if (ch == '\0') Error("NULL is not allowed in a literal.", _at - 1, _at); value.Append(ch);
                 }
                 if (!closed) Error("Unterminated quoted literal.", start, _at);
+                text = value.ToString();
             }
-            else if (_at < _text.Length && _text[_at] == '$') { _at++; value.Append(Name()); kind = Mf2OperandKind.Variable; }
+            else if (_at < _text.Length && _text[_at] == '$') { _at++; text = Name(); kind = Mf2OperandKind.Variable; }
             else
             {
-                while (_at < _text.Length && NameChar(Rune.GetRuneAt(_text, _at).Value)) { Rune rune = Rune.GetRuneAt(_text, _at); value.Append(rune.ToString()); _at += rune.Utf16SequenceLength; }
-                if (Regex.IsMatch(value.ToString(), @"^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$")) kind = Mf2OperandKind.Number;
+                int from = _at;
+                while (_at < _text.Length && NameChar(Rune.GetRuneAt(_text, _at).Value)) _at += Rune.GetRuneAt(_text, _at).Utf16SequenceLength;
+                text = _text.Substring(from, _at - from);
+                if (IsNumberLiteral(text)) kind = Mf2OperandKind.Number;
             }
-            if (start == _at || (kind == Mf2OperandKind.Variable && value.Length == 0)) Error("Expected a literal or variable operand.", start, _at);
-            Token(kind == Mf2OperandKind.Variable ? Mf2SyntaxTokenKind.Variable : Mf2SyntaxTokenKind.Literal, start, value.ToString());
-            return new Mf2OperandSyntax(kind, value.ToString(), quoted, Location(start, _at));
+            if (start == _at || (kind == Mf2OperandKind.Variable && text.Length == 0)) Error("Expected a literal or variable operand.", start, _at);
+            Token(kind == Mf2OperandKind.Variable ? Mf2SyntaxTokenKind.Variable : Mf2SyntaxTokenKind.Literal, start, text);
+            return new Mf2OperandSyntax(kind, text, quoted, Location(start, _at));
+        }
+        // ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$, the MF2 number-literal production.
+        private static bool IsNumberLiteral(string value)
+        {
+            int at = 0;
+            if (at < value.Length && value[at] == '-') at++;
+            if (at == value.Length || !char.IsAsciiDigit(value[at])) return false;
+            if (value[at++] != '0') while (at < value.Length && char.IsAsciiDigit(value[at])) at++;
+            if (at < value.Length && value[at] == '.')
+            {
+                if (++at == value.Length || !char.IsAsciiDigit(value[at])) return false;
+                while (at < value.Length && char.IsAsciiDigit(value[at])) at++;
+            }
+            if (at < value.Length && value[at] is 'e' or 'E')
+            {
+                at++;
+                if (at < value.Length && value[at] is '+' or '-') at++;
+                if (at == value.Length || !char.IsAsciiDigit(value[at])) return false;
+                while (at < value.Length && char.IsAsciiDigit(value[at])) at++;
+            }
+            return at == value.Length;
         }
         private string Name(bool qualified = false)
         {
@@ -375,7 +414,8 @@ internal static class Mf2SyntaxReader
         {
             int line = _lineStarts.BinarySearch(from); if (line < 0) line = ~line - 1;
             int endLine = _lineStarts.BinarySearch(to); if (endLine < 0) endLine = ~endLine - 1;
-            return new TextSourceLocation(_source.Path, _bytes[from], _bytes[to] - _bytes[from], line + 1, from - _lineStarts[line] + 1, endLine + 1, to - _lineStarts[endLine] + 1);
+            int fromByte = _bytes is null ? from : _bytes[from], toByte = _bytes is null ? to : _bytes[to];
+            return new TextSourceLocation(_source.Path, fromByte, toByte - fromByte, line + 1, from - _lineStarts[line] + 1, endLine + 1, to - _lineStarts[endLine] + 1);
         }
         private void Error(string message, int from, int to) => _diagnostics.Add("RTR0066", TranslationDiagnosticSeverity.Error, message, Location(from, to));
         private Mf2SyntaxDocument Result() => new(_source, _tokens, _expressions, _declarations, _variants, _match, _diagnostics.ToSortedArray());
