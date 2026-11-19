@@ -18,21 +18,72 @@ The command is hidden from `runic-translations --help`. See
 - The server is the project's own tool, so it always matches the project's
   Translations release. Install `dotnet-runic-translations` with the same exact
   version as the project's `Runic.Translations` packages.
-- For now, the `lsp` command, its protocol subset, its custom methods and
-  commands, and the `initializationOptions` it reads are **outside the 1.0
-  compatibility rules** and may change in a minor release (see
-  [Versioning and support from 1.0](../../../eng/release/README.md#versioning-and-support-from-10)).
-  The production language server is 1.0 scope: from 1.0, the standard LSP
-  surface and the `experimental.runic` protocol the server advertises will be
-  covered by those rules.
-- A new revision of the Runic protocol is negotiated, never silently changed (see
-  [Protocol revisions](#protocol-revisions)).
+- From 1.0.0 the language server is covered by the 1.0 compatibility rules
+  ([Versioning and support from 1.0](../../../eng/release/README.md#versioning-and-support-from-10)),
+  as the tool's other commands are: a minor release only adds, and a breaking
+  change needs a major release. Until 1.0 a minor release may still change it,
+  with upgrade steps in its release notes
+  ([Versions before 1.0](../../../eng/release/README.md#versions-before-10)).
 - The editor extensions are versioned and released by runic-editors. Its
   [README](https://github.com/Runic-Artifex/runic-editors#language-server-and-supported-translations-versions)
   lists the Translations releases each extension release is tested with. Up to
   0.11, the extensions were also attached to the Translations GitHub release; from
   0.12.0 install them from the
   [runic-editors releases](https://github.com/Runic-Artifex/runic-editors/releases).
+
+### What the promise covers
+
+- **The command.** `runic-translations lsp`, run with no arguments and speaking
+  LSP over standard input and output. It is hidden from `--help`, but covered.
+- **The standard LSP surface.** Every capability the `initialize` result
+  advertises, the LSP methods behind it, and their behaviour as the LSP
+  specification defines it for `.rmf2`, `.mf2` and `runic.json` documents: the
+  methods listed under [Protocol](#protocol), the position encodings, the
+  semantic token legend, the code-action kinds, the completion trigger
+  characters, and the error codes in [Protocol revisions](#protocol-revisions).
+- **The `experimental.runic` protocol.** The capability key
+  `capabilities.experimental.runic` is covered, with its members `protocol`,
+  `commands` and `requests`. So are each listed `runic.*` command and `runic/*`
+  request, with their arguments, results and errors, the meaning of protocol
+  revision 2, and the `initializationOptions` the server reads
+  (`runicConfigurationSync`, and `runicProtocol` for choosing a later revision).
+
+The `initialize` result a client receives is pinned by a golden snapshot test
+(`tests/dotnet/Runic.Translations.Build.Tests/Fixtures/lsp-initialize-result.json`).
+
+### What a minor release may add
+
+New capabilities and capability options, completion trigger characters,
+code-action kinds, semantic token types appended to the legend, commands and
+requests listed in `experimental.runic`, optional arguments, result members,
+diagnostics and quick fixes. A client ignores what it does not know: unknown
+capabilities, members, commands, requests and code-action kinds.
+
+### What is not covered
+
+- Text written for people: hover and completion details, diagnostic messages,
+  code-action titles and the messages of refusals. The diagnostics carry the
+  compiler's IDs (`RTR0001`), which the [diagnostics reference](diagnostics.md)
+  documents.
+- The order of completion items, symbols, references and code actions, and
+  which quick fixes are offered for a diagnostic.
+- Timing, batching and performance. The large-catalog budgets that CI checks
+  guard against regressions and are not a contract.
+- The value of `serverInfo.version`, which is the tool's version, and the file
+  patterns the server watches, which may grow.
+
+### What a breaking change requires
+
+- **Standard LSP surface.** Removing a capability or a method, or changing its
+  behaviour beyond what the LSP specification allows, waits for a major
+  release, with upgrade steps in its release notes.
+- **`experimental.runic`.** A change to an existing command, request, result
+  or initialization option is a new protocol revision, never a silent change.
+  The server offers a new revision only to a client that asks for it with
+  `initializationOptions.runicProtocol` and advertises it in
+  `experimental.runic.protocol`. Every other client keeps getting revision 2
+  for the rest of the major version. Removing revision 2, or renaming or
+  removing the capability key, waits for a major release.
 
 ## How editors launch it
 

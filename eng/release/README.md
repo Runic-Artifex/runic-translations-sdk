@@ -447,7 +447,7 @@ Releases before 1.0 use plain `0.y.z` versions, as Runic SDK does from 0.9.0
   npm `latest` moves to every release (the publish workflow keeps its name
   `publish-preview.yml`, to which trusted publishing is bound).
 - Translations has no preview packages: every package is stable-tier and follows
-  these rules. The `lsp` command is the exception listed below.
+  these rules, the `lsp` command included.
 
 ## Versioning and support from 1.0
 
@@ -470,11 +470,14 @@ same policy. For Translations:
   workspace transactions, the MF2 syntax tree and the language service are
   internal: they serve the tool and the editor, built from the same commit, and may
   be published later as additive API. There is no experimental API family.
-- Outside the 1.0 compatibility rules, until the production language server (2.0):
-  the `lsp` command of `dotnet-runic-translations` (hidden from help) with its
-  protocol subset and custom methods (see
-  [the language server](../../docs/guides/translations/language-server.md)). The VS Code and
-  Visual Studio extensions that launch it are versioned and released by
+- The `lsp` command of `dotnet-runic-translations` (hidden from help) is covered
+  by these rules: the standard LSP surface it advertises in `initialize` and the
+  `experimental.runic` protocol, including that capability key, with its `runic.*`
+  commands and `runic/*` requests. A change to the Runic protocol is a new revision
+  that a client asks for, and removing a revision needs a major release (see
+  [the language server's compatibility](../../docs/guides/translations/language-server.md#compatibility)).
+  Runic DevKit, the VS Code and Visual Studio extensions that launch it, is
+  versioned and released by
   [runic-editors](https://github.com/Runic-Artifex/runic-editors), not here.
 - `Runic.Translations.CommandLine` depends on Runic Command Line. Translations
   ships 1.0.0 after Command Line 1.0.0 and before Runic SDK 1.0.0 in one release

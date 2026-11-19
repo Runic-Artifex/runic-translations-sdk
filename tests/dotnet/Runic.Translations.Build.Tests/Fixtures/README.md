@@ -9,3 +9,9 @@ are checked against it.
 server, captured unchanged by a stdio proxy in the Visual Studio spike (SPIKE-VS-0, 2026-11). The protocol 2 tests use
 its `capabilities` as Visual Studio's client: `create` and `rename` without `delete`, no `window` block, no dynamic
 watched-file registration and no `edit` in `codeAction.resolveSupport`.
+
+`lsp-initialize-result.json` is the golden snapshot of the language server's `initialize` result for a client without
+capabilities or initialization options, with `serverInfo.version` replaced by `(tool version)`. It pins the standard
+LSP surface and the `experimental.runic` capability that the compatibility promise covers
+(`docs/guides/translations/language-server.md#compatibility`). `Rmf2ProtocolLspTests.InitializeGolden` compares
+against it; after an intended, compatible change, run that test with `RUNIC_UPDATE_LSP_SNAPSHOT=1` and review the diff.
