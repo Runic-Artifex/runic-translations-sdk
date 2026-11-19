@@ -180,7 +180,9 @@ internal sealed class EditorDesktopEntry
     }
 
     /// <summary>The packaged application icon, the one the editor's page shows.</summary>
-    internal static string PackagedIcon() => Path.Combine(AppContext.BaseDirectory, "www", "brand", "icon.png");
+    // The packaged web UI's icon, where Runic Desktop finds the UI: www beside the editor, or a macOS bundle's
+    // Contents/Resources/www.
+    internal static string PackagedIcon() => Path.Combine(new Runic.Application.Views.RunicWindowOptions().ResolveContentRoot(), "brand", "icon.png");
 
     internal static string ProductName() =>
         typeof(EditorDesktopEntry).Assembly.GetCustomAttribute<AssemblyProductAttribute>()?.Product ?? "Runic Translations Editor";

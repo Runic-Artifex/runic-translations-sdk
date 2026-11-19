@@ -440,7 +440,9 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
         OperatingSystem.IsMacOS() && File.Exists(EditorDesktopEntry.PackagedIcon()) ? options with { IconFile = EditorDesktopEntry.PackagedIcon() } : options;
 
     private static RunicWindowOptions EditorWindowOptions() => new() { ContentRoot = EditorUiRoot(), StartPage = "index.html" };
-    private static string EditorUiRoot() => Path.Combine(AppContext.BaseDirectory, "www");
+    // The packaged web UI where Runic Desktop looks for it: www beside the editor, or a macOS bundle's
+    // Contents/Resources/www, where dotnet runic package puts it (Apple expects only code in Contents/MacOS).
+    internal static string EditorUiRoot() => new RunicWindowOptions().ResolveContentRoot();
     private static bool EditorUiAvailable() => File.Exists(Path.Combine(EditorUiRoot(), "index.html"));
 
     // desktop-entry install|uninstall: the user's Linux desktop entry and icon (EditorDesktopEntry).
