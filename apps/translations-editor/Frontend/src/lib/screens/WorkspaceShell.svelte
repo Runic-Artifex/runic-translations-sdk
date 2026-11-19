@@ -1,5 +1,8 @@
 <script lang="ts">
   import MessageSquareTextIcon from "@lucide/svelte/icons/message-square-text";
+  import PanelsTopLeftIcon from "@lucide/svelte/icons/panels-top-left";
+  import Rows3Icon from "@lucide/svelte/icons/rows-3";
+  import { tick } from "svelte";
   import { Button } from "#lib/components/ui/button/index.js";
   import * as Empty from "#lib/components/ui/empty/index.js";
   import * as Sidebar from "#lib/components/ui/sidebar/index.js";
@@ -24,7 +27,9 @@
   import type { WorkspaceView } from "#lib/state/workspace-view.svelte.js";
   import { stepTitle } from "#lib/command-palette.js";
   import { displayNotice, getUiText, notice, type UiMessage } from "#lib/ui-text.js";
+  import type { WorkspaceLayout } from "#lib/list-view.js";
   import MessageEditorPane from "./MessageEditorPane.svelte";
+  import MessageListView from "./MessageListView.svelte";
   import PreviewSection from "./PreviewSection.svelte";
   import ValidationArea from "./ValidationArea.svelte";
   import WorkspaceSidebar from "./WorkspaceSidebar.svelte";
@@ -131,6 +136,20 @@
       ? diagnostics.latest?.success === false || clientError !== undefined
       : snapshot.review?.error !== undefined));
   const nextLabel = $derived(stepTitle("next", next.kind, ui));
+  // The workbench or the side-by-side list (D074.1), one selection for both.
+  const layout = $derived(preferences.layout);
+  const layouts: { value: WorkspaceLayout; key: string; icon: typeof Rows3Icon }[] = [
+    { value: "workbench", key: "ui_view_workbench", icon: PanelsTopLeftIcon },
+    { value: "list", key: "ui_view_list", icon: Rows3Icon },
+  ];
+
+  /** A row of the list opens in the workbench: the same selection, its editor focused. */
+  async function openInWorkbench(): Promise<void> {
+    if (selection.mode !== "translation") selection.chooseMode("translation");
+    preferences.changeLayout("workbench");
+    await tick();
+    document.querySelector<HTMLElement>('[data-testid="editor-column"] textarea[data-draft-field]')?.focus();
+  }
 </script>
 
 <!-- The workbench (D074.1): the message tree in the sidebar, the editor in the middle and a rail with the preview and
@@ -182,6 +201,22 @@
       onnext={() => next.step("next")}
     >
       {#snippet leading()}
+        <div class="inline-flex shrink-0 items-center gap-0.5 rounded-md border bg-background p-0.5" role="group" aria-label={ui.text("ui_view_label")} data-testid="view-switch">
+          {#each layouts as option (option.value)}
+            <Button
+              variant={layout === option.value ? "secondary" : "ghost"}
+              size="xs"
+              aria-pressed={layout === option.value}
+              aria-label={ui.text(option.key)}
+              title={ui.text(option.key)}
+              data-layout={option.value}
+              onclick={() => preferences.changeLayout(option.value)}
+            >
+              <option.icon data-icon="inline-start" aria-hidden="true" />
+              <span class="hidden sm:inline">{ui.text(option.key)}</span>
+            </Button>
+          {/each}
+        </div>
         {#if (snapshot.libraries?.length ?? 0) > 0}
           <Button variant="outline" size="sm" disabled={workspace.loading || library.busy} onclick={() => void library.openLibrary(library.view?.catalog ?? snapshot.libraries![0].catalog)}>{ui.text("ui_library_open")}…</Button>
         {/if}
@@ -189,7 +224,23 @@
       {/snippet}
     </EditorToolbar>
 
-    {#if selection.selectedRow === undefined}
+    {#if layout === "list"}
+      <div class="flex min-h-0 min-w-0 flex-1 flex-col" dir={uiDirection}>
+        <MessageListView
+          {catalog}
+          {selection}
+          {view}
+          {editing}
+          {diagnostics}
+          {labels}
+          {clientError}
+          {editingBlocked}
+          revision={history.revision}
+          {localeName}
+          onopenworkbench={() => void openInWorkbench()}
+        />
+      </div>
+    {:else if selection.selectedRow === undefined}
       <Empty.Root>
         <Empty.Header>
           <Empty.Media variant="icon" class="text-primary">

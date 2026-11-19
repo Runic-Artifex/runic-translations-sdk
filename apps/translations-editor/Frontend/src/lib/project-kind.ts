@@ -75,6 +75,7 @@ export const contentWording: Readonly<Record<string, string>> = {
   ui_workbench_save_and_next_failed: "ui_content_save_and_next_failed",
   ui_palette_focus_message_search: "ui_content_palette_focus_search",
   ui_palette_toggle_messages_section: "ui_content_palette_toggle_texts",
+  ui_count_messages: "ui_content_count_texts",
 };
 
 /**

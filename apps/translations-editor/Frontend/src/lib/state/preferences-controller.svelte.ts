@@ -1,4 +1,5 @@
 import { applyAppearance, applyDensity, densityKey, readAppearance, saveAppearance, type Density, type ThemeMode } from "../appearance";
+import { readWorkspaceLayout, workspaceLayoutKey, type WorkspaceLayout } from "../list-view";
 import { isPseudoLocale, readUiSimulation, saveUiSimulation, type UiDirection } from "../simulation";
 import { matchUiLocale, uiLocaleStateKey } from "../ui-locale";
 import type { PreviewController } from "./preview-controller.svelte";
@@ -21,12 +22,14 @@ export interface PreferencesControllerOptions {
 
 /**
  * The user's preferences of the editor itself, kept in the native editor state: the interface locale, the theme, the
- * density, and the simulations of pseudo-localization and a right-to-left interface.
+ * density, the view (workbench or list), and the simulations of pseudo-localization and a right-to-left interface.
  */
 export class PreferencesController {
   uiLocale = $state("");
   themeMode = $state<ThemeMode>("dark");
   density = $state<Density>("comfortable");
+  /** The workbench or the side-by-side list (D074.1). */
+  layout = $state<WorkspaceLayout>("workbench");
   pseudoLocalization = $state(false);
   uiDirection = $state<UiDirection>("ltr");
 
@@ -57,6 +60,7 @@ export class PreferencesController {
     this.density = appearance.density;
     this.#apply();
     this.#applyDensity();
+    this.layout = readWorkspaceLayout(this.#options.storage.get(workspaceLayoutKey));
     const simulation = readUiSimulation((key) => this.#options.storage.get(key));
     this.pseudoLocalization = simulation.pseudoLocalization;
     this.uiDirection = simulation.direction;
@@ -94,6 +98,17 @@ export class PreferencesController {
     this.density = density;
     this.#options.storage.set(densityKey, density);
     this.#applyDensity();
+  }
+
+  /** The user chose the workbench or the list: it is stored. The selection is the same in both. */
+  changeLayout(layout: WorkspaceLayout): void {
+    if (this.layout === layout) return;
+    this.layout = layout;
+    try {
+      this.#options.storage.set(workspaceLayoutKey, layout);
+    } catch {
+      // Without the native state (a test page), the view lasts for the session only.
+    }
   }
 
   togglePseudoLocalization(): void {

@@ -10,7 +10,7 @@
   import { Input } from "#lib/components/ui/input/index.js";
   import { Textarea } from "#lib/components/ui/textarea/index.js";
   import PatternEditor from "./PatternEditor.svelte";
-  import { nextIdentifier, variantTitle, type InputType, type MessageInput } from "./message-composer";
+  import { authoringInputs, nextIdentifier, variantTitle } from "./message-composer";
   import type { EditorMessageOperation, EditorMessageProjection } from "./contracts";
   import type { ResourceValue } from "./resource-model";
   import { lengthLimit, patternLength } from "./message-starter";
@@ -57,22 +57,13 @@
     onchange(next);
   }
   let canAuthor = $derived(authoring?.supported === true && onoperation !== undefined && typeof value === "string");
-  let inputs = $derived.by(() => Object.fromEntries((authoring?.inputs ?? []).map(input => [input.name, {
-    type: inputType(input.type, input.function),
-  } satisfies MessageInput])));
+  let inputs = $derived(authoringInputs(authoring));
   let primarySelector = $derived(authoring?.selectors[0]);
   let primaryIsNumeric = $derived(["plural", "ordinal"].includes(authoring?.selectorFunctions[0] ?? ""));
   let availableCases = $derived(primaryIsNumeric ? (authoring?.selectorPluralCategories?.[0] ?? authoring?.pluralCategories ?? []).filter(category => category !== "other" && !authoring?.variants.some(variant => variant.keys[0] === category)) : []);
   // Per-variant lengths where the composer shows variants of a message with a length limit.
   let variantLimits = $derived(maxLength !== undefined && (authoring?.variants.length ?? 0) > 1);
   let exactCaseDuplicate =$derived(authoring?.variants.some(variant => variant.keys[0] === exactCaseValue.trim() && variant.keys.slice(1).every(key => key === "*")) ?? false);
-
-  function inputType(type: string, fn?: string): InputType {
-    if (fn === "integer") return "int64";
-    if (fn === "number") return "decimal";
-    if (fn === "datetime") return "instant";
-    return ["string", "bool", "int64", "decimal", "date", "time", "instant", "uuid"].includes(type) ? type as InputType : "string";
-  }
 
   function operation(next: EditorMessageOperation): void | Promise<void> {
     if (canAuthor) return onoperation?.(next);

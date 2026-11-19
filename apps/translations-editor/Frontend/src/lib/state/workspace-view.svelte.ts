@@ -1,6 +1,7 @@
 import type { EditorReviewState, WorkspaceSnapshot } from "../contracts";
 import type { DiagnosticSources } from "../diagnostic-scope";
 import type { EditorLabels } from "../editor-labels";
+import { buildListRows, type ListRow } from "../list-view";
 import type { MessageGroupCountKind, MessageListItem } from "../MessageList.svelte";
 import type { MessageFilter } from "../MessageToolbar.svelte";
 import { createMessageSearchIndex } from "../message-search";
@@ -176,6 +177,24 @@ export class WorkspaceView {
         stale: isStale(rowReview),
         needsReview: !content && effectiveReviewState(rowReview, cell?.entry !== undefined) === "needs-review",
       };
+    });
+  });
+  /**
+   * The list view's rows (D074.1): the messages the search and filter let through, in tree order under namespace
+   * headers, with the source text beside the selected locale's text and its translation state.
+   */
+  listRows = $derived.by((): ListRow[] => {
+    const locale = this.#locale();
+    const sourceText = this.editingSource;
+    const reviewIndex = this.#options.review.index;
+    return buildListRows(this.visibleRows, {
+      locale,
+      baseLocale: this.#defaultLocale(),
+      sourceText,
+      review: (key, translated) => {
+        const entry = reviewIndex.get(reviewIdentity(key, locale));
+        return { state: effectiveReviewState(entry, translated), stale: isStale(entry) };
+      },
     });
   });
   /** The keys of the messages in tree order, which Next and Previous follow. */
