@@ -54,7 +54,7 @@ public static partial class TranslationCompiler
     {
         private string? _logical;
         /// <summary>The logical path, <c>common.cancel</c>, joined once.</summary>
-        internal string Logical => _logical ??= string.Join(".", Path);
+        internal string Logical { get => _logical ??= string.Join(".", Path); init => _logical = value; }
         /// <summary>
         /// The memos of a cached compile (<see cref="Rmf2CompileCache"/>), which reuses this object while its file and the
         /// link context are unchanged; null in any other compile. Each memo is an immutable object replaced as a whole,
@@ -1075,7 +1075,7 @@ public static partial class TranslationCompiler
     }
 
     // One node of a file as a compile extracts it: its paths and, for a message, the source the compile links.
-    private sealed record Rmf2NodeExtractV5(Rmf2ResourceNode Node, string Logical, string Identity, string Metadata, string? Key, Rmf2ProjectSourceV5? Message);
+    private sealed record Rmf2NodeExtractV5(Rmf2ResourceNode Node, string Logical, string Metadata, string? Key, Rmf2ProjectSourceV5? Message);
 
     private static List<Rmf2ProjectSourceV5> ReadRmf2ProjectSourcesV5(TranslationSource project, TranslationSource[] sources,
         IReadOnlyDictionary<TranslationSource, Rmf2SourceUnitV5>? units, JsonValue config, HashSet<string> locales, DiagnosticBag diagnostics, TranslationCompilerOptions options, CancellationToken cancellationToken,
@@ -1103,7 +1103,8 @@ public static partial class TranslationCompiler
         var result = new List<Rmf2ProjectSourceV5>();
         var portable = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var spellings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        var identities = new Dictionary<string, (bool Group, string Metadata, TextSourceLocation Location)>(StringComparer.Ordinal);
+        // Declarations by locale and logical path (the identity "locale:path" of RTR0054).
+        var identities = new Dictionary<(string Locale, string Logical), (bool Group, string Metadata, TextSourceLocation Location)>();
         var pathKinds = new Dictionary<string, bool>(StringComparer.Ordinal);
         var generated = new Dictionary<string, string>(StringComparer.Ordinal);
         bool? groupedInput = null;
@@ -1194,33 +1195,33 @@ public static partial class TranslationCompiler
                     string[] path = mount.Concat(node.Path).ToArray();
                     string logical = string.Join(".", path);
                     string? key = node.IsGroup ? null : string.Join("_", path);
-                    extract[index] = new(node, logical, locale + ":" + logical, string.Join("\n", node.Comments.Concat(node.Properties)), key,
-                        key is null ? null : new Rmf2ProjectSourceV5(key, path, locale, source, node, unit) { Memo = context is null ? null : new() });
+                    extract[index] = new(node, logical, string.Join("\n", node.Comments.Concat(node.Properties)), key,
+                        key is null ? null : new Rmf2ProjectSourceV5(key, path, locale, source, node, unit) { Logical = logical, Memo = context is null ? null : new() });
                 }
                 if (context is not null && unit is not null) unit.SetExtraction(context, extract);
             }
             for (int index = 1; index <= mount.Length; index++)
             {
-                string logical = string.Join(".", mount.Take(index));
-                Register(logical, locale + ":" + logical, true, "", DiagnosticBag.Location(source, new(0, 0)));
+                Register(string.Join(".", mount.Take(index)), true, "", DiagnosticBag.Location(source, new(0, 0)));
             }
             foreach (var item in extract)
             {
-                Register(item.Logical, item.Identity, item.Node.IsGroup, item.Metadata, item.Node.NameLocation);
+                Register(item.Logical, item.Node.IsGroup, item.Metadata, item.Node.NameLocation);
                 if (item.Message is not { } extracted) continue;
                 string key = item.Key!, logical = item.Logical;
                 if (generated.TryGetValue(key, out string? previous) && previous != logical) diagnostics.Add("RTR0018", TranslationDiagnosticSeverity.Error, "Logical path '" + logical + "' collides with '" + previous + "' under canonical underscore keys.", item.Node.NameLocation);
                 generated[key] = logical;
                 result.Add(extracted);
             }
-            void Register(string logical, string identity, bool group, string metadata, TextSourceLocation location)
+            void Register(string logical, bool group, string metadata, TextSourceLocation location)
             {
                 if (pathKinds.TryGetValue(logical, out bool previousKind) && previousKind != group) diagnostics.Add("RTR0054", TranslationDiagnosticSeverity.Error, "Message/group collision for '" + logical + "' across locales.", location);
                 pathKinds[logical] = group;
+                var identity = (locale, logical);
                 if (identities.TryGetValue(identity, out var first) && (!group || !first.Group || (metadata.Length != 0 && first.Metadata.Length != 0)))
                 {
-                    diagnostics.Add("RTR0054", TranslationDiagnosticSeverity.Error, "Duplicate declaration '" + identity + "'; first declaration: " + first.Location + ".", location);
-                    diagnostics.Add("RTR0054", TranslationDiagnosticSeverity.Error, "Conflicting declaration '" + identity + "': " + location + ".", first.Location);
+                    diagnostics.Add("RTR0054", TranslationDiagnosticSeverity.Error, "Duplicate declaration '" + locale + ":" + logical + "'; first declaration: " + first.Location + ".", location);
+                    diagnostics.Add("RTR0054", TranslationDiagnosticSeverity.Error, "Conflicting declaration '" + locale + ":" + logical + "': " + location + ".", first.Location);
                 }
                 else if (!identities.ContainsKey(identity) || metadata.Length != 0) identities[identity] = (group, metadata, location);
             }

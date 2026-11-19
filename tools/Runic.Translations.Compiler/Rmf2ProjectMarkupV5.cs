@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 
 namespace Runic.Translations.Compiler;
 
@@ -62,6 +63,17 @@ internal sealed class Rmf2ProjectMarkupV5
     }
 
     private static readonly IReadOnlyDictionary<string, int> NoOccurrences = ReadOnlyDictionary<string, int>.Empty;
+    // An empty occurrence count per variant, shared by the messages with that many variants and no markup.
+    private static readonly IReadOnlyList<IReadOnlyDictionary<string, int>>[] SharedNoOccurrences = new IReadOnlyList<IReadOnlyDictionary<string, int>>[33];
+    private static IReadOnlyList<IReadOnlyDictionary<string, int>> NoOccurrencesFor(int variants)
+    {
+        if (variants < SharedNoOccurrences.Length && Volatile.Read(ref SharedNoOccurrences[variants]) is { } shared) return shared;
+        var empty = new IReadOnlyDictionary<string, int>[variants];
+        Array.Fill(empty, NoOccurrences);
+        var result = Array.AsReadOnly(empty);
+        if (variants < SharedNoOccurrences.Length) Volatile.Write(ref SharedNoOccurrences[variants], result);
+        return result;
+    }
 
     internal Rmf2LinkedMarkupV5 Link(Rmf2MessageV5 message, TextSourceLocation location, DiagnosticBag diagnostics)
     {
@@ -75,9 +87,7 @@ internal sealed class Rmf2ProjectMarkupV5
         }
         if (!markup)
         {
-            var empty = new IReadOnlyDictionary<string, int>[message.Variants.Count];
-            Array.Fill(empty, NoOccurrences);
-            return new(message, ReadOnlyDictionary<string, string>.Empty, Array.AsReadOnly(empty), Array.Empty<string>());
+            return new(message, ReadOnlyDictionary<string, string>.Empty, NoOccurrencesFor(message.Variants.Count), Array.Empty<string>());
         }
         var slots = new SortedDictionary<string, string>(StringComparer.Ordinal);
         var names = new SortedSet<string>(StringComparer.Ordinal);

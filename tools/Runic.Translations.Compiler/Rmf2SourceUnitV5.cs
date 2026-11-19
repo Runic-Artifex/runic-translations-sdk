@@ -67,6 +67,14 @@ internal sealed class Rmf2SourceUnitV5
         return new(source, options, null, message, message is null ? null : Mf2SyntaxReader.Read(source, options, cancellationToken));
     }
 
+    /// <summary>Releases the token streams of the unit's messages (<see cref="Mf2SyntaxDocument.ReleaseTokens"/>).</summary>
+    internal void ReleaseTokens()
+    {
+        if (Resource is { } resource)
+            foreach (var node in resource.Nodes) node.MessageSyntax?.ReleaseTokens();
+        DirectSyntax?.ReleaseTokens();
+    }
+
     private int _messageCount = -1;
 
     /// <summary>The number of messages in the source (not groups).</summary>
