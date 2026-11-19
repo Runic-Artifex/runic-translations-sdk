@@ -372,7 +372,7 @@ internal sealed partial class Rmf2LanguageServer
     {
         if (method is "textDocument/didOpen" or "textDocument/didChange" or "textDocument/didClose" or "textDocument/didSave" or
             "workspace/didChangeWatchedFiles" or "workspace/didChangeConfiguration") _reviewViews.Clear();
-        if (method is "workspace/didChangeWatchedFiles" or "workspace/didChangeConfiguration") { _dependencies.Clear(); _sourceFiles.Clear(); }
+        if (method is "workspace/didChangeWatchedFiles" or "workspace/didChangeConfiguration") { _dependencies.Clear(); _sourceFiles.Clear(); _readWorkspaces.Clear(); }
         if (method == ValidatedMethod) { ApplyValidations(); return null; }
         if (method == "initialize")
         {
@@ -631,7 +631,12 @@ internal sealed partial class Rmf2LanguageServer
         }
         int offset = args["position"] is JsonNode position ? Offset(buffer.Text, position) : 0;
         int atByte = Utf8.GetByteCount(buffer.Text.AsSpan(0, offset));
-        Rmf2ResourceNode? entry = buffer.Syntax.Nodes.LastOrDefault(n => n.Location.StartByte <= atByte && atByte <= n.Location.StartByte + n.Location.LengthBytes);
+        // Read requests find the message in the read workspace's document of the buffer, which Rmf2Workspace.Update has
+        // just read: its nodes are the buffer's (Rmf2ResourceReader.Analyze is Read plus a second parse of every message
+        // for diagnostics), so a request after typing parses the document once instead of twice (#271).
+        Rmf2ResourceDocument syntax = method is "textDocument/hover" or "textDocument/completion" or "textDocument/definition" or
+            "textDocument/references" or "runic/message" ? ReadWorkspaceDocument(LocalPath(uri), uri) ?? buffer.Syntax : buffer.Syntax;
+        Rmf2ResourceNode? entry = syntax.Nodes.LastOrDefault(n => n.Location.StartByte <= atByte && atByte <= n.Location.StartByte + n.Location.LengthBytes);
         // An override source of a library catalog: completion, hover and definition come from the packed library.
         if (method is "textDocument/hover" or "textDocument/completion" or "textDocument/definition" && OverrideContextOf(uri) is { } library)
             return method switch
@@ -643,7 +648,7 @@ internal sealed partial class Rmf2LanguageServer
         if (method == "runic/message")
         {
             if (entry is null) throw new TranslationAuthoringException("Place the cursor inside a resource or group.");
-            string sourcePath = LocalPath(uri); var workspace = Workspace(sourcePath);
+            string sourcePath = LocalPath(uri); var workspace = ReadWorkspace(sourcePath, uri);
             var locals = entry.MessageSyntax?.Declarations.Where(declaration => declaration.Kind == "local").Select(declaration => declaration.Name).ToHashSet(StringComparer.Ordinal) ?? new HashSet<string>();
             var inputs = entry.MessageSyntax?.Tokens.Where(token => token.Kind == Mf2SyntaxTokenKind.Variable && !locals.Contains(token.Value)).Select(token => token.Value).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal) ?? Enumerable.Empty<string>();
             var slots = entry.MessageSyntax?.Expressions.SelectMany(expression => expression.Options.Where(option => option.Name == "ref" && option.Value is { Kind: not Mf2OperandKind.Variable })).Select(option => option.Value!.Value).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal) ?? Enumerable.Empty<string>();
@@ -665,7 +670,7 @@ internal sealed partial class Rmf2LanguageServer
         if (method == "textDocument/hover")
         {
             if (entry is null) return null;
-            string path = LocalPath(uri); var workspace = Workspace(path);
+            string path = LocalPath(uri); var workspace = ReadWorkspace(path, uri);
             string key = string.Join('_', workspace.LogicalPath(path, entry));
             string summary = entry.MessageSyntax is { } messageSyntax ? workspace.LanguageService.Hover(messageSyntax, MessageOffset(entry, atByte)) ?? key : key;
             var contractLines = new List<string>();
@@ -717,7 +722,7 @@ internal sealed partial class Rmf2LanguageServer
             if (symbol is not null)
             {
                 bool includeDeclaration = args["context"]?["includeDeclaration"]?.GetValue<bool>() ?? true;
-                var references = Workspace(LocalPath(uri)).VariableReferences(LocalPath(uri), entry.Key, symbol);
+                var references = ReadWorkspace(LocalPath(uri), uri).VariableReferences(LocalPath(uri), entry.Key, symbol);
                 var selected = references.Where(reference => method == "textDocument/definition" ? reference.IsDeclaration : includeDeclaration || !reference.IsDeclaration);
                 return new JsonArray(selected.Select(reference => {
                     var bytes = reference.Document.Source.GetUtf8Bytes();
@@ -734,14 +739,14 @@ internal sealed partial class Rmf2LanguageServer
         if (method == "textDocument/definition")
         {
             if (entry is null) return new JsonArray();
-            string path = LocalPath(uri); var workspace = Workspace(path); var logical = workspace.LogicalPath(path, entry);
+            string path = LocalPath(uri); var workspace = ReadWorkspace(path, uri); var logical = workspace.LogicalPath(path, entry);
             return new JsonArray(workspace.Documents.SelectMany(document => document.Nodes.Where(node => workspace.LogicalPath(document.Source.Path, node).SequenceEqual(logical, StringComparer.Ordinal))
                 .Select(node => (JsonNode)new JsonObject { ["uri"] = ClientUri(document.Source.Path), ["range"] = Range(new Buffer(Utf8.GetString(document.Source.GetUtf8Bytes()), 0, document.Source.Path, () => document), node.NameLocation) })).ToArray());
         }
         if (method == "textDocument/completion")
         {
             var labels = new HashSet<string>(StringComparer.Ordinal) { "one", "two", "few", "many", "zero", "*" };
-            string sourcePath = LocalPath(uri); var workspace = Workspace(sourcePath);
+            string sourcePath = LocalPath(uri); var workspace = ReadWorkspace(sourcePath, uri);
             var completions = entry is { IsGroup: false } ? workspace.Complete(sourcePath, entry.Key, MessageOffset(entry, atByte)) : workspace.LanguageService.Complete(null, 0);
             var items = completions.ToDictionary(item => item.Label, item => item.Detail, StringComparer.Ordinal);
             foreach (string label in labels) items.TryAdd(label, "Runic semantic translation contract");
@@ -1155,6 +1160,64 @@ internal sealed partial class Rmf2LanguageServer
         return workspace;
     }
 
+    // The workspace of read requests (hover, completion, definition, references, runic/message) per project, kept while the
+    // project's saved files and set of open buffers stay as they were, with a changed buffer updated in place
+    // (Rmf2Workspace.Update re-reads that file only). Building one walks the project and compares every source with the
+    // syntax cache: 6-28 ms per request at 20,000 messages x 10 locales, most of a hover or a completion (#271). It is
+    // built without a request's cancellation, since it outlives the request; requests that edit build their own.
+    // Watched-file events, configuration changes and runic.json buffers drop it.
+    private sealed class ReadWorkspaceEntry(Rmf2Workspace workspace, string root, string group, Dictionary<string, int> versions)
+    {
+        internal Rmf2Workspace Workspace { get; } = workspace;
+        internal string Root { get; } = root;
+        internal string Group { get; } = group;
+        internal Dictionary<string, int> Versions { get; } = versions;
+    }
+    private readonly Dictionary<string, ReadWorkspaceEntry> _readWorkspaces = new(PathComparer);
+
+    private Rmf2Workspace ReadWorkspace(string path, string uri)
+    {
+        if (BufferProject(uri, out _) is not { } project) return Workspace(path);
+        string[] group = BufferUris(project).ToArray();
+        string groupKey = string.Join('\n', group);
+        if (_readWorkspaces.TryGetValue(project, out ReadWorkspaceEntry? entry) && entry.Group == groupKey && UpdateReadWorkspace(entry, group))
+        {
+            _requestRoots.Add(entry.Root);
+            return entry.Workspace;
+        }
+        _requestCancellation.ThrowIfCancellationRequested();
+        (Rmf2Workspace workspace, string root) = BuildWorkspace(SnapshotOf(project, group), CancellationToken.None);
+        _projectLayouts[project] = workspace.IsDirect;
+        _readWorkspaces[project] = new ReadWorkspaceEntry(workspace, root, groupKey, group.ToDictionary(item => item, item => _buffers[item].Version, StringComparer.Ordinal));
+        _requestRoots.Add(root);
+        return workspace;
+    }
+
+    // The read workspace's document of an open buffer in a project, at the buffer's text; null when the workspace does not
+    // compile the buffer (a loose buffer, a library override source), whose own syntax the caller reads instead.
+    private Rmf2ResourceDocument? ReadWorkspaceDocument(string path, string uri)
+    {
+        if (BufferProject(uri, out _) is null) return null;
+        // BuildWorkspace keys a buffer's source by its LocalPath, so the document's path is the buffer's.
+        return ReadWorkspace(path, uri).Documents.FirstOrDefault(document => string.Equals(document.Source.Path, path, StringComparison.Ordinal));
+    }
+
+    // Brings a kept workspace to the buffers' current text; false when one cannot be updated in place (it is rebuilt).
+    private bool UpdateReadWorkspace(ReadWorkspaceEntry entry, string[] group)
+    {
+        foreach (string uri in group)
+        {
+            Buffer buffer = _buffers[uri];
+            if (entry.Versions.GetValueOrDefault(uri, -1) == buffer.Version) continue;
+            string file = LocalPath(uri);
+            try { entry.Workspace.Update(file, Utf8.GetBytes(buffer.Text), entry.Workspace.Revision(file)); }
+            // A buffer the workspace does not compile (outside the project's sources) has no source to update.
+            catch (KeyNotFoundException) { return false; }
+            entry.Versions[uri] = buffer.Version;
+        }
+        return true;
+    }
+
     // A project's open buffers as one immutable state: what a workspace is built from, on the worker or off it.
     private sealed record WorkspaceSnapshot(string Directory, Buffer? ProjectBuffer, (string Path, Buffer Buffer)[] Buffers);
 
@@ -1268,6 +1331,7 @@ internal sealed partial class Rmf2LanguageServer
             // otherwise buffers from the old mapping retain stale diagnostics.
             _bufferProjects.Clear();
             _projectLayouts.Clear();
+            _readWorkspaces.Clear();
             QueueGlobalDiagnosticsRefresh();
             return;
         }
