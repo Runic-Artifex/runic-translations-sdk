@@ -80,13 +80,17 @@ public static partial class TranslationCompiler
     }
     private sealed record ContractMemo(Rmf2ProjectEntryV5 Origin, IReadOnlyDictionary<string, Rmf2SlotV5> Requirements, string[] Names, int Id,
         Rmf2MessageContractV5 Contract, string? ReadableProblem);
-    private sealed record CompiledMemo(IReadOnlyList<Rmf2InputV5>? Inputs, Rmf2ProjectEntryV5? Entry, TranslationDiagnostic[] Diagnostics);
+    // The memos whose checks read the validation policies record whether their compile was relaxed (every policy allowed),
+    // and their diagnostics without the policies' (WithoutPolicy): a relaxed compile reuses a full compile's memo with
+    // those, and a full compile does not reuse a relaxed one.
+    private sealed record CompiledMemo(IReadOnlyList<Rmf2InputV5>? Inputs, Rmf2ProjectEntryV5? Entry, TranslationDiagnostic[] Diagnostics,
+        bool Relaxed, TranslationDiagnostic[] WithoutPolicy);
     private sealed record ProfiledMemo(Rmf2ProjectEntryV5 Entry, string? ExpectedKind, Rmf2ProjectEntryV5 Updated, Rmf2DocumentAnalysisV5 Analysis, TranslationDiagnostic[] Diagnostics);
     private sealed record RequiredMemo(Rmf2ProjectEntryV5 Origin, IReadOnlyDictionary<string, Rmf2SlotV5> Requirements, TranslationDiagnostic[] Diagnostics);
     // OriginSignature: what the pair checks read from the base entry, so a reparsed base file whose message is unchanged
     // for them keeps its translations' checks (null for document content, whose structure check reads more).
     private sealed record PairedMemo(Rmf2ProjectEntryV5 Origin, Rmf2ProjectEntryV5 Translated, IReadOnlyDictionary<string, Rmf2SlotV5> Requirements, TranslationDiagnostic[] Diagnostics,
-        string? OriginSignature = null);
+        bool Relaxed, TranslationDiagnostic[] WithoutPolicy, string? OriginSignature = null);
     private sealed record SignatureMemo(Rmf2ProjectEntryV5 Origin, IReadOnlyDictionary<string, Rmf2SlotV5> Requirements, string? Signature);
     private sealed record TranslatedMemo(Rmf2ProjectEntryV5 Entry, Rmf2TranslationV5 Translation, TranslationDiagnostic[] ContentDiagnostics);
     private sealed record Rmf2ProjectEntryV5(Rmf2ProjectSourceV5 Source, Rmf2LinkedMarkupV5 Linked)
@@ -244,7 +248,8 @@ public static partial class TranslationCompiler
             false, Materialize(overrideSources), locales);
     }
 
-    // The compile of Rmf2CompileCache: its units, link context and memo-miss counters.
+    // The compile of Rmf2CompileCache: its units, the context its extracted messages are kept for (relaxed validation
+    // aside), its link state and memo-miss counters.
     internal static Rmf2ProjectCompilation CompileRmf2ProjectV5Cached(TranslationSource project, TranslationSource[] sources,
         IReadOnlyDictionary<TranslationSource, Rmf2SourceUnitV5> units, TranslationCompilerOptions options, bool pseudoLocales,
         Rmf2LinkContext context, Rmf2LinkState state, Rmf2CompileCounters counters, CancellationToken cancellationToken) =>
@@ -267,6 +272,21 @@ public static partial class TranslationCompiler
             scratch = null;
             diagnostics = bag;
             try { compute(); return bag.Count == 0 ? [] : bag.Items.ToArray(); }
+            finally { diagnostics = saved; bag.Clear(); scratch = bag; }
+        }
+        // As Capture, also without the diagnostics of validation policies (for the memos a relaxed compile reuses).
+        (TranslationDiagnostic[] All, TranslationDiagnostic[] WithoutPolicy) CapturePolicy(Action compute)
+        {
+            var saved = diagnostics;
+            var bag = scratch ?? new DiagnosticBag();
+            scratch = null;
+            diagnostics = bag;
+            try
+            {
+                compute();
+                TranslationDiagnostic[] all = bag.Count == 0 ? [] : bag.Items.ToArray();
+                return (all, bag.WithoutPolicy(all));
+            }
             finally { diagnostics = saved; bag.Clear(); scratch = bag; }
         }
         void Replay(TranslationDiagnostic[] items) { foreach (var item in items) diagnostics.Append(item); }
@@ -441,15 +461,16 @@ public static partial class TranslationCompiler
                     if (translated.Source.Memo is not { } pairMemo) ValidatePair(pair.Value, translated, requirements);
                     else
                     {
-                        if (pairMemo.Paired is not { } paired || !ReferenceEquals(paired.Translated, translated) ||
+                        if (pairMemo.Paired is not { } paired || (paired.Relaxed && !manifest.Relaxed) || !ReferenceEquals(paired.Translated, translated) ||
                             !((ReferenceEquals(paired.Origin, pair.Value) && ReferenceEquals(paired.Requirements, requirements)) ||
                               (paired.OriginSignature is { } signature && signature == OriginSignature(pair.Value, requirements))))
                         {
                             if (counters is not null) counters.PairsChecked++;
-                            pairMemo.Paired = paired = new(pair.Value, translated, requirements, Capture(() => ValidatePair(pair.Value, translated, requirements)),
+                            var reported = CapturePolicy(() => ValidatePair(pair.Value, translated, requirements));
+                            pairMemo.Paired = paired = new(pair.Value, translated, requirements, reported.All, manifest.Relaxed, reported.WithoutPolicy,
                                 ReferenceEquals(translated, pair.Value) ? null : OriginSignature(pair.Value, requirements));
                         }
-                        Replay(paired.Diagnostics);
+                        Replay(manifest.Relaxed ? paired.WithoutPolicy : paired.Diagnostics);
                     }
                     if (translated.Linked.Names.Count != 0) (names ??= new SortedSet<string>(StringComparer.Ordinal)).UnionWith(translated.Linked.Names);
                 }
@@ -760,8 +781,9 @@ public static partial class TranslationCompiler
         }
         // The memoized compile of a source against these caller inputs (by identity), or null.
         // Equal inputs are as good as the same: a reparsed base file gives its messages new, equal input lists.
+        // A full compile does not reuse the memo of a relaxed one (it lacks the policies' diagnostics).
         CompiledMemo? CompiledFor(Rmf2ProjectSourceV5 source, IReadOnlyList<Rmf2InputV5>? callerInputs) =>
-            source.Memo?.Compiled is { } memo && (ReferenceEquals(memo.Inputs, callerInputs) ||
+            source.Memo?.Compiled is { } memo && (!memo.Relaxed || manifest.Relaxed) && (ReferenceEquals(memo.Inputs, callerInputs) ||
                 (memo.Inputs is not null && callerInputs is not null && memo.Inputs.SequenceEqual(callerInputs))) ? memo : null;
         Rmf2ProjectEntryV5? Compile(Rmf2ProjectSourceV5 source, IReadOnlyList<Rmf2InputV5>? callerInputs, Rmf2SemanticResultV5? lowered = null)
         {
@@ -771,10 +793,10 @@ public static partial class TranslationCompiler
             {
                 Rmf2ProjectEntryV5? entry = null;
                 if (counters is not null) counters.MessagesCompiled++;
-                var reported = Capture(() => entry = CompileNow(source, callerInputs, lowered));
-                memo.Compiled = compiled = new(callerInputs, entry, reported);
+                var reported = CapturePolicy(() => entry = CompileNow(source, callerInputs, lowered));
+                memo.Compiled = compiled = new(callerInputs, entry, reported.All, manifest.Relaxed, reported.WithoutPolicy);
             }
-            Replay(compiled.Diagnostics);
+            Replay(manifest.Relaxed ? compiled.WithoutPolicy : compiled.Diagnostics);
             return compiled.Entry;
         }
         Rmf2ProjectEntryV5? CompileNow(Rmf2ProjectSourceV5 source, IReadOnlyList<Rmf2InputV5>? callerInputs, Rmf2SemanticResultV5? lowered)

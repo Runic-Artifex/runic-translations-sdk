@@ -86,7 +86,21 @@ internal sealed class DiagnosticBag
     /// <summary>Adds a diagnostic as it is, with its message key and locale (a replayed memo, see Rmf2CompileCache).</summary>
     internal void Append(TranslationDiagnostic diagnostic) => _items.Add(diagnostic);
 
-    internal void Clear() => _items.Clear();
+    // The diagnostics a validation policy reported (TranslationCompiler.AddPolicyDiagnostic). A relaxed compile, which
+    // allows every policy, reports all the others: a session replays a memo of a full compile without these.
+    private HashSet<TranslationDiagnostic>? _policy;
+
+    /// <summary>Marks the diagnostic just added as one a validation policy reported.</summary>
+    internal void MarkPolicy() => (_policy ??= new HashSet<TranslationDiagnostic>(ReferenceEqualityComparer.Instance)).Add(_items[^1]);
+
+    /// <summary><paramref name="items"/> (from this bag) without the ones a validation policy reported.</summary>
+    internal TranslationDiagnostic[] WithoutPolicy(TranslationDiagnostic[] items)
+    {
+        if (_policy is not { Count: > 0 } policy) return items;
+        return Array.FindAll(items, item => !policy.Contains(item));
+    }
+
+    internal void Clear() { _items.Clear(); _policy?.Clear(); }
 
     internal TranslationDiagnostic[] ToSortedArray()
     {

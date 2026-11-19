@@ -31,24 +31,35 @@ internal sealed class IncrementalValidationTests
         var session = new TranslationValidationSession();
         // The previews draw from their own generator, so the edit sequence of each seed stays as it was.
         var previews = new Random(seed + 1000);
-        int compiled = 0, diagnosed = 0;
+        // Whether the review compiles run before the full one: they share its memos, in either order.
+        var order = new Random(seed + 2000);
+        int compiled = 0, diagnosed = 0, memoizedPolicies = 0;
         string last = "";
         for (int step = 0; step < 60; step++)
         {
             string edit = step == 0 ? "initial" : catalog.Edit();
             TranslationSource project = catalog.Project();
             TranslationSource[] sources = catalog.Sources();
+            string context = $"seed {seed}, step {step} ({edit})";
+            bool reviewFirst = order.Next(3) == 0;
+            if (reviewFirst) Review();
             TranslationValidationSnapshot snapshot = session.Validate(project, sources);
             Rmf2ProjectCompilation full = TranslationCompiler.CompileRmf2ProjectV5(project, catalog.Sources());
-            string context = $"seed {seed}, step {step} ({edit})";
             AssertSame(full, snapshot.Compilation, context);
             if (full.Project is not null) compiled++;
             if (full.Diagnostics.Count != 0) diagnosed++;
             last = string.Join(" ", full.Diagnostics.Where(diagnostic => diagnostic.Severity == TranslationDiagnosticSeverity.Error).Select(diagnostic => diagnostic.Id).Distinct());
-            Assert.Equal(3L * step + 1, snapshot.Revision, context + ": revision");
+            Assert.Equal(3L * step + (reviewFirst ? 3 : 1), snapshot.Revision, context + ": revision");
+            if (!reviewFirst) Review();
+            // A policy diagnostic of a memoized check, which a relaxed compile replays the full compile's memo without.
+            if (full.Diagnostics.Any(diagnostic => diagnostic.Id is "RTR0021" or "RTR0094" or "RTR0095" or "RTR0096" or "RTR0097" or "RTR0098")) memoizedPolicies++;
             // A relaxed and a base-locale-only compile (the review compiles) through the same session.
-            foreach (var options in new[] { new TranslationCompilerOptions { RelaxedValidation = true }, new TranslationCompilerOptions { RelaxedValidation = true, BaseLocaleOnly = true } })
-                AssertSame(TranslationCompiler.CompileRmf2ProjectV5(project, sources, options), session.Validate(project, sources, options, false).Compilation, context + (options.BaseLocaleOnly ? ", base locale only" : ", relaxed"));
+            void Review()
+            {
+                foreach (var options in new[] { new TranslationCompilerOptions { RelaxedValidation = true }, new TranslationCompilerOptions { RelaxedValidation = true, BaseLocaleOnly = true } })
+                    AssertSame(TranslationCompiler.CompileRmf2ProjectV5(project, sources, options), session.Validate(project, sources, options, false).Compilation,
+                        context + (options.BaseLocaleOnly ? ", base locale only" : ", relaxed"));
+            }
             // A hypothetical state (a refactoring's plan): one file replaced by a random edit of it. The preview equals a
             // full compile of that state, and the next real validation, at the next step, still equals a full compile.
             TranslationSource[] hypothetical = (TranslationSource[])sources.Clone();
@@ -58,6 +69,7 @@ internal sealed class IncrementalValidationTests
             AssertSame(TranslationCompiler.CompileRmf2ProjectV5(project, hypothetical), session.Preview(project, hypothetical), context + ", preview");
         }
         Assert.True(compiled > 0 && diagnosed > 0, $"the sequence covers compiled catalogs ({compiled}) and diagnostics ({diagnosed}); errors of the last step: {last}");
+        Assert.True(memoizedPolicies > 0, "the sequence covers memoized checks of validation policies, which a relaxed compile allows");
     }
 
     [Test, DisplayName("An edit to one file recompiles that file's messages and reuses the others")]
