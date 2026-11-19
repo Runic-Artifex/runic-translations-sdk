@@ -27,6 +27,7 @@ internal sealed class Rmf2Workspace
     private readonly bool _direct;
     private readonly Dictionary<string, TranslationSource> _sources;
     private readonly Dictionary<string, Rmf2ResourceDocument> _syntax = new(StringComparer.Ordinal);
+    private readonly Rmf2WorkspaceCache? _cache;
     private static readonly UTF8Encoding Utf8 = new(false, true);
     public Rmf2Workspace(string root, TranslationSource project, IEnumerable<TranslationSource> sources) : this(root, project, sources, CancellationToken.None) { }
     public Rmf2Workspace(string root, TranslationSource project, IEnumerable<TranslationSource> sources, CancellationToken cancellationToken)
@@ -34,7 +35,7 @@ internal sealed class Rmf2Workspace
     internal Rmf2Workspace(string root, TranslationSource project, IEnumerable<TranslationSource> sources, Rmf2WorkspaceCache? cache, CancellationToken cancellationToken)
     {
         _cancellationToken = cancellationToken; cancellationToken.ThrowIfCancellationRequested();
-        _root = Path.GetFullPath(root); _project = project;
+        _root = Path.GetFullPath(root); _project = project; _cache = cache;
         _projectDirectory = Path.GetDirectoryName(Path.GetFullPath(_project.Path, _root))!;
         using var config = JsonDocument.Parse(Utf8Bom.Skip(_project.GetUtf8Bytes()));
         // An unsaved or hand-edited runic.json may be malformed. Construction
@@ -71,7 +72,7 @@ internal sealed class Rmf2Workspace
         foreach (var source in _sources.Values)
         {
             if (!source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase) && !source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)) continue;
-            _syntax.Add(source.Path, cache?.Read(source, cancellationToken) ?? (source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)
+            _syntax.Add(source.Path, cache?.Read(_project.Path, source, cancellationToken) ?? (source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)
                 ? Rmf2ResourceReader.ReadDirect(source, cancellationToken: _cancellationToken)
                 : Rmf2ResourceReader.Read(source, cancellationToken: _cancellationToken)));
         }
@@ -97,7 +98,16 @@ internal sealed class Rmf2Workspace
             .SelectMany(document => document.Nodes.Where(node => !node.IsGroup && LogicalPath(document.Source.Path, node).SequenceEqual(logical, StringComparer.Ordinal))).FirstOrDefault();
         return LanguageService.Complete(origin.MessageSyntax, byteOffset, baseMessage?.MessageSyntax);
     }
-    internal Rmf2ProjectCompilation Validate() => TranslationCompiler.CompileRmf2ProjectV5(_project, _sources.Values, null, _cancellationToken);
+    /// <summary>
+    /// Compiles the catalog. A workspace of a <see cref="Rmf2WorkspaceCache"/> validates through its project's session, which
+    /// reuses the work of earlier validations; the result is the same either way.
+    /// </summary>
+    internal Rmf2ProjectCompilation Validate() => Session is { } session
+        ? session.Validate(_project, _sources.Values, _cancellationToken).Compilation
+        : TranslationCompiler.CompileRmf2ProjectV5(_project, _sources.Values, null, _cancellationToken);
+
+    /// <summary>The validation session of this workspace's project, when the workspace comes from a <see cref="Rmf2WorkspaceCache"/>.</summary>
+    internal TranslationValidationSession? Session => _cache?.Session(_project.Path);
 
     /// <summary>The runic.json source this workspace compiles.</summary>
     internal TranslationSource ProjectSource => _project;

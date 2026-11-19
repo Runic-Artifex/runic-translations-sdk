@@ -340,6 +340,8 @@ public static partial class TranslationCompiler
         return messageId.Length != 0;
     }
 
+    internal static TranslationSource[] MaterializeSources(IEnumerable<TranslationSource> sources) => Materialize(sources);
+
     private static TranslationSource[] Materialize(IEnumerable<TranslationSource> sources)
     {
         var result = new List<TranslationSource>();
