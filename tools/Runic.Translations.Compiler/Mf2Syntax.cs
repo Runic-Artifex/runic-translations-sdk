@@ -14,23 +14,87 @@ internal enum Mf2SyntaxTokenKind { Text, Whitespace, PatternStart, PatternEnd, E
 internal sealed record Mf2SyntaxToken(Mf2SyntaxTokenKind Kind, string Raw, string Value, TextSourceLocation Location);
 /// <summary>MF2 operands retain whether a value is a variable, number or string literal.</summary>
 internal enum Mf2OperandKind { Variable, Number, String }
-internal sealed record Mf2OperandSyntax(Mf2OperandKind Kind, string Value, bool Quoted, TextSourceLocation Location);
+internal sealed record Mf2OperandSyntax(Mf2OperandKind Kind, string Value, bool Quoted, Mf2Span Span)
+{
+    public TextSourceLocation Location => Span.Location;
+}
 /// <summary>Attributes are distinct from function/markup options and may be valueless.</summary>
-internal sealed record Mf2PropertySyntax(string Name, Mf2OperandSyntax? Value, bool IsAttribute, TextSourceLocation Location);
+internal sealed record Mf2PropertySyntax(string Name, Mf2OperandSyntax? Value, bool IsAttribute, Mf2Span Span)
+{
+    public TextSourceLocation Location => Span.Location;
+}
 internal enum Mf2MarkupKind { None, Open, Close, Standalone }
 /// <summary>A syntax expression before function resolution or renderer-profile validation.</summary>
 internal sealed record Mf2ExpressionSyntax(Mf2OperandSyntax? Operand, string? Function, string? MarkupName,
     Mf2MarkupKind MarkupKind, IReadOnlyList<Mf2PropertySyntax> Options, IReadOnlyList<Mf2PropertySyntax> Attributes,
-    TextSourceLocation Location);
-/// <summary>A declaration retains its expression and exact source symbol.</summary>
-internal sealed record Mf2VariantSyntax(IReadOnlyList<string> Keys, TextSourceLocation Location)
+    Mf2Span Span)
 {
-    public TextSourceLocation PatternLocation { get; init; } = Location;
-    public IReadOnlyList<TextSourceLocation> KeyLocations { get; init; } = Array.Empty<TextSourceLocation>();
+    public TextSourceLocation Location => Span.Location;
 }
-internal sealed record Mf2MatchSyntax(IReadOnlyList<string> Selectors, TextSourceLocation Location);
-internal sealed record Mf2DeclarationSyntax(string Kind, string Name, TextSourceLocation NameLocation,
-    Mf2ExpressionSyntax Expression, TextSourceLocation Location);
+/// <summary>A declaration retains its expression and exact source symbol.</summary>
+internal sealed record Mf2VariantSyntax(IReadOnlyList<string> Keys, Mf2Span Span)
+{
+    public TextSourceLocation Location => Span.Location;
+    public Mf2Span PatternSpan { get; init; } = Span;
+    public TextSourceLocation PatternLocation => PatternSpan.Location;
+    public IReadOnlyList<Mf2Span> KeySpans { get; init; } = Array.Empty<Mf2Span>();
+    public IReadOnlyList<TextSourceLocation> KeyLocations => KeySpans.Count == 0 ? Array.Empty<TextSourceLocation>() : KeySpans.Select(span => span.Location).ToArray();
+}
+internal sealed record Mf2MatchSyntax(IReadOnlyList<string> Selectors, Mf2Span Span)
+{
+    public TextSourceLocation Location => Span.Location;
+}
+internal sealed record Mf2DeclarationSyntax(string Kind, string Name, Mf2Span NameSpan, Mf2ExpressionSyntax Expression, Mf2Span Span)
+{
+    public TextSourceLocation NameLocation => NameSpan.Location;
+    public TextSourceLocation Location => Span.Location;
+}
+
+/// <summary>
+/// The text of one MF2 message and its path: the syntax keeps its nodes' extents as character offsets into it, and a
+/// node's <see cref="TextSourceLocation"/> is made from them when read, with the values the reader computes (lines from
+/// '\n', UTF-16 columns, UTF-8 byte offsets), instead of one location object per node (docs/plans/compact-syntax-tree.md, option A).
+/// </summary>
+internal sealed class Mf2SourceMap(string path, string text, bool ascii)
+{
+    internal string Path { get; } = path;
+    internal string Text { get; } = text;
+
+    internal TextSourceLocation Location(int from, int to)
+    {
+        int line = LineOf(from, out int lineStart), endLine = LineOf(to, out int endLineStart);
+        int fromByte = ByteOffset(from), toByte = ByteOffset(to);
+        return new TextSourceLocation(Path, fromByte, toByte - fromByte, line + 1, from - lineStart + 1, endLine + 1, to - endLineStart + 1);
+    }
+
+    // The line of a character offset (from 0) and its first character: the newlines before it.
+    private int LineOf(int offset, out int lineStart)
+    {
+        int line = 0; lineStart = 0;
+        for (int newline = Text.IndexOf('\n'); newline >= 0 && newline < offset; newline = Text.IndexOf('\n', newline + 1)) { line++; lineStart = newline + 1; }
+        return line;
+    }
+
+    // The UTF-8 offset of a character offset; an offset inside a surrogate pair is the pair's first byte, as the reader maps it.
+    private int ByteOffset(int offset)
+    {
+        if (ascii) return offset;
+        int bytes = 0;
+        for (int index = 0; index < offset;)
+        {
+            Rune rune = Rune.GetRuneAt(Text, index);
+            if (index + rune.Utf16SequenceLength > offset) break;
+            bytes += rune.Utf8SequenceLength; index += rune.Utf16SequenceLength;
+        }
+        return bytes;
+    }
+}
+
+/// <summary>The extent of a syntax node: character offsets into its message's text.</summary>
+internal readonly record struct Mf2Span(Mf2SourceMap Map, int From, int To)
+{
+    public TextSourceLocation Location => Map.Location(From, To);
+}
 /// <summary>Full original bytes, a contiguous token stream and parsed expressions for authoring tools.</summary>
 internal sealed class Mf2SyntaxDocument
 {
@@ -38,11 +102,30 @@ internal sealed class Mf2SyntaxDocument
         List<Mf2DeclarationSyntax> declarations, List<Mf2VariantSyntax> variants, Mf2MatchSyntax? match, TranslationDiagnostic[] diagnostics,
         TranslationCompilerOptions? options = null, string? text = null)
     {
-        Source = source; _tokens = tokens.AsReadOnly(); Expressions = Compact(expressions); Declarations = Compact(declarations); Variants = Compact(variants); Match = match;
+        _tokens = tokens.AsReadOnly(); Expressions = Compact(expressions); Declarations = Compact(declarations); Variants = Compact(variants); Match = match;
         Diagnostics = diagnostics.Length == 0 ? NoDiagnostics : Array.AsReadOnly(diagnostics);
         _options = options; _text = text;
+        // A message read from its text keeps the text (which it shares with its resource node), not a copy of its bytes.
+        if (text is null) _source = source;
+        else { _path = source.Path; _releasedSource = new WeakReference<TranslationSource>(source); }
     }
-    public TranslationSource Source { get; }
+
+    private readonly TranslationSource? _source;
+    private readonly string? _path;
+    private WeakReference<TranslationSource>? _releasedSource;
+
+    /// <summary>The UTF-8 source of the message; for a message read from its text, made again from the text when needed.</summary>
+    public TranslationSource Source
+    {
+        get
+        {
+            if (_source is not null) return _source;
+            if (Volatile.Read(ref _releasedSource) is { } cached && cached.TryGetTarget(out TranslationSource? source)) return source;
+            source = TranslationSource.Owned(_path!, Encoding.UTF8.GetBytes(_text!));
+            Volatile.Write(ref _releasedSource, new WeakReference<TranslationSource>(source));
+            return source;
+        }
+    }
     private static readonly IReadOnlyList<TranslationDiagnostic> NoDiagnostics = Array.AsReadOnly(Array.Empty<TranslationDiagnostic>());
 
     /// <summary>A list as a read-only array of its items: the shared empty array when it has none.</summary>
@@ -260,7 +343,7 @@ internal static class Mf2SyntaxReader
             if (input) symbol = expression.Operand;
             if (symbol?.Kind != Mf2OperandKind.Variable || expression.MarkupKind != Mf2MarkupKind.None)
             { Error("Invalid declaration expression.", start, _at); return; }
-            _declarations.Add(new Mf2DeclarationSyntax(input ? "input" : "local", symbol.Value, symbol.Location, expression, Location(start, _at)));
+            _declarations.Add(new Mf2DeclarationSyntax(input ? "input" : "local", symbol.Value, symbol.Span, expression, Span(start, _at)));
         }
         private void ReadMatcher()
         {
@@ -274,25 +357,25 @@ internal static class Mf2SyntaxReader
                 selectors.Add(Operand().Value);
             }
             if (selectors.Count == 0) Error("A matcher requires variable selectors.", start, _at);
-            _match = new Mf2MatchSyntax(Mf2SyntaxDocument.Compact(selectors), Location(start, _at));
+            _match = new Mf2MatchSyntax(Mf2SyntaxDocument.Compact(selectors), Span(start, _at));
             while (_at < _text.Length)
             {
                 _cancellation.ThrowIfCancellationRequested(); int variantStart = _at;
-                var keys = new List<string>(); var locations = new List<TextSourceLocation>();
+                var keys = new List<string>(); var locations = new List<Mf2Span>();
                 while (_at < _text.Length && !Starts("{{"))
                 {
                     int keyStart = _at;
                     if (Starts("*")) { _at++; Token(Mf2SyntaxTokenKind.Literal, keyStart); }
                     else { var key = Operand(); if (key.Kind == Mf2OperandKind.Variable) Error("Variant keys must be literals.", keyStart, _at); }
                     if (_at == keyStart) { Recover(); break; }
-                    keys.Add(_text.Substring(keyStart, _at - keyStart)); locations.Add(Location(keyStart, _at));
+                    keys.Add(_text.Substring(keyStart, _at - keyStart)); locations.Add(Span(keyStart, _at));
                     bool separated = Space();
                     if (!separated && !Starts("{{")) { Error("Variant keys require whitespace.", _at, _at); Recover(); break; }
                 }
                 if (keys.Count == 0) Error("A variant requires keys.", variantStart, _at);
                 if (!Starts("{{")) { Error("A variant requires a quoted pattern.", _at, _at); break; }
                 int patternStart = _at; ReadPattern(true);
-                _variants.Add(new Mf2VariantSyntax(Mf2SyntaxDocument.Compact(keys), Location(variantStart, _at)) { PatternLocation = Location(patternStart, _at), KeyLocations = Mf2SyntaxDocument.Compact(locations) });
+                _variants.Add(new Mf2VariantSyntax(Mf2SyntaxDocument.Compact(keys), Span(variantStart, _at)) { PatternSpan = Span(patternStart, _at), KeySpans = Mf2SyntaxDocument.Compact(locations) });
                 Space();
             }
             if (_variants.Count == 0) Error("A matcher requires variants.", start, _at);
@@ -360,12 +443,12 @@ internal static class Mf2SyntaxReader
                 if (!attribute && (attributes.Count != 0 || (kind == Mf2MarkupKind.None && function is null))) Error("Options must follow a function or markup name and precede attributes.", from, _at);
                 var target = attribute ? attributes : options;
                 if (target.Any(p => p.Name == name)) Error("Duplicate " + (attribute ? "attribute" : "option") + " '" + name + "'.", from, _at);
-                target.Add(new Mf2PropertySyntax(name, value, attribute, Location(from, _at)));
+                target.Add(new Mf2PropertySyntax(name, value, attribute, Span(from, _at)));
             }
             if (_at < _text.Length) { int close = _at++; Token(Mf2SyntaxTokenKind.ExpressionEnd, close); }
             else Error("Unterminated MF2 expression.", start, Math.Min(start + 1, _text.Length));
             if (kind == Mf2MarkupKind.None && operand is null && function is null) Error("An expression requires an operand or function.", start, _at);
-            _expressions.Add(new Mf2ExpressionSyntax(operand, function, markup, kind, Mf2SyntaxDocument.Compact(options), Mf2SyntaxDocument.Compact(attributes), Location(start, _at)));
+            _expressions.Add(new Mf2ExpressionSyntax(operand, function, markup, kind, Mf2SyntaxDocument.Compact(options), Mf2SyntaxDocument.Compact(attributes), Span(start, _at)));
         }
         /// <summary>Skips an unreadable expression body up to, not including, its closing brace.</summary>
         private void SkipExpression()
@@ -406,7 +489,7 @@ internal static class Mf2SyntaxReader
             }
             if (start == _at || (kind == Mf2OperandKind.Variable && text.Length == 0)) Error("Expected a literal or variable operand.", start, _at);
             Token(kind == Mf2OperandKind.Variable ? Mf2SyntaxTokenKind.Variable : Mf2SyntaxTokenKind.Literal, start, text);
-            return new Mf2OperandSyntax(kind, text, quoted, Location(start, _at));
+            return new Mf2OperandSyntax(kind, text, quoted, Span(start, _at));
         }
         // ^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$, the MF2 number-literal production.
         private static bool IsNumberLiteral(string value)
@@ -461,6 +544,9 @@ internal static class Mf2SyntaxReader
             int fromByte = _bytes is null ? from : _bytes[from], toByte = _bytes is null ? to : _bytes[to];
             return new TextSourceLocation(_source.Path, fromByte, toByte - fromByte, line + 1, from - _lineStarts[line] + 1, endLine + 1, to - _lineStarts[endLine] + 1);
         }
+        // A node's extent, made a location when read (Mf2SourceMap), with the values Location computes.
+        private Mf2SourceMap? _map;
+        private Mf2Span Span(int from, int to) => new(_map ??= new Mf2SourceMap(_source.Path, _text, _bytes is null), from, to);
         private void Error(string message, int from, int to) => _diagnostics.Add("RTR0066", TranslationDiagnosticSeverity.Error, message, Location(from, to));
         private Mf2SyntaxDocument Result() => new(_source, _tokens, _expressions, _declarations, _variants, _match, _diagnostics.ToSortedArray(), _options, _given);
     }

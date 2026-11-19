@@ -56,6 +56,8 @@ public static partial class TranslationCompiler
         private string? _logical;
         /// <summary>The logical path, <c>common.cancel</c>, joined once.</summary>
         internal string Logical { get => _logical ??= string.Join(".", Path); init => _logical = value; }
+        /// <summary>The node's comments and properties, joined: path registration compares them.</summary>
+        internal string Metadata { get; init; } = "";
         /// <summary>
         /// The memos of a cached compile (<see cref="Rmf2CompileCache"/>), which reuses this object while its file and the
         /// link context are unchanged; null in any other compile. Each memo is an immutable object replaced as a whole,
@@ -1134,7 +1136,8 @@ public static partial class TranslationCompiler
     }
 
     // One node of a file as a compile extracts it: its paths and, for a message, the source the compile links.
-    private sealed record Rmf2NodeExtractV5(Rmf2ResourceNode Node, string Logical, string Metadata, string? Key, Rmf2ProjectSourceV5? Message);
+    // A group node of a file as a compile extracts it; a message node is extracted as its Rmf2ProjectSourceV5.
+    private sealed record Rmf2NodeExtractV5(Rmf2ResourceNode Node, string Logical, string Metadata);
 
     private static List<Rmf2ProjectSourceV5> ReadRmf2ProjectSourcesV5(TranslationSource project, TranslationSource[] sources,
         IReadOnlyDictionary<TranslationSource, Rmf2SourceUnitV5>? units, JsonValue config, HashSet<string> locales, DiagnosticBag diagnostics, TranslationCompilerOptions options, CancellationToken cancellationToken,
@@ -1223,7 +1226,7 @@ public static partial class TranslationCompiler
             Rmf2SourceUnitV5? unit = units is not null && units.TryGetValue(source, out var match) ? match : null;
             // A cached compile reuses a file's extracted nodes while the file and the link context (which decides the
             // mounts) are unchanged, so its messages keep their identity and memos from one compile to the next.
-            var extract = context is not null && unit is not null ? unit.Extraction(context) as Rmf2NodeExtractV5[] : null;
+            var extract = context is not null && unit is not null ? unit.Extraction(context) as object[] : null;
             IReadOnlyList<Rmf2ResourceNode>? nodes = null;
             if (grouped)
             {
@@ -1247,15 +1250,14 @@ public static partial class TranslationCompiler
             }
             if (extract is null)
             {
-                extract = new Rmf2NodeExtractV5[nodes!.Count];
+                extract = new object[nodes!.Count];
                 for (int index = 0; index < extract.Length; index++)
                 {
                     var node = nodes[index];
                     string[] path = mount.Concat(node.Path).ToArray();
-                    string logical = string.Join(".", path);
-                    string? key = node.IsGroup ? null : string.Join("_", path);
-                    extract[index] = new(node, logical, string.Join("\n", node.Comments.Concat(node.Properties)), key,
-                        key is null ? null : new Rmf2ProjectSourceV5(key, path, locale, source, node, unit) { Logical = logical, Memo = context is null ? null : new() });
+                    string logical = string.Join(".", path), metadata = string.Join("\n", node.Comments.Concat(node.Properties));
+                    extract[index] = node.IsGroup ? new Rmf2NodeExtractV5(node, logical, metadata)
+                        : new Rmf2ProjectSourceV5(string.Join("_", path), path, locale, source, node, unit) { Logical = logical, Metadata = metadata, Memo = context is null ? null : new() };
                 }
                 if (context is not null && unit is not null) unit.SetExtraction(context, extract);
             }
@@ -1264,13 +1266,14 @@ public static partial class TranslationCompiler
             {
                 Register(string.Join(".", mount.Take(index)), true, "", DiagnosticBag.Location(source, new(0, 0)));
             }
-            foreach (var item in extract)
+            foreach (object item in extract)
             {
-                Register(item.Logical, item.Node.IsGroup, item.Metadata, item.Node.NameLocation);
-                if (item.Message is not { } extracted) continue;
-                string key = item.Key!, logical = item.Logical;
+                if (item is Rmf2NodeExtractV5 group) { Register(group.Logical, true, group.Metadata, group.Node.NameLocation); continue; }
+                var extracted = (Rmf2ProjectSourceV5)item;
+                Register(extracted.Logical, false, extracted.Metadata, extracted.Node.NameLocation);
+                string key = extracted.Key, logical = extracted.Logical;
                 ref string? previous = ref CollectionsMarshal.GetValueRefOrAddDefault(generated, key, out bool generatedBefore);
-                if (generatedBefore && previous != logical) diagnostics.Add("RTR0018", TranslationDiagnosticSeverity.Error, "Logical path '" + logical + "' collides with '" + previous + "' under canonical underscore keys.", item.Node.NameLocation);
+                if (generatedBefore && previous != logical) diagnostics.Add("RTR0018", TranslationDiagnosticSeverity.Error, "Logical path '" + logical + "' collides with '" + previous + "' under canonical underscore keys.", extracted.Node.NameLocation);
                 previous = logical;
                 result.Add(extracted);
             }
