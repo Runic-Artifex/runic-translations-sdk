@@ -5219,6 +5219,11 @@ ui {
 }
 ui {
   list {
+    unsaved = Unsaved changes
+  }
+}
+ui {
+  list {
     has_errors = The text has errors. Open it in the workbench to see them.
   }
 }

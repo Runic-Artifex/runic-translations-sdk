@@ -177,6 +177,14 @@ export class ReviewStore {
   }
 
   // The SDK per-unit fingerprint of the base message as the editor loaded it (undefined: the base locale has errors).
+  /** The messages whose review entry for `locale` has an unsaved change: the list view marks them. */
+  changedKeys(locale: string): string[] {
+    return this.changes.entries.flatMap(({ entry, base }) => {
+      const changed = entry ?? base;
+      return changed?.locale === locale ? [changed.key] : [];
+    });
+  }
+
   fingerprint(key: string): string | undefined {
     return this.#options.snapshot()?.review?.fingerprints?.[key];
   }

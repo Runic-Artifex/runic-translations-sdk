@@ -5219,6 +5219,11 @@ ui {
 }
 ui {
   list {
+    unsaved = Ungespeicherte Änderungen
+  }
+}
+ui {
+  list {
     has_errors = Der Text enthält Fehler. Öffnen Sie ihn in der Werkbank, um sie zu sehen.
   }
 }

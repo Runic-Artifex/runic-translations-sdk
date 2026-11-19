@@ -16,6 +16,7 @@
   import type { SelectionController } from "#lib/state/selection-controller.svelte.js";
   import type { WorkspaceView } from "#lib/state/workspace-view.svelte.js";
   import { getUiText, type UiMessage } from "#lib/ui-text.js";
+  import { unsavedTitleMarker } from "#lib/window-title.js";
 
   let {
     catalog,
@@ -239,6 +240,10 @@
   }
 </script>
 
+{#snippet unsavedMark()}
+  <span class="list-unsaved" role="img" aria-label={ui.text("ui_list_unsaved")} title={ui.text("ui_list_unsaved")} data-unsaved-mark>{unsavedTitleMarker.trim()}</span>
+{/snippet}
+
 {#snippet segments(items: SourceSegment[])}{#each items as segment, index (index)}{#if segment.kind === "text"}{segment.text}{:else}<span class="placeholder-chip mx-0.5 align-baseline" data-placeholder={segment.kind}>{segment.syntax}</span>{/if}{/each}{/snippet}
 
 {#snippet textView(text: SourceTextView, tag: string)}
@@ -300,8 +305,10 @@
             data-list-row={row.key}
             data-state={row.state?.name}
             data-inline={row.inline}
+            data-unsaved={row.unsaved}
           >
             <div role="gridcell" tabindex="-1" class="list-path" title={row.dottedPath} onclick={(event) => cellClick(event, row, false)} onkeydown={(event) => cellKeydown(event, row, index)}>
+              {#if row.unsaved}{@render unsavedMark()}{/if}
               <span class="font-mono">{row.dottedPath}</span>
             </div>
             {#if !sourceText}
@@ -452,6 +459,14 @@
   .list-current { background: var(--card); box-shadow: inset 2px 0 0 var(--paint); }
   .list-path { color: var(--muted-foreground); font-size: var(--ui-text-xs); overflow-wrap: anywhere; padding-top: calc(var(--list-cell-block) + 0.2rem) !important; }
   .list-source { color: var(--foreground); }
+  /* The unsaved mark: the window title's marker, before the path of a message with unsaved work. */
+  .list-unsaved {
+    display: inline-block;
+    margin-inline-end: 0.35rem;
+    color: var(--foreground);
+    font-weight: 700;
+    line-height: 1;
+  }
   .list-text { cursor: text !important; }
   .list-missing { color: var(--muted-foreground); font-style: italic; font-size: var(--message-text); }
   .list-structure {

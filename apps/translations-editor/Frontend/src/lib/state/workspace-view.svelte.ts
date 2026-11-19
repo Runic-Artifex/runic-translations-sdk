@@ -7,7 +7,7 @@ import type { MessageFilter } from "../MessageToolbar.svelte";
 import { createMessageSearchIndex } from "../message-search";
 import { adjacentMessage, messageTreeOrder, nextMessageKind, type NextMessageDirection, type NextMessageKind } from "../next-message";
 import { projectKind, textRole, type ProjectKind, type TextRole } from "../project-kind";
-import { localeCoverage, preview, type TranslationRow } from "../resource-model";
+import { localeCoverage, preview, unsavedMessageKeys, type TranslationRow } from "../resource-model";
 import {
   bidiIssues,
   effectiveReviewState,
@@ -180,6 +180,19 @@ export class WorkspaceView {
     });
   });
   /**
+   * The messages of the selected locale with unsaved work: text that differs from the saved document, or a review
+   * change. Save and an edit back to the saved text clear it, as they clear the window title's mark.
+   */
+  unsavedKeys = $derived.by((): ReadonlySet<string> => {
+    const locale = this.#locale();
+    const { drafts, review } = this.#options;
+    const keys = unsavedMessageKeys(this.#options.snapshot(), drafts.drafts, drafts.parsed, locale);
+    // The source text has no review states; review entries kept for it are not the selection's work.
+    if (this.editingSource) return keys;
+    for (const key of review.changedKeys(locale)) keys.add(key);
+    return keys;
+  });
+  /**
    * The list view's rows (D074.1): the messages the search and filter let through, in tree order under namespace
    * headers, with the source text beside the selected locale's text and its translation state.
    */
@@ -187,10 +200,12 @@ export class WorkspaceView {
     const locale = this.#locale();
     const sourceText = this.editingSource;
     const reviewIndex = this.#options.review.index;
+    const unsaved = this.unsavedKeys;
     return buildListRows(this.visibleRows, {
       locale,
       baseLocale: this.#defaultLocale(),
       sourceText,
+      unsaved: (key) => unsaved.has(key),
       review: (key, translated) => {
         const entry = reviewIndex.get(reviewIdentity(key, locale));
         return { state: effectiveReviewState(entry, translated), stale: isStale(entry) };
