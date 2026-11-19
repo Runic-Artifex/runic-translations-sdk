@@ -107,8 +107,13 @@ internal sealed class Rmf2CompileCache
     /// <summary>Compiles as <see cref="TranslationCompiler.CompileProject"/> does, reusing what the cache holds for unchanged sources.</summary>
     /// <param name="options">The options of this compile (such as a relaxed review compile); the cache's options when null.</param>
     /// <exception cref="OperationCanceledException">The token was canceled.</exception>
+    /// <param name="record">
+    /// Whether this compile is of the catalog as it is: its files become the cache's file set and its result the last
+    /// result. A compile of a hypothetical state (a refactoring's edited files) passes false: it reuses everything, and
+    /// the next compile of the real state finds the cache as it left it.
+    /// </param>
     internal Rmf2ProjectCompilation Compile(TranslationSource project, IEnumerable<TranslationSource> sources, out Rmf2CompileStatistics statistics,
-        TranslationCompilerOptions? options = null, bool pseudoLocales = false, CancellationToken cancellationToken = default)
+        TranslationCompilerOptions? options = null, bool pseudoLocales = false, bool record = true, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(sources);
@@ -136,22 +141,22 @@ internal sealed class Rmf2CompileCache
             lookup[materialized[index]] = found[index]!;
             current[materialized[index].Path] = found[index]!;
         }
-        // The latest compile decides the source set: paths it lacks lose their units, and with them their memos.
-        lock (_gate) _units = current;
+        // The latest compile of the real state decides the source set: paths it lacks lose their units, and with them their memos.
+        if (record) lock (_gate) _units = current;
 
         var (context, state) = Context(new Rmf2LinkContext(project.Path, Convert.ToHexStringLower(SHA256.HashData(project.Bytes)),
             options.MaximumDocumentBytes, options.MaximumDepth, options.MaximumKeysPerCatalog, options.MaximumValueBytes,
             options.MaximumPlaceholdersPerValue, options.MaximumLocalesPerCatalog, options.RelaxedValidation, options.BaseLocaleOnly, pseudoLocales));
         // Nothing changed since the last compile of this context: its result is this one's.
         var units = Array.ConvertAll(found, unit => unit!);
-        if (state.Last is { } last && last.Units.AsSpan().SequenceEqual(units))
+        if (record && state.Last is { } last && last.Units.AsSpan().SequenceEqual(units))
         {
             statistics = new(materialized.Length, 0, last.Units.Sum(MessageCount), 0, 0);
             return last.Result;
         }
         var counters = new Rmf2CompileCounters();
         Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5Cached(project, materialized, lookup, options, pseudoLocales, context, state, counters, cancellationToken);
-        state.Last = new(units, result);
+        if (record) state.Last = new(units, result);
         // The new files' messages are compiled and memoized: their token streams are read again only when asked for.
         foreach (int index in missing) found[index]!.ReleaseTokens();
         statistics = new(materialized.Length, missing.Length,

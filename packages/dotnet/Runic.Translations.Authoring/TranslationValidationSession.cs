@@ -68,6 +68,19 @@ internal sealed class TranslationValidationSession
     public TranslationValidationSnapshot Validate(TranslationSource project, IEnumerable<TranslationSource> sources, CancellationToken cancellationToken = default) =>
         Validate(project, sources, null, false, cancellationToken);
 
+    /// <summary>
+    /// Compiles a hypothetical state of the catalog, such as the files a refactoring would write, reusing the session's
+    /// work, without making it the session's state: the next <see cref="Validate(TranslationSource, IEnumerable{TranslationSource}, CancellationToken)"/>
+    /// finds the session as before. Equal to a full compile of the same sources.
+    /// </summary>
+    /// <exception cref="OperationCanceledException">The token was canceled.</exception>
+    public Rmf2ProjectCompilation Preview(TranslationSource project, IEnumerable<TranslationSource> sources, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentNullException.ThrowIfNull(sources);
+        return Cache.Compile(project, sources, out _, null, false, record: false, cancellationToken);
+    }
+
     /// <param name="options">Options of this validation, such as the relaxed review compile of <c>TranslationReviewFile.ForReview</c>; the session's when null.</param>
     /// <param name="pseudoLocales">Whether to generate the pseudo-locales runic.json declares.</param>
     public TranslationValidationSnapshot Validate(TranslationSource project, IEnumerable<TranslationSource> sources, TranslationCompilerOptions? options,
@@ -76,7 +89,7 @@ internal sealed class TranslationValidationSession
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(sources);
         TranslationSource[] all = sources as TranslationSource[] ?? sources.ToArray();
-        Rmf2ProjectCompilation compilation = Cache.Compile(project, all, out Rmf2CompileStatistics statistics, options, pseudoLocales, cancellationToken);
+        Rmf2ProjectCompilation compilation = Cache.Compile(project, all, out Rmf2CompileStatistics statistics, options, pseudoLocales, cancellationToken: cancellationToken);
         lock (_gate)
         {
             var current = new Dictionary<string, TranslationSource>(all.Length, StringComparer.Ordinal);
