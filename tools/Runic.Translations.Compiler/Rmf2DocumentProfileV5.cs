@@ -39,6 +39,18 @@ internal static class Rmf2DocumentProfileV5
 
     internal static bool IsBlockLevel(Rmf2MarkupContractV5 contract) => contract.Placement is "block" or "list-item";
 
+    private static readonly Rmf2DocumentVariantV5 InlineVariant = new(Inline, null);
+    private static readonly IReadOnlyList<Rmf2DocumentVariantV5>[] SharedInline = new IReadOnlyList<Rmf2DocumentVariantV5>[33];
+    private static IReadOnlyList<Rmf2DocumentVariantV5> InlineVariants(int count)
+    {
+        if (count < SharedInline.Length && System.Threading.Volatile.Read(ref SharedInline[count]) is { } shared) return shared;
+        var items = new Rmf2DocumentVariantV5[count];
+        Array.Fill(items, InlineVariant);
+        var result = Array.AsReadOnly(items);
+        if (count < SharedInline.Length) System.Threading.Volatile.Write(ref SharedInline[count], result);
+        return result;
+    }
+
     internal static Rmf2DocumentAnalysisV5 Analyze(string key, Rmf2MessageV5 message, string? expectedKind,
         IReadOnlyDictionary<string, Rmf2MarkupContractV5> contracts, TextSourceLocation location, DiagnosticBag diagnostics)
     {
@@ -78,13 +90,16 @@ internal static class Rmf2DocumentProfileV5
             {
                 if (kinds[index] == Inline) NestedBlocks(variant.Nodes);
                 variants.Add(variant);
-                results.Add(new(kinds[index], null));
+                results.Add(kinds[index] == Inline ? InlineVariant : new(kinds[index], null));
             }
         }
         // A message whose variants all stay as they are is the message itself (inline content), not a copy.
         bool unchanged = true;
         for (int index = 0; unchanged && index < variants.Count; index++) unchanged = ReferenceEquals(variants[index], message.Variants[index]);
-        return new(kind, unchanged ? message : message with { Variants = variants.AsReadOnly() }, results.AsReadOnly());
+        // Inline content in every variant: the shared results for that many variants.
+        bool allInline = true;
+        foreach (var result in results) if (!ReferenceEquals(result, InlineVariant)) { allInline = false; break; }
+        return new(kind, unchanged ? message : message with { Variants = variants.AsReadOnly() }, allInline ? InlineVariants(results.Count) : results.AsReadOnly());
 
         void NestedBlocks(IReadOnlyList<Rmf2NodeV5> nodes)
         {

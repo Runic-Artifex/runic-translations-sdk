@@ -202,7 +202,7 @@ internal static class TranslationInterchangeProjectionAdapter
     }
 
     private static string RawSyntax(Rmf2MessageV5 message) =>
-        Encoding.UTF8.GetString(message.Syntax.Source.GetUtf8Bytes());
+        message.Syntax.Text;
 
     // Profile v3: placeholders are plain (exchanged as <ph>); declarations and selectors are exchanged as a selector
     // view (DecomposeSelector) when their patterns are plain; markup is structured.

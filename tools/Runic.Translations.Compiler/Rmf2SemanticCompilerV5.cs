@@ -121,20 +121,20 @@ internal static class Rmf2SemanticCompilerV5
                 var seen = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var variant in syntax.Variants)
                 {
-                    var keys = variant.Keys.Select((raw, index) => Key(raw, selectors[index], variant.KeyLocations[index])).ToArray();
+                    var keys = variant.Keys.Select((raw, index) => Key(raw, selectors[index], variant.KeySpans[index])).ToArray();
                     string vector = string.Concat(keys.Select(key => {
                         string normalized = key.Kind == "wildcard" ? "*" : "=" + (key.Canonical ?? key.Value!.Normalize(NormalizationForm.FormC));
                         return normalized.Length.ToString(CultureInfo.InvariantCulture) + ":" + normalized;
                     }));
                     if (!seen.Add(vector)) DataError("Duplicate normalized variant key vector.", variant.Location);
-                    variants.Add(new(keys, Pattern(variant.PatternLocation.StartByte + 2, variant.PatternLocation.StartByte + variant.PatternLocation.LengthBytes - 2)));
+                    variants.Add(new(keys, Pattern(variant.PatternSpan.StartByte + 2, variant.PatternSpan.EndByte - 2)));
                 }
             }
             else
             {
                 var opening = syntax.Tokens.FirstOrDefault(t => t.Kind == Mf2SyntaxTokenKind.PatternStart);
                 var closing = syntax.Tokens.LastOrDefault(t => t.Kind == Mf2SyntaxTokenKind.PatternEnd);
-                variants.Add(new(Array.Empty<Rmf2KeyV5>(), Pattern(opening is null ? 0 : opening.Location.StartByte + 2, closing?.Location.StartByte ?? syntax.Source.Bytes.Length)));
+                variants.Add(new(Array.Empty<Rmf2KeyV5>(), Pattern(opening is null ? 0 : opening.Location.StartByte + 2, closing?.Location.StartByte ?? syntax.ByteLength)));
             }
             if (_inputs.Count > options.MaximumPlaceholdersPerValue || _inputs.Count > 32 || selectors.Count > 16 || variants.Count > 256 || declarations.Count > 256)
                 Error("Message exceeds the v5 input, selector, variant or declaration limit.", syntax.Tokens[0].Location);
@@ -205,7 +205,7 @@ internal static class Rmf2SemanticCompilerV5
             var nodes = new List<Rmf2NodeV5>();
             // The text of the current run: its single piece, or the builder once a second piece joins it.
             string? piece = null; StringBuilder? text = null;
-            var expressions = _expressionsByStart ??= syntax.Expressions.ToDictionary(expression => expression.Location.StartByte);
+            var expressions = _expressionsByStart ??= syntax.Expressions.ToDictionary(expression => expression.Span.StartByte);
             int consumed = from;
             foreach (var token in syntax.Tokens)
             {
@@ -221,7 +221,7 @@ internal static class Rmf2SemanticCompilerV5
                 }
                 if (token.Kind != Mf2SyntaxTokenKind.ExpressionStart) continue;
                 Flush();
-                var expression = expressions[token.Location.StartByte]; consumed = expression.Location.StartByte + expression.Location.LengthBytes;
+                var expression = expressions[token.Location.StartByte]; consumed = expression.Span.EndByte;
                 if (expression.MarkupKind == Mf2MarkupKind.None) nodes.Add(new Rmf2ExpressionNodeV5(Expression(expression).Expression));
                 else nodes.Add(new Rmf2MarkupV5(expression.MarkupName!, expression.MarkupKind.ToString().ToLowerInvariant(),
                     expression.Options.Select(property => new Rmf2OptionV5(property.Name, Value(property.Value!, null))).ToArray(), Annotations(expression)));
@@ -265,24 +265,24 @@ internal static class Rmf2SemanticCompilerV5
         private Rmf2AnnotationV5[] Annotations(Mf2ExpressionSyntax expression) => expression.Attributes.Select(property =>
             new Rmf2AnnotationV5(property.Name, property.Value is null ? null : Value(property.Value, null))).ToArray();
 
-        private Rmf2KeyV5 Key(string raw, Rmf2SelectorV5 selector, TextSourceLocation location)
+        private Rmf2KeyV5 Key(string raw, Rmf2SelectorV5 selector, Mf2Span span)
         {
             if (raw == "*") return new("wildcard");
             string value = raw.StartsWith('|') ? Unescape(raw.Substring(1, raw.Length - 2)) : raw;
             string normalized = value.Normalize(NormalizationForm.FormC);
             if (!raw.StartsWith('|') && raw.Length != 0 && (char.IsAsciiDigit(raw[0]) || raw[0] == '-') && !Rmf2DecimalV5.TryCanonicalize(raw, out _))
-                DataError("Malformed or out-of-domain numeric variant key.", location);
+                DataError("Malformed or out-of-domain numeric variant key.", span.Location);
             if (selector.Type is "int64" or "decimal")
             {
                 if (Rmf2DecimalV5.TryCanonicalize(normalized, out string number))
                 {
-                    if (selector.Type == "int64" && !long.TryParse(number, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out _)) DataError("An integer selector requires an int64 exact key.", location);
+                    if (selector.Type == "int64" && !long.TryParse(number, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out _)) DataError("An integer selector requires an int64 exact key.", span.Location);
                     return new("literal", value, number);
                 }
                 if (selector.Function is not ("plural" or "ordinal") || normalized is not ("zero" or "one" or "two" or "few" or "many" or "other"))
-                    DataError("A numeric selector key must be a portable exact number or an enabled plural category.", location);
+                    DataError("A numeric selector key must be a portable exact number or an enabled plural category.", span.Location);
             }
-            else if (selector.Type == "boolean" && normalized is not ("true" or "false")) DataError("A boolean selector key must be true, false or wildcard.", location);
+            else if (selector.Type == "boolean" && normalized is not ("true" or "false")) DataError("A boolean selector key must be true, false or wildcard.", span.Location);
             return new("literal", value);
         }
         private static bool AcceptsOperand(Rmf2ValueV5 value, string actual, string expected)

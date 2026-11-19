@@ -11,10 +11,17 @@ namespace Runic.Translations.Compiler;
 /// </summary>
 internal sealed class Rmf2ByteMap : IReadOnlyList<int>
 {
-    private readonly int[] _starts;
-    private readonly int[] _values;
+    // The runs, or null for a map of one run (a one-line message), whose first offset is _first.
+    private readonly int[]? _starts;
+    private readonly int[]? _values;
+    private readonly int _first;
 
-    private Rmf2ByteMap(int[] starts, int[] values, int count) { _starts = starts; _values = values; Count = count; }
+    private Rmf2ByteMap(int[] starts, int[] values, int count)
+    {
+        Count = count;
+        if (starts.Length == 1 && starts[0] == 0) _first = values[0];
+        else { _starts = starts; _values = values; }
+    }
 
     /// <summary>The map of a source that is its own message: entry <c>i</c> is <c>i</c>.</summary>
     internal static Rmf2ByteMap Identity(int count) => count == 0 ? new([], [], 0) : new([0], [0], count);
@@ -26,9 +33,10 @@ internal sealed class Rmf2ByteMap : IReadOnlyList<int>
         get
         {
             if ((uint)index >= (uint)Count) throw new ArgumentOutOfRangeException(nameof(index));
+            if (_starts is null) return _first + index;
             int run = Array.BinarySearch(_starts, index);
             if (run < 0) run = ~run - 1;
-            return _values[run] + (index - _starts[run]);
+            return _values![run] + (index - _starts[run]);
         }
     }
 
