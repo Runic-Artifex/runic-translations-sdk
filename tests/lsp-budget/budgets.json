@@ -11,64 +11,64 @@
     "lsp/open-to-diagnostics-ms": {
       "target": 5000,
       "headroom": 1.75,
-      "measured": 6564,
-      "limit": 11488
+      "measured": 6408,
+      "limit": 11215
     },
     "lsp/edit-to-diagnostics-ms": {
       "target": 500,
       "headroom": 2,
-      "measured": 665,
-      "limit": 1330
+      "measured": 643,
+      "limit": 1286
     },
     "lsp/hover-ms": {
-      "headroom": 3,
+      "headroom": 6,
       "measured": 13,
-      "limit": 41
+      "limit": 78
     },
     "lsp/completion-ms": {
-      "headroom": 3,
-      "measured": 19,
-      "limit": 58
+      "headroom": 6,
+      "measured": 14,
+      "limit": 84
     },
     "lsp/hover-after-diagnostics-ms": {
-      "headroom": 3,
+      "headroom": 6,
       "measured": 19,
-      "limit": 57
+      "limit": 114
     },
     "lsp/hover-while-typing-ms": {
       "target": 50,
       "headroom": 3,
-      "measured": 42,
-      "limit": 128
+      "measured": 58,
+      "limit": 175
     },
     "lsp/completion-while-typing-ms": {
       "target": 50,
       "headroom": 3,
-      "measured": 67,
-      "limit": 202
+      "measured": 71,
+      "limit": 214
     },
     "lsp/typing-to-diagnostics-ms": {
       "target": 500,
       "headroom": 2,
-      "measured": 1339,
-      "limit": 2679
+      "measured": 80,
+      "limit": 161
     },
     "lsp/rename-ms": {
       "target": 3000,
       "headroom": 1.75,
-      "measured": 6497,
-      "limit": 11370
+      "measured": 3640,
+      "limit": 6371
     },
     "lsp/resident-bytes-after-open": {
       "target": 1073741824,
       "headroom": 1.25,
-      "measured": 1322840064,
-      "limit": 1653550080
+      "measured": 1183526912,
+      "limit": 1479408640
     },
     "lsp/peak-resident-bytes": {
       "headroom": 1.3,
-      "measured": 3039027200,
-      "limit": 3950735360
+      "measured": 2770747392,
+      "limit": 3601971610
     }
   }
 }

@@ -40,12 +40,13 @@ A latency is the median of every measurement of every sample, memory the largest
 ## Budget entries
 
 ```json
-"lsp/rename-ms": { "target": 3000, "headroom": 1.75, "measured": 1610, "limit": 2818 }
+"lsp/rename-ms": { "target": 3000, "headroom": 1.75, "measured": 3640, "limit": 6371 }
 ```
 
 - `measured` and `limit` are written by `--update`: the limit is the measured value times `headroom`.
-- `headroom` covers a shared CI runner's variance and is written by hand: wider for latencies of a few milliseconds than
-  for the seconds a validation takes, and narrow for memory.
+- `headroom` covers a shared CI runner's variance and is written by hand: 6 for idle requests of a few milliseconds, where
+  jitter is most of the value, 3 for requests while typing, 1.75–2 for what takes seconds, and 1.25–1.3 for memory.
+- The committed values come from three runs on four processors (`taskset -c 12-15`), each budget's slowest.
 - `target` is #271's goal for the size the budgets measure, shown beside the limit in the report. A budget above its
   target is a known gap, listed in the pull request that set it.
 - A value under half its `measured` reports **improved: lower the budget**; it does not fail.
