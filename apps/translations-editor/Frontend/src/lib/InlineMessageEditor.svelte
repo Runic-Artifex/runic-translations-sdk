@@ -437,3 +437,14 @@
     </div>
   {/if}
 </div>
+
+<style>
+  /* Keyboard focus in the visual text box shows as the box's ring (focus-within above); the caret marks the segment. The
+     page's global textarea:focus-visible outline would draw a second ring around the focused segment inside it (#225
+     R9). Forced colours drop the box's ring (a box-shadow), so there the segment keeps its outline. */
+  @media not (forced-colors: active) {
+    [data-pattern-box] textarea:focus-visible {
+      outline: none;
+    }
+  }
+</style>
