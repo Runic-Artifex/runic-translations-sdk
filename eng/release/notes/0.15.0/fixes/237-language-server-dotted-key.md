@@ -1,0 +1,1 @@
+- The language server's "Mark … reviewed" code action names the message by its dotted path (`notes.pinned`), as RTR0090 and the command line do, instead of its flattened key (`notes_pinned`).

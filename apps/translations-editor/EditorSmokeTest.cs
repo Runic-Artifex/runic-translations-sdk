@@ -53,6 +53,14 @@ internal static partial class EditorSmokeTest
         var stale = await session.ApplyAuthoringOperationAsync(document.Path, draft.Content, "cart", entry.Authoring.Revision,
             new EditorMessageOperation("set-pattern", "0", "Stale")).ConfigureAwait(false);
         Require(!stale.Success && stale.Content == draft.Content && stale.Diagnostics.Any(diagnostic => diagnostic.Id == "EDITOR-AUTHORING"), "Stale authoring edit was accepted.");
+        // Refusals report a localized editor notice, as the document transform does: the compiler's reason as its detail.
+        EditorDiagnostic staleRefusal = stale.Diagnostics.Single(diagnostic => diagnostic.Id == "EDITOR-AUTHORING");
+        Require(staleRefusal.Message.Length == 0 && staleRefusal.Notice is { Code: "ui_backend_external_error", Detail.Length: > 0 },
+            "A stale authoring edit wasn't refused with a localized notice: " + staleRefusal.Notice?.Code + " " + staleRefusal.Message);
+        var vanished = await session.ApplyAuthoringOperationAsync(document.Path, draft.Content, "gone", entry.Authoring.Revision,
+            new EditorMessageOperation("set-pattern", "0", "Weg")).ConfigureAwait(false);
+        Require(!vanished.Success && vanished.Diagnostics.Single().Notice?.Code == "ui_backend_messageMissing" && vanished.Diagnostics.Single().Message.Length == 0,
+            "An operation on a missing message wasn't refused with ui_backend_messageMissing: " + vanished.Diagnostics.Single().Notice?.Code);
         Require((await session.SaveAsync(document.Path, draft.Content, document.Revision).ConfigureAwait(false)).Ok, "Authoring source wasn't saved.");
         var reloaded = (await session.LoadAsync().ConfigureAwait(false)).Documents.Single(document => document.Path == "de.rmf2");
         Require(reloaded.Entries!.Single().Authoring?.Variants[0].Pattern == "Genau ein Artikel", "Branch edit didn't survive save/reload.");
@@ -69,6 +77,9 @@ internal static partial class EditorSmokeTest
         Require(repaired.Content == "# 🦊 incomplete\nempty = {{}}\n" && !repaired.Diagnostics.Any(diagnostic => diagnostic.Id == "EDITOR-FIX"), "Safe repair didn't preserve unrelated content.");
         var staleFix = await session.ApplyDiagnosticFixAsync("de.rmf2", broken + "other = New\n", fix).ConfigureAwait(false);
         Require(staleFix.Diagnostics.Any(diagnostic => diagnostic.Id == "EDITOR-FIX"), "Stale repair wasn't refused as an operation result.");
+        EditorDiagnostic fixRefusal = staleFix.Diagnostics.Single(diagnostic => diagnostic.Id == "EDITOR-FIX");
+        Require(fixRefusal.Message.Length == 0 && fixRefusal.Notice is { Code: "ui_backend_external_error", Detail.Length: > 0 },
+            "A stale repair wasn't refused with a localized notice: " + fixRefusal.Notice?.Code + " " + fixRefusal.Message);
     }
 
     // Issue #225, P2/P5/P21: a missing translation starts as a standalone draft shaped like the base message with the
@@ -425,6 +436,26 @@ internal static partial class EditorSmokeTest
         await DrainExternalChangesAsync(session, "translations/runic.json").ConfigureAwait(false);
         WorkspaceSnapshot recovered = await session.LoadAsync().ConfigureAwait(false);
         Require(recovered.Success && recovered.Documents.Any(document => document.Path == "feature/en.rmf2"), "The editor did not recover after the manifest was fixed.");
+    }
+
+    // A preview of a structural change reads the workspace but acknowledges nothing: an outside edit made just before it
+    // is still reported by the next external-change check. Only a reload or an applied change moves the baseline.
+    private static async Task PreviewKeepsExternalChangesJourneyAsync(string project)
+    {
+        Directory.CreateDirectory(project);
+        await File.WriteAllTextAsync(Path.Combine(project, "runic.json"),
+            "{\"schemaVersion\":1,\"catalog\":\"preview-external\",\"code\":{\"namespace\":\"Smoke.Translations\",\"className\":\"PreviewText\"},\"baseLocale\":\"en\",\"locales\":[\"en\",\"de\"]}\n").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), "notes {\n  pinned = Pinned\n}\n").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "de.rmf2"), "notes {\n  pinned = Angeheftet\n}\n").ConfigureAwait(false);
+        using var session = new EditorSession(project);
+        Require((await session.LoadAsync().ConfigureAwait(false)).Success, "The preview fixture did not load.");
+        await DrainExternalChangesAsync(session, null).ConfigureAwait(false);
+
+        await File.WriteAllTextAsync(Path.Combine(project, "de.rmf2"), "notes {\n  pinned = Von außen geändert\n}\n").ConfigureAwait(false);
+        EditorMutationPreview preview = session.PreviewMutation(new EditorMutationRequest("create-key", null, null, null, null, null, "notes.archived", "Archived"));
+        Require(preview.Ok, "The create-key preview failed: " + preview.Message?.Code + " " + preview.Message?.Detail);
+        await DrainExternalChangesAsync(session, "de.rmf2").ConfigureAwait(false);
+        Require(await File.ReadAllTextAsync(Path.Combine(project, "en.rmf2")).ConfigureAwait(false) == "notes {\n  pinned = Pinned\n}\n", "The preview wrote to the workspace.");
     }
 
     private static async Task DrainExternalChangesAsync(EditorSession session, string? expectedPath)
@@ -789,6 +820,7 @@ internal static partial class EditorSmokeTest
             await NestedMissingKeyJourneyAsync(Path.Combine(container, "nested-missing-key")).ConfigureAwait(false);
             await CatalogImportJourneyAsync(Path.Combine(container, "catalog-import")).ConfigureAwait(false);
             await MalformedManifestJourneyAsync(Path.Combine(container, "malformed-manifest")).ConfigureAwait(false);
+            await PreviewKeepsExternalChangesJourneyAsync(Path.Combine(container, "preview-external")).ConfigureAwait(false);
             await InterchangeOutputJourneyAsync(Path.Combine(container, "interchange-output"), commandLine).ConfigureAwait(false);
             await ReviewStampJourneyAsync(Path.Combine(container, "review-stamp")).ConfigureAwait(false);
             await IncompleteCatalogReviewJourneyAsync(Path.Combine(container, "incomplete-review")).ConfigureAwait(false);

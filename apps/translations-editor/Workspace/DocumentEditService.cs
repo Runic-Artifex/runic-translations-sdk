@@ -86,7 +86,7 @@ internal sealed class DocumentEditService
             {
                 var workspace = _files.Rmf2Catalog();
                 var node = Rmf2ResourceReader.Read(source, cancellationToken: cancellationToken).Nodes.SingleOrDefault(node => !node.IsGroup && string.Join('_', workspace.LogicalPath(path, node)) == key)
-                    ?? throw new ArgumentException("The selected message no longer exists.");
+                    ?? throw new EditorUserException(EditorNotice.Create("ui_backend_messageMissing"));
                 var changed = Rmf2AuthoringService.Apply(Source(path, node.Message!), expectedRevision, Operation(operation));
                 content = operation.Kind == "rename-input"
                     ? StrictUtf8.GetString(Rmf2ResourceWriter.RenameInput(source, node.Key, operation.Name!, operation.NewName!))
@@ -94,13 +94,14 @@ internal sealed class DocumentEditService
             }
             else if (path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase))
                 content = StrictUtf8.GetString(Rmf2AuthoringService.Apply(source, expectedRevision, Operation(operation)).Bytes);
-            else throw new ArgumentException("Choose an MF2 message document.");
+            else throw new EditorUserException(EditorNotice.Create("ui_backend_not_message_document"));
             WorkspaceState state = await _reader.ReadStateAsync(path, content, cancellationToken).ConfigureAwait(false);
             return new(state.Compilation.Success, content, _entries.ReadEntries(path, content, state), _diagnostics.Diagnostics(state, cancellationToken));
         }
         catch (Exception exception) when (exception is ArgumentException or TranslationAuthoringException)
         {
-            return new(false, content, [], [new EditorDiagnostic("EDITOR-AUTHORING", "error", exception.Message, relativePath, 1, 1, 1, 1)]);
+            return new(false, content, [],
+                [new EditorDiagnostic("EDITOR-AUTHORING", "error", string.Empty, relativePath, 1, 1, 1, 1, EditorNotice.FromException(exception))]);
         }
         finally { _gate.Release(); }
     }
@@ -173,7 +174,8 @@ internal sealed class DocumentEditService
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
         {
-            return new(false, content, [], [new EditorDiagnostic("EDITOR-FIX", "error", exception.Message, relativePath, 1, 1, 1, 1)]);
+            return new(false, content, [],
+                [new EditorDiagnostic("EDITOR-FIX", "error", string.Empty, relativePath, 1, 1, 1, 1, EditorNotice.FromException(exception))]);
         }
         finally { _gate.Release(); }
     }

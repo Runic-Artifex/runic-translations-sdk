@@ -541,7 +541,7 @@ internal sealed partial class Rmf2LanguageServer
             bool AtEdit(Rmf2DiagnosticQuickFix fix) => fix.StartByte <= to && from <= fix.StartByte + fix.LengthBytes;
             // Document repairs, then project repairs (RTR0095: add the missing plural variants) and, for a stale
             // review entry (RTR0090), "mark reviewed", which records the current source in the review file.
-            (IReadOnlyList<Rmf2DiagnosticQuickFix> projectFixes, IReadOnlyList<TranslationReviewStaleEntry> stale) = ProjectQuickFixes(uri, buffer);
+            (IReadOnlyList<Rmf2DiagnosticQuickFix> projectFixes, IReadOnlyList<TranslationReviewStaleEntry> stale, Rmf2ProjectV5? reviewed) = ProjectQuickFixes(uri, buffer);
             Rmf2DiagnosticQuickFix[] fixes = Rmf2DiagnosticActions.GetQuickFixes(buffer.Syntax, _requestCancellation).Concat(projectFixes).Where(fix => fix.Location.StartByte <= to &&
                 from <= fix.Location.StartByte + fix.Location.LengthBytes || AtEdit(fix)).ToArray();
             // Several fixes can share one diagnostic (one RTR0078 join per line break, all reported at
@@ -549,9 +549,12 @@ internal sealed partial class Rmf2LanguageServer
             // diagnostic, is preferred, so a client never auto-applies an arbitrary one of them.
             var actions = new JsonArray(fixes.Select(fix => (JsonNode)QuickFixAction(uri, buffer, fix, AtEdit(fix) ||
                 fixes.Count(other => other.DiagnosticId == fix.DiagnosticId && other.Location.StartByte == fix.Location.StartByte && other.Location.LengthBytes == fix.Location.LengthBytes) == 1)).ToArray());
+            // The title names the message by its dotted path (notes.pinned), as RTR0090 and the CLI do; the command keeps the canonical key.
+            IReadOnlyDictionary<string, IReadOnlyList<string>>? paths = null;
             foreach (TranslationReviewStaleEntry item in stale.Where(item => item.Location.StartByte <= to && from <= item.Location.StartByte + item.Location.LengthBytes))
             {
-                string title = $"Mark the '{item.Entry.Locale}' translation of '{item.Entry.Key}' reviewed ({TranslationReviewFile.StateText(item.Entry.State)})";
+                paths ??= reviewed is not null ? Rmf2MessageKeys.Paths(reviewed) : new Dictionary<string, IReadOnlyList<string>>();
+                string title = $"Mark the '{item.Entry.Locale}' translation of '{Rmf2MessageKeys.Display(paths, item.Entry.Key)}' reviewed ({TranslationReviewFile.StateText(item.Entry.State)})";
                 actions.Add((JsonNode)new JsonObject { ["title"] = title, ["kind"] = "quickfix",
                     ["command"] = new JsonObject { ["title"] = title, ["command"] = "runic.markReviewed",
                         ["arguments"] = new JsonArray((JsonNode)JsonValue.Create(uri), JsonValue.Create(item.Entry.Key), JsonValue.Create(item.Entry.Locale)) } });
@@ -1559,10 +1562,10 @@ internal sealed partial class Rmf2LanguageServer
 
     // The project repairs for one open buffer and its stale review entries whose "Mark reviewed" can run now (the files
     // with the key's base message and translation are saved), from its project compiled with the open buffers.
-    private (IReadOnlyList<Rmf2DiagnosticQuickFix> Fixes, IReadOnlyList<TranslationReviewStaleEntry> Stale) ProjectQuickFixes(string uri, Buffer buffer)
+    private (IReadOnlyList<Rmf2DiagnosticQuickFix> Fixes, IReadOnlyList<TranslationReviewStaleEntry> Stale, Rmf2ProjectV5? Reviewed) ProjectQuickFixes(string uri, Buffer buffer)
     {
         string? project = BufferProject(uri, out _);
-        if (project is null) return ([], []);
+        if (project is null) return ([], [], null);
         try
         {
             ReviewView view = ReviewViewOf(project, BufferUris(project).ToArray());
@@ -1573,11 +1576,11 @@ internal sealed partial class Rmf2LanguageServer
             if (view.File is { } review && view.Fingerprints is not null)
                 stale = TranslationReviewFile.Stale(view.Review, review).Where(entry => PathComparer.Equals(FileKey(entry.Location.Path), FileKey(path)) &&
                     UnsavedReviewFiles(project, view.Review.Project, null, entry.Entry.Key, entry.Entry.Locale).Count == 0).ToArray();
-            return (fixes, stale);
+            return (fixes, stale, view.Review.Project);
         }
         catch (Exception error) when (error is ToolUsageException or ToolDiagnosticException or UnauthorizedAccessException or InvalidOperationException or IOException or FormatException or TranslationInterchangeException or TranslationAuthoringException or System.Text.Json.JsonException)
         {
-            return ([], []);
+            return ([], [], null);
         }
     }
 
