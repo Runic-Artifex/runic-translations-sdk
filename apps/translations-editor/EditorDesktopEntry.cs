@@ -172,13 +172,17 @@ internal sealed class EditorDesktopEntry
     {
         string apphost = Path.Combine(AppContext.BaseDirectory, "Runic.Translations.Editor");
         if (File.Exists(apphost)) return [apphost];
-        string assembly = typeof(EditorDesktopEntry).Assembly.Location;
+        // AppContext.BaseDirectory rather than Assembly.Location, which is empty in a NativeAOT executable.
+        string assembly = Path.Combine(AppContext.BaseDirectory, "Runic.Translations.Editor.dll");
+        if (!File.Exists(assembly)) assembly = string.Empty;
         string process = Environment.ProcessPath ?? throw new EditorDesktopEntryException("The editor's executable is unknown.");
         return string.IsNullOrEmpty(assembly) || Path.GetFileNameWithoutExtension(process) != "dotnet" ? [process] : [process, assembly];
     }
 
     /// <summary>The packaged application icon, the one the editor's page shows.</summary>
-    internal static string PackagedIcon() => Path.Combine(AppContext.BaseDirectory, "www", "brand", "icon.png");
+    // The packaged web UI's icon, where Runic Desktop finds the UI: www beside the editor, or a macOS bundle's
+    // Contents/Resources/www.
+    internal static string PackagedIcon() => Path.Combine(new Runic.Application.Views.RunicWindowOptions().ResolveContentRoot(), "brand", "icon.png");
 
     internal static string ProductName() =>
         typeof(EditorDesktopEntry).Assembly.GetCustomAttribute<AssemblyProductAttribute>()?.Product ?? "Runic Translations Editor";

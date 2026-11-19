@@ -63,20 +63,25 @@ internal sealed class Rmf2WorkspaceCache
         string? project = projectPath is not null && source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase) ? projectPath : null;
         lock (_documents)
         {
+            if (_documents.TryGetValue(source.Path, out var cached) && cached.Document.Source.Bytes.AsSpan().SequenceEqual(source.Bytes))
+            {
+                _recent.Remove(cached.Node); _recent.AddLast(cached.Node);
+                return cached.Document;
+            }
+        }
+        // Read outside the lock, so a workspace's files are read in parallel.
+        var document = project is not null ? Session(project).Cache.Unit(source, cancellationToken).Resource!
+            : source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)
+            ? Rmf2ResourceReader.ReadDirect(source, cancellationToken: cancellationToken)
+            : Rmf2ResourceReader.Read(source, cancellationToken: cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_documents)
+        {
             if (_documents.TryGetValue(source.Path, out var cached))
             {
-                if (cached.Document.Source.Bytes.AsSpan().SequenceEqual(source.Bytes))
-                {
-                    _recent.Remove(cached.Node); _recent.AddLast(cached.Node);
-                    return cached.Document;
-                }
+                // Another reader added this path meanwhile: keep the document of these bytes.
                 _documents.Remove(source.Path); _recent.Remove(cached.Node);
             }
-            var document = project is not null ? Session(project).Cache.Unit(source, cancellationToken).Resource!
-                : source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)
-                ? Rmf2ResourceReader.ReadDirect(source, cancellationToken: cancellationToken)
-                : Rmf2ResourceReader.Read(source, cancellationToken: cancellationToken);
-            cancellationToken.ThrowIfCancellationRequested();
             if (_documents.Count == _capacity)
             {
                 string evicted = _recent.First!.Value;
@@ -84,7 +89,7 @@ internal sealed class Rmf2WorkspaceCache
                 _documents.Remove(evicted); _recent.RemoveFirst();
             }
             _documents.Add(source.Path, (document, _recent.AddLast(source.Path), project));
-            return document;
         }
+        return document;
     }
 }

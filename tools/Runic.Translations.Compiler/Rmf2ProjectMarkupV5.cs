@@ -1,9 +1,12 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
+using System.Threading;
 
 namespace Runic.Translations.Compiler;
 
@@ -60,6 +63,17 @@ internal sealed class Rmf2ProjectMarkupV5
     }
 
     private static readonly IReadOnlyDictionary<string, int> NoOccurrences = ReadOnlyDictionary<string, int>.Empty;
+    // An empty occurrence count per variant, shared by the messages with that many variants and no markup.
+    private static readonly IReadOnlyList<IReadOnlyDictionary<string, int>>[] SharedNoOccurrences = new IReadOnlyList<IReadOnlyDictionary<string, int>>[33];
+    private static IReadOnlyList<IReadOnlyDictionary<string, int>> NoOccurrencesFor(int variants)
+    {
+        if (variants < SharedNoOccurrences.Length && Volatile.Read(ref SharedNoOccurrences[variants]) is { } shared) return shared;
+        var empty = new IReadOnlyDictionary<string, int>[variants];
+        Array.Fill(empty, NoOccurrences);
+        var result = Array.AsReadOnly(empty);
+        if (variants < SharedNoOccurrences.Length) Volatile.Write(ref SharedNoOccurrences[variants], result);
+        return result;
+    }
 
     internal Rmf2LinkedMarkupV5 Link(Rmf2MessageV5 message, TextSourceLocation location, DiagnosticBag diagnostics)
     {
@@ -73,9 +87,7 @@ internal sealed class Rmf2ProjectMarkupV5
         }
         if (!markup)
         {
-            var empty = new IReadOnlyDictionary<string, int>[message.Variants.Count];
-            Array.Fill(empty, NoOccurrences);
-            return new(message with { }, ReadOnlyDictionary<string, string>.Empty, Array.AsReadOnly(empty), Array.Empty<string>());
+            return new(message, ReadOnlyDictionary<string, string>.Empty, NoOccurrencesFor(message.Variants.Count), Array.Empty<string>());
         }
         var slots = new SortedDictionary<string, string>(StringComparer.Ordinal);
         var names = new SortedSet<string>(StringComparer.Ordinal);
@@ -182,25 +194,68 @@ internal sealed class Rmf2ProjectMarkupV5
         void Error(string message) => diagnostics.Add("RTR0062", TranslationDiagnosticSeverity.Error, message, location);
     }
 
-    internal static string Export(IReadOnlyDictionary<string, Rmf2MarkupContractV5> contracts,
-        IReadOnlyList<Rmf2MessageContractV5> messages, IReadOnlyList<Rmf2LocaleV5>? locales = null)
+    // Written with Utf8JsonWriter rather than JsonSerializer over anonymous types, so a trimmed or NativeAOT host (the
+    // Translations Editor's packages) writes the same bytes: JsonSerializer's default options write through the same
+    // writer, unindented with the default encoder, in this property order and with nulls.
+    /// <summary>
+    /// The JSON of each exported message by its contract and content locales, from one export to the next of a session
+    /// (Rmf2LinkState): a message whose contract and content locales are unchanged is not written again.
+    /// </summary>
+    internal sealed class ExportFragments
     {
-        var exportedContracts = new SortedDictionary<string, object>(StringComparer.Ordinal);
-        foreach (var contract in contracts)
+        internal Dictionary<Rmf2MessageContractV5, (string?[]? ContentLocales, string Json)> Messages { get; } = new(ReferenceEqualityComparer.Instance);
+        // The locale of each position of ContentLocales.
+        internal string[] Tags { get; set; } = [];
+    }
+
+    /// <param name="previous">The fragments of the last export of a session, or null.</param>
+    /// <param name="next">Receives this export's fragments, or null.</param>
+    internal static string Export(IReadOnlyDictionary<string, Rmf2MarkupContractV5> contracts,
+        IReadOnlyList<Rmf2MessageContractV5> messages, IReadOnlyList<Rmf2LocaleV5>? locales = null, ExportFragments? previous = null, ExportFragments? next = null)
+    {
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer))
+            WriteExport(writer, contracts, messages, locales, previous, next);
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
+    private static void WriteExport(Utf8JsonWriter writer, IReadOnlyDictionary<string, Rmf2MarkupContractV5> contracts,
+        IReadOnlyList<Rmf2MessageContractV5> messages, IReadOnlyList<Rmf2LocaleV5>? locales, ExportFragments? previous, ExportFragments? next)
+    {
+        writer.WriteStartObject();
+        writer.WriteNumber("version", Rmf2ProjectV5.MarkupContractVersion);
+        writer.WriteStartObject("contracts");
+        foreach (var contract in contracts.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
         {
-            var options = new SortedDictionary<string, object>(StringComparer.Ordinal);
-            foreach (var option in contract.Value.Options)
-                options[option.Key] = option.Value.Type == "integer"
-                    ? new { type = option.Value.Type, values = option.Value.Values, @default = option.Value.Default, literalOnly = option.Value.LiteralOnly, minimum = option.Value.Minimum, maximum = option.Value.Maximum }
-                    : new { type = option.Value.Type, values = option.Value.Values, @default = option.Value.Default, literalOnly = option.Value.LiteralOnly };
             // Contract v2 always writes the placement and child model; runtimes accept exactly v2.
-            exportedContracts[contract.Key] = new
+            writer.WriteStartObject(contract.Key);
+            writer.WriteString("kind", contract.Value.Standalone ? "standalone" : "paired");
+            writer.WriteString("placement", contract.Value.Placement);
+            writer.WriteString("children", contract.Value.Children);
+            writer.WriteBoolean("interactive", contract.Value.Interactive);
+            writer.WriteString("plainText", contract.Value.PlainText);
+            writer.WriteStartObject("options");
+            foreach (var option in contract.Value.Options.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
             {
-                kind = contract.Value.Standalone ? "standalone" : "paired", placement = contract.Value.Placement, children = contract.Value.Children,
-                interactive = contract.Value.Interactive, plainText = contract.Value.PlainText, options,
-            };
+                writer.WriteStartObject(option.Key);
+                writer.WriteString("type", option.Value.Type);
+                WriteStrings(writer, "values", option.Value.Values);
+                writer.WriteString("default", option.Value.Default);
+                writer.WriteBoolean("literalOnly", option.Value.LiteralOnly);
+                if (option.Value.Type == "integer")
+                {
+                    writer.WriteNumber("minimum", option.Value.Minimum);
+                    writer.WriteNumber("maximum", option.Value.Maximum);
+                }
+                writer.WriteEndObject();
+            }
+            writer.WriteEndObject();
+            writer.WriteEndObject();
         }
-        var exportedMessages = new SortedDictionary<string, object>(StringComparer.Ordinal);
+        writer.WriteEndObject();
+        // A later message with the same key replaces an earlier one, as the sorted dictionary this replaced did.
+        var messagesByKey = new SortedDictionary<string, Rmf2MessageContractV5>(StringComparer.Ordinal);
+        foreach (var message in messages) messagesByKey[message.Key] = message;
         // Each locale's content locale by key, built once: a lookup per message and locale, not a scan of the locale.
         var resolvedByLocale = locales?.Select(locale =>
         {
@@ -208,22 +263,85 @@ internal sealed class Rmf2ProjectMarkupV5
             foreach (var resource in locale.ResolvedResources) byKey.TryAdd(resource.Key, resource.ContentLocale);
             return (locale.Tag, ByKey: byKey);
         }).ToArray();
-        foreach (var message in messages)
+        string[] tags = locales?.Select(locale => locale.Tag).ToArray() ?? [];
+        if (previous is not null && !previous.Tags.AsSpan().SequenceEqual(tags)) previous = null;
+        if (next is not null) next.Tags = tags;
+        // A session writes each message on its own and keeps its JSON; any other export writes it in place.
+        bool fragments = previous is not null || next is not null;
+        var fragmentBuffer = fragments ? new ArrayBufferWriter<byte>() : null;
+        writer.WriteStartObject("messages");
+        foreach (var message in messagesByKey.Values)
         {
-            var slots = new SortedDictionary<string, object>(StringComparer.Ordinal);
-            foreach (var slot in message.Slots) slots[slot.Key] = new { kind = slot.Value.Kind, min = slot.Value.Min, max = slot.Value.Max };
-            // The content kind is part of the caller contract; skeletons are not, because
-            // they change no generated API. Packs are checked against them at load time.
-            if (locales is null) exportedMessages[message.Key] = new { slots, structured = message.Structured, markup = message.MarkupNames, content = message.Content };
+            string?[]? contentLocales = null;
+            if (resolvedByLocale is not null)
+            {
+                contentLocales = new string?[resolvedByLocale.Length];
+                for (int index = 0; index < resolvedByLocale.Length; index++) contentLocales[index] = resolvedByLocale[index].ByKey.GetValueOrDefault(message.Key);
+            }
+            if (!fragments)
+            {
+                writer.WritePropertyName(message.Key);
+                WriteMessage(writer, message, contentLocales);
+                continue;
+            }
+            string json;
+            if (previous is not null && previous.Messages.TryGetValue(message, out var cached) &&
+                (cached.ContentLocales is null ? contentLocales is null : contentLocales is not null && cached.ContentLocales.AsSpan().SequenceEqual(contentLocales)))
+                json = cached.Json;
             else
             {
-                var contentLocales = new SortedDictionary<string, string>(StringComparer.Ordinal);
-                foreach (var locale in resolvedByLocale!)
-                    if (locale.ByKey.TryGetValue(message.Key, out string? contentLocale)) contentLocales[locale.Tag] = contentLocale;
-                exportedMessages[message.Key] = new { slots, structured = message.Structured, contentLocales, content = message.Content, skeletons = message.Skeletons };
+                fragmentBuffer!.Clear();
+                using (var fragment = new Utf8JsonWriter(fragmentBuffer)) WriteMessage(fragment, message, contentLocales);
+                json = Encoding.UTF8.GetString(fragmentBuffer.WrittenSpan);
             }
+            next?.Messages.TryAdd(message, (contentLocales, json));
+            writer.WritePropertyName(message.Key);
+            writer.WriteRawValue(json, skipInputValidation: true);
         }
-        return JsonSerializer.Serialize(new { version = Rmf2ProjectV5.MarkupContractVersion, contracts = exportedContracts, messages = exportedMessages });
+        writer.WriteEndObject();
+        writer.WriteEndObject();
+
+        void WriteMessage(Utf8JsonWriter target, Rmf2MessageContractV5 message, string?[]? contentLocales)
+        {
+            target.WriteStartObject();
+            target.WriteStartObject("slots");
+            foreach (var slot in message.Slots.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
+            {
+                target.WriteStartObject(slot.Key);
+                target.WriteString("kind", slot.Value.Kind);
+                target.WriteNumber("min", slot.Value.Min);
+                target.WriteNumber("max", slot.Value.Max);
+                target.WriteEndObject();
+            }
+            target.WriteEndObject();
+            target.WriteBoolean("structured", message.Structured);
+            // The content kind is part of the caller contract; skeletons are not, because
+            // they change no generated API. Packs are checked against them at load time.
+            if (contentLocales is null)
+            {
+                WriteStrings(target, "markup", message.MarkupNames);
+                target.WriteString("content", message.Content);
+            }
+            else
+            {
+                var byTag = new SortedDictionary<string, string>(StringComparer.Ordinal);
+                for (int index = 0; index < contentLocales.Length; index++)
+                    if (contentLocales[index] is { } contentLocale) byTag[resolvedByLocale![index].Tag] = contentLocale;
+                target.WriteStartObject("contentLocales");
+                foreach (var pair in byTag) target.WriteString(pair.Key, pair.Value);
+                target.WriteEndObject();
+                target.WriteString("content", message.Content);
+                WriteStrings(target, "skeletons", message.Skeletons);
+            }
+            target.WriteEndObject();
+        }
+    }
+
+    internal static void WriteStrings(Utf8JsonWriter writer, string name, IEnumerable<string> values)
+    {
+        writer.WriteStartArray(name);
+        foreach (var value in values) writer.WriteStringValue(value);
+        writer.WriteEndArray();
     }
 
     private static bool AcceptsType(string schema, string type) => schema switch

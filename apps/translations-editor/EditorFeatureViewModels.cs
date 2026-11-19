@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using ReactiveUI;
 using ReactiveUI.Primitives;
 using ReactiveUI.Primitives.Concurrency;
@@ -72,7 +73,7 @@ public abstract class EditorFeatureViewModel : ReactiveObject, IDisposable
             ? item.GetString() : null;
 
     protected static T Parse<T>(JsonElement value) =>
-        value.Deserialize<T>(EditorJsonContext.Default.Options)
+        value.Deserialize((JsonTypeInfo<T>)EditorJsonContext.Default.GetTypeInfo(typeof(T))!)
             ?? throw new ArgumentException("The editor request is invalid.");
 
     public void Dispose()

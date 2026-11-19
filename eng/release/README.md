@@ -4,8 +4,10 @@ Runic Translations releases eight NuGet packages together: `Runic.Translations`,
 `Runic.Translations.Build`, `Runic.Translations.CommandLine`, `Runic.Translations.Hosting`, `Runic.Translations.Tooling`,
 `Runic.Translations.Wpf`, `Runic.Translations.Templates`, and
 `dotnet-runic-translations`. It also releases the Vite, Svelte, and SvelteKit
-packages listed in `eng/workspace.json`. The editor is verified with the release
-source but is not released by this workflow. The VS Code and Visual Studio
+packages listed in `eng/workspace.json`. The Translations Editor is verified with the
+release source but is not released by this workflow: it has its own version, notes and
+releases, tagged `editor-v<version>` and built by `release-editor.yml` (D078; see
+[Editor releases](#editor-releases)). The VS Code and Visual Studio
 extensions release from [Runic-Artifex/runic-editors](https://github.com/Runic-Artifex/runic-editors)
 on their own schedule; since 0.12.0 a Translations release carries no `.vsix` assets.
 
@@ -65,6 +67,12 @@ before.
 - **Links.** Write links as they work from the assembled
   `eng/release/notes/<version>.md`: same-document anchors (`#upgrading-from-011`)
   and links to the release tag, as before.
+
+The Translations Editor's notes use the same layout in `eng/release/notes/editor/<editor version>/`,
+for the editor's own versions; pass `--editor` to each command below to work on them
+(`bun eng/release/notes.mjs --editor assemble 0.1.0`). `check` without versions checks
+both. A note about the editor alone belongs there; a change to both keeps its note
+here and adds a short one for the editor.
 
 `eng/release/notes.mjs` has three commands:
 
@@ -462,7 +470,8 @@ same policy. For Translations:
   stable from 1.0.0. From 1.0 npm previews go to the `preview` dist-tag and
   `latest` moves only to stable versions. A 1.0 release candidate is published as
   `1.0.0-rc.N` ([Release versions](#release-versions)). The Translations
-  Editor is a separate product on its own timeline and is not released here.
+  Editor is a separate product on its own timeline and is not released here
+  ([Editor releases](#editor-releases)).
 - `Runic.Translations.Tooling` is a stable package. Its public API is the
   compiler (`TranslationCompiler` and its source, options, diagnostic and
   compilation types), XLIFF interchange with the review sidecar, artifact
@@ -550,3 +559,20 @@ same policy. For Translations:
   `Runic.Translations.Wpf` targets `net10.0-windows`.
 - Bug and security fixes ship in a patch of the latest minor only. `[Obsolete]`
   APIs stay for at least one minor release and are removed only in a major.
+
+## Editor releases
+
+The Translations Editor releases separately from the packages above (D078.2–D078.5):
+its version is `RunicTranslationsEditorVersion` in
+`apps/translations-editor/Directory.Build.props` (plain `0.y.z`, starting at 0.1.0),
+its notes are in `eng/release/notes/editor/`, and a tag `editor-v<version>` starts
+[`release-editor.yml`](../../.github/workflows/release-editor.yml), which builds the
+deb, rpm, AppImage, `.tar.gz`, macOS disk image and Windows zip, installs or extracts
+and opens each on its runner, and drafts a GitHub release that is a prerelease before
+1.0 and never marked Latest. CI and Publish preview do not run for `editor-v*` tags,
+and Release editor does not run for the SDK's `v*` tags. Its release job waits in the
+same `publish-preview` concurrency group as Publish preview. The packages are
+unsigned. The steps, each approved by the maintainer, are in the editor's
+[distribution guide](../../apps/translations-editor/docs/editor-distribution.md#releasing-the-editor);
+`eng/release/editor-release.mjs` holds the version, tag, notes, checksum and package
+manifest checks.

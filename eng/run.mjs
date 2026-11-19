@@ -7,10 +7,23 @@ import { fileURLToPath } from "node:url";
 import { stageAndPromote, stampNpmManifest } from "./release/candidate.mjs";
 import { activeTrainFeed } from "./train-feed.mjs";
 import { dirtyNpmInputs, npmSourceCommit } from "./release/npm-inputs.mjs";
+import { editorVersion } from "./release/editor-release.mjs";
 
 export const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const workspace = JSON.parse(readFileSync(resolve(root, "eng/workspace.json"), "utf8"));
 export const configuration = process.env.CONFIGURATION ?? "Release";
+
+// The Translations Editor's own version (D078.3), independent of workspace.version, the Translations version its
+// packages carry. Editor releases (.github/workflows/release-editor.yml) are tagged editor-v<it>.
+export { editorVersion };
+
+// The first line of the editor's --version: its product name and own version, with the source revision as build
+// metadata when the build knew it. Never the Translations version.
+export function assertEditorVersionText(text, version = editorVersion()) {
+  const first = text.split(/\r?\n/, 1)[0];
+  const pattern = new RegExp(`^Runic Translations Editor ${version.replaceAll(".", "\\.")}(?:\\+[0-9a-f]{40})?$`);
+  assert.match(first, pattern, `The editor reports "${first}", not its own version ${version}.`);
+}
 
 // The eng scripts run with Bun. On Windows, npm and npx are .cmd shims: Bun starts those, while Node (since 20.12.2,
 // CVE-2024-27980) refuses a .cmd without a shell with EINVAL. So the shims are started only under Bun.
@@ -93,16 +106,19 @@ function publishEditor(rid) {
 
 function verifyEditorFrontend() {
   const editorDirectory = dirname(resolve(root, workspace.editor.project));
+  const editorAssembly = resolve(editorDirectory, "bin", configuration, "net10.0", "Runic.Translations.Editor.dll");
+  assertEditorVersionText(commandOutput("dotnet", [editorAssembly, "--version"]));
   run("bun", ["run", "--bun", "verify:built"], resolve(editorDirectory, "Frontend"), {
     RUNIC_TRANSLATIONS_MANIFEST: resolve(editorDirectory, "obj", configuration, "net10.0", "translations", "editor.esm-v5", "web-module-manifest-v3.json"),
   });
-  run("dotnet", [resolve(editorDirectory, "bin", configuration, "net10.0", "Runic.Translations.Editor.dll"),
-    "--workspace", resolve(editorDirectory, "ExampleWorkspace"), "--smoke-test"]);
+  run("dotnet", [editorAssembly, "--workspace", resolve(editorDirectory, "ExampleWorkspace"), "--smoke-test"]);
 }
 
 // Builds the editor against freshly packed Translations packages instead of project
 // references, then proves NuGet resolved them from the local feed. The suffixed
 // version never exists on nuget.org, so restore cannot pick a published package.
+// It is the Translations packages' version; the editor keeps its own (editorVersion),
+// which verifyEditorFrontend checks in --version.
 // A plain release (0.8.0) gets the prerelease label -editor-packed; a prerelease
 // (1.0.0-rc.1) gets one more identifier, .editor-packed, so both stay SemVer.
 export function editorPackedVersion(release) {
@@ -375,12 +391,15 @@ async function main() {
       break;
     case "verify-editor-packed": verifyEditorPacked(version); break;
     case "publish-editor": publishEditor(process.argv[3]); break;
+    // The web packages the editor's frontend consumes, before dotnet runic package or dotnet publish builds the editor
+    // (.github/workflows/release-editor.yml).
+    case "build-web": buildWeb(); break;
     case "native-aot": testNativeAot(); break;
     case "audit": auditDependencies(); break;
     // The language server's generic-client smoke with the packed tool (eng/lsp-smoke.mjs).
     case "lsp-smoke": (await import("./lsp-smoke.mjs")).lspSmoke(version); break;
     default:
-      throw new Error("Use bootstrap, build, test, pack [version], pack-built [version], verify:candidate [version], verify-packages [version] (alias), verify-editor-packed [version], publish-editor <rid>, native-aot, audit, or lsp-smoke [version].");
+      throw new Error("Use bootstrap, build, test, pack [version], pack-built [version], verify:candidate [version], verify-packages [version] (alias), verify-editor-packed [version], publish-editor <rid>, build-web, native-aot, audit, or lsp-smoke [version].");
   }
 }
 

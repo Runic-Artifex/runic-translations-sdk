@@ -406,6 +406,15 @@ internal sealed class TranslationOverrideConflictException(string path, string m
 /// </summary>
 internal static class TranslationOverrideChanges
 {
+    // The JSON string literal JsonSerializer.Serialize(value) writes, through the same writer, so a trimmed or NativeAOT
+    // host (the Translations Editor's packages) needs no reflection-based serialization.
+    private static string JsonString(string value)
+    {
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>();
+        using (var writer = new System.Text.Json.Utf8JsonWriter(buffer)) writer.WriteStringValue(value);
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
     /// <summary>
@@ -550,7 +559,7 @@ internal static class TranslationOverrideChanges
         byte[] bytes = project.GetUtf8Bytes();
         string text = StrictUtf8.GetString(bytes);
         string newLine = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
-        string entry = "{ \"catalog\": " + System.Text.Json.JsonSerializer.Serialize(catalog) + ", \"from\": " + System.Text.Json.JsonSerializer.Serialize(from) + " }";
+        string entry = "{ \"catalog\": " + JsonString(catalog) + ", \"from\": " + JsonString(from) + " }";
         if (root.Property("overrides") is { } overrides)
         {
             if (overrides.Value.Kind != JsonKind.Array) throw new InvalidOperationException("runic.json \"overrides\" must be an array.");

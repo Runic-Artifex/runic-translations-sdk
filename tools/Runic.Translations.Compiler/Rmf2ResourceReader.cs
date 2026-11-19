@@ -255,7 +255,8 @@ internal static class Rmf2ResourceReader
             if (!isGroup) map.Add(map.Count == 0 ? bytes[at + trim.Length] : bytes[extentEnd > 0 && text[extentEnd - 1] == '\n' ? (extentEnd > 1 && text[extentEnd - 2] == '\r' ? extentEnd - 2 : extentEnd - 1) : extentEnd]);
             var node = new Rmf2ResourceNode(path, isGroup ? null : body.ToString(), comments.ToArray(), properties.ToArray(),
                 Location(at, at + nameLength), Location(statementStart, extentEnd), map.Build());
-            if (!isGroup) node.MessageSyntax = Mf2SyntaxReader.Read(TranslationSource.Owned(source.Path, Encoding.UTF8.GetBytes(node.Message!)), options, cancellationToken);
+            // The message's bytes are the UTF-8 encoding of its text, which the syntax shares.
+            if (!isGroup) node.MessageSyntax = Mf2SyntaxReader.Read(TranslationSource.Owned(source.Path, Encoding.UTF8.GetBytes(node.Message!)), options, node.Message, cancellationToken);
             nodes.Add(node);
             foreach (string property in properties)
             {

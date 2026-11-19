@@ -1,4 +1,12 @@
 <Project>
   <Import Project="../../Directory.Build.props" />
   <Import Project="../../eng/build/translations.props" />
+  <PropertyGroup>
+    <!-- The editor's own version line (D078.3), plain 0.y.z, independent of the Translations version in
+         eng/Versions.props (RunicTranslationsVersion), whose packages the editor is built from. It names the editor's
+         releases (tags editor-v<version>, .github/workflows/release-editor.yml), its packages and what the version option,
+         the About dialog and diagnostic bundles show. Raise it in the pull request that prepares an editor release. -->
+    <RunicTranslationsEditorVersion>0.1.0</RunicTranslationsEditorVersion>
+    <Version>$(RunicTranslationsEditorVersion)</Version>
+  </PropertyGroup>
 </Project>

@@ -35,10 +35,48 @@ internal sealed record Mf2DeclarationSyntax(string Kind, string Name, TextSource
 internal sealed class Mf2SyntaxDocument
 {
     internal Mf2SyntaxDocument(TranslationSource source, List<Mf2SyntaxToken> tokens, List<Mf2ExpressionSyntax> expressions,
-        List<Mf2DeclarationSyntax> declarations, List<Mf2VariantSyntax> variants, Mf2MatchSyntax? match, TranslationDiagnostic[] diagnostics)
-    { Source = source; Tokens = tokens.AsReadOnly(); Expressions = expressions.AsReadOnly(); Declarations = declarations.AsReadOnly(); Variants = variants.AsReadOnly(); Match = match; Diagnostics = Array.AsReadOnly(diagnostics); }
+        List<Mf2DeclarationSyntax> declarations, List<Mf2VariantSyntax> variants, Mf2MatchSyntax? match, TranslationDiagnostic[] diagnostics,
+        TranslationCompilerOptions? options = null, string? text = null)
+    {
+        Source = source; _tokens = tokens.AsReadOnly(); Expressions = Compact(expressions); Declarations = Compact(declarations); Variants = Compact(variants); Match = match;
+        Diagnostics = diagnostics.Length == 0 ? NoDiagnostics : Array.AsReadOnly(diagnostics);
+        _options = options; _text = text;
+    }
     public TranslationSource Source { get; }
-    public IReadOnlyList<Mf2SyntaxToken> Tokens { get; }
+    private static readonly IReadOnlyList<TranslationDiagnostic> NoDiagnostics = Array.AsReadOnly(Array.Empty<TranslationDiagnostic>());
+
+    /// <summary>A list as a read-only array of its items: the shared empty array when it has none.</summary>
+    internal static IReadOnlyList<T> Compact<T>(List<T> items) => items.Count == 0 ? Array.Empty<T>() : Array.AsReadOnly(items.ToArray());
+
+    // The token stream: held until a validation session has compiled the message (ReleaseTokens), then read again from
+    // the source on demand and kept only while someone uses it. The tokens are the same either way.
+    private IReadOnlyList<Mf2SyntaxToken>? _tokens;
+    private WeakReference<IReadOnlyList<Mf2SyntaxToken>>? _released;
+    private readonly TranslationCompilerOptions? _options;
+    private readonly string? _text;
+
+    public IReadOnlyList<Mf2SyntaxToken> Tokens
+    {
+        get
+        {
+            if (Volatile.Read(ref _tokens) is { } tokens) return tokens;
+            if (Volatile.Read(ref _released) is { } released && released.TryGetTarget(out tokens)) return tokens;
+            tokens = Mf2SyntaxReader.Read(Source, _options, _text, CancellationToken.None).Tokens;
+            Volatile.Write(ref _released, new WeakReference<IReadOnlyList<Mf2SyntaxToken>>(tokens));
+            return tokens;
+        }
+    }
+
+    /// <summary>
+    /// Lets the token stream go once it is no longer needed to compile the message (a validation session memoizes the
+    /// compile); <see cref="Tokens"/> reads it again from <see cref="Source"/> when asked.
+    /// </summary>
+    internal void ReleaseTokens()
+    {
+        if (Volatile.Read(ref _tokens) is not { } tokens) return;
+        Volatile.Write(ref _released, new WeakReference<IReadOnlyList<Mf2SyntaxToken>>(tokens));
+        Volatile.Write(ref _tokens, null);
+    }
     public IReadOnlyList<Mf2ExpressionSyntax> Expressions { get; }
     public IReadOnlyList<Mf2DeclarationSyntax> Declarations { get; }
     public IReadOnlyList<Mf2VariantSyntax> Variants { get; }
@@ -67,10 +105,15 @@ internal sealed class Mf2SyntaxDocument
 /// <summary>Reads MF2 source independently of executable functions and balanced-inline markup rules.</summary>
 internal static class Mf2SyntaxReader
 {
-    public static Mf2SyntaxDocument Read(TranslationSource source, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default)
+    public static Mf2SyntaxDocument Read(TranslationSource source, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default) =>
+        Read(source, options, null, cancellationToken);
+
+    /// <param name="text">The source's text, when the caller has it (it is the UTF-8 decoding of the bytes): the syntax
+    /// shares it instead of decoding the bytes again.</param>
+    internal static Mf2SyntaxDocument Read(TranslationSource source, TranslationCompilerOptions? options, string? text, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(source); options ??= new TranslationCompilerOptions();
-        return new Reader(source, options, cancellationToken).Read();
+        return new Reader(source, options, cancellationToken, text).Read();
     }
     /// <summary>Checks declaration and matcher constraints independently of syntax and target support.</summary>
     private static readonly IReadOnlyList<TranslationDiagnostic> NoDiagnostics = Array.AsReadOnly(Array.Empty<TranslationDiagnostic>());
@@ -172,13 +215,14 @@ internal static class Mf2SyntaxReader
         // The UTF-8 offset of every UTF-16 index; null when the text is ASCII, whose offsets are the indexes.
         private int[]? _bytes;
         private int _at;
-        internal Reader(TranslationSource source, TranslationCompilerOptions options, CancellationToken cancellation)
-        { _source = source; _options = options; _cancellation = cancellation; }
+        private readonly string? _given;
+        internal Reader(TranslationSource source, TranslationCompilerOptions options, CancellationToken cancellation, string? text = null)
+        { _source = source; _options = options; _cancellation = cancellation; _given = text; }
         internal Mf2SyntaxDocument Read()
         {
             _cancellation.ThrowIfCancellationRequested();
             if (_source.Bytes.Length > _options.MaximumValueBytes) { _diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "MF2 source exceeds the configured byte limit.", _source, new ByteSpan(0, 0)); return Result(); }
-            try { _text = StrictJsonParser.StrictUtf8.GetString(_source.Bytes); }
+            try { _text = _given ?? StrictJsonParser.StrictUtf8.GetString(_source.Bytes); }
             catch (DecoderFallbackException) { _diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "MF2 requires valid UTF-8.", _source, new ByteSpan(0, 0)); return Result(); }
             if (_source.Bytes.Length != _text.Length)
             {
@@ -230,7 +274,7 @@ internal static class Mf2SyntaxReader
                 selectors.Add(Operand().Value);
             }
             if (selectors.Count == 0) Error("A matcher requires variable selectors.", start, _at);
-            _match = new Mf2MatchSyntax(selectors.AsReadOnly(), Location(start, _at));
+            _match = new Mf2MatchSyntax(Mf2SyntaxDocument.Compact(selectors), Location(start, _at));
             while (_at < _text.Length)
             {
                 _cancellation.ThrowIfCancellationRequested(); int variantStart = _at;
@@ -248,7 +292,7 @@ internal static class Mf2SyntaxReader
                 if (keys.Count == 0) Error("A variant requires keys.", variantStart, _at);
                 if (!Starts("{{")) { Error("A variant requires a quoted pattern.", _at, _at); break; }
                 int patternStart = _at; ReadPattern(true);
-                _variants.Add(new Mf2VariantSyntax(keys.AsReadOnly(), Location(variantStart, _at)) { PatternLocation = Location(patternStart, _at), KeyLocations = locations.AsReadOnly() });
+                _variants.Add(new Mf2VariantSyntax(Mf2SyntaxDocument.Compact(keys), Location(variantStart, _at)) { PatternLocation = Location(patternStart, _at), KeyLocations = Mf2SyntaxDocument.Compact(locations) });
                 Space();
             }
             if (_variants.Count == 0) Error("A matcher requires variants.", start, _at);
@@ -321,7 +365,7 @@ internal static class Mf2SyntaxReader
             if (_at < _text.Length) { int close = _at++; Token(Mf2SyntaxTokenKind.ExpressionEnd, close); }
             else Error("Unterminated MF2 expression.", start, Math.Min(start + 1, _text.Length));
             if (kind == Mf2MarkupKind.None && operand is null && function is null) Error("An expression requires an operand or function.", start, _at);
-            _expressions.Add(new Mf2ExpressionSyntax(operand, function, markup, kind, options.AsReadOnly(), attributes.AsReadOnly(), Location(start, _at)));
+            _expressions.Add(new Mf2ExpressionSyntax(operand, function, markup, kind, Mf2SyntaxDocument.Compact(options), Mf2SyntaxDocument.Compact(attributes), Location(start, _at)));
         }
         /// <summary>Skips an unreadable expression body up to, not including, its closing brace.</summary>
         private void SkipExpression()
@@ -418,6 +462,6 @@ internal static class Mf2SyntaxReader
             return new TextSourceLocation(_source.Path, fromByte, toByte - fromByte, line + 1, from - _lineStarts[line] + 1, endLine + 1, to - _lineStarts[endLine] + 1);
         }
         private void Error(string message, int from, int to) => _diagnostics.Add("RTR0066", TranslationDiagnosticSeverity.Error, message, Location(from, to));
-        private Mf2SyntaxDocument Result() => new(_source, _tokens, _expressions, _declarations, _variants, _match, _diagnostics.ToSortedArray());
+        private Mf2SyntaxDocument Result() => new(_source, _tokens, _expressions, _declarations, _variants, _match, _diagnostics.ToSortedArray(), _options, _given);
     }
 }
