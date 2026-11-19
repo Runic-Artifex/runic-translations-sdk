@@ -27,6 +27,8 @@ internal sealed partial class Rmf2LanguageServer
 {
     // The worker's queue message that applies finished validations; it is not a client method.
     internal const string ValidatedMethod = "$/runic/validated";
+    // The name the test hook (beforeRequest) sees on the validator thread as a validation starts.
+    internal const string ValidationHook = "$/runic/validating";
 
     private sealed record ValidationJob(string Project, long Generation, string[] Group, string CacheKey, WorkspaceSnapshot Snapshot);
     private sealed record ValidationOutcome(ValidationJob Job, ReviewView? View, bool IsDirect, Exception? Error);
@@ -114,6 +116,7 @@ internal sealed partial class Rmf2LanguageServer
             try
             {
                 Interlocked.Increment(ref _validations);
+                _beforeRequest?.Invoke(ValidationHook);
                 (Rmf2Workspace workspace, _) = BuildWorkspace(job.Snapshot, cancellation.Token);
                 ReviewView view = BuildReviewView(job.Project, workspace, cancellation.Token);
                 outcome = new ValidationOutcome(job, view, workspace.IsDirect, null);

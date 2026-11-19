@@ -720,6 +720,19 @@ internal sealed class Rmf2DiagnosticLspTests
                 Publications.Add(frame);
             }
         }
+        // The first publication, among those read so far and those that follow, that matches; it stays in Publications.
+        internal JsonNode WaitForPublication(Func<JsonNode, bool> predicate)
+        {
+            int index = 0;
+            while (true)
+            {
+                for (; index < Publications.Count; index++)
+                    if (Publications[index]["method"]?.GetValue<string>() == "textDocument/publishDiagnostics" && predicate(Publications[index])) return Publications[index];
+                JsonNode frame = Task.Run(ReadFrame).WaitAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
+                if (frame["method"] is not null && frame["id"] is not null) { HandleServerRequest(frame); continue; }
+                Publications.Add(frame);
+            }
+        }
         // Reads until the server sends a request with this method, which it returns unanswered.
         internal JsonNode WaitForServerRequest(string method)
         {
