@@ -14,6 +14,29 @@ internal sealed record Rmf2LinkContext(string ProjectPath, string ProjectHash, i
     int MaximumKeysPerCatalog, int MaximumValueBytes, int MaximumPlaceholdersPerValue, int MaximumLocalesPerCatalog,
     bool RelaxedValidation, bool BaseLocaleOnly, bool PseudoLocales);
 
+/// <summary>
+/// What a session keeps from one compile of a link context for the next: each locale's key order, the contract
+/// exports and the last result. Each part is an immutable object replaced as a whole, so overlapping compiles are safe.
+/// </summary>
+internal sealed class Rmf2LinkState
+{
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string[]> _orders = new(StringComparer.OrdinalIgnoreCase);
+    internal string[]? KeyOrder(string locale) => _orders.TryGetValue(locale, out string[]? order) ? order : null;
+    internal void SetKeyOrder(string locale, string[] order) => _orders[locale] = order;
+    internal Rmf2CallerContractMemo? CallerContract;
+    internal Rmf2MarkupExportMemo? MarkupExport;
+    internal Rmf2ResultMemo? Last;
+    internal Rmf2ReadableReferencesMemo? ReadableReferences;
+    // The JSON of each message in the last contract exports (Rmf2ProjectMarkupV5.Export, the caller contract).
+    internal Rmf2ProjectMarkupV5.ExportFragments? MarkupFragments;
+    internal Rmf2ProjectMarkupV5.ExportFragments? CallerMarkup;
+    internal Dictionary<Rmf2MessageContractV5, string>? CallerMessages;
+}
+internal sealed record Rmf2ReadableReferencesMemo(Rmf2MessageContractV5[] Contracts, List<(string Key, string Problem)> Problems);
+internal sealed record Rmf2CallerContractMemo(string Catalog, Rmf2MessageContractV5[] Contracts, string[] Markup, string Json);
+internal sealed record Rmf2MarkupExportMemo(Rmf2MessageContractV5[] Contracts, string[] Used, Rmf2LocaleV5[] Locales, string Json);
+internal sealed record Rmf2ResultMemo(Rmf2SourceUnitV5[] Units, Rmf2ProjectCompilation Result);
+
 /// <summary>What one cached compile reused and what it computed again.</summary>
 internal sealed record Rmf2CompileStatistics(int Files, int FilesRead, int Messages, int MessagesCompiled, int PairsChecked);
 
@@ -38,7 +61,7 @@ internal sealed class Rmf2CompileCache
     private const int MaximumContexts = 4;
     private readonly object _gate = new();
     private Dictionary<string, Rmf2SourceUnitV5> _units = new(StringComparer.Ordinal);
-    private readonly List<Rmf2LinkContext> _contexts = new();
+    private readonly List<(Rmf2LinkContext Context, Rmf2LinkState State)> _contexts = new();
 
     /// <param name="options">The size limits the file units are read with; a compile with other limits reuses nothing.</param>
     internal Rmf2CompileCache(TranslationCompilerOptions? options = null) => Options = options ?? new TranslationCompilerOptions();
@@ -114,29 +137,40 @@ internal sealed class Rmf2CompileCache
         // The latest compile decides the source set: paths it lacks lose their units, and with them their memos.
         lock (_gate) _units = current;
 
-        Rmf2LinkContext context = Context(new Rmf2LinkContext(project.Path, Convert.ToHexStringLower(SHA256.HashData(project.Bytes)),
+        var (context, state) = Context(new Rmf2LinkContext(project.Path, Convert.ToHexStringLower(SHA256.HashData(project.Bytes)),
             options.MaximumDocumentBytes, options.MaximumDepth, options.MaximumKeysPerCatalog, options.MaximumValueBytes,
             options.MaximumPlaceholdersPerValue, options.MaximumLocalesPerCatalog, options.RelaxedValidation, options.BaseLocaleOnly, pseudoLocales));
+        // Nothing changed since the last compile of this context: its result is this one's.
+        var units = Array.ConvertAll(found, unit => unit!);
+        if (state.Last is { } last && last.Units.AsSpan().SequenceEqual(units))
+        {
+            statistics = new(materialized.Length, 0, last.Units.Sum(MessageCount), 0, 0);
+            return last.Result;
+        }
         var counters = new Rmf2CompileCounters();
-        Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5Cached(project, materialized, lookup, options, pseudoLocales, context, counters, cancellationToken);
+        Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5Cached(project, materialized, lookup, options, pseudoLocales, context, state, counters, cancellationToken);
+        state.Last = new(units, result);
         statistics = new(materialized.Length, missing.Length,
-            current.Values.Sum(unit => unit.Resource?.Nodes.Count(node => !node.IsGroup) ?? (unit.DirectMessage is null ? 0 : 1)),
+            current.Values.Sum(MessageCount),
             counters.MessagesCompiled, counters.PairsChecked);
         return result;
     }
 
-    // One instance per distinct context, so memos compare contexts by reference; the oldest of more than four is forgotten.
-    private Rmf2LinkContext Context(Rmf2LinkContext context)
+    // One instance per distinct context, so memos compare contexts by reference, with its state; the oldest of more than
+    // four is forgotten.
+    private (Rmf2LinkContext Context, Rmf2LinkState State) Context(Rmf2LinkContext context)
     {
         lock (_gate)
         {
-            int index = _contexts.IndexOf(context);
+            int index = _contexts.FindIndex(item => item.Context.Equals(context));
             if (index >= 0) return _contexts[index];
             if (_contexts.Count == MaximumContexts) _contexts.RemoveAt(0);
-            _contexts.Add(context);
-            return context;
+            _contexts.Add((context, new Rmf2LinkState()));
+            return _contexts[^1];
         }
     }
+
+    private static int MessageCount(Rmf2SourceUnitV5 unit) => unit.MessageCount;
 
     internal static bool SameLimits(TranslationCompilerOptions left, TranslationCompilerOptions right) =>
         ReferenceEquals(left, right) ||
