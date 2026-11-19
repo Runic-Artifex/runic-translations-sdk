@@ -150,6 +150,8 @@ internal sealed class Rmf2CompileCache
         var counters = new Rmf2CompileCounters();
         Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5Cached(project, materialized, lookup, options, pseudoLocales, context, state, counters, cancellationToken);
         state.Last = new(units, result);
+        // The new files' messages are compiled and memoized: their token streams are read again only when asked for.
+        foreach (int index in missing) found[index]!.ReleaseTokens();
         statistics = new(materialized.Length, missing.Length,
             current.Values.Sum(MessageCount),
             counters.MessagesCompiled, counters.PairsChecked);
