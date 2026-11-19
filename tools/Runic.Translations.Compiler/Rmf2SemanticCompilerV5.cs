@@ -138,7 +138,8 @@ internal static class Rmf2SemanticCompilerV5
             }
             if (_inputs.Count > options.MaximumPlaceholdersPerValue || _inputs.Count > 32 || selectors.Count > 16 || variants.Count > 256 || declarations.Count > 256)
                 Error("Message exceeds the v5 input, selector, variant or declaration limit.", syntax.Tokens[0].Location);
-            return Result(HasErrors() ? null : new(syntax, _inputs.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => new Rmf2InputV5(p.Key, p.Value)).ToArray(), declarations, selectors, variants));
+            return Result(HasErrors() ? null : new(syntax, _inputs.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => new Rmf2InputV5(p.Key, p.Value)).ToArray(),
+                Mf2SyntaxDocument.Compact(declarations), Mf2SyntaxDocument.Compact(selectors), Mf2SyntaxDocument.Compact(variants)));
         }
 
         private (Rmf2ExpressionV5 Expression, Symbol Symbol) Expression(Mf2ExpressionSyntax expression)
@@ -199,7 +200,7 @@ internal static class Rmf2SemanticCompilerV5
         private Dictionary<int, Mf2ExpressionSyntax>? _expressionsByStart;
         private StringBuilder? _text;
 
-        private List<Rmf2NodeV5> Pattern(int from, int to)
+        private IReadOnlyList<Rmf2NodeV5> Pattern(int from, int to)
         {
             var nodes = new List<Rmf2NodeV5>();
             // The text of the current run: its single piece, or the builder once a second piece joins it.
@@ -227,7 +228,7 @@ internal static class Rmf2SemanticCompilerV5
             }
             Flush();
             if (nodes.Count > 4096) Error("A pattern exceeds the v5 node limit.", syntax.Tokens[0].Location);
-            return nodes;
+            return Mf2SyntaxDocument.Compact(nodes);
             void Flush()
             {
                 if (text is not null) { if (text.Length != 0) nodes.Add(new Rmf2TextV5(text.ToString())); text = null; }

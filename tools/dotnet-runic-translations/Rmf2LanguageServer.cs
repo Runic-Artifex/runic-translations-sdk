@@ -736,7 +736,7 @@ internal sealed partial class Rmf2LanguageServer
             if (entry is null) return new JsonArray();
             string path = LocalPath(uri); var workspace = Workspace(path); var logical = workspace.LogicalPath(path, entry);
             return new JsonArray(workspace.Documents.SelectMany(document => document.Nodes.Where(node => workspace.LogicalPath(document.Source.Path, node).SequenceEqual(logical, StringComparer.Ordinal))
-                .Select(node => (JsonNode)new JsonObject { ["uri"] = ClientUri(document.Source.Path), ["range"] = Range(new Buffer(Utf8.GetString(document.Source.GetUtf8Bytes()), 0, document), node.NameLocation) })).ToArray());
+                .Select(node => (JsonNode)new JsonObject { ["uri"] = ClientUri(document.Source.Path), ["range"] = Range(new Buffer(Utf8.GetString(document.Source.GetUtf8Bytes()), 0, document.Source.Path, () => document), node.NameLocation) })).ToArray());
         }
         if (method == "textDocument/completion")
         {
@@ -1252,11 +1252,14 @@ internal sealed partial class Rmf2LanguageServer
         string extension = Path.GetExtension(LocalPath(uri));
         if (!configuration && !extension.Equals(".rmf2", StringComparison.OrdinalIgnoreCase) && !extension.Equals(".mf2", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException("The Runic language server supports .mf2, .rmf2, and runic.json synchronization; use the native service for application sources.");
-        var source = new TranslationSource(LocalPath(uri), configuration ? Array.Empty<byte>() : Utf8.GetBytes(text));
-        var syntax = extension.Equals(".mf2", StringComparison.OrdinalIgnoreCase)
-            ? Rmf2ResourceReader.AnalyzeDirect(source)
-            : Rmf2ResourceReader.Analyze(source);
-        var buffer = new Buffer(text, version, syntax); _buffers[uri] = buffer;
+        string path = LocalPath(uri);
+        bool direct = extension.Equals(".mf2", StringComparison.OrdinalIgnoreCase);
+        // Parsed when a request or a publication first needs it: a burst of keystrokes parses the document once (#271).
+        var buffer = new Buffer(text, version, path, () => {
+            var source = new TranslationSource(path, configuration ? Array.Empty<byte>() : Utf8.GetBytes(text));
+            return direct ? Rmf2ResourceReader.AnalyzeDirect(source) : Rmf2ResourceReader.Analyze(source);
+        });
+        _buffers[uri] = buffer;
         _bufferPaths[FileKey(LocalPath(uri))] = uri;
         if (configuration)
         {
@@ -1828,12 +1831,18 @@ internal sealed partial class Rmf2LanguageServer
         byte[] bytes = Utf8.GetBytes(message.ToJsonString());
         _output.Write(Encoding.ASCII.GetBytes("Content-Length: " + bytes.Length + "\r\n\r\n")); _output.Write(bytes); _output.Flush();
     }
-    private sealed record Buffer(string Text, int Version, Rmf2ResourceDocument Syntax)
+    // One immutable state of an open document. Its syntax is parsed on first use, once: requests and publications need it,
+    // the background validator reads only Text (#271).
+    private sealed class Buffer(string text, int version, string path, Func<Rmf2ResourceDocument> parse)
     {
+        private readonly Lazy<Rmf2ResourceDocument> _syntax = new(parse, LazyThreadSafetyMode.ExecutionAndPublication);
         private TranslationSource? _encoded;
+        internal string Text { get; } = text;
+        internal int Version { get; } = version;
+        internal Rmf2ResourceDocument Syntax => _syntax.Value;
         // The UTF-8 source of Text, encoded once per buffer: folding ranges and the outline map
         // many block locations of one immutable buffer.
-        internal TranslationSource Encoded => _encoded ??= new TranslationSource(Syntax.Source.Path, Utf8.GetBytes(Text));
+        internal TranslationSource Encoded => _encoded ??= new TranslationSource(path, Utf8.GetBytes(Text));
     }
     private sealed class ProjectFile
     {
