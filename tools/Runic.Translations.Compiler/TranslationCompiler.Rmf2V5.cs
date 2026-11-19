@@ -88,6 +88,61 @@ public static partial class TranslationCompiler
         { SourceText = Source.Node.Message, ParameterDescriptions = ParameterDescriptionsV5(Source.Node.Properties), Properties = Source.Node.Properties };
     }
 
+    // The caller contract, whose hash generated code and packs carry. Written with Utf8JsonWriter in the order and form
+    // JsonSerializer wrote it over an anonymous type, so trimmed and NativeAOT hosts (the editor's packages) write the
+    // same bytes.
+    // A session passes each message's JSON from its last compile (previous) and receives this compile's (next).
+    private static string CallerContractV5(string catalog, IReadOnlyList<Rmf2MessageContractV5> contracts, string markup,
+        Dictionary<Rmf2MessageContractV5, string>? previous = null, Dictionary<Rmf2MessageContractV5, string>? next = null)
+    {
+        var fragmentBuffer = previous is not null || next is not null ? new System.Buffers.ArrayBufferWriter<byte>() : null;
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber("callerContractVersion", 1);
+            writer.WriteString("profile", Rmf2ProjectV5.Profile);
+            writer.WriteNumber("messageGrammarVersion", Rmf2ProjectV5.MessageGrammarVersion);
+            writer.WriteNumber("runtimeAbiVersion", Rmf2ProjectV5.RuntimeAbiVersion);
+            writer.WriteNumber("generatedNameVersion", Rmf2GeneratedNamesV1.Version);
+            writer.WriteString("catalog", catalog);
+            writer.WriteStartArray("messages");
+            foreach (var contract in contracts)
+            {
+                if (fragmentBuffer is null) { WriteMessage(writer, contract); continue; }
+                if (previous is null || !previous.TryGetValue(contract, out string? json))
+                {
+                    fragmentBuffer.Clear();
+                    using (var fragment = new Utf8JsonWriter(fragmentBuffer)) WriteMessage(fragment, contract);
+                    json = Encoding.UTF8.GetString(fragmentBuffer.WrittenSpan);
+                }
+                next?.TryAdd(contract, json);
+                writer.WriteRawValue(json, skipInputValidation: true);
+            }
+            writer.WriteEndArray();
+            writer.WriteString("markup", markup);
+            writer.WriteEndObject();
+        }
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+
+        static void WriteMessage(Utf8JsonWriter writer, Rmf2MessageContractV5 contract)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("key", contract.Key);
+            Rmf2ProjectMarkupV5.WriteStrings(writer, "path", contract.Path);
+            writer.WriteStartArray("inputs");
+            foreach (var input in contract.Inputs)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("name", input.Name);
+                writer.WriteString("type", input.Type);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+    }
+
     internal static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project,
         IEnumerable<TranslationSource> messages, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default) =>
         CompileRmf2ProjectV5(project, messages, options, false, cancellationToken);
@@ -615,39 +670,11 @@ public static partial class TranslationCompiler
             callerContract = callerMemo.Json;
         else
         {
-            // As JsonSerializer writes the anonymous caller contract, with each message's JSON reused from the last compile.
+            // Each message's JSON is reused from the last compile while its contract is the same.
             var callerFragments = state is null ? null : new Rmf2ProjectMarkupV5.ExportFragments();
             string callerMarkupJson = Rmf2ProjectMarkupV5.Export(callerMarkup, contracts, null, state?.CallerMarkup, callerFragments);
             var messageJson = state is null ? null : new Dictionary<Rmf2MessageContractV5, string>(contracts.Count, ReferenceEqualityComparer.Instance);
-            var buffer = new System.Buffers.ArrayBufferWriter<byte>();
-            using (var writer = new Utf8JsonWriter(buffer))
-            {
-                writer.WriteStartObject();
-                writer.WriteNumber("callerContractVersion", 1);
-                writer.WriteString("profile", Rmf2ProjectV5.Profile);
-                writer.WriteNumber("messageGrammarVersion", Rmf2ProjectV5.MessageGrammarVersion);
-                writer.WriteNumber("runtimeAbiVersion", Rmf2ProjectV5.RuntimeAbiVersion);
-                writer.WriteNumber("generatedNameVersion", Rmf2GeneratedNamesV1.Version);
-                writer.WriteString("catalog", manifest.Id);
-                writer.WritePropertyName("messages");
-                writer.WriteStartArray();
-                foreach (var contract in contracts)
-                {
-                    if (state?.CallerMessages is not { } cachedJson || !cachedJson.TryGetValue(contract, out string? json))
-                        json = JsonSerializer.Serialize(new
-                        {
-                            key = contract.Key,
-                            path = contract.Path,
-                            inputs = contract.Inputs.Select(input => new { name = input.Name, type = input.Type }),
-                        });
-                    messageJson?.TryAdd(contract, json);
-                    writer.WriteRawValue(json, skipInputValidation: true);
-                }
-                writer.WriteEndArray();
-                writer.WriteString("markup", callerMarkupJson);
-                writer.WriteEndObject();
-            }
-            callerContract = Encoding.UTF8.GetString(buffer.WrittenSpan);
+            callerContract = CallerContractV5(manifest.Id, contracts, callerMarkupJson, state?.CallerMessages, messageJson);
             if (state is not null)
             {
                 state.CallerContract = new(manifest.Id, contracts.ToArray(), callerNames, callerContract);

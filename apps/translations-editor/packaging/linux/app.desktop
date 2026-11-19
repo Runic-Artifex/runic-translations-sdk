@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name={{ApplicationName}}
+Comment={{Description}}
+{{LocalizedEntries}}Exec={{Executable}} %f
+Icon={{ApplicationId}}
+Terminal=false
+Categories=Development;Translation;
+StartupNotify=true
+StartupWMClass={{ApplicationId}}
+{{MimeTypes}}{{DBusActivatable}}

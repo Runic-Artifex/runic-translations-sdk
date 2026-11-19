@@ -87,6 +87,20 @@ internal static class GenerationSupport
         return result.Append('"').ToString();
     }
 
+    /// <summary>The JSON array JsonSerializer.Serialize writes for <paramref name="values"/> with default options, written
+    /// through the same writer without reflection, so NativeAOT hosts (the Translations Editor's packages) can use it.</summary>
+    internal static string JsonStringArray(IEnumerable<string> values)
+    {
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>();
+        using (var writer = new System.Text.Json.Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartArray();
+            foreach (string value in values) writer.WriteStringValue(value);
+            writer.WriteEndArray();
+        }
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
     internal static string JsonString(string value)
     {
         var result = new StringBuilder(value.Length + 2);

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The editor's AppStream metadata for dotnet runic package (deb, rpm, AppImage), from runic-sdk 0.22's template with
+     the editor's licence, description and homepage. -->
+<component type="desktop-application">
+  <id>{{ApplicationId}}</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>{{ApplicationName}}</name>{{LocalizedNames}}
+  <developer id="{{DeveloperId}}">
+    <name>Runic Artifex</name>
+  </developer>
+  <summary>A focused desktop editor for Runic Translations workspaces</summary>{{LocalizedSummaries}}
+  <description>
+    <p>
+      Runic Translations Editor edits the translations of a Runic Translations workspace: the MF2 and RMF2 messages of
+      each language beside their source, with placeholders, plural forms and markup, a live preview, the review state
+      of every translation, and XLIFF export and import. It saves through the same compiler that builds the
+      application, so what it saves is valid.
+    </p>
+    <p>The editor works offline. It sends nothing over the network and does not update itself.</p>
+  </description>
+  <url type="homepage">{{Homepage}}</url>
+  <url type="bugtracker">https://github.com/Runic-Artifex/runic-translations-sdk/issues</url>
+  <launchable type="desktop-id">{{ApplicationId}}.desktop</launchable>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="{{Version}}" date="{{ReleaseDate}}" />
+  </releases>
+</component>
