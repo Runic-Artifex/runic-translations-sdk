@@ -29,19 +29,17 @@ internal sealed partial class Rmf2LanguageServer
     private readonly object _revisionGate = new();
     private string _encoding = "utf-16";
     private bool _shutdown;
-    private bool _fileOperations;
     private bool _configurationSync;
     private bool _codeDescriptionSupport;
-    // The Runic protocol revision this session speaks (experimental.runic). A client opts in to revision 2 with
-    // initializationOptions.runicProtocol; without it the server keeps the revision 1 behaviour of Translations 0.13
-    // (results, error codes, serverInfo) for one minor (D069.3, D070.1).
+    // The Runic protocol revision every session speaks (experimental.runic.protocol). Revision 1, the behaviour of
+    // Translations 0.13 for a client without initializationOptions.runicProtocol, was removed in 0.15 after its
+    // one-minor transition (D069.3, D070.1, #263). runicProtocol is no longer read: any value, or none, gets revision 2.
     internal const int LatestProtocol = 2;
-    private int _protocol = 1;
-    // Client capabilities that revision 2 uses when the client advertises them, and degrades without.
+    // Client capabilities that the protocol uses when the client advertises them, and degrades without.
     private bool _applyEditSupport;
     private bool _watchedFilesRegistration;
     // Resource operations of the client's workspace edits, each on its own: Visual Studio 2026 applies `create` and
-    // `rename` but not `delete` (SPIKE-VS-0). Revision 1 keeps 0.13's combined check (_fileOperations).
+    // `rename` but not `delete` (SPIKE-VS-0).
     private bool _createFiles;
     private bool _deleteFiles;
     // Whether the client resolves code actions (textDocument.codeAction.resolveSupport). Visual Studio lists no `edit`
@@ -133,7 +131,7 @@ internal sealed partial class Rmf2LanguageServer
     private sealed class MethodNotFoundException(string method) : Exception("Unknown method '" + method + "'.") { }
     // The client answered a server-to-client request with an error.
     private sealed class ClientRequestFailedException(string message) : InvalidOperationException(message) { }
-    // The requests this server answers. Under protocol 2 any other request is answered with MethodNotFound.
+    // The requests this server answers. Any other request is answered with MethodNotFound.
     private static readonly HashSet<string> RequestMethods = new(StringComparer.Ordinal) {
         "initialize", "shutdown", "codeAction/resolve", "workspace/executeCommand",
         "runic/documentInfo", "runic/message", "runic/libraryCatalogs", "runic/libraryDocument",
@@ -141,13 +139,11 @@ internal sealed partial class Rmf2LanguageServer
         "textDocument/formatting", "textDocument/hover", "textDocument/completion", "textDocument/definition",
         "textDocument/references", "textDocument/rename", "textDocument/prepareRename",
     };
-    // Protocol 1 reports every failure as InvalidParams, as 0.13 did. Protocol 2 keeps InvalidParams for malformed
-    // parameters and reports a request that could not be carried out as RequestFailed (-32803).
-    private int ErrorCode(Exception error) => error switch {
+    // InvalidParams for malformed parameters; RequestFailed (-32803) for a request that could not be carried out.
+    private static int ErrorCode(Exception error) => error switch {
         ContentModifiedException => -32801,
         OperationCanceledException => -32800,
         MethodNotFoundException => -32601,
-        _ when _protocol < 2 => -32602,
         ArgumentException or FormatException or OverflowException or KeyNotFoundException or System.Text.Json.JsonException => -32602,
         _ => -32803,
     };
@@ -173,7 +169,7 @@ internal sealed partial class Rmf2LanguageServer
                     // never supplies a hook or exposes a barrier method.
                     _beforeRequest?.Invoke(method);
                     if (method == "exit") return _shutdown ? 0 : 1;
-                    if (id is not null && _protocol >= 2 && !RequestMethods.Contains(method)) throw new MethodNotFoundException(method);
+                    if (id is not null && !RequestMethods.Contains(method)) throw new MethodNotFoundException(method);
                     JsonNode? result = Handle(method, parameters);
                     lock (_revisionGate)
                     {
@@ -325,9 +321,10 @@ internal sealed partial class Rmf2LanguageServer
         foreach (var completion in pending) completion.TrySetException(new IOException("The client closed the connection."));
     }
 
-    // Under protocol 2, a client that registers watchers dynamically gets them from the server, so it needs no watcher
-    // code of its own: the manifests, the resources, the review files and the restore and install state that decides
-    // which library catalogs resolve. A client without dynamic registration forwards these events itself, as before.
+    // A client that registers watchers dynamically gets them from the server, so it needs no watcher code of its own:
+    // the manifests, the resources, the review files and the restore and install state that decides which library
+    // catalogs resolve. A client without dynamic registration gets the server's own watcher (FileWatching.cs); events
+    // it forwards itself are handled as well.
     internal static readonly string[] WatchedFilePatterns = [
         "**/runic.json", "**/*.{rmf2,mf2}", "**/*.review.json",
         "**/{obj/project.assets.json,node_modules/.package-lock.json,node_modules/.modules.yaml,node_modules/.yarn-state.yml,package-lock.json,pnpm-lock.yaml,yarn.lock,bun.lock,bun.lockb}",
@@ -366,33 +363,20 @@ internal sealed partial class Rmf2LanguageServer
             var resourceOperations = args["capabilities"]?["workspace"]?["workspaceEdit"]?["resourceOperations"] as JsonArray;
             _createFiles = resourceOperations?.Any(v => v is JsonValue value && value.TryGetValue(out string? text) && text == "create") == true;
             _deleteFiles = resourceOperations?.Any(v => v is JsonValue value && value.TryGetValue(out string? text) && text == "delete") == true;
-            _fileOperations = _createFiles && _deleteFiles;
             var encodings = args["capabilities"]?["general"]?["positionEncodings"] as JsonArray;
             _encoding = encodings?.Select(v => v!.GetValue<string>()).FirstOrDefault(v => v is "utf-8" or "utf-16" or "utf-32") ?? "utf-16";
-            // A client that asks for a newer revision than this server knows gets the latest one, and sees which in
-            // experimental.runic.protocol.
-            _protocol = args["initializationOptions"]?["runicProtocol"] is JsonValue requested && requested.TryGetValue(out int revision) && revision >= 2 ? LatestProtocol : 1;
             JsonNode? clientCapabilities = args["capabilities"];
             _applyEditSupport = clientCapabilities?["workspace"]?["applyEdit"] is JsonValue applyEdit && applyEdit.TryGetValue(out bool canApply) && canApply;
             _codeActionResolve = clientCapabilities?["textDocument"]?["codeAction"]?["resolveSupport"] is JsonObject;
             _watchedFilesRegistration = clientCapabilities?["workspace"]?["didChangeWatchedFiles"]?["dynamicRegistration"] is JsonValue dynamic && dynamic.TryGetValue(out bool canRegister) && canRegister;
-            if (_protocol >= 2) return Protocol2Capabilities();
-            return new JsonObject { ["capabilities"] = new JsonObject {
-                ["positionEncoding"] = _encoding, ["textDocumentSync"] = 2, ["documentSymbolProvider"] = true,
-                ["semanticTokensProvider"] = new JsonObject { ["legend"] = new JsonObject { ["tokenTypes"] = new JsonArray("namespace", "property", "variable", "function", "keyword", "string", "comment", "type"), ["tokenModifiers"] = new JsonArray() }, ["full"] = true },
-                ["referencesProvider"] = true, ["foldingRangeProvider"] = true, ["hoverProvider"] = true, ["definitionProvider"] = true,
-                ["documentFormattingProvider"] = true, ["renameProvider"] = true,
-                ["codeActionProvider"] = new JsonObject { ["codeActionKinds"] = new JsonArray("quickfix"), ["resolveProvider"] = true },
-                ["executeCommandProvider"] = new JsonObject { ["commands"] = new JsonArray("runic.extractGroup", "runic.inlineResource", "runic.markReviewed", "runic.preview", "runic.renameInput", "runic.renameSlot", "runic.renameResource", "runic.renderPreview") },
-                ["completionProvider"] = new JsonObject { ["triggerCharacters"] = new JsonArray("$", ":", "#", "/", "=") },
-            }, ["serverInfo"] = new JsonObject { ["name"] = "Runic RMF2", ["version"] = "1" } };
+            return Capabilities();
         }
         if (method == "shutdown") { _shutdown = true; return null; }
         if (method == "initialized")
         {
             // A client that cannot register watchers gets the server's own (Visual Studio 2026 has no dynamic
             // didChangeWatchedFiles registration, SPIKE-VS-0).
-            if (_protocol >= 2) { if (_watchedFilesRegistration) RegisterWatchedFiles(); else StartFileWatching(); }
+            if (_watchedFilesRegistration) RegisterWatchedFiles(); else StartFileWatching();
             return null;
         }
         if (method == "$/cancelRequest") return null;
@@ -408,8 +392,8 @@ internal sealed partial class Rmf2LanguageServer
             var source = new TranslationSource(LocalPath(actionUri), Utf8.GetBytes(actionBuffer.Text));
             if (actionBuffer.Version != actionVersion || Rmf2DiagnosticActions.Revision(source) != actionRevision)
                 throw new ContentModifiedException();
-            // Protocol 2 refactorings (Extract Group, Inline Resource) carry the same revision evidence as quick fixes.
-            if (_protocol >= 2 && data["refactor"] is not null) return ResolveRefactor(args, actionUri, data);
+            // Refactorings (Extract Group, Inline Resource) carry the same revision evidence as quick fixes.
+            if (data["refactor"] is not null) return ResolveRefactor(args, actionUri, data);
             string fixId = data["fixId"]?.GetValue<string>() ?? throw new ArgumentException("Missing quick-fix ID.");
             Rmf2DiagnosticQuickFix? fix = Rmf2DiagnosticActions.GetQuickFixes(actionBuffer.Syntax, _requestCancellation)
                 .Concat(ProjectQuickFixes(actionUri, actionBuffer).Fixes).FirstOrDefault(candidate => candidate.Id == fixId);
@@ -464,23 +448,23 @@ internal sealed partial class Rmf2LanguageServer
                     .SelectMany(node => node.Properties.Where(value => value.StartsWith("example ", StringComparison.Ordinal)).Select(value => JsonNode.Parse(value.Substring(8))));
                 return new JsonObject { ["key"] = key, ["locale"] = locale, ["ast"] = message.DeepClone(), ["inputs"] = inputContract, ["markup"] = markup, ["examples"] = new JsonArray(examples.ToArray()) };
             }
-            // Protocol 2 applies a command's edit through workspace/applyEdit and answers null; protocol 1, and a client
-            // without applyEdit, receive the WorkspaceEdit as before.
+            // A command applies its edit through workspace/applyEdit and answers null; a client without applyEdit
+            // receives the WorkspaceEdit.
             if (command == "runic.renameResource")
                 return ApplyCommandEdit("Rename resource", WorkspaceEdit(workspace.Rename(arguments[1]!.AsArray().Select(value => value!.GetValue<string>()).ToArray(), arguments[2]!.GetValue<string>())));
             if (command == "runic.renameSlot")
                 return ApplyCommandEdit("Rename slot", WorkspaceEdit(workspace.RenameSlot(sourcePath, arguments[1]!.GetValue<string>(), arguments[2]!.GetValue<string>(), arguments[3]!.GetValue<string>())));
             if (command == "runic.renameInput")
                 return ApplyCommandEdit("Rename input", WorkspaceEdit(workspace.RenameInput(sourcePath, arguments[1]!.GetValue<string>(), arguments[2]!.GetValue<string>(), arguments[3]!.GetValue<string>())));
-            // Protocol 2 needs only the operations a command uses, and empties an inlined file for a client without
-            // `delete` (Visual Studio 2026), as the Inline Resource code action does.
-            if (_protocol < 2 ? !_fileOperations : !_createFiles) throw new InvalidOperationException("The client does not support the required file operations.");
+            // A command needs only the operations it uses, and empties an inlined file for a client without `delete`
+            // (Visual Studio 2026), as the Inline Resource code action does.
+            if (!_createFiles) throw new InvalidOperationException("The client does not support the required file operations.");
             var plan = command switch {
                 "runic.extractGroup" => workspace.Extract(sourcePath, arguments[1]!.AsArray().Select(v => v!.GetValue<string>()).ToArray()),
                 "runic.inlineResource" => workspace.Inline(sourcePath, LocalPath(arguments[1]!.GetValue<string>())),
                 _ => throw new ArgumentException("Unknown RMF2 workspace command."),
             };
-            return ApplyCommandEdit(command == "runic.extractGroup" ? "Extract group" : "Inline resource", WorkspaceEdit(plan, emptyInsteadOfDelete: _protocol >= 2 && !_deleteFiles));
+            return ApplyCommandEdit(command == "runic.extractGroup" ? "Extract group" : "Inline resource", WorkspaceEdit(plan, emptyInsteadOfDelete: !_deleteFiles));
         }
         var document = args["textDocument"] as JsonObject;
         if (document is null) return null;
@@ -549,13 +533,12 @@ internal sealed partial class Rmf2LanguageServer
         if (method == "textDocument/codeAction")
         {
             JsonArray? only = args["context"]?["only"] as JsonArray;
-            if (_protocol < 2 && only is not null && !only.Any(kind => kind?.GetValue<string>() is "" or "quickfix")) return new JsonArray();
             JsonObject requestedRange = args["range"]?.AsObject() ?? throw new ArgumentException("Missing code-action range.");
             int from = Utf8.GetByteCount(buffer.Text.AsSpan(0, Offset(buffer.Text, requestedRange["start"]!)));
             int to = Utf8.GetByteCount(buffer.Text.AsSpan(0, Offset(buffer.Text, requestedRange["end"]!)));
             if (to < from) throw new ArgumentException("Invalid code-action range.");
-            // Protocol 2 also offers refactorings; `only` selects kinds hierarchically (refactor covers refactor.extract).
-            if (_protocol >= 2 && !RequestsKind(only, "quickfix")) return new JsonArray(RefactorActions(uri, buffer, from, to, only).ToArray());
+            // Refactorings too; `only` selects kinds hierarchically (refactor covers refactor.extract).
+            if (!RequestsKind(only, "quickfix")) return new JsonArray(RefactorActions(uri, buffer, from, to, only).ToArray());
             // A fix applies at its diagnostic and at the source it edits (RTR0078 is reported at the
             // message name, but the line break is further down).
             bool AtEdit(Rmf2DiagnosticQuickFix fix) => fix.StartByte <= to && from <= fix.StartByte + fix.LengthBytes;
@@ -579,7 +562,7 @@ internal sealed partial class Rmf2LanguageServer
                     ["command"] = new JsonObject { ["title"] = title, ["command"] = "runic.markReviewed",
                         ["arguments"] = new JsonArray((JsonNode)JsonValue.Create(uri), JsonValue.Create(item.Entry.Key), JsonValue.Create(item.Entry.Locale)) } });
             }
-            if (_protocol >= 2) foreach (JsonNode refactor in RefactorActions(uri, buffer, from, to, only)) actions.Add(refactor);
+            foreach (JsonNode refactor in RefactorActions(uri, buffer, from, to, only)) actions.Add(refactor);
             return actions;
         }
         if (method == "textDocument/semanticTokens/full") return SemanticTokens(buffer);
@@ -655,29 +638,9 @@ internal sealed partial class Rmf2LanguageServer
                 ["slots"] = new JsonArray(slots.Select(value => (JsonNode?)JsonValue.Create(value)).ToArray()),
             };
         }
-        // Protocol 2: F2 on resources, MF2 locals and inputs, and slot references (Rmf2LanguageServer.Refactoring.cs).
-        if (_protocol >= 2 && method == "textDocument/prepareRename") return PrepareRename(buffer, entry, atByte);
-        if (_protocol >= 2 && method == "textDocument/rename") return StandardRename(uri, entry, atByte, args["newName"]!.GetValue<string>());
-        if (method == "textDocument/rename")
-        {
-            if (entry is null) throw new InvalidOperationException("The position is not on a resource symbol.");
-            string path = LocalPath(uri); var workspace = Workspace(path);
-            TranslationWorkspaceTransactionPlan plan;
-            if (atByte >= entry.NameLocation.StartByte && atByte <= entry.NameLocation.StartByte + entry.NameLocation.LengthBytes)
-            {
-                RequireResourceOnlyWorkspace(path);
-                plan = workspace.Rename(workspace.LogicalPath(path, entry), args["newName"]!.GetValue<string>());
-            }
-            else
-            {
-                var syntax = entry.MessageSyntax;
-                var local = syntax?.Declarations.FirstOrDefault(d => d.Kind == "local" && syntax.VariableReferences(d.Name).Any(location => entry.MessageByteMap[location.StartByte] <= atByte && atByte < entry.MessageByteMap[location.StartByte + location.LengthBytes]));
-                if (local is null) throw new InvalidOperationException("Rename requires a resource symbol or an MF2 local; caller-input changes require a catalog-wide plan.");
-                plan = workspace.RenameLocal(path, entry.Key, local.Name, args["newName"]!.GetValue<string>());
-            }
-            if (!_fileOperations && plan.Edits.Any(e => e.Kind != TranslationWorkspaceEditKind.Replace)) throw new InvalidOperationException("Rename requires client file-operation support.");
-            return WorkspaceEdit(plan);
-        }
+        // F2 on resources, MF2 locals and inputs, and slot references (Rmf2LanguageServer.Refactoring.cs).
+        if (method == "textDocument/prepareRename") return PrepareRename(buffer, entry, atByte);
+        if (method == "textDocument/rename") return StandardRename(uri, entry, atByte, args["newName"]!.GetValue<string>());
         if (method == "textDocument/hover")
         {
             if (entry is null) return null;
@@ -769,16 +732,15 @@ internal sealed partial class Rmf2LanguageServer
     internal static readonly string[] WorkspaceCommands = ["runic.extractGroup", "runic.inlineResource", "runic.markReviewed", "runic.preview", "runic.renameInput", "runic.renameSlot", "runic.renameResource", "runic.renderPreview"];
     internal static readonly string[] RunicRequests = ["runic/documentInfo", "runic/libraryCatalogs", "runic/libraryDocument", "runic/message"];
 
-    // experimental.runic: the protocol revision this session speaks and the Runic commands and requests it answers.
-    // Only a session that opted in advertises it; a protocol 1 session answers initialize exactly as 0.13 did.
-    private JsonObject RunicCapability() => new() {
-        ["protocol"] = _protocol,
+    // experimental.runic: the protocol revision the server speaks and the Runic commands and requests it answers.
+    private static JsonObject RunicCapability() => new() {
+        ["protocol"] = LatestProtocol,
         ["commands"] = new JsonArray(WorkspaceCommands.Select(command => (JsonNode)JsonValue.Create(command)).ToArray()),
         ["requests"] = new JsonArray(RunicRequests.Select(request => (JsonNode)JsonValue.Create(request)).ToArray()),
     };
 
-    // The capabilities of protocol 2. serverInfo.version is the tool's version (Translations release).
-    private JsonObject Protocol2Capabilities() => new() {
+    // The server's capabilities. serverInfo.version is the tool's version (Translations release).
+    private JsonObject Capabilities() => new() {
         ["capabilities"] = new JsonObject {
             ["positionEncoding"] = _encoding, ["textDocumentSync"] = 2, ["documentSymbolProvider"] = true,
             ["semanticTokensProvider"] = new JsonObject { ["legend"] = new JsonObject { ["tokenTypes"] = new JsonArray("namespace", "property", "variable", "function", "keyword", "string", "comment", "type"), ["tokenModifiers"] = new JsonArray() }, ["full"] = true },
@@ -851,7 +813,7 @@ internal sealed partial class Rmf2LanguageServer
     }
     // Native application-language services own call sites. Never return a partial F2 edit unasked. With allowMixed, a
     // workspace whose only problem is that it contains application sources returns true instead of refusing, so the
-    // caller can ask the user (protocol 2); every other refusal still throws.
+    // caller can ask the user; every other refusal still throws.
     private bool RequireResourceOnlyWorkspace(string path, bool allowMixed = false)
     {
         string root = _workspaceRoots.Where(value => IsWithin(value, path)).OrderByDescending(value => value.Length).FirstOrDefault()
@@ -1219,7 +1181,7 @@ internal sealed partial class Rmf2LanguageServer
         }
     }
     // emptyInsteadOfDelete: a deleted file is emptied by a text edit instead, for a client without the `delete`
-    // resource operation (protocol 2 Inline Resource in Visual Studio 2026). Nothing is lost if the client applies only
+    // resource operation (Inline Resource in Visual Studio 2026). Nothing is lost if the client applies only
     // part of the edit, and the empty resource contributes nothing to the catalog until the user deletes it.
     private JsonObject WorkspaceEdit(TranslationWorkspaceTransactionPlan plan, bool emptyInsteadOfDelete = false)
     {

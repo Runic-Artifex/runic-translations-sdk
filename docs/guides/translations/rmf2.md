@@ -748,9 +748,8 @@ locale add/remove/fallback operations validate the complete fallback graph.
 
 The stdio LSP implements incremental changes, UTF-8/16/32 position negotiation,
 recoverable diagnostics, flat document symbols, folding, formatting, contract-aware
-completion/hover, logical definitions, and versioned rename edits. With
-[protocol 2](language-server.md#protocol-revisions), which a client requests with
-`initializationOptions.runicProtocol: 2`, every refactoring is standard LSP: F2
+completion/hover, logical definitions, and versioned rename edits. Every
+refactoring is standard LSP ([protocol revision 2](language-server.md#protocol-revisions)): F2
 (with `prepareRename`) renames resources, MF2 locals, caller inputs and slot
 references, and Extract Group and Inline Resource are `refactor.extract` and
 `refactor.inline` code actions.
@@ -766,20 +765,19 @@ declaration target unless another translation declares it. Application call-site
 navigation remains owned by native language services; Runic's resource
 references are intentionally scoped to catalog sources. Standard resource F2
 therefore never returns a partial edit unasked in a workspace containing
-application or other non-resource sources: with protocol 2 the server asks
-whether to rename in resource sources only (`window/showMessageRequest`), and
-otherwise it refuses, as it does for unindexable links. The explicit
+application or other non-resource sources: the server asks whether to rename
+in resource sources only (`window/showMessageRequest`), and refuses when the
+client cannot ask, as it does for unindexable links. The explicit
 resource-source transaction is the opt-in boundary; callers must update native
 application call sites separately.
 Local-variable rename uses parsed symbol locations and rejects capture of an
 existing variable. Quoted literals and ordinary message text are preserved.
-With protocol 1, `runic.extractGroup` and `runic.inlineResource` return
-`WorkspaceEdit` results and the client applies them; with protocol 2 the server
-applies command edits through `workspace/applyEdit`. Extract and Inline code
-actions are resolved against the document revision they were offered for.
-File-changing commands and actions require client create/delete capabilities
-with protocol 1; protocol 2 needs only `create` and empties an inlined file for a
-client without `delete`, such as Visual Studio 2026 (see the
+The server applies the edits of the `runic.*` refactoring commands through
+`workspace/applyEdit`; a client without `workspace.applyEdit` receives the
+`WorkspaceEdit` instead. Extract and Inline code actions are resolved against the
+document revision they were offered for. File-changing commands and actions need
+the client's `create` resource operation and empty an inlined file for a client
+without `delete`, such as Visual Studio 2026 (see the
 [language server guide](language-server.md#client-compatibility)). A separate reader processes cancellation while one worker owns
 request state; cancelled and stale requests return protocol errors rather than
 obsolete edits. A bounded cache reuses byte-identical syntax across workspace
