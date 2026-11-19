@@ -670,6 +670,8 @@ internal sealed class Rmf2DiagnosticLspTests
         private int _nextId;
         private bool _disposed;
         internal List<JsonNode> Publications { get; } = new();
+        // The in-process server; null for a child process.
+        internal Rmf2LanguageServer? Server { get; }
         /// <summary>Server stderr; complete only after <see cref="Dispose"/>.</summary>
         internal string StandardError => _errors.IsCompletedSuccessfully ? _errors.Result : "";
         internal Session(string directory)
@@ -684,7 +686,7 @@ internal sealed class Rmf2DiagnosticLspTests
         {
             _serverInput = new Rmf2LspBenchmark.BlockingByteStream();
             Rmf2LspBenchmark.BlockingByteStream output = _serverOutput = new Rmf2LspBenchmark.BlockingByteStream();
-            var server = new Rmf2LanguageServer(_serverInput, output, beforeRequest, requestCancelled);
+            var server = Server = new Rmf2LanguageServer(_serverInput, output, beforeRequest, requestCancelled);
             _server = Task.Run(() => {
                 try { return server.Run(); }
                 finally { output.CompleteWriting(); }
