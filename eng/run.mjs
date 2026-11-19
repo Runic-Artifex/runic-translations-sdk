@@ -398,8 +398,10 @@ async function main() {
     case "audit": auditDependencies(); break;
     // The language server's generic-client smoke with the packed tool (eng/lsp-smoke.mjs).
     case "lsp-smoke": (await import("./lsp-smoke.mjs")).lspSmoke(version); break;
+    // The language server's large-catalog budgets (tests/lsp-budget/README.md); extra arguments go to measure.mjs.
+    case "lsp-budget": run("bun", ["tests/lsp-budget/measure.mjs", ...process.argv.slice(3)]); break;
     default:
-      throw new Error("Use bootstrap, build, test, pack [version], pack-built [version], verify:candidate [version], verify-packages [version] (alias), verify-editor-packed [version], publish-editor <rid>, build-web, native-aot, audit, or lsp-smoke [version].");
+      throw new Error("Use bootstrap, build, test, pack [version], pack-built [version], verify:candidate [version], verify-packages [version] (alias), verify-editor-packed [version], publish-editor <rid>, build-web, native-aot, audit, lsp-smoke [version], or lsp-budget [--update].");
   }
 }
 

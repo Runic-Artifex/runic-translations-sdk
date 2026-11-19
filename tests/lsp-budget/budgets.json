@@ -1,0 +1,74 @@
+{
+  "catalog": {
+    "features": 20,
+    "messagesPerFeature": 1000,
+    "locales": 10,
+    "keystrokes": 5
+  },
+  "samples": 3,
+  "repeats": 2,
+  "cases": {
+    "lsp/open-to-diagnostics-ms": {
+      "target": 5000,
+      "headroom": 1.75,
+      "measured": 6564,
+      "limit": 11488
+    },
+    "lsp/edit-to-diagnostics-ms": {
+      "target": 500,
+      "headroom": 2,
+      "measured": 665,
+      "limit": 1330
+    },
+    "lsp/hover-ms": {
+      "headroom": 3,
+      "measured": 13,
+      "limit": 41
+    },
+    "lsp/completion-ms": {
+      "headroom": 3,
+      "measured": 19,
+      "limit": 58
+    },
+    "lsp/hover-after-diagnostics-ms": {
+      "headroom": 3,
+      "measured": 19,
+      "limit": 57
+    },
+    "lsp/hover-while-typing-ms": {
+      "target": 50,
+      "headroom": 3,
+      "measured": 42,
+      "limit": 128
+    },
+    "lsp/completion-while-typing-ms": {
+      "target": 50,
+      "headroom": 3,
+      "measured": 67,
+      "limit": 202
+    },
+    "lsp/typing-to-diagnostics-ms": {
+      "target": 500,
+      "headroom": 2,
+      "measured": 1339,
+      "limit": 2679
+    },
+    "lsp/rename-ms": {
+      "target": 3000,
+      "headroom": 1.75,
+      "measured": 6497,
+      "limit": 11370
+    },
+    "lsp/resident-bytes-after-open": {
+      "target": 1073741824,
+      "headroom": 1.25,
+      "measured": 1322840064,
+      "limit": 1653550080
+    },
+    "lsp/peak-resident-bytes": {
+      "headroom": 1.3,
+      "measured": 3039027200,
+      "limit": 3950735360
+    }
+  }
+}
