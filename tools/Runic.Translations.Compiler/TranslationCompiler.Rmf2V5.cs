@@ -195,12 +195,16 @@ public static partial class TranslationCompiler
         cancellationToken.ThrowIfCancellationRequested();
         var diagnostics = new DiagnosticBag();
         // A memoized computation runs with its own bag, and its diagnostics are replayed at the same point of the compile.
+        // Captures run one at a time, so one bag is reused (a nested capture gets its own).
+        DiagnosticBag? scratch = null;
         TranslationDiagnostic[] Capture(Action compute)
         {
             var saved = diagnostics;
-            diagnostics = new DiagnosticBag();
-            try { compute(); return diagnostics.Items.ToArray(); }
-            finally { diagnostics = saved; }
+            var bag = scratch ?? new DiagnosticBag();
+            scratch = null;
+            diagnostics = bag;
+            try { compute(); return bag.Count == 0 ? [] : bag.Items.ToArray(); }
+            finally { diagnostics = saved; bag.Clear(); scratch = bag; }
         }
         void Replay(TranslationDiagnostic[] items) { foreach (var item in items) diagnostics.Append(item); }
         Rmf2ProjectCompilation Result(Rmf2ProjectV5? value = null) => new(value, Array.AsReadOnly(diagnostics.ToSortedArray()));
@@ -553,9 +557,10 @@ public static partial class TranslationCompiler
                 chain.Add(entries[current.Tag]);
                 current = current.Fallback is not null && byTag.TryGetValue(current.Fallback, out var next) ? next : null;
             }
-            var resolved = new List<Rmf2ProjectEntryV5>(chain[0].Count);
-            var resolvedKeys = new List<string>(chain[0].Count);
-            foreach (var link in chain) Merge(resolvedKeys, resolved, link);
+            var resolvedKeys = new List<string>(chain[0].Order);
+            var resolved = new List<Rmf2ProjectEntryV5>(resolvedKeys.Count);
+            foreach (string key in resolvedKeys) resolved.Add(chain[0][key]);
+            for (int link = 1; link < chain.Count; link++) Merge(resolvedKeys, resolved, chain[link]);
             // Formatters use the resource's content locale, including fallback.
             var resources = new Rmf2TranslationV5[resolved.Count];
             for (int resourceIndex = 0; resourceIndex < resources.Length; resourceIndex++)

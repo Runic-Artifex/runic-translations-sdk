@@ -56,7 +56,14 @@ uses it at each stage:
 5. **Keys.** The contract of a key (its slot requirements, markup names, readable-name check and the RTR0010 reports of
    locales that lack it) is memoized by the identities of the key's entries in every locale.
 6. **Global work** runs every time, over the cached objects: path registration, the key lists, locale resolution, the
-   contract exports and the hashes. It has no parsing or lowering and allocates little.
+   contract exports and the hashes. It has no parsing or lowering. Per link context, the session also keeps what the
+   last compile built (`Rmf2LinkState`), so this pass is proportional to the edit wherever it can be:
+   - a compile whose units and context are those of the last compile returns the last result;
+   - a locale's entries are a hash table enumerated in the last compile's key order while its keys are the same,
+     and fallback resolution merges sorted key lists (nothing for a complete translation);
+   - the caller and markup contract exports are written from each message's JSON, which is reused while the message's
+     contract (memoized per key) and content locales are unchanged; the readable reference names are reused while
+     the contracts are the same.
 
 **Link context.** Everything that runic.json and the options decide: the bytes of runic.json, the size limits, relaxed
 and base-locale-only validation, and pseudo-locale generation. A memo of another context is never used. A change to

@@ -86,6 +86,8 @@ internal sealed class DiagnosticBag
     /// <summary>Adds a diagnostic as it is, with its message key and locale (a replayed memo, see Rmf2CompileCache).</summary>
     internal void Append(TranslationDiagnostic diagnostic) => _items.Add(diagnostic);
 
+    internal void Clear() => _items.Clear();
+
     internal TranslationDiagnostic[] ToSortedArray()
     {
         _items.Sort((left, right) =>
