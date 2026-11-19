@@ -68,7 +68,8 @@ capabilities, members, commands, requests and code-action kinds.
 - The order of completion items, symbols, references and code actions, and
   which quick fixes are offered for a diagnostic.
 - Timing, batching and performance. The large-catalog budgets that CI checks
-  guard against regressions and are not a contract.
+  ([Performance](#performance)) guard against regressions and are not a
+  contract.
 - The value of `serverInfo.version`, which is the tool's version, and the file
   patterns the server watches, which may grow.
 
@@ -305,6 +306,38 @@ makes no network requests. It reads the workspace's catalogs and the restore
 state of library catalogs. It writes files only when a command asks it to:
 `runic.markReviewed` writes the review file, and refactorings send their edits
 to the client, which applies them.
+
+## Performance
+
+CI measures the server on a catalog of **20,000 messages in 10 locales** (200
+resource files of 1,000 messages) on its Linux runner (ubuntu-24.04, 4
+processors), and fails when a measurement exceeds its budget
+([tests/lsp-budget](../../../tests/lsp-budget/README.md)). The budgets are
+the slowest of three runs times a margin for a shared runner's variance:
+about 2× for what takes seconds, 3× for hover and completion while typing, and
+6× for idle requests of a few milliseconds.
+
+| Measurement | Budget (4 processors) | Measured, 4 processors | Measured, 12 processors |
+| --- | ---: | ---: | ---: |
+| Open to the first diagnostics | 11.2 s | 5.0–6.4 s | 4.4 s |
+| An edit to its diagnostics | 1.3 s | 0.6 s | 0.56 s |
+| The last of five keystrokes to its diagnostics | 161 ms | 56–80 ms | 61 ms |
+| Hover after five keystrokes | 175 ms | 39–58 ms | 27 ms |
+| Completion after five keystrokes | 214 ms | 43–71 ms | 50 ms |
+| Hover and completion, idle | 78–84 ms | 10–27 ms | 15 ms |
+| Rename of a resource (10 files) | 6.4 s | 2.9–3.6 s | 2.9 s |
+| Resident memory after open | 1,411 MiB | 1,103–1,129 MiB | 1,139 MiB |
+| Peak resident memory | 3,435 MiB | 2,497–2,642 MiB | 2,527 MiB |
+
+The 4-processor column is three runs; the 12-processor column is medians of
+two rounds per size (#271).
+
+- **Scaling.** Smaller catalogs are faster: at 2,000 messages × 10 locales an
+  edit's diagnostics take about 0.2 s and open about 2 s.
+- **Review files.** A catalog with a review file (`<catalog>.review.json`)
+  validates more slowly while the review state is computed for every message.
+  At 20,000 × 10, an edit's diagnostics take about 3 s on 12 processors.
+  Hover, completion and rename are not affected.
 
 ## Tests
 
