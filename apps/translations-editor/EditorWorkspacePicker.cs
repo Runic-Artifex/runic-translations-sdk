@@ -1,86 +1,69 @@
 using System.Diagnostics;
 using Runic.Platform;
+using Runic.Platform.Runtime;
 #if RUNIC_PLATFORM_Linux
 using Runic.Platform.Linux.Portal;
-using Runic.Platform.Runtime;
+#elif RUNIC_PLATFORM_Windows
+using Runic.Platform.Windows;
+#elif RUNIC_PLATFORM_MacOS
+using Runic.Platform.MacOS;
 #endif
 
 namespace Runic.Translations.Editor;
 
 /// <summary>
-/// Chooses a workspace directory. On Linux it first uses the Runic SDK's XDG desktop portal FileChooser, which needs no
-/// toolkit and no parent window. When the session has no FileChooser portal of version 3 or later, or no session bus,
-/// it falls back to <c>/usr/bin/zenity</c> when that is installed. The picker needs no window and works the same with
-/// every host, also in <c>serve</c> mode, which has no native owner. Windows and macOS keep their system folder dialog
-/// through PowerShell and AppleScript. Parented dialogs through the Runic Desktop window's <see cref="IFileDialogs"/>
-/// are a follow-up.
+/// Chooses a workspace directory through the editor window's <see cref="IFileDialogs"/>, so the folder dialog belongs
+/// to the window: the XDG desktop portal's FileChooser parented to the GTK 4 window on Linux, the Common Item Dialog
+/// owned by the window on Windows, and an <c>NSOpenPanel</c> sheet on the window on macOS. In an installed browser
+/// (<c>--browser</c>, or the fallback when the embedded WebView cannot start) Runic Desktop shows the same dialogs
+/// without an owner, since the window asks for <see cref="OwnerPolicy.PreferOwner"/>.
 /// </summary>
-/// <remarks>The latest selection's directory lease is held until the next pick or disposal, as the SDK asks for
-/// filesystem work through <see cref="IDirectoryLease.LocalPath"/>.</remarks>
+/// <remarks>
+/// <para>Only <c>serve</c> has no window: Runic Desktop's serve-only mode binds no native owner, and its window dialogs
+/// report <see cref="PlatformUnavailableReason.OwnerUnavailable"/>. For that case alone the picker falls back to the
+/// platform's dialogs without an owner (<see cref="CreateUnownedDialogs"/>). The editor serves on loopback only, so the
+/// browser that asked runs on this computer, where the dialog appears. Every other unavailability, such as a session
+/// without a FileChooser portal, is reported to the page, which then asks for the directory's path.</para>
+/// <para>The latest selection's directory lease is held until the next pick or disposal, as the SDK asks for filesystem
+/// work through <see cref="IDirectoryLease.LocalPath"/>. A window's lease is also released when the window closes.</para>
+/// </remarks>
 internal sealed class EditorWorkspacePicker : IDisposable
 {
+    private static readonly OpenDirectoryOptions Options = new(OwnerPolicy.PreferOwner);
+
+    private readonly IFileDialogs _window;
+    private readonly Func<IFileDialogs?> _unowned;
     private readonly object _gate = new();
     private IAsyncDisposable? _selection;
     private bool _disposed;
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static",
-        Justification = "The Linux portal path keeps the selection's lease in this instance; other builds compile it out.")]
+    /// <param name="window">The window scope's dialogs (<c>AddRunicPlatformServices</c>).</param>
+    /// <param name="unowned">The dialogs without an owner for a window that has none; <see cref="CreateUnownedDialogs"/>
+    /// by default.</param>
+    internal EditorWorkspacePicker(IFileDialogs window, Func<IFileDialogs?>? unowned = null)
+    {
+        _window = window ?? throw new ArgumentNullException(nameof(window));
+        _unowned = unowned ?? CreateUnownedDialogs;
+    }
+
     public async Task<EditorWorkspacePickerResult> PickAsync(CancellationToken cancellationToken)
-    {
-#if RUNIC_PLATFORM_Linux
-        if (OperatingSystem.IsLinux())
-        {
-            // The portal showed no dialog when it returns null; the system dialog (zenity) is then tried instead.
-            EditorWorkspacePickerResult? portal = await PickWithPortalAsync(cancellationToken).ConfigureAwait(false);
-            if (portal is not null) return portal;
-        }
-#endif
-        return await PickWithSystemDialogAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// The editor's result for a portal outcome other than a selection, or <see langword="null"/> when the portal could
-    /// not show a dialog (no FileChooser of version 3 or later, or no session bus) and the system dialog should be tried.
-    /// </summary>
-    internal static EditorWorkspacePickerResult? PortalOutcome(PickerResult<IDirectoryLease> result) => result switch
-    {
-        PickerResult<IDirectoryLease>.Dismissed => new EditorWorkspacePickerResult(false, true, null, null),
-        PickerResult<IDirectoryLease>.Unavailable => null,
-        PickerResult<IDirectoryLease>.Failed(var code, var diagnostic) =>
-            new EditorWorkspacePickerResult(false, false, null, PickerFailed(code.ToString(), diagnostic?.ToString())),
-        _ => new EditorWorkspacePickerResult(false, false, null, EditorNotice.Create("ui_backend_picker_start")),
-    };
-
-    // The dialog ran, but its selection could not be used, for example a folder name that is not UTF-8 or a folder the
-    // process cannot read.
-    private static EditorNotice PickerFailed(string reason, string? detail) =>
-        EditorNotice.Create("ui_backend_picker_failed", ("reason", reason)) with { Detail = detail };
-
-#if RUNIC_PLATFORM_Linux
-    // One portal application identity, inferred from the desktop, for the process.
-    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
-    private static class PortalDialogs
-    {
-        internal static readonly IPickerBackend Value = new PortalApplication().CreateUnparentedFileDialogs();
-    }
-
-    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
-    private async Task<EditorWorkspacePickerResult?> PickWithPortalAsync(CancellationToken cancellationToken)
     {
         PickerResult<IDirectoryLease> result;
         try
         {
-            result = await PortalDialogs.Value.OpenDirectoryAsync(new OpenDirectoryOptions(OwnerPolicy.PreferOwner), cancellationToken)
-                .ConfigureAwait(false);
+            result = await _window.OpenDirectoryAsync(Options, cancellationToken).ConfigureAwait(false);
+            if (result is PickerResult<IDirectoryLease>.Unavailable(PlatformUnavailableReason.OwnerUnavailable) && _unowned() is { } unowned)
+                result = await unowned.OpenDirectoryAsync(Options, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             return new EditorWorkspacePickerResult(false, false, null, EditorNotice.FromException(exception));
         }
-        if (result is not PickerResult<IDirectoryLease>.Selected(var lease)) return PortalOutcome(result);
+        if (result is not PickerResult<IDirectoryLease>.Selected(var lease)) return Outcome(result);
         string path;
         try { path = Path.GetFullPath(lease.LocalPath); }
-        catch (Exception exception) when (exception is ArgumentException or IOException or NotSupportedException or System.Security.SecurityException)
+        catch (Exception exception) when (exception is ArgumentException or IOException or NotSupportedException or
+            System.Security.SecurityException or ObjectDisposedException or InvalidOperationException)
         {
             await lease.DisposeAsync().ConfigureAwait(false);
             return new EditorWorkspacePickerResult(false, false, null, PickerFailed(exception.GetType().Name, exception.Message));
@@ -88,10 +71,48 @@ internal sealed class EditorWorkspacePicker : IDisposable
         Keep(lease);
         return new EditorWorkspacePickerResult(true, false, path, null);
     }
-#endif
 
-    // Outside the portal block: builds without RUNIC_PLATFORM_Linux (Windows, macOS, the Views bootstrap) must still read
-    // _disposed, or the compiler reports CS0414.
+    /// <summary>The editor's result for a dialog outcome other than a selection.</summary>
+    internal static EditorWorkspacePickerResult Outcome(PickerResult<IDirectoryLease> result) => result switch
+    {
+        PickerResult<IDirectoryLease>.Dismissed => new EditorWorkspacePickerResult(false, true, null, null),
+        // No dialog could be shown, for example without a FileChooser portal or a session bus: the page asks for the path.
+        PickerResult<IDirectoryLease>.Unavailable => new EditorWorkspacePickerResult(false, false, null, EditorNotice.Create("ui_backend_picker_unavailable")),
+        PickerResult<IDirectoryLease>.Failed(var code, var diagnostic) =>
+            new EditorWorkspacePickerResult(false, false, null, PickerFailed(code.ToString(), diagnostic?.ToString())),
+        _ => new EditorWorkspacePickerResult(false, false, null, EditorNotice.Create("ui_backend_picker_start")),
+    };
+
+    // The dialog ran, but its selection could not be used, for example a folder name that is not UTF-8 or a folder the
+    // process cannot read, or another dialog of the window is still open (ResourceBusy).
+    private static EditorNotice PickerFailed(string reason, string? detail) =>
+        EditorNotice.Create("ui_backend_picker_failed", ("reason", reason)) with { Detail = detail };
+
+    /// <summary>
+    /// The platform's folder dialogs without an owner window, for <c>serve</c>, whose window has no native owner: the
+    /// portal's unparented FileChooser on Linux (which needs no toolkit), the Common Item Dialog on its own thread on
+    /// Windows, and an <c>NSOpenPanel</c> of its own on macOS. <see langword="null"/> where the platform has none.
+    /// </summary>
+    internal static IFileDialogs? CreateUnownedDialogs() => UnownedDialogs.Value;
+
+    private static class UnownedDialogs
+    {
+        // One backend for the process; none of them needs disposal.
+        internal static readonly IPickerBackend? Value = Create();
+
+        private static IPickerBackend? Create()
+        {
+#if RUNIC_PLATFORM_Linux
+            if (OperatingSystem.IsLinux()) return new PortalApplication().CreateUnparentedFileDialogs();
+#elif RUNIC_PLATFORM_Windows
+            if (OperatingSystem.IsWindowsVersionAtLeast(8)) return WindowsPlatformProvider.CreateUnownedFileDialogs();
+#elif RUNIC_PLATFORM_MacOS
+            if (OperatingSystem.IsMacOS()) return MacOSPlatformProvider.CreateUnownedFileDialogs();
+#endif
+            return null;
+        }
+    }
+
     private void Keep(IAsyncDisposable selection)
     {
         IAsyncDisposable? previous;
@@ -129,95 +150,4 @@ internal sealed class EditorWorkspacePicker : IDisposable
             catch (Exception exception) { Trace.TraceWarning($"The workspace directory lease was not released: {exception.Message}"); }
         });
     }
-
-    private static async Task<EditorWorkspacePickerResult> PickWithSystemDialogAsync(CancellationToken cancellationToken)
-    {
-        ProcessStartInfo? startInfo = CreateStartInfo(File.Exists);
-        if (startInfo is null)
-        {
-            return new EditorWorkspacePickerResult(
-                false,
-                false,
-                null,
-                EditorNotice.Create("ui_backend_picker_unavailable"));
-        }
-
-        using var process = new Process { StartInfo = startInfo };
-        try
-        {
-            if (!process.Start())
-                return new EditorWorkspacePickerResult(false, false, null, EditorNotice.Create("ui_backend_picker_start"));
-            Task<string> outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            Task<string> errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            string output = (await outputTask.ConfigureAwait(false)).Trim();
-            string error = (await errorTask.ConfigureAwait(false)).Trim();
-            if (process.ExitCode != 0 || output.Length == 0)
-                return new EditorWorkspacePickerResult(false, true, null, error.Length == 0 ? null : EditorNotice.External(error));
-            string path;
-            try { path = Path.GetFullPath(output); }
-            catch (Exception exception) when (exception is ArgumentException or NotSupportedException or System.Security.SecurityException)
-            {
-                return new EditorWorkspacePickerResult(false, false, null, PickerFailed(exception.GetType().Name, exception.Message));
-            }
-            return new EditorWorkspacePickerResult(true, false, path, null);
-        }
-        catch (OperationCanceledException)
-        {
-            if (!process.HasExited) process.Kill(entireProcessTree: true);
-            throw;
-        }
-        catch (Exception exception) when (exception is IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-            return new EditorWorkspacePickerResult(false, false, null, EditorNotice.FromException(exception));
-        }
-    }
-
-    // TODO(runic-sdk 0.17): replace Windows and macOS with the SDK's unowned file dialogs once they are public
-    // (today WindowsPlatformProvider.CreateUnownedFileDialogs and MacOSPlatformProvider.CreateUnownedFileDialogs are
-    // internal to Runic Desktop). Linux reaches this only when the portal showed no dialog.
-    internal static ProcessStartInfo? CreateStartInfo(Func<string, bool> fileExists)
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            var result = StartInfo("powershell.exe");
-            result.ArgumentList.Add("-NoProfile");
-            result.ArgumentList.Add("-STA");
-            result.ArgumentList.Add("-Command");
-            result.ArgumentList.Add(
-                "Add-Type -AssemblyName System.Windows.Forms; " +
-                "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog; " +
-                "if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($dialog.SelectedPath) }");
-            return result;
-        }
-
-        if (OperatingSystem.IsMacOS())
-        {
-            var result = StartInfo("/usr/bin/osascript");
-            result.ArgumentList.Add("-e");
-            result.ArgumentList.Add("POSIX path of (choose folder)");
-            return result;
-        }
-
-        return CreateZenityStartInfo(fileExists);
-    }
-
-    /// <summary>The Linux fallback, a zenity folder dialog, or <see langword="null"/> when zenity is not installed.</summary>
-    internal static ProcessStartInfo? CreateZenityStartInfo(Func<string, bool> fileExists)
-    {
-        const string zenity = "/usr/bin/zenity";
-        if (!fileExists(zenity)) return null;
-        var result = StartInfo(zenity);
-        result.ArgumentList.Add("--file-selection");
-        result.ArgumentList.Add("--directory");
-        return result;
-    }
-
-    private static ProcessStartInfo StartInfo(string fileName) => new(fileName)
-    {
-        UseShellExecute = false,
-        RedirectStandardOutput = true,
-        RedirectStandardError = true,
-        CreateNoWindow = true,
-    };
 }

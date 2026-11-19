@@ -347,13 +347,44 @@ SIGTERM. The end of standard input does not stop it.
 On Linux, `edit` needs a running X11 or Wayland desktop session, GTK 4.12 or newer and
 WebKitGTK 6 (Ubuntu and Debian: `libwebkitgtk-6.0-4`; Fedora: `webkitgtk6.0`);
 native chooser services also need that session's D-Bus and configured XDG portal
-backend. On Linux, **Browse** chooses a workspace folder through the first of these
-that is available: the portal's FileChooser (version 3 or newer, for example from
-`xdg-desktop-portal-gnome`, `-kde` or `-gtk`), then `/usr/bin/zenity` when the session
-has no such FileChooser or no session bus. Without either, enter the workspace
-directory instead. Windows and macOS show their system folder dialog. Windows needs
-the WebView2 runtime, which current Windows releases include. The shell supplies tools
-and libraries without starting those services or selecting the session's backend.
+backend. Windows needs the WebView2 runtime, which current Windows releases include.
+The shell supplies tools and libraries without starting those services or selecting
+the session's backend.
+
+**Browse** chooses the workspace folder in a dialog that belongs to the editor
+window, through the window's Runic Desktop file dialogs: on Linux the XDG portal's
+FileChooser (version 3 or newer, for example from `xdg-desktop-portal-kde`, `-gnome`
+or `-gtk`), parented to the window; on Windows the system folder dialog, modal for
+the window; on macOS a folder panel attached to the window as a sheet. In an
+installed browser (`--browser`, or after the fallback) the same dialogs open without
+an owner window. `serve` has no window, so there the dialog opens without one on the
+computer that serves the editor, which is also the one whose browser shows it, since
+`serve` listens on loopback only. Where no dialog can open, for example on Linux
+without a session bus or a FileChooser portal, the editor says so: enter the
+workspace directory instead.
+
+On Linux the window's icon comes from the desktop: on Wayland the compositor looks up
+the desktop entry named after the app ID, `eu.runic-artifex.TranslationsEditor`, and
+its icon. Until one is installed the window shows a generic icon. Install it for
+your user with
+
+```sh
+runic-translations-editor desktop-entry install
+```
+
+It writes `$XDG_DATA_HOME/applications/eu.runic-artifex.TranslationsEditor.desktop`
+and `$XDG_DATA_HOME/icons/hicolor/512x512/apps/eu.runic-artifex.TranslationsEditor.png`
+(`$XDG_DATA_HOME` is `~/.local/share` by default). The entry starts the editor that
+installed it, by its full path, so run the command again after moving the editor;
+from the menu it opens the packaged example, and a folder dropped on the launcher
+opens as the workspace. `StartupWMClass` and the icon name are the app ID, so X11
+desktops match the window too. Install replaces only an entry the editor wrote, and
+`runic-translations-editor desktop-entry uninstall` removes exactly those files; an
+entry of that name from a package is left alone. No other command, and no launch,
+writes into your home directory. Desktops pick the entry up at once or after a new
+login (KDE Plasma: `kbuildsycoca6`). On macOS the editor sets the Dock icon from its
+packaged icon when the window opens. On Windows the window and the executable show
+the default icon for now.
 
 `edit --native-shell-canary` opens the native window without a browser fallback,
 closes it as soon as its page has connected, and prints one JSON line
