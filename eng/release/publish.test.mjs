@@ -169,6 +169,13 @@ test("every publishing workflow waits in one fixed concurrency group, so publica
     return writes(file.permissions) || Object.values(file.jobs).some(job => writes(job.permissions) || job.environment);
   });
   expect(publishing).toContain("publish-preview.yml");
-  // One group for every version: a per-version group would let two versions publish and move tags at once.
-  for (const name of publishing) expect(parse(name).concurrency).toEqual({ group: "publish-preview", "cancel-in-progress": false });
+  expect(publishing).toContain("release-editor.yml");
+  // One group for every version: a per-version group would let two versions publish and move tags at once. A workflow
+  // whose builds run without publishing (the editor's, also for pull requests) puts each job that writes in the group.
+  const fixed = { group: "publish-preview", "cancel-in-progress": false };
+  for (const name of publishing) {
+    const file = parse(name);
+    if (file.concurrency?.group === "publish-preview") expect(file.concurrency).toEqual(fixed);
+    else for (const job of Object.values(file.jobs).filter(job => writes(job.permissions) || job.environment)) expect(job.concurrency).toEqual(fixed);
+  }
 });

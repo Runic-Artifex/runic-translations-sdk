@@ -154,7 +154,7 @@ internal static class Rmf2ResourceWriter
                 byte[] json = Utf8.GetBytes(line.Substring(example.Length)); var reader = new Utf8JsonReader(json);
                 while (reader.Read())
                     if (reader.TokenType == JsonTokenType.PropertyName && reader.CurrentDepth == 1 && reader.ValueTextEquals(name))
-                        edits.Add((offset + Utf8.GetByteCount(line.AsSpan(0, example.Length)) + (int)reader.TokenStartIndex, reader.HasValueSequence ? throw new TranslationAuthoringException("Unexpected segmented JSON input.") : reader.ValueSpan.Length + 2, Utf8.GetBytes(JsonSerializer.Serialize(newName))));
+                        edits.Add((offset + Utf8.GetByteCount(line.AsSpan(0, example.Length)) + (int)reader.TokenStartIndex, reader.HasValueSequence ? throw new TranslationAuthoringException("Unexpected segmented JSON input.") : reader.ValueSpan.Length + 2, JsonStringUtf8(newName)));
             }
             offset += Utf8.GetByteCount(line) + 1;
         }
@@ -280,4 +280,13 @@ internal static class Rmf2ResourceWriter
     }
     private static int Leading(string value) => value.Length - value.TrimStart(' ').Length;
     private static bool IsDirect(TranslationSource source) => source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase);
+
+    // The JSON string literal JsonSerializer.Serialize(value) writes, through the same writer, so a trimmed or NativeAOT
+    // host (the Translations Editor's packages) needs no reflection-based serialization.
+    internal static byte[] JsonStringUtf8(string value)
+    {
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer)) writer.WriteStringValue(value);
+        return buffer.WrittenSpan.ToArray();
+    }
 }

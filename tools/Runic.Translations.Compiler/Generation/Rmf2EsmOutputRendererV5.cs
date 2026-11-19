@@ -75,10 +75,10 @@ internal static class Rmf2EsmOutputRendererV5
         writer.Line("export const contractFingerprint = " + GenerationSupport.JsonString(project.CallerFingerprint) + ";");
         writer.Line("export const sourceHash = " + GenerationSupport.JsonString(project.SourceHash) + ";");
         writer.Line("export const baseLocale = " + GenerationSupport.JsonString(project.DefaultLocale) + ";");
-        writer.Line("export const locales = Object.freeze(" + JsonSerializer.Serialize(project.Locales.Select(item => item.Tag).OrderBy(item => item, StringComparer.Ordinal)) + ");");
+        writer.Line("export const locales = Object.freeze(" + GenerationSupport.JsonStringArray(project.Locales.Select(item => item.Tag).OrderBy(item => item, StringComparer.Ordinal)) + ");");
         writer.Line("const unsupportedLocalePolicy = " + GenerationSupport.JsonString(project.UnsupportedLocale.ToString()) + ";");
         // The pseudo-locales among them, which only their own tag selects; none in a release build.
-        writer.Line("const pseudoLocales = Object.freeze(" + JsonSerializer.Serialize(project.Locales.Select(item => item.Tag).Where(PseudoLocaleTags.IsPseudo).OrderBy(item => item, StringComparer.Ordinal)) + ");");
+        writer.Line("const pseudoLocales = Object.freeze(" + GenerationSupport.JsonStringArray(project.Locales.Select(item => item.Tag).Where(PseudoLocaleTags.IsPseudo).OrderBy(item => item, StringComparer.Ordinal)) + ");");
         // Only the CLDR data of the catalog's languages is embedded.
         // and only the currencies, units and compact patterns its messages use (D055.4).
         writer.Line(TranslationCapabilityRegistry.EsmLocaleSource(project.Locales.Select(item => item.Tag), project.BidiIsolation, FormatData(project)));

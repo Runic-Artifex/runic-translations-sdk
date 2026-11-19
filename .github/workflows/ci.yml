@@ -2,6 +2,9 @@ name: CI
 
 on:
   push:
+    # Every branch, and the SDK's tags; an editor release tag runs release-editor.yml instead (D078.2).
+    branches: ["**"]
+    tags-ignore: ["editor-v*"]
   pull_request:
   workflow_dispatch:
 
@@ -387,7 +390,7 @@ jobs:
       - name: Open and close the native editor window (WebView2)
         timeout-minutes: 5
         shell: bash
-        run: bash eng/ci/editor-native-canary.sh artifacts/editor-win-x64 webview2 artifacts/editor-canary
+        run: bash eng/ci/editor-native-canary.sh artifacts/editor-win-x64 webview2 artifacts/editor-canary "$(bun eng/release/editor-release.mjs version)"
       - name: Retain the native editor canary logs
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -419,7 +422,7 @@ jobs:
       # The hosted runner's logged-in GUI session shows the window, as in runic-sdk's macOS native leg.
       - name: Open and close the native editor window (WKWebView)
         timeout-minutes: 5
-        run: bash eng/ci/editor-native-canary.sh artifacts/editor-osx-arm64 wkwebview artifacts/editor-canary
+        run: bash eng/ci/editor-native-canary.sh artifacts/editor-osx-arm64 wkwebview artifacts/editor-canary "$(bun eng/release/editor-release.mjs version)"
       - name: Retain the native editor canary logs
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
