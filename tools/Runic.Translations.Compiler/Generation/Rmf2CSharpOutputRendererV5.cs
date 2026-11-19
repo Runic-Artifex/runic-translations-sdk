@@ -40,7 +40,9 @@ internal static class Rmf2CSharpOutputRendererV5
     // composition: the referenced runtime has the catalog composition surface (TranslationsCompatibility.CompositionVersion),
     // so the accessors get a constructor over an ITranslationContext and the registration class a Registration.
     // rmf2Abi4: each accessor calls a shared __Format or __FormatContent with its message ID, so its own code is a call,
-    // and creates its arguments with the typed GeneratedCatalogSupport.CreateArgument overloads (RMF2 ABI 4).
+    // and creates its arguments with the typed GeneratedCatalogSupport.CreateArgument overloads (RMF2 ABI 4). An accessor
+    // with one input calls the shared body for its input type (__Format_string and so on); one with several passes its
+    // arguments as a collection expression, a span on the stack (D077.16).
     internal static TranslationGeneratedOutput RenderAccessors(Rmf2ProjectV5 project, bool readableSurface = true, bool composition = true, bool rmf2Abi4 = true)
     {
         GenerationWriter writer = StartFile(project);
@@ -446,7 +448,23 @@ internal static class Rmf2CSharpOutputRendererV5
             writer.Line("private global::Runic.Translations.LocalizedTextContent __FormatContent(int id, " + Arguments + ") =>"); writer.Indent();
             writer.Line("__translationManager.Current.FormatContent(" + keys + ".__Key(id), arguments);"); writer.Unindent();
         }
+        // One body per format and input type for the accessors with one input (D077.16): an accessor is then a call with
+        // its message ID and input name, which inlines at the call site, instead of its own method that builds the
+        // argument. The argument is a collection expression, so the span lives on the stack: no array per call.
+        foreach ((bool content, string type) in messages.Where(message => message.Inputs.Count == 1)
+            .Select(message => (UsesContent(message), message.Inputs[0].Type)).Distinct()
+            .OrderBy(item => item.Item1).ThenBy(item => item.Item2, StringComparer.Ordinal))
+        {
+            string result = content ? "global::Runic.Translations.LocalizedTextContent" : "string", format = content ? "__FormatContent" : "__Format";
+            writer.Blank();
+            writer.Line("// Formats message <id> with one " + type + " input: the shared body of the accessors below with that input.");
+            writer.Line(NoInlining);
+            writer.Line("private " + result + " " + OneInputHelper(content, type) + "(int id, string name, " + ParameterType(type) + " value) =>"); writer.Indent();
+            writer.Line(format + "(id, [global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(name, value)]);"); writer.Unindent();
+        }
     }
+
+    private static string OneInputHelper(bool content, string type) => (content ? "__FormatContent_" : "__Format_") + type;
 
     private static bool UsesContent(Rmf2MessageContractV5 message) => message.Structured || message.Content == Rmf2DocumentProfileV5.Document;
 
@@ -472,11 +490,22 @@ internal static class Rmf2CSharpOutputRendererV5
             {
                 var parameters = new List<string>(message.Inputs.Count);
                 foreach (Rmf2InputV5 input in message.Inputs) parameters.Add(ParameterType(input.Type) + " " + Rmf2GeneratedNamesV1.Identifier(input.Name));
-                writer.Line("public " + result + " " + member + "(" + string.Join(", ", parameters) + ") => " + call + "new global::Runic.Translations.TextArgument[]");
-                writer.Line("{"); writer.Indent();
-                foreach (Rmf2InputV5 input in message.Inputs)
-                    writer.Line(TypedArgument(input.Name, Rmf2GeneratedNamesV1.Identifier(input.Name)) + ",");
-                writer.Unindent(); writer.Line("})" + close + ";");
+                string signature = "public " + result + " " + member + "(" + string.Join(", ", parameters) + ") => ";
+                if (message.Inputs.Count == 1)
+                {
+                    Rmf2InputV5 input = message.Inputs[0];
+                    writer.Line(signature + open + OneInputHelper(message.Structured || document, input.Type) + "(" + message.Id + ", " +
+                        GenerationSupport.CSharpString(input.Name) + ", " + Rmf2GeneratedNamesV1.Identifier(input.Name) + ")" + close + ";");
+                }
+                else
+                {
+                    // A collection expression: the arguments are a span on the stack, not an array per call.
+                    writer.Line(signature + call + "[");
+                    writer.Indent();
+                    foreach (Rmf2InputV5 input in message.Inputs)
+                        writer.Line(TypedArgument(input.Name, Rmf2GeneratedNamesV1.Identifier(input.Name)) + ",");
+                    writer.Unindent(); writer.Line("])" + close + ";");
+                }
             }
             if (readableSurface) writer.Line(HiddenAttribute);
             writer.Line("public " + result + " r_args_" + member + "(global::System.ReadOnlySpan<global::Runic.Translations.TextArgument> arguments) => " + call + "arguments)" + close + ";");
@@ -547,7 +576,7 @@ internal static class Rmf2CSharpOutputRendererV5
             writer.Line("// first use. The fallback text repeats the arguments' text, so for long arguments it can break a transport limit that");
             writer.Line("// the arguments alone keep; the reference then has no fallback text.");
             writer.Line("private static " + Reference + " __Reference(string key, global::System.Collections.Generic.IReadOnlyDictionary<string, " + Argument + ">? arguments,");
-            writer.Line("    global::Runic.Translations.TranslationKey message, global::Runic.Translations.TextArgument[] fallbackArguments)");
+            writer.Line("    global::Runic.Translations.TranslationKey message, " + (rmf2Abi4 ? "global::System.ReadOnlySpan<global::Runic.Translations.TextArgument>" : "global::Runic.Translations.TextArgument[]") + " fallbackArguments)");
             writer.Line("{"); writer.Indent();
             writer.Line("string fallbackText = global::System.Threading.LazyInitializer.EnsureInitialized(ref __referenceSnapshot, static () => " + ns + Verbatim(project.ClassName + "Catalog") + ".CreateProvider()");
             writer.Line("    .GetSnapshotAsync(" + GenerationSupport.CSharpString(project.DefaultLocale) + ").AsTask().GetAwaiter().GetResult()).Format(message, fallbackArguments);");
@@ -611,14 +640,22 @@ internal static class Rmf2CSharpOutputRendererV5
             }
             if (!fallback) writer.Line("null);");
             else if (parameters.Length == 0)
-                writer.Line(keys + "." + Member(message) + ", global::System.Array.Empty<global::Runic.Translations.TextArgument>());");
+                writer.Line(keys + "." + Member(message) + (rmf2Abi4 ? ", default);" : ", global::System.Array.Empty<global::Runic.Translations.TextArgument>());"));
+            else if (rmf2Abi4)
+            {
+                // A collection expression: the fallback arguments are a span on the stack (D077.16).
+                writer.Line(keys + "." + Member(message) + ", [");
+                writer.Indent();
+                for (int index = 0; index < parameters.Length; index++)
+                    writer.Line(TypedArgument(message.Inputs[index].Name, parameters[index]) + ",");
+                writer.Unindent(); writer.Line("]);");
+            }
             else
             {
                 writer.Line(keys + "." + Member(message) + ", new global::Runic.Translations.TextArgument[]");
                 writer.Line("{"); writer.Indent();
                 for (int index = 0; index < parameters.Length; index++)
-                    writer.Line((rmf2Abi4 ? TypedArgument(message.Inputs[index].Name, parameters[index])
-                        : "global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(" + GenerationSupport.CSharpString(message.Inputs[index].Name) + ", new global::Runic.Translations.TextArgument(\"_\", " + parameters[index] + "))") + ",");
+                    writer.Line("global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(" + GenerationSupport.CSharpString(message.Inputs[index].Name) + ", new global::Runic.Translations.TextArgument(\"_\", " + parameters[index] + "))" + ",");
                 writer.Unindent(); writer.Line("});");
             }
             writer.Unindent();

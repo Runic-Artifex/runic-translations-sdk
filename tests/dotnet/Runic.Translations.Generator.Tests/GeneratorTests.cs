@@ -194,6 +194,50 @@ internal sealed class GeneratorTests
             Execute(run, "Example.Localization.ExecutionProbe", "Run"), "generated execution");
     }
 
+    [Test, DisplayName("one-input accessors share one body per format and input type, and several inputs are a collection expression")]
+    public void SharedOneInputAccessorBodies()
+    {
+        const string resource = """
+            hello = Hello {$name}
+            bye = Bye {$name}
+            count = {$n :integer} files
+            other = {$n :integer} folders
+            price = {$amount :number} EUR
+            link = Open {#strong}{$name}{/strong}
+            moved = {$count :integer} files to {$folder}
+            """;
+        string source = $$"""
+            namespace Example.Localization;
+            public static class SharedProbe
+            {
+                public static string Run()
+                {
+                    global::Runic.Translations.ITranslationManager manager =
+                        AppTextCatalog.CreateManagerAsync().AsTask().GetAwaiter().GetResult();
+                    var text = new AppText(manager);
+                    return string.Join("|", text.{{PathMember("hello")}}("Ada"), text.{{PathMember("bye")}}("Bo"), text.{{PathMember("count")}}(3L),
+                        text.{{PathMember("other")}}(1L), text.{{PathMember("price")}}(2.5m),
+                        text.{{PathMember("link")}}("Cy").Nodes.Length.ToString(global::System.Globalization.CultureInfo.InvariantCulture),
+                        text.{{PathMember("moved")}}(2L, "Docs"));
+                }
+            }
+            """;
+        GeneratorRun run = GeneratorTestHost.RunWithConsumer(source, ProjectInput(), new TestInput("C:/repo/translations/en.rmf2", "Rmf2", resource));
+        Assert.Equal(0, run.SingleResult.Diagnostics.Length, string.Join("\n", run.SingleResult.Diagnostics));
+        Assert.Equal("Hello Ada|Bye Bo|3 files|1 folders|2.5 EUR|4|2 files to Docs", Execute(run, "Example.Localization.SharedProbe", "Run"), "shared accessor bodies");
+        string accessors = run.SingleResult.GeneratedSources.Single(static item => item.HintName == "AppText.Accessors.g.cs").SourceText.ToString();
+        // One body per format and input type, whatever the number of messages that use it.
+        foreach ((string helper, int count) in new[] { ("private string __Format_string(int id, string name, string value)", 1), ("private string __Format_int64(int id, string name, long value)", 1),
+            ("private string __Format_decimal(int id, string name, decimal value)", 1), ("private global::Runic.Translations.LocalizedTextContent __FormatContent_string(int id, string name, string value)", 1),
+            ("__Format_string(", 3), ("__Format_int64(", 3), ("__FormatContent_string(", 2) })
+            Assert.Equal(count, accessors.Split(helper).Length - 1, helper);
+        Assert.True(System.Text.RegularExpressions.Regex.IsMatch(accessors, @"\(string r_6e616d65\) => __Format_string\(\d+, ""name"", r_6e616d65\);"), "A one-input accessor does not call its shared body:\n" + accessors);
+        Assert.True(System.Text.RegularExpressions.Regex.IsMatch(accessors, @"\(long r_636f756e74, string r_666f6c646572\) => __Format\(\d+, \["), "Several inputs are not a collection expression:\n" + accessors);
+        Assert.True(accessors.Contains("[global::Runic.Translations.Generated.GeneratedCatalogSupport.CreateArgument(name, value)]", StringComparison.Ordinal), "The shared body does not use a collection expression.");
+        Assert.True(!accessors.Contains("new global::Runic.Translations.TextArgument[]", StringComparison.Ordinal), "An accessor still allocates an argument array:\n" + accessors);
+        Assert.True(!accessors.Contains("__Format_boolean", StringComparison.Ordinal), "A body for an unused input type is generated.");
+    }
+
     [Test, DisplayName("generated C# types list inputs as IReadOnlyList<string> and formats them")]
     public void GeneratedListInputs()
     {
