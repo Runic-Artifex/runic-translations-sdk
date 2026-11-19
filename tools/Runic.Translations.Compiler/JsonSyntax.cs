@@ -91,7 +91,14 @@ internal sealed class DiagnosticBag
     private HashSet<TranslationDiagnostic>? _policy;
 
     /// <summary>Marks the diagnostic just added as one a validation policy reported.</summary>
-    internal void MarkPolicy() => (_policy ??= new HashSet<TranslationDiagnostic>(ReferenceEqualityComparer.Instance)).Add(_items[^1]);
+    internal void MarkPolicy()
+    {
+        (_policy ??= new HashSet<TranslationDiagnostic>(ReferenceEqualityComparer.Instance)).Add(_items[^1]);
+        PolicyReported = true;
+    }
+
+    /// <summary>Whether a validation policy reported a diagnostic into this bag, also one replayed from a memo.</summary>
+    internal bool PolicyReported { get; set; }
 
     /// <summary><paramref name="items"/> (from this bag) without the ones a validation policy reported.</summary>
     internal TranslationDiagnostic[] WithoutPolicy(TranslationDiagnostic[] items)
@@ -100,7 +107,7 @@ internal sealed class DiagnosticBag
         return Array.FindAll(items, item => !policy.Contains(item));
     }
 
-    internal void Clear() { _items.Clear(); _policy?.Clear(); }
+    internal void Clear() { _items.Clear(); _policy?.Clear(); PolicyReported = false; }
 
     internal TranslationDiagnostic[] ToSortedArray()
     {

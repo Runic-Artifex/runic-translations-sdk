@@ -290,7 +290,11 @@ public static partial class TranslationCompiler
             finally { diagnostics = saved; bag.Clear(); scratch = bag; }
         }
         void Replay(TranslationDiagnostic[] items) { foreach (var item in items) diagnostics.Append(item); }
-        Rmf2ProjectCompilation Result(Rmf2ProjectV5? value = null) => new(value, Array.AsReadOnly(diagnostics.ToSortedArray()));
+        Rmf2ProjectCompilation Result(Rmf2ProjectV5? value = null)
+        {
+            if (counters is not null) counters.PolicyReported = diagnostics.PolicyReported;
+            return new(value, Array.AsReadOnly(diagnostics.ToSortedArray()));
+        }
         bool Failed() => diagnostics.Items.Any(d => d.Severity == TranslationDiagnosticSeverity.Error);
         if (RejectDuplicateSourcePaths(new[] { project }, sources, diagnostics)) return Result();
         ParsedJson parsed = StrictJsonParser.Parse(project, diagnostics, options, cancellationToken);
@@ -470,7 +474,7 @@ public static partial class TranslationCompiler
                             pairMemo.Paired = paired = new(pair.Value, translated, requirements, reported.All, manifest.Relaxed, reported.WithoutPolicy,
                                 ReferenceEquals(translated, pair.Value) ? null : OriginSignature(pair.Value, requirements));
                         }
-                        Replay(manifest.Relaxed ? paired.WithoutPolicy : paired.Diagnostics);
+                        ReplayPolicy(paired.Diagnostics, paired.WithoutPolicy);
                     }
                     if (translated.Linked.Names.Count != 0) (names ??= new SortedSet<string>(StringComparer.Ordinal)).UnionWith(translated.Linked.Names);
                 }
@@ -781,6 +785,13 @@ public static partial class TranslationCompiler
         }
         // The memoized compile of a source against these caller inputs (by identity), or null.
         // Equal inputs are as good as the same: a reparsed base file gives its messages new, equal input lists.
+        // Replays a memo of the checks that read the validation policies: without the policies' diagnostics in a relaxed compile.
+        void ReplayPolicy(TranslationDiagnostic[] all, TranslationDiagnostic[] withoutPolicy)
+        {
+            if (manifest.Relaxed) { Replay(withoutPolicy); return; }
+            Replay(all);
+            if (all.Length != withoutPolicy.Length) diagnostics.PolicyReported = true;
+        }
         // A full compile does not reuse the memo of a relaxed one (it lacks the policies' diagnostics).
         CompiledMemo? CompiledFor(Rmf2ProjectSourceV5 source, IReadOnlyList<Rmf2InputV5>? callerInputs) =>
             source.Memo?.Compiled is { } memo && (!memo.Relaxed || manifest.Relaxed) && (ReferenceEquals(memo.Inputs, callerInputs) ||
@@ -796,7 +807,7 @@ public static partial class TranslationCompiler
                 var reported = CapturePolicy(() => entry = CompileNow(source, callerInputs, lowered));
                 memo.Compiled = compiled = new(callerInputs, entry, reported.All, manifest.Relaxed, reported.WithoutPolicy);
             }
-            Replay(manifest.Relaxed ? compiled.WithoutPolicy : compiled.Diagnostics);
+            ReplayPolicy(compiled.Diagnostics, compiled.WithoutPolicy);
             return compiled.Entry;
         }
         Rmf2ProjectEntryV5? CompileNow(Rmf2ProjectSourceV5 source, IReadOnlyList<Rmf2InputV5>? callerInputs, Rmf2SemanticResultV5? lowered)

@@ -32,7 +32,7 @@ internal sealed class SourceFingerprintTests
         Require(compared >= 3, $"Only {compared} corpus projects compiled.");
     }
 
-    [Test, DisplayName("Source fingerprints stay equal to the projection's across the edits of a validation session")]
+    [Test, DisplayName("Source fingerprints stay equal to the projection's across the edits of a validation session, and a reparsed file's unchanged messages keep theirs")]
     public void EqualAcrossSessionEdits()
     {
         (TranslationSource project, TranslationSource[] sources) = Read("xliff-v3/project");
@@ -53,6 +53,11 @@ internal sealed class SourceFingerprintTests
         IReadOnlyDictionary<string, string> after = TranslationInterchange.ComputeSourceFingerprints(baseEdit);
         Require(before.Where(pair => pair.Key != "farewell").All(pair => after[pair.Key] == pair.Value) && after["farewell"] != before["farewell"],
             "A base edit changes only the edited message's fingerprint.");
+        // The base file restored (a reparse of the original text): every fingerprint is the original one again.
+        TranslationSource[] restored = edited.Select(source => source.Path.EndsWith("en.rmf2", StringComparison.Ordinal)
+            ? Replace(source, "farewell = See you later", "farewell = See you soon") : source).ToArray();
+        Require(Equal(before, TranslationInterchange.ComputeSourceFingerprints(Compile(cache, project, restored, "restored base file"))),
+            "A restored base file has the original fingerprints.");
         TranslationSource[] added = edited.Select(source => source.Path.EndsWith("en.rmf2", StringComparison.Ordinal)
             ? Replace(source, "farewell = See you later", "farewell = See you later\nwelcome_back = Welcome back") : source).ToArray();
         Rmf2ProjectCompilation addition = Compile(cache, project, added, "new message");
