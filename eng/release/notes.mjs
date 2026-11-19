@@ -8,6 +8,8 @@
 //   bun eng/release/notes.mjs assemble <version>     write <version>.md and remove <version>/
 //   bun eng/release/notes.mjs split <version> [<file>] [--keep]
 //                                                    turn a <version>.md into fragments
+// --editor works on the Translations Editor's own notes in eng/release/notes/editor/ instead (D078.3), whose versions
+// are the editor's (apps/translations-editor/Directory.Build.props); check without versions checks both.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix, resolve } from 'node:path';
@@ -16,6 +18,8 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 export const root = resolve(here, '../..');
 export const notesDirectory = resolve(here, 'notes');
+// The Translations Editor's notes: the same layout, for the editor's own versions (.github/workflows/release-editor.yml).
+export const editorNotesDirectory = join(notesDirectory, 'editor');
 
 // The sections in the order <version>.md lists them. `heading` is the default heading;
 // a section's _intro.md that starts with a heading of the same level replaces it (for
@@ -359,9 +363,11 @@ export function check(directory, {exists = repositoryPaths()} = {}) {
   return problems;
 }
 
-// Every version that has a fragment directory.
+const versionName = /^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/;
+
+// Every version that has a fragment directory (not editor/, the editor's notes).
 export function fragmentVersions(directory = notesDirectory) {
-  return existsSync(directory) ? readdirSync(directory).filter(entry => statSync(join(directory, entry)).isDirectory()).sort() : [];
+  return existsSync(directory) ? readdirSync(directory).filter(entry => versionName.test(entry) && statSync(join(directory, entry)).isDirectory()).sort() : [];
 }
 
 // ---------------------------------------------------------------------------
@@ -459,31 +465,39 @@ export function split(markdown, directory) {
 // ---------------------------------------------------------------------------
 
 function main(args) {
-  const [command, ...rest] = args;
+  const editor = args.includes('--editor');
+  const [command, ...rest] = args.filter(arg => arg !== '--editor');
+  const base = editor ? editorNotesDirectory : notesDirectory;
+  const shown = editor ? 'eng/release/notes/editor' : 'eng/release/notes';
   const versionDirectory = version => {
-    if (!/^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/.test(version ?? '')) throw new Error(`Not a version: ${version ?? '(none)'}`);
-    return join(notesDirectory, version);
+    if (!versionName.test(version ?? '')) throw new Error(`Not a version: ${version ?? '(none)'}`);
+    return join(base, version);
   };
   if (command === 'check') {
-    const versions = rest.length ? rest : fragmentVersions();
     const exists = repositoryPaths();
-    const problems = versions.flatMap(version => {
-      const directory = versionDirectory(version);
-      return existsSync(directory) ? check(directory, {exists}) : [`${version}: no fragment directory eng/release/notes/${version}/`];
-    });
+    // Without versions: every fragment directory, the editor's too unless --editor names only those.
+    const sets = rest.length ? [[base, shown, rest]]
+      : [...(editor ? [] : [[notesDirectory, 'eng/release/notes', fragmentVersions(notesDirectory)]]),
+        [editorNotesDirectory, 'eng/release/notes/editor', fragmentVersions(editorNotesDirectory)]];
+    const problems = sets.flatMap(([directory, where, versions]) => versions.flatMap(version => {
+      const path = join(directory, version);
+      const label = directory === editorNotesDirectory ? 'editor/' : '';
+      return existsSync(path) ? check(path, {exists}).map(problem => label + problem) : [`${label}${version}: no fragment directory ${where}/${version}/`];
+    }));
     for (const problem of problems) console.error(problem);
     if (problems.length) return 1;
-    console.log(versions.length ? `Release-note fragments of ${versions.join(', ')} are valid.` : 'No release-note fragment directories.');
+    const checked = sets.flatMap(([directory, , versions]) => versions.map(version => (directory === editorNotesDirectory ? 'editor ' : '') + version));
+    console.log(checked.length ? `Release-note fragments of ${checked.join(', ')} are valid.` : 'No release-note fragment directories.');
     return 0;
   }
   if (command === 'assemble' && rest.length === 1) {
     const directory = versionDirectory(rest[0]);
-    if (!existsSync(directory)) throw new Error(`No fragment directory eng/release/notes/${rest[0]}/`);
+    if (!existsSync(directory)) throw new Error(`No fragment directory ${shown}/${rest[0]}/`);
     const problems = check(directory);
     if (problems.length) { for (const problem of problems) console.error(problem); return 1; }
     writeFileSync(`${directory}.md`, assemble(directory));
     rmSync(directory, {recursive: true});
-    console.log(`Wrote eng/release/notes/${rest[0]}.md and removed its fragments. Review it and commit both.`);
+    console.log(`Wrote ${shown}/${rest[0]}.md and removed its fragments. Review it and commit both.`);
     return 0;
   }
   if (command === 'split' && rest.length >= 1) {
@@ -493,12 +507,12 @@ function main(args) {
     const source = file ? resolve(file) : `${directory}.md`;
     if (!existsSync(source)) throw new Error(`No ${source}`);
     for (const line of split(readFileSync(source, 'utf8'), directory)) console.log(line);
-    if (!file && !keep) { rmSync(source); console.log(`removed eng/release/notes/${version}.md`); }
+    if (!file && !keep) { rmSync(source); console.log(`removed ${shown}/${version}.md`); }
     const problems = check(directory);
     for (const problem of problems) console.error(problem);
     return problems.length ? 1 : 0;
   }
-  console.error('Use notes.mjs check [<version>...] | assemble <version> | split <version> [<file>] [--keep]');
+  console.error('Use notes.mjs [--editor] check [<version>...] | assemble <version> | split <version> [<file>] [--keep]');
   return 2;
 }
 

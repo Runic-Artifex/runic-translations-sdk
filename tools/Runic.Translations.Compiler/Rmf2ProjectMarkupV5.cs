@@ -1,8 +1,10 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 
 namespace Runic.Translations.Compiler;
@@ -182,25 +184,55 @@ internal sealed class Rmf2ProjectMarkupV5
         void Error(string message) => diagnostics.Add("RTR0062", TranslationDiagnosticSeverity.Error, message, location);
     }
 
+    // Written with Utf8JsonWriter rather than JsonSerializer over anonymous types, so a trimmed or NativeAOT host (the
+    // Translations Editor's packages) writes the same bytes: JsonSerializer's default options write through the same
+    // writer, unindented with the default encoder, in this property order and with nulls.
     internal static string Export(IReadOnlyDictionary<string, Rmf2MarkupContractV5> contracts,
         IReadOnlyList<Rmf2MessageContractV5> messages, IReadOnlyList<Rmf2LocaleV5>? locales = null)
     {
-        var exportedContracts = new SortedDictionary<string, object>(StringComparer.Ordinal);
-        foreach (var contract in contracts)
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer))
+            WriteExport(writer, contracts, messages, locales);
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
+    private static void WriteExport(Utf8JsonWriter writer, IReadOnlyDictionary<string, Rmf2MarkupContractV5> contracts,
+        IReadOnlyList<Rmf2MessageContractV5> messages, IReadOnlyList<Rmf2LocaleV5>? locales = null)
+    {
+        writer.WriteStartObject();
+        writer.WriteNumber("version", Rmf2ProjectV5.MarkupContractVersion);
+        writer.WriteStartObject("contracts");
+        foreach (var contract in contracts.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
         {
-            var options = new SortedDictionary<string, object>(StringComparer.Ordinal);
-            foreach (var option in contract.Value.Options)
-                options[option.Key] = option.Value.Type == "integer"
-                    ? new { type = option.Value.Type, values = option.Value.Values, @default = option.Value.Default, literalOnly = option.Value.LiteralOnly, minimum = option.Value.Minimum, maximum = option.Value.Maximum }
-                    : new { type = option.Value.Type, values = option.Value.Values, @default = option.Value.Default, literalOnly = option.Value.LiteralOnly };
             // Contract v2 always writes the placement and child model; runtimes accept exactly v2.
-            exportedContracts[contract.Key] = new
+            writer.WriteStartObject(contract.Key);
+            writer.WriteString("kind", contract.Value.Standalone ? "standalone" : "paired");
+            writer.WriteString("placement", contract.Value.Placement);
+            writer.WriteString("children", contract.Value.Children);
+            writer.WriteBoolean("interactive", contract.Value.Interactive);
+            writer.WriteString("plainText", contract.Value.PlainText);
+            writer.WriteStartObject("options");
+            foreach (var option in contract.Value.Options.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
             {
-                kind = contract.Value.Standalone ? "standalone" : "paired", placement = contract.Value.Placement, children = contract.Value.Children,
-                interactive = contract.Value.Interactive, plainText = contract.Value.PlainText, options,
-            };
+                writer.WriteStartObject(option.Key);
+                writer.WriteString("type", option.Value.Type);
+                WriteStrings(writer, "values", option.Value.Values);
+                writer.WriteString("default", option.Value.Default);
+                writer.WriteBoolean("literalOnly", option.Value.LiteralOnly);
+                if (option.Value.Type == "integer")
+                {
+                    writer.WriteNumber("minimum", option.Value.Minimum);
+                    writer.WriteNumber("maximum", option.Value.Maximum);
+                }
+                writer.WriteEndObject();
+            }
+            writer.WriteEndObject();
+            writer.WriteEndObject();
         }
-        var exportedMessages = new SortedDictionary<string, object>(StringComparer.Ordinal);
+        writer.WriteEndObject();
+        // A later message with the same key replaces an earlier one, as the sorted dictionary this replaced did.
+        var messagesByKey = new SortedDictionary<string, Rmf2MessageContractV5>(StringComparer.Ordinal);
+        foreach (var message in messages) messagesByKey[message.Key] = message;
         // Each locale's content locale by key, built once: a lookup per message and locale, not a scan of the locale.
         var resolvedByLocale = locales?.Select(locale =>
         {
@@ -208,22 +240,50 @@ internal sealed class Rmf2ProjectMarkupV5
             foreach (var resource in locale.ResolvedResources) byKey.TryAdd(resource.Key, resource.ContentLocale);
             return (locale.Tag, ByKey: byKey);
         }).ToArray();
-        foreach (var message in messages)
+        writer.WriteStartObject("messages");
+        foreach (var message in messagesByKey.Values)
         {
-            var slots = new SortedDictionary<string, object>(StringComparer.Ordinal);
-            foreach (var slot in message.Slots) slots[slot.Key] = new { kind = slot.Value.Kind, min = slot.Value.Min, max = slot.Value.Max };
+            writer.WriteStartObject(message.Key);
+            writer.WriteStartObject("slots");
+            foreach (var slot in message.Slots.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
+            {
+                writer.WriteStartObject(slot.Key);
+                writer.WriteString("kind", slot.Value.Kind);
+                writer.WriteNumber("min", slot.Value.Min);
+                writer.WriteNumber("max", slot.Value.Max);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndObject();
+            writer.WriteBoolean("structured", message.Structured);
             // The content kind is part of the caller contract; skeletons are not, because
             // they change no generated API. Packs are checked against them at load time.
-            if (locales is null) exportedMessages[message.Key] = new { slots, structured = message.Structured, markup = message.MarkupNames, content = message.Content };
+            if (locales is null)
+            {
+                WriteStrings(writer, "markup", message.MarkupNames);
+                writer.WriteString("content", message.Content);
+            }
             else
             {
                 var contentLocales = new SortedDictionary<string, string>(StringComparer.Ordinal);
                 foreach (var locale in resolvedByLocale!)
                     if (locale.ByKey.TryGetValue(message.Key, out string? contentLocale)) contentLocales[locale.Tag] = contentLocale;
-                exportedMessages[message.Key] = new { slots, structured = message.Structured, contentLocales, content = message.Content, skeletons = message.Skeletons };
+                writer.WriteStartObject("contentLocales");
+                foreach (var pair in contentLocales) writer.WriteString(pair.Key, pair.Value);
+                writer.WriteEndObject();
+                writer.WriteString("content", message.Content);
+                WriteStrings(writer, "skeletons", message.Skeletons);
             }
+            writer.WriteEndObject();
         }
-        return JsonSerializer.Serialize(new { version = Rmf2ProjectV5.MarkupContractVersion, contracts = exportedContracts, messages = exportedMessages });
+        writer.WriteEndObject();
+        writer.WriteEndObject();
+    }
+
+    internal static void WriteStrings(Utf8JsonWriter writer, string name, IEnumerable<string> values)
+    {
+        writer.WriteStartArray(name);
+        foreach (var value in values) writer.WriteStringValue(value);
+        writer.WriteEndArray();
     }
 
     private static bool AcceptsType(string schema, string type) => schema switch

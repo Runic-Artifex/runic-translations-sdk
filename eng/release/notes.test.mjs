@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { anchor, assemble, check, fragmentVersions, notesDirectory, repositoryPaths, split } from './notes.mjs';
+import { anchor, assemble, check, editorNotesDirectory, fragmentVersions, notesDirectory, repositoryPaths, split } from './notes.mjs';
 
 // The fixture is a released notes file written before fragments existed.
 const FIXTURE = '0.11.0';
@@ -168,5 +168,16 @@ test('the repository\'s release-note fragments are valid', () => {
   for (const version of fragmentVersions()) {
     expect(existsSync(join(notesDirectory, version, '_intro.md'))).toBe(true);
     expect(check(join(notesDirectory, version), {exists})).toEqual([]);
+  }
+});
+
+// D078.3: the Translations Editor's own notes, in eng/release/notes/editor/<editor version>/.
+test('the editor\'s release-note fragments are valid, and editor/ is not a Translations version', () => {
+  expect(fragmentVersions()).not.toContain('editor');
+  const versions = fragmentVersions(editorNotesDirectory);
+  expect(versions.length + readdirSync(editorNotesDirectory).filter(file => file.endsWith('.md')).length).toBeGreaterThan(0);
+  for (const version of versions) {
+    expect(existsSync(join(editorNotesDirectory, version, '_intro.md'))).toBe(true);
+    expect(check(join(editorNotesDirectory, version), {exists})).toEqual([]);
   }
 });

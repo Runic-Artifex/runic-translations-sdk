@@ -1,18 +1,33 @@
 #!/usr/bin/env bash
 # Opens a published editor's example workspace in its native Runic Desktop window and checks the evidence of
 # `edit --native-shell-canary`: the window opened embedded (no browser fallback), its page connected to the backend, and
-# the window closed and drained. CI's Windows and macOS editor jobs run it on `bun eng/run.mjs publish-editor <rid>`.
-# Usage: editor-native-canary.sh <publish-directory> <expected-backend> <log-directory>
-# The expected backend is webview2, wkwebview or gtk4-webkitgtk6. Standard output and error are kept in the log directory.
+# the window closed and drained. CI's Windows and macOS editor jobs run it on `bun eng/run.mjs publish-editor <rid>`, and
+# the release workflow (.github/workflows/release-editor.yml) on each installed or extracted package.
+# Usage: editor-native-canary.sh <publish-directory> <expected-backend> <log-directory> [<expected-version>]
+# The publish directory holds the editor executable and ExampleWorkspace: a publish folder, an extracted archive, the
+# installed /usr/lib/<application id> of a deb or rpm, or the Contents/MacOS of a macOS bundle. EDITOR_EXECUTABLE names
+# another executable to start, such as an AppImage, with the publish directory's example workspace. The expected backend
+# is webview2, wkwebview or gtk4-webkitgtk6. With an expected version, the first line of --version must be
+# "Runic Translations Editor <version>", optionally with the source revision as build metadata (+<commit>).
+# Standard output and error are kept in the log directory.
 set -euo pipefail
-publish=$1 backend=$2 logs=$3
+publish=$1 backend=$2 logs=$3 version=${4:-}
 
 mkdir -p "$logs"
-editor="$publish/Runic.Translations.Editor"
+editor="${EDITOR_EXECUTABLE:-$publish/Runic.Translations.Editor}"
 [[ -f "$editor.exe" ]] && editor="$editor.exe"
-workspace="$publish/ExampleWorkspace"
+# The physical path: a macOS bundle's Contents/MacOS/ExampleWorkspace is a symbolic link to Contents/Resources, and the
+# editor refuses a workspace path that crosses a link.
+workspace="$(cd -P "$publish/ExampleWorkspace" && pwd)"
 
 "$editor" --version | tee "$logs/version.txt"
+if [[ -n "$version" ]]; then
+  first="$(head -n 1 "$logs/version.txt" | tr -d '\r')"
+  if [[ ! "$first" =~ ^Runic\ Translations\ Editor\ ${version//./\\.}(\+[0-9a-f]{40})?$ ]]; then
+    echo "::error::The editor reports \"$first\", not its own version $version."
+    exit 1
+  fi
+fi
 "$editor" validate "$workspace" 2>&1 | tee "$logs/validate.txt"
 
 status=0
