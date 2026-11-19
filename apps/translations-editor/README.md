@@ -397,6 +397,16 @@ nix develop .#editor -c env GDK_BACKEND=x11 xvfb-run -a \
   dotnet apps/translations-editor/bin/Release/net10.0/Runic.Translations.Editor.dll edit --native-shell-canary
 ```
 
+CI runs the canary on all three platforms: under Xvfb on Linux, and on Windows (WebView2)
+and macOS (WKWebView) against a publish for `win-x64` and `osx-arm64`. To repeat those
+jobs, publish for the runtime and run the canary script on the output, which opens the
+publish's example workspace and checks the JSON line:
+
+```sh
+bun eng/run.mjs publish-editor win-x64    # or osx-arm64, linux-x64: artifacts/editor-<rid>
+bash eng/ci/editor-native-canary.sh artifacts/editor-win-x64 webview2 artifacts/editor-canary
+```
+
 For the hosted acceptance harness outside Nix, set
 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to a Chromium executable. The [hosted acceptance
 guide](tests/HostedBrowserE2E/README.md) explains the reproducible Nix workflow.
