@@ -182,8 +182,21 @@ internal sealed class Rmf2ProjectMarkupV5
         void Error(string message) => diagnostics.Add("RTR0062", TranslationDiagnosticSeverity.Error, message, location);
     }
 
+    /// <summary>
+    /// The JSON of each exported message by its contract and content locales, from one export to the next of a session
+    /// (Rmf2LinkState): a message whose contract and content locales are unchanged is not serialized again.
+    /// </summary>
+    internal sealed class ExportFragments
+    {
+        internal Dictionary<Rmf2MessageContractV5, (string?[]? ContentLocales, string Json)> Messages { get; } = new(ReferenceEqualityComparer.Instance);
+        // The locale of each position of ContentLocales.
+        internal string[] Tags { get; set; } = [];
+    }
+
+    /// <param name="previous">The fragments of the last export of a session, or null.</param>
+    /// <param name="next">Receives this export's fragments, or null.</param>
     internal static string Export(IReadOnlyDictionary<string, Rmf2MarkupContractV5> contracts,
-        IReadOnlyList<Rmf2MessageContractV5> messages, IReadOnlyList<Rmf2LocaleV5>? locales = null)
+        IReadOnlyList<Rmf2MessageContractV5> messages, IReadOnlyList<Rmf2LocaleV5>? locales = null, ExportFragments? previous = null, ExportFragments? next = null)
     {
         var exportedContracts = new SortedDictionary<string, object>(StringComparer.Ordinal);
         foreach (var contract in contracts)
@@ -200,7 +213,8 @@ internal sealed class Rmf2ProjectMarkupV5
                 interactive = contract.Value.Interactive, plainText = contract.Value.PlainText, options,
             };
         }
-        var exportedMessages = new SortedDictionary<string, object>(StringComparer.Ordinal);
+        // Each message's JSON by key, in key order; a later message of the same key replaces an earlier one.
+        var exportedMessages = new SortedDictionary<string, string>(StringComparer.Ordinal);
         // Each locale's content locale by key, built once: a lookup per message and locale, not a scan of the locale.
         var resolvedByLocale = locales?.Select(locale =>
         {
@@ -208,22 +222,57 @@ internal sealed class Rmf2ProjectMarkupV5
             foreach (var resource in locale.ResolvedResources) byKey.TryAdd(resource.Key, resource.ContentLocale);
             return (locale.Tag, ByKey: byKey);
         }).ToArray();
+        string[] tags = locales?.Select(locale => locale.Tag).ToArray() ?? [];
+        if (previous is not null && !previous.Tags.AsSpan().SequenceEqual(tags)) previous = null;
+        if (next is not null) next.Tags = tags;
         foreach (var message in messages)
+        {
+            string?[]? contentLocales = null;
+            if (resolvedByLocale is not null)
+            {
+                contentLocales = new string?[resolvedByLocale.Length];
+                for (int index = 0; index < resolvedByLocale.Length; index++) contentLocales[index] = resolvedByLocale[index].ByKey.GetValueOrDefault(message.Key);
+            }
+            string json;
+            if (previous is not null && previous.Messages.TryGetValue(message, out var cached) &&
+                (cached.ContentLocales is null ? contentLocales is null : contentLocales is not null && cached.ContentLocales.AsSpan().SequenceEqual(contentLocales)))
+                json = cached.Json;
+            else json = MessageJson(message, contentLocales);
+            next?.Messages.TryAdd(message, (contentLocales, json));
+            exportedMessages[message.Key] = json;
+        }
+        // As JsonSerializer writes { version, contracts, messages }, with each message's JSON as serialized on its own.
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber("version", Rmf2ProjectV5.MarkupContractVersion);
+            writer.WritePropertyName("contracts");
+            writer.WriteRawValue(JsonSerializer.Serialize(exportedContracts), skipInputValidation: true);
+            writer.WritePropertyName("messages");
+            writer.WriteStartObject();
+            foreach (var pair in exportedMessages)
+            {
+                writer.WritePropertyName(pair.Key);
+                writer.WriteRawValue(pair.Value, skipInputValidation: true);
+            }
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+        return System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan);
+
+        string MessageJson(Rmf2MessageContractV5 message, string?[]? contentLocales)
         {
             var slots = new SortedDictionary<string, object>(StringComparer.Ordinal);
             foreach (var slot in message.Slots) slots[slot.Key] = new { kind = slot.Value.Kind, min = slot.Value.Min, max = slot.Value.Max };
             // The content kind is part of the caller contract; skeletons are not, because
             // they change no generated API. Packs are checked against them at load time.
-            if (locales is null) exportedMessages[message.Key] = new { slots, structured = message.Structured, markup = message.MarkupNames, content = message.Content };
-            else
-            {
-                var contentLocales = new SortedDictionary<string, string>(StringComparer.Ordinal);
-                foreach (var locale in resolvedByLocale!)
-                    if (locale.ByKey.TryGetValue(message.Key, out string? contentLocale)) contentLocales[locale.Tag] = contentLocale;
-                exportedMessages[message.Key] = new { slots, structured = message.Structured, contentLocales, content = message.Content, skeletons = message.Skeletons };
-            }
+            if (contentLocales is null) return JsonSerializer.Serialize(new { slots, structured = message.Structured, markup = message.MarkupNames, content = message.Content });
+            var byTag = new SortedDictionary<string, string>(StringComparer.Ordinal);
+            for (int index = 0; index < contentLocales.Length; index++)
+                if (contentLocales[index] is { } contentLocale) byTag[resolvedByLocale![index].Tag] = contentLocale;
+            return JsonSerializer.Serialize(new { slots, structured = message.Structured, contentLocales = byTag, content = message.Content, skeletons = message.Skeletons });
         }
-        return JsonSerializer.Serialize(new { version = Rmf2ProjectV5.MarkupContractVersion, contracts = exportedContracts, messages = exportedMessages });
     }
 
     private static bool AcceptsType(string schema, string type) => schema switch

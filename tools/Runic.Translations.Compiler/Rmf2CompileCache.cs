@@ -27,6 +27,10 @@ internal sealed class Rmf2LinkState
     internal Rmf2MarkupExportMemo? MarkupExport;
     internal Rmf2ResultMemo? Last;
     internal Rmf2ReadableReferencesMemo? ReadableReferences;
+    // The JSON of each message in the last contract exports (Rmf2ProjectMarkupV5.Export, the caller contract).
+    internal Rmf2ProjectMarkupV5.ExportFragments? MarkupFragments;
+    internal Rmf2ProjectMarkupV5.ExportFragments? CallerMarkup;
+    internal Dictionary<Rmf2MessageContractV5, string>? CallerMessages;
 }
 internal sealed record Rmf2ReadableReferencesMemo(Rmf2MessageContractV5[] Contracts, List<(string Key, string Problem)> Problems);
 internal sealed record Rmf2CallerContractMemo(string Catalog, Rmf2MessageContractV5[] Contracts, string[] Markup, string Json);

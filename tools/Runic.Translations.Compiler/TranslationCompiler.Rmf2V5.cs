@@ -610,21 +610,45 @@ public static partial class TranslationCompiler
             callerContract = callerMemo.Json;
         else
         {
-            callerContract = JsonSerializer.Serialize(new
-        {
-            callerContractVersion = 1,
-            profile = Rmf2ProjectV5.Profile, messageGrammarVersion = Rmf2ProjectV5.MessageGrammarVersion,
-            runtimeAbiVersion = Rmf2ProjectV5.RuntimeAbiVersion, generatedNameVersion = Rmf2GeneratedNamesV1.Version,
-            catalog = manifest.Id,
-            messages = contracts.Select(contract => new
+            // As JsonSerializer writes the anonymous caller contract, with each message's JSON reused from the last compile.
+            var callerFragments = state is null ? null : new Rmf2ProjectMarkupV5.ExportFragments();
+            string callerMarkupJson = Rmf2ProjectMarkupV5.Export(callerMarkup, contracts, null, state?.CallerMarkup, callerFragments);
+            var messageJson = state is null ? null : new Dictionary<Rmf2MessageContractV5, string>(contracts.Count, ReferenceEqualityComparer.Instance);
+            var buffer = new System.Buffers.ArrayBufferWriter<byte>();
+            using (var writer = new Utf8JsonWriter(buffer))
             {
-                key = contract.Key,
-                path = contract.Path,
-                inputs = contract.Inputs.Select(input => new { name = input.Name, type = input.Type }),
-            }),
-            markup = Rmf2ProjectMarkupV5.Export(callerMarkup, contracts),
-        });
-            if (state is not null) state.CallerContract = new(manifest.Id, contracts.ToArray(), callerNames, callerContract);
+                writer.WriteStartObject();
+                writer.WriteNumber("callerContractVersion", 1);
+                writer.WriteString("profile", Rmf2ProjectV5.Profile);
+                writer.WriteNumber("messageGrammarVersion", Rmf2ProjectV5.MessageGrammarVersion);
+                writer.WriteNumber("runtimeAbiVersion", Rmf2ProjectV5.RuntimeAbiVersion);
+                writer.WriteNumber("generatedNameVersion", Rmf2GeneratedNamesV1.Version);
+                writer.WriteString("catalog", manifest.Id);
+                writer.WritePropertyName("messages");
+                writer.WriteStartArray();
+                foreach (var contract in contracts)
+                {
+                    if (state?.CallerMessages is not { } cachedJson || !cachedJson.TryGetValue(contract, out string? json))
+                        json = JsonSerializer.Serialize(new
+                        {
+                            key = contract.Key,
+                            path = contract.Path,
+                            inputs = contract.Inputs.Select(input => new { name = input.Name, type = input.Type }),
+                        });
+                    messageJson?.TryAdd(contract, json);
+                    writer.WriteRawValue(json, skipInputValidation: true);
+                }
+                writer.WriteEndArray();
+                writer.WriteString("markup", callerMarkupJson);
+                writer.WriteEndObject();
+            }
+            callerContract = Encoding.UTF8.GetString(buffer.WrittenSpan);
+            if (state is not null)
+            {
+                state.CallerContract = new(manifest.Id, contracts.ToArray(), callerNames, callerContract);
+                state.CallerMarkup = callerFragments;
+                state.CallerMessages = messageJson;
+            }
         }
         var exported = contracts.Concat(extraContracts).ToArray();
         string[] usedMarkup = usedContracts.Keys.ToArray();
@@ -633,8 +657,9 @@ public static partial class TranslationCompiler
             markupContract = exportMemo.Json;
         else
         {
-            markupContract = Rmf2ProjectMarkupV5.Export(usedContracts, exported, linkedLocales);
-            if (state is not null) state.MarkupExport = new(exported, usedMarkup, linkedLocales.ToArray(), markupContract);
+            var fragments = state is null ? null : new Rmf2ProjectMarkupV5.ExportFragments();
+            markupContract = Rmf2ProjectMarkupV5.Export(usedContracts, exported, linkedLocales, state?.MarkupFragments, fragments);
+            if (state is not null) { state.MarkupExport = new(exported, usedMarkup, linkedLocales.ToArray(), markupContract); state.MarkupFragments = fragments; }
         }
         static bool SameItems<T>(IReadOnlyList<T> left, IReadOnlyList<T> right) where T : class
         {
@@ -682,8 +707,10 @@ public static partial class TranslationCompiler
             return Rmf2SemanticCompilerV5.Lower(syntax, callerInputs, options, cancellationToken);
         }
         // The memoized compile of a source against these caller inputs (by identity), or null.
+        // Equal inputs are as good as the same: a reparsed base file gives its messages new, equal input lists.
         CompiledMemo? CompiledFor(Rmf2ProjectSourceV5 source, IReadOnlyList<Rmf2InputV5>? callerInputs) =>
-            source.Memo?.Compiled is { } memo && ReferenceEquals(memo.Inputs, callerInputs) ? memo : null;
+            source.Memo?.Compiled is { } memo && (ReferenceEquals(memo.Inputs, callerInputs) ||
+                (memo.Inputs is not null && callerInputs is not null && memo.Inputs.SequenceEqual(callerInputs))) ? memo : null;
         Rmf2ProjectEntryV5? Compile(Rmf2ProjectSourceV5 source, IReadOnlyList<Rmf2InputV5>? callerInputs, Rmf2SemanticResultV5? lowered = null)
         {
             cancellationToken.ThrowIfCancellationRequested();
