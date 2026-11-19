@@ -173,7 +173,7 @@ internal static class TranslationCatalogImport
 
         // The sources before the import: the text of each existing message per locale.
         var before = project.Locales.ToDictionary(static locale => locale.Tag,
-            static locale => locale.DirectResources.ToDictionary(static resource => resource.Key, static resource => Encoding.UTF8.GetString(resource.Message.Syntax.Source.GetUtf8Bytes()), StringComparer.Ordinal),
+            static locale => locale.DirectResources.ToDictionary(static resource => resource.Key, static resource => resource.Message.Syntax.Text, StringComparer.Ordinal),
             StringComparer.Ordinal);
 
         // One message per locale and key. The generated key joins the source-root namespace, the group and the path.

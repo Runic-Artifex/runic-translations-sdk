@@ -909,7 +909,7 @@ public static partial class TranslationCompiler
                     if (key.Kind != "literal" || key.Canonical is not null || key.Value is not ("zero" or "one" or "two" or "few" or "many" or "other")) continue;
                     used.Add(key.Value);
                     if (categories.Contains(key.Value)) continue;
-                    TextSourceLocation location = message.Syntax.Variants[index].KeyLocations[position];
+                    TextSourceLocation location = message.Syntax.Variants[index].KeySpans[position].Location;
                     AddPolicyDiagnostic("RTR0094", policy, "Variant key '" + key.Value + "' of '" + logical + "' is never selected in locale '" + source.Locale + "', whose " +
                         (ordinal ? "ordinal" : "plural") + " categories" + (integer ? " for integers" : "") + " are " + string.Join(", ", categories) + ".", source.Source, MessageSpan(source, location), diagnostics, (source.Key, source.Locale));
                 }
