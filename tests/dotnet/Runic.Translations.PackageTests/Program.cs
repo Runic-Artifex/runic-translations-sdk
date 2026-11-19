@@ -126,6 +126,7 @@ internal static class Program
             "build/Runic.Translations.Build.props",
             "build/Runic.Translations.Build.targets",
             "build/Runic.Translations.Build.Pack.targets",
+            "build/Runic.Translations.Build.Locales.targets",
             "buildMultiTargeting/Runic.Translations.Build.targets",
             "analyzers/dotnet/cs/Runic.Translations.Generator.dll",
             "analyzers/dotnet/cs/Runic.Translations.Compiler.dll",

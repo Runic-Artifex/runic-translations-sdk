@@ -248,10 +248,40 @@ CLDR data. The build fails with
 [`RTR0108`](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/docs/guides/translations/diagnostics.md#rtr0108)
 when it finds no catalog locale or no `Runic.Translations` reference.
 
+## The application's languages for Runic packaging
+
+A Runic Desktop application declares the languages it is translated into with the MSBuild property
+`RunicApplicationLocales` and `RunicApplicationLocale` items: `dotnet runic package` writes them into the macOS,
+MSIX and Linux packages, and the macOS development bundle of `dotnet run` lists them in `CFBundleLocalizations`. When
+the project leaves `RunicApplicationLocales` empty, this package fills them from `runic.json`: `baseLocale` first, as
+the development language, then `locales` in their order (a string, or an object's `tag`), each once. `pseudoLocales`
+are left out. The languages are added as `RunicApplicationLocale` items, in front of the project's own items, because
+`dotnet runic package` reads the project by evaluating it, without running a target, and an evaluation cannot turn
+items into a property. An item of the project still gives a language its `Name` and `Description`:
+
+```xml
+<ItemGroup>
+  <RunicTranslationProject Include="Frontend/translations/runic.json" />
+  <!-- With "baseLocale": "en" and "locales": ["en", "de", "pt-BR"], the packages declare en, de and pt-BR,
+       and macOS names the application "Notizen" in German. -->
+  <RunicApplicationLocale Include="de" Name="Notizen" />
+</ItemGroup>
+```
+
+- A project that sets `RunicApplicationLocales` keeps exactly its value and its items; nothing is added.
+- Without `locales`, only `baseLocale` is added. List the languages in `locales`, or set the property.
+- With several `RunicTranslationProject` items, the languages of each file are added in item order, so the first
+  file's `baseLocale` is the development language. A file that is missing or has no `baseLocale` and no `locales`
+  adds nothing. The rest of the build still reports such a project as usual.
+- A multi-targeted project gets the languages in its outer evaluation too, which `dotnet runic package` reads.
+- The first 128 languages count. `runic.json` is read during evaluation with regular expressions, which handle
+  comments and locale objects but are not a full JSON parser.
+- Set `RunicTranslationsFillApplicationLocales` to `false` to turn this off.
+
 ## Important build behavior
 
 - Discovery follows the declared `RunicTranslationProject` directory, including nondefault paths. Explicit `RunicTranslationMf2` items override corresponding discovery. File membership is recorded in generation state so additions and removals invalidate artifacts.
-- The current target accepts exactly one `runic.json` project and either direct `.mf2` messages or recursive grouped `.rmf2` sources. Mixed representations are rejected.
+- The current target accepts exactly one `runic.json` project (the application languages above read every one) and either direct `.mf2` messages or recursive grouped `.rmf2` sources. Mixed representations are rejected.
 - The default launcher is the project-local `dotnet tool run runic-translations --`; restore the committed tool manifest before building.
 - Output must resolve beneath `IntermediateOutputPath`. Unsafe paths fail with `RTR0020`.
 - Incremental generation tracks inputs, settings, the tool manifest, declared outputs, and an owned-output inventory.

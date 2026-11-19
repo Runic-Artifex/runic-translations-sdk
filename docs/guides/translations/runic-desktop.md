@@ -65,6 +65,12 @@ process that shows a few messages pays for the locales it uses and compiles no
 per-message code. The API uses no reflection and is safe for trimming and
 NativeAOT.
 
+The packages that `dotnet runic package` makes, and the macOS development bundle, declare the catalog's languages
+too. When the project does not set `RunicApplicationLocales`, Runic.Translations.Build adds `baseLocale` and `locales`
+from `runic.json` as `RunicApplicationLocale` items, so macOS shows its own text (the About panel, the open and save
+panels) in the user's language. See
+[The application's languages for Runic packaging](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/packages/dotnet/Runic.Translations.Build/README.md#the-applications-languages-for-runic-packaging).
+
 The [shared-catalog example](https://github.com/Runic-Artifex/runic-translations-sdk/tree/main/examples/shared-catalog)
 is a tray process that formats a frontend's catalog in English and German, and
 `bun eng/run.mjs native-aot` publishes it with NativeAOT.
