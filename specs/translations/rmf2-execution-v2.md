@@ -805,9 +805,11 @@ the literal requirement **3**, then call `EnsureRmf2RuntimeAbi(3)` or
 `SupportsRmf2RuntimeAbi(3)`. These methods execute against the loaded runtime
 and accept requirement 3. ABI 3 is ABI 2 plus markup contract v2: every
 exported contract carries `placement` and `children`, and markup options may use
-the bounded `integer` type. Runtimes accept exactly markup contract version 2;
-an artifact or pack with another markup contract version is rejected as
-`RTR0023/markup-contract-version-mismatch` and must be rebuilt. A generated constant that aliases the runtime's
+the bounded `integer` type. Runtimes of Runic Translations 0.15 and later accept
+markup contract versions 2 and 3 ([version 3](#markup-contract-version-3)) and
+earlier runtimes exactly version 2; an artifact or pack with another markup
+contract version is rejected as `RTR0023/markup-contract-version-mismatch` and
+must be rebuilt. A generated constant that aliases the runtime's
 constant is not a compatibility check. Missing or unknown ABI markers are
 rejected.
 
@@ -849,6 +851,41 @@ format; a message that is never formatted keeps only its bytes. The runtime's
 ABI 5, 4 and 3 that the referenced runtime runs: ABI 4 for a 0.14 runtime and
 ABI 3, with the JSON as is, before 0.14. ESM output, external packs and the
 caller contract keep ABI 3.
+
+### Markup contract version 3
+
+Markup contract version 3 (Runic Translations 0.15, D077.16) is version 2
+without the message entries of the default shape, with the catalog's locales
+instead: `{"version": 3, "contracts": {...}, "locales": [...], "messages":
+{...}}`. A message entry has the default shape when it is exactly
+
+```json
+{"slots": {}, "structured": false, "contentLocales": {"<each locale>": "<the same locale>"}, "content": "inline", "skeletons": []}
+```
+
+with every one of the catalog's locales, and only those, as its own content
+locale. `locales` lists the catalog's locales once, as canonical tags in ordinal
+order. `contracts` and the listed entries are as in version 2, member for
+member. A message of the catalog that the contract does not list has the default
+entry; a contract that lists an entry of the default shape is malformed, so each
+contract has one form. Version 2 has no `locales`.
+
+- The compiler writes version 3 into generated C# of RMF2 ABI 5, ESM output
+  (`dynamic.js` `rmf2Contract`) and the locale artifacts and packs it writes for
+  the current release, and the same bytes for all of them. Generated C# for an
+  earlier runtime (RMF2 ABI 3 and 4) keeps version 2, which those runtimes
+  require; so does the caller contract the fingerprint covers. A pack written for
+  an earlier release (`pack --contract`) carries that release's contract as it is.
+- Runtimes compare contracts as one contract, not as text: two contracts are the
+  same when they are equal, or equal once each version 3 contract is written as
+  version 2 with the default entry of each of the catalog's messages it does not
+  list (the message keys of the exact pack contract in .NET, of `messageContracts`
+  in ESM), in ordinal key order and the member order above. A catalog with a
+  version 3 contract therefore loads the version 2 packs written for its release
+  and the other way round, as exact packs and overlays.
+- `specs/translations/corpus/rmf2-markup-contract-v3.json` is the shared oracle:
+  each v2 compacts to its v3 exactly, and both runtimes give each comparison its
+  verdict.
 
 ### Generated locale data, binary encoding
 

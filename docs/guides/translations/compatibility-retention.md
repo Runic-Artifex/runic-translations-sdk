@@ -27,9 +27,22 @@ fail explicitly.
 
 All current writers use the single `rmf2-execution-v2` contract: resource syntax
 `rmf2-v1`, grammar and normalized AST 5, locale artifact 5, RMF2 runtime ABI 3
-(markup contract v2), and ESM ABI 4 under `web-module-manifest-v3`. Both direct `.mf2` and grouped
+(markup contract v3; v2 is still read, and written for runtimes before 0.15), and ESM ABI 4 under `web-module-manifest-v3`. Both direct `.mf2` and grouped
 `.rmf2` authoring feed this same contract; direct `.mf2` is an active supported
 representation, not a compatibility format.
+
+## Markup contract v3 (0.15)
+
+Generated output and packs of 0.15 carry markup contract version 3, version 2
+without the message entries of the default shape
+([spec](../../../specs/translations/rmf2-execution-v2.md#markup-contract-version-3)).
+The 0.15 runtimes (.NET and ESM) read versions 2 and 3 and compare them as one
+contract, so an application built with 0.15 also loads the v2 packs written for
+it. Runtimes before 0.15 read only version 2: write the packs of an application
+released with 0.14 or earlier with `pack --contract <its shipped locale
+artifact>`, which keeps that release's v2 contract, also when the catalog's
+caller fingerprint has not changed since. The v2 reader stays as long as packs
+for releases before 0.15 are supported.
 
 ## Migration: markup contract v2 (0.6.0-preview.4)
 

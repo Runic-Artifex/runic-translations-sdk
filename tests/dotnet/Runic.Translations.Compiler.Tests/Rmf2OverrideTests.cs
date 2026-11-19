@@ -42,7 +42,10 @@ internal sealed class Rmf2OverrideTests
         using JsonDocument french = JsonDocument.Parse(Rmf2LocaleArtifactV5.RenderOverlay(overlay, "fr").Text);
         Assert.Equal("grid_empty,grid_help,grid_rows", string.Join(",", french.RootElement.GetProperty("messages").EnumerateObject().Select(message => message.Name)), "fr overrides");
         // The markup contract maps fr to its own content for the overridden keys and to English for the others.
-        JsonElement contentLocales = french.RootElement.GetProperty("markupContract").GetProperty("messages");
+        // Markup contract v3 leaves the default entries out; expanded to v2, every message has its content locales.
+        using JsonDocument expanded = JsonDocument.Parse(Rmf2MarkupContractV3.Expand(french.RootElement.GetProperty("markupContract").GetRawText(),
+            library.Project.CanonicalMessages.Select(static message => message.Key)));
+        JsonElement contentLocales = expanded.RootElement.GetProperty("messages");
         Assert.Equal("fr", contentLocales.GetProperty("grid_empty").GetProperty("contentLocales").GetProperty("fr").GetString(), "fr content");
         Assert.Equal("en", contentLocales.GetProperty("grid_sort").GetProperty("contentLocales").GetProperty("fr").GetString(), "fr falls back");
         Assert.Throws<ArgumentException>(() => Rmf2LocaleArtifactV5.RenderOverlay(overlay, "de"), "de has no overrides");

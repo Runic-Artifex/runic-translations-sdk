@@ -19,10 +19,13 @@ was built with. Text that a pack does not supply keeps the release's own text.
 | **Overlay**: .NET `TranslationOverlay.FromPacks`, web `installLocalePack` | A pack of any release of the catalog. Each message is checked by key against the running release; messages it cannot use are skipped and reported. A pack may add a locale. | 0.9 |
 | **Exact pack**: .NET `ExternalTranslationSnapshotFactory`, web `decodeLocalePack` | Only a pack whose contract fingerprint and markup contract equal the running release's, for a locale it declares. | 0.8 |
 
-Use overlays in new code. They let one pack serve every release in the field.
-Releases built before 0.9, and code that uses the exact-pack loaders, need a
-pack built for their contract; see [Packs for a shipped
-release](#packs-for-a-shipped-release).
+Use overlays in new code. They let one pack serve every release in the field
+that runs Runic Translations 0.15 or later. Packs of 0.15 carry markup contract
+version 3, which runtimes before 0.15 do not read
+([details](../../../specs/translations/rmf2-execution-v2.md#markup-contract-version-3)).
+Releases built before 0.15, and code that uses the exact-pack loaders, need a
+pack built for their contract, which keeps their version 2; see [Packs for a
+shipped release](#packs-for-a-shipped-release).
 
 A .NET application built with `RunicTranslationsCldrSubset` embeds only the
 CLDR formatting data of its catalog's languages. A pack that adds a locale of
@@ -59,7 +62,8 @@ dotnet tool run runic-translations -- generate --project translations --output p
 ```
 
 The output has one pack for each locale that the release declares. Each pack
-is stamped with the release's contract fingerprint and markup contract and
+is stamped with the release's contract fingerprint and markup contract (version
+2 for a release built before 0.15, which its runtime requires) and
 holds only the messages the release accepts. For every message it leaves out,
 the command prints one line with the locale, the key and the reason:
 

@@ -280,8 +280,10 @@ internal sealed class Rmf2V1CorpusTests
     // several inputs and reference fallback arguments are collection expressions, in both digests (C# only).
     // Re-pinned for D077.16, RMF2 ABI 5: the C# embeds each locale's binary locale data and the message table as DEFLATE
     // data (GeneratedCatalogSupport.ReadDeflatedBinaryValues, InflateData) and requires ABI 5, in both digests (C# only).
-    private const string EncodedOutputDigest = "fda88bb199565ac72d283fa275c7f426c2d32702a9c06c0d680d83bc61e91445";
-    private const string HiddenEncodedOutputDigest = "9436ab426b43d55276aad7ad163b02bbf4e0cb3142cff82c87e9043fe633d925";
+    // Re-pinned for D077.16, markup contract v3: the C# of RMF2 ABI 5 and dynamic.js embed the contract without its
+    // default-shaped entries, in both digests (C# and ESM).
+    private const string EncodedOutputDigest = "4d1c9a6206bc77c5ffd8afa06a0e7105af94aa3aa465b71ecb8ac802c5c5a38b";
+    private const string HiddenEncodedOutputDigest = "4d9dba0775447ea87d838bfe355f118878ee3252818faa7ca34b90f98d298cfa";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

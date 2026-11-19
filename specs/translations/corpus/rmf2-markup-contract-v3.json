@@ -1,0 +1,1641 @@
+{
+  "description": "Markup contract version 3 (D077.16, specs/translations/rmf2-execution-v2.md \"Markup contract version 3\"): version 2 without the message entries of the default shape, with the catalog's locales. compaction: the compiler writes v3 for v2 with these locales, and both runtimes take the two for the same contract with these keys (the catalog's canonical messages and the locale's extras). comparisons: whether both runtimes take two contracts for the same one.",
+  "compaction": [
+    {
+      "id": "every-entry-default",
+      "locales": [
+        "en"
+      ],
+      "keys": [
+        "x",
+        "y"
+      ],
+      "v2": {
+        "version": 2,
+        "contracts": {},
+        "messages": {
+          "x": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "en": "en"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "y": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "en": "en"
+            },
+            "content": "inline",
+            "skeletons": []
+          }
+        }
+      },
+      "v3": {
+        "version": 3,
+        "contracts": {},
+        "locales": [
+          "en"
+        ],
+        "messages": {}
+      }
+    },
+    {
+      "id": "mixed-shapes",
+      "locales": [
+        "de",
+        "en",
+        "fr"
+      ],
+      "keys": [
+        "a",
+        "b",
+        "c",
+        "d",
+        "f"
+      ],
+      "v2": {
+        "version": 2,
+        "contracts": {
+          "runic:strong": {
+            "kind": "paired",
+            "placement": "inline",
+            "children": "inline",
+            "interactive": false,
+            "plainText": "children",
+            "options": {}
+          }
+        },
+        "messages": {
+          "a": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "b": {
+            "slots": {
+              "link": {
+                "kind": "runic:link",
+                "min": 1,
+                "max": 1
+              }
+            },
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "c": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "en",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "d": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "document",
+            "skeletons": [
+              "p[1]"
+            ]
+          },
+          "e": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "f": {
+            "slots": {},
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          }
+        }
+      },
+      "v3": {
+        "version": 3,
+        "contracts": {
+          "runic:strong": {
+            "kind": "paired",
+            "placement": "inline",
+            "children": "inline",
+            "interactive": false,
+            "plainText": "children",
+            "options": {}
+          }
+        },
+        "locales": [
+          "de",
+          "en",
+          "fr"
+        ],
+        "messages": {
+          "b": {
+            "slots": {
+              "link": {
+                "kind": "runic:link",
+                "min": 1,
+                "max": 1
+              }
+            },
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "c": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "en",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "d": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "document",
+            "skeletons": [
+              "p[1]"
+            ]
+          },
+          "e": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "f": {
+            "slots": {},
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          }
+        }
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "id": "same-v2",
+      "keys": [
+        "a",
+        "b",
+        "c",
+        "d",
+        "f"
+      ],
+      "left": {
+        "version": 2,
+        "contracts": {
+          "runic:strong": {
+            "kind": "paired",
+            "placement": "inline",
+            "children": "inline",
+            "interactive": false,
+            "plainText": "children",
+            "options": {}
+          }
+        },
+        "messages": {
+          "a": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "b": {
+            "slots": {
+              "link": {
+                "kind": "runic:link",
+                "min": 1,
+                "max": 1
+              }
+            },
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "c": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "en",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "d": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "document",
+            "skeletons": [
+              "p[1]"
+            ]
+          },
+          "e": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "f": {
+            "slots": {},
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          }
+        }
+      },
+      "right": {
+        "version": 2,
+        "contracts": {
+          "runic:strong": {
+            "kind": "paired",
+            "placement": "inline",
+            "children": "inline",
+            "interactive": false,
+            "plainText": "children",
+            "options": {}
+          }
+        },
+        "messages": {
+          "a": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "b": {
+            "slots": {
+              "link": {
+                "kind": "runic:link",
+                "min": 1,
+                "max": 1
+              }
+            },
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "c": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "en",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "d": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "document",
+            "skeletons": [
+              "p[1]"
+            ]
+          },
+          "e": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "f": {
+            "slots": {},
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          }
+        }
+      },
+      "same": true
+    },
+    {
+      "id": "same-v3",
+      "keys": [
+        "a",
+        "b",
+        "c",
+        "d",
+        "f"
+      ],
+      "left": {
+        "version": 3,
+        "contracts": {
+          "runic:strong": {
+            "kind": "paired",
+            "placement": "inline",
+            "children": "inline",
+            "interactive": false,
+            "plainText": "children",
+            "options": {}
+          }
+        },
+        "locales": [
+          "de",
+          "en",
+          "fr"
+        ],
+        "messages": {
+          "b": {
+            "slots": {
+              "link": {
+                "kind": "runic:link",
+                "min": 1,
+                "max": 1
+              }
+            },
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "c": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "en",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "d": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "document",
+            "skeletons": [
+              "p[1]"
+            ]
+          },
+          "e": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "f": {
+            "slots": {},
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          }
+        }
+      },
+      "right": {
+        "version": 3,
+        "contracts": {
+          "runic:strong": {
+            "kind": "paired",
+            "placement": "inline",
+            "children": "inline",
+            "interactive": false,
+            "plainText": "children",
+            "options": {}
+          }
+        },
+        "locales": [
+          "de",
+          "en",
+          "fr"
+        ],
+        "messages": {
+          "b": {
+            "slots": {
+              "link": {
+                "kind": "runic:link",
+                "min": 1,
+                "max": 1
+              }
+            },
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "c": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "en",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "d": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "document",
+            "skeletons": [
+              "p[1]"
+            ]
+          },
+          "e": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "f": {
+            "slots": {},
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          }
+        }
+      },
+      "same": true
+    },
+    {
+      "id": "v3-content-locale-changed",
+      "keys": [
+        "a",
+        "b",
+        "c",
+        "d",
+        "f"
+      ],
+      "left": {
+        "version": 2,
+        "contracts": {
+          "runic:strong": {
+            "kind": "paired",
+            "placement": "inline",
+            "children": "inline",
+            "interactive": false,
+            "plainText": "children",
+            "options": {}
+          }
+        },
+        "messages": {
+          "a": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "b": {
+            "slots": {
+              "link": {
+                "kind": "runic:link",
+                "min": 1,
+                "max": 1
+              }
+            },
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "c": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "en",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "d": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "document",
+            "skeletons": [
+              "p[1]"
+            ]
+          },
+          "e": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "f": {
+            "slots": {},
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          }
+        }
+      },
+      "right": {
+        "version": 3,
+        "contracts": {
+          "runic:strong": {
+            "kind": "paired",
+            "placement": "inline",
+            "children": "inline",
+            "interactive": false,
+            "plainText": "children",
+            "options": {}
+          }
+        },
+        "locales": [
+          "de",
+          "en",
+          "fr"
+        ],
+        "messages": {
+          "b": {
+            "slots": {
+              "link": {
+                "kind": "runic:link",
+                "min": 1,
+                "max": 1
+              }
+            },
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "c": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "d": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "document",
+            "skeletons": [
+              "p[1]"
+            ]
+          },
+          "e": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "f": {
+            "slots": {},
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          }
+        }
+      },
+      "same": false
+    },
+    {
+      "id": "v3-omits-a-non-default-entry",
+      "keys": [
+        "a",
+        "b",
+        "c",
+        "d",
+        "f"
+      ],
+      "left": {
+        "version": 2,
+        "contracts": {
+          "runic:strong": {
+            "kind": "paired",
+            "placement": "inline",
+            "children": "inline",
+            "interactive": false,
+            "plainText": "children",
+            "options": {}
+          }
+        },
+        "messages": {
+          "a": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "b": {
+            "slots": {
+              "link": {
+                "kind": "runic:link",
+                "min": 1,
+                "max": 1
+              }
+            },
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "c": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "en",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "d": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "document",
+            "skeletons": [
+              "p[1]"
+            ]
+          },
+          "e": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "f": {
+            "slots": {},
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          }
+        }
+      },
+      "right": {
+        "version": 3,
+        "contracts": {
+          "runic:strong": {
+            "kind": "paired",
+            "placement": "inline",
+            "children": "inline",
+            "interactive": false,
+            "plainText": "children",
+            "options": {}
+          }
+        },
+        "locales": [
+          "de",
+          "en",
+          "fr"
+        ],
+        "messages": {
+          "b": {
+            "slots": {
+              "link": {
+                "kind": "runic:link",
+                "min": 1,
+                "max": 1
+              }
+            },
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "d": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "document",
+            "skeletons": [
+              "p[1]"
+            ]
+          },
+          "e": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "f": {
+            "slots": {},
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          }
+        }
+      },
+      "same": false
+    },
+    {
+      "id": "v3-other-locales",
+      "keys": [
+        "a",
+        "b",
+        "c",
+        "d",
+        "f"
+      ],
+      "left": {
+        "version": 2,
+        "contracts": {
+          "runic:strong": {
+            "kind": "paired",
+            "placement": "inline",
+            "children": "inline",
+            "interactive": false,
+            "plainText": "children",
+            "options": {}
+          }
+        },
+        "messages": {
+          "a": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "b": {
+            "slots": {
+              "link": {
+                "kind": "runic:link",
+                "min": 1,
+                "max": 1
+              }
+            },
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "c": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "en",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "d": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "document",
+            "skeletons": [
+              "p[1]"
+            ]
+          },
+          "e": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "f": {
+            "slots": {},
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          }
+        }
+      },
+      "right": {
+        "version": 3,
+        "contracts": {
+          "runic:strong": {
+            "kind": "paired",
+            "placement": "inline",
+            "children": "inline",
+            "interactive": false,
+            "plainText": "children",
+            "options": {}
+          }
+        },
+        "locales": [
+          "de",
+          "en"
+        ],
+        "messages": {
+          "b": {
+            "slots": {
+              "link": {
+                "kind": "runic:link",
+                "min": 1,
+                "max": 1
+              }
+            },
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "c": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "en",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "d": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "document",
+            "skeletons": [
+              "p[1]"
+            ]
+          },
+          "e": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "f": {
+            "slots": {},
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          }
+        }
+      },
+      "same": false
+    },
+    {
+      "id": "v3-other-markup",
+      "keys": [
+        "a",
+        "b",
+        "c",
+        "d",
+        "f"
+      ],
+      "left": {
+        "version": 2,
+        "contracts": {
+          "runic:strong": {
+            "kind": "paired",
+            "placement": "inline",
+            "children": "inline",
+            "interactive": false,
+            "plainText": "children",
+            "options": {}
+          }
+        },
+        "messages": {
+          "a": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "b": {
+            "slots": {
+              "link": {
+                "kind": "runic:link",
+                "min": 1,
+                "max": 1
+              }
+            },
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "c": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "en",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "d": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "document",
+            "skeletons": [
+              "p[1]"
+            ]
+          },
+          "e": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "f": {
+            "slots": {},
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          }
+        }
+      },
+      "right": {
+        "version": 3,
+        "contracts": {
+          "runic:strong": {
+            "kind": "paired",
+            "placement": "inline",
+            "children": "inline",
+            "interactive": true,
+            "plainText": "children",
+            "options": {}
+          }
+        },
+        "locales": [
+          "de",
+          "en",
+          "fr"
+        ],
+        "messages": {
+          "b": {
+            "slots": {
+              "link": {
+                "kind": "runic:link",
+                "min": 1,
+                "max": 1
+              }
+            },
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "c": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "en",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "d": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "document",
+            "skeletons": [
+              "p[1]"
+            ]
+          },
+          "e": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "f": {
+            "slots": {},
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          }
+        }
+      },
+      "same": false
+    },
+    {
+      "id": "v3-structured-changed",
+      "keys": [
+        "a",
+        "b",
+        "c",
+        "d",
+        "f"
+      ],
+      "left": {
+        "version": 2,
+        "contracts": {
+          "runic:strong": {
+            "kind": "paired",
+            "placement": "inline",
+            "children": "inline",
+            "interactive": false,
+            "plainText": "children",
+            "options": {}
+          }
+        },
+        "messages": {
+          "a": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "b": {
+            "slots": {
+              "link": {
+                "kind": "runic:link",
+                "min": 1,
+                "max": 1
+              }
+            },
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "c": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "en",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "d": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "document",
+            "skeletons": [
+              "p[1]"
+            ]
+          },
+          "e": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "f": {
+            "slots": {},
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          }
+        }
+      },
+      "right": {
+        "version": 3,
+        "contracts": {
+          "runic:strong": {
+            "kind": "paired",
+            "placement": "inline",
+            "children": "inline",
+            "interactive": false,
+            "plainText": "children",
+            "options": {}
+          }
+        },
+        "locales": [
+          "de",
+          "en",
+          "fr"
+        ],
+        "messages": {
+          "b": {
+            "slots": {
+              "link": {
+                "kind": "runic:link",
+                "min": 1,
+                "max": 1
+              }
+            },
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "c": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "en",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "d": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "document",
+            "skeletons": [
+              "p[1]"
+            ]
+          },
+          "e": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "f": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          }
+        }
+      },
+      "same": false
+    },
+    {
+      "id": "v2-missing-a-default-entry",
+      "keys": [
+        "a",
+        "b",
+        "c",
+        "d",
+        "f"
+      ],
+      "left": {
+        "version": 2,
+        "contracts": {
+          "runic:strong": {
+            "kind": "paired",
+            "placement": "inline",
+            "children": "inline",
+            "interactive": false,
+            "plainText": "children",
+            "options": {}
+          }
+        },
+        "messages": {
+          "b": {
+            "slots": {
+              "link": {
+                "kind": "runic:link",
+                "min": 1,
+                "max": 1
+              }
+            },
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "c": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "en",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "d": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "document",
+            "skeletons": [
+              "p[1]"
+            ]
+          },
+          "e": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "f": {
+            "slots": {},
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          }
+        }
+      },
+      "right": {
+        "version": 3,
+        "contracts": {
+          "runic:strong": {
+            "kind": "paired",
+            "placement": "inline",
+            "children": "inline",
+            "interactive": false,
+            "plainText": "children",
+            "options": {}
+          }
+        },
+        "locales": [
+          "de",
+          "en",
+          "fr"
+        ],
+        "messages": {
+          "b": {
+            "slots": {
+              "link": {
+                "kind": "runic:link",
+                "min": 1,
+                "max": 1
+              }
+            },
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "c": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "en",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "d": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "document",
+            "skeletons": [
+              "p[1]"
+            ]
+          },
+          "e": {
+            "slots": {},
+            "structured": false,
+            "contentLocales": {
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          },
+          "f": {
+            "slots": {},
+            "structured": true,
+            "contentLocales": {
+              "de": "de",
+              "en": "en",
+              "fr": "fr"
+            },
+            "content": "inline",
+            "skeletons": []
+          }
+        }
+      },
+      "same": false
+    }
+  ]
+}

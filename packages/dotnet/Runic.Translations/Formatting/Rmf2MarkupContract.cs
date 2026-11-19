@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -18,6 +19,8 @@ public sealed class Rmf2MarkupContract
 {
     // Markup contract v2 (W220-003): explicit placement and child models plus integer options.
     internal const int Version = 2;
+    // Markup contract v3 (D077.16): v2 without the message entries of the default shape, and the catalog's locales instead.
+    internal const int CompactVersion = 3;
     // Document profile v1 (specs/translations/rmf2-document-profile-v1.md).
     internal const int MaximumDepth = 16;
     internal const int MaximumNodes = 4096;
@@ -37,7 +40,18 @@ public sealed class Rmf2MarkupContract
     }
 
     internal Dictionary<string, Tag> Tags => Volatile.Read(ref _data).Tags;
-    internal Dictionary<string, Message> Messages => Volatile.Read(ref _data).Messages;
+
+    /// <summary>
+    /// The contract of a message of the catalog: its entry, or in markup contract v3 the default entry when the contract
+    /// does not list it. Callers check that the key is the catalog's; v3 does not list the default-shaped keys.
+    /// </summary>
+    internal bool TryGetMessage(string key, [NotNullWhen(true)] out Message? message)
+    {
+        Data data = Volatile.Read(ref _data);
+        if (data.Messages.TryGetValue(key, out message)) return true;
+        message = data.DefaultMessage;
+        return message is not null;
+    }
 
     /// <summary>How many times Hot Reload linked a changed contract into this object; caches built from it compare it.</summary>
     internal int LinkVersion => Volatile.Read(ref _linkVersion);
@@ -103,12 +117,31 @@ public sealed class Rmf2MarkupContract
     {
         internal Dictionary<string, Tag> Tags { get; } = new(StringComparer.Ordinal);
         internal Dictionary<string, Message> Messages { get; } = new(StringComparer.Ordinal);
+        // Markup contract v3: the entry of every message it does not list; null for v2.
+        internal Message? DefaultMessage { get; set; }
     }
 
     private static Data Read(JsonElement root)
     {
         var data = new Data();
-        if (root.GetProperty("version").GetInt32() != Version) throw new FormatException("Unsupported RMF2 contract version.");
+        int version = root.GetProperty("version").GetInt32();
+        if (version is not (Version or CompactVersion)) throw new FormatException("Unsupported RMF2 contract version.");
+        if (version == CompactVersion)
+        {
+            // The default entry: no slots, not structured, inline without skeletons, each locale its own content locale.
+            var locales = new Dictionary<string, string>(StringComparer.Ordinal);
+            string? previous = null;
+            foreach (JsonElement locale in root.GetProperty("locales").EnumerateArray())
+            {
+                string tag = locale.GetString()!;
+                if (!LocaleTag.TryCanonicalize(tag, out string canonical) || canonical != tag || (previous is not null && string.CompareOrdinal(previous, tag) >= 0))
+                    throw new FormatException("The locales of an RMF2 markup contract v3 must be canonical tags in ordinal order.");
+                locales.Add(tag, tag);
+                previous = tag;
+            }
+            data.DefaultMessage = new Message([], [], locales, false, [], false);
+        }
+        else if (root.TryGetProperty("locales", out _)) throw new FormatException("An RMF2 markup contract v2 has no locales.");
         foreach (JsonProperty item in root.GetProperty("contracts").EnumerateObject())
         {
             var options = new Dictionary<string, Option>(StringComparer.Ordinal);
@@ -166,6 +199,9 @@ public sealed class Rmf2MarkupContract
             // Whether any locale of the message uses markup; a contract without the member allows markup.
             bool structured = !message.Value.TryGetProperty("structured", out JsonElement structuredValue) || structuredValue.GetBoolean();
             data.Messages.Add(message.Name, new Message(slots, bounds, locales, content == "document", skeletons, structured));
+            // v3 lists only entries that differ from the default; a default one there is malformed, so each contract has one form.
+            if (data.DefaultMessage is not null && IsDefault(data.Messages[message.Name], data.DefaultMessage))
+                throw new FormatException("An RMF2 markup contract v3 lists a message of the default shape.");
         }
         return data;
     }
@@ -185,7 +221,7 @@ public sealed class Rmf2MarkupContract
     }
 
     internal Message Get(string key) =>
-        Messages.TryGetValue(key, out Message? message) ? message : throw new TranslationFormatException("Unknown RMF2 message contract '" + key + "'.");
+        TryGetMessage(key, out Message? message) ? message : throw new TranslationFormatException("Unknown RMF2 message contract '" + key + "'.");
 
     // Validates one loaded external-pack message against the linked contract: markup kinds,
     // options and slots, and for document messages the block rules, the normalized leaf
@@ -195,7 +231,7 @@ public sealed class Rmf2MarkupContract
 
     internal void ValidatePlanV5(string key, CompiledRmf2Message message)
     {
-        if (!Messages.TryGetValue(key, out Message? linked))
+        if (!TryGetMessage(key, out Message? linked))
             throw new TranslationFormatException("Unknown RMF2 message contract.");
         var types = message.InputArray.ToDictionary(input => input.Name, input => input.Type, StringComparer.Ordinal);
         foreach (CompiledRmf2Declaration declaration in message.DeclarationArray) types[declaration.Name] = declaration.Expression.ValueType;
@@ -364,6 +400,66 @@ public sealed class Rmf2MarkupContract
         if (start == text.Length || (text[start] == '0' && text.Length != 1)) return false;
         for (int index = start; index < text.Length; index++) if (!char.IsAsciiDigit(text[index])) return false;
         return long.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out long value) && value >= minimum && value <= maximum;
+    }
+
+    private static bool IsDefault(Message message, Message defaults) =>
+        message.Slots.Count == 0 && !message.Structured && !message.Document && message.Skeletons.Count == 0 &&
+        message.ContentLocales.Count == defaults.ContentLocales.Count &&
+        message.ContentLocales.All(pair => defaults.ContentLocales.ContainsKey(pair.Key) && pair.Key == pair.Value);
+
+    /// <summary>
+    /// Whether two markup contracts of one catalog are the same contract, in version 2 or 3: equal text, or equal once each
+    /// version 3 contract is written in version 2 with the default entry of every one of <paramref name="keys"/> (the
+    /// catalog's messages) that it does not list.
+    /// </summary>
+    internal static bool SameContract(string left, string right, IEnumerable<string> keys)
+    {
+        if (string.Equals(left, right, StringComparison.Ordinal)) return true;
+        string[] all = keys.ToArray();
+        // A pack's contract is untrusted: one that cannot be expanded is not the same contract.
+        try { return string.Equals(Expanded(left, all), Expanded(right, all), StringComparison.Ordinal); }
+        catch (Exception exception) when (exception is JsonException or KeyNotFoundException or InvalidOperationException) { return false; }
+    }
+
+    // The version 2 form of a contract, as the compiler writes it; a version 2 contract as it is.
+    private static string Expanded(string contract, IReadOnlyList<string> keys)
+    {
+        using JsonDocument document = JsonDocument.Parse(contract, new JsonDocumentOptions { MaxDepth = 32 });
+        JsonElement root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("version", out JsonElement version) || !version.TryGetInt32(out int number) || number != CompactVersion)
+            return contract;
+        string[] locales = root.GetProperty("locales").EnumerateArray().Select(static item => item.GetString()!).ToArray();
+        JsonElement listed = root.GetProperty("messages");
+        var all = new SortedSet<string>(keys, StringComparer.Ordinal);
+        foreach (JsonProperty message in listed.EnumerateObject()) all.Add(message.Name);
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber("version", Version);
+            writer.WritePropertyName("contracts");
+            root.GetProperty("contracts").WriteTo(writer);
+            writer.WriteStartObject("messages");
+            foreach (string key in all)
+            {
+                writer.WritePropertyName(key);
+                if (listed.TryGetProperty(key, out JsonElement entry)) { entry.WriteTo(writer); continue; }
+                writer.WriteStartObject();
+                writer.WriteStartObject("slots");
+                writer.WriteEndObject();
+                writer.WriteBoolean("structured", false);
+                writer.WriteStartObject("contentLocales");
+                foreach (string locale in locales) writer.WriteString(locale, locale);
+                writer.WriteEndObject();
+                writer.WriteString("content", "inline");
+                writer.WriteStartArray("skeletons");
+                writer.WriteEndArray();
+                writer.WriteEndObject();
+            }
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+        return System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 
     internal sealed record Message(Dictionary<string, string> Slots, Dictionary<string, (int Min, int Max)> Bounds,

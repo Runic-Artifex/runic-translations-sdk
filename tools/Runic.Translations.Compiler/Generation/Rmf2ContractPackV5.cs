@@ -53,7 +53,9 @@ internal sealed class Rmf2ShippedContractV5
             string catalog = root.GetProperty("catalog").GetString() ?? throw new FormatException("The contract has no catalog.");
             string fingerprint = root.GetProperty("contractFingerprint").GetString() ?? throw new FormatException("The contract has no fingerprint.");
             JsonElement markup = root.GetProperty("markupContract");
-            if (markup.ValueKind != JsonValueKind.Object || !markup.TryGetProperty("version", out JsonElement markupVersion) || markupVersion.GetInt32() != Rmf2ProjectV5.MarkupContractVersion)
+            // Version 2 (before 0.15) or 3 (D077.16); the pack carries the release's contract as it is.
+            if (markup.ValueKind != JsonValueKind.Object || !markup.TryGetProperty("version", out JsonElement markupVersion) ||
+                markupVersion.GetInt32() is not (Rmf2ProjectV5.MarkupContractVersion or Rmf2MarkupContractV3.Version))
                 throw new FormatException("The contract was built for another Runic markup contract version.");
             var inputs = new SortedDictionary<string, IReadOnlyList<Rmf2InputV5>>(StringComparer.Ordinal);
             int featureLevel = 0;
@@ -63,7 +65,9 @@ internal sealed class Rmf2ShippedContractV5
                     .Select(input => new Rmf2InputV5(input.GetProperty("name").GetString()!, input.GetProperty("type").GetString()!)).ToArray());
                 featureLevel = Math.Max(featureLevel, Math.Min(Rmf2ReleaseFeaturesV5.LevelOf(message.Value.GetProperty("ast"), out _), Rmf2ReleaseFeaturesV5.Newest));
             }
-            JsonElement messages = markup.TryGetProperty("messages", out JsonElement value) ? value.Clone() : default;
+            // The messages compare in the version 2 form: a version 3 contract gets the default entry of each message it omits.
+            using JsonDocument expanded = JsonDocument.Parse(Rmf2MarkupContractV3.Expand(markup.GetRawText(), inputs.Keys));
+            JsonElement messages = expanded.RootElement.TryGetProperty("messages", out JsonElement value) ? value.Clone() : default;
             JsonElement contracts = markup.TryGetProperty("contracts", out JsonElement definitions) ? definitions.Clone() : default;
             // The release's locales: every message maps each of them to its content locale.
             var locales = new HashSet<string>(StringComparer.Ordinal);
