@@ -734,7 +734,8 @@ public static partial class TranslationCompiler
         Rmf2SemanticResultV5 LowerSource(Rmf2ProjectSourceV5 source, IReadOnlyList<Rmf2InputV5>? callerInputs)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (source.Unit is { } unit) return unit.Lower(source.Node.Message!, source.Node.MessageSyntax, callerInputs, cancellationToken);
+            // A session memoizes whole compiles per message, so it lowers directly instead of filling the unit's lowering memo.
+            if (source.Unit is { } unit && source.Memo is null) return unit.Lower(source.Node.Message!, source.Node.MessageSyntax, callerInputs, cancellationToken);
             var syntax = source.Node.MessageSyntax ?? Mf2SyntaxReader.Read(TranslationSource.Owned(source.Source.Path, Encoding.UTF8.GetBytes(source.Node.Message!)), options, cancellationToken);
             return Rmf2SemanticCompilerV5.Lower(syntax, callerInputs, options, cancellationToken);
         }
@@ -781,7 +782,7 @@ public static partial class TranslationCompiler
             if (entry.Source.Memo is not { } memo)
             {
                 analysis = Rmf2DocumentProfileV5.Analyze(entry.Source.Logical, entry.Linked.Message, expectedKind, markup.Contracts, entry.Source.Node.NameLocation, diagnostics);
-                updated = entry with { Linked = entry.Linked with { Message = analysis.Message } };
+                updated = WithMessage(entry, analysis.Message);
             }
             else
             {
@@ -789,7 +790,7 @@ public static partial class TranslationCompiler
                 {
                     Rmf2DocumentAnalysisV5? computed = null;
                     var reported = Capture(() => computed = Rmf2DocumentProfileV5.Analyze(entry.Source.Logical, entry.Linked.Message, expectedKind, markup.Contracts, entry.Source.Node.NameLocation, diagnostics));
-                    memo.Profiled = profiled = new(entry, expectedKind, entry with { Linked = entry.Linked with { Message = computed!.Message } }, computed, reported);
+                    memo.Profiled = profiled = new(entry, expectedKind, WithMessage(entry, computed!.Message), computed, reported);
                 }
                 Replay(profiled.Diagnostics);
                 analysis = profiled.Analysis;
@@ -807,6 +808,9 @@ public static partial class TranslationCompiler
             if (!ReferenceEquals(translated, origin)) { ValidateStructure(origin, translated); ValidateInputParity(origin, translated); }
             ValidateMaxLength(origin, translated);
         }
+        // The entry with its profiled message; the entry itself when profiling left the message as it was.
+        static Rmf2ProjectEntryV5 WithMessage(Rmf2ProjectEntryV5 entry, Rmf2MessageV5 message) =>
+            ReferenceEquals(message, entry.Linked.Message) ? entry : entry with { Linked = entry.Linked with { Message = message } };
         // Structure is locked (RTR0074): every translated document variant must match one of
         // the source skeletons. RTR0071 flags a match against a different key tuple's variant.
         void ValidateStructure(Rmf2ProjectEntryV5 origin, Rmf2ProjectEntryV5 translated)

@@ -77,7 +77,7 @@ internal sealed class Rmf2ProjectMarkupV5
         {
             var empty = new IReadOnlyDictionary<string, int>[message.Variants.Count];
             Array.Fill(empty, NoOccurrences);
-            return new(message with { }, ReadOnlyDictionary<string, string>.Empty, Array.AsReadOnly(empty), Array.Empty<string>());
+            return new(message, ReadOnlyDictionary<string, string>.Empty, Array.AsReadOnly(empty), Array.Empty<string>());
         }
         var slots = new SortedDictionary<string, string>(StringComparer.Ordinal);
         var names = new SortedSet<string>(StringComparer.Ordinal);
