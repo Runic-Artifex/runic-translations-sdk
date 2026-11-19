@@ -8,7 +8,7 @@ Pull requests must pass the `verify` job in [CI](.github/workflows/ci.yml), whic
 
 | CI job | Local command |
 | --- | --- |
-| Source checks | `bun eng/generate-cldr.mjs --check`, `bun eng/render-capabilities.mjs --check`, and `actionlint` (available in the runic-sdk development shell) |
+| Source checks | `bun eng/generate-cldr.mjs --check`, `bun eng/render-capabilities.mjs --check`, `bun test --timeout 180000 eng/ci/apt-install.test.mjs` (Linux; see [Ubuntu packages in CI](#ubuntu-packages-in-ci)), and `actionlint` (available in the runic-sdk development shell) |
 | Build and test | `bun run test` (heavy; prefer the focused commands in the README while iterating), then `bun examples/bun/operation-history/verify.ts` |
 | Vite in-place message updates / Chromium | `bun run --bun build` in `packages/web/vite-plugin-runic-translations` and in `packages/web/translations-svelte`, then `bun run --bun test:hmr` in `packages/web/translations-svelte` (builds the CLI; set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to a Chromium, such as the `editor` dev shell's) |
 | RMF2 NativeAOT / linux-x64 | `bun eng/run.mjs native-aot` (NativeAOT publishes of the RMF2 suites and examples, then the size budgets: `bun tests/aot-size/measure.mjs`, see [tests/aot-size](tests/aot-size/README.md)) |
@@ -35,6 +35,17 @@ same configuration first. For locally packed Runtime and Build candidates, add
 `--test-parameter xaml-package-feed=<feed> --test-parameter
 xaml-package-version=<version>` instead; this exercises the packaged analyzer
 without project references.
+
+## Ubuntu packages in CI
+
+Linux jobs install Ubuntu packages through [`.github/actions/apt-install`](.github/actions/apt-install/action.yml), which runs [`eng/ci/apt-install.sh`](eng/ci/apt-install.sh); both are ported from runic-sdk, whose `eng/ci/README.md` ("Ubuntu packages") documents them in full. No workflow step runs `apt-get` directly. The runners' Ubuntu mirrors can crawl (an EC2 mirror delivered about 40 kB/s in #258), so the script does not give apt a fixed time per attempt:
+
+- **Probe.** Before the first download it measures each candidate mirror (the runner's own Ubuntu mirrors plus `azure.archive.ubuntu.com` and `archive.ubuntu.com`) with a ranged 2 MB GET of the largest archive to fetch, and puts the fastest first.
+- **Progress bounds.** `apt-get install --download-only` is stopped after 60 seconds without growth of the archives, or, while an untried mirror is left, when its average rate after 45 seconds is below 1 MB/s. The next attempt uses the fastest untried mirror and resumes the partial downloads. All attempts (at most five) share a 20-minute budget, so a slow last mirror that keeps delivering still finishes. The install then runs with `--no-download`. The `APT_*` variables at the top of the script set these limits.
+- **Archive cache.** The action first runs `apt-install.sh --resolve` (`apt-get update`, then a hash of the archive versions the packages need) and keys an `actions/cache` entry of the downloaded `.deb` files by Ubuntu release, architecture, package list, runner image and that hash. On `main` it saves the entry right after the install; other branches only restore. apt verifies every cached archive against the signed indexes before it uses it.
+- **Chromium.** [`.github/actions/install-chromium`](.github/actions/install-chromium/action.yml) lists the packages Playwright's Chromium needs that the image lacks (`playwright-core install-deps --dry-run`), installs them through the action without recommended packages, and then downloads the browser with [`eng/ci/install-chromium.sh`](eng/ci/install-chromium.sh) (5 minutes per attempt, three attempts, through `eng/ci/retry.sh`). Playwright's own `--with-deps` is not used, as it runs `apt-get` without a time limit or mirror fallback.
+
+[`eng/ci/apt-install.test.mjs`](eng/ci/apt-install.test.mjs) runs the script against a stubbed `sudo`, `apt-get` and `curl` in the `Source checks` job: the probe, the rate floor, a slow last mirror, a stalled mirror, plain sources, `ports.ubuntu.com`, the budget and `--resolve`.
 
 ## Test suites
 
