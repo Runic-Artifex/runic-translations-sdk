@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
+using System.Threading.Tasks;
 using Runic.Translations.Authoring;
 using Runic.Translations.Compiler;
 using Runic.Translations.Tooling;
@@ -48,6 +49,13 @@ internal sealed partial class Rmf2LanguageServer
     private readonly ConcurrentQueue<ValidationOutcome> _validationOutcomes = new();
     // Queues ValidatedMethod for the worker; set by Run.
     private Action? _enqueueValidated;
+
+    // The compiler parallelizes a catalog's reading and lowering over the thread pool (CompilerParallel), with the
+    // current task scheduler. A validation runs its compile on this scheduler, which runs at most one task fewer than
+    // the machine has processors, so the request worker and the reader always find a free core while a validation
+    // runs: on all of them, a hover after typing waited up to 200 ms for one (#271).
+    private static readonly TaskScheduler ValidationScheduler =
+        new ConcurrentExclusiveSchedulerPair(TaskScheduler.Default, Math.Max(1, Environment.ProcessorCount - 1)).ConcurrentScheduler;
 
     // Validations whose outcome is not applied yet, for tests that wait until diagnostics are settled.
     private int _outstandingValidations;
@@ -117,11 +125,14 @@ internal sealed partial class Rmf2LanguageServer
             {
                 Interlocked.Increment(ref _validations);
                 _beforeRequest?.Invoke(ValidationHook);
-                (Rmf2Workspace workspace, _) = BuildWorkspace(job.Snapshot, cancellation.Token);
-                ReviewView view = BuildReviewView(job.Project, workspace, cancellation.Token);
-                // Off the worker: what hover will keep of this validation once a newer one runs.
-                _ = view.Hover;
-                outcome = new ValidationOutcome(job, view, workspace.IsDirect, null);
+                // On the validation scheduler, so the compiler's parallel loops leave a core to the request worker.
+                outcome = Task.Factory.StartNew(() => {
+                    (Rmf2Workspace workspace, _) = BuildWorkspace(job.Snapshot, cancellation.Token);
+                    ReviewView view = BuildReviewView(job.Project, workspace, cancellation.Token);
+                    // Off the worker: what hover will keep of this validation once a newer one runs.
+                    _ = view.Hover;
+                    return new ValidationOutcome(job, view, workspace.IsDirect, null);
+                }, cancellation.Token, TaskCreationOptions.None, ValidationScheduler).GetAwaiter().GetResult();
             }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
             // Any other failure goes to the worker, which reports it as validation failures always were, or rethrows it.
