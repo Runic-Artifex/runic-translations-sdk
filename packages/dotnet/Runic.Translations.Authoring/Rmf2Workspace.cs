@@ -69,13 +69,12 @@ internal sealed class Rmf2Workspace
         else _mounts.Add((_projectDirectory, Array.Empty<string>()));
         _sources = sources.ToDictionary(s => s.Path, StringComparer.Ordinal);
         _direct = _sources.Values.Any(source => source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase));
-        foreach (var source in _sources.Values)
-        {
-            if (!source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase) && !source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)) continue;
-            _syntax.Add(source.Path, cache?.Read(_project.Path, source, cancellationToken) ?? (source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)
-                ? Rmf2ResourceReader.ReadDirect(source, cancellationToken: _cancellationToken)
-                : Rmf2ResourceReader.Read(source, cancellationToken: _cancellationToken)));
-        }
+        // Each file is read on its own, in parallel; the documents are added in source order.
+        TranslationSource[] resources = _sources.Values.Where(source => source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase) || source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)).ToArray();
+        Rmf2ResourceDocument[] documents = CompilerParallel.Map(resources.Length, index => cache?.Read(_project.Path, resources[index], cancellationToken) ?? (resources[index].Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase)
+            ? Rmf2ResourceReader.ReadDirect(resources[index], cancellationToken: _cancellationToken)
+            : Rmf2ResourceReader.Read(resources[index], cancellationToken: _cancellationToken)), cancellationToken);
+        for (int index = 0; index < resources.Length; index++) _syntax.Add(resources[index].Path, documents[index]);
     }
     public IReadOnlyList<Rmf2ResourceDocument> Documents => _syntax.Values.OrderBy(d => d.Source.Path, StringComparer.Ordinal).ToArray();
     public string BaseLocale => _baseLocale;

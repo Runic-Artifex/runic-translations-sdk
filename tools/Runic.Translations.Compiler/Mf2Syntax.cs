@@ -67,10 +67,15 @@ internal sealed class Mf2SyntaxDocument
 /// <summary>Reads MF2 source independently of executable functions and balanced-inline markup rules.</summary>
 internal static class Mf2SyntaxReader
 {
-    public static Mf2SyntaxDocument Read(TranslationSource source, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default)
+    public static Mf2SyntaxDocument Read(TranslationSource source, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default) =>
+        Read(source, options, cancellationToken, null);
+
+    /// <param name="text">The source's text, when the caller has it (it is the UTF-8 decoding of the bytes): the syntax
+    /// shares it instead of decoding the bytes again.</param>
+    internal static Mf2SyntaxDocument Read(TranslationSource source, TranslationCompilerOptions? options, CancellationToken cancellationToken, string? text)
     {
         ArgumentNullException.ThrowIfNull(source); options ??= new TranslationCompilerOptions();
-        return new Reader(source, options, cancellationToken).Read();
+        return new Reader(source, options, cancellationToken, text).Read();
     }
     /// <summary>Checks declaration and matcher constraints independently of syntax and target support.</summary>
     private static readonly IReadOnlyList<TranslationDiagnostic> NoDiagnostics = Array.AsReadOnly(Array.Empty<TranslationDiagnostic>());
@@ -172,13 +177,14 @@ internal static class Mf2SyntaxReader
         // The UTF-8 offset of every UTF-16 index; null when the text is ASCII, whose offsets are the indexes.
         private int[]? _bytes;
         private int _at;
-        internal Reader(TranslationSource source, TranslationCompilerOptions options, CancellationToken cancellation)
-        { _source = source; _options = options; _cancellation = cancellation; }
+        private readonly string? _given;
+        internal Reader(TranslationSource source, TranslationCompilerOptions options, CancellationToken cancellation, string? text = null)
+        { _source = source; _options = options; _cancellation = cancellation; _given = text; }
         internal Mf2SyntaxDocument Read()
         {
             _cancellation.ThrowIfCancellationRequested();
             if (_source.Bytes.Length > _options.MaximumValueBytes) { _diagnostics.Add("RTR0022", TranslationDiagnosticSeverity.Error, "MF2 source exceeds the configured byte limit.", _source, new ByteSpan(0, 0)); return Result(); }
-            try { _text = StrictJsonParser.StrictUtf8.GetString(_source.Bytes); }
+            try { _text = _given ?? StrictJsonParser.StrictUtf8.GetString(_source.Bytes); }
             catch (DecoderFallbackException) { _diagnostics.Add("RTR0019", TranslationDiagnosticSeverity.Error, "MF2 requires valid UTF-8.", _source, new ByteSpan(0, 0)); return Result(); }
             if (_source.Bytes.Length != _text.Length)
             {

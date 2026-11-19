@@ -81,7 +81,10 @@ internal static class Rmf2DocumentProfileV5
                 results.Add(new(kinds[index], null));
             }
         }
-        return new(kind, message with { Variants = variants.AsReadOnly() }, results.AsReadOnly());
+        // A message whose variants all stay as they are is the message itself (inline content), not a copy.
+        bool unchanged = true;
+        for (int index = 0; unchanged && index < variants.Count; index++) unchanged = ReferenceEquals(variants[index], message.Variants[index]);
+        return new(kind, unchanged ? message : message with { Variants = variants.AsReadOnly() }, results.AsReadOnly());
 
         void NestedBlocks(IReadOnlyList<Rmf2NodeV5> nodes)
         {
