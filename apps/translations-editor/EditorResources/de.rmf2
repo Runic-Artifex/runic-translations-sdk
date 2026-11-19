@@ -348,6 +348,11 @@ ui {
 }
 ui {
   backend {
+    messageMissing = Die ausgewählte Nachricht existiert nicht mehr.
+  }
+}
+ui {
+  backend {
     no_redo = Es gibt keine gespeicherte Änderung, die wiederholt werden kann.
   }
 }

@@ -361,35 +361,35 @@ internal sealed class Rmf2DiagnosticLspTests
     {
         using TemporaryDirectory temporary = new();
         File.WriteAllText(temporary.Resolve("runic.json"), PlainProject);
-        File.WriteAllText(temporary.Resolve("en.rmf2"), "title = Hello {$name}\nlater = Later\n");
-        const string german = "title = Hallo {$name}\nlater = Später\n";
+        File.WriteAllText(temporary.Resolve("en.rmf2"), "notes {\n  pinned = Hello {$name}\n}\nlater = Later\n");
+        const string german = "notes {\n  pinned = Hallo {$name}\n}\nlater = Später\n";
         File.WriteAllText(temporary.Resolve("de.rmf2"), german);
         string reviewPath = temporary.Resolve("app.review.json");
-        // Recorded for an older source of "title" and for the current source of "later".
+        // Recorded for an older source of "notes.pinned" and for the current source of "later".
         Rmf2ProjectCompilation compiled = TranslationCompiler.CompileRmf2ProjectV5(
             new TranslationSource(temporary.Resolve("runic.json"), Encoding.UTF8.GetBytes(PlainProject)),
-            [new TranslationSource(temporary.Resolve("en.rmf2"), Encoding.UTF8.GetBytes("title = Hello {$name}\nlater = Later\n")),
+            [new TranslationSource(temporary.Resolve("en.rmf2"), Encoding.UTF8.GetBytes("notes {\n  pinned = Hello {$name}\n}\nlater = Later\n")),
              new TranslationSource(temporary.Resolve("de.rmf2"), Encoding.UTF8.GetBytes(german))]);
         string current = Runic.Translations.Tooling.TranslationInterchange.ComputeSourceFingerprints(compiled)["later"];
         File.WriteAllText(reviewPath, "{\"$schema\":\"runic.translations.interchange-review/2\",\"catalog\":\"app\",\"entries\":[" +
             "{\"key\":\"later\",\"locale\":\"de\",\"state\":\"approved\",\"sourceFingerprint\":\"" + current + "\"}," +
-            "{\"key\":\"title\",\"locale\":\"de\",\"state\":\"approved\",\"sourceFingerprint\":\"sha256:" + new string('0', 64) + "\"}]}");
+            "{\"key\":\"notes_pinned\",\"locale\":\"de\",\"state\":\"approved\",\"sourceFingerprint\":\"sha256:" + new string('0', 64) + "\"}]}");
         string deUri = new Uri(temporary.Resolve("de.rmf2")).AbsoluteUri;
         using Session session = new(temporary.Path);
         session.Request("initialize", new JsonObject { ["rootUri"] = new Uri(temporary.Path).AbsoluteUri, ["capabilities"] = new JsonObject() });
         session.Notify("textDocument/didOpen", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = deUri, ["version"] = 1, ["text"] = german } });
         Flush(session, deUri);
         JsonNode stale = LastDiagnostics(session, deUri).Single(item => item?["code"]?.GetValue<string>() == "RTR0090")!;
-        Assert.Equal(0, stale["range"]!["start"]!["line"]!.GetValue<int>(), stale.ToJsonString());
+        Assert.Equal(1, stale["range"]!["start"]!["line"]!.GetValue<int>(), stale.ToJsonString());
 
-        JsonObject Hover(int line) => session.Request("textDocument/hover", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = deUri }, ["position"] = Position(line, 1) })["result"]!.AsObject();
-        Assert.Contains("Review: approved, stale: the source changed since it was recorded (RTR0090)", Hover(0)["contents"]!["value"]!.GetValue<string>());
-        Assert.Contains("Review: approved\n", Hover(1)["contents"]!["value"]!.GetValue<string>());
+        JsonObject Hover(int line) => session.Request("textDocument/hover", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = deUri }, ["position"] = Position(line, 3) })["result"]!.AsObject();
+        Assert.Contains("Review: approved, stale: the source changed since it was recorded (RTR0090)", Hover(1)["contents"]!["value"]!.GetValue<string>());
+        Assert.Contains("Review: approved\n", Hover(3)["contents"]!["value"]!.GetValue<string>());
 
         JsonArray actions = session.Request("textDocument/codeAction", new JsonObject { ["textDocument"] = new JsonObject { ["uri"] = deUri },
-            ["range"] = new JsonObject { ["start"] = Position(0, 0), ["end"] = Position(0, 5) }, ["context"] = new JsonObject { ["diagnostics"] = new JsonArray() } })["result"]!.AsArray();
+            ["range"] = new JsonObject { ["start"] = Position(1, 2), ["end"] = Position(1, 8) }, ["context"] = new JsonObject { ["diagnostics"] = new JsonArray() } })["result"]!.AsArray();
         JsonNode mark = actions.Single(action => action?["command"]?["command"]?.GetValue<string>() == "runic.markReviewed")!;
-        Assert.Equal("Mark the 'de' translation of 'title' reviewed (approved)", mark["title"]!.GetValue<string>());
+        Assert.Equal("Mark the 'de' translation of 'notes.pinned' reviewed (approved)", mark["title"]!.GetValue<string>());
         Assert.True(session.Request("codeAction/resolve", mark.DeepClone().AsObject())["error"] is null, "The command action did not resolve.");
         JsonObject command = mark["command"]!.AsObject();
         Assert.True(session.Request("workspace/executeCommand", new JsonObject { ["command"] = command["command"]!.GetValue<string>(), ["arguments"] = command["arguments"]!.DeepClone() })["error"] is null,
@@ -397,7 +397,7 @@ internal sealed class Rmf2DiagnosticLspTests
         Flush(session, deUri);
         Assert.False(LastDiagnostics(session, deUri).Any(item => item?["code"]?.GetValue<string>() == "RTR0090"), "RTR0090 remained after marking the entry reviewed.");
         Assert.False(File.ReadAllText(reviewPath).Contains(new string('0', 64), StringComparison.Ordinal), "The review file still records the old source.");
-        Assert.Contains("Review: approved\n", Hover(0)["contents"]!["value"]!.GetValue<string>());
+        Assert.Contains("Review: approved\n", Hover(1)["contents"]!["value"]!.GetValue<string>());
         Assert.Equal(german, File.ReadAllText(temporary.Resolve("de.rmf2")), "Marking a review changed the translation.");
     }
 

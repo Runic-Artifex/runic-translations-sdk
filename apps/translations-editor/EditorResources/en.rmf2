@@ -348,6 +348,11 @@ ui {
 }
 ui {
   backend {
+    messageMissing = The selected message no longer exists.
+  }
+}
+ui {
+  backend {
     no_redo = There is no saved change to redo.
   }
 }

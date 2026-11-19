@@ -73,7 +73,7 @@ internal sealed class WorkspaceLoader
             EditorCatalogSummary[] summaries = projects.Select(project => _reader.SummarizeProject(project, cancellationToken)).ToArray();
             return new WorkspaceSnapshot(_root, null, summaries, [], [], true, null, null, null);
         }
-        WorkspaceState state = await _reader.ReadStateAsync(null, null, cancellationToken).ConfigureAwait(false);
+        WorkspaceState state = await _reader.ReadStateAsync(null, null, cancellationToken, resetBaseline: true).ConfigureAwait(false);
         return CreateSnapshot(state);
     }
 

@@ -67,13 +67,14 @@ internal sealed class WorkspaceStateReader
         return review;
     }
 
-    // A read of the files on disk (no replacement) becomes the baseline of the external-change check, unless
-    // resetBaseline is false (the check itself reads the catalog to report a review file another writer changed).
+    // A read of the files on disk (no replacement) becomes the baseline of the external-change check only when
+    // resetBaseline is true: a workspace load (WorkspaceLoader), which every applied change ends with. Previews, exports
+    // and drafts read without acknowledging anything, so an outside edit made just before them is still reported.
     internal Task<WorkspaceState> ReadStateAsync(
         string? replacementPath,
         string? replacementContent,
         CancellationToken cancellationToken,
-        bool resetBaseline = true)
+        bool resetBaseline = false)
     {
         string? projectConfig = _files.FindMf2ProjectConfig();
         if (projectConfig is null)
@@ -86,7 +87,7 @@ internal sealed class WorkspaceStateReader
         string? replacementPath,
         string? replacementContent,
         CancellationToken cancellationToken,
-        bool resetBaseline = true)
+        bool resetBaseline = false)
     {
         string projectRoot = Path.GetDirectoryName(configPath)!;
         string configRelativePath = NormalizeRelativePath(Path.GetRelativePath(_root, configPath));

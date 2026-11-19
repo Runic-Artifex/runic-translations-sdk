@@ -156,7 +156,8 @@ export class MessageEditingController {
       }
       const result = outcome.result;
       if (outcome.kind === "rejected") {
-        feedback.clientError = result.diagnostics.find(diagnostic => diagnostic.id === "EDITOR-AUTHORING")?.message;
+        const diagnostic = result.diagnostics.find(candidate => candidate.id === "EDITOR-AUTHORING");
+        feedback.clientError = diagnostic?.notice ?? diagnostic?.message;
         diagnostics.record("authoring", path, result);
         return;
       }
@@ -257,7 +258,8 @@ export class MessageEditingController {
       }
       const result = outcome.result;
       if (outcome.kind === "rejected") {
-        const message = result.diagnostics.find(diagnostic => diagnostic.id === "EDITOR-FIX")?.message;
+        const refusal = result.diagnostics.find(diagnostic => diagnostic.id === "EDITOR-FIX");
+        const message = refusal?.notice ?? refusal?.message;
         if (repairing) repair.message = message;
         else feedback.clientError = message;
         return;
