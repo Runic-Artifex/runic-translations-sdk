@@ -1,0 +1,85 @@
+name: Install Ubuntu packages
+description: >-
+  Install Ubuntu packages with eng/ci/apt-install.sh, reusing the downloaded .deb archives from a cache keyed by
+  Ubuntu release, architecture, package list, runner image and the resolved package versions. On main the archives
+  are saved as soon as the packages are installed, so a later failure in the job does not discard a slow download;
+  other branches only restore. Ported from runic-sdk's action of the same name (#258).
+inputs:
+  packages:
+    description: Package names, separated by spaces
+    required: true
+  install-recommends:
+    description: Whether apt also installs the packages' recommended packages ("true" or "false")
+    default: "true"
+runs:
+  using: composite
+  steps:
+    # apt checks every cached archive against the signed package index before it uses it,
+    # so a restored archive that no longer matches is downloaded again.
+    - name: Prepare the package archive cache
+      id: apt
+      shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+        RECOMMENDS: ${{ inputs.install-recommends }}
+      run: |
+        archives=/var/cache/runic-apt
+        sudo install -d -o "$(id -u)" -g "$(id -g)" "$archives"
+        . /etc/os-release
+        # shellcheck disable=SC2086 # one package per word
+        list=$(printf '%s\n' $PACKAGES | sort -u | sha256sum | cut -c1-16)
+        if [ "$RECOMMENDS" = false ]; then list="$list-norecommends"; fi
+        {
+          echo "archives=$archives"
+          echo "prefix=apt-$ID-$VERSION_ID-$RUNNER_ARCH-$list-"
+          echo "image=${ImageVersion:-local}"
+        } >> "$GITHUB_OUTPUT"
+    # runic-sdk#1131: apt-get update before the restore, so the key names the archive versions
+    # the packages need; a new package version gets a new entry instead of being downloaded on
+    # every run. The install reuses these indexes. Unresolved versions are not saved.
+    - name: Resolve the package versions
+      id: resolve
+      shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+        RECOMMENDS: ${{ inputs.install-recommends }}
+      run: |
+        options=()
+        if [ "$RECOMMENDS" = false ]; then options=(--no-install-recommends); fi
+        # shellcheck disable=SC2086 # one package per word
+        versions=$(eng/ci/apt-install.sh --resolve ${options[@]+"${options[@]}"} $PACKAGES)
+        echo "versions=$versions" >> "$GITHUB_OUTPUT"
+    # The cache holds the archives only: apt's lock and its partial downloads are root's.
+    # An entry for the same image, then any image, restores the archives that did not change.
+    # Restore only, also on main; the save follows the install.
+    - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      id: cache
+      with:
+        path: /var/cache/runic-apt/*.deb
+        key: ${{ steps.apt.outputs.prefix }}${{ steps.apt.outputs.image }}-${{ steps.resolve.outputs.versions || 'unresolved' }}
+        restore-keys: |
+          ${{ steps.apt.outputs.prefix }}${{ steps.apt.outputs.image }}-
+          ${{ steps.apt.outputs.prefix }}
+    - name: Install ${{ inputs.packages }}
+      id: install
+      shell: bash
+      env:
+        APT_ARCHIVES: ${{ steps.apt.outputs.archives }}
+        APT_UPDATED: ${{ steps.resolve.outputs.versions != '' }}
+        PACKAGES: ${{ inputs.packages }}
+        RECOMMENDS: ${{ inputs.install-recommends }}
+      run: |
+        options=()
+        if [ "$RECOMMENDS" = false ]; then options=(--no-install-recommends); fi
+        # shellcheck disable=SC2086 # one package per word
+        eng/ci/apt-install.sh ${options[@]+"${options[@]}"} $PACKAGES
+        echo "archives=$(find "$APT_ARCHIVES" -maxdepth 1 -name '*.deb' | wc -l)" >> "$GITHUB_OUTPUT"
+    # Saved right after the install rather than at the end of the job, and on main only, so pull
+    # requests cannot evict main's entries from the repository's cache quota. An exact hit already
+    # holds this key, a job whose packages were all on the image has nothing to save, and
+    # unresolved versions have no key of their own.
+    - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      if: github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true' && steps.install.outputs.archives != '0' && steps.resolve.outputs.versions != ''
+      with:
+        path: /var/cache/runic-apt/*.deb
+        key: ${{ steps.apt.outputs.prefix }}${{ steps.apt.outputs.image }}-${{ steps.resolve.outputs.versions || 'unresolved' }}

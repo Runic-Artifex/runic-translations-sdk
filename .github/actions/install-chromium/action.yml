@@ -1,0 +1,43 @@
+name: Install the locked Chromium browser
+description: >-
+  Install Playwright's Chromium from a directory's locked playwright-core with its Ubuntu dependencies, and set
+  PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH. The dependencies go through .github/actions/apt-install (as runic-sdk's
+  install-browser action does), the browser download through eng/ci/install-chromium.sh. Ubuntu only.
+inputs:
+  working-directory:
+    description: The directory whose node_modules holds the locked playwright-core (bun install has run there)
+    required: true
+runs:
+  using: composite
+  steps:
+    # Playwright's own --with-deps runs apt-get without a time limit or mirror fallback, so its list for this Ubuntu
+    # release, minus what the image already has, goes through eng/ci/apt-install.sh instead.
+    - name: List the browser's missing Ubuntu packages
+      id: deps
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        status=0
+        out=$(bun node_modules/playwright-core/cli.js install-deps --dry-run chromium 2>&1) || status=$?
+        if grep -q '^All system dependencies are installed' <<<"$out"; then
+          packages=
+        elif grep -q '^Missing system dependencies' <<<"$out"; then
+          packages=$(sed -n '/^Missing system dependencies/,$ { s/^  \([^[:space:]]\+\)$/\1/p }' <<<"$out" | paste -sd' ' -)
+        else
+          printf '%s\n' "$out"
+          echo "::error title=Browser dependencies unknown::playwright-core install-deps --dry-run exited with $status without a package list; see its output above."
+          exit 1
+        fi
+        echo "Missing: ${packages:-none}"
+        echo "packages=$packages" >> "$GITHUB_OUTPUT"
+    - if: steps.deps.outputs.packages != ''
+      uses: ./.github/actions/apt-install
+      with:
+        packages: ${{ steps.deps.outputs.packages }}
+        install-recommends: "false"
+    - name: Download Chromium
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        "$GITHUB_WORKSPACE/eng/ci/install-chromium.sh"
+        bun -e 'import { chromium } from "playwright-core"; console.log("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=" + chromium.executablePath())' >> "$GITHUB_ENV"
