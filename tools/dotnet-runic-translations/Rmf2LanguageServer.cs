@@ -685,23 +685,20 @@ internal sealed partial class Rmf2LanguageServer
             string hoverProject = ProjectDirectory(path, allowExternalAncestor: true);
             // Hover never compiles: it reads the catalog's current review data, or while a newer validation runs in the
             // background the last one applied (#271). Before the first validation it shows the source alone.
-            ReviewView? view = CurrentReviewView(hoverProject, BufferUris(hoverProject).ToArray()) ?? _lastReviewViews.GetValueOrDefault(hoverProject);
-            Rmf2ProjectCompilation? compiled = view?.Compilation;
-            if (view is { HasReviewFile: true } && !entry.IsGroup)
-                reviewState = Rmf2ReviewFileState.Describe(view.Review.Project?.DefaultLocale, view.Fingerprints, view.File, view.Error, key, locale);
-            if (compiled is { Success: true } && !entry.IsGroup)
+            HoverFacts? facts = CurrentReviewView(hoverProject, BufferUris(hoverProject).ToArray())?.Hover ?? _lastHoverFacts.GetValueOrDefault(hoverProject);
+            if (facts?.Review is { } review && !entry.IsGroup)
+                reviewState = Rmf2ReviewFileState.Describe(review.BaseLocale, review.Fingerprints, review.File, review.Error, key, locale);
+            if (facts is { Compiled: true } && !entry.IsGroup)
             {
-                Rmf2ProjectV5 project = compiled.Project!;
-                Rmf2TranslationV5? value = project.Locales.FirstOrDefault(item => item.Tag == locale)?.ResolvedResources.FirstOrDefault(item => item.Key == key);
-                Rmf2MessageContractV5? contract = project.CanonicalMessages.Concat(project.ExtraMessages).FirstOrDefault(item => item.Key == key);
-                if (value is not null) contractLines.Add("Content locale: " + value.ContentLocale);
+                bool localeCompiled = facts.Locales.TryGetValue(locale, out var localeFacts);
+                Rmf2MessageContractV5? contract = facts.Contracts.GetValueOrDefault(key);
+                if (localeCompiled && localeFacts.ContentLocales.TryGetValue(key, out string? contentLocale)) contractLines.Add("Content locale: " + contentLocale);
                 if (contract is { Inputs.Count: > 0 }) contractLines.Add("Inputs: " + string.Join(", ", contract.Inputs.Select(input => "$" + input.Name + ": " + input.Type)));
                 if (contract is not null) contractLines.Add("Content: " + contract.Content);
                 // The locked block structure translations must keep, one skeleton per distinct source variant.
                 if (contract is { Content: Rmf2DocumentProfileV5.Document })
                     contractLines.Add("Structure: " + string.Join(" | ", contract.Skeletons.Select(skeleton => skeleton.Length == 0 ? "(empty)" : skeleton)));
-                string? fallback = project.Locales.FirstOrDefault(item => item.Tag == locale)?.FallbackTag;
-                if (fallback is not null) contractLines.Add("Fallback: " + fallback);
+                if (localeCompiled && localeFacts.Fallback is { } fallback) contractLines.Add("Fallback: " + fallback);
             }
             string content = new Rmf2HoverContent {
                 Summary = summary, BaseLocale = workspace.BaseLocale, BaseText = baseEntry?.Message,
@@ -1548,6 +1545,9 @@ internal sealed partial class Rmf2LanguageServer
         internal Rmf2ProjectCompilation Review => _review.Value.Review;
         internal IReadOnlyDictionary<string, string>? Fingerprints => _review.Value.Fingerprints;
         internal string? ReviewPath { get; } = reviewPath;
+        private HoverFacts? _hover;
+        // What hover shows from this validation (HoverFacts); the validator computes it, a request on first use.
+        internal HoverFacts Hover => _hover ??= HoverFacts.Of(this);
         internal TranslationInterchangeReview? File { get; } = file;
         internal string? Error { get; } = error;
         internal TranslationInterchangeException? ReadFailure { get; } = readFailure;
@@ -1565,6 +1565,39 @@ internal sealed partial class Rmf2LanguageServer
         ReviewView view = BuildReviewView(project, workspace, _requestCancellation);
         _reviewViews[ReviewCacheKey(project, group)] = view;
         return view;
+    }
+
+    // What hover shows from a validation: the compiled contracts, the content locale of each message per locale, the
+    // fallback locales and the review state. Kept per project while a newer validation runs, instead of the whole
+    // compilation, so the server holds one compiled catalog at a time (#271).
+    private sealed class HoverFacts
+    {
+        private HoverFacts() { }
+        internal bool Compiled { get; private init; }
+        internal Dictionary<string, Rmf2MessageContractV5> Contracts { get; private init; } = new();
+        internal Dictionary<string, (string? Fallback, Dictionary<string, string> ContentLocales)> Locales { get; private init; } = new();
+        internal (string? BaseLocale, IReadOnlyDictionary<string, string>? Fingerprints, TranslationInterchangeReview? File, string? Error)? Review { get; private init; }
+
+        internal static HoverFacts Of(ReviewView view)
+        {
+            Rmf2ProjectV5? project = view.Compilation.Success ? view.Compilation.Project : null;
+            var contracts = new Dictionary<string, Rmf2MessageContractV5>(StringComparer.Ordinal);
+            var locales = new Dictionary<string, (string? Fallback, Dictionary<string, string> ContentLocales)>(StringComparer.Ordinal);
+            if (project is not null)
+            {
+                foreach (Rmf2MessageContractV5 contract in project.CanonicalMessages.Concat(project.ExtraMessages)) contracts.TryAdd(contract.Key, contract);
+                foreach (Rmf2LocaleV5 locale in project.Locales)
+                {
+                    var contentLocales = new Dictionary<string, string>(StringComparer.Ordinal);
+                    foreach (Rmf2TranslationV5 resource in locale.ResolvedResources) contentLocales.TryAdd(resource.Key, resource.ContentLocale);
+                    locales.TryAdd(locale.Tag, (locale.FallbackTag, contentLocales));
+                }
+            }
+            return new HoverFacts {
+                Compiled = project is not null, Contracts = contracts, Locales = locales,
+                Review = view.HasReviewFile ? (view.Review.Project?.DefaultLocale, view.Fingerprints, view.File, view.Error) : null,
+            };
+        }
     }
 
     private static string ReviewCacheKey(string project, IReadOnlyCollection<string> group) =>

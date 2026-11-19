@@ -33,10 +33,10 @@ internal sealed partial class Rmf2LanguageServer
     private sealed record ValidationJob(string Project, long Generation, string[] Group, string CacheKey, WorkspaceSnapshot Snapshot);
     private sealed record ValidationOutcome(ValidationJob Job, ReviewView? View, bool IsDirect, Exception? Error);
 
-    // Worker state: the latest generation scheduled per project, and the latest applied review view per project, which
-    // hover reads while a newer validation runs.
+    // Worker state: the latest generation scheduled per project, and what hover shows from the latest applied validation
+    // per project, which it reads while a newer validation runs.
     private readonly Dictionary<string, long> _validationGenerations = new(PathComparer);
-    private readonly Dictionary<string, ReviewView> _lastReviewViews = new(PathComparer);
+    private readonly Dictionary<string, HoverFacts> _lastHoverFacts = new(PathComparer);
 
     // Shared with the validator thread, under _validatorGate.
     private readonly object _validatorGate = new();
@@ -119,6 +119,8 @@ internal sealed partial class Rmf2LanguageServer
                 _beforeRequest?.Invoke(ValidationHook);
                 (Rmf2Workspace workspace, _) = BuildWorkspace(job.Snapshot, cancellation.Token);
                 ReviewView view = BuildReviewView(job.Project, workspace, cancellation.Token);
+                // Off the worker: what hover will keep of this validation once a newer one runs.
+                _ = view.Hover;
                 outcome = new ValidationOutcome(job, view, workspace.IsDirect, null);
             }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
@@ -184,7 +186,7 @@ internal sealed partial class Rmf2LanguageServer
         {
             _projectLayouts[job.Project] = isDirect;
             _reviewViews[job.CacheKey] = view;
-            _lastReviewViews[job.Project] = view;
+            _lastHoverFacts[job.Project] = view.Hover;
             diagnostics = [.. WithReviewDiagnostics(view), .. LibraryDiagnostics(job.Project, job.Group)];
             // A later failure after recovery is worth reporting again.
             foreach (string uri in job.Group) _reportedBufferFailures.Remove(uri);
