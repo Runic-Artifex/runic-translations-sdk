@@ -67,14 +67,14 @@ export default async function listViewVirtualization(context) {
   assert.ok(first.length < 120, `${first.length} rows are rendered for a list of ${rowCount}.`);
   assert.equal(first[0].index, 1, "The column headers are not row 1.");
   assert.ok(first.every((entry, position) => position === 0 || entry.index > first[position - 1].index), "The shown rows are out of order.");
-  assert.equal(await row("bulk0_m010").count(), 0, "A row far above the window is rendered.");
+  await waitFor(async () => await row("bulk0_m010").count() === 0, "bulk0_m010 is not rendered while the list is near its end");
 
   // Home and End: the first and the last message, far outside the window, selected, focused and shown.
   await textCell("common_cancel").focus();
   await page.keyboard.press("Home");
   await waitFor(async () => await selectedRow() === "bulk0_m000" && await focusedRow() === "bulk0_m000" && await inView("bulk0_m000"),
     "Home selects the first message");
-  assert.equal(await row("common_cancel").count(), 0, "A row far below the window stays rendered.");
+  await waitFor(async () => await row("common_cancel").count() === 0, "common_cancel leaves the DOM after Home");
   // Rows differ in height and are measured: a long text's row is taller than a short one's.
   const heightOf = key => row(key).evaluate(element => element.getBoundingClientRect().height);
   assert.ok(await heightOf("bulk0_m000") > await heightOf("bulk0_m001") + 8, "A long text's row is not taller.");
@@ -91,7 +91,7 @@ export default async function listViewVirtualization(context) {
   for (let step = 0; step < 150; step += 1) await page.keyboard.press("ArrowDown");
   await waitFor(async () => await selectedRow() === "bulk1_m000" && await focusedRow() === "bulk1_m000", "Down reaches bulk1.m000");
   await waitFor(async () => await inView("bulk1_m000"), "the row Down reached is in view");
-  assert.equal(await row("bulk0_m000").count(), 0, "Rows far above the window stay rendered.");
+  await waitFor(async () => await row("bulk0_m000").count() === 0, "bulk0_m000 leaves the DOM after Down");
   await page.keyboard.press("ArrowUp");
   await waitFor(async () => await selectedRow() === "bulk0_m149" && await focusedRow() === "bulk0_m149", "Up goes back over the namespace header");
   await page.keyboard.press("ArrowDown");
@@ -106,7 +106,7 @@ export default async function listViewVirtualization(context) {
     await waitFor(async () => await selectedRow() === key && await focusedRow() === key && await focusedField(), `Tab edits ${key}`);
   }
   await waitFor(async () => await inView("bulk1_m061"), "the row Tab reached is in view");
-  assert.equal(await row("bulk1_m000").count(), 0, "The rows Tab left far behind stay rendered.");
+  await waitFor(async () => await row("bulk1_m000").count() === 0, "bulk1_m000 leaves the DOM after Tab");
   // The edited row keeps the focus while the list scrolls far away from it, and typing still edits it.
   await scroller.evaluate(element => { element.scrollTop = element.scrollHeight; });
   await page.waitForTimeout(200);
