@@ -12,7 +12,7 @@ namespace Runic.Translations.Editor;
 /// language server), and preview samples, terminology and the notes of rows without a review entry in the editor's own
 /// <c>.runic-translations/&lt;catalog&gt;.editor-state.json</c>.
 /// "Stale" is the SDK definition: the entry's fingerprint differs from the message's current one (RTR0090).
-/// The compilation passed in is the review compilation (<see cref="TranslationReviewFile.ForReview"/>), so review data
+/// The compilation passed in is the review compilation (<see cref="TranslationReviewFile.ForReview(Rmf2ProjectCompilation, TranslationSource, System.Collections.Generic.IEnumerable{TranslationSource}, TranslationCompilerOptions, System.Threading.CancellationToken)"/>), so review data
 /// is read and written while translations are incomplete or invalid; only errors in runic.json or the base locale
 /// leave it without fingerprints. The snapshot revision covers both files; a save whose revision is out of date
 /// re-applies the user's changes onto the current files (other writers change the review file routinely).

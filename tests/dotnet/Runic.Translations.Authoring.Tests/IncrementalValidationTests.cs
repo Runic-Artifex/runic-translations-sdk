@@ -310,7 +310,7 @@ internal sealed class IncrementalValidationTests
             };
         }
 
-        private string Render(List<(string Name, string Text)> messages)
+        private static string Render(List<(string Name, string Text)> messages)
         {
             var text = new StringBuilder("s0 {\n");
             foreach (var (name, body) in messages)
