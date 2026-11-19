@@ -55,7 +55,8 @@ the largest sample. `results.json` in `artifacts/lsp-budget/` keeps each sample'
 - The committed values come from three runs on four processors (`taskset -c 12-15`), each budget's slowest.
 - `target` is #271's goal for the size the budgets measure, shown beside the limit in the report, with "met" when the
   run's value is within it. A budget above its target is a known gap, listed in the pull request that set it.
-- A value under half its `measured` reports **improved: lower the budget**; it does not fail.
+- A value under half its `measured` reports **improved: lower the budget**, unless the limit is its `minimum`; it does not
+  fail.
 
 The limits are for CI's runner, ubuntu-24.04 with 4 processors. A run with more processors is faster; for a local
 comparison pin it to four of them (`taskset -c 0-3 bun eng/run.mjs lsp-budget`). A pull request that raises a limit says

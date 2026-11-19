@@ -305,8 +305,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       const label = variant.review ? `${name} (review file)` : name;
       if (!updating && entry.limit === undefined) failure = `${label} has no limit in budgets.json; run bun tests/lsp-budget/measure.mjs --update.`;
       else if (!updating && value > entry.limit) failure = `${label} is ${format(name, value)}, over its limit ${format(name, entry.limit)}.`;
-      // Well under its limit: not a failure, but the budget can be lowered (a run on the CI runner, then --update).
-      const improved = !failure && !updating && entry.measured !== undefined && value < 0.5 * entry.measured;
+      // Well under its limit: not a failure, but the budget can be lowered (a run on the CI runner, then --update), unless
+      // the limit is its minimum.
+      const improved = !failure && !updating && entry.measured !== undefined && value < 0.5 * entry.measured &&
+        entry.limit > (entry.minimum ?? 0);
       results[name] = { value, limit: updating ? null : entry.limit ?? null, target: entry.target ?? null,
         status: failure ? "failed" : updating ? "recorded" : improved ? "ok, improved: lower the budget" : "ok", failure };
       if (failure) failures.push(failure);
