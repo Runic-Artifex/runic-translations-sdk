@@ -75,14 +75,20 @@ export function writeFixture(directory, messages, locales) {
     code: { namespace: "AotSizeProbe.Translations", className: "AppText", visibility: "internal" },
     baseLocale: locales[0], locales,
   }, null, 2)}\n`);
-  const calls = Array.from({ length: messages }, (_, index) => call(index));
+  // Each message is formatted from its own method of Calls, which is never inlined, so the probe's own code is one small
+  // method per message whatever ILC decides to inline. measure.mjs leaves Main and Calls.* out of the catalog's records:
+  // they are the application's code, not the catalog's. In one Main of 3,000 lines, ILC's inlining budget decided how
+  // much of each accessor counted as the catalog (D077.16).
+  const methods = Array.from({ length: messages }, (_, index) =>
+    `    [MethodImpl(MethodImplOptions.NoInlining)] internal static void M${index}(AppText text) => ${call(index)}`);
   writeFileSync(resolve(directory, "Program.cs"), [
-    "using AotSizeProbe.Translations;", "",
+    "using System.Runtime.CompilerServices;", "using AotSizeProbe.Translations;", "",
     // Registered in a translation context, as Runic applications register their catalogs (runic-sdk#1109).
     "var context = await Runic.Translations.TranslationContext.CreateBuilder().AddCatalog(AppTextCatalog.Registration)",
     `    .BuildAsync(Environment.GetEnvironmentVariable("PROBE_LOCALE") ?? "${locales[0]}");`,
     "var text = new AppText(context);",
-    ...calls,
+    ...Array.from({ length: messages }, (_, index) => `Calls.M${index}(text);`),
     "return 0;", "",
+    "static class Calls", "{", ...methods, "}", "",
   ].join("\n"));
 }
