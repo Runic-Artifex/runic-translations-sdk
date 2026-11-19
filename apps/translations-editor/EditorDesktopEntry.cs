@@ -172,7 +172,9 @@ internal sealed class EditorDesktopEntry
     {
         string apphost = Path.Combine(AppContext.BaseDirectory, "Runic.Translations.Editor");
         if (File.Exists(apphost)) return [apphost];
-        string assembly = typeof(EditorDesktopEntry).Assembly.Location;
+        // AppContext.BaseDirectory rather than Assembly.Location, which is empty in a NativeAOT executable.
+        string assembly = Path.Combine(AppContext.BaseDirectory, "Runic.Translations.Editor.dll");
+        if (!File.Exists(assembly)) assembly = string.Empty;
         string process = Environment.ProcessPath ?? throw new EditorDesktopEntryException("The editor's executable is unknown.");
         return string.IsNullOrEmpty(assembly) || Path.GetFileNameWithoutExtension(process) != "dotnet" ? [process] : [process, assembly];
     }

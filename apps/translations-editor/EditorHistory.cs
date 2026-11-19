@@ -135,14 +135,18 @@ internal sealed class EditorHistory
         public void SetRedoRevision(string? revision) => RedoRevision = revision;
     }
 
+    // The size of the entry's values as JSON, from the editor's source-generated contracts (the packages are NativeAOT
+    // executables without reflection-based serialization).
     private static int Estimate(params object?[] values)
     {
         try
         {
-            long bytes = JsonSerializer.SerializeToUtf8Bytes(values).LongLength;
+            long bytes = 1 + values.Length;
+            foreach (object? value in values)
+                bytes += value is null ? 4 : JsonSerializer.SerializeToUtf8Bytes(value, value.GetType(), EditorJsonContext.Default).LongLength;
             return bytes > int.MaxValue ? int.MaxValue : (int)bytes;
         }
-        catch (NotSupportedException)
+        catch (Exception exception) when (exception is NotSupportedException or InvalidOperationException)
         {
             return int.MaxValue;
         }

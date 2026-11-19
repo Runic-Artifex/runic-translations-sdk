@@ -58,6 +58,45 @@ public static partial class TranslationCompiler
         { SourceText = Source.Node.Message, ParameterDescriptions = ParameterDescriptionsV5(Source.Node.Properties), Properties = Source.Node.Properties };
     }
 
+    // The caller contract, whose hash generated code and packs carry. Written with Utf8JsonWriter in the order and form
+    // JsonSerializer wrote it over an anonymous type, so trimmed and NativeAOT hosts (the editor's packages) write the
+    // same bytes.
+    private static string CallerContractV5(string catalog, IReadOnlyList<Rmf2MessageContractV5> contracts, string markup)
+    {
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber("callerContractVersion", 1);
+            writer.WriteString("profile", Rmf2ProjectV5.Profile);
+            writer.WriteNumber("messageGrammarVersion", Rmf2ProjectV5.MessageGrammarVersion);
+            writer.WriteNumber("runtimeAbiVersion", Rmf2ProjectV5.RuntimeAbiVersion);
+            writer.WriteNumber("generatedNameVersion", Rmf2GeneratedNamesV1.Version);
+            writer.WriteString("catalog", catalog);
+            writer.WriteStartArray("messages");
+            foreach (var contract in contracts)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("key", contract.Key);
+                Rmf2ProjectMarkupV5.WriteStrings(writer, "path", contract.Path);
+                writer.WriteStartArray("inputs");
+                foreach (var input in contract.Inputs)
+                {
+                    writer.WriteStartObject();
+                    writer.WriteString("name", input.Name);
+                    writer.WriteString("type", input.Type);
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndArray();
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+            writer.WriteString("markup", markup);
+            writer.WriteEndObject();
+        }
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
     internal static Rmf2ProjectCompilation CompileRmf2ProjectV5(TranslationSource project,
         IEnumerable<TranslationSource> messages, TranslationCompilerOptions? options = null, CancellationToken cancellationToken = default) =>
         CompileRmf2ProjectV5(project, messages, options, false, cancellationToken);
@@ -427,20 +466,7 @@ public static partial class TranslationCompiler
         var usedContracts = new ReadOnlyDictionary<string, Rmf2MarkupContractV5>(new SortedDictionary<string, Rmf2MarkupContractV5>(markup.Contracts.Where(pair => usedNames.Contains(pair.Key)).ToDictionary(pair => pair.Key, pair => pair.Value), StringComparer.Ordinal));
         var canonicalNames = contracts.SelectMany(contract => contract.MarkupNames).ToHashSet(StringComparer.Ordinal);
         var callerMarkup = new ReadOnlyDictionary<string, Rmf2MarkupContractV5>(new SortedDictionary<string, Rmf2MarkupContractV5>(usedContracts.Where(pair => canonicalNames.Contains(pair.Key)).ToDictionary(pair => pair.Key, pair => pair.Value), StringComparer.Ordinal));
-        string callerContract = JsonSerializer.Serialize(new
-        {
-            callerContractVersion = 1,
-            profile = Rmf2ProjectV5.Profile, messageGrammarVersion = Rmf2ProjectV5.MessageGrammarVersion,
-            runtimeAbiVersion = Rmf2ProjectV5.RuntimeAbiVersion, generatedNameVersion = Rmf2GeneratedNamesV1.Version,
-            catalog = manifest.Id,
-            messages = contracts.Select(contract => new
-            {
-                key = contract.Key,
-                path = contract.Path,
-                inputs = contract.Inputs.Select(input => new { name = input.Name, type = input.Type }),
-            }),
-            markup = Rmf2ProjectMarkupV5.Export(callerMarkup, contracts),
-        });
+        string callerContract = CallerContractV5(manifest.Id, contracts, Rmf2ProjectMarkupV5.Export(callerMarkup, contracts));
         return Result(new(manifest.Id, manifest.CodeNamespace, manifest.ClassName, manifest.Visibility, manifest.DefaultLocale,
             manifest.UnsupportedLocale, manifest.MissingKey, contracts.AsReadOnly(), extraContracts.AsReadOnly(), linkedLocales.AsReadOnly(), usedContracts,
             Rmf2ProjectMarkupV5.Export(usedContracts, contracts.Concat(extraContracts).ToArray(), linkedLocales), HashV5(Encoding.UTF8.GetBytes(callerContract)),

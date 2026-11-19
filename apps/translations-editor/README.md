@@ -323,7 +323,7 @@ repository's locked nixpkgs. It does not require another repository's shell.
 
 The editor runs on the Runic SDK's **Runic Desktop** host. `edit` opens a native
 window: GTK 4 with WebKitGTK 6 on Linux, WebView2 on Windows and WKWebView on
-macOS, under the application ID `eu.runic-artifex.TranslationsEditor`. When the
+macOS, under the application ID `eu.runicartifex.TranslationsEditor`. When the
 embedded WebView cannot start, for example without WebKitGTK 6, the editor
 reports why on standard error and opens in an installed browser instead. Add
 `--browser` to open it in an installed browser (the first one found) from the
@@ -364,7 +364,7 @@ without a session bus or a FileChooser portal, the editor says so: enter the
 workspace directory instead.
 
 On Linux the window's icon comes from the desktop: on Wayland the compositor looks up
-the desktop entry named after the app ID, `eu.runic-artifex.TranslationsEditor`, and
+the desktop entry named after the app ID, `eu.runicartifex.TranslationsEditor`, and
 its icon. Until one is installed the window shows a generic icon. Install it for
 your user with
 
@@ -372,8 +372,8 @@ your user with
 runic-translations-editor desktop-entry install
 ```
 
-It writes `$XDG_DATA_HOME/applications/eu.runic-artifex.TranslationsEditor.desktop`
-and `$XDG_DATA_HOME/icons/hicolor/512x512/apps/eu.runic-artifex.TranslationsEditor.png`
+It writes `$XDG_DATA_HOME/applications/eu.runicartifex.TranslationsEditor.desktop`
+and `$XDG_DATA_HOME/icons/hicolor/512x512/apps/eu.runicartifex.TranslationsEditor.png`
 (`$XDG_DATA_HOME` is `~/.local/share` by default). The entry starts the editor that
 installed it, by its full path, so run the command again after moving the editor;
 from the menu it opens the packaged example, and a folder dropped on the launcher

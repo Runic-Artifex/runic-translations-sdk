@@ -258,18 +258,19 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
                     connected = RunicDesktopHost.GetSurface(window)?.ConnectionCount > 0;
                     closed = await window.CloseAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
                 }
-                var evidence = new
+                Console.WriteLine(EditorJsonText.Write(writer =>
                 {
-                    schema = "runic.translations.editor-native-shell/4",
-                    host = "desktop",
-                    presentation,
-                    backend = NativeBackend(),
-                    applicationId = ApplicationId,
-                    packagedUiPresent = true,
-                    bridgeConnected = connected,
-                    cleanup = closed.Drained ? "closed-disposed" : "closed-undrained",
-                };
-                Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(evidence));
+                    writer.WriteStartObject();
+                    writer.WriteString("schema", "runic.translations.editor-native-shell/4");
+                    writer.WriteString("host", "desktop");
+                    writer.WriteString("presentation", presentation);
+                    writer.WriteString("backend", NativeBackend());
+                    writer.WriteString("applicationId", ApplicationId);
+                    writer.WriteBoolean("packagedUiPresent", true);
+                    writer.WriteBoolean("bridgeConnected", connected);
+                    writer.WriteString("cleanup", closed.Drained ? "closed-disposed" : "closed-undrained");
+                    writer.WriteEndObject();
+                }));
                 return presentation == nameof(BrowserKind.Embedded) && connected && closed.Drained ? 0 : CommandExitCodes.Unavailable;
             },
             waitForConnection: true));
