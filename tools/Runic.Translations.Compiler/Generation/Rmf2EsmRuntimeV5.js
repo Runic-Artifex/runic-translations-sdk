@@ -1669,39 +1669,74 @@ export function decodeWireValue(value, type) {
 // Markup contract v3 (D077.16) is v2 without the message entries of the default shape, with the catalog's locales instead:
 // a message it does not list has no slots, is not structured, has inline content without skeletons, and each locale is its
 // own content locale. Version 2 lists every message and has no locales.
+// @runic-markup-contract-start
+// A v2 contract has no locales; a v3 one lists canonical tags in strictly ordinal order.
 function validContractLocales(contract) {
   if (contract.version === 2) return !Object.hasOwn(contract, "locales");
   return Array.isArray(contract.locales) && contract.locales.every((locale, index) => typeof locale === "string" && canonicalLocale(locale) === locale &&
     (index === 0 || contract.locales[index - 1] < locale));
 }
 
-// @runic-markup-contract-start
-function defaultContractEntry(locales) {
-  return { slots: {}, structured: false, contentLocales: Object.fromEntries(locales.map(locale => [locale, locale])), content: "inline", skeletons: [] };
+// One default entry per v3 contract, so a contract's locales are read once however many keys take the default.
+const defaultContractEntries = new WeakMap();
+function defaultContractEntry(contract) {
+  let entry = defaultContractEntries.get(contract);
+  if (!entry) {
+    entry = Object.freeze({ slots: Object.freeze({}), structured: false, contentLocales: Object.freeze(Object.fromEntries(contract.locales.map(locale => [locale, locale]))), content: "inline", skeletons: Object.freeze([]) });
+    defaultContractEntries.set(contract, entry);
+  }
+  return entry;
 }
 
 // The entry of a message of the catalog: the listed one, or in v3 the default one. Callers check that the key is the catalog's.
 function contractEntry(contract, key) {
   const messages = contract?.messages;
   if (isRecord(messages) && Object.hasOwn(messages, key)) return isRecord(messages[key]) ? messages[key] : undefined;
-  return contract?.version === 3 && Array.isArray(contract.locales) ? defaultContractEntry(contract.locales) : undefined;
+  return contract?.version === 3 && Array.isArray(contract.locales) ? defaultContractEntry(contract) : undefined;
 }
 
-// A contract in version 2, as the compiler writes it: a v3 contract with the default entry of each of the catalog's keys
-// it does not list, in ordinal key order.
-function expandContract(contract, keys) {
-  if (!isRecord(contract) || contract.version !== 3 || !Array.isArray(contract.locales) || !isRecord(contract.messages)) return contract;
-  const messages = {};
-  for (const key of [...new Set([...keys, ...Object.keys(contract.messages)])].sort((left, right) => left < right ? -1 : left > right ? 1 : 0))
-    messages[key] = Object.hasOwn(contract.messages, key) ? contract.messages[key] : defaultContractEntry(contract.locales);
-  return { version: 2, contracts: contract.contracts, messages };
+function isCompactContract(contract) {
+  return isRecord(contract) && contract.version === 3 && Array.isArray(contract.locales) && isRecord(contract.messages);
+}
+
+// A contract in version 2 as the compiler writes it, kept as its parts so that it is never written out whole: its JSON
+// without the messages, and each message's key and JSON in order. In a v3 contract, the catalog's keys it does not list
+// take the default entry (null here) and every key is in ordinal order, as JSON.stringify writes an object built that way.
+function writtenForm(contract, keys) {
+  if (isCompactContract(contract)) {
+    if (!validContractLocales(contract)) return null;
+    const listed = contract.messages, names = new Set(keys);
+    for (const key of Object.keys(listed)) names.add(key);
+    const sorted = [...names].sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
+    const order = Object.keys(Object.fromEntries(sorted.map(key => [key, 0])));
+    return { head: JSON.stringify({ version: 2, contracts: contract.contracts, messages: {} }),
+      entries: order.map(key => [key, Object.hasOwn(listed, key) ? JSON.stringify(listed[key]) : null]),
+      defaultEntry: JSON.stringify(defaultContractEntry(contract)) };
+  }
+  // Any other contract is its own version 2 form.
+  if (!isRecord(contract) || !isRecord(contract.messages)) return null;
+  const messages = contract.messages;
+  return { head: JSON.stringify({ ...contract, messages: {} }), entries: Object.keys(messages).map(key => [key, JSON.stringify(messages[key])]), defaultEntry: null };
 }
 
 // Two contracts of one catalog are the same in version 2 or 3: equal, or equal once each is written in version 2. A v3
-// catalog loads the v2 packs written for it and the other way round (.NET Rmf2MarkupContract.SameContract).
+// catalog loads the v2 packs written for it and the other way round (.NET Rmf2MarkupContract.SameContract). A pack's
+// contract is untrusted, so the version 2 form is compared entry by entry and never built: two v3 contracts must list the
+// same locales, and each default entry is written once.
 function sameMarkupContract(left, right, keys) {
-  if (JSON.stringify(left) === JSON.stringify(right)) return true;
-  return JSON.stringify(expandContract(left, keys)) === JSON.stringify(expandContract(right, keys));
+  try {
+    if (JSON.stringify(left) === JSON.stringify(right)) return true;
+    const leftCompact = isCompactContract(left), rightCompact = isCompactContract(right);
+    if (!leftCompact && !rightCompact) return false;
+    if (leftCompact && rightCompact && left.locales.length !== right.locales.length) return false;
+    const leftForm = writtenForm(left, keys), rightForm = writtenForm(right, keys);
+    if (leftForm === null || rightForm === null || leftForm.head !== rightForm.head || leftForm.entries.length !== rightForm.entries.length) return false;
+    for (let index = 0; index < leftForm.entries.length; index++) {
+      const [leftKey, leftEntry] = leftForm.entries[index], [rightKey, rightEntry] = rightForm.entries[index];
+      if (leftKey !== rightKey || (leftEntry ?? leftForm.defaultEntry) !== (rightEntry ?? rightForm.defaultEntry)) return false;
+    }
+    return true;
+  } catch { return false; }
 }
 // @runic-markup-contract-end
 
@@ -1714,9 +1749,12 @@ function validateEnvelope(value, tables) {
   if (value.artifactVersion !== 5) return "RTR0023/artifact-version-mismatch";
   if (value.messageGrammarVersion !== 5 || value.profile !== profile) return "RTR0023/message-grammar-version-mismatch";
   if (!isRecord(value.markupContract) || (value.markupContract.version !== 2 && value.markupContract.version !== 3)) return "RTR0023/markup-contract-version-mismatch";
-  if (!validContractLocales(value.markupContract)) return "RTR0023/malformed";
   if (value.catalog !== catalog) return "RTR0023/catalog-mismatch"; if (value.contractFingerprint !== contractFingerprint) return "RTR0023/contract-fingerprint-mismatch";
   if (typeof value.locale !== "string" || !localeSet.has(value.locale) || canonicalLocale(value.locale) !== value.locale) return "RTR0023/locale-mismatch";
+  // Two v3 contracts of one catalog list the same locales: compare the counts before reading the pack's.
+  if (value.markupContract.version === 3 && Array.isArray(value.markupContract.locales) && rmf2Contract.version === 3 && Array.isArray(rmf2Contract.locales) &&
+    value.markupContract.locales.length !== rmf2Contract.locales.length) return "RTR0023/argument-contract-mismatch";
+  if (!validContractLocales(value.markupContract)) return "RTR0023/malformed";
   if (!isRecord(value.messages)) return "RTR0023/malformed"; if (Object.keys(value.messages).length > limits.maximumMessages) return "RTR0023/limit-exceeded";
   if (!sameMarkupContract(value.markupContract, rmf2Contract, Object.keys(tables.messageContracts))) return "RTR0023/argument-contract-mismatch";
   return null;

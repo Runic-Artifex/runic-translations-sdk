@@ -282,8 +282,10 @@ internal sealed class Rmf2V1CorpusTests
     // data (GeneratedCatalogSupport.ReadDeflatedBinaryValues, InflateData) and requires ABI 5, in both digests (C# only).
     // Re-pinned for D077.16, markup contract v3: the C# of RMF2 ABI 5 and dynamic.js embed the contract without its
     // default-shaped entries, in both digests (C# and ESM).
-    private const string EncodedOutputDigest = "4d1c9a6206bc77c5ffd8afa06a0e7105af94aa3aa465b71ecb8ac802c5c5a38b";
-    private const string HiddenEncodedOutputDigest = "4d9dba0775447ea87d838bfe355f118878ee3252818faa7ca34b90f98d298cfa";
+    // Re-pinned for the bounded contract comparison: the ESM runtime compares markup contracts entry by entry and writes
+    // each v3 default entry once, in both digests (ESM only).
+    private const string EncodedOutputDigest = "9f216b8ab313bb9a1083ef77966d295ce9710dd0109c3dc88d55f4242b696fbc";
+    private const string HiddenEncodedOutputDigest = "aec717a3ceb6318b9134e559e414b286266b9ea46366e9d38a199a802815890c";
     private static readonly string[] CorpusSources = ["en.rmf2", "de.rmf2", "fr.rmf2"];
 
     [Test, DisplayName("RMF2 v1 corpus encoded C# and ESM outputs stay byte-identical and only hide members beside the readable surface")]

@@ -412,38 +412,133 @@ public sealed class Rmf2MarkupContract
     /// version 3 contract is written in version 2 with the default entry of every one of <paramref name="keys"/> (the
     /// catalog's messages) that it does not list.
     /// </summary>
+    /// <remarks>
+    /// A pack's contract is untrusted, so the version 2 form is never written out: its size is the catalog's keys times the
+    /// contract's locales. The comparison walks the keys once, writes each version 3 contract's default entry once, and
+    /// compares every other entry as the compiler would write it. Two version 3 contracts must list the same locales, so a
+    /// pack's locales are bounded by the trusted contract's before any of them is read. A version 3 contract's locales must
+    /// be canonical tags in ordinal order, as <see cref="Link(string)"/> requires.
+    /// </remarks>
     internal static bool SameContract(string left, string right, IEnumerable<string> keys)
     {
         if (string.Equals(left, right, StringComparison.Ordinal)) return true;
-        string[] all = keys.ToArray();
-        // A pack's contract is untrusted: one that cannot be expanded is not the same contract.
-        try { return string.Equals(Expanded(left, all), Expanded(right, all), StringComparison.Ordinal); }
-        catch (Exception exception) when (exception is JsonException or KeyNotFoundException or InvalidOperationException) { return false; }
+        // A pack's contract is untrusted: one that cannot be read is not the same contract.
+        try
+        {
+            using JsonDocument leftDocument = JsonDocument.Parse(left, new JsonDocumentOptions { MaxDepth = 32 });
+            using JsonDocument rightDocument = JsonDocument.Parse(right, new JsonDocumentOptions { MaxDepth = 32 });
+            JsonElement leftRoot = leftDocument.RootElement, rightRoot = rightDocument.RootElement;
+            bool leftCompact = IsCompact(leftRoot), rightCompact = IsCompact(rightRoot);
+            // Neither is version 3: each is its own version 2 form, and their texts differ.
+            if (!leftCompact && !rightCompact) return false;
+            if (leftCompact && rightCompact)
+            {
+                JsonElement leftLocales = leftRoot.GetProperty("locales"), rightLocales = rightRoot.GetProperty("locales");
+                if (leftLocales.GetArrayLength() != rightLocales.GetArrayLength()) return false;
+            }
+            var all = new SortedSet<string>(keys, StringComparer.Ordinal);
+            ExpandedForm? leftForm = leftCompact ? ExpandedForm.Compact(leftRoot, all) : ExpandedForm.Written(left, leftRoot);
+            ExpandedForm? rightForm = rightCompact ? ExpandedForm.Compact(rightRoot, all) : ExpandedForm.Written(right, rightRoot);
+            return leftForm is not null && rightForm is not null && leftForm.SameAs(rightForm);
+        }
+        catch (Exception exception) when (exception is JsonException or KeyNotFoundException or InvalidOperationException or FormatException) { return false; }
     }
 
-    // The version 2 form of a contract, as the compiler writes it; a version 2 contract as it is.
-    private static string Expanded(string contract, IReadOnlyList<string> keys)
+    private static bool IsCompact(JsonElement root) =>
+        root.ValueKind == JsonValueKind.Object && root.TryGetProperty("version", out JsonElement version) && version.TryGetInt32(out int number) && number == CompactVersion;
+
+    // The version 2 form of a contract as the compiler writes it, kept as its parts: the contracts and the ordered entries.
+    // A version 3 contract's unlisted entries share one default entry.
+    private sealed class ExpandedForm
     {
-        using JsonDocument document = JsonDocument.Parse(contract, new JsonDocumentOptions { MaxDepth = 32 });
-        JsonElement root = document.RootElement;
-        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("version", out JsonElement version) || !version.TryGetInt32(out int number) || number != CompactVersion)
-            return contract;
-        string[] locales = root.GetProperty("locales").EnumerateArray().Select(static item => item.GetString()!).ToArray();
-        JsonElement listed = root.GetProperty("messages");
-        var all = new SortedSet<string>(keys, StringComparer.Ordinal);
-        foreach (JsonProperty message in listed.EnumerateObject()) all.Add(message.Name);
-        var buffer = new System.Buffers.ArrayBufferWriter<byte>();
-        using (var writer = new Utf8JsonWriter(buffer))
+        private readonly byte[] _contracts;
+        private readonly List<(string Key, JsonElement? Entry)> _entries;
+        private readonly byte[]? _default;
+        private readonly string[]? _locales;
+
+        private ExpandedForm(byte[] contracts, List<(string Key, JsonElement? Entry)> entries, byte[]? defaultEntry, string[]? locales)
         {
-            writer.WriteStartObject();
-            writer.WriteNumber("version", Version);
-            writer.WritePropertyName("contracts");
-            root.GetProperty("contracts").WriteTo(writer);
-            writer.WriteStartObject("messages");
-            foreach (string key in all)
+            _contracts = contracts;
+            _entries = entries;
+            _default = defaultEntry;
+            _locales = locales;
+        }
+
+        // A version 3 contract: the catalog's keys and its listed ones in ordinal order, each listed entry or the default one.
+        internal static ExpandedForm? Compact(JsonElement root, SortedSet<string> keys)
+        {
+            JsonElement localesValue = root.GetProperty("locales");
+            var locales = new string[localesValue.GetArrayLength()];
+            int index = 0;
+            foreach (JsonElement locale in localesValue.EnumerateArray())
             {
-                writer.WritePropertyName(key);
-                if (listed.TryGetProperty(key, out JsonElement entry)) { entry.WriteTo(writer); continue; }
+                string tag = locale.GetString()!;
+                if (!LocaleTag.TryCanonicalize(tag, out string canonical) || canonical != tag || (index > 0 && string.CompareOrdinal(locales[index - 1], tag) >= 0))
+                    return null;
+                locales[index++] = tag;
+            }
+            JsonElement listed = root.GetProperty("messages");
+            // The last of repeated names, as JsonElement.TryGetProperty finds it.
+            var entries = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+            foreach (JsonProperty message in listed.EnumerateObject()) entries[message.Name] = message.Value;
+            var all = new SortedSet<string>(keys, StringComparer.Ordinal);
+            all.UnionWith(entries.Keys);
+            var ordered = new List<(string Key, JsonElement? Entry)>(all.Count);
+            foreach (string key in all) ordered.Add((key, entries.TryGetValue(key, out JsonElement entry) ? entry : null));
+            return new ExpandedForm(Write(root.GetProperty("contracts")), ordered, DefaultEntry(locales), locales);
+        }
+
+        // A contract that is not version 3 is its own version 2 form: it matches only the compiler's exact text, the version 2
+        // root with its members in order and nothing else.
+        internal static ExpandedForm? Written(string text, JsonElement root)
+        {
+            if (root.ValueKind != JsonValueKind.Object) return null;
+            var members = new List<JsonProperty>(3);
+            foreach (JsonProperty member in root.EnumerateObject())
+            {
+                if (members.Count == 3) return null;
+                members.Add(member);
+            }
+            if (members.Count != 3 || members[0].Name != "version" || members[1].Name != "contracts" || members[2].Name != "messages" ||
+                members[0].Value.GetRawText() != "2" || members[2].Value.ValueKind != JsonValueKind.Object)
+                return null;
+            // The compiler writes compact JSON; any other spelling never equalled an expanded contract.
+            if (!Write(root).AsSpan().SequenceEqual(System.Text.Encoding.UTF8.GetBytes(text))) return null;
+            var ordered = new List<(string Key, JsonElement? Entry)>();
+            foreach (JsonProperty message in members[2].Value.EnumerateObject()) ordered.Add((message.Name, message.Value));
+            return new ExpandedForm(Write(members[1].Value), ordered, null, null);
+        }
+
+        internal bool SameAs(ExpandedForm other)
+        {
+            if (_entries.Count != other._entries.Count || !_contracts.AsSpan().SequenceEqual(other._contracts)) return false;
+            // Two version 3 contracts give an unlisted key the same entry only with the same locales.
+            bool sameDefaults = _locales is not null && other._locales is not null && _locales.AsSpan().SequenceEqual(other._locales);
+            for (int index = 0; index < _entries.Count; index++)
+            {
+                (string key, JsonElement? entry) = _entries[index];
+                (string otherKey, JsonElement? otherEntry) = other._entries[index];
+                if (!string.Equals(key, otherKey, StringComparison.Ordinal)) return false;
+                if (entry is null && otherEntry is null) { if (!sameDefaults) return false; continue; }
+                byte[] mine = entry is { } value ? Write(value) : _default!;
+                byte[] theirs = otherEntry is { } otherValue ? Write(otherValue) : other._default!;
+                if (!mine.AsSpan().SequenceEqual(theirs)) return false;
+            }
+            return true;
+        }
+
+        private static byte[] Write(JsonElement element)
+        {
+            var buffer = new System.Buffers.ArrayBufferWriter<byte>();
+            using (var writer = new Utf8JsonWriter(buffer)) element.WriteTo(writer);
+            return buffer.WrittenSpan.ToArray();
+        }
+
+        private static byte[] DefaultEntry(string[] locales)
+        {
+            var buffer = new System.Buffers.ArrayBufferWriter<byte>();
+            using (var writer = new Utf8JsonWriter(buffer))
+            {
                 writer.WriteStartObject();
                 writer.WriteStartObject("slots");
                 writer.WriteEndObject();
@@ -456,10 +551,8 @@ public sealed class Rmf2MarkupContract
                 writer.WriteEndArray();
                 writer.WriteEndObject();
             }
-            writer.WriteEndObject();
-            writer.WriteEndObject();
+            return buffer.WrittenSpan.ToArray();
         }
-        return System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 
     internal sealed record Message(Dictionary<string, string> Slots, Dictionary<string, (int Min, int Max)> Bounds,

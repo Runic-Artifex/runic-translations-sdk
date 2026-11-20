@@ -883,6 +883,16 @@ contract has one form. Version 2 has no `locales`.
   in ESM), in ordinal key order and the member order above. A catalog with a
   version 3 contract therefore loads the version 2 packs written for its release
   and the other way round, as exact packs and overlays.
+- A pack's contract is untrusted, so runtimes compare it entry by entry and never
+  write out its version 2 form, whose size is the catalog's messages times the
+  contract's locales: they write a version 3 contract's default entry once, and
+  compare each key's listed or default entry in turn. A version 3 contract whose
+  `locales` are not canonical tags in strictly ordinal order is not the same as
+  any other contract. Two version 3 contracts are the same only when they list
+  the same locales; runtimes compare the counts before they read the tags, so a
+  pack's `locales` are bounded by the catalog's. A pack whose contract is not the
+  same is refused (`ArgumentContractMismatch`, `RTR0023/argument-contract-mismatch`),
+  and any other failure while reading a pack is a typed pack failure as well.
 - `specs/translations/corpus/rmf2-markup-contract-v3.json` is the shared oracle:
   each v2 compacts to its v3 exactly, and both runtimes give each comparison its
   verdict.

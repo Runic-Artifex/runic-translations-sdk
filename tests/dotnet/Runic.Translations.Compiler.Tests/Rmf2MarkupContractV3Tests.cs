@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -67,9 +69,10 @@ internal sealed class Rmf2MarkupContractV3Tests
         {
             string runtime = File.ReadAllText(RepositoryPaths.Resolve("tools", "Runic.Translations.Compiler", "Generation", "Rmf2EsmRuntimeV5.js"));
             int start = runtime.IndexOf("// @runic-markup-contract-start", StringComparison.Ordinal), end = runtime.IndexOf("// @runic-markup-contract-end", StringComparison.Ordinal);
-            Assert.True(start > 0 && end > start, "the runtime's markup contract rules");
+            int canonical = runtime.IndexOf("\nfunction canonicalLocale(", StringComparison.Ordinal), canonicalEnd = runtime.IndexOf("\n}\n", canonical, StringComparison.Ordinal);
+            Assert.True(start > 0 && end > start && canonical > 0 && canonicalEnd > canonical, "the runtime's markup contract rules");
             File.WriteAllText(Path.Combine(directory, "rules.mjs"), "function isRecord(value) { return typeof value === \"object\" && value !== null && !Array.isArray(value); }\n" +
-                runtime[start..end] + "\nexport { sameMarkupContract, contractEntry };\n", new UTF8Encoding(false));
+                runtime[canonical..(canonicalEnd + 3)] + runtime[start..end] + "\nexport { sameMarkupContract, contractEntry };\n", new UTF8Encoding(false));
             File.Copy(RepositoryPaths.Resolve("specs", "translations", "corpus", "rmf2-markup-contract-v3.json"), Path.Combine(directory, "corpus.json"));
             string script = Path.Combine(directory, "compare.mjs");
             File.WriteAllText(script, """
@@ -93,17 +96,19 @@ internal sealed class Rmf2MarkupContractV3Tests
     }
 
     // en, de and fr: one plain message (the default shape), one with markup, one de takes from en, and an extra of fr.
-    private static Rmf2ProjectV5 Project()
+    // plain adds that many more default-shaped messages to every locale.
+    private static Rmf2ProjectV5 Project(int plain = 0)
     {
+        string more = string.Concat(Enumerable.Range(0, plain).Select(static index => "plain" + index + " = Plain " + index + "\n"));
         const string project = """
             {"schemaVersion":1,"catalog":"contracts","code":{"namespace":"Example","className":"Text"},"baseLocale":"en","locales":["en","de","fr"],
              "validation":{"translationCompleteness":"allow","extraLocaleKeys":"allow"}}
             """;
         Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(new TranslationSource("translations/runic.json", Encoding.UTF8.GetBytes(project)),
         [
-            new("translations/en.rmf2", Encoding.UTF8.GetBytes("plain = Plain\nhelp = Read the {#strong}guide{/strong}.\npartial = Only English and French\n")),
-            new("translations/de.rmf2", Encoding.UTF8.GetBytes("plain = Schlicht\nhelp = Lies die {#strong}Anleitung{/strong}.\n")),
-            new("translations/fr.rmf2", Encoding.UTF8.GetBytes("plain = Simple\nhelp = Lisez le {#strong}guide{/strong}.\npartial = Seulement anglais et français\nextra = Only French\n")),
+            new("translations/en.rmf2", Encoding.UTF8.GetBytes("plain = Plain\nhelp = Read the {#strong}guide{/strong}.\npartial = Only English and French\n" + more)),
+            new("translations/de.rmf2", Encoding.UTF8.GetBytes("plain = Schlicht\nhelp = Lies die {#strong}Anleitung{/strong}.\n" + more)),
+            new("translations/fr.rmf2", Encoding.UTF8.GetBytes("plain = Simple\nhelp = Lisez le {#strong}guide{/strong}.\npartial = Seulement anglais et français\nextra = Only French\n" + more)),
         ]);
         Assert.True(result.Success, string.Join("; ", result.Diagnostics.Select(static item => item.Id + " " + item.Message)));
         Rmf2GeneratedLocaleBinaryTests.AssertBinaryMatchesJson(result.Project!);
@@ -216,4 +221,226 @@ internal sealed class Rmf2MarkupContractV3Tests
         }
         finally { Directory.Delete(directory, true); }
     }
+    // Pack contracts whose locales would make the version 2 form huge: the same tag a million times (not ordered), and
+    // 456,976 distinct canonical tags in ordinal order (aa-AA … zz-ZZ), each within the 8 MiB pack limit.
+    private static IEnumerable<(string Name, string Locales)> HostileLocales()
+    {
+        yield return ("repeated", "[" + string.Join(",", Enumerable.Repeat("\"de\"", 1_000_000)) + "]");
+        var tags = new List<string>(26 * 26 * 26 * 26);
+        for (char a = 'a'; a <= 'z'; a++) for (char b = 'a'; b <= 'z'; b++) for (char c = 'A'; c <= 'Z'; c++) for (char d = 'A'; d <= 'Z'; d++)
+            tags.Add("\"" + a + b + "-" + c + d + "\"");
+        yield return ("distinct", "[" + string.Join(",", tags) + "]");
+    }
+
+    private static byte[] WithLocales(byte[] pack, string locales)
+    {
+        string text = Encoding.UTF8.GetString(pack);
+        const string Locales = "\"locales\":[\"de\",\"en\",\"fr\"]";
+        Assert.True(text.Contains(Locales, StringComparison.Ordinal), "the pack's v3 locales");
+        return Encoding.UTF8.GetBytes(text.Replace(Locales, "\"locales\":" + locales, StringComparison.Ordinal));
+    }
+
+    // Loading must end in a TranslationPackException or a result, in bounded time and memory.
+    private static TranslationPackException? Bounded(string label, Action load, bool rejects)
+    {
+        long allocated = GC.GetAllocatedBytesForCurrentThread(), started = Stopwatch.GetTimestamp();
+        TranslationPackException? refused = null;
+        try
+        {
+            load();
+            Assert.True(!rejects, label + ": accepted");
+        }
+        catch (TranslationPackException exception)
+        {
+            Assert.True(rejects, label + ": refused with " + exception.Reason + ": " + exception.Message);
+            refused = exception;
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidOperationException(label + " failed with " + exception.GetType().Name + ", not TranslationPackException: " + exception, exception);
+        }
+        TimeSpan elapsed = Stopwatch.GetElapsedTime(started);
+        long used = GC.GetAllocatedBytesForCurrentThread() - allocated;
+        Assert.True(elapsed < TimeSpan.FromSeconds(10), label + " took " + elapsed + ".");
+        Assert.True(used < 256L * 1024 * 1024, label + " allocated " + used + " bytes.");
+        return refused;
+    }
+
+    [Test, DisplayName("a pack contract with a huge locales array is refused by v3 and v2 catalogs and as an overlay, in bounded time and memory")]
+    public void HostileLocalesAreBounded()
+    {
+        // 200 default-shaped messages: written out in version 2, each would repeat the pack's whole locales array.
+        Rmf2ProjectV5 project = Project(plain: 200);
+        byte[] pack = Rmf2LocaleArtifactV5.Render(project, "de").GetUtf8Bytes(), overlay = Rmf2LocaleArtifactV5.Render(project, "fr").GetUtf8Bytes();
+        TranslationPackContract generated = Rmf2V1CorpusTests.PackContract(project, "de");
+        foreach ((string name, string locales) in HostileLocales())
+        {
+            byte[] hostile = WithLocales(pack, locales);
+            Assert.True(hostile.Length < 8 * 1024 * 1024, name + ": " + hostile.Length + " bytes");
+            foreach (bool compactCatalog in new[] { true, false })
+            {
+                TranslationPackContract contract = Generated.GeneratedCatalogSupport.CreatePackContract(generated.Catalog, generated.Locale, generated.ContractFingerprint,
+                    generated.Messages, compactCatalog ? project.CompactMarkupContract : project.MarkupContract);
+                string label = name + " locales, catalog v" + (compactCatalog ? 3 : 2);
+                TranslationPackException? refused = Bounded(label, () => TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(hostile), contract).AsTask().GetAwaiter().GetResult(), rejects: true);
+                Assert.Equal(TranslationPackFailureReason.ArgumentContractMismatch, refused!.Reason, label + ": reason");
+            }
+            // An overlay is checked key by key against its own contract: the repeated tags are malformed, and the distinct
+            // ones leave out fr, so an unlisted message has no content locale for it.
+            Bounded(name + " locales, overlay", () => TranslationPackV5Loader.ParseOverlay(WithLocales(overlay, locales), "contracts", "fr", new TranslationPackLimits(), default), rejects: true);
+        }
+    }
+
+    // Malformed v3 contracts in a pack: every one is refused with a TranslationPackException, never another exception.
+    private static IEnumerable<(string Name, string From, string To)> MalformedContracts() =>
+    [
+        ("locales not an array", "\"locales\":[\"de\",\"en\",\"fr\"]", "\"locales\":{\"de\":1}"),
+        ("locales of numbers", "\"locales\":[\"de\",\"en\",\"fr\"]", "\"locales\":[1,2,3]"),
+        ("locales null", "\"locales\":[\"de\",\"en\",\"fr\"]", "\"locales\":null"),
+        ("unordered locales", "\"locales\":[\"de\",\"en\",\"fr\"]", "\"locales\":[\"en\",\"de\",\"fr\"]"),
+        ("repeated locale", "\"locales\":[\"de\",\"en\",\"fr\"]", "\"locales\":[\"de\",\"de\",\"en\"]"),
+        ("non-canonical locale", "\"locales\":[\"de\",\"en\",\"fr\"]", "\"locales\":[\"DE\",\"en\",\"fr\"]"),
+        ("fewer locales", "\"locales\":[\"de\",\"en\",\"fr\"]", "\"locales\":[\"de\",\"en\"]"),
+        ("more locales", "\"locales\":[\"de\",\"en\",\"fr\"]", "\"locales\":[\"de\",\"en\",\"fr\",\"it\"]"),
+        ("no locales", ",\"locales\":[\"de\",\"en\",\"fr\"]", ""),
+        ("messages an array", "\"messages\":{\"extra\"", "\"messages\":[],\"x\":{\"extra\""),
+        ("version as text", "\"version\":3", "\"version\":\"3\""),
+        ("contracts null", "\"contracts\":{", "\"contracts\":null,\"y\":{"),
+    ];
+
+    [Test, DisplayName(".NET refuses malformed v3 pack contracts with a TranslationPackException")]
+    public void DotNetRefusesMalformedContracts()
+    {
+        Rmf2ProjectV5 project = Project();
+        string pack = Rmf2LocaleArtifactV5.Render(project, "de").Text;
+        TranslationPackContract generated = Rmf2V1CorpusTests.PackContract(project, "de");
+        TranslationPackContract contract = Generated.GeneratedCatalogSupport.CreatePackContract(generated.Catalog, generated.Locale, generated.ContractFingerprint,
+            generated.Messages, project.CompactMarkupContract);
+        foreach ((string name, string from, string to) in MalformedContracts())
+        {
+            Assert.True(pack.Contains(from, StringComparison.Ordinal), name + ": the pack contains " + from);
+            byte[] malformed = Encoding.UTF8.GetBytes(ReplaceFirst(pack, from, to));
+            Bounded(name, () => TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(malformed), contract).AsTask().GetAwaiter().GetResult(), rejects: true);
+        }
+    }
+
+    private static string ReplaceFirst(string text, string from, string to)
+    {
+        int at = text.IndexOf(from, StringComparison.Ordinal);
+        return text[..at] + to + text[(at + from.Length)..];
+    }
+
+    [Test, DisplayName("the contract comparison never throws on truncated, flipped, spliced or inflated contracts, in bounded time")]
+    public void FuzzedContractsCompareClosed()
+    {
+        Rmf2ProjectV5 project = Project();
+        string trusted = project.CompactMarkupContract, v2 = project.MarkupContract;
+        string[] keys = [.. project.CanonicalMessages.Select(static item => item.Key)];
+        byte[][] seeds = [Encoding.UTF8.GetBytes(trusted), Encoding.UTF8.GetBytes(v2)];
+        var random = new Random(0x0DE5EC81);
+        int same = 0, different = 0;
+        long slowest = 0;
+        for (int round = 0; round < 4000; round++)
+        {
+            byte[] mutant = MutateContract(seeds[random.Next(seeds.Length)], random);
+            string text = Encoding.UTF8.GetString(mutant);
+            long started = Stopwatch.GetTimestamp();
+            bool verdict;
+            try { verdict = Rmf2MarkupContract.SameContract(text, round % 2 == 0 ? trusted : v2, keys); }
+            catch (Exception exception) { throw new InvalidOperationException("Round " + round + " threw " + exception.GetType().Name + ": " + exception, exception); }
+            slowest = Math.Max(slowest, Stopwatch.GetTimestamp() - started);
+            if (verdict) same++; else different++;
+        }
+        Assert.True(same > 0 && different > 2000, "The mutations did not cover both outcomes: " + same + " same, " + different + " different.");
+        Assert.True(Stopwatch.GetElapsedTime(0, slowest) < TimeSpan.FromSeconds(2), "A single comparison took " + Stopwatch.GetElapsedTime(0, slowest) + ".");
+    }
+
+    private static byte[] MutateContract(byte[] seed, Random random)
+    {
+        byte[] data = (byte[])seed.Clone();
+        switch (random.Next(7))
+        {
+            case 0: return data[..random.Next(data.Length)];                                            // truncation
+            case 1:                                                                                     // bit flips
+                for (int flips = 1 + random.Next(4); flips > 0; flips--) data[random.Next(data.Length)] ^= (byte)(1 << random.Next(8));
+                return data;
+            case 2:                                                                                     // printable bytes
+                for (int index = random.Next(data.Length), end = Math.Min(data.Length, index + 1 + random.Next(8)); index < end; index++) data[index] = (byte)random.Next(32, 127);
+                return data;
+            case 3:                                                                                     // a removed range
+            {
+                int at = random.Next(data.Length), length = 1 + random.Next(Math.Min(16, data.Length - at));
+                return [.. data[..at], .. data[(at + length)..]];
+            }
+            case 4:                                                                                     // a duplicated range
+            {
+                int at = random.Next(data.Length), length = 1 + random.Next(Math.Min(64, data.Length - at));
+                return [.. data[..(at + length)], .. data[at..(at + length)], .. data[(at + length)..]];
+            }
+            case 5:                                                                                     // inflated locales
+            {
+                string text = Encoding.UTF8.GetString(data);
+                int at = text.IndexOf("\"locales\":[", StringComparison.Ordinal);
+                if (at < 0) return data;
+                at += "\"locales\":[".Length;
+                string tag = random.Next(2) == 0 ? "\"de\"," : "\"zz-ZZ\",";
+                return Encoding.UTF8.GetBytes(text[..at] + string.Concat(Enumerable.Repeat(tag, 1 + random.Next(200_000))) + text[at..]);
+            }
+            default: return data;                                                                       // unchanged
+        }
+    }
+
+    [Test, NotInParallel, DisplayName("ESM refuses hostile and malformed v3 pack contracts and hostile overlays, in bounded time and without throwing")]
+    public void EsmRefusesHostileContracts()
+    {
+        Rmf2ProjectV5 project = Project(plain: 200);
+        string directory = Rmf2EsmV5Tests.Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(project));
+        try
+        {
+            byte[] pack = Rmf2LocaleArtifactV5.Render(project, "de").GetUtf8Bytes(), overlay = Rmf2LocaleArtifactV5.Render(project, "fr").GetUtf8Bytes();
+            var cases = new List<string>();
+            foreach ((string name, string locales) in HostileLocales())
+            {
+                File.WriteAllBytes(Path.Combine(directory, name + ".json"), WithLocales(pack, locales));
+                File.WriteAllBytes(Path.Combine(directory, name + "-overlay.json"), WithLocales(overlay, locales));
+                cases.Add(name);
+            }
+            string text = Encoding.UTF8.GetString(pack);
+            int index = 0;
+            foreach ((string name, string from, string to) in MalformedContracts())
+            {
+                File.WriteAllText(Path.Combine(directory, "malformed-" + index + ".json"), ReplaceFirst(text, from, to), new UTF8Encoding(false));
+                index++;
+            }
+            string script = Path.Combine(directory, "hostile.mjs");
+            File.WriteAllText(script, "const hostile = " + JsonSerializer.Serialize(cases) + ", malformed = " + index + ";\n" + """
+                import { readFile } from "node:fs/promises";
+                import { decodeLocaleArtifact, installOverlay } from "./contracts.esm-v5/dynamic.js";
+                const read = async name => JSON.parse(await readFile(new URL(name, import.meta.url), "utf8"));
+                const failures = [];
+                const timed = (label, run) => {
+                  const started = performance.now();
+                  try { return run(); } catch (error) { failures.push(label + " threw " + error); return undefined; }
+                  finally { const elapsed = performance.now() - started; if (elapsed > 10000) failures.push(label + " took " + Math.round(elapsed) + " ms"); }
+                };
+                for (const name of hostile) {
+                  const artifact = await read(name + ".json");
+                  const decoded = timed(name, () => decodeLocaleArtifact(artifact));
+                  if (decoded && (decoded.ok || decoded.reason !== "RTR0023/argument-contract-mismatch")) failures.push(name + ": " + (decoded.ok ? "accepted" : decoded.reason));
+                  const overlay = await read(name + "-overlay.json");
+                  const installed = timed(name + " overlay", () => installOverlay(overlay));
+                  if (installed?.ok) { installed.value.remove(); failures.push(name + " overlay: accepted"); }
+                }
+                for (let index = 0; index < malformed; index++) {
+                  const artifact = await read("malformed-" + index + ".json");
+                  const decoded = timed("malformed " + index, () => decodeLocaleArtifact(artifact));
+                  if (decoded?.ok) failures.push("malformed " + index + ": accepted");
+                }
+                if (failures.length) throw new Error(failures.join("\n"));
+                """, new UTF8Encoding(false));
+            foreach (string host in Rmf2DatePercentConformanceTests.EsmHosts()) Rmf2EsmV5Tests.Run(host, [script], directory);
+        }
+        finally { Directory.Delete(directory, true); }
+    }
 }
+
