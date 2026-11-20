@@ -84,6 +84,10 @@ internal static class TranslationPackV5Loader
         catch (DecoderFallbackException) { throw Error("The external pack contains invalid UTF-8 text."); }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or KeyNotFoundException)
         { throw Error("The external pack contains an invalid normalized v5 AST.", TranslationPackFailureReason.MalformedPattern); }
+        // Pack data is untrusted: whatever else it makes fail is still a failed pack, so the caller's fallback runs. Only
+        // cancellation stays itself.
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        { throw Error("The external pack could not be read."); }
     }
 
     // An overlay pack is a locale artifact v5 checked key by key against the library it overlays, not against a whole
@@ -155,6 +159,10 @@ internal static class TranslationPackV5Loader
         catch (DecoderFallbackException) { throw Error("The overlay pack contains invalid UTF-8 text."); }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or KeyNotFoundException)
         { throw Error("The overlay pack contains an invalid normalized v5 AST.", TranslationPackFailureReason.MalformedPattern); }
+        // Pack data is untrusted: whatever else it makes fail is still a failed pack, so the caller's fallback runs. Only
+        // cancellation stays itself.
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        { throw Error("The overlay pack could not be read."); }
     }
 
     // Generated catalogs embed each locale's direct values as [[id, {"contentLocale", "ast"}], ...] and read them when the
