@@ -20,7 +20,9 @@ same file, so merging one does not make the others conflict and run CI again. Th
 release pull request assembles the fragments into `eng/release/notes/<version>.md`.
 `ci-artifact.mjs release` passes that file to `gh release create --notes-file`, and
 gh puts it above the list of merged pull requests that `--generate-notes` adds.
-Without a notes file the release has only the generated list.
+Without a notes file the release has only the generated list. The list starts at the
+previous SDK tag, the highest `v<version>` tag below the new one
+(`--notes-start-tag`), never at an editor release's `editor-v<version>` tag (#278).
 
 One directory per section, one file per entry:
 
