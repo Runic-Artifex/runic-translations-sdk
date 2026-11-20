@@ -70,7 +70,10 @@ test("editor release tags and SDK tags start different workflows", () => {
   const editor = workflow("release-editor.yml");
   expect(editor).toMatch(/\n {2}push:\n {4}tags: \["editor-v\*"\]\n/);
   expect(editor).not.toMatch(/\n {2}push:\n {4}branches/);
-  expect(workflow("ci.yml")).toMatch(/\n {2}push:\n(?: {4}#.*\n)* {4}branches: \["\*\*"\]\n {4}tags-ignore: \["editor-v\*"\]\n/);
+  // CI's push runs are main's commits only, so no tag push, editor-v or SDK, starts it.
+  const ci = workflow("ci.yml");
+  expect(ci).toMatch(/\n {2}push:\n(?: {4}#.*\n)* {4}branches: \[main\]\n {2}\S/);
+  expect(ci).not.toMatch(/\n {4}tags:/);
   // Publish preview, the SDK's release, runs only when dispatched.
   expect(workflow("publish-preview.yml")).toMatch(/\non:\n {2}workflow_dispatch:\n/);
   expect(workflow("publish-preview.yml")).not.toMatch(/\n {2}push:/);
