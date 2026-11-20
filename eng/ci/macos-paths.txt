@@ -1,0 +1,52 @@
+# The paths CI's macOS jobs exercise (eng/ci/macos-changes.sh). A pull request that changes none of them skips
+# `Localized formatting / macOS` and `Editor / native window / osx-arm64`; pushes to main, the nightly run and manual
+# runs always run them. `*` also matches `/`; a line starting with `!` excludes, and exclusions win.
+
+# Documentation never changes what the jobs run.
+!*.md
+
+# The workflow, its local actions and the CI scripts, including this list.
+.github/workflows/ci.yml
+.github/actions/*
+eng/ci/*
+
+# Toolchain and dependency pins: .NET SDK, central package versions (Runic Desktop among them), the Command Line
+# release of the train, the NuGet sources and every project's NuGet lock file.
+global.json
+Directory.Build.props
+Directory.Packages.props
+NuGet.config
+eng/Versions.props
+*packages.lock.json
+
+# Localized formatting / macOS (eng/ci/localized-formatting.sh): .NET formatting on Apple's ICU and the generated ESM
+# runtime in Bun and Node, against the pinned CLDR data and the conformance corpora.
+packages/dotnet/Runic.Translations/Formatting/*
+tools/Runic.Translations.Compiler/Generation/*
+tools/Runic.Translations.Compiler/GeneratedFormatData.bin
+tools/Runic.Translations.Compiler/Rmf2FormatDataV1.cs
+specs/translations/corpus/*
+tests/dotnet/Runic.Translations.Compiler.Tests/Runic.Translations.Compiler.Tests.csproj
+tests/dotnet/Runic.Translations.Compiler.Tests/Rmf2DatePercentConformanceTests.cs
+tests/dotnet/Runic.Translations.Compiler.Tests/Rmf2EsmLocalizedFormattingTests.cs
+tests/dotnet/Runic.Translations.Compiler.Tests/LocalizedFormatComparisonTests.cs
+tests/dotnet/Runic.Translations.Compiler.Tests/Rmf2CurrencyUnitConformanceTests.cs
+tests/dotnet/Runic.Translations.Compiler.Tests/CurrencyUnitComparisonTests.cs
+tests/dotnet/Runic.Translations.Runtime.Tests/Runic.Translations.Runtime.Tests.csproj
+tests/dotnet/Runic.Translations.Runtime.Tests/LocalizedFormattingTests.cs
+
+# Editor / native window / osx-arm64: the editor's native host published for osx-arm64 and opened in WKWebView, and the
+# publish and version commands. The frontend and the workspace services are platform-neutral; Linux opens the same
+# page in WebKitGTK (editor-e2e).
+apps/translations-editor/Runic.Translations.Editor.csproj
+apps/translations-editor/Directory.Build.props
+apps/translations-editor/Program.cs
+apps/translations-editor/EditorCommandModule.cs
+apps/translations-editor/EditorDesktopEntry.cs
+apps/translations-editor/EditorDiagnostics.cs
+apps/translations-editor/EditorLocalStateStore.cs
+apps/translations-editor/EditorWindow.cs
+apps/translations-editor/EditorWindowPlacements.cs
+apps/translations-editor/EditorWorkspacePicker.cs
+eng/run.mjs
+eng/release/editor-release.mjs
