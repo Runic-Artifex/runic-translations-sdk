@@ -4,11 +4,11 @@ Use the locked development environment through `direnv exec . <command>` or `nix
 
 ## Checks
 
-Pull requests must pass the `verify` job in [CI](.github/workflows/ci.yml), which requires every other CI job to succeed. Run the matching command locally before pushing:
+Pull requests must pass the `verify` job in [CI](.github/workflows/ci.yml), which requires every other CI job to succeed; the macOS jobs may instead be skipped when a pull request changes none of their paths ([CI triggers and macOS jobs](#ci-triggers-and-macos-jobs)). Run the matching command locally before pushing:
 
 | CI job | Local command |
 | --- | --- |
-| Source checks | `bun eng/generate-cldr.mjs --check`, `bun eng/render-capabilities.mjs --check`, `bun test --timeout 180000 eng/ci/apt-install.test.mjs` (Linux; see [Ubuntu packages in CI](#ubuntu-packages-in-ci)), and `actionlint` (available in the runic-sdk development shell) |
+| Source checks | `bun eng/generate-cldr.mjs --check`, `bun eng/render-capabilities.mjs --check`, `bun test --timeout 180000 eng/ci/apt-install.test.mjs` (Linux; see [Ubuntu packages in CI](#ubuntu-packages-in-ci)), `bun test eng/ci/macos-changes.test.mjs`, and `actionlint` (available in the runic-sdk development shell) |
 | Build and test | `bun run test` (heavy; prefer the focused commands in the README while iterating), then `bun examples/bun/operation-history/verify.ts` |
 | Vite in-place message updates / Chromium | `bun run --bun build` in `packages/web/vite-plugin-runic-translations` and in `packages/web/translations-svelte`, then `bun run --bun test:hmr` in `packages/web/translations-svelte` (builds the CLI; set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to a Chromium, such as the `editor` dev shell's) |
 | RMF2 NativeAOT / linux-x64 | `bun eng/run.mjs native-aot` (NativeAOT publishes of the RMF2 suites and examples, then the size budgets: `bun tests/aot-size/measure.mjs`, see [tests/aot-size](tests/aot-size/README.md)) |
@@ -36,6 +36,23 @@ same configuration first. For locally packed Runtime and Build candidates, add
 `--test-parameter xaml-package-feed=<feed> --test-parameter
 xaml-package-version=<version>` instead; this exercises the packaged analyzer
 without project references.
+
+## CI triggers and macOS jobs
+
+CI runs on pull requests, on pushes to `main`, nightly (03:17 UTC) and when dispatched. A pull request branch runs only
+through its pull request, not a second time as a branch push, and a newer push to it cancels the running CI. Publish
+preview takes a release's packages from the push run on `main` of the version commit, and the runic-sdk train from a
+green run on `main`; both always include every job.
+
+macOS runners are shared with runic-sdk, so the macOS jobs (`Localized formatting / macOS` and
+`Editor / native window / osx-arm64`) run on pushes to `main`, nightly and dispatched runs, and on a pull request only
+when it changes a path in [`eng/ci/macos-paths.txt`](eng/ci/macos-paths.txt): the formatting runtime, the generated ESM
+runtime, the CLDR data and conformance corpora and their tests, the editor's native host, the workflow and CI scripts,
+and the toolchain and dependency pins, including the NuGet lock files. The `Platform paths` job decides this with
+`eng/ci/macos-changes.sh` against the pull request's base; otherwise the two jobs report as skipped and `verify` accepts
+that. Check a branch locally with `bash eng/ci/macos-changes.sh "$(git merge-base origin/main HEAD)"`. To run the macOS jobs for a pull request
+that does not need them, dispatch CI on its branch (`gh workflow run ci.yml --ref <branch>`). Add a path to the list
+when a macOS job starts to exercise it.
 
 ## Ubuntu packages in CI
 
