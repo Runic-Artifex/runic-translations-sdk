@@ -98,7 +98,7 @@ jobs:
       # verify-packages serves the SvelteKit quick start with adapter-node.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.22.1
+          node-version: 24.22.3
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.4
@@ -136,7 +136,7 @@ jobs:
           path: artifacts/test-results
           if-no-files-found: ignore
   node-26:
-    # engines allows Node 24 and 26; the other jobs run Node 24.22.1, this one the npm package tests on Node 26.
+    # engines allows Node 24 and 26; the other jobs run Node 24.22.3, this one the npm package tests on Node 26.
     name: npm packages / Node 26
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -167,7 +167,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.22.1
+          node-version: 24.22.3
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.4
@@ -196,7 +196,7 @@ jobs:
           global-json-file: global.json
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.22.1
+          node-version: 24.22.3
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.4
@@ -225,7 +225,7 @@ jobs:
           global-json-file: global.json
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.22.1
+          node-version: 24.22.3
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.4
@@ -317,7 +317,7 @@ jobs:
           global-json-file: global.json
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.22.1
+          node-version: 24.22.3
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.4
@@ -349,7 +349,7 @@ jobs:
           global-json-file: global.json
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.22.1
+          node-version: 24.22.3
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.4
