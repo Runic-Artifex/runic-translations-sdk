@@ -1,1 +1,0 @@
-- An MF2 expression that cannot be read, such as one left behind by an unbalanced brace in a message, reports one error and the compiler continues after it, instead of adding several errors for each remaining character of the expression. A stray `{$oops` in one plural variant now gives two errors instead of 14.
