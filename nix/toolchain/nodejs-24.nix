@@ -1,6 +1,6 @@
 # Node.js from the official nodejs.org binary archives, for the development shell while nixpkgs' nodejs_24 is older
 # than `.node-version`. The hashes are the archives' SHA-256 values from
-# https://nodejs.org/dist/v24.22.1/SHASUMS256.txt (in SRI form).
+# https://nodejs.org/dist/v24.22.3/SHASUMS256.txt (in SRI form).
 {
   lib,
   stdenv,
@@ -9,15 +9,15 @@
 }:
 
 let
-  version = "24.22.1";
+  version = "24.22.3";
   archives = {
     x86_64-linux = {
       platform = "linux-x64";
-      hash = "sha256-bBcqmrZxj3uAH7WnvUhq8u5eMnWAhqBLhPzOKqdwleY=";
+      hash = "sha256-TysXWm1TpcYXqA26JnYjigaIzvKMbaTro1x9hE5m/Ps=";
     };
     aarch64-linux = {
       platform = "linux-arm64";
-      hash = "sha256-26v3ocv5R+YFn/rSwnuABB25feoeVTtir97n8T/KM24=";
+      hash = "sha256-blGiraAPABHMJm9l2YkitAPXrYj4CcoqphWl/hzm6Gw=";
     };
   };
   archive =

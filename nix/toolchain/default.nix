@@ -1,8 +1,8 @@
 # The repository's pinned .NET SDK and Node for the development shell (global.json disables SDK roll-forward and
 # CI installs `.node-version`). Copied from runic-sdk's nix/toolchain (D050).
 #
-# The locked nixpkgs still has .NET SDK 10.0.401 (runtime 10.0.12) and Node 24.21.0, older than the October 2026
-# security releases the repository pins (D050). Until it catches up, both come from the official binaries: the SDK
+# The locked nixpkgs still has .NET SDK 10.0.401 (runtime 10.0.12) and Node 24.21.0, older than the security releases
+# the repository pins (D050; SDK 10.0.404 and Node 24.22.3 of 2026-11-10). Until it catches up, both come from the official binaries: the SDK
 # through nixpkgs' own binary SDK builder (`dotnetCorePackages.buildDotnetSdk`, the `sdk_10_0-bin` machinery, so
 # `.packages`, `.runtime`, `.aspnetcore` and `share/dotnet` behave as for nixpkgs' SDK) with ./dotnet-10.0.nix, and
 # Node from the nodejs.org archive (./nodejs-24.nix). Evaluation warns once nixpkgs provides the pins; then delete
