@@ -1,6 +1,1 @@
 #nullable enable
-*REMOVED*const Runic.Translations.Generated.TranslationsCompatibility.Rmf2RuntimeAbiVersion = 4 -> int
-const Runic.Translations.Generated.TranslationsCompatibility.Rmf2RuntimeAbiVersion = 5 -> int
-static Runic.Translations.Generated.GeneratedCatalogSupport.InflateData(System.ReadOnlySpan<byte> deflatedData, int length) -> byte[]!
-static Runic.Translations.Generated.GeneratedCatalogSupport.ReadDeflatedBinaryValues(System.ReadOnlySpan<byte> deflatedData, int length) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTranslationValue>!
-static Runic.Translations.Generated.GeneratedCatalogSupport.ReadDeflatedBinaryValues(System.ReadOnlySpan<byte> deflatedData, int length, System.ReadOnlySpan<byte> formatData) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTranslationValue>!

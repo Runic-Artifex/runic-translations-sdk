@@ -694,7 +694,7 @@ const Runic.Translations.CompiledTranslationCatalog.DynamicKeyId = -1 -> int
 const Runic.Translations.Generated.TranslationsCompatibility.CompositionVersion = 2 -> int
 const Runic.Translations.Generated.TranslationsCompatibility.MinimumRmf2RuntimeAbiVersion = 3 -> int
 const Runic.Translations.Generated.TranslationsCompatibility.MinimumRuntimeAbiVersion = 1 -> int
-const Runic.Translations.Generated.TranslationsCompatibility.Rmf2RuntimeAbiVersion = 4 -> int
+const Runic.Translations.Generated.TranslationsCompatibility.Rmf2RuntimeAbiVersion = 5 -> int
 const Runic.Translations.Generated.TranslationsCompatibility.RuntimeAbiVersion = 1 -> int
 const Runic.Translations.Generated.TranslationsCompatibility.TypedSlotBindingsVersion = 1 -> int
 const Runic.Translations.TranslationPackException.DiagnosticId = "RTR0023" -> string!
@@ -785,7 +785,10 @@ static Runic.Translations.Generated.GeneratedCatalogSupport.CreateKeys(string! c
 static Runic.Translations.Generated.GeneratedCatalogSupport.CreatePackContract(string! catalog, string! locale, string! contractFingerprint, System.Collections.Generic.IReadOnlyList<Runic.Translations.TranslationPackMessageContract!>! messages, string! rmf2MarkupContract) -> Runic.Translations.TranslationPackContract!
 static Runic.Translations.Generated.GeneratedCatalogSupport.CreatePackContract(string! catalog, string! locale, string! contractFingerprint, System.ReadOnlySpan<byte> messageTable, int canonicalCount, System.ReadOnlySpan<int> extraIds, string! rmf2MarkupContract) -> Runic.Translations.TranslationPackContract!
 static Runic.Translations.Generated.GeneratedCatalogSupport.CreatePackMessageContract(Runic.Translations.TranslationKey key, System.Collections.Generic.IReadOnlyList<Runic.Translations.Generated.CompiledRmf2Input!>! inputs) -> Runic.Translations.TranslationPackMessageContract!
+static Runic.Translations.Generated.GeneratedCatalogSupport.InflateData(System.ReadOnlySpan<byte> deflatedData, int length) -> byte[]!
 static Runic.Translations.Generated.GeneratedCatalogSupport.ReadDefinitions(System.ReadOnlySpan<byte> messageTable, int canonicalCount) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTranslationDefinition!>!
+static Runic.Translations.Generated.GeneratedCatalogSupport.ReadDeflatedBinaryValues(System.ReadOnlySpan<byte> deflatedData, int length) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTranslationValue>!
+static Runic.Translations.Generated.GeneratedCatalogSupport.ReadDeflatedBinaryValues(System.ReadOnlySpan<byte> deflatedData, int length, System.ReadOnlySpan<byte> formatData) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTranslationValue>!
 static Runic.Translations.Generated.GeneratedCatalogSupport.ReadDeflatedText(System.ReadOnlySpan<byte> deflatedUtf8, int length) -> string!
 static Runic.Translations.Generated.GeneratedCatalogSupport.ReadDeflatedValues(System.ReadOnlySpan<byte> deflatedUtf8Json, int length) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTranslationValue>!
 static Runic.Translations.Generated.GeneratedCatalogSupport.ReadDeflatedValues(System.ReadOnlySpan<byte> deflatedUtf8Json, int length, System.ReadOnlySpan<byte> formatData) -> System.Collections.Generic.IReadOnlyList<Runic.Translations.CompiledTranslationValue>!
