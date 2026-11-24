@@ -189,13 +189,13 @@
 
     <PropertyGroup>
       <_TranslationsProjectDirectory>$([MSBuild]::EnsureTrailingSlash('$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)'))'))</_TranslationsProjectDirectory>
-      <_TranslationsIntermediateRoot>$([MSBuild]::EnsureTrailingSlash('$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)', '$(_TranslationsProjectDirectory)'))'))</_TranslationsIntermediateRoot>
-      <_TranslationsOutputDirectory>$([System.IO.Path]::TrimEndingDirectorySeparator('$([System.IO.Path]::GetFullPath('$(RunicTranslationsOutputPath)', '$(_TranslationsProjectDirectory)'))'))</_TranslationsOutputDirectory>
+      <_TranslationsIntermediateRoot>$([MSBuild]::NormalizeDirectory('$(_TranslationsProjectDirectory)', '$(IntermediateOutputPath)'))</_TranslationsIntermediateRoot>
+      <_TranslationsOutputDirectory>$([MSBuild]::NormalizePath('$(_TranslationsProjectDirectory)', '$(RunicTranslationsOutputPath)', '.'))</_TranslationsOutputDirectory>
       <_TranslationsOutputRoot>$([MSBuild]::EnsureTrailingSlash('$(_TranslationsOutputDirectory)'))</_TranslationsOutputRoot>
-      <_TranslationsRelativeOutput>$([System.IO.Path]::GetRelativePath('$(_TranslationsIntermediateRoot)', '$(_TranslationsOutputRoot)'))</_TranslationsRelativeOutput>
+      <_TranslationsRelativeOutput>$([MSBuild]::MakeRelative('$(_TranslationsIntermediateRoot)', '$(_TranslationsOutputRoot)'))</_TranslationsRelativeOutput>
       <_TranslationsParentPrefix>..$([System.IO.Path]::DirectorySeparatorChar)</_TranslationsParentPrefix>
-      <_TranslationsOutputStampPath>$([System.IO.Path]::GetFullPath('$(RunicTranslationsOutputStamp)', '$(_TranslationsProjectDirectory)'))</_TranslationsOutputStampPath>
-      <_TranslationsRelativeStamp>$([System.IO.Path]::GetRelativePath('$(_TranslationsOutputRoot)', '$(_TranslationsOutputStampPath)'))</_TranslationsRelativeStamp>
+      <_TranslationsOutputStampPath>$([MSBuild]::NormalizePath('$(_TranslationsProjectDirectory)', '$(RunicTranslationsOutputStamp)'))</_TranslationsOutputStampPath>
+      <_TranslationsRelativeStamp>$([MSBuild]::MakeRelative('$(_TranslationsOutputRoot)', '$(_TranslationsOutputStampPath)'))</_TranslationsRelativeStamp>
       <_TranslationsGenerationStatePath>$(_TranslationsOutputRoot).generate.inputs</_TranslationsGenerationStatePath>
       <_TranslationsGenerationInventoryPath>$(_TranslationsOutputRoot).generate.outputs</_TranslationsGenerationInventoryPath>
       <_TranslationsResponseFilePath>$(_TranslationsOutputRoot).generate.rsp</_TranslationsResponseFilePath>
@@ -221,8 +221,8 @@
     </ReadLinesFromFile>
     <ItemGroup>
       <_TranslationsOwnedInventoryEntry Update="@(_TranslationsOwnedInventoryEntry)">
-        <_OwnedFullPath>$([System.IO.Path]::GetFullPath('%(Identity)', '$(_TranslationsOutputRoot)'))</_OwnedFullPath>
-        <_OwnedRelativePath>$([System.IO.Path]::GetRelativePath('$(_TranslationsOutputRoot)', '$([System.IO.Path]::GetFullPath('%(Identity)', '$(_TranslationsOutputRoot)'))'))</_OwnedRelativePath>
+        <_OwnedFullPath>$([MSBuild]::NormalizePath('$(_TranslationsOutputRoot)', '%(Identity)'))</_OwnedFullPath>
+        <_OwnedRelativePath>$([MSBuild]::MakeRelative('$(_TranslationsOutputRoot)', '$([MSBuild]::NormalizePath('$(_TranslationsOutputRoot)', '%(Identity)'))'))</_OwnedRelativePath>
       </_TranslationsOwnedInventoryEntry>
       <!-- Permit nested ESM modules while rejecting every path outside the owned root. -->
       <_TranslationsUnsafeInventoryEntry Include="@(_TranslationsOwnedInventoryEntry)"
@@ -384,7 +384,7 @@
           DependsOnTargets="ResolveAssemblyReferences;_RunicTranslationsDiscoverTranslationSources"
           Condition="'$(RunicTranslationsCldrSubset)' == 'true'">
     <PropertyGroup>
-      <_RunicTranslationsCldrSubsetFile>$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)RunicTranslations.CldrSubset.bin', '$(MSBuildProjectDirectory)'))</_RunicTranslationsCldrSubsetFile>
+      <_RunicTranslationsCldrSubsetFile>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'RunicTranslations.CldrSubset.bin'))</_RunicTranslationsCldrSubsetFile>
     </PropertyGroup>
     <Error Condition="!Exists('$(_Rmf2DiscoveryAssembly)')" Code="RTR0108" HelpKeyword="RTR0108"
            Text="RunicTranslationsCldrSubset needs the Runic.Translations.Build task assembly '$(_Rmf2DiscoveryAssembly)': in a source checkout, build packages/dotnet/Runic.Translations.Build first." />
