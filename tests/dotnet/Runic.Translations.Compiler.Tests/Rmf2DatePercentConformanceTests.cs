@@ -44,6 +44,13 @@ internal sealed class Rmf2DatePercentConformanceTests
         return vectors;
     }
 
+    // The compiled groups of this corpus (specs/translations/corpus/compiled): one project per locale, with the cases as
+    // vector0, vector1, … in corpus order.
+    internal static IEnumerable<CompiledCorpus.Group> CompiledGroups() =>
+        Vectors().GroupBy(vector => vector.Locale, StringComparer.Ordinal)
+            .Select(group => new CompiledCorpus.Group("date-percent/" + group.Key, "rmf2-date-percent-conformance.json", Project(group.Key, group.ToArray()), group.Key,
+                group.Select(vector => vector.Id).ToArray()));
+
     private static Rmf2ProjectV5 Project(string locale, IReadOnlyList<Vector> vectors)
     {
         var source = new StringBuilder();
@@ -80,9 +87,9 @@ internal sealed class Rmf2DatePercentConformanceTests
             Vector[] vectors = group.ToArray();
             Rmf2ProjectV5 project = Project(group.Key, vectors);
             Rmf2LocaleV5 locale = project.Locales.Single();
-            TranslationGeneratedOutput artifact = Rmf2LocaleArtifactV5.Render(project, group.Key);
-            VerifiedExternalTranslationPack pack = TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(artifact.GetUtf8Bytes()),
-                Rmf2V1CorpusTests.PackContract(project, group.Key)).AsTask().GetAwaiter().GetResult();
+            // The pack route reads the committed compiled artifact against its committed contract.
+            string compiled = "date-percent/" + group.Key;
+            VerifiedExternalTranslationPack pack = CompiledCorpus.Load(compiled);
             for (int index = 0; index < vectors.Length; index++)
             {
                 string key = "vector" + index;
@@ -91,7 +98,7 @@ internal sealed class Rmf2DatePercentConformanceTests
                 TextArgument[] arguments = Arguments(vectors[index].Arguments);
                 CompiledRmf2Message direct = Rmf2V1CorpusTests.Lower(linked.Message with { Inputs = contract.Inputs }, linked.ContentLocale);
                 Check(vectors[index], direct.Format(arguments, vectors[index].Requested), "linked");
-                CompiledRmf2Message loaded = pack.Messages.Single(item => item.Key.Name == key).Message!.Rmf2V5!;
+                CompiledRmf2Message loaded = pack.Messages.Single(item => item.Key.Name == CompiledCorpus.Key(compiled, vectors[index].Id)).Message!.Rmf2V5!;
                 Check(vectors[index], loaded.Format(arguments, vectors[index].Requested), "pack");
             }
         }
@@ -122,7 +129,7 @@ internal sealed class Rmf2DatePercentConformanceTests
             string directory = Rmf2EsmV5Tests.Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(project));
             try
             {
-                File.WriteAllBytes(Path.Combine(directory, "artifact.json"), Rmf2LocaleArtifactV5.Render(project, group.Key).GetUtf8Bytes());
+                File.WriteAllBytes(Path.Combine(directory, "artifact.json"), CompiledCorpus.Artifact("date-percent/" + group.Key));
                 var cases = new JsonArray(vectors.Select((vector, index) => (JsonNode)new JsonObject
                 {
                     ["id"] = vector.Id, ["key"] = "vector" + index, ["requested"] = vector.Requested, ["arguments"] = vector.Arguments.DeepClone(), ["expected"] = vector.Expected, ["alternates"] = new JsonArray(vector.Alternates.Select(value => (JsonNode)value).ToArray()),

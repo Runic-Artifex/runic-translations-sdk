@@ -95,10 +95,10 @@ The current release contract is exercised by sixteen complementary fixtures:
   values are `Intl.NumberFormat` output on ICU 78 except where a `note` records
   ICU departing from CLDR; all four routes must match exactly, with isolation off
   (the bidi corpus covers it);
-- [`rmf2-format-data-invalid.json`](rmf2-format-data-invalid.json) holds crafted
-  `formatData` members of a locale artifact that both runtimes reject as
-  `RTR0023/malformed` in exact packs and overlays
-  (`Rmf2FormatDataValidationTests`, the
+- [`rmf2-format-data-invalid.json`](rmf2-format-data-invalid.json) holds
+  [pack recipes](#pack-recipes) that craft the `formatData` of a compiled locale
+  artifact (`packBase`) so that both runtimes reject it as `RTR0023/malformed`
+  in exact packs and overlays (`Rmf2FormatDataValidationTests`, the
   [embedded format data rules](../rmf2-execution-v2.md#embedded-format-data));
 - [`currency-unit-divergences.json`](currency-unit-divergences.json) lists, by
   locale and kind, where `CurrencyUnitComparisonTests` (every CLDR locale, .NET
@@ -123,9 +123,16 @@ The current release contract is exercised by sixteen complementary fixtures:
   `TranslationReferenceResolver` and the generated ESM `resolveTextReference`
   must agree with every case, and every `rejected` reference must fail to read.
   `written` references must be written byte for byte as `expected` by .NET and
-  by `JSON.stringify` of the ESM `createTextReference` result. `json` gives a
-  case as raw text (duplicate members, a `2.0` version); `$text`, `$items` and
-  `$arguments` macros spell the large limit cases (see the .NET runner).
+  by `JSON.stringify` of the ESM `createTextReference` result. `fingerprints`
+  records the values of `$writer` and `$reader`. A case's wire text is its
+  `json` member as written (duplicate members, a `2.0` version), or else its
+  `reference` with the [macros](#macros) expanded, written as compact JSON in
+  member order, with each `"$writer"` and `"$reader"` string replaced by the
+  fingerprint. The macros spell the large limit cases.
+
+[`compiled`](#compiled-artifacts) holds the locale artifacts the compiler
+produces for these corpora, so that a runtime without the C# compiler can run
+them.
 
 [`xliff-v3`](xliff-v3/README.md) holds XLIFF profile v3 interchange cases: modeled TMS
 files, partial and stale files, placeholders, nested groups and the expected `.rmf2` sources after
@@ -134,6 +141,80 @@ files, partial and stale files, placeholders, nested groups and the expected `.r
 The name `rmf2-v1` denotes the resource-file syntax. It does not select a retired
 runtime, artifact, or emitter. Current runners compile every fixture through the
 typed v5 project model.
+
+## Compiled artifacts
+
+The corpora above give sources and messages; only the C# compiler turns them into
+locale artifact v5. [`compiled/`](compiled/index.json) commits what it produces,
+so that a runtime with only a pack reader (Rust, C++) runs the same cases. Each
+entry of `compiled/index.json` is one group:
+
+- `id`, such as `rmf2-v1/de` or `list/en`, and `corpus`, the corpus file the
+  group serves, relative to this directory;
+- `artifact`, the exact bytes of the locale artifact (an exact pack), and its
+  `sha256`;
+- `contract`, the pack contract the artifact is read against, as a project's
+  generated code holds it: `catalog`, `locale`, `contractFingerprint`,
+  `bidiIsolation` (`default`, `on` or `off`), the project's `locales` with their
+  `fallback`, the `messages` with their `id`, `key`, `canonical` flag and typed
+  `inputs`, and `markupContract`, the project's markup contract JSON;
+- `cases`, for a message corpus, the key of each case id in the artifact.
+
+The message corpora (list, grouping, date and percent, bidi, currency and unit)
+compile one project per locale (bidi: per locale and `bidiIsolation`), with the
+locale as base locale, the corpus's `formats` for currency and unit, isolation
+`off` except in the bidi corpus, and the cases as `vector0`, `vector1`, … in
+corpus order. `rmf2-v1`, `rmf2-document-v1` and `v5-project` compile their own
+project, the transport corpus its `writer` and `reader` catalogs, and
+`format-data-invalid` the English catalog that `rmf2-format-data-invalid.json`
+describes. The relative-time, plural and negotiation corpora need no compiled
+message.
+
+The files are generated. `bun eng/generate-corpus.mjs` rewrites the directory,
+and `--check` fails when a file is stale; the Compiler test suite runs the same
+check (`CompiledCorpusTests`), so CI fails on a stale directory. Regenerate and
+commit it with any change to the compiler output or to a corpus source. The
+.NET runners read these files for their pack routes and compile the projects
+only for the linked and generated routes.
+
+## Pack recipes
+
+A rejection case (`invalidPacks` in `rmf2-v1` and `rmf2-document-v1`,
+`validPacks`, the cases of `rmf2-format-data-invalid.json`) builds its pack from
+the compiled artifact that the file's `packBase` names, with one of:
+
+- `patch`, an [RFC 6902](https://www.rfc-editor.org/rfc/rfc6902) JSON Patch
+  applied to the parsed artifact. Its `value`s may use the [macros](#macros).
+  The result is written as compact JSON in member order: `add` on an existing
+  member keeps its place, a new member goes last. Its `test` operations pin the
+  target of a case (the first wildcard key, the `ref` option of a link), so a
+  changed artifact fails the recipe instead of mutating something else;
+- `textEdit`, `{"find": f, "replace": r}`, which replaces the first occurrence
+  of `f` in the artifact's text, for a pack that is no JSON value with unique
+  members (a duplicate member).
+
+The reader under test then gets the resulting bytes and the group's contract. Recipes replaced the
+mutations named after C# test code in `corpusVersion` 2 of these three files.
+
+## Macros
+
+A corpus value may spell a large value as a macro, expanded before use:
+
+- `{"$text": c, "length": n}` is a string of `n` copies of `c`;
+- `{"$items": v, "count": n}` is an array of `n` copies of `v`;
+- `{"$arguments": v, "count": n, "prefix": p}` is an object with the members
+  `p0` to `p(n-1)`, each a copy of `v`.
+
+Macros expand recursively in transport `reference`s and in patch values. No
+corpus value uses the member names `$text`, `$items` or `$arguments` otherwise.
+
+## Case ids
+
+Every case and every divergence entry has an `id`, unique within its file
+(`locale-negotiation.json` names its groups), so that status files and reports
+can key a case as `<file stem>/<id>`, such as
+`rmf2-list-conformance/en-conjunction-long-two`. A change to an existing case's
+content gets a new id.
 
 ## Published 0.3 historical fixture boundary
 

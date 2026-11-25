@@ -1,0 +1,48 @@
+{
+  "catalog": "lists",
+  "locale": "es-MX",
+  "contractFingerprint": "sha256:fb066109382c9b57732ded5587198070c697a149a65657f538aa385dd32e7658",
+  "bidiIsolation": "off",
+  "locales": [
+    {
+      "tag": "es-MX",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "vector0",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "key": "vector1",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "key": "vector2",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{},"messages":{"vector0":{"slots":{},"structured":false,"contentLocales":{"es-MX":"es-MX"},"content":"inline","skeletons":[]},"vector1":{"slots":{},"structured":false,"contentLocales":{"es-MX":"es-MX"},"content":"inline","skeletons":[]},"vector2":{"slots":{},"structured":false,"contentLocales":{"es-MX":"es-MX"},"content":"inline","skeletons":[]}}}
+}

@@ -1,0 +1,48 @@
+{
+  "catalog": "dates",
+  "locale": "zh",
+  "contractFingerprint": "sha256:9da5fabaee5890c604273585990b81cd78a647ce8889fc9c0a07ed719c35db8e",
+  "bidiIsolation": "off",
+  "locales": [
+    {
+      "tag": "zh",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "vector0",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "t",
+          "type": "time"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "key": "vector1",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "d",
+          "type": "date"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "key": "vector2",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "t",
+          "type": "time"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{},"messages":{"vector0":{"slots":{},"structured":false,"contentLocales":{"zh":"zh"},"content":"inline","skeletons":[]},"vector1":{"slots":{},"structured":false,"contentLocales":{"zh":"zh"},"content":"inline","skeletons":[]},"vector2":{"slots":{},"structured":false,"contentLocales":{"zh":"zh"},"content":"inline","skeletons":[]}}}
+}

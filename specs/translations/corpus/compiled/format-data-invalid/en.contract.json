@@ -1,0 +1,59 @@
+{
+  "catalog": "shop",
+  "locale": "en",
+  "contractFingerprint": "sha256:6409f9e8474faaa7a0b00ae5ec74f2af244307ea597de542a55f78559cc99aaa",
+  "bidiIsolation": "default",
+  "locales": [
+    {
+      "tag": "en",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "debt",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "key": "reach",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "key": "speed",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "key": "total",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{},"messages":{"debt":{"slots":{},"structured":false,"contentLocales":{"en":"en"},"content":"inline","skeletons":[]},"reach":{"slots":{},"structured":false,"contentLocales":{"en":"en"},"content":"inline","skeletons":[]},"speed":{"slots":{},"structured":false,"contentLocales":{"en":"en"},"content":"inline","skeletons":[]},"total":{"slots":{},"structured":false,"contentLocales":{"en":"en"},"content":"inline","skeletons":[]}}}
+}

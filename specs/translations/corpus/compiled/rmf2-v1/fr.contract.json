@@ -1,0 +1,111 @@
+{
+  "catalog": "oracle",
+  "locale": "fr",
+  "contractFingerprint": "sha256:24d36009f62f0b673275388c3463953e91af2765fe55996c22b69191e36a8adf",
+  "bidiIsolation": "default",
+  "locales": [
+    {
+      "tag": "de",
+      "fallback": "en"
+    },
+    {
+      "tag": "en",
+      "fallback": null
+    },
+    {
+      "tag": "fr",
+      "fallback": "de"
+    },
+    {
+      "tag": "fr-FR",
+      "fallback": "fr"
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "core_direct",
+      "canonical": true,
+      "inputs": []
+    },
+    {
+      "id": 1,
+      "key": "core_hostile",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "__proto__",
+          "type": "string"
+        },
+        {
+          "name": "café",
+          "type": "string"
+        },
+        {
+          "name": "constructor",
+          "type": "string"
+        },
+        {
+          "name": "user-name",
+          "type": "string"
+        },
+        {
+          "name": "用户",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "key": "core_rank",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "count",
+          "type": "decimal"
+        },
+        {
+          "name": "kind",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "key": "core_rich",
+      "canonical": true,
+      "inputs": []
+    },
+    {
+      "id": 4,
+      "key": "core_total",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "digits",
+          "type": "int64"
+        },
+        {
+          "name": "rate",
+          "type": "decimal"
+        },
+        {
+          "name": "style",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "key": "locale_extra",
+      "canonical": false,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{"app:badge":{"kind":"paired","placement":"inline","children":"inline","interactive":false,"plainText":"children","options":{"amount":{"type":"number","values":[],"default":"100","literalOnly":false},"tone":{"type":"enum","values":["neutral","positive"],"default":"neutral","literalOnly":false}}},"runic:br":{"kind":"standalone","placement":"inline","children":"none","interactive":false,"plainText":"lineBreak","options":{}},"runic:link":{"kind":"paired","placement":"inline","children":"inline","interactive":true,"plainText":"children","options":{}},"runic:strong":{"kind":"paired","placement":"inline","children":"inline","interactive":false,"plainText":"children","options":{}}},"messages":{"core_direct":{"slots":{},"structured":false,"contentLocales":{"de":"de","en":"en","fr":"fr","fr-FR":"fr"},"content":"inline","skeletons":[]},"core_hostile":{"slots":{},"structured":false,"contentLocales":{"de":"en","en":"en","fr":"en","fr-FR":"en"},"content":"inline","skeletons":[]},"core_rank":{"slots":{},"structured":false,"contentLocales":{"de":"en","en":"en","fr":"en","fr-FR":"en"},"content":"inline","skeletons":[]},"core_rich":{"slots":{"terms":{"kind":"runic:link","min":1,"max":1}},"structured":true,"contentLocales":{"de":"de","en":"en","fr":"de","fr-FR":"de"},"content":"inline","skeletons":[]},"core_total":{"slots":{},"structured":false,"contentLocales":{"de":"de","en":"en","fr":"de","fr-FR":"de"},"content":"inline","skeletons":[]},"locale_extra":{"slots":{},"structured":false,"contentLocales":{"de":"de","fr":"de","fr-FR":"de"},"content":"inline","skeletons":[]}}}
+}

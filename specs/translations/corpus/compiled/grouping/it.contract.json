@@ -1,0 +1,411 @@
+{
+  "catalog": "grouping",
+  "locale": "it",
+  "contractFingerprint": "sha256:69a459f0ab4d15c7fef668b3d159ea8610dc039e3010996d8e0a339929ba9fd7",
+  "bidiIsolation": "off",
+  "locales": [
+    {
+      "tag": "it",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "vector0",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "key": "vector1",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "key": "vector10",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "key": "vector11",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "key": "vector12",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "key": "vector13",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "key": "vector14",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "key": "vector15",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "key": "vector16",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "key": "vector17",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "key": "vector18",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "key": "vector19",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "key": "vector2",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "key": "vector20",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "key": "vector21",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "key": "vector22",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "key": "vector23",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "key": "vector24",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "key": "vector25",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "key": "vector26",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "key": "vector27",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "key": "vector28",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "key": "vector29",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "key": "vector3",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "key": "vector30",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "key": "vector31",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "key": "vector32",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "key": "vector33",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 28,
+      "key": "vector34",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 29,
+      "key": "vector35",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "key": "vector4",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "key": "vector5",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "key": "vector6",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "key": "vector7",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "key": "vector8",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "key": "vector9",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{},"messages":{"vector0":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector1":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector10":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector11":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector12":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector13":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector14":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector15":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector16":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector17":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector18":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector19":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector2":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector20":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector21":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector22":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector23":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector24":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector25":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector26":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector27":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector28":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector29":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector3":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector30":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector31":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector32":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector33":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector34":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector35":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector4":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector5":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector6":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector7":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector8":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector9":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]}}}
+}

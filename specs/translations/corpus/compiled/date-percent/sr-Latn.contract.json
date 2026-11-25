@@ -1,0 +1,37 @@
+{
+  "catalog": "dates",
+  "locale": "sr-Latn",
+  "contractFingerprint": "sha256:6ddb662ef338bbc268ada2172ad1782de2cb7c6706b38a276e7d454551a5d9f9",
+  "bidiIsolation": "off",
+  "locales": [
+    {
+      "tag": "sr-Latn",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "vector0",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "d",
+          "type": "date"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "key": "vector1",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "d",
+          "type": "date"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{},"messages":{"vector0":{"slots":{},"structured":false,"contentLocales":{"sr-Latn":"sr-Latn"},"content":"inline","skeletons":[]},"vector1":{"slots":{},"structured":false,"contentLocales":{"sr-Latn":"sr-Latn"},"content":"inline","skeletons":[]}}}
+}

@@ -1,0 +1,147 @@
+{
+  "catalog": "dates",
+  "locale": "fa",
+  "contractFingerprint": "sha256:60c399a5edcd6ca8400b5a9257968c54fc8104820387d1dc50998a8d2a0c7f73",
+  "bidiIsolation": "off",
+  "locales": [
+    {
+      "tag": "fa",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "vector0",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "key": "vector1",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "key": "vector10",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "key": "vector11",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "key": "vector2",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "key": "vector3",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "d",
+          "type": "date"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "key": "vector4",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "t",
+          "type": "time"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "key": "vector5",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "key": "vector6",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "key": "vector7",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "key": "vector8",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "key": "vector9",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{},"messages":{"vector0":{"slots":{},"structured":false,"contentLocales":{"fa":"fa"},"content":"inline","skeletons":[]},"vector1":{"slots":{},"structured":false,"contentLocales":{"fa":"fa"},"content":"inline","skeletons":[]},"vector10":{"slots":{},"structured":false,"contentLocales":{"fa":"fa"},"content":"inline","skeletons":[]},"vector11":{"slots":{},"structured":false,"contentLocales":{"fa":"fa"},"content":"inline","skeletons":[]},"vector2":{"slots":{},"structured":false,"contentLocales":{"fa":"fa"},"content":"inline","skeletons":[]},"vector3":{"slots":{},"structured":false,"contentLocales":{"fa":"fa"},"content":"inline","skeletons":[]},"vector4":{"slots":{},"structured":false,"contentLocales":{"fa":"fa"},"content":"inline","skeletons":[]},"vector5":{"slots":{},"structured":false,"contentLocales":{"fa":"fa"},"content":"inline","skeletons":[]},"vector6":{"slots":{},"structured":false,"contentLocales":{"fa":"fa"},"content":"inline","skeletons":[]},"vector7":{"slots":{},"structured":false,"contentLocales":{"fa":"fa"},"content":"inline","skeletons":[]},"vector8":{"slots":{},"structured":false,"contentLocales":{"fa":"fa"},"content":"inline","skeletons":[]},"vector9":{"slots":{},"structured":false,"contentLocales":{"fa":"fa"},"content":"inline","skeletons":[]}}}
+}

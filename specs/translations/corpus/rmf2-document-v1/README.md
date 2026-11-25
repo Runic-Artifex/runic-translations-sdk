@@ -34,12 +34,10 @@ the warnings the project itself is expected to report.
 - `compilerCases` are small projects with the expected diagnostics
   (`RTR0070` to `RTR0078`, and `RTR0061`/`RTR0067` for integer literal
   forms) as `id:locale:severity`.
-- `invalidPacks` mutate the `de` locale artifact and expect the same
-  `RTR0023/*` rejection in .NET and ESM. `validPacks` apply the same mutations
-  with equivalent encodings that both loaders must accept. Mutations edit the
-  first variant (or `variant`) of `key`: `editText` adds a `prefix` or
-  `suffix` to the `text`-th text node, `insertNodes` inserts `nodes` at node
-  index `at`, and `setOption` replaces the value of the first `option`.
+- `invalidPacks` are [pack recipes](../README.md#pack-recipes) over the
+  compiled `de` locale artifact (`packBase`) and expect the same `RTR0023/*`
+  rejection in .NET and ESM. `validPacks` write equivalent encodings that both
+  loaders must accept.
 
 `html.json` is the oracle for DOM-based adapters: the canonical semantic HTML
 of every execution with heading base 2, attributes in ordinal name order, no

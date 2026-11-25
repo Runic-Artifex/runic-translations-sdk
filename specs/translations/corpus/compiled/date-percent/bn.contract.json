@@ -1,0 +1,103 @@
+{
+  "catalog": "dates",
+  "locale": "bn",
+  "contractFingerprint": "sha256:10bd8b9522dc33900889df897296a65a2da3f09bf3070c596f650c03bcc9f959",
+  "bidiIsolation": "off",
+  "locales": [
+    {
+      "tag": "bn",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "vector0",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "key": "vector1",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "key": "vector2",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "key": "vector3",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "d",
+          "type": "date"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "key": "vector4",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "t",
+          "type": "time"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "key": "vector5",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "key": "vector6",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "key": "vector7",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{},"messages":{"vector0":{"slots":{},"structured":false,"contentLocales":{"bn":"bn"},"content":"inline","skeletons":[]},"vector1":{"slots":{},"structured":false,"contentLocales":{"bn":"bn"},"content":"inline","skeletons":[]},"vector2":{"slots":{},"structured":false,"contentLocales":{"bn":"bn"},"content":"inline","skeletons":[]},"vector3":{"slots":{},"structured":false,"contentLocales":{"bn":"bn"},"content":"inline","skeletons":[]},"vector4":{"slots":{},"structured":false,"contentLocales":{"bn":"bn"},"content":"inline","skeletons":[]},"vector5":{"slots":{},"structured":false,"contentLocales":{"bn":"bn"},"content":"inline","skeletons":[]},"vector6":{"slots":{},"structured":false,"contentLocales":{"bn":"bn"},"content":"inline","skeletons":[]},"vector7":{"slots":{},"structured":false,"contentLocales":{"bn":"bn"},"content":"inline","skeletons":[]}}}
+}

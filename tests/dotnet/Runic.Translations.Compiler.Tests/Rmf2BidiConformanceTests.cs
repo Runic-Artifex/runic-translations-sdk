@@ -43,6 +43,12 @@ internal sealed class Rmf2BidiConformanceTests
     private static IEnumerable<IGrouping<(string Locale, string Isolation), Vector>> Groups() =>
         Vectors().GroupBy(vector => (vector.Locale, vector.Isolation));
 
+    // The compiled groups of this corpus (specs/translations/corpus/compiled): one project per locale and isolation setting, with the cases as
+    // vector0, vector1, … in corpus order.
+    internal static IEnumerable<CompiledCorpus.Group> CompiledGroups() =>
+        Groups().Select(group => new CompiledCorpus.Group("bidi/" + group.Key.Locale + "." + group.Key.Isolation, "rmf2-bidi-conformance.json",
+            Project(group.Key.Locale, group.Key.Isolation, group.ToArray()), group.Key.Locale, group.Select(vector => vector.Id).ToArray()));
+
     private static Rmf2ProjectV5 Project(string locale, string isolation, IReadOnlyList<Vector> vectors)
     {
         var source = new StringBuilder();
@@ -92,9 +98,9 @@ internal sealed class Rmf2BidiConformanceTests
             Vector[] vectors = group.ToArray();
             Rmf2ProjectV5 project = Project(group.Key.Locale, group.Key.Isolation, vectors);
             Rmf2LocaleV5 locale = project.Locales.Single();
-            TranslationGeneratedOutput artifact = Rmf2LocaleArtifactV5.Render(project, group.Key.Locale);
-            VerifiedExternalTranslationPack pack = TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(artifact.GetUtf8Bytes()),
-                Rmf2V1CorpusTests.PackContract(project, group.Key.Locale)).AsTask().GetAwaiter().GetResult();
+            // The pack route reads the committed compiled artifact against its committed contract.
+            string compiled = "bidi/" + group.Key.Locale + "." + group.Key.Isolation;
+            VerifiedExternalTranslationPack pack = CompiledCorpus.Load(compiled);
             for (int index = 0; index < vectors.Length; index++)
             {
                 string key = "vector" + index;
@@ -105,7 +111,7 @@ internal sealed class Rmf2BidiConformanceTests
                 // The CLDR currency, unit and compact data the compiler embeds with the message, as a generated catalog does.
                 if (project.FormatData([linked.ContentLocale], [linked.Message]) is { } formats) direct.FormatData = Rmf2FormatData.Parse(System.Text.Encoding.UTF8.GetBytes(formats));
                 Check(vectors[index], Format(direct, arguments, vectors[index]), "linked");
-                CompiledRmf2Message loaded = pack.Messages.Single(item => item.Key.Name == key).Message!.Rmf2V5!;
+                CompiledRmf2Message loaded = pack.Messages.Single(item => item.Key.Name == CompiledCorpus.Key(compiled, vectors[index].Id)).Message!.Rmf2V5!;
                 Check(vectors[index], Format(loaded, arguments, vectors[index]), "pack");
             }
         }
@@ -132,7 +138,7 @@ internal sealed class Rmf2BidiConformanceTests
             string directory = Rmf2EsmV5Tests.Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(project));
             try
             {
-                File.WriteAllBytes(Path.Combine(directory, "artifact.json"), Rmf2LocaleArtifactV5.Render(project, group.Key.Locale).GetUtf8Bytes());
+                File.WriteAllBytes(Path.Combine(directory, "artifact.json"), CompiledCorpus.Artifact("bidi/" + group.Key.Locale + "." + group.Key.Isolation));
                 var cases = new JsonArray(vectors.Select((vector, index) => (JsonNode)new JsonObject
                 {
                     ["id"] = vector.Id, ["key"] = "vector" + index, ["locale"] = vector.RequestedLocale, ["arguments"] = vector.Arguments.DeepClone(), ["expected"] = vector.Expected,

@@ -1,0 +1,37 @@
+{
+  "catalog": "lists",
+  "locale": "zh-Hant",
+  "contractFingerprint": "sha256:c36e87df6c57c45ec6daae1486c2da663cc12d6ec498318cb4201c9af3137676",
+  "bidiIsolation": "off",
+  "locales": [
+    {
+      "tag": "zh-Hant",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "vector0",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "key": "vector1",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{},"messages":{"vector0":{"slots":{},"structured":false,"contentLocales":{"zh-Hant":"zh-Hant"},"content":"inline","skeletons":[]},"vector1":{"slots":{},"structured":false,"contentLocales":{"zh-Hant":"zh-Hant"},"content":"inline","skeletons":[]}}}
+}

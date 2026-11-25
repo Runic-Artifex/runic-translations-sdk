@@ -1,0 +1,70 @@
+{
+  "catalog": "dates",
+  "locale": "ps",
+  "contractFingerprint": "sha256:892bce521ec1cc0143afba15b36fae6aa243e23aa8f619b6db762ef29febd550",
+  "bidiIsolation": "off",
+  "locales": [
+    {
+      "tag": "ps",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "vector0",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "key": "vector1",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "key": "vector2",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "key": "vector3",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "d",
+          "type": "date"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "key": "vector4",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "t",
+          "type": "time"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{},"messages":{"vector0":{"slots":{},"structured":false,"contentLocales":{"ps":"ps"},"content":"inline","skeletons":[]},"vector1":{"slots":{},"structured":false,"contentLocales":{"ps":"ps"},"content":"inline","skeletons":[]},"vector2":{"slots":{},"structured":false,"contentLocales":{"ps":"ps"},"content":"inline","skeletons":[]},"vector3":{"slots":{},"structured":false,"contentLocales":{"ps":"ps"},"content":"inline","skeletons":[]},"vector4":{"slots":{},"structured":false,"contentLocales":{"ps":"ps"},"content":"inline","skeletons":[]}}}
+}

@@ -25,7 +25,7 @@ internal sealed class Rmf2V1CorpusTests
         using JsonDocument index = Index();
         Rmf2ProjectV5 project = Compile();
         JsonElement contracts = index.RootElement.GetProperty("contracts");
-        Assert.Equal(1, index.RootElement.GetProperty("corpusVersion").GetInt32());
+        Assert.Equal(2, index.RootElement.GetProperty("corpusVersion").GetInt32());
         Assert.Equal("runic-rmf2-v1-conformance", index.RootElement.GetProperty("identity").GetString());
         Assert.Equal("rmf2-execution-v2", Rmf2ProjectV5.Profile);
         Assert.Equal(contracts.GetProperty("messageAstVersion").GetInt32(), Rmf2ProjectV5.MessageGrammarVersion);
@@ -65,6 +65,8 @@ internal sealed class Rmf2V1CorpusTests
             Assert.Equal(first.Sha256, second.Sha256, "Locale artifact digest changed with input enumeration for " + locale.Tag);
             Assert.Equal(deterministic.GetProperty("localeArtifactSha256").GetProperty(locale.Tag).GetString(), first.Sha256,
                 "Locale artifact digest golden for " + locale.Tag);
+            Assert.Equal(first.Sha256, "sha256:" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(CompiledCorpus.Artifact("rmf2-v1/" + locale.Tag))),
+                "Committed compiled artifact for " + locale.Tag);
         }
         TranslationGeneratedOutput[] artifacts = project.Locales.Select(locale => Rmf2LocaleArtifactV5.Render(project, locale.Tag)).ToArray();
         TranslationGeneratedOutput manifest = TranslationOutputRenderer.RenderRmf2V5AssetManifestJson(project, artifacts);
@@ -88,13 +90,9 @@ internal sealed class Rmf2V1CorpusTests
         using JsonDocument index = Index();
         Rmf2ProjectV5 project = Compile();
         var renderer = new Rmf2InlineRenderer(project.MarkupContract);
+        // The pack route reads the committed compiled artifacts against their committed contracts.
         var verified = new Dictionary<string, VerifiedExternalTranslationPack>(StringComparer.Ordinal);
-        foreach (Rmf2LocaleV5 locale in project.Locales)
-        {
-            TranslationGeneratedOutput artifact = Rmf2LocaleArtifactV5.Render(project, locale.Tag);
-            verified.Add(locale.Tag, TranslationPackLoader.VerifyAsync(
-                new ExternalTranslationPack(artifact.GetUtf8Bytes()), PackContract(project, locale.Tag)).AsTask().GetAwaiter().GetResult());
-        }
+        foreach (Rmf2LocaleV5 locale in project.Locales) verified.Add(locale.Tag, CompiledCorpus.Load("rmf2-v1/" + locale.Tag));
 
         foreach (JsonElement test in index.RootElement.GetProperty("executions").EnumerateArray())
         {
@@ -118,17 +116,17 @@ internal sealed class Rmf2V1CorpusTests
         RunEsm(project, index.RootElement);
     }
 
-    [Test, DisplayName("RMF2 v1 corpus pack rejection taxonomy agrees across .NET and ESM")]
+    // The rejection cases are recipes over the committed German artifact (packBase), read against its committed contract.
+    [Test, DisplayName("RMF2 v1 corpus pack rejection taxonomy holds in .NET for the committed artifact and recipes")]
     public void InvalidPacks()
     {
         using JsonDocument index = Index();
-        Rmf2ProjectV5 project = Compile();
-        TranslationGeneratedOutput artifact = Rmf2LocaleArtifactV5.Render(project, "de");
-        TranslationPackContract contract = PackContract(project, "de");
+        byte[] artifact = PackBase(index);
+        TranslationPackContract contract = CompiledCorpus.PackContract("rmf2-v1/de");
         foreach (JsonElement test in index.RootElement.GetProperty("invalidPacks").EnumerateArray())
         {
             string expected = test.GetProperty("rejection").GetString()!;
-            byte[] bytes = Mutate(artifact.Text, test);
+            byte[] bytes = CompiledCorpus.Apply(artifact, test);
             try
             {
                 _ = TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(bytes), contract).AsTask().GetAwaiter().GetResult();
@@ -139,8 +137,16 @@ internal sealed class Rmf2V1CorpusTests
                 Assert.Equal(expected, exception.RejectionId, test.GetProperty("id").GetString());
             }
         }
-        RunEsmInvalid(project, index.RootElement, artifact);
     }
+
+    [Test, DisplayName("RMF2 v1 corpus pack rejection taxonomy holds in ESM for the committed artifact and recipes")]
+    public void InvalidPacksEsm()
+    {
+        using JsonDocument index = Index();
+        RunEsmInvalid(Compile(), index.RootElement, PackBase(index));
+    }
+
+    private static byte[] PackBase(JsonDocument index) => File.ReadAllBytes(Path.Combine(Root, index.RootElement.GetProperty("packBase").GetString()!));
 
     private static IEnumerable<Rmf2ProjectV5> Layouts(JsonDocument index)
     {
@@ -313,7 +319,7 @@ internal sealed class Rmf2V1CorpusTests
             string.Join("\n", outputs.Select(output => output.RelativePath + " " + output.Sha256)))));
     }
 
-    private static Rmf2ProjectV5 Compile(bool reverse = false)
+    internal static Rmf2ProjectV5 Compile(bool reverse = false)
     {
         using JsonDocument index = Index();
         JsonElement project = index.RootElement.GetProperty("project");
@@ -343,7 +349,7 @@ internal sealed class Rmf2V1CorpusTests
     private static CompiledRmf2Input[] Inputs(IReadOnlyList<Rmf2InputV5> inputs) =>
         inputs.Select(item => new CompiledRmf2Input(item.Name, Type(item.Type))).ToArray();
 
-    private static TextArgumentType Type(string type) => type switch
+    internal static TextArgumentType Type(string type) => type switch
     {
         "string" => TextArgumentType.String, "int64" => TextArgumentType.Int, "decimal" => TextArgumentType.Number,
         "boolean" => TextArgumentType.Bool, "date" => TextArgumentType.Date, "time" => TextArgumentType.Time,
@@ -390,155 +396,6 @@ internal sealed class Rmf2V1CorpusTests
         }
     }
 
-    private static byte[] Mutate(string artifact, JsonElement test)
-    {
-        string mutation = test.GetProperty("mutation").GetString()!;
-        if (mutation == "duplicateRootMember")
-            return Encoding.UTF8.GetBytes(artifact.Replace("{\"artifactVersion\":5", "{\"artifactVersion\":5,\"artifactVersion\":5", StringComparison.Ordinal));
-        JsonObject root = JsonNode.Parse(artifact)!.AsObject();
-        JsonNode? value = JsonNode.Parse(test.GetProperty("value").GetRawText());
-        switch (mutation)
-        {
-            case "artifactVersion": case "messageGrammarVersion": case "profile": case "catalog": case "locale": case "contractFingerprint": root[mutation] = value; break;
-            case "addRootMember": root["future"] = value; break;
-            case "addMessage": root["messages"]!["future"] = root["messages"]!["core_direct"]!.DeepClone(); break;
-            case "contentLocale": root["messages"]!["core_total"]!["contentLocale"] = value; break;
-            case "markupContract": root["markupContract"] = value; break;
-            case "addAstMember": root["messages"]!["core_total"]!["ast"]!["future"] = value; break;
-            case "astVersion": root["messages"]!["core_total"]!["ast"]!["astVersion"] = value; break;
-            case "addWrapperMember": root["messages"]!["core_total"]!["future"] = value; break;
-            case "addInputMember": root["messages"]!["core_total"]!["ast"]!["inputs"]![0]!["future"] = value; break;
-            case "addDeclarationMember": root["messages"]!["core_total"]!["ast"]!["declarations"]![0]!["future"] = value; break;
-            case "addSelectorMember": root["messages"]!["core_rank"]!["ast"]!["selectors"]![0]!["future"] = value; break;
-            case "addVariantMember": root["messages"]!["core_rank"]!["ast"]!["variants"]![0]!["future"] = value; break;
-            case "addWildcardKeyMember":
-            {
-                JsonObject key = root["messages"]!["core_rank"]!["ast"]!["variants"]!.AsArray()
-                    .SelectMany(item => item!["keys"]!.AsArray()).Select(item => item!.AsObject())
-                    .First(item => item["kind"]!.GetValue<string>() == "wildcard");
-                key["future"] = value;
-                break;
-            }
-            case "addLiteralKeyMember":
-            {
-                JsonObject key = root["messages"]!["core_rank"]!["ast"]!["variants"]!.AsArray()
-                    .SelectMany(item => item!["keys"]!.AsArray()).Select(item => item!.AsObject())
-                    .First(item => item["kind"]!.GetValue<string>() == "literal");
-                key["future"] = value;
-                break;
-            }
-            case "addTextNodeMember": root["messages"]!["core_direct"]!["ast"]!["variants"]![0]!["nodes"]![0]!["future"] = value; break;
-            case "addExpressionNodeMember":
-            {
-                JsonObject node = root["messages"]!["core_total"]!["ast"]!["variants"]![0]!["nodes"]!.AsArray()
-                    .Select(item => item!.AsObject()).First(item => item["kind"]!.GetValue<string>() == "expression");
-                node["future"] = value;
-                break;
-            }
-            case "addMarkupNodeMember":
-            {
-                JsonObject node = root["messages"]!["core_rich"]!["ast"]!["variants"]![0]!["nodes"]!.AsArray()
-                    .Select(item => item!.AsObject()).First(item => item["kind"]!.GetValue<string>() == "markup");
-                node["future"] = value;
-                break;
-            }
-            case "addExpressionMember": root["messages"]!["core_total"]!["ast"]!["declarations"]![0]!["expression"]!["future"] = value; break;
-            case "addExpressionOptionMember":
-            {
-                JsonObject expression = root["messages"]!["core_total"]!["ast"]!["declarations"]!.AsArray()
-                    .Select(item => item!["expression"]!.AsObject()).First(item => item["options"]!.AsArray().Count > 0);
-                expression["options"]![0]!["future"] = value;
-                break;
-            }
-            case "addMarkupOptionMember":
-            {
-                JsonObject node = root["messages"]!["core_rich"]!["ast"]!["variants"]![0]!["nodes"]!.AsArray()
-                    .Select(item => item!.AsObject()).First(item => item["kind"]!.GetValue<string>() == "markup" && item["options"]!.AsArray().Count > 0);
-                node["options"]![0]!["future"] = value;
-                break;
-            }
-            case "addExpressionAnnotationMember":
-                root["messages"]!["core_total"]!["ast"]!["declarations"]![0]!["expression"]!["annotations"]!.AsArray()
-                    .Add(new JsonObject { ["name"] = "future", ["future"] = value });
-                break;
-            case "addMarkupAnnotationMember":
-            {
-                JsonObject node = root["messages"]!["core_rich"]!["ast"]!["variants"]![0]!["nodes"]!.AsArray()
-                    .Select(item => item!.AsObject()).First(item => item["kind"]!.GetValue<string>() == "markup");
-                node["annotations"]!.AsArray().Add(new JsonObject { ["name"] = "future", ["future"] = value });
-                break;
-            }
-            case "addValueMember": root["messages"]!["core_total"]!["ast"]!["declarations"]![0]!["expression"]!["operand"]!["future"] = value; break;
-            case "addNumericValueMember":
-                root["messages"]!["core_total"]!["ast"]!["declarations"]![0]!["expression"]!["operand"] =
-                    new JsonObject { ["kind"] = "number-literal", ["value"] = "1", ["canonical"] = "1", ["future"] = value };
-                break;
-            case "missingExpressionOptionValueKindWithUnknown":
-            case "nonStringExpressionOptionValueKindWithUnknown":
-            {
-                JsonObject expression = root["messages"]!["core_total"]!["ast"]!["declarations"]!.AsArray()
-                    .Select(item => item!["expression"]!.AsObject()).First(item => item["options"]!.AsArray().Count > 0);
-                JsonObject optionValue = expression["options"]![0]!["value"]!.AsObject();
-                if (mutation == "missingExpressionOptionValueKindWithUnknown") optionValue.Remove("kind");
-                else optionValue["kind"] = 1;
-                optionValue["future"] = value;
-                break;
-            }
-            case "missingExpressionAnnotationValueKindWithUnknown":
-                root["messages"]!["core_total"]!["ast"]!["declarations"]![0]!["expression"]!["annotations"]!.AsArray().Add(
-                    new JsonObject { ["name"] = "future", ["value"] = new JsonObject { ["value"] = "x", ["future"] = value } });
-                break;
-            case "missingMarkupValueKindWithUnknown":
-            case "nonStringMarkupValueKindWithUnknown":
-            {
-                JsonObject node = root["messages"]!["core_rich"]!["ast"]!["variants"]![0]!["nodes"]!.AsArray()
-                    .Select(item => item!.AsObject()).First(item => item["kind"]!.GetValue<string>() == "markup" && item["options"]!.AsArray().Count > 0);
-                JsonObject optionValue = node["options"]![0]!["value"]!.AsObject();
-                if (mutation == "missingMarkupValueKindWithUnknown") optionValue.Remove("kind");
-                else optionValue["kind"] = 1;
-                optionValue["future"] = value;
-                break;
-            }
-            case "nonStringMarkupAnnotationValueKindWithUnknown":
-            {
-                JsonObject node = root["messages"]!["core_rich"]!["ast"]!["variants"]![0]!["nodes"]!.AsArray()
-                    .Select(item => item!.AsObject()).First(item => item["kind"]!.GetValue<string>() == "markup");
-                node["annotations"]!.AsArray().Add(new JsonObject
-                {
-                    ["name"] = "future",
-                    ["value"] = new JsonObject { ["kind"] = 1, ["value"] = "x", ["future"] = value },
-                });
-                break;
-            }
-            case "unboundLocal": root["messages"]!["core_total"]!["ast"]!["declarations"]![0]!["expression"]!["operand"] = new JsonObject { ["kind"] = "local", ["value"] = "missing" }; break;
-            case "implicitDynamicDependency":
-            {
-                JsonArray declarations = root["messages"]!["core_total"]!["ast"]!["declarations"]!.AsArray();
-                JsonNode dependency = declarations.Single(item => item!["kind"]!.GetValue<string>() == "input" && item["name"]!.GetValue<string>() == "digits")!;
-                declarations.Remove(dependency);
-                break;
-            }
-            case "selectorContract": root["messages"]!["core_rank"]!["ast"]!["selectors"]![0]!["function"] = value; break;
-            case "duplicateSelector": root["messages"]!["core_rank"]!["ast"]!["selectors"]![1] = root["messages"]!["core_rank"]!["ast"]!["selectors"]![0]!.DeepClone(); break;
-            case "slotIdentity":
-            {
-                JsonArray nodes = root["messages"]!["core_rich"]!["ast"]!["variants"]![0]!["nodes"]!.AsArray();
-                JsonObject link = nodes.Select(item => item!.AsObject()).Single(item => item["kind"]!.GetValue<string>() == "markup" && item["name"]!.GetValue<string>() == "runic:link" && item["markupKind"]!.GetValue<string>() == "open");
-                JsonObject reference = link["options"]!.AsArray().Select(item => item!.AsObject()).Single(item => item["name"]!.GetValue<string>() == "ref");
-                reference["value"]!["value"] = value;
-                break;
-            }
-            case "nodeLimit":
-            {
-                JsonArray nodes = root["messages"]!["core_direct"]!["ast"]!["variants"]![0]!["nodes"]!.AsArray();
-                while (nodes.Count <= test.GetProperty("value").GetInt32()) nodes.Add(new JsonObject { ["kind"] = "text", ["value"] = string.Empty });
-                break;
-            }
-            default: throw new InvalidOperationException("Unknown corpus mutation " + mutation);
-        }
-        return Encoding.UTF8.GetBytes(root.ToJsonString());
-    }
-
     private static void RunEsm(Rmf2ProjectV5 project, JsonElement index)
     {
         string directory = Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(project));
@@ -546,21 +403,21 @@ internal sealed class Rmf2V1CorpusTests
         {
             File.WriteAllText(Path.Combine(directory, "index.json"), index.GetRawText(), new UTF8Encoding(false));
             foreach (Rmf2LocaleV5 locale in project.Locales)
-                File.WriteAllBytes(Path.Combine(directory, locale.Tag + ".json"), Rmf2LocaleArtifactV5.Render(project, locale.Tag).GetUtf8Bytes());
+                File.WriteAllBytes(Path.Combine(directory, locale.Tag + ".json"), CompiledCorpus.Artifact("rmf2-v1/" + locale.Tag));
             File.WriteAllText(Path.Combine(directory, "corpus.mjs"), EsmExecutionScript, new UTF8Encoding(false));
             Run("bun", [Path.Combine(directory, "corpus.mjs")], directory);
         }
         finally { Directory.Delete(directory, true); }
     }
 
-    private static void RunEsmInvalid(Rmf2ProjectV5 project, JsonElement index, TranslationGeneratedOutput artifact)
+    private static void RunEsmInvalid(Rmf2ProjectV5 project, JsonElement index, byte[] artifact)
     {
         string directory = Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(project));
         try
         {
             File.WriteAllText(Path.Combine(directory, "index.json"), index.GetRawText(), new UTF8Encoding(false));
             foreach (JsonElement test in index.GetProperty("invalidPacks").EnumerateArray())
-                File.WriteAllBytes(Path.Combine(directory, test.GetProperty("id").GetString()! + ".json"), Mutate(artifact.Text, test));
+                File.WriteAllBytes(Path.Combine(directory, test.GetProperty("id").GetString()! + ".json"), CompiledCorpus.Apply(artifact, test));
             File.WriteAllText(Path.Combine(directory, "invalid.mjs"), EsmInvalidScript, new UTF8Encoding(false));
             Run("bun", [Path.Combine(directory, "invalid.mjs")], directory);
         }

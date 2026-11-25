@@ -1,0 +1,1035 @@
+{
+  "catalog": "formats",
+  "locale": "it",
+  "contractFingerprint": "sha256:bc7ea94f60872e6bbaa74fc382a6874aec107463da81efce389f8909c01c3c7d",
+  "bidiIsolation": "off",
+  "locales": [
+    {
+      "tag": "it",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "vector0",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "key": "vector1",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "key": "vector10",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "key": "vector11",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "key": "vector12",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "key": "vector13",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "key": "vector14",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "key": "vector15",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "key": "vector16",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "key": "vector17",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "key": "vector18",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "key": "vector19",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "code",
+          "type": "string"
+        },
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "key": "vector2",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "key": "vector20",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "key": "vector21",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "key": "vector22",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "key": "vector23",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "key": "vector24",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "key": "vector25",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "key": "vector26",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "key": "vector27",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "key": "vector28",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "key": "vector29",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "key": "vector3",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "key": "vector30",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "key": "vector31",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "key": "vector32",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "key": "vector33",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 28,
+      "key": "vector34",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 29,
+      "key": "vector35",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 30,
+      "key": "vector36",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "key": "vector37",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "key": "vector38",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "key": "vector39",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "key": "vector4",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 35,
+      "key": "vector40",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 36,
+      "key": "vector41",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 37,
+      "key": "vector42",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 38,
+      "key": "vector43",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 39,
+      "key": "vector44",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 40,
+      "key": "vector45",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 41,
+      "key": "vector46",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 42,
+      "key": "vector47",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 43,
+      "key": "vector48",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 44,
+      "key": "vector49",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 45,
+      "key": "vector5",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 46,
+      "key": "vector50",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 47,
+      "key": "vector51",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 48,
+      "key": "vector52",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 49,
+      "key": "vector53",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 50,
+      "key": "vector54",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 51,
+      "key": "vector55",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 52,
+      "key": "vector56",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 53,
+      "key": "vector57",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 54,
+      "key": "vector58",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 55,
+      "key": "vector59",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 56,
+      "key": "vector6",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 57,
+      "key": "vector60",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 58,
+      "key": "vector61",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 59,
+      "key": "vector62",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 60,
+      "key": "vector63",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        },
+        {
+          "name": "u",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": 61,
+      "key": "vector64",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 62,
+      "key": "vector65",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 63,
+      "key": "vector66",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 64,
+      "key": "vector67",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 65,
+      "key": "vector68",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 66,
+      "key": "vector69",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 67,
+      "key": "vector7",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 68,
+      "key": "vector70",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 69,
+      "key": "vector71",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 70,
+      "key": "vector72",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 71,
+      "key": "vector73",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 72,
+      "key": "vector74",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 73,
+      "key": "vector75",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 74,
+      "key": "vector76",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 75,
+      "key": "vector77",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 76,
+      "key": "vector78",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 77,
+      "key": "vector79",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 78,
+      "key": "vector8",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 79,
+      "key": "vector80",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 80,
+      "key": "vector81",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 81,
+      "key": "vector82",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 82,
+      "key": "vector83",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 83,
+      "key": "vector84",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 84,
+      "key": "vector85",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 85,
+      "key": "vector86",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 86,
+      "key": "vector87",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 87,
+      "key": "vector88",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 88,
+      "key": "vector89",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 89,
+      "key": "vector9",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 90,
+      "key": "vector90",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 91,
+      "key": "vector91",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{},"messages":{"vector0":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector1":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector10":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector11":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector12":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector13":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector14":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector15":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector16":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector17":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector18":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector19":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector2":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector20":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector21":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector22":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector23":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector24":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector25":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector26":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector27":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector28":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector29":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector3":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector30":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector31":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector32":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector33":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector34":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector35":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector36":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector37":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector38":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector39":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector4":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector40":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector41":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector42":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector43":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector44":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector45":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector46":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector47":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector48":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector49":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector5":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector50":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector51":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector52":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector53":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector54":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector55":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector56":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector57":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector58":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector59":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector6":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector60":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector61":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector62":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector63":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector64":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector65":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector66":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector67":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector68":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector69":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector7":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector70":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector71":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector72":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector73":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector74":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector75":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector76":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector77":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector78":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector79":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector8":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector80":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector81":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector82":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector83":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector84":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector85":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector86":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector87":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector88":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector89":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector9":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector90":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]},"vector91":{"slots":{},"structured":false,"contentLocales":{"it":"it"},"content":"inline","skeletons":[]}}}
+}

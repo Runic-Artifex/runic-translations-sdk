@@ -1,0 +1,26 @@
+{
+  "catalog": "bidi",
+  "locale": "he",
+  "contractFingerprint": "sha256:90e29121cf79fbb4c3c398d807be02c7ee66faf94c13d8f52a2624909fc0f32b",
+  "bidiIsolation": "on",
+  "locales": [
+    {
+      "tag": "he",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "vector0",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "name",
+          "type": "string"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{},"messages":{"vector0":{"slots":{},"structured":false,"contentLocales":{"he":"he"},"content":"inline","skeletons":[]}}}
+}

@@ -64,6 +64,8 @@ internal sealed class LocalizedFormatComparisonTests
     {
         var corpus = JsonNode.Parse(File.ReadAllBytes(RepositoryPaths.Resolve("specs", "translations", "corpus", "localized-format-divergences.json")))!;
         Assert.Equal("48.2", corpus["cldrVersion"]!.GetValue<string>(), "Divergence list CLDR pin");
+        string[] ids = corpus["divergences"]!.AsArray().Select(item => item!["id"]?.GetValue<string>() ?? "").ToArray();
+        Assert.True(ids.All(id => id.Length > 0) && ids.Distinct(StringComparer.Ordinal).Count() == ids.Length, "Every divergence needs a unique id.");
         return corpus["divergences"]!.AsArray().Select(item => new Divergence(item!["locale"]!.GetValue<string>(), item["probe"]!.GetValue<string>(),
             item["dotnet"]!.GetValue<string>(), item["esm"]!.GetValue<string>(), item["reason"]!.GetValue<string>(),
             item["engines"]?.AsArray().Select(value => value!.GetValue<string>()).ToArray())).ToList();

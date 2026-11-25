@@ -31,26 +31,17 @@ internal sealed class TransportV2ConformanceTests
 
     private static readonly JsonSerializerOptions Literal = new() { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
-    // Expands the corpus macros that keep large limit cases readable: {"$text": c, "length": n} is a string of n copies of c,
-    // {"$items": v, "count": n} an array of n copies of v, and {"$arguments": v, "count": n, "prefix": p} an object with the
-    // members p0 to p(n-1), each a copy of v.
-    private static JsonNode? Expand(JsonNode? node)
+    private static JsonNode? Expand(JsonNode? node) => CorpusMacros.Expand(node);
+
+    // The compiled groups of this corpus (specs/translations/corpus/compiled): each locale of the writer and the reader catalog.
+    internal static IEnumerable<CompiledCorpus.Group> CompiledGroups()
     {
-        switch (node)
+        JsonObject corpus = Corpus();
+        foreach (string side in new[] { "writer", "reader" })
         {
-            case JsonObject macro when macro.ContainsKey("$text"):
-                return (JsonNode)(string.Concat(Enumerable.Repeat(macro["$text"]!.GetValue<string>(), macro["length"]!.GetValue<int>())));
-            case JsonObject macro when macro.ContainsKey("$items"):
-                return new JsonArray(Enumerable.Range(0, macro["count"]!.GetValue<int>()).Select(_ => Expand(macro["$items"])).ToArray());
-            case JsonObject macro when macro.ContainsKey("$arguments"):
-                return new JsonObject(Enumerable.Range(0, macro["count"]!.GetValue<int>())
-                    .Select(index => KeyValuePair.Create(macro["prefix"]!.GetValue<string>() + index, Expand(macro["$arguments"]))));
-            case JsonObject value:
-                return new JsonObject(value.Select(item => KeyValuePair.Create(item.Key, Expand(item.Value))));
-            case JsonArray array:
-                return new JsonArray(array.Select(Expand).ToArray());
-            default:
-                return node?.DeepClone();
+            Rmf2ProjectV5 project = Project(corpus, side);
+            foreach (Rmf2LocaleV5 locale in project.Locales)
+                yield return new CompiledCorpus.Group("transport-v2/" + side + "." + locale.Tag, "transport-v2-persisted-references.json", project, locale.Tag);
         }
     }
 
@@ -93,9 +84,9 @@ internal sealed class TransportV2ConformanceTests
 
     private static CompiledTranslationSnapshot Snapshot(Rmf2ProjectV5 project, string locale)
     {
-        VerifiedExternalTranslationPack pack = TranslationPackLoader.VerifyAsync(
-            new ExternalTranslationPack(Rmf2LocaleArtifactV5.Render(project, locale).GetUtf8Bytes()), Rmf2V1CorpusTests.PackContract(project, locale))
-            .AsTask().GetAwaiter().GetResult();
+        // The pack is the committed compiled artifact of the reader catalog, read against its committed contract.
+        Assert.Equal(project.CallerFingerprint, CompiledCorpus.PackContract("transport-v2/reader." + locale).ContractFingerprint, "The snapshot is the reader catalog's.");
+        VerifiedExternalTranslationPack pack = CompiledCorpus.Load("transport-v2/reader." + locale);
         CompiledTranslationDefinition[] definitions = project.CanonicalMessages.Select(message =>
             CompiledTranslationDefinition.FromRmf2Inputs(message.Key, message.Inputs.Select(input => new CompiledRmf2Input(input.Name, input.Type switch
             {
@@ -123,6 +114,8 @@ internal sealed class TransportV2ConformanceTests
         JsonObject corpus = Corpus();
         Rmf2ProjectV5 writer = Project(corpus, "writer"), reader = Project(corpus, "reader");
         Assert.True(writer.CallerFingerprint != reader.CallerFingerprint, "The corpus catalogs must have different contracts.");
+        Assert.Equal(writer.CallerFingerprint, corpus["fingerprints"]!["$writer"]!.GetValue<string>(), "The recorded $writer fingerprint");
+        Assert.Equal(reader.CallerFingerprint, corpus["fingerprints"]!["$reader"]!.GetValue<string>(), "The recorded $reader fingerprint");
         var snapshots = new Dictionary<string, CompiledTranslationSnapshot>(StringComparer.Ordinal);
         var failures = new List<string>();
         JsonArray cases = corpus["cases"]!.AsArray();

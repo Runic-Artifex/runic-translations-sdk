@@ -26,7 +26,8 @@ Cross-backend expectations store decimal and integer arguments as strings so a
 JavaScript runner cannot round through binary64. Structured cases compare both
 the effective content locale and the explicit plain-text projection with typed
 functional-slot bindings. Pack rejection cases use the public `RTR0023/*`
-taxonomy shared by .NET and ESM, including closed-member rejection for every
+taxonomy shared by .NET and ESM. Each is a [pack recipe](../README.md#pack-recipes)
+over the compiled German artifact (`packBase`), and the cases include closed-member rejection for every
 normalized wrapper, AST, input, declaration, selector, variant, key, node,
 expression, option, annotation, and value object shape. Value discriminator
 cases also prove that a missing or non-string `kind` remains malformed even

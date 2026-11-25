@@ -18,40 +18,25 @@ namespace Runic.Translations.Compiler.Tests;
 [Category("rmf2-semantic-v5")]
 internal sealed class Rmf2FormatDataValidationTests
 {
-    private static Rmf2ProjectV5 Project() => Rmf2EsmV5Tests.CompileProject("shop", "en", ["en"], false, ("en", """
+    internal static Rmf2ProjectV5 Project() => Rmf2EsmV5Tests.CompileProject("shop", "en", ["en"], false, ("en", """
         total = {{{$n :currency currency=EUR}}}
         debt = {{{$n :currency currency=EUR currencySign=accounting}}}
         speed = {{{$n :unit unit=kilometer-per-hour}}}
         reach = {{{$n :number runic:notation=compact}}}
         """));
 
-    private sealed record Case(string Id, JsonArray Path, JsonNode? Value, bool Delete, int Repeat);
-
-    private static Case[] Cases() => JsonNode.Parse(File.ReadAllBytes(RepositoryPaths.Resolve("specs", "translations", "corpus", "rmf2-format-data-invalid.json")))!["cases"]!
-        .AsArray().Select(item => new Case(item!["id"]!.GetValue<string>(), item["path"]!.AsArray(), item["value"]?.DeepClone(), item["delete"]?.GetValue<bool>() == true,
-            item["repeat"]?.GetValue<int>() ?? 0)).ToArray();
-
-    // The artifact with the case applied to its formatData.
-    private static byte[] Apply(byte[] artifact, Case item)
+    // The cases are pack recipes over the committed compiled artifact of Project (packBase, corpus README "Pack recipes"):
+    // RFC 6902 patches of its formatData and a text edit for a duplicate member, which JSON.parse would let the last one win.
+    private sealed record Case(string Id, JsonNode Recipe)
     {
-        JsonObject root = JsonNode.Parse(artifact)!.AsObject();
-        JsonNode? value = item.Repeat > 0 ? new JsonArray(Enumerable.Range(0, item.Repeat).Select(_ => item.Value!.DeepClone()).ToArray()) : item.Value?.DeepClone();
-        if (item.Path.Count == 0) { root["formatData"] = value; return Encoding.UTF8.GetBytes(root.ToJsonString()); }
-        JsonNode parent = root["formatData"]!;
-        for (int index = 0; index < item.Path.Count - 1; index++) parent = Step(parent, item.Path[index]!) ?? throw new InvalidOperationException(item.Id + ": no member at " + item.Path.ToJsonString());
-        JsonNode last = item.Path[^1]!;
-        if (last.GetValueKind() == JsonValueKind.Number)
-        {
-            JsonArray array = parent.AsArray();
-            int position = last.GetValue<int>();
-            if (position >= array.Count) throw new InvalidOperationException(item.Id + ": no element at " + item.Path.ToJsonString());
-            array[position] = value;
-        }
-        else if (item.Delete) Assert.True(parent.AsObject().Remove(last.GetValue<string>()), item.Id + ": nothing to delete");
-        else parent.AsObject()[last.GetValue<string>()] = value;
-        return Encoding.UTF8.GetBytes(root.ToJsonString());
+        internal bool IsText => Recipe["textEdit"] is not null;
+    }
 
-        static JsonNode? Step(JsonNode node, JsonNode key) => key.GetValueKind() == JsonValueKind.Number ? node.AsArray()[key.GetValue<int>()] : node.AsObject()[key.GetValue<string>()];
+    private static (byte[] Artifact, Case[] Cases) Corpus()
+    {
+        JsonNode corpus = JsonNode.Parse(File.ReadAllBytes(RepositoryPaths.Resolve("specs", "translations", "corpus", "rmf2-format-data-invalid.json")))!;
+        byte[] artifact = File.ReadAllBytes(RepositoryPaths.Resolve("specs", "translations", "corpus", corpus["packBase"]!.GetValue<string>()));
+        return (artifact, corpus["cases"]!.AsArray().Select(item => new Case(item!["id"]!.GetValue<string>(), item)).ToArray());
     }
 
     private static TranslationPackFailureReason? DotNet(Func<object> load)
@@ -88,26 +73,19 @@ internal sealed class Rmf2FormatDataValidationTests
     [Test, DisplayName("crafted formatData is RTR0023/malformed in .NET exact packs and overlays")]
     public void DotNetRejects()
     {
-        Rmf2ProjectV5 project = Project();
-        byte[] artifact = Rmf2LocaleArtifactV5.Render(project, "en").GetUtf8Bytes();
-        TranslationPackContract contract = Rmf2V1CorpusTests.PackContract(project, "en");
+        (byte[] artifact, Case[] cases) = Corpus();
+        TranslationPackContract contract = CompiledCorpus.PackContract("format-data-invalid/en");
         object Exact(byte[] bytes) => TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(bytes), contract).AsTask().GetAwaiter().GetResult();
         object Overlay(byte[] bytes) => TranslationPackV5Loader.ParseOverlay(bytes, "shop", "en", new TranslationPackLimits(), CancellationToken.None);
         Assert.Equal(null, DotNet(() => Exact(artifact)), "the artifact loads as an exact pack");
         Assert.Equal(null, DotNet(() => Overlay(artifact)), "the artifact loads as an overlay");
         var failures = new List<string>();
-        foreach (Case item in Cases())
+        foreach (Case item in cases)
         {
-            byte[] bytes = Apply(artifact, item);
+            byte[] bytes = CompiledCorpus.Apply(artifact, item.Recipe);
             foreach ((string route, Func<byte[], object> load) in new (string, Func<byte[], object>)[] { ("exact", Exact), ("overlay", Overlay) })
                 if (DotNet(() => load(bytes)) is var reason && reason != TranslationPackFailureReason.Malformed) failures.Add(item.Id + "/" + route + ": " + (reason?.ToString() ?? "accepted"));
         }
-        // A duplicate member, which JSON.parse would let the last one win, is malformed too.
-        string text = Encoding.UTF8.GetString(artifact);
-        int currencies = text.IndexOf("\"currencies\":{\"EUR\":2}", StringComparison.Ordinal);
-        Assert.True(currencies > 0, "the artifact's currencies");
-        byte[] duplicate = Encoding.UTF8.GetBytes(text.Insert(currencies + "\"currencies\":{".Length, "\"EUR\":2,"));
-        if (DotNet(() => Exact(duplicate)) != TranslationPackFailureReason.Malformed) failures.Add("duplicate-member/exact");
         Assert.True(failures.Count == 0, string.Join("\n", failures));
     }
 
@@ -118,12 +96,15 @@ internal sealed class Rmf2FormatDataValidationTests
         string directory = Rmf2EsmV5Tests.Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(project));
         try
         {
-            byte[] artifact = Rmf2LocaleArtifactV5.Render(project, "en").GetUtf8Bytes();
+            (byte[] artifact, Case[] all) = Corpus();
             File.WriteAllBytes(Path.Combine(directory, "artifact.json"), artifact);
-            var cases = new JsonArray(Cases().Select(item => (JsonNode)new JsonObject { ["id"] = item.Id, ["artifact"] = JsonNode.Parse(Apply(artifact, item)) }).ToArray());
+            // Patched cases are decoded as values; a text-edited pack, which is no JSON value with unique members, as bytes.
+            var cases = new JsonArray(all.Where(item => !item.IsText).Select(item => (JsonNode)new JsonObject
+                { ["id"] = item.Id, ["artifact"] = JsonNode.Parse(CompiledCorpus.Apply(artifact, item.Recipe)) }).ToArray());
             File.WriteAllText(Path.Combine(directory, "cases.json"), cases.ToJsonString(), new UTF8Encoding(false));
-            string text = Encoding.UTF8.GetString(artifact);
-            File.WriteAllText(Path.Combine(directory, "duplicate.json"), text.Insert(text.IndexOf("\"currencies\":{\"EUR\":2}", StringComparison.Ordinal) + "\"currencies\":{".Length, "\"EUR\":2,"), new UTF8Encoding(false));
+            var packs = new JsonArray(all.Where(item => item.IsText).Select(item => (JsonNode)item.Id).ToArray());
+            File.WriteAllText(Path.Combine(directory, "packs.json"), packs.ToJsonString(), new UTF8Encoding(false));
+            foreach (Case item in all.Where(item => item.IsText)) File.WriteAllBytes(Path.Combine(directory, item.Id + ".pack.json"), CompiledCorpus.Apply(artifact, item.Recipe));
             // The runtime's validator, evaluated as it is written, on all pinned data.
             using (JsonDocument pinned = JsonDocument.Parse(File.ReadAllBytes(RepositoryPaths.Resolve("specs", "translations", "cldr", "runic-formats-48.2.json"))))
                 File.WriteAllText(Path.Combine(directory, "pinned.json"), AllData(pinned), new UTF8Encoding(false));
@@ -147,8 +128,10 @@ internal sealed class Rmf2FormatDataValidationTests
                   if (installed.ok) installed.value.remove();
                   for (const [route, result] of [["exact", decoded], ["overlay", installed]]) if (result.ok || result.reason !== "RTR0023/malformed") failures.push(`${item.id}/${route}: ${result.ok ? "accepted" : result.reason}`);
                 }
-                const duplicate = await decodeLocalePack(new TextEncoder().encode(await read("duplicate.json")), "en");
-                if (duplicate.ok || duplicate.reason !== "RTR0023/malformed") failures.push(`duplicate-member/exact: ${duplicate.reason}`);
+                for (const id of JSON.parse(await read("packs.json"))) {
+                  const decoded = await decodeLocalePack(new TextEncoder().encode(await read(id + ".pack.json")), "en");
+                  if (decoded.ok || decoded.reason !== "RTR0023/malformed") failures.push(`${id}/exact: ${decoded.ok ? "accepted" : decoded.reason}`);
+                }
                 if (failures.length) throw new Error(failures.join("\n"));
                 """, new UTF8Encoding(false));
             foreach (string host in Rmf2DatePercentConformanceTests.EsmHosts()) Rmf2EsmV5Tests.Run(host, [script], directory);
