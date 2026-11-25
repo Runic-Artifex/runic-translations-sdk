@@ -246,14 +246,25 @@ internal static class TranslationDependencyCatalogs
                     int slash = library.Name.IndexOf('/');
                     if (slash <= 0) continue;
                     string package = library.Name[..slash], version = library.Name[(slash + 1)..];
+                    // A package's catalog as runic/<catalog>/runic.json or, from a package built after the rename,
+                    // rax/<catalog>/rax.json; the new format first when a package ships both (TranslationCatalogFormats).
+                    var packedFiles = new List<(TranslationCatalogFormat Format, string Catalog)>();
                     foreach (JsonElement file in files.EnumerateArray())
                     {
                         if (file.ValueKind != JsonValueKind.String) continue;
                         string[] segments = file.GetString()!.Split('/');
-                        if (segments.Length != 3 || segments[0] != "runic" || segments[2] != "runic.json" || !TranslationReviewFile.IsFileName(segments[1])) continue;
+                        if (segments.Length != 3 || !TranslationReviewFile.IsFileName(segments[1])) continue;
+                        foreach (TranslationCatalogFormat format in TranslationCatalogFormats.PackagePreference)
+                            if (segments[0] == TranslationCatalogFormats.PackageFolder(format) && segments[2] == TranslationCatalogFormats.ProjectFileName(format))
+                                packedFiles.Add((format, segments[1]));
+                    }
+                    packedFiles.Sort((left, right) => left.Format == right.Format ? 0 : left.Format == TranslationCatalogFormats.PackagePreference[0] ? -1 : 1);
+                    foreach ((TranslationCatalogFormat format, string catalog) in packedFiles)
+                    {
+                        string[] segments = [TranslationCatalogFormats.PackageFolder(format), catalog, TranslationCatalogFormats.ProjectFileName(format)];
                         foreach (string folder in folders)
                         {
-                            string candidate = Path.GetFullPath(Path.Combine(folder, path.GetString()!, "runic", segments[1], "runic.json"));
+                            string candidate = Path.GetFullPath(Path.Combine(folder, path.GetString()!, segments[0], segments[1], segments[2]));
                             if (!File.Exists(candidate)) continue;
                             if (imported is not null && !imported.Contains(library.Name))
                             {
@@ -261,7 +272,10 @@ internal static class TranslationDependencyCatalogs
                                 break;
                             }
                             if (!result.Any(item => item.Catalog == segments[1] && string.Equals(item.Package, package, StringComparison.OrdinalIgnoreCase)))
+                            {
                                 result.Add(new TranslationDependencyCatalog(segments[1], package, version, TranslationDependencyOrigin.NuGet, candidate));
+                                if (TranslationCatalogFormats.FormerFormatWarning(segments[1], package, format) is { } former) warnings.Add(former);
+                            }
                             break;
                         }
                     }
@@ -489,7 +503,7 @@ internal static class TranslationDependencyCatalogs
         ArgumentNullException.ThrowIfNull(catalog);
         var project = new TranslationSource(catalog.ProjectPath, ReadBounded(catalog.ProjectPath));
         var sources = new List<TranslationSource>();
-        foreach (string file in EnumerateSources(catalog.Root, cancellationToken))
+        foreach (string file in EnumerateSources(catalog.Root, TranslationCatalogFormats.OfProject(catalog.ProjectPath), cancellationToken))
             sources.Add(new TranslationSource(file, ReadBounded(file)));
         return (project, sources);
     }
@@ -502,7 +516,7 @@ internal static class TranslationDependencyCatalogs
     {
         ArgumentNullException.ThrowIfNull(catalog);
         var stamp = new System.Text.StringBuilder();
-        foreach (string file in EnumerateSources(catalog.Root, cancellationToken).Prepend(catalog.ProjectPath))
+        foreach (string file in EnumerateSources(catalog.Root, TranslationCatalogFormats.OfProject(catalog.ProjectPath), cancellationToken).Prepend(catalog.ProjectPath))
         {
             var information = new FileInfo(file);
             stamp.Append(file).Append('|').Append(information.Exists ? information.Length : -1).Append('|')
@@ -520,19 +534,18 @@ internal static class TranslationDependencyCatalogs
         ArgumentNullException.ThrowIfNull(target);
         var sources = new SortedDictionary<string, TranslationSource>(StringComparer.Ordinal);
         if (Directory.Exists(target.Directory))
-            foreach (string file in EnumerateSources(target.Directory, cancellationToken))
+            foreach (string file in EnumerateSources(target.Directory, TranslationCatalogFormats.Current, cancellationToken))
                 sources[new TranslationSource(file, []).Path] = new TranslationSource(file, ReadBounded(file));
         if (buffers is not null)
             foreach (var buffer in buffers)
-                if (IsWithin(target.Directory, Path.GetFullPath(buffer.Key)) && IsSource(buffer.Key))
+                if (IsWithin(target.Directory, Path.GetFullPath(buffer.Key)) && TranslationCatalogFormats.IsSource(buffer.Key, TranslationCatalogFormats.Current))
                     sources[new TranslationSource(Path.GetFullPath(buffer.Key), []).Path] = new TranslationSource(Path.GetFullPath(buffer.Key), buffer.Value);
         return sources.Values.ToArray();
     }
 
-    private static bool IsSource(string path) =>
-        string.Equals(Path.GetExtension(path), ".rmf2", StringComparison.OrdinalIgnoreCase) || string.Equals(Path.GetExtension(path), ".mf2", StringComparison.OrdinalIgnoreCase);
-
-    private static List<string> EnumerateSources(string root, CancellationToken cancellationToken)
+    // The sources of a catalog in a format: .mf2, and .rmf2 or, for a package catalog in the rax format, .ramf2. Override
+    // sources are the application's own, in the current format.
+    private static List<string> EnumerateSources(string root, TranslationCatalogFormat format, CancellationToken cancellationToken)
     {
         var found = new List<string>();
         var pending = new Stack<string>();
@@ -546,7 +559,7 @@ internal static class TranslationDependencyCatalogs
                 FileAttributes attributes = File.GetAttributes(entry);
                 if ((attributes & FileAttributes.ReparsePoint) != 0) continue;
                 if ((attributes & FileAttributes.Directory) != 0) pending.Push(entry);
-                else if (IsSource(entry))
+                else if (TranslationCatalogFormats.IsSource(entry, format))
                 {
                     if (found.Count >= MaximumSources) throw new IOException($"'{root}' holds more than {MaximumSources} translation sources.");
                     found.Add(entry);

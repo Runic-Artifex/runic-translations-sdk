@@ -766,6 +766,17 @@ and no `RunicTranslationsCldrLocale` item, it does not reference
 `Runic.Translations` (0.14 or later), or a `runic.json` could not be read.
 Reference the runtime package, declare the catalog, or remove the property.
 
+## RTR0109
+
+Package catalog in the former format. A warning, from the Runic Artifex rename
+on, when a referenced package ships its catalog under the names from before the
+rename (`runic/<catalog>/runic.json`, `*.rmf2` sources and the `runic:`
+namespace). The build reads it as before, through 1.0.x; the warning names the
+package. Ask its author for a release built with the current Translations
+release, which packs `rax/<catalog>/rax.json`, `*.ramf2` and `rax:`. In 0.16
+the `runic` names are still the current ones, so nothing reports `RTR0109`
+yet; see [Library catalog formats](libraries.md#library-catalog-formats).
+
 ## RCLI8201
 
 The requested output could not be written, for example because of an

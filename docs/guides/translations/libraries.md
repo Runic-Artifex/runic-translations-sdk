@@ -99,6 +99,22 @@ A WPF control library names its catalog in XAML
 packs its own `build/` or `buildTransitive/` props, or targets several
 frameworks, is covered in [The library](composition.md#the-library).
 
+### Library catalog formats
+
+The Runic Artifex rename renames the packed catalog: a package built after it
+ships `rax/<catalog>/rax.json` with `*.ramf2` sources, which spell Runic's MF2
+namespace `rax:` (`:rax:uuid`, `{#rax:link}`), and declares it as a
+`RaxTranslationsPackedCatalog` item. The build, the editor, the language server
+and `runic-translations overrides` read a package's catalog in either format,
+so a library does not have to republish when an application updates, and
+Runic Command Line's `runic-command-line` catalog can move first. The format
+follows the names: `rax:` is read only in `.ramf2` sources, and an
+application's own catalog and its override sources keep the current format.
+When a package ships both, the `rax` one is used. Packing is unchanged. From
+the rename on, a catalog in the former format warns with
+[`RTR0109`](diagnostics.md#rtr0109); in 0.16 the `runic` names are current, so
+nothing warns.
+
 ## The web: the npm package
 
 An npm package ships the same catalog twice: prebuilt, so that it works in any

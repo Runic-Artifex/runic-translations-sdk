@@ -45,7 +45,7 @@ internal static class Rmf2DiagnosticActions
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(diagnostic);
-        if (!source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase) || diagnostic.Id != "RTR0050" || diagnostic.Message != EmptyAssignment ||
+        if (!TranslationCatalogFormats.IsResourceSource(source.Path) || diagnostic.Id != "RTR0050" || diagnostic.Message != EmptyAssignment ||
             !string.Equals(source.Path, diagnostic.Location.Path.Replace('\\', '/'), StringComparison.Ordinal)) return Array.Empty<Rmf2DiagnosticQuickFix>();
         Rmf2ResourceDocument document = Rmf2ResourceReader.Analyze(source);
         if (!document.Diagnostics.Any(item => SameDiagnostic(item, diagnostic))) return Array.Empty<Rmf2DiagnosticQuickFix>();
@@ -58,7 +58,7 @@ internal static class Rmf2DiagnosticActions
     {
         ArgumentNullException.ThrowIfNull(document);
         TranslationSource source = document.Source;
-        if (!source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase)) return Array.Empty<Rmf2DiagnosticQuickFix>();
+        if (!TranslationCatalogFormats.IsResourceSource(source.Path)) return Array.Empty<Rmf2DiagnosticQuickFix>();
         var nodes = document.Nodes.Where(item => !item.IsGroup && item.Message == "" && item.MessageByteMap.Count == 1)
             .ToDictionary(item => item.NameLocation.StartByte);
         var fixes = new List<Rmf2DiagnosticQuickFix>();
@@ -123,7 +123,7 @@ internal static class Rmf2DiagnosticActions
             cancellationToken.ThrowIfCancellationRequested();
             if (diagnostic.Id != "RTR0095" || diagnostic.MessageKey is null || diagnostic.Locale is not { } locale ||
                 !string.Equals(diagnostic.Location.Path.Replace('\\', '/'), source.Path, StringComparison.Ordinal)) continue;
-            bool rmf2 = source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase);
+            bool rmf2 = TranslationCatalogFormats.IsResourceSource(source.Path);
             document ??= rmf2 ? Rmf2ResourceReader.Analyze(source, cancellationToken: cancellationToken) : Rmf2ResourceReader.AnalyzeDirect(source, cancellationToken: cancellationToken);
             Rmf2ResourceNode? node = rmf2
                 ? document.Nodes.FirstOrDefault(item => !item.IsGroup && item.NameLocation.StartByte == diagnostic.Location.StartByte)

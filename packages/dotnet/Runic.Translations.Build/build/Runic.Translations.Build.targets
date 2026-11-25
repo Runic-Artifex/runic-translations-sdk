@@ -82,7 +82,9 @@
          referenced package that packs a catalog (RunicTranslationsPackCatalog) declares it as a RunicTranslationsPackedCatalog
          item from its buildTransitive props. The overridden catalogs' packed runic.json and sources go to the source
          generator, which validates the overrides against them and compiles them into XCatalog.Overlays. -->
-    <Runic.Translations.Build.Rmf2SourceDiscovery Projects="@(RunicTranslationProject)" PackedCatalogs="@(RunicTranslationsPackedCatalog)" Condition="'@(RunicTranslationProject)' != '' and Exists('$(_Rmf2DiscoveryAssembly)')">
+    <!-- A package built after the Runic Artifex rename declares its catalog (rax/<catalog>/rax.json) as a
+         RaxTranslationsPackedCatalog item; both are read, the new one preferred (rename plan P6). -->
+    <Runic.Translations.Build.Rmf2SourceDiscovery Projects="@(RunicTranslationProject)" PackedCatalogs="@(RunicTranslationsPackedCatalog);@(RaxTranslationsPackedCatalog)" Condition="'@(RunicTranslationProject)' != '' and Exists('$(_Rmf2DiscoveryAssembly)')">
       <Output TaskParameter="Sources" ItemName="_TranslationsDiscoveredSource" />
       <Output TaskParameter="OverrideSources" ItemName="RunicTranslationOverride" />
       <Output TaskParameter="PackedCatalogFiles" ItemName="_TranslationsPackedCatalogFile" />
@@ -107,7 +109,7 @@
          with MSBuild's case-insensitive string comparison, matching the compiler contract. -->
     <ItemGroup Condition="'@(RunicTranslationMf2)' == ''">
       <RunicTranslationMf2 Include="@(_TranslationsDiscoveredSource)"
-                      Condition="'%(_TranslationsDiscoveredSource.Extension)' == '.mf2' or '%(_TranslationsDiscoveredSource.Extension)' == '.rmf2'" />
+                      Condition="'%(_TranslationsDiscoveredSource.Extension)' == '.mf2' or '%(_TranslationsDiscoveredSource.Extension)' == '.rmf2' or '%(_TranslationsDiscoveredSource.Extension)' == '.ramf2'" />
     </ItemGroup>
     <ItemGroup>
       <AdditionalFiles Include="@(RunicTranslationMf2->'%(FullPath)')" RunicTranslationKind="Mf2" />
@@ -389,7 +391,7 @@
     <Error Condition="!Exists('$(_Rmf2DiscoveryAssembly)')" Code="RTR0108" HelpKeyword="RTR0108"
            Text="RunicTranslationsCldrSubset needs the Runic.Translations.Build task assembly '$(_Rmf2DiscoveryAssembly)': in a source checkout, build packages/dotnet/Runic.Translations.Build first." />
     <Runic.Translations.Build.CldrLocaleSubset Projects="@(RunicTranslationProject)" Sources="@(RunicTranslationMf2)"
-                                                PackedCatalogs="@(RunicTranslationsPackedCatalog)" Locales="@(RunicTranslationsCldrLocale)"
+                                                PackedCatalogs="@(RunicTranslationsPackedCatalog);@(RaxTranslationsPackedCatalog)" Locales="@(RunicTranslationsCldrLocale)"
                                                 References="@(ReferencePath)" OutputFile="$(_RunicTranslationsCldrSubsetFile)">
       <Output TaskParameter="Languages" PropertyName="RunicTranslationsCldrSubsetLanguages" />
     </Runic.Translations.Build.CldrLocaleSubset>

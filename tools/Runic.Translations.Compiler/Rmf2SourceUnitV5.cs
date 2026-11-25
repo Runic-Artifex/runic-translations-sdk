@@ -57,7 +57,7 @@ internal sealed class Rmf2SourceUnitV5
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(options);
         cancellationToken.ThrowIfCancellationRequested();
-        if (source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
+        if (TranslationCatalogFormats.IsResourceSource(source.Path))
             return new(source, options, Rmf2ResourceReader.Read(source, options, cancellationToken), null, null);
         if (!source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase))
             return new(source, options, null, null, null);
