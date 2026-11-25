@@ -313,7 +313,8 @@ export function check(directory, {exists = repositoryPaths()} = {}) {
   const report = (file, problem) => problems.push(`${version}/${file}: ${problem}`);
   if (existsSync(`${directory}.md`)) report('', `${version}.md exists too; a release keeps either its fragments or its assembled notes`);
   if (!existsSync(join(directory, '_intro.md'))) report('_intro.md', 'missing: the title, install lines and hand-written introduction');
-  for (const entry of readdirSync(directory)) {
+  // Sorted, so the problems come out in the same order on every filesystem (ext4 lists a directory in hash order).
+  for (const entry of readdirSync(directory).sort()) {
     const path = join(directory, entry);
     if (statSync(path).isDirectory()) {
       if (!byName.has(entry)) report(`${entry}/`, `unknown section; use one of ${SECTIONS.map(section => section.name).join(', ')}`);
@@ -326,7 +327,8 @@ export function check(directory, {exists = repositoryPaths()} = {}) {
   for (const section of SECTIONS) {
     const path = join(directory, section.name);
     if (!existsSync(path) || !statSync(path).isDirectory()) continue;
-    for (const file of readdirSync(path)) {
+    // Sorted: of two fragments with the same heading, the later name is the one reported as repeating it.
+    for (const file of readdirSync(path).sort()) {
       const where = `${section.name}/${file}`;
       if (statSync(join(path, file)).isDirectory()) { report(`${where}/`, 'a section has no subdirectories'); continue; }
       if (!['_intro.md', '_end.md'].includes(file) && !fragmentName.test(file)) {
