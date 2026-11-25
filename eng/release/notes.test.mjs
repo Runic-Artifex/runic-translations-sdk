@@ -135,6 +135,13 @@ test('check reports misplaced, malformed and duplicate fragments', () => scratch
   for (const [where, text] of expected) expect(problems.some(problem => problem.startsWith(`9.9.0/${where}`) && problem.includes(text))).toBe(true);
 }));
 
+test('check reads fragments in name order, whatever order the filesystem lists them in', () => scratch(directory => {
+  // Written in reverse: tmpfs and btrfs list a directory in creation order, ext4 in hash order. Of two fragments with
+  // the same heading the later name is the repeat either way.
+  files(directory, { '_intro.md': intro, 'features/2.md': '## Same title (#2)\n\nAgain.\n', 'features/1.md': '## Same title (#2)\n\nText.\n' });
+  expect(check(directory, {exists: anywhere})).toEqual(['9.9.0/features/2.md: repeats the heading "## Same title (#2)" of features/1.md']);
+}));
+
 test('check resolves links as the assembled notes have them', () => scratch(directory => {
   files(directory, {
     '_intro.md': `${intro}\nSee [the fix](#fixes), [the guide](../../../CONTRIBUTING.md) and [Upgrading](#upgrading).\n`,
