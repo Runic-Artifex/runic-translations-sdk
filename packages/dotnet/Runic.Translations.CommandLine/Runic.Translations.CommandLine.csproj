@@ -47,13 +47,20 @@
   <ItemGroup>
     <None Update="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
-  <!-- PkgRunic_CommandLine comes from the restore output, so it is empty while restore itself evaluates the project. -->
+  <!-- PkgRunic_CommandLine comes from the restore output, so it is empty while restore itself evaluates the project.
+       A Command Line release built after the Runic Artifex rename ships the catalog in the new format (translations/rax.json
+       with .ramf2 sources), which is preferred; today's releases ship translations/runic.json with .rmf2 sources
+       (rename plan §6.4, P6). -->
+  <PropertyGroup Condition="'$(PkgRunic_CommandLine)' != ''">
+    <_RunicCommandLineCatalogProject>$(PkgRunic_CommandLine)/translations/runic.json</_RunicCommandLineCatalogProject>
+    <_RunicCommandLineCatalogProject Condition="Exists('$(PkgRunic_CommandLine)/translations/rax.json')">$(PkgRunic_CommandLine)/translations/rax.json</_RunicCommandLineCatalogProject>
+  </PropertyGroup>
   <ItemGroup Condition="'$(PkgRunic_CommandLine)' != ''">
-    <RunicTranslationProject Include="$(PkgRunic_CommandLine)/translations/runic.json" />
+    <RunicTranslationProject Include="$(_RunicCommandLineCatalogProject)" />
   </ItemGroup>
   <Target Name="_RunicCommandLineCatalogSources" BeforeTargets="CoreCompile" Condition="'$(PkgRunic_CommandLine)' != ''">
-    <Error Condition="!Exists('$(PkgRunic_CommandLine)/translations/runic.json')"
-           Text="Runic.CommandLine $(RunicCommandLineVersion) has no translations/runic.json. Runic.Translations.CommandLine compiles the runic-command-line catalog from the Runic.CommandLine package, which carries it from 0.12.0." />
+    <Error Condition="!Exists('$(_RunicCommandLineCatalogProject)')"
+           Text="Runic.CommandLine $(RunicCommandLineVersion) has no translations/runic.json or translations/rax.json. Runic.Translations.CommandLine compiles the runic-command-line catalog from the Runic.CommandLine package, which carries it from 0.12.0." />
   </Target>
   <Import Project="../Runic.Translations.Build/build/Runic.Translations.Build.targets" />
   <Import Project="../../../eng/build/translations.targets" />

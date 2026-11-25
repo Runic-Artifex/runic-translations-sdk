@@ -106,7 +106,7 @@ public sealed class CldrLocaleSubset : ITask
         foreach (ITaskItem source in Sources)
         {
             string file = Path.GetFullPath(source.ItemSpec);
-            if (string.Equals(Path.GetExtension(file), ".rmf2", StringComparison.OrdinalIgnoreCase)) tags.Add(Path.GetFileNameWithoutExtension(file));
+            if (TranslationCatalogFormats.IsResourceSource(file)) tags.Add(Path.GetFileNameWithoutExtension(file));
             else if (string.Equals(Path.GetExtension(file), ".mf2", StringComparison.OrdinalIgnoreCase))
                 foreach (string segment in Path.GetRelativePath(directory, Path.GetDirectoryName(file)!).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
                     tags.Add(segment);

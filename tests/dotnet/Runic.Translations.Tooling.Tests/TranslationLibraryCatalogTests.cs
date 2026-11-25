@@ -32,6 +32,37 @@ internal sealed class TranslationLibraryCatalogTests
         Require(resolution.OverrideOf(Path.Combine(fixture.ProjectDirectory, "en.rmf2")) is null, "An application source maps to an override target.");
     }
 
+    [Test, DisplayName("a NuGet package's catalog in the rax format (rax/<catalog>/rax.json, .ramf2, rax:) resolves, preferred to runic/")]
+    public void ResolvesRaxFormat()
+    {
+        using PackedLibraryFixture fixture = PackedLibraryFixture.Create();
+        // The same package also ships the catalog under rax/ (rename plan P6), with a message only that spelling has.
+        string package = Path.Combine(fixture.Root, "packages", "acme.table", "1.0.0");
+        string rax = Path.Combine(package, "rax", PackedLibraryFixture.Catalog);
+        Directory.CreateDirectory(rax);
+        File.WriteAllText(Path.Combine(rax, "rax.json"), PackedLibraryFixture.LibraryProject);
+        File.WriteAllText(Path.Combine(rax, "en.ramf2"), PackedLibraryFixture.LibraryEnglish + "help = Read {#rax:link}the guide{/rax:link}\n");
+        File.WriteAllText(Path.Combine(rax, "de.ramf2"), PackedLibraryFixture.LibraryGerman + "help = Lies {#rax:link}die Anleitung{/rax:link}\n");
+        string assets = Path.Combine(fixture.Root, "app", "obj", "project.assets.json");
+        File.WriteAllText(assets, File.ReadAllText(assets).Replace("\"runic/acme.table/runic.json\"",
+            "\"runic/acme.table/runic.json\",\"rax/acme.table/rax.json\",\"rax/acme.table/en.ramf2\",\"rax/acme.table/de.ramf2\"", StringComparison.Ordinal));
+
+        TranslationDependencyResolution resolution = TranslationDependencyCatalogs.Resolve(fixture.ProjectPath);
+        // Nothing warns in 0.24: neither format is the former one yet.
+        Require(resolution.Warnings.Count == 0, "Unexpected warnings: " + string.Join("; ", resolution.Warnings));
+        TranslationDependencyCatalog catalog = resolution.Catalogs.Single();
+        Require(Path.GetFullPath(catalog.Root) == Path.GetFullPath(rax), "The rax/ catalog is not preferred: " + catalog.Root);
+        TranslationLibraryCatalog library = TranslationLibraryCatalog.Load(resolution.Overrides.Single());
+        Require(library.Diagnostics.Count == 0, "Unexpected diagnostics: " + string.Join("; ", library.Diagnostics.Select(static d => d.Id + " " + d.Message)));
+        Require(string.Join(",", library.Messages.Select(static message => message.Key)) == "empty,header_sort,help,rows",
+            "Wrong keys: " + string.Join(",", library.Messages.Select(static message => message.Key)));
+        Require(string.Join(",", library.Locales.Select(static locale => locale.Tag).Order(StringComparer.Ordinal)) == "de,en", "Wrong locales");
+
+        // Without the rax/ files the package's runic/ catalog is read as before.
+        Directory.Delete(rax, recursive: true);
+        Require(Path.GetFullPath(TranslationDependencyCatalogs.Resolve(fixture.ProjectPath).Catalogs.Single().Root) == Path.GetFullPath(fixture.LibraryRoot), "runic/ is not read");
+    }
+
     [Test, DisplayName("overrides[].from as an array (NuGet and npm package) resolves the catalog in either ecosystem")]
     [Arguments(false)]
     [Arguments(true)]

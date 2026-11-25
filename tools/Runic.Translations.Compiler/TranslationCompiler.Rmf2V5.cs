@@ -38,14 +38,14 @@ public static partial class TranslationCompiler
             CompileRmf2ProjectV5(project, messages, options, cancellationToken));
     }
 
-    // Whether a path is a grouped <locale>.rmf2 file or a direct <locale>/<id>.mf2 file of the locale.
+    // Whether a path is a grouped <locale>.rmf2 (or a package's <locale>.ramf2) file or a direct <locale>/<id>.mf2 file of the locale.
     private static bool IsLocaleSource(string path, string locale)
     {
         string normalized = path.Replace('\\', '/');
         int slash = normalized.LastIndexOf('/');
         string file = normalized[(slash + 1)..];
-        if (file.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
-            return string.Equals(file[..^".rmf2".Length], locale, StringComparison.OrdinalIgnoreCase);
+        if (TranslationCatalogFormats.ResourceStem(file) is { } stem)
+            return string.Equals(stem, locale, StringComparison.OrdinalIgnoreCase);
         if (!file.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase) || slash <= 0) return false;
         int parent = normalized.LastIndexOf('/', slash - 1);
         return string.Equals(normalized[(parent + 1)..slash], locale, StringComparison.OrdinalIgnoreCase);
@@ -381,7 +381,7 @@ public static partial class TranslationCompiler
             // Once per file: a file's messages are consecutive.
             if (ReferenceEquals(source.Source, previousFile)) continue;
             previousFile = source.Source;
-            if (source.Source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase))
+            if (TranslationCatalogFormats.IsResourceSource(source.Source.Path))
                 groupedFiles.TryAdd(ProjectDirectory(source.Source.Path) + "\0" + source.Locale, source.Source);
         }
         // The suggestions of RTR0011, needed only when a locale defines a key the base locale lacks.
@@ -1209,10 +1209,10 @@ public static partial class TranslationCompiler
         var read = CompilerParallel.Map(sources.Length, index =>
         {
             TranslationSource source = sources[index];
-            if (!source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase) || (units is not null && units.ContainsKey(source))) return null;
+            if (!TranslationCatalogFormats.IsResourceSource(source.Path) || (units is not null && units.ContainsKey(source))) return null;
             if (onlyLocale is not null)
             {
-                string file = source.Path[(source.Path.LastIndexOf('/') + 1)..^".rmf2".Length];
+                string file = TranslationCatalogFormats.ResourceStem(source.Path[(source.Path.LastIndexOf('/') + 1)..])!;
                 if (!TryCanonicalizeLocale(file, out string fileLocale) || !string.Equals(fileLocale, onlyLocale, StringComparison.OrdinalIgnoreCase)) return null;
             }
             return Rmf2ResourceReader.Read(source, options, cancellationToken);
@@ -1221,7 +1221,8 @@ public static partial class TranslationCompiler
         {
             var source = sources[sourceIndex];
             cancellationToken.ThrowIfCancellationRequested();
-            bool grouped = source.Path.EndsWith(".rmf2", StringComparison.OrdinalIgnoreCase);
+            // A package's catalog in the other format names its grouped sources .ramf2 (TranslationCatalogFormats).
+            bool grouped = TranslationCatalogFormats.IsResourceSource(source.Path);
             bool direct = source.Path.EndsWith(".mf2", StringComparison.OrdinalIgnoreCase);
             var matches = (grouped || direct) ? mounts.Where(mount => source.Path.StartsWith(mount.Root, StringComparison.Ordinal)).ToArray() : Array.Empty<(string Root, string[] Prefix)>();
             if ((!grouped && !direct) || matches.Length != 1) { Error("Translation sources must be .mf2 or .rmf2 beneath exactly one source root.", source, new(0, 0)); continue; }
@@ -1244,7 +1245,7 @@ public static partial class TranslationCompiler
             string[] directPath = Array.Empty<string>();
             if (grouped)
             {
-                spelling = parts[^1].Substring(0, parts[^1].Length - 5);
+                spelling = TranslationCatalogFormats.ResourceStem(parts[^1])!;
                 namespaceParts = parts.Take(parts.Length - 1).ToArray();
             }
             else

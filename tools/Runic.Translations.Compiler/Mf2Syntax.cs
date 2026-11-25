@@ -362,8 +362,10 @@ internal static class Mf2SyntaxReader
         private bool _ascii = true;
         private int _at;
         private readonly string? _given;
+        // The catalog format the source's name tells (TranslationCatalogFormats): a .ramf2 source spells Runic's namespace rax:.
+        private readonly TranslationCatalogFormat _format;
         internal Reader(TranslationSource source, TranslationCompilerOptions options, CancellationToken cancellation, string? text = null, bool tokens = true)
-        { _source = source; _options = options; _cancellation = cancellation; _given = text; _tokens = tokens ? new() : null; }
+        { _source = source; _options = options; _cancellation = cancellation; _given = text; _tokens = tokens ? new() : null; _format = TranslationCatalogFormats.OfSource(source.Path); }
         internal Mf2SyntaxDocument Read()
         {
             _cancellation.ThrowIfCancellationRequested();
@@ -581,7 +583,9 @@ internal static class Mf2SyntaxReader
             string result = _text.Substring(nameStart, _at - nameStart);
             if (_at < _text.Length && Bidi(_text[_at])) _at++;
             if (qualified && Starts(":")) { _at++; result += ":" + Name(); }
-            return result.Normalize(NormalizationForm.FormC);
+            result = result.Normalize(NormalizationForm.FormC);
+            // Function, option and markup names in the namespace of a source's own format read as the current one.
+            return qualified ? TranslationCatalogFormats.CanonicalName(result, _format) : result;
         }
         private static bool NameStart(int c) => c is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or '+' or '_' or >= 0xA1 and <= 0x61B or >= 0x61D and <= 0x167F or >= 0x1681 and <= 0x1FFF or >= 0x200B and <= 0x200D or >= 0x2010 and <= 0x2027 or >= 0x2030 and <= 0x205E or >= 0x2060 and <= 0x2065 or >= 0x206A and <= 0x2FFF or >= 0x3001 and <= 0xD7FF or >= 0xE000 and <= 0xFDCF or >= 0xFDF0 and <= 0xFFFD || (c >= 0x10000 && c <= 0x10FFFD && (c & 0xFFFF) <= 0xFFFD);
         private static bool NameChar(int c) => NameStart(c) || c is >= '0' and <= '9' or '-' or '.';

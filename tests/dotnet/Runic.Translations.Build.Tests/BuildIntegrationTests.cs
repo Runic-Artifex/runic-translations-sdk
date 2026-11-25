@@ -263,6 +263,69 @@ internal sealed class BuildIntegrationTests
         }
     }
 
+    [Test, DisplayName("build overrides a library catalog packed in the rax format (rax.json, .ramf2, rax:), preferred to runic/, and in the runic format")]
+    public void PackedCatalogFormats()
+    {
+        using TemporaryDirectory temporary = new();
+        string runic = temporary.Resolve("packages", "acme.grid", "1.0.0", "runic", "acme-grid"), rax = temporary.Resolve("packages", "acme.grid", "1.0.0", "rax", "acme-grid");
+        const string Library = "{\"schemaVersion\":1,\"catalog\":\"acme-grid\",\"code\":{\"namespace\":\"Acme.Grid\",\"className\":\"GridText\"},\"baseLocale\":\"en\",\"locales\":[\"en\"]}\n";
+        Directory.CreateDirectory(runic); Directory.CreateDirectory(rax);
+        // Only the rax spelling has help, which the application overrides: the build fails with RTR0103 if it reads runic/.
+        File.WriteAllText(Path.Combine(runic, "runic.json"), Library, new UTF8Encoding(false));
+        File.WriteAllText(Path.Combine(runic, "en.rmf2"), "title = Grid\n", new UTF8Encoding(false));
+        File.WriteAllText(Path.Combine(rax, "rax.json"), Library, new UTF8Encoding(false));
+        File.WriteAllText(Path.Combine(rax, "en.ramf2"), "title = Grid\nhelp = Read {#rax:link}the guide{/rax:link}\n", new UTF8Encoding(false));
+        string Item(string name, string path) => $"<{name} Include=\"{XmlPath(path)}\" Catalog=\"acme-grid\" Package=\"Acme.Grid\" />";
+        string both = Item("RunicTranslationsPackedCatalog", Path.Combine(runic, "runic.json")) + Item("RaxTranslationsPackedCatalog", Path.Combine(rax, "rax.json"));
+
+        foreach ((string items, string expected) in new[] { (both, "rax.json"), (Item("RunicTranslationsPackedCatalog", Path.Combine(runic, "runic.json")), "runic.json") })
+        {
+            using TemporaryDirectory consumer = CreateConsumer(false, extraItems: items);
+            AddSourceGenerator(consumer);
+            UsePackedTaskLayout(consumer);
+            Directory.Delete(consumer.Resolve("translations", "en"), recursive: true);
+            File.WriteAllText(consumer.Resolve("translations", "runic.json"), "{\"schemaVersion\":1,\"catalog\":\"minimal\",\"code\":{\"namespace\":\"Example\",\"className\":\"MinimalText\"},\"baseLocale\":\"en\",\"overrides\":[{\"catalog\":\"acme-grid\",\"from\":\"Acme.Grid\"}]}\n", new UTF8Encoding(false));
+            File.WriteAllText(consumer.Resolve("translations", "en.rmf2"), "greeting = Hello\n", new UTF8Encoding(false));
+            // The project's own catalog is runic.json, so a .ramf2 file beside it is not one of its sources.
+            File.WriteAllText(consumer.Resolve("translations", "xx.ramf2"), "not { a catalog\n", new UTF8Encoding(false));
+            Directory.CreateDirectory(consumer.Resolve("translations", "overrides", "acme-grid"));
+            File.WriteAllText(consumer.Resolve("translations", "overrides", "acme-grid", "en.rmf2"),
+                expected == "rax.json" ? "help = See {#runic:link}the manual{/runic:link}\n" : "title = Table\n", new UTF8Encoding(false));
+
+            ProcessResult build = Build(consumer);
+            Assert.Equal(0, build.ExitCode, build.Combined);
+            Assert.False(build.Combined.Contains("RTR0109", StringComparison.Ordinal), "Nothing is in the former format in 0.24: " + build.Combined);
+            ProcessResult dump = Processes.DotNet(consumer.Path, ["msbuild", "Consumer.csproj", "-t:DumpTranslationItems", "-p:Configuration=" + BuildConfiguration, "/nologo", "/v:minimal"]);
+            Assert.Equal(0, dump.ExitCode, dump.Combined);
+            string files = File.ReadAllText(consumer.Resolve("dump.txt"));
+            Assert.Contains((expected == "rax.json" ? "rax" : "runic") + "|PackedCatalogProject", files);
+            Assert.Contains("en|PackedCatalogSource", files);
+            Assert.False(files.Contains(expected == "rax.json" ? "runic|PackedCatalogProject" : "rax|PackedCatalogProject", StringComparison.Ordinal), files);
+            Assert.False(files.Contains("xx|", StringComparison.Ordinal), "A .ramf2 file joined the runic.json catalog: " + files);
+        }
+    }
+
+    /// <summary>
+    /// Imports the build files from a copy of the Runic.Translations.Build package's layout: build/ and
+    /// tools/net10.0/Runic.Translations.Build.dll alone, as the package ships the task. Source discovery runs on every
+    /// build, so a task that needs an assembly the package does not put beside it (the compiler ships in
+    /// analyzers/dotnet/cs) fails here as it fails for a packed package (MSB4018), not only in the packed-editor CI job.
+    /// </summary>
+    private static void UsePackedTaskLayout(TemporaryDirectory consumer)
+    {
+        string source = RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build");
+        string layout = consumer.Resolve("package");
+        Directory.CreateDirectory(Path.Combine(layout, "build"));
+        foreach (string file in Directory.EnumerateFiles(Path.Combine(source, "build")))
+            File.Copy(file, Path.Combine(layout, "build", Path.GetFileName(file)));
+        Directory.CreateDirectory(Path.Combine(layout, "tools", "net10.0"));
+        File.Copy(Path.Combine(source, "bin", BuildConfiguration, "net10.0", "Runic.Translations.Build.dll"), Path.Combine(layout, "tools", "net10.0", "Runic.Translations.Build.dll"));
+        string project = File.ReadAllText(consumer.Resolve("Consumer.csproj"));
+        string repository = XmlPath(Path.Combine(source, "build")), packed = XmlPath(Path.Combine(layout, "build"));
+        Assert.Contains(repository, project);
+        File.WriteAllText(consumer.Resolve("Consumer.csproj"), project.Replace(repository, packed, StringComparison.Ordinal), new UTF8Encoding(false));
+    }
+
     private static void AddSourceGenerator(TemporaryDirectory temporary)
     {
         string generator = Path.Combine(RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build"), "bin", BuildConfiguration, "net10.0");

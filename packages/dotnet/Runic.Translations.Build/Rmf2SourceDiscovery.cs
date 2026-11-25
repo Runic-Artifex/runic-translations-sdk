@@ -10,10 +10,17 @@ namespace Runic.Translations.Build;
 public sealed class Rmf2SourceDiscovery : ITask
 {
     private const string CommandLineCatalog = "runic-command-line";
+    /// <summary>A package catalog in the former format (<see cref="TranslationCatalogFormats.FormerFormatWarning"/>); never reported in 0.24.</summary>
+    internal const string FormerFormatCode = "RTR0109";
 
     [Required]
     public ITaskItem[] Projects { get; set; } = Array.Empty<ITaskItem>();
-    /// <summary>The packed library catalogs of referenced packages (<c>RunicTranslationsPackedCatalog</c>: runic.json with Package and Catalog metadata).</summary>
+    /// <summary>
+    /// The packed library catalogs of referenced packages, with Package and Catalog metadata: <c>RunicTranslationsPackedCatalog</c>
+    /// items naming <c>runic/&lt;catalog&gt;/runic.json</c>, and <c>RaxTranslationsPackedCatalog</c> items naming
+    /// <c>rax/&lt;catalog&gt;/rax.json</c> from packages built after the rename. A package that declares a catalog in both
+    /// formats is read in the new one (<see cref="TranslationCatalogFormats.PackagePreference"/>).
+    /// </summary>
     public ITaskItem[] PackedCatalogs { get; set; } = Array.Empty<ITaskItem>();
     [Output]
     public string[] Sources { get; set; } = Array.Empty<string>();
@@ -39,6 +46,9 @@ public sealed class Rmf2SourceDiscovery : ITask
             foreach (ITaskItem project in Projects)
             {
                 string config = Path.GetFullPath(project.ItemSpec), root = Path.GetDirectoryName(config)!;
+                // A project's sources follow its file's format: a rax.json catalog (Command Line's, from its package after the
+                // rename) has .ramf2 sources, a runic.json catalog .rmf2 ones.
+                TranslationCatalogFormat format = TranslationCatalogFormats.OfProject(config);
                 if (new FileInfo(config).Length > 8 * 1024 * 1024) throw new IOException("Translation project exceeds byte limit.");
                 using var json = JsonDocument.Parse(File.ReadAllBytes(config));
                 if (json.RootElement.ValueKind != JsonValueKind.Object) throw new InvalidOperationException("runic.json must contain a JSON object.");
@@ -62,10 +72,10 @@ public sealed class Rmf2SourceDiscovery : ITask
                             !mount.TryGetProperty("path", out JsonElement path) || path.ValueKind != JsonValueKind.String ||
                             string.IsNullOrWhiteSpace(path.GetString()))
                             throw new InvalidOperationException("Each source root must declare a non-empty path.");
-                        Discover(Path.GetFullPath(path.GetString()!, root), root, files);
+                        Discover(Path.GetFullPath(path.GetString()!, root), root, files, format);
                     }
                 }
-                else Discover(root, root, files);
+                else Discover(root, root, files, format);
                 if (overridesRoot is not null) files.RemoveWhere(file => IsWithin(overridesRoot, file));
             }
             Sources = new List<string>(files).ToArray();
@@ -81,7 +91,7 @@ public sealed class Rmf2SourceDiscovery : ITask
             }
             OverrideSources = overrideItems.ToArray();
             var packedItems = new List<ITaskItem>();
-            foreach (ITaskItem packed in PackedCatalogs)
+            foreach (ITaskItem packed in PreferredPackedCatalogs(PackedCatalogs))
             {
                 string catalog = packed.GetMetadata("Catalog"), package = packed.GetMetadata("Package");
                 // runic-command-line also goes to the generator without an override, so it can report application messages
@@ -89,13 +99,17 @@ public sealed class Rmf2SourceDiscovery : ITask
                 if (!overridden.Contains(catalog) && !string.Equals(catalog, CommandLineCatalog, StringComparison.Ordinal)) continue;
                 string config = Path.GetFullPath(packed.ItemSpec), root = Path.GetDirectoryName(config)!;
                 if (!File.Exists(config)) continue;
+                TranslationCatalogFormat format = TranslationCatalogFormats.OfProject(config);
+                if (TranslationCatalogFormats.FormerFormatWarning(catalog, package, format) is { } former)
+                    BuildEngine.LogWarningEvent(new BuildWarningEventArgs("translations", FormerFormatCode, config, 0, 0, 0, 0, former,
+                        FormerFormatCode, nameof(Rmf2SourceDiscovery)));
                 var project = new TaskItem(config);
                 project.SetMetadata("RunicTranslationKind", "PackedCatalogProject");
                 project.SetMetadata("RunicTranslationPackedCatalog", catalog);
                 project.SetMetadata("RunicTranslationPackage", package);
                 packedItems.Add(project);
                 var sources = new SortedSet<string>(StringComparer.Ordinal);
-                Discover(root, root, sources);
+                Discover(root, root, sources, format);
                 foreach (string source in sources)
                 {
                     var item = new TaskItem(source);
@@ -112,7 +126,35 @@ public sealed class Rmf2SourceDiscovery : ITask
             BuildEngine.LogErrorEvent(new BuildErrorEventArgs("translations", "RTR0052", "", 0, 0, 0, 0, exception.Message, "", nameof(Rmf2SourceDiscovery))); return false;
         }
     }
-    internal static void Discover(string root, string projectRoot, SortedSet<string> files)
+    /// <summary>
+    /// The packed catalogs to read: each package's catalog once, in the format <see cref="TranslationCatalogFormats.PackagePreference"/>
+    /// prefers when the package declares it in both (its runic.json and its rax.json).
+    /// </summary>
+    internal static IReadOnlyList<ITaskItem> PreferredPackedCatalogs(IReadOnlyList<ITaskItem> packed)
+    {
+        var chosen = new List<ITaskItem>();
+        var index = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (ITaskItem item in packed)
+        {
+            string identity = item.GetMetadata("Package") + "\0" + item.GetMetadata("Catalog");
+            if (!index.TryGetValue(identity, out int at)) { index[identity] = chosen.Count; chosen.Add(item); continue; }
+            int Rank(ITaskItem candidate)
+            {
+                TranslationCatalogFormat format = TranslationCatalogFormats.OfProject(candidate.ItemSpec);
+                for (int order = 0; order < TranslationCatalogFormats.PackagePreference.Count; order++)
+                    if (TranslationCatalogFormats.PackagePreference[order] == format) return order;
+                return int.MaxValue;
+            }
+            if (Rank(item) < Rank(chosen[at])) chosen[at] = item;
+        }
+        return chosen;
+    }
+
+    internal static void Discover(string root, string projectRoot, SortedSet<string> files) =>
+        Discover(root, projectRoot, files, TranslationCatalogFormat.Runic);
+
+    /// <summary>Adds the sources of a catalog in <paramref name="format"/> below <paramref name="root"/>: <c>.mf2</c>, and <c>.rmf2</c> or <c>.ramf2</c>.</summary>
+    internal static void Discover(string root, string projectRoot, SortedSet<string> files, TranslationCatalogFormat format)
     {
         ValidateNoReparseAncestors(root, projectRoot);
         var directories = new Stack<string>(); directories.Push(root); int visited = 0;
@@ -126,8 +168,7 @@ public sealed class Rmf2SourceDiscovery : ITask
                 FileAttributes attributes = File.GetAttributes(path);
                 if ((attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("Translation sources must not traverse symbolic links.");
                 if ((attributes & FileAttributes.Directory) != 0) directories.Push(path);
-                else if (string.Equals(Path.GetExtension(path), ".mf2", StringComparison.OrdinalIgnoreCase) ||
-                         string.Equals(Path.GetExtension(path), ".rmf2", StringComparison.OrdinalIgnoreCase)) files.Add(path);
+                else if (TranslationCatalogFormats.IsSource(path, format)) files.Add(path);
             }
         }
     }
