@@ -498,7 +498,7 @@ Line and the Runic SDK packages (Views with its Runic Desktop host
 `Runic.Application.Views.Desktop`, `Runic.Desktop.Gtk4` and the native server
 `Runic.Desktop.NativeServer`, the ReactiveUI adapter, Navigation, Platform) and their
 npm counterparts resolve from independently pinned published packages; the editor is
-built on Runic SDK 0.22.0, NuGet and npm, which move together: the page and the host
+built on Runic SDK 0.23.0, NuGet and npm, which move together: the page and the host
 speak Bridge protocol 4, and the generated Views clients in `Frontend/src/generated`
 are rewritten by each SDK update. No sibling SDK checkout is needed; the packages
 resolve through the repository's ordinary NuGet.org configuration. Runic Desktop
