@@ -54,6 +54,16 @@ internal sealed class Rmf2CurrencyUnitConformanceTests
         return result.Project!;
     }
 
+    // The compiled groups of this corpus (specs/translations/corpus/compiled): one project per locale, with the cases as
+    // vector0, vector1, … in corpus order.
+    internal static IEnumerable<CompiledCorpus.Group> CompiledGroups()
+    {
+        (List<Vector> all, string[] currencies, string[] units) = Corpus();
+        return all.GroupBy(vector => vector.Locale, StringComparer.Ordinal)
+            .Select(group => new CompiledCorpus.Group("currency-unit/" + group.Key, "rmf2-currency-unit-conformance.json",
+                Project(group.Key, group.ToArray(), currencies, units), group.Key, group.Select(vector => vector.Id).ToArray()));
+    }
+
     private static Rmf2ProjectV5 Project(string locale, IReadOnlyList<Vector> vectors, string[] currencies, string[] units)
     {
         var source = new StringBuilder();
@@ -89,9 +99,9 @@ internal sealed class Rmf2CurrencyUnitConformanceTests
             Rmf2ProjectV5 project = Project(group.Key, vectors, currencies, units);
             Rmf2LocaleV5 locale = project.Locales.Single();
             Rmf2FormatData data = Rmf2FormatData.Parse(Encoding.UTF8.GetBytes(project.FormatData([group.Key], locale.ResolvedResources.Select(item => item.Message))!));
-            TranslationGeneratedOutput artifact = Rmf2LocaleArtifactV5.Render(project, group.Key);
-            VerifiedExternalTranslationPack pack = TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(artifact.GetUtf8Bytes()),
-                Rmf2V1CorpusTests.PackContract(project, group.Key)).AsTask().GetAwaiter().GetResult();
+            // The pack route reads the committed compiled artifact against its committed contract.
+            string compiled = "currency-unit/" + group.Key;
+            VerifiedExternalTranslationPack pack = CompiledCorpus.Load(compiled);
             for (int index = 0; index < vectors.Length; index++)
             {
                 string key = "vector" + index;
@@ -101,7 +111,7 @@ internal sealed class Rmf2CurrencyUnitConformanceTests
                 CompiledRmf2Message direct = Rmf2V1CorpusTests.Lower(linked.Message with { Inputs = contract.Inputs }, linked.ContentLocale);
                 direct.FormatData = data;
                 Check(vectors[index], () => direct.Format(arguments, vectors[index].Requested), "linked");
-                CompiledRmf2Message loaded = pack.Messages.Single(item => item.Key.Name == key).Message!.Rmf2V5!;
+                CompiledRmf2Message loaded = pack.Messages.Single(item => item.Key.Name == CompiledCorpus.Key(compiled, vectors[index].Id)).Message!.Rmf2V5!;
                 Check(vectors[index], () => loaded.Format(arguments, vectors[index].Requested), "pack");
             }
         }
@@ -129,7 +139,7 @@ internal sealed class Rmf2CurrencyUnitConformanceTests
             string directory = Rmf2EsmV5Tests.Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(project));
             try
             {
-                File.WriteAllBytes(Path.Combine(directory, "artifact.json"), Rmf2LocaleArtifactV5.Render(project, group.Key).GetUtf8Bytes());
+                File.WriteAllBytes(Path.Combine(directory, "artifact.json"), CompiledCorpus.Artifact("currency-unit/" + group.Key));
                 var cases = new JsonArray(vectors.Select((vector, index) => (JsonNode)new JsonObject
                 {
                     ["id"] = vector.Id, ["key"] = "vector" + index, ["requested"] = vector.Requested, ["arguments"] = vector.Arguments.DeepClone(), ["expected"] = vector.Expected,

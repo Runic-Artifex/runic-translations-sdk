@@ -790,7 +790,7 @@ internal sealed class Rmf2EsmV5Tests
         return result.Project!;
     }
 
-    private static Rmf2ProjectV5 Fixture()
+    internal static Rmf2ProjectV5 Fixture()
     {
         string root = RepositoryPaths.Resolve("specs", "translations", "corpus", "v5-project");
         Rmf2ProjectCompilation result = TranslationCompiler.CompileRmf2ProjectV5(

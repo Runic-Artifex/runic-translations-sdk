@@ -1,0 +1,26 @@
+{
+  "catalog": "lists",
+  "locale": "nn",
+  "contractFingerprint": "sha256:0be09d620bd4b9001cba1b81df5c37e890b44cf2923f39f869d701d2c2bc5bc6",
+  "bidiIsolation": "off",
+  "locales": [
+    {
+      "tag": "nn",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "vector0",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{},"messages":{"vector0":{"slots":{},"structured":false,"contentLocales":{"nn":"nn"},"content":"inline","skeletons":[]}}}
+}

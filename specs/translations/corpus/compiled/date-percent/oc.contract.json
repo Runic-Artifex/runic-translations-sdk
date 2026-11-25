@@ -1,0 +1,26 @@
+{
+  "catalog": "dates",
+  "locale": "oc",
+  "contractFingerprint": "sha256:5d93f17f2be4db6dab291cf6149ae5de7acdd11ffd4f9f84835e1c878984efdd",
+  "bidiIsolation": "off",
+  "locales": [
+    {
+      "tag": "oc",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "vector0",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{},"messages":{"vector0":{"slots":{},"structured":false,"contentLocales":{"oc":"oc"},"content":"inline","skeletons":[]}}}
+}

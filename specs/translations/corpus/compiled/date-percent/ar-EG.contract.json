@@ -1,0 +1,92 @@
+{
+  "catalog": "dates",
+  "locale": "ar-EG",
+  "contractFingerprint": "sha256:ac7c1abc83d54cf95da8d009ec45b681d299f037011333a1a20946fdb1ef9e94",
+  "bidiIsolation": "off",
+  "locales": [
+    {
+      "tag": "ar-EG",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "vector0",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "key": "vector1",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "key": "vector2",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "key": "vector3",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "d",
+          "type": "date"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "key": "vector4",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "t",
+          "type": "time"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "key": "vector5",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "key": "vector6",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "d",
+          "type": "date"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{},"messages":{"vector0":{"slots":{},"structured":false,"contentLocales":{"ar-EG":"ar-EG"},"content":"inline","skeletons":[]},"vector1":{"slots":{},"structured":false,"contentLocales":{"ar-EG":"ar-EG"},"content":"inline","skeletons":[]},"vector2":{"slots":{},"structured":false,"contentLocales":{"ar-EG":"ar-EG"},"content":"inline","skeletons":[]},"vector3":{"slots":{},"structured":false,"contentLocales":{"ar-EG":"ar-EG"},"content":"inline","skeletons":[]},"vector4":{"slots":{},"structured":false,"contentLocales":{"ar-EG":"ar-EG"},"content":"inline","skeletons":[]},"vector5":{"slots":{},"structured":false,"contentLocales":{"ar-EG":"ar-EG"},"content":"inline","skeletons":[]},"vector6":{"slots":{},"structured":false,"contentLocales":{"ar-EG":"ar-EG"},"content":"inline","skeletons":[]}}}
+}

@@ -1,0 +1,2 @@
+# The compiled conformance corpus is byte-exact generated output (bun eng/generate-corpus.mjs): no newline conversion.
+specs/translations/corpus/compiled/** -text linguist-generated=true

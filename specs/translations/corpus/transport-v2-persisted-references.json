@@ -8,8 +8,8 @@
     "de"
   ],
   "fingerprints": {
-    "$writer": "The writer catalog's contract fingerprint.",
-    "$reader": "The reader catalog's contract fingerprint."
+    "$writer": "sha256:79bb61f0272a7a0cab989e6d4a6879d6db5cc07fc6b22e36497a4ac630939ece",
+    "$reader": "sha256:1700e4ecc25c6d0cf60457c7d56d76537113a24cbd5beb44752450aef020ff56"
   },
   "writer": {
     "en": "values {\n  flag = Flag {$on :runic:boolean}\n  day = Day {$day :date}\n  clock = At {$at :time}\n  moment = At {$at :datetime}\n  id = Id {$id :runic:uuid}\n  big = Count {$n :integer}\n  amount = Amount {$x :number}\n}\nsteps {\n  build = Building {$name}\n  download =\n    .input {$count :integer}\n    .match $count\n    one {{Downloading one file}}\n    * {{Downloading {$count} files}}\n  cleanup = Cleaning up\n  check = Checking {$target}\n}\noperation {\n  failed = {$step} failed\n  summary = Changed {$names :runic:list}\n  retry = Retry {$attempt} of {$total :integer}\n  notice = Read the {#strong}notes{/strong}\n}\n",

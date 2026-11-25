@@ -1,0 +1,191 @@
+{
+  "catalog": "lists",
+  "locale": "es",
+  "contractFingerprint": "sha256:16474157bdbda20ce2b036b8484ddb6985fa4ac2f439c842892484eaec7a8ce1",
+  "bidiIsolation": "off",
+  "locales": [
+    {
+      "tag": "es",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "vector0",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "key": "vector1",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "key": "vector10",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "key": "vector11",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "key": "vector12",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "key": "vector13",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "key": "vector14",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "key": "vector15",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "key": "vector2",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "key": "vector3",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "key": "vector4",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "key": "vector5",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "key": "vector6",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "key": "vector7",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "key": "vector8",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "key": "vector9",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{},"messages":{"vector0":{"slots":{},"structured":false,"contentLocales":{"es":"es"},"content":"inline","skeletons":[]},"vector1":{"slots":{},"structured":false,"contentLocales":{"es":"es"},"content":"inline","skeletons":[]},"vector10":{"slots":{},"structured":false,"contentLocales":{"es":"es"},"content":"inline","skeletons":[]},"vector11":{"slots":{},"structured":false,"contentLocales":{"es":"es"},"content":"inline","skeletons":[]},"vector12":{"slots":{},"structured":false,"contentLocales":{"es":"es"},"content":"inline","skeletons":[]},"vector13":{"slots":{},"structured":false,"contentLocales":{"es":"es"},"content":"inline","skeletons":[]},"vector14":{"slots":{},"structured":false,"contentLocales":{"es":"es"},"content":"inline","skeletons":[]},"vector15":{"slots":{},"structured":false,"contentLocales":{"es":"es"},"content":"inline","skeletons":[]},"vector2":{"slots":{},"structured":false,"contentLocales":{"es":"es"},"content":"inline","skeletons":[]},"vector3":{"slots":{},"structured":false,"contentLocales":{"es":"es"},"content":"inline","skeletons":[]},"vector4":{"slots":{},"structured":false,"contentLocales":{"es":"es"},"content":"inline","skeletons":[]},"vector5":{"slots":{},"structured":false,"contentLocales":{"es":"es"},"content":"inline","skeletons":[]},"vector6":{"slots":{},"structured":false,"contentLocales":{"es":"es"},"content":"inline","skeletons":[]},"vector7":{"slots":{},"structured":false,"contentLocales":{"es":"es"},"content":"inline","skeletons":[]},"vector8":{"slots":{},"structured":false,"contentLocales":{"es":"es"},"content":"inline","skeletons":[]},"vector9":{"slots":{},"structured":false,"contentLocales":{"es":"es"},"content":"inline","skeletons":[]}}}
+}

@@ -1,0 +1,59 @@
+{
+  "catalog": "grouping",
+  "locale": "fr",
+  "contractFingerprint": "sha256:66912f72bd56e2c15c6ea9fca9d8a8e44581acfd84ef018ce4d0eca0e76092d2",
+  "bidiIsolation": "off",
+  "locales": [
+    {
+      "tag": "fr",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "vector0",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "key": "vector1",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "key": "vector2",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "key": "vector3",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{},"messages":{"vector0":{"slots":{},"structured":false,"contentLocales":{"fr":"fr"},"content":"inline","skeletons":[]},"vector1":{"slots":{},"structured":false,"contentLocales":{"fr":"fr"},"content":"inline","skeletons":[]},"vector2":{"slots":{},"structured":false,"contentLocales":{"fr":"fr"},"content":"inline","skeletons":[]},"vector3":{"slots":{},"structured":false,"contentLocales":{"fr":"fr"},"content":"inline","skeletons":[]}}}
+}

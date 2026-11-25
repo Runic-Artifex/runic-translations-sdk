@@ -1,0 +1,54 @@
+{
+  "catalog": "bidi",
+  "locale": "he",
+  "contractFingerprint": "sha256:22fb57952e4be56078f9685f6ed5701f087fd1ac4811c239294997a5f35e3721",
+  "bidiIsolation": "default",
+  "locales": [
+    {
+      "tag": "he",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "vector0",
+      "canonical": true,
+      "inputs": []
+    },
+    {
+      "id": 1,
+      "key": "vector1",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "people",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "key": "vector2",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "p",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "key": "vector3",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "d",
+          "type": "decimal"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{},"messages":{"vector0":{"slots":{},"structured":false,"contentLocales":{"he":"he"},"content":"inline","skeletons":[]},"vector1":{"slots":{},"structured":false,"contentLocales":{"he":"he"},"content":"inline","skeletons":[]},"vector2":{"slots":{},"structured":false,"contentLocales":{"he":"he"},"content":"inline","skeletons":[]},"vector3":{"slots":{},"structured":false,"contentLocales":{"he":"he"},"content":"inline","skeletons":[]}}}
+}

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
@@ -99,6 +100,7 @@ internal sealed class CompiledMessageTests
     {
         string path = Path.Combine(FindRepositoryRoot(), "specs", "translations", "corpus", "v2-plural-conformance.json");
         using JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(path));
+        AssertUniqueIds(document);
         foreach (JsonElement item in document.RootElement.GetProperty("cases").EnumerateArray())
         {
             string locale = item.GetProperty("locale").GetString()!;
@@ -115,6 +117,7 @@ internal sealed class CompiledMessageTests
         string path = Path.Combine(FindRepositoryRoot(), "specs", "translations", "corpus", "v2-relative-time-conformance.json");
         using JsonDocument document = JsonDocument.Parse(File.ReadAllBytes(path));
         Assert.Equal("48.2", document.RootElement.GetProperty("cldrVersion").GetString());
+        AssertUniqueIds(document);
         foreach (JsonElement item in document.RootElement.GetProperty("cases").EnumerateArray())
         {
             string locale = item.GetProperty("locale").GetString()!;
@@ -124,6 +127,14 @@ internal sealed class CompiledMessageTests
             string expected = item.GetProperty("expected").GetString()!;
             Assert.Equal(expected, TextRelativeTimeFormatter.Format(value, unit, numeric, locale), locale + " " + value + " " + unit);
         }
+    }
+
+    // Every case has an id, unique within its file, which status files and reports use as the case's key.
+    private static void AssertUniqueIds(JsonDocument document)
+    {
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        foreach (JsonElement item in document.RootElement.GetProperty("cases").EnumerateArray())
+            Assert.True(item.TryGetProperty("id", out JsonElement id) && id.GetString() is { Length: > 0 } value && ids.Add(value), "Missing or duplicate case id: " + item.GetRawText());
     }
 
     private static string FindRepositoryRoot()

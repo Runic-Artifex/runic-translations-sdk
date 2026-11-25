@@ -1,5 +1,5 @@
 {
-  "corpusVersion": 1,
+  "corpusVersion": 2,
   "identity": "runic-rmf2-document-v1-conformance",
   "contracts": {
     "documentProfileVersion": 1,
@@ -1846,301 +1846,521 @@
       "success": true
     }
   ],
+  "packBase": "../compiled/rmf2-document-v1/de.json",
   "invalidPacks": [
     {
       "id": "structure-not-in-skeletons",
-      "mutation": "dropLastBlock",
-      "key": "guide_backup",
+      "patch": [
+        {
+          "op": "test",
+          "path": "/messages/guide_backup/ast/variants/0/nodes/23/markupKind",
+          "value": "open"
+        },
+        {
+          "op": "remove",
+          "path": "/messages/guide_backup/ast/variants/0/nodes/25"
+        },
+        {
+          "op": "remove",
+          "path": "/messages/guide_backup/ast/variants/0/nodes/24"
+        },
+        {
+          "op": "remove",
+          "path": "/messages/guide_backup/ast/variants/0/nodes/23"
+        }
+      ],
       "rejection": "RTR0023/document-structure-mismatch"
     },
     {
       "id": "block-in-inline-message",
-      "mutation": "wrapInParagraph",
-      "key": "inline",
+      "patch": [
+        {
+          "op": "add",
+          "path": "/messages/inline/ast/variants/0/nodes/0",
+          "value": {
+            "kind": "markup",
+            "name": "runic:p",
+            "markupKind": "open",
+            "options": [],
+            "annotations": []
+          }
+        },
+        {
+          "op": "add",
+          "path": "/messages/inline/ast/variants/0/nodes/-",
+          "value": {
+            "kind": "markup",
+            "name": "runic:p",
+            "markupKind": "close",
+            "options": [],
+            "annotations": []
+          }
+        }
+      ],
       "rejection": "RTR0023/malformed-pattern"
     },
     {
       "id": "text-at-document-root",
-      "mutation": "insertRootText",
-      "key": "guide_backup",
-      "value": "Loose",
+      "patch": [
+        {
+          "op": "add",
+          "path": "/messages/guide_backup/ast/variants/0/nodes/0",
+          "value": {
+            "kind": "text",
+            "value": "Loose"
+          }
+        }
+      ],
       "rejection": "RTR0023/malformed-pattern"
     },
     {
       "id": "leaf-leading-space",
-      "mutation": "prefixFirstText",
-      "key": "guide_backup",
-      "value": " ",
+      "patch": [
+        {
+          "op": "test",
+          "path": "/messages/guide_backup/ast/variants/0/nodes/2/value",
+          "value": "Bevor Sie fortfahren"
+        },
+        {
+          "op": "replace",
+          "path": "/messages/guide_backup/ast/variants/0/nodes/2/value",
+          "value": " Bevor Sie fortfahren"
+        }
+      ],
       "rejection": "RTR0023/malformed-pattern"
     },
     {
       "id": "leaf-line-feed",
-      "mutation": "prefixFirstText",
-      "key": "files",
-      "variant": 1,
-      "value": "\n",
+      "patch": [
+        {
+          "op": "test",
+          "path": "/messages/files/ast/variants/1/nodes/1/value",
+          "value": "Eine Datei ist bereit."
+        },
+        {
+          "op": "replace",
+          "path": "/messages/files/ast/variants/1/nodes/1/value",
+          "value": "\nEine Datei ist bereit."
+        }
+      ],
       "rejection": "RTR0023/malformed-pattern"
     },
     {
       "id": "skeletons-tampered",
-      "mutation": "skeletons",
-      "key": "files",
-      "value": [
-        "p"
+      "patch": [
+        {
+          "op": "add",
+          "path": "/markupContract/messages/files/skeletons",
+          "value": [
+            "p"
+          ]
+        }
       ],
       "rejection": "RTR0023/argument-contract-mismatch"
     },
     {
       "id": "markup-contract-v1",
-      "mutation": "markupContract",
-      "value": {
-        "version": 1,
-        "contracts": {},
-        "messages": {}
-      },
+      "patch": [
+        {
+          "op": "replace",
+          "path": "/markupContract",
+          "value": {
+            "version": 1,
+            "contracts": {},
+            "messages": {}
+          }
+        }
+      ],
       "rejection": "RTR0023/markup-contract-version-mismatch"
     },
     {
       "id": "leaf-trailing-space",
-      "mutation": "editText",
-      "key": "guide_backup",
-      "text": 8,
-      "suffix": " ",
+      "patch": [
+        {
+          "op": "test",
+          "path": "/messages/guide_backup/ast/variants/0/nodes/24/value",
+          "value": "Sie können fortfahren, wenn die Prüfung abgeschlossen ist."
+        },
+        {
+          "op": "replace",
+          "path": "/messages/guide_backup/ast/variants/0/nodes/24/value",
+          "value": "Sie können fortfahren, wenn die Prüfung abgeschlossen ist. "
+        }
+      ],
       "rejection": "RTR0023/malformed-pattern"
     },
     {
       "id": "leaf-space-across-inline-boundary",
-      "mutation": "editText",
-      "key": "guide_backup",
-      "text": 6,
-      "prefix": " ",
+      "patch": [
+        {
+          "op": "test",
+          "path": "/messages/guide_backup/ast/variants/0/nodes/18/value",
+          "value": "Prüfen"
+        },
+        {
+          "op": "replace",
+          "path": "/messages/guide_backup/ast/variants/0/nodes/18/value",
+          "value": " Prüfen"
+        }
+      ],
       "rejection": "RTR0023/malformed-pattern"
     },
     {
       "id": "list-item-at-root",
-      "mutation": "insertNodes",
-      "key": "guide_backup",
-      "at": 0,
-      "nodes": [
+      "patch": [
         {
-          "kind": "markup",
-          "name": "runic:li",
-          "markupKind": "open",
-          "options": [],
-          "annotations": []
+          "op": "add",
+          "path": "/messages/guide_backup/ast/variants/0/nodes/0",
+          "value": {
+            "kind": "markup",
+            "name": "runic:li",
+            "markupKind": "open",
+            "options": [],
+            "annotations": []
+          }
         },
         {
-          "kind": "text",
-          "value": "Loose"
+          "op": "add",
+          "path": "/messages/guide_backup/ast/variants/0/nodes/1",
+          "value": {
+            "kind": "text",
+            "value": "Loose"
+          }
         },
         {
-          "kind": "markup",
-          "name": "runic:li",
-          "markupKind": "close",
-          "options": [],
-          "annotations": []
+          "op": "add",
+          "path": "/messages/guide_backup/ast/variants/0/nodes/2",
+          "value": {
+            "kind": "markup",
+            "name": "runic:li",
+            "markupKind": "close",
+            "options": [],
+            "annotations": []
+          }
         }
       ],
       "rejection": "RTR0023/malformed-pattern"
     },
     {
       "id": "paragraph-inside-list",
-      "mutation": "insertNodes",
-      "key": "guide_backup",
-      "at": 9,
-      "nodes": [
+      "patch": [
         {
-          "kind": "markup",
-          "name": "runic:p",
-          "markupKind": "open",
-          "options": [],
-          "annotations": []
+          "op": "add",
+          "path": "/messages/guide_backup/ast/variants/0/nodes/9",
+          "value": {
+            "kind": "markup",
+            "name": "runic:p",
+            "markupKind": "open",
+            "options": [],
+            "annotations": []
+          }
         },
         {
-          "kind": "text",
-          "value": "Loose"
+          "op": "add",
+          "path": "/messages/guide_backup/ast/variants/0/nodes/10",
+          "value": {
+            "kind": "text",
+            "value": "Loose"
+          }
         },
         {
-          "kind": "markup",
-          "name": "runic:p",
-          "markupKind": "close",
-          "options": [],
-          "annotations": []
+          "op": "add",
+          "path": "/messages/guide_backup/ast/variants/0/nodes/11",
+          "value": {
+            "kind": "markup",
+            "name": "runic:p",
+            "markupKind": "close",
+            "options": [],
+            "annotations": []
+          }
         }
       ],
       "rejection": "RTR0023/malformed-pattern"
     },
     {
       "id": "block-inside-inline-markup",
-      "mutation": "insertNodes",
-      "key": "guide_backup",
-      "at": 2,
-      "nodes": [
+      "patch": [
         {
-          "kind": "markup",
-          "name": "runic:p",
-          "markupKind": "open",
-          "options": [],
-          "annotations": []
+          "op": "add",
+          "path": "/messages/guide_backup/ast/variants/0/nodes/2",
+          "value": {
+            "kind": "markup",
+            "name": "runic:p",
+            "markupKind": "open",
+            "options": [],
+            "annotations": []
+          }
         },
         {
-          "kind": "text",
-          "value": "Loose"
+          "op": "add",
+          "path": "/messages/guide_backup/ast/variants/0/nodes/3",
+          "value": {
+            "kind": "text",
+            "value": "Loose"
+          }
         },
         {
-          "kind": "markup",
-          "name": "runic:p",
-          "markupKind": "close",
-          "options": [],
-          "annotations": []
+          "op": "add",
+          "path": "/messages/guide_backup/ast/variants/0/nodes/4",
+          "value": {
+            "kind": "markup",
+            "name": "runic:p",
+            "markupKind": "close",
+            "options": [],
+            "annotations": []
+          }
         }
       ],
       "rejection": "RTR0023/malformed-pattern"
     },
     {
       "id": "integer-option-leading-zero",
-      "mutation": "setOption",
-      "key": "lists_upper",
-      "option": "start",
-      "value": {
-        "kind": "string-literal",
-        "value": "026"
-      },
+      "patch": [
+        {
+          "op": "test",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/name",
+          "value": "start"
+        },
+        {
+          "op": "replace",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/value",
+          "value": {
+            "kind": "string-literal",
+            "value": "026"
+          }
+        }
+      ],
       "rejection": "RTR0023/argument-contract-mismatch"
     },
     {
       "id": "integer-option-plus-sign",
-      "mutation": "setOption",
-      "key": "lists_upper",
-      "option": "start",
-      "value": {
-        "kind": "string-literal",
-        "value": "+26"
-      },
+      "patch": [
+        {
+          "op": "test",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/name",
+          "value": "start"
+        },
+        {
+          "op": "replace",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/value",
+          "value": {
+            "kind": "string-literal",
+            "value": "+26"
+          }
+        }
+      ],
       "rejection": "RTR0023/argument-contract-mismatch"
     },
     {
       "id": "integer-option-fraction",
-      "mutation": "setOption",
-      "key": "lists_upper",
-      "option": "start",
-      "value": {
-        "kind": "string-literal",
-        "value": "26.0"
-      },
+      "patch": [
+        {
+          "op": "test",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/name",
+          "value": "start"
+        },
+        {
+          "op": "replace",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/value",
+          "value": {
+            "kind": "string-literal",
+            "value": "26.0"
+          }
+        }
+      ],
       "rejection": "RTR0023/argument-contract-mismatch"
     },
     {
       "id": "integer-option-exponent",
-      "mutation": "setOption",
-      "key": "lists_upper",
-      "option": "start",
-      "value": {
-        "kind": "string-literal",
-        "value": "2.6e1"
-      },
+      "patch": [
+        {
+          "op": "test",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/name",
+          "value": "start"
+        },
+        {
+          "op": "replace",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/value",
+          "value": {
+            "kind": "string-literal",
+            "value": "2.6e1"
+          }
+        }
+      ],
       "rejection": "RTR0023/argument-contract-mismatch"
     },
     {
       "id": "integer-option-leading-space",
-      "mutation": "setOption",
-      "key": "lists_upper",
-      "option": "start",
-      "value": {
-        "kind": "string-literal",
-        "value": " 26"
-      },
+      "patch": [
+        {
+          "op": "test",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/name",
+          "value": "start"
+        },
+        {
+          "op": "replace",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/value",
+          "value": {
+            "kind": "string-literal",
+            "value": " 26"
+          }
+        }
+      ],
       "rejection": "RTR0023/argument-contract-mismatch"
     },
     {
       "id": "integer-option-trailing-space",
-      "mutation": "setOption",
-      "key": "lists_upper",
-      "option": "start",
-      "value": {
-        "kind": "string-literal",
-        "value": "26 "
-      },
+      "patch": [
+        {
+          "op": "test",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/name",
+          "value": "start"
+        },
+        {
+          "op": "replace",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/value",
+          "value": {
+            "kind": "string-literal",
+            "value": "26 "
+          }
+        }
+      ],
       "rejection": "RTR0023/argument-contract-mismatch"
     },
     {
       "id": "integer-option-negative-zero",
-      "mutation": "setOption",
-      "key": "lists_upper",
-      "option": "start",
-      "value": {
-        "kind": "string-literal",
-        "value": "-0"
-      },
+      "patch": [
+        {
+          "op": "test",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/name",
+          "value": "start"
+        },
+        {
+          "op": "replace",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/value",
+          "value": {
+            "kind": "string-literal",
+            "value": "-0"
+          }
+        }
+      ],
       "rejection": "RTR0023/argument-contract-mismatch"
     },
     {
       "id": "integer-option-below-minimum",
-      "mutation": "setOption",
-      "key": "lists_upper",
-      "option": "start",
-      "value": {
-        "kind": "string-literal",
-        "value": "0"
-      },
+      "patch": [
+        {
+          "op": "test",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/name",
+          "value": "start"
+        },
+        {
+          "op": "replace",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/value",
+          "value": {
+            "kind": "string-literal",
+            "value": "0"
+          }
+        }
+      ],
       "rejection": "RTR0023/argument-contract-mismatch"
     },
     {
       "id": "integer-option-above-int32",
-      "mutation": "setOption",
-      "key": "lists_upper",
-      "option": "start",
-      "value": {
-        "kind": "string-literal",
-        "value": "2147483648"
-      },
+      "patch": [
+        {
+          "op": "test",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/name",
+          "value": "start"
+        },
+        {
+          "op": "replace",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/value",
+          "value": {
+            "kind": "string-literal",
+            "value": "2147483648"
+          }
+        }
+      ],
       "rejection": "RTR0023/argument-contract-mismatch"
     },
     {
       "id": "integer-option-arabic-indic-digits",
-      "mutation": "setOption",
-      "key": "lists_upper",
-      "option": "start",
-      "value": {
-        "kind": "string-literal",
-        "value": "٢٦"
-      },
+      "patch": [
+        {
+          "op": "test",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/name",
+          "value": "start"
+        },
+        {
+          "op": "replace",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/value",
+          "value": {
+            "kind": "string-literal",
+            "value": "٢٦"
+          }
+        }
+      ],
       "rejection": "RTR0023/argument-contract-mismatch"
     },
     {
       "id": "integer-option-non-canonical-number",
-      "mutation": "setOption",
-      "key": "lists_upper",
-      "option": "start",
-      "value": {
-        "kind": "number-literal",
-        "value": "26.0",
-        "canonical": "26"
-      },
+      "patch": [
+        {
+          "op": "test",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/name",
+          "value": "start"
+        },
+        {
+          "op": "replace",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/value",
+          "value": {
+            "kind": "number-literal",
+            "value": "26.0",
+            "canonical": "26"
+          }
+        }
+      ],
       "rejection": "RTR0023/argument-contract-mismatch"
     }
   ],
   "validPacks": [
     {
       "id": "integer-option-string-literal",
-      "mutation": "setOption",
-      "key": "lists_upper",
-      "option": "start",
-      "value": {
-        "kind": "string-literal",
-        "value": "26"
-      }
+      "patch": [
+        {
+          "op": "test",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/name",
+          "value": "start"
+        },
+        {
+          "op": "replace",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/value",
+          "value": {
+            "kind": "string-literal",
+            "value": "26"
+          }
+        }
+      ]
     },
     {
       "id": "integer-option-number-literal",
-      "mutation": "setOption",
-      "key": "lists_upper",
-      "option": "start",
-      "value": {
-        "kind": "number-literal",
-        "value": "26",
-        "canonical": "26"
-      }
+      "patch": [
+        {
+          "op": "test",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/name",
+          "value": "start"
+        },
+        {
+          "op": "replace",
+          "path": "/messages/lists_upper/ast/variants/0/nodes/0/options/1/value",
+          "value": {
+            "kind": "number-literal",
+            "value": "26",
+            "canonical": "26"
+          }
+        }
+      ]
     }
   ]
 }

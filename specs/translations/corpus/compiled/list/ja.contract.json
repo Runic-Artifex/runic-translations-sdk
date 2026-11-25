@@ -1,0 +1,70 @@
+{
+  "catalog": "lists",
+  "locale": "ja",
+  "contractFingerprint": "sha256:5aebeed88c57926546d2c29a50795ac56c49833d963ba40687a46d0b0f9ca515",
+  "bidiIsolation": "off",
+  "locales": [
+    {
+      "tag": "ja",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "vector0",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "key": "vector1",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "key": "vector2",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "key": "vector3",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "key": "vector4",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "items",
+          "type": "list"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{},"messages":{"vector0":{"slots":{},"structured":false,"contentLocales":{"ja":"ja"},"content":"inline","skeletons":[]},"vector1":{"slots":{},"structured":false,"contentLocales":{"ja":"ja"},"content":"inline","skeletons":[]},"vector2":{"slots":{},"structured":false,"contentLocales":{"ja":"ja"},"content":"inline","skeletons":[]},"vector3":{"slots":{},"structured":false,"contentLocales":{"ja":"ja"},"content":"inline","skeletons":[]},"vector4":{"slots":{},"structured":false,"contentLocales":{"ja":"ja"},"content":"inline","skeletons":[]}}}
+}

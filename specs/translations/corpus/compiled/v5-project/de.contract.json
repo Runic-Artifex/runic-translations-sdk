@@ -1,0 +1,49 @@
+{
+  "catalog": "billing",
+  "locale": "de",
+  "contractFingerprint": "sha256:12b4348dd74e56f33b568e93b1fd86fed3ee9147d8f43fe46c40e4cb8763f6f7",
+  "bidiIsolation": "default",
+  "locales": [
+    {
+      "tag": "de",
+      "fallback": "en"
+    },
+    {
+      "tag": "en",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "account_bill",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "count",
+          "type": "int64"
+        },
+        {
+          "name": "rate",
+          "type": "decimal"
+        },
+        {
+          "name": "用户",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "key": "account_total",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "rate",
+          "type": "decimal"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{"runic:link":{"kind":"paired","placement":"inline","children":"inline","interactive":true,"plainText":"children","options":{}}},"messages":{"account_bill":{"slots":{"invoice":{"kind":"runic:link","min":1,"max":1}},"structured":true,"contentLocales":{"de":"de","en":"en"},"content":"inline","skeletons":[]},"account_total":{"slots":{},"structured":false,"contentLocales":{"de":"de","en":"en"},"content":"inline","skeletons":[]}}}
+}

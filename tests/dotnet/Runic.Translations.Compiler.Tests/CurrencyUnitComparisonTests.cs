@@ -57,6 +57,8 @@ internal sealed class CurrencyUnitComparisonTests
     {
         var corpus = JsonNode.Parse(File.ReadAllBytes(RepositoryPaths.Resolve("specs", "translations", "corpus", "currency-unit-divergences.json")))!;
         Assert.Equal("48.2", corpus["cldrVersion"]!.GetValue<string>(), "Currency and unit divergence list CLDR pin");
+        string[] ids = corpus["divergences"]!.AsArray().Select(item => item!["id"]?.GetValue<string>() ?? "").ToArray();
+        Assert.True(ids.All(id => id.Length > 0) && ids.Distinct(StringComparer.Ordinal).Count() == ids.Length, "Every divergence needs a unique id.");
         return corpus["divergences"]!.AsArray().SelectMany(item => item!["locales"]!.AsArray().Select(locale => new Divergence(locale!.GetValue<string>(),
             item["kind"]!.GetValue<string>(), item["reason"]!.GetValue<string>()))).ToList();
     }

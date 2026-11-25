@@ -1,0 +1,158 @@
+{
+  "catalog": "dates",
+  "locale": "sv",
+  "contractFingerprint": "sha256:7614a33bf973e8b59a8eb70376cbcafa1897b5245e228f4e0188a1a105536c25",
+  "bidiIsolation": "off",
+  "locales": [
+    {
+      "tag": "sv",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "vector0",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "d",
+          "type": "date"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "key": "vector1",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "d",
+          "type": "date"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "key": "vector10",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "key": "vector11",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "key": "vector12",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "d",
+          "type": "date"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "key": "vector2",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "d",
+          "type": "date"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "key": "vector3",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "d",
+          "type": "date"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "key": "vector4",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "t",
+          "type": "time"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "key": "vector5",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "t",
+          "type": "time"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "key": "vector6",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "t",
+          "type": "time"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "key": "vector7",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "t",
+          "type": "time"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "key": "vector8",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "at",
+          "type": "datetime"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "key": "vector9",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "at",
+          "type": "datetime"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{},"messages":{"vector0":{"slots":{},"structured":false,"contentLocales":{"sv":"sv"},"content":"inline","skeletons":[]},"vector1":{"slots":{},"structured":false,"contentLocales":{"sv":"sv"},"content":"inline","skeletons":[]},"vector10":{"slots":{},"structured":false,"contentLocales":{"sv":"sv"},"content":"inline","skeletons":[]},"vector11":{"slots":{},"structured":false,"contentLocales":{"sv":"sv"},"content":"inline","skeletons":[]},"vector12":{"slots":{},"structured":false,"contentLocales":{"sv":"sv"},"content":"inline","skeletons":[]},"vector2":{"slots":{},"structured":false,"contentLocales":{"sv":"sv"},"content":"inline","skeletons":[]},"vector3":{"slots":{},"structured":false,"contentLocales":{"sv":"sv"},"content":"inline","skeletons":[]},"vector4":{"slots":{},"structured":false,"contentLocales":{"sv":"sv"},"content":"inline","skeletons":[]},"vector5":{"slots":{},"structured":false,"contentLocales":{"sv":"sv"},"content":"inline","skeletons":[]},"vector6":{"slots":{},"structured":false,"contentLocales":{"sv":"sv"},"content":"inline","skeletons":[]},"vector7":{"slots":{},"structured":false,"contentLocales":{"sv":"sv"},"content":"inline","skeletons":[]},"vector8":{"slots":{},"structured":false,"contentLocales":{"sv":"sv"},"content":"inline","skeletons":[]},"vector9":{"slots":{},"structured":false,"contentLocales":{"sv":"sv"},"content":"inline","skeletons":[]}}}
+}

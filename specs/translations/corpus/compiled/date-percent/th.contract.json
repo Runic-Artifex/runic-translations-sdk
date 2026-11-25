@@ -1,0 +1,26 @@
+{
+  "catalog": "dates",
+  "locale": "th",
+  "contractFingerprint": "sha256:27fbf0410de16e5eb87f96fc7983bbac20ecb73dcb083aef98c85821cdd026a0",
+  "bidiIsolation": "off",
+  "locales": [
+    {
+      "tag": "th",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "vector0",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "d",
+          "type": "date"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{},"messages":{"vector0":{"slots":{},"structured":false,"contentLocales":{"th":"th"},"content":"inline","skeletons":[]}}}
+}

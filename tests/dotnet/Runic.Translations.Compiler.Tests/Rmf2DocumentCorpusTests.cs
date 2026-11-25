@@ -28,7 +28,7 @@ internal sealed class Rmf2DocumentCorpusTests
         using JsonDocument index = Index();
         Rmf2ProjectV5 project = Compile();
         JsonElement root = index.RootElement;
-        Assert.Equal(1, root.GetProperty("corpusVersion").GetInt32());
+        Assert.Equal(2, root.GetProperty("corpusVersion").GetInt32());
         Assert.Equal("runic-rmf2-document-v1-conformance", root.GetProperty("identity").GetString());
         JsonElement contracts = root.GetProperty("contracts");
         Assert.Equal(contracts.GetProperty("messageAstVersion").GetInt32(), Rmf2ProjectV5.MessageGrammarVersion);
@@ -47,8 +47,13 @@ internal sealed class Rmf2DocumentCorpusTests
         JsonElement deterministic = root.GetProperty("determinism");
         Assert.Equal(deterministic.GetProperty("callerFingerprint").GetString(), project.CallerFingerprint, "Caller fingerprint golden");
         foreach (Rmf2LocaleV5 locale in project.Locales)
+        {
             Assert.Equal(deterministic.GetProperty("localeArtifactSha256").GetProperty(locale.Tag).GetString(), Rmf2LocaleArtifactV5.Render(project, locale.Tag).Sha256,
                 "Locale artifact digest golden for " + locale.Tag);
+            Assert.Equal(deterministic.GetProperty("localeArtifactSha256").GetProperty(locale.Tag).GetString(),
+                "sha256:" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(CompiledCorpus.Artifact("rmf2-document-v1/" + locale.Tag))),
+                "Committed compiled artifact for " + locale.Tag);
+        }
     }
 
     [Test, DisplayName("RMF2 document corpus compiler cases report the expected diagnostics")]
@@ -76,9 +81,8 @@ internal sealed class Rmf2DocumentCorpusTests
         var documents = new Rmf2DocumentRenderer(contract);
         var inline = new Rmf2InlineRenderer(contract);
         var verified = new Dictionary<string, VerifiedExternalTranslationPack>(StringComparer.Ordinal);
-        foreach (Rmf2LocaleV5 locale in project.Locales)
-            verified.Add(locale.Tag, TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(Rmf2LocaleArtifactV5.Render(project, locale.Tag).GetUtf8Bytes()),
-                Rmf2V1CorpusTests.PackContract(project, locale.Tag)).AsTask().GetAwaiter().GetResult());
+        // The pack route reads the committed compiled artifacts against their committed contracts.
+        foreach (Rmf2LocaleV5 locale in project.Locales) verified.Add(locale.Tag, CompiledCorpus.Load("rmf2-document-v1/" + locale.Tag));
         JsonElement slotDefinitions = index.RootElement.GetProperty("slots");
 
         foreach (JsonElement test in index.RootElement.GetProperty("executions").EnumerateArray())
@@ -142,47 +146,53 @@ internal sealed class Rmf2DocumentCorpusTests
             File.WriteAllText(Path.Combine(directory, "index.json"), index.RootElement.GetRawText(), new UTF8Encoding(false));
             File.Copy(Path.Combine(Root, "html.json"), Path.Combine(directory, "html.json"));
             foreach (Rmf2LocaleV5 locale in project.Locales)
-                File.WriteAllBytes(Path.Combine(directory, locale.Tag + ".json"), Rmf2LocaleArtifactV5.Render(project, locale.Tag).GetUtf8Bytes());
+                File.WriteAllBytes(Path.Combine(directory, locale.Tag + ".json"), CompiledCorpus.Artifact("rmf2-document-v1/" + locale.Tag));
             File.WriteAllText(Path.Combine(directory, "dom.mjs"), EsmDomScript, new UTF8Encoding(false));
             Rmf2V1CorpusTests.Run("bun", [Path.Combine(directory, "dom.mjs")], directory);
         }
         finally { Directory.Delete(directory, true); }
     }
 
-    [Test, NotInParallel, DisplayName("RMF2 document corpus pack rejection taxonomy agrees across .NET and ESM")]
+    // The pack cases are recipes over the committed German artifact (packBase), read against its committed contract.
+    [Test, DisplayName("RMF2 document corpus pack rejection taxonomy holds in .NET for the committed artifact and recipes")]
     public void InvalidPacks()
     {
         using JsonDocument index = Index();
-        Rmf2ProjectV5 project = Compile();
-        TranslationGeneratedOutput artifact = Rmf2LocaleArtifactV5.Render(project, "de");
-        TranslationPackContract contract = Rmf2V1CorpusTests.PackContract(project, "de");
-        string directory = Rmf2V1CorpusTests.Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(project));
+        byte[] artifact = PackBase(index);
+        TranslationPackContract contract = CompiledCorpus.PackContract("rmf2-document-v1/de");
+        foreach (JsonElement test in index.RootElement.GetProperty("invalidPacks").EnumerateArray())
+        {
+            string id = test.GetProperty("id").GetString()!;
+            try
+            {
+                _ = TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(CompiledCorpus.Apply(artifact, test)), contract).AsTask().GetAwaiter().GetResult();
+                throw new InvalidOperationException("Invalid pack was accepted: " + id);
+            }
+            catch (TranslationPackException exception)
+            {
+                Assert.Equal(test.GetProperty("rejection").GetString(), exception.RejectionId, id);
+            }
+        }
+        // Equivalent encodings of the same pack that both loaders accept.
+        foreach (JsonElement test in index.RootElement.GetProperty("validPacks").EnumerateArray())
+        {
+            string id = test.GetProperty("id").GetString()!;
+            try { _ = TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(CompiledCorpus.Apply(artifact, test)), contract).AsTask().GetAwaiter().GetResult(); }
+            catch (TranslationPackException exception) { throw new InvalidOperationException("Valid pack was rejected: " + id + " " + exception.RejectionId, exception); }
+        }
+    }
+
+    [Test, NotInParallel, DisplayName("RMF2 document corpus pack rejection taxonomy holds in ESM for the committed artifact and recipes")]
+    public void InvalidPacksEsm()
+    {
+        using JsonDocument index = Index();
+        byte[] artifact = PackBase(index);
+        string directory = Rmf2V1CorpusTests.Write(TranslationOutputRenderer.RenderRmf2V5EsmModules(Compile()));
         try
         {
-            foreach (JsonElement test in index.RootElement.GetProperty("invalidPacks").EnumerateArray())
-            {
-                string id = test.GetProperty("id").GetString()!;
-                byte[] bytes = Mutate(artifact.Text, test);
-                File.WriteAllBytes(Path.Combine(directory, id + ".json"), bytes);
-                try
-                {
-                    _ = TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(bytes), contract).AsTask().GetAwaiter().GetResult();
-                    throw new InvalidOperationException("Invalid pack was accepted: " + id);
-                }
-                catch (TranslationPackException exception)
-                {
-                    Assert.Equal(test.GetProperty("rejection").GetString(), exception.RejectionId, id);
-                }
-            }
-            // Equivalent encodings of the same pack that both loaders accept.
-            foreach (JsonElement test in index.RootElement.GetProperty("validPacks").EnumerateArray())
-            {
-                string id = test.GetProperty("id").GetString()!;
-                byte[] bytes = Mutate(artifact.Text, test);
-                File.WriteAllBytes(Path.Combine(directory, id + ".json"), bytes);
-                try { _ = TranslationPackLoader.VerifyAsync(new ExternalTranslationPack(bytes), contract).AsTask().GetAwaiter().GetResult(); }
-                catch (TranslationPackException exception) { throw new InvalidOperationException("Valid pack was rejected: " + id + " " + exception.RejectionId, exception); }
-            }
+            foreach (string section in new[] { "invalidPacks", "validPacks" })
+                foreach (JsonElement test in index.RootElement.GetProperty(section).EnumerateArray())
+                    File.WriteAllBytes(Path.Combine(directory, test.GetProperty("id").GetString()! + ".json"), CompiledCorpus.Apply(artifact, test));
             File.WriteAllText(Path.Combine(directory, "index.json"), index.RootElement.GetRawText(), new UTF8Encoding(false));
             File.WriteAllText(Path.Combine(directory, "invalid.mjs"), EsmInvalidScript, new UTF8Encoding(false));
             Rmf2V1CorpusTests.Run("bun", [Path.Combine(directory, "invalid.mjs")], directory);
@@ -190,79 +200,7 @@ internal sealed class Rmf2DocumentCorpusTests
         finally { Directory.Delete(directory, true); }
     }
 
-    // Each mutation edits the first variant of one message in the German artifact.
-    private static byte[] Mutate(string artifact, JsonElement test)
-    {
-        JsonObject root = JsonNode.Parse(artifact)!.AsObject();
-        string mutation = test.GetProperty("mutation").GetString()!;
-        if (mutation == "markupContract")
-        {
-            root["markupContract"] = JsonNode.Parse(test.GetProperty("value").GetRawText());
-            return Encoding.UTF8.GetBytes(root.ToJsonString());
-        }
-        if (mutation == "skeletons")
-        {
-            root["markupContract"]!["messages"]![test.GetProperty("key").GetString()!]!["skeletons"] = JsonNode.Parse(test.GetProperty("value").GetRawText());
-            return Encoding.UTF8.GetBytes(root.ToJsonString());
-        }
-        JsonArray nodes = root["messages"]![test.GetProperty("key").GetString()!]!["ast"]!["variants"]![test.TryGetProperty("variant", out JsonElement variant) ? variant.GetInt32() : 0]!["nodes"]!.AsArray();
-        switch (mutation)
-        {
-            case "dropLastBlock":
-            {
-                // Remove the last top-level block: from its opening node to the end of the variant.
-                int depth = 0, start = -1;
-                for (int position = 0; position < nodes.Count; position++)
-                {
-                    if (nodes[position]!["kind"]!.GetValue<string>() != "markup") continue;
-                    string kind = nodes[position]!["markupKind"]!.GetValue<string>();
-                    if (kind == "open" && depth++ == 0) start = position;
-                    else if (kind == "close") depth--;
-                }
-                while (nodes.Count > start) nodes.RemoveAt(nodes.Count - 1);
-                break;
-            }
-            case "wrapInParagraph":
-                nodes.Insert(0, new JsonObject { ["kind"] = "markup", ["name"] = "runic:p", ["markupKind"] = "open", ["options"] = new JsonArray(), ["annotations"] = new JsonArray() });
-                nodes.Add(new JsonObject { ["kind"] = "markup", ["name"] = "runic:p", ["markupKind"] = "close", ["options"] = new JsonArray(), ["annotations"] = new JsonArray() });
-                break;
-            case "insertRootText":
-                nodes.Insert(0, new JsonObject { ["kind"] = "text", ["value"] = test.GetProperty("value").GetString() });
-                break;
-            case "prefixFirstText":
-            {
-                JsonObject text = nodes.Select(item => item!.AsObject()).First(item => item["kind"]!.GetValue<string>() == "text");
-                text["value"] = test.GetProperty("value").GetString() + text["value"]!.GetValue<string>();
-                break;
-            }
-            case "editText":
-            {
-                // "text" is the zero-based index among the variant's text nodes.
-                JsonObject text = nodes.Select(item => item!.AsObject()).Where(item => item["kind"]!.GetValue<string>() == "text").ElementAt(test.GetProperty("text").GetInt32());
-                string prefix = test.TryGetProperty("prefix", out JsonElement before) ? before.GetString()! : "";
-                string suffix = test.TryGetProperty("suffix", out JsonElement after) ? after.GetString()! : "";
-                text["value"] = prefix + text["value"]!.GetValue<string>() + suffix;
-                break;
-            }
-            case "insertNodes":
-            {
-                int at = test.GetProperty("at").GetInt32();
-                foreach (JsonElement node in test.GetProperty("nodes").EnumerateArray().Reverse()) nodes.Insert(at, JsonNode.Parse(node.GetRawText()));
-                break;
-            }
-            case "setOption":
-            {
-                // Replaces the value of the named option on the first markup node that has it.
-                string option = test.GetProperty("option").GetString()!;
-                JsonObject target = nodes.Select(item => item!.AsObject()).Where(item => item["kind"]!.GetValue<string>() == "markup" && item["options"] is JsonArray)
-                    .SelectMany(item => item["options"]!.AsArray().Select(value => value!.AsObject())).First(value => value["name"]!.GetValue<string>() == option);
-                target["value"] = JsonNode.Parse(test.GetProperty("value").GetRawText());
-                break;
-            }
-            default: throw new InvalidOperationException("Unknown document corpus mutation " + mutation);
-        }
-        return Encoding.UTF8.GetBytes(root.ToJsonString());
-    }
+    private static byte[] PackBase(JsonDocument index) => File.ReadAllBytes(Path.Combine(Root, index.RootElement.GetProperty("packBase").GetString()!));
 
     private static void RunEsm(Rmf2ProjectV5 project, JsonElement index)
     {
@@ -271,14 +209,14 @@ internal sealed class Rmf2DocumentCorpusTests
         {
             File.WriteAllText(Path.Combine(directory, "index.json"), index.GetRawText(), new UTF8Encoding(false));
             foreach (Rmf2LocaleV5 locale in project.Locales)
-                File.WriteAllBytes(Path.Combine(directory, locale.Tag + ".json"), Rmf2LocaleArtifactV5.Render(project, locale.Tag).GetUtf8Bytes());
+                File.WriteAllBytes(Path.Combine(directory, locale.Tag + ".json"), CompiledCorpus.Artifact("rmf2-document-v1/" + locale.Tag));
             File.WriteAllText(Path.Combine(directory, "corpus.mjs"), EsmExecutionScript, new UTF8Encoding(false));
             Rmf2V1CorpusTests.Run("bun", [Path.Combine(directory, "corpus.mjs")], directory);
         }
         finally { Directory.Delete(directory, true); }
     }
 
-    private static Rmf2ProjectV5 Compile()
+    internal static Rmf2ProjectV5 Compile()
     {
         using JsonDocument index = Index();
         JsonElement project = index.RootElement.GetProperty("project");

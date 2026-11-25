@@ -1,0 +1,178 @@
+{
+  "catalog": "ops",
+  "locale": "en",
+  "contractFingerprint": "sha256:79bb61f0272a7a0cab989e6d4a6879d6db5cc07fc6b22e36497a4ac630939ece",
+  "bidiIsolation": "default",
+  "locales": [
+    {
+      "tag": "de",
+      "fallback": "en"
+    },
+    {
+      "tag": "en",
+      "fallback": null
+    }
+  ],
+  "messages": [
+    {
+      "id": 0,
+      "key": "operation_failed",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "step",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "key": "operation_notice",
+      "canonical": true,
+      "inputs": []
+    },
+    {
+      "id": 2,
+      "key": "operation_retry",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "attempt",
+          "type": "string"
+        },
+        {
+          "name": "total",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "key": "operation_summary",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "names",
+          "type": "list"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "key": "steps_build",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "name",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "key": "steps_check",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "target",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "key": "steps_cleanup",
+      "canonical": true,
+      "inputs": []
+    },
+    {
+      "id": 7,
+      "key": "steps_download",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "count",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "key": "values_amount",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "x",
+          "type": "decimal"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "key": "values_big",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "n",
+          "type": "int64"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "key": "values_clock",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "at",
+          "type": "time"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "key": "values_day",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "day",
+          "type": "date"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "key": "values_flag",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "on",
+          "type": "boolean"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "key": "values_id",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "id",
+          "type": "guid"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "key": "values_moment",
+      "canonical": true,
+      "inputs": [
+        {
+          "name": "at",
+          "type": "datetime"
+        }
+      ]
+    }
+  ],
+  "markupContract": {"version":2,"contracts":{"runic:strong":{"kind":"paired","placement":"inline","children":"inline","interactive":false,"plainText":"children","options":{}}},"messages":{"operation_failed":{"slots":{},"structured":false,"contentLocales":{"de":"de","en":"en"},"content":"inline","skeletons":[]},"operation_notice":{"slots":{},"structured":true,"contentLocales":{"de":"de","en":"en"},"content":"inline","skeletons":[]},"operation_retry":{"slots":{},"structured":false,"contentLocales":{"de":"de","en":"en"},"content":"inline","skeletons":[]},"operation_summary":{"slots":{},"structured":false,"contentLocales":{"de":"de","en":"en"},"content":"inline","skeletons":[]},"steps_build":{"slots":{},"structured":false,"contentLocales":{"de":"de","en":"en"},"content":"inline","skeletons":[]},"steps_check":{"slots":{},"structured":false,"contentLocales":{"de":"de","en":"en"},"content":"inline","skeletons":[]},"steps_cleanup":{"slots":{},"structured":false,"contentLocales":{"de":"de","en":"en"},"content":"inline","skeletons":[]},"steps_download":{"slots":{},"structured":false,"contentLocales":{"de":"de","en":"en"},"content":"inline","skeletons":[]},"values_amount":{"slots":{},"structured":false,"contentLocales":{"de":"de","en":"en"},"content":"inline","skeletons":[]},"values_big":{"slots":{},"structured":false,"contentLocales":{"de":"de","en":"en"},"content":"inline","skeletons":[]},"values_clock":{"slots":{},"structured":false,"contentLocales":{"de":"de","en":"en"},"content":"inline","skeletons":[]},"values_day":{"slots":{},"structured":false,"contentLocales":{"de":"de","en":"en"},"content":"inline","skeletons":[]},"values_flag":{"slots":{},"structured":false,"contentLocales":{"de":"de","en":"en"},"content":"inline","skeletons":[]},"values_id":{"slots":{},"structured":false,"contentLocales":{"de":"de","en":"en"},"content":"inline","skeletons":[]},"values_moment":{"slots":{},"structured":false,"contentLocales":{"de":"de","en":"en"},"content":"inline","skeletons":[]}}}
+}
