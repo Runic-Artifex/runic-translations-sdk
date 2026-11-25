@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using Microsoft.Build.Framework;
-using Runic.Translations.Compiler;
 
 namespace Runic.Translations.Build;
 

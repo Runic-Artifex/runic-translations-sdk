@@ -282,6 +282,7 @@ internal sealed class BuildIntegrationTests
         {
             using TemporaryDirectory consumer = CreateConsumer(false, extraItems: items);
             AddSourceGenerator(consumer);
+            UsePackedTaskLayout(consumer);
             Directory.Delete(consumer.Resolve("translations", "en"), recursive: true);
             File.WriteAllText(consumer.Resolve("translations", "runic.json"), "{\"schemaVersion\":1,\"catalog\":\"minimal\",\"code\":{\"namespace\":\"Example\",\"className\":\"MinimalText\"},\"baseLocale\":\"en\",\"overrides\":[{\"catalog\":\"acme-grid\",\"from\":\"Acme.Grid\"}]}\n", new UTF8Encoding(false));
             File.WriteAllText(consumer.Resolve("translations", "en.rmf2"), "greeting = Hello\n", new UTF8Encoding(false));
@@ -302,6 +303,27 @@ internal sealed class BuildIntegrationTests
             Assert.False(files.Contains(expected == "rax.json" ? "runic|PackedCatalogProject" : "rax|PackedCatalogProject", StringComparison.Ordinal), files);
             Assert.False(files.Contains("xx|", StringComparison.Ordinal), "A .ramf2 file joined the runic.json catalog: " + files);
         }
+    }
+
+    /// <summary>
+    /// Imports the build files from a copy of the Runic.Translations.Build package's layout: build/ and
+    /// tools/net10.0/Runic.Translations.Build.dll alone, as the package ships the task. Source discovery runs on every
+    /// build, so a task that needs an assembly the package does not put beside it (the compiler ships in
+    /// analyzers/dotnet/cs) fails here as it fails for a packed package (MSB4018), not only in the packed-editor CI job.
+    /// </summary>
+    private static void UsePackedTaskLayout(TemporaryDirectory consumer)
+    {
+        string source = RepositoryPaths.Resolve("packages", "dotnet", "Runic.Translations.Build");
+        string layout = consumer.Resolve("package");
+        Directory.CreateDirectory(Path.Combine(layout, "build"));
+        foreach (string file in Directory.EnumerateFiles(Path.Combine(source, "build")))
+            File.Copy(file, Path.Combine(layout, "build", Path.GetFileName(file)));
+        Directory.CreateDirectory(Path.Combine(layout, "tools", "net10.0"));
+        File.Copy(Path.Combine(source, "bin", BuildConfiguration, "net10.0", "Runic.Translations.Build.dll"), Path.Combine(layout, "tools", "net10.0", "Runic.Translations.Build.dll"));
+        string project = File.ReadAllText(consumer.Resolve("Consumer.csproj"));
+        string repository = XmlPath(Path.Combine(source, "build")), packed = XmlPath(Path.Combine(layout, "build"));
+        Assert.Contains(repository, project);
+        File.WriteAllText(consumer.Resolve("Consumer.csproj"), project.Replace(repository, packed, StringComparison.Ordinal), new UTF8Encoding(false));
     }
 
     private static void AddSourceGenerator(TemporaryDirectory temporary)

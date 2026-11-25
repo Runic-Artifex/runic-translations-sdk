@@ -1,7 +1,13 @@
 using System;
 using System.Collections.Generic;
 
+// Runic.Translations.Build links this file, as it links PathContainment: its source discovery task runs on every build
+// and must not load the compiler, which the Build package does not ship beside the task.
+#if RUNIC_TRANSLATIONS_BUILD
+namespace Runic.Translations.Build;
+#else
 namespace Runic.Translations.Compiler;
+#endif
 
 /// <summary>
 /// The two spellings of a catalog. <see cref="Runic"/> is today's: the project file <c>runic.json</c>, RMF2 sources
