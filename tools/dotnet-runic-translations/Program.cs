@@ -57,6 +57,7 @@ internal static class Program
             if (arguments.Length == 1 && arguments[0] == "lsp") return new Rmf2LanguageServer(Console.OpenStandardInput(), Console.OpenStandardOutput(),
                 settleDiagnostics: Environment.GetEnvironmentVariable(Rmf2LanguageServer.SettleDiagnosticsVariable) == "1").Run();
             if (arguments.Length == 1 && arguments[0] == "serve") return CompileServer.RunOnStandardStreams(ToolVersion);
+            if (arguments is [ExtensionInfo.Option]) return ExtensionInfo.Write(Console.Out, ToolVersion);
             // The catalog declares response files, so CommandApp expands @file arguments before parsing.
             return CreateApp(CreateCatalog(), PresentationConsole).RunAsync(arguments).GetAwaiter().GetResult();
         }
