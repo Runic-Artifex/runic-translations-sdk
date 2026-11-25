@@ -476,6 +476,16 @@ Methods are `generate` (`project`, `output`, optional `emit` with `csharp`, `jso
 
 Trust model: `serve` has the same authority as the one-shot commands run by the same user. It reads requests only from its standard input, so only the parent process that started it can send them; it opens no socket or port. A request may name any `project` and `output` the process can access, and `generate` writes there, exactly like `runic-translations generate --project ... --output ...`; `set-message` writes the project's sources, its override sources and runic.json, like `overrides add`. Start it only from trusted tooling, and do not forward untrusted input into its standard input.
 
+## Run under `dotnet runic`
+
+From runic-sdk 0.24, `dotnet runic translations …` runs this tool as an extension of the Runic core tool: it passes the arguments after `translations` unchanged (a leading `--format` first) and exits with this tool's exit code, so `dotnet runic translations status` is `runic-translations status`. The core finds the tool through `RAX_TRANSLATIONS_TOOL` (a path), the nearest tool manifest (`dotnet tool run runic-translations`), `node_modules/.bin` or `PATH`, and prints the install command when it finds none. Its `doctor` checks this tool's version with `--extension-info`, which prints one JSON object on one line and exits 0:
+
+```text
+{"name":"translations","version":"0.16.0","extensionProtocol":1,"command":"runic-translations","package":"dotnet-runic-translations"}
+```
+
+`name` is the command under the core, `version` the release that `--version` reports, and `extensionProtocol` 1 the dispatch contract above. Readers ignore other members, which later releases may add. The 0.25 rename changes the names (`rax translations` runs `rax-translations`), not the protocol.
+
 ## Compatibility and status
 
 This tool targets .NET 10. Before 1.0 a minor release may contain breaking changes, each listed with upgrade steps in the release notes (see [Versions before 1.0](https://github.com/Runic-Artifex/runic-translations-sdk/blob/main/eng/release/README.md#versions-before-10)). Pin one exact version in the local manifest and coordinate upgrades with all consumers of its generated artifacts.
