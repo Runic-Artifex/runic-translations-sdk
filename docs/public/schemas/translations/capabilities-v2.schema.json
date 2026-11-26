@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://runic-artifex.eu/schemas/translations/capabilities-v2.schema.json",
+  "title": "Runic Translations capability matrix v2",
+  "description": "The locales and formatter equivalence classes of a Translations release, with one entry per implementation and its status. Version 2 replaces version 1's closed backends tuple with an open set of implementation keys, so an implementation such as rust is added without a new version (specs/translations/capabilities.md).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["capabilityMatrixVersion", "releaseTarget", "cldr", "implementations", "equivalence", "formatterProfile", "messageProfile", "locales"],
+  "properties": {
+    "capabilityMatrixVersion": { "const": 2 },
+    "releaseTarget": { "type": "string", "minLength": 1 },
+    "cldr": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "jsonTag", "source", "sha512", "license"],
+      "properties": {
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+        "jsonTag": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "source": { "type": "string", "format": "uri" },
+        "sha512": { "type": "string", "pattern": "^[0-9a-f]{128}$" },
+        "license": { "const": "Unicode-3.0" }
+      }
+    },
+    "implementations": {
+      "description": "The implementations of the contract by key. The set of keys is open: a validator of this version accepts any key of the pattern, so an implementation is added without a new matrix version.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$" },
+      "additionalProperties": { "$ref": "#/$defs/implementation" }
+    },
+    "equivalence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exact", "semantic"],
+      "properties": {
+        "exact": { "type": "string", "minLength": 1 },
+        "semantic": { "type": "string", "minLength": 1 }
+      }
+    },
+    "formatterProfile": { "$ref": "#/$defs/formatterProfile" },
+    "messageProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cardinal", "ordinal", "relativeTime", "list"],
+      "properties": {
+        "cardinal": { "$ref": "#/$defs/equivalence" },
+        "ordinal": { "$ref": "#/$defs/equivalence" },
+        "relativeTime": { "$ref": "#/$defs/equivalence" },
+        "list": { "$ref": "#/$defs/equivalence" }
+      }
+    },
+    "locales": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/locale" }
+    }
+  },
+  "$defs": {
+    "equivalence": { "enum": ["exact", "semantic"] },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "status", "dateTimeSource"],
+      "properties": {
+        "name": { "description": "The implementation's packages or runtime, for readers.", "type": "string", "minLength": 1 },
+        "status": {
+          "description": "The implementation's maturity, as its conformance status file records it: development (in progress, may have known failures), preview (usable, may have known failures, no compatibility promise) or stable (no known failures).",
+          "enum": ["development", "preview", "stable"]
+        },
+        "dateTimeSource": { "description": "Where the implementation's localized date and time patterns and names come from.", "type": "string", "minLength": 1 },
+        "conformance": {
+          "description": "The implementation's conformance status file, relative to specs/translations.",
+          "type": "string",
+          "pattern": "^conformance/status/[a-z0-9-]+\\.json$"
+        },
+        "formatterProfile": {
+          "description": "The forms whose equivalence differs from the matrix's formatterProfile for this implementation; every other form has the matrix's equivalence.",
+          "$ref": "#/$defs/formatterOverrides"
+        }
+      }
+    },
+    "formatterProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["string", "boolean", "integer", "number", "date", "time", "datetime", "uuid"],
+      "properties": {
+        "string": { "$ref": "#/$defs/defaultFormat" },
+        "boolean": { "$ref": "#/$defs/defaultFormat" },
+        "integer": { "$ref": "#/$defs/integerFormat" },
+        "number": { "$ref": "#/$defs/numberFormat" },
+        "date": { "$ref": "#/$defs/temporalFormat" },
+        "time": { "$ref": "#/$defs/temporalFormat" },
+        "datetime": { "$ref": "#/$defs/temporalFormat" },
+        "uuid": { "$ref": "#/$defs/uuidFormat" },
+        "currency": { "$ref": "#/$defs/currencyFormat" },
+        "unit": { "$ref": "#/$defs/unitFormat" },
+        "compact": { "$ref": "#/$defs/compactFormat" }
+      }
+    },
+    "formatterOverrides": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "string": { "$ref": "#/$defs/overrides" },
+        "boolean": { "$ref": "#/$defs/overrides" },
+        "integer": { "$ref": "#/$defs/overrides" },
+        "number": { "$ref": "#/$defs/overrides" },
+        "date": { "$ref": "#/$defs/overrides" },
+        "time": { "$ref": "#/$defs/overrides" },
+        "datetime": { "$ref": "#/$defs/overrides" },
+        "uuid": { "$ref": "#/$defs/overrides" },
+        "currency": { "$ref": "#/$defs/overrides" },
+        "unit": { "$ref": "#/$defs/overrides" },
+        "compact": { "$ref": "#/$defs/overrides" }
+      }
+    },
+    "overrides": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[a-zA-Z]+$" },
+      "additionalProperties": { "$ref": "#/$defs/equivalence" }
+    },
+    "defaultFormat": {
+      "type": "object", "additionalProperties": false, "required": ["default"],
+      "properties": { "default": { "$ref": "#/$defs/equivalence" } }
+    },
+    "integerFormat": {
+      "type": "object", "additionalProperties": false, "required": ["plain", "grouped"],
+      "properties": { "plain": { "$ref": "#/$defs/equivalence" }, "grouped": { "$ref": "#/$defs/equivalence" } }
+    },
+    "numberFormat": {
+      "type": "object", "additionalProperties": false, "required": ["plain", "grouped", "fixed", "percent"],
+      "properties": {
+        "plain": { "$ref": "#/$defs/equivalence" }, "grouped": { "$ref": "#/$defs/equivalence" },
+        "fixed": { "$ref": "#/$defs/equivalence" }, "percent": { "$ref": "#/$defs/equivalence" }
+      }
+    },
+    "temporalFormat": {
+      "type": "object", "additionalProperties": false, "required": ["iso", "localized"],
+      "properties": { "iso": { "$ref": "#/$defs/equivalence" }, "localized": { "$ref": "#/$defs/equivalence" } }
+    },
+    "uuidFormat": {
+      "type": "object", "additionalProperties": false, "required": ["d", "n"],
+      "properties": { "d": { "$ref": "#/$defs/equivalence" }, "n": { "$ref": "#/$defs/equivalence" } }
+    },
+    "currencyFormat": {
+      "type": "object", "additionalProperties": false, "required": ["symbol", "narrowSymbol", "code", "name", "accounting"],
+      "properties": {
+        "symbol": { "$ref": "#/$defs/equivalence" }, "narrowSymbol": { "$ref": "#/$defs/equivalence" }, "code": { "$ref": "#/$defs/equivalence" },
+        "name": { "$ref": "#/$defs/equivalence" }, "accounting": { "$ref": "#/$defs/equivalence" }
+      }
+    },
+    "unitFormat": {
+      "type": "object", "additionalProperties": false, "required": ["short", "long", "narrow", "compound"],
+      "properties": {
+        "short": { "$ref": "#/$defs/equivalence" }, "long": { "$ref": "#/$defs/equivalence" },
+        "narrow": { "$ref": "#/$defs/equivalence" }, "compound": { "$ref": "#/$defs/equivalence" }
+      }
+    },
+    "compactFormat": {
+      "type": "object", "additionalProperties": false, "required": ["short", "long"],
+      "properties": { "short": { "$ref": "#/$defs/equivalence" }, "long": { "$ref": "#/$defs/equivalence" } }
+    },
+    "locale": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tag", "cardinal", "ordinal", "relativeTime", "list"],
+      "properties": {
+        "tag": { "description": "A CLDR language or language-script locale.", "type": "string", "pattern": "^[a-z]{2,8}(-[A-Z][a-z]{3})?$" },
+        "cardinal": { "type": "boolean" },
+        "ordinal": { "type": "boolean" },
+        "relativeTime": { "type": "boolean" },
+        "list": { "type": "boolean" }
+      }
+    }
+  }
+}

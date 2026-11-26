@@ -51,12 +51,40 @@ internal sealed class SchemaTests
         }
     }
 
+    // Capability matrix version 2 lists implementations as an open set of keys (specs/translations/capabilities.md), so a
+    // matrix that adds one, such as rust, still validates; version 1's backends tuple stays closed (R7 T1-9, F17).
+    [Test, DisplayName("capability matrix v2 validates with an open set of implementation keys")]
+    public void CapabilityMatrixV2()
+    {
+        JsonSchema schema = JsonSchema.FromFile(ReadSchemaPath("capabilities-v2.schema.json"), new BuildOptions { Dialect = Dialect.Draft202012 });
+        string matrix = File.ReadAllText(RepositoryPaths.Resolve("specs", "translations", "capabilities-v2.json"));
+        AssertMatrix(matrix, true, "the generated matrix");
+        System.Text.Json.Nodes.JsonObject withRust = System.Text.Json.Nodes.JsonNode.Parse(matrix)!.AsObject();
+        withRust["implementations"]!["rust"] = System.Text.Json.Nodes.JsonNode.Parse(
+            """{"name":"runic-translations (Rust)","status":"preview","dateTimeSource":"ICU4X compiled data","formatterProfile":{"date":{"localized":"semantic"}}}""");
+        AssertMatrix(withRust.ToJsonString(), true, "a matrix with a rust implementation");
+        System.Text.Json.Nodes.JsonObject badStatus = System.Text.Json.Nodes.JsonNode.Parse(matrix)!.AsObject();
+        badStatus["implementations"]!["dotnet"]!["status"] = "beta";
+        AssertMatrix(badStatus.ToJsonString(), false, "an unknown status");
+        System.Text.Json.Nodes.JsonObject badKey = System.Text.Json.Nodes.JsonNode.Parse(matrix)!.AsObject();
+        badKey["implementations"]!["Rust"] = withRust["implementations"]!["rust"]!.DeepClone();
+        AssertMatrix(badKey.ToJsonString(), false, "an implementation key outside the pattern");
+
+        void AssertMatrix(string json, bool expected, string context)
+        {
+            using JsonDocument document = JsonDocument.Parse(json);
+            EvaluationResults result = schema.Evaluate(document.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
+            Assert.Equal(expected, result.IsValid, context + ": " + result);
+        }
+    }
+
     [Test, DisplayName("schemas contain only resolvable local references")]
     public void LocalReferencesResolve()
     {
         AssertReferencesResolve(ReadSchemaPath("message-ast-v5.schema.json"));
         AssertReferencesResolve(ReadSchemaPath("web-module-manifest-v3.schema.json"));
         AssertReferencesResolve(ReadSchemaPath("capabilities-v1.schema.json"));
+        AssertReferencesResolve(ReadSchemaPath("capabilities-v2.schema.json"));
         AssertReferencesResolve(ReadSchemaPath("project-v1.schema.json"));
     }
 
@@ -105,7 +133,7 @@ internal sealed class SchemaTests
         Array.Sort(paths, StringComparer.Ordinal);
         Assert.True(paths.Length != 0, "No published schemas were found.");
         Assert.Equal(
-            "asset-manifest-v1.schema.json,capabilities-v1.schema.json,external-pack-v5.schema.json,interchange-review-v2.schema.json,locale-artifact-v5.schema.json,message-ast-v5.schema.json,project-v1.schema.json,review-sources-v1.schema.json,translations-serve-v1.schema.json,translations-status-v1.schema.json,translations-support-v1.schema.json,translations-tool-v1.schema.json,web-module-manifest-v3.schema.json",
+            "asset-manifest-v1.schema.json,capabilities-v1.schema.json,capabilities-v2.schema.json,external-pack-v5.schema.json,interchange-review-v2.schema.json,locale-artifact-v5.schema.json,message-ast-v5.schema.json,project-v1.schema.json,review-sources-v1.schema.json,translations-serve-v1.schema.json,translations-status-v1.schema.json,translations-support-v1.schema.json,translations-tool-v1.schema.json,web-module-manifest-v3.schema.json",
             string.Join(',', Array.ConvertAll(paths, Path.GetFileName)),
             "The published schema set must match the selected translation contract");
         foreach (string path in paths)
