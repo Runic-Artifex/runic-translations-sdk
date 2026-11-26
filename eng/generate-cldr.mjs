@@ -515,11 +515,13 @@ const implementations = {
     name: "Runic.Translations (.NET)",
     status: "stable",
     dateTimeSource: "platform globalization: .NET's ICU on Linux and macOS, ICU or NLS on Windows; time zones from TimeZoneInfo",
+    conformance: "conformance/status/dotnet-translations.json",
   },
   esm: {
     name: "the generated ESM runtime (generate --emit-esm)",
     status: "stable",
     dateTimeSource: "the JavaScript engine's Intl.DateTimeFormat and its time zone data",
+    conformance: "conformance/status/esm-translations.json",
   },
 };
 const matrix =

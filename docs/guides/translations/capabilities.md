@@ -9,10 +9,10 @@ Implementations: **dotnet, esm**
 
 ## Implementations
 
-| Key      | Implementation                                  | Status | Localized dates and times                                                                                  |
-| -------- | ----------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------- |
-| `dotnet` | Runic.Translations (.NET)                       | stable | platform globalization: .NET's ICU on Linux and macOS, ICU or NLS on Windows; time zones from TimeZoneInfo |
-| `esm`    | the generated ESM runtime (generate --emit-esm) | stable | the JavaScript engine's Intl.DateTimeFormat and its time zone data                                         |
+| Key      | Implementation                                  | Status | Localized dates and times                                                                                  | Conformance                                                                       |
+| -------- | ----------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `dotnet` | Runic.Translations (.NET)                       | stable | platform globalization: .NET's ICU on Linux and macOS, ICU or NLS on Windows; time zones from TimeZoneInfo | [status](../../../specs/translations/conformance/status/dotnet-translations.json) |
+| `esm`    | the generated ESM runtime (generate --emit-esm) | stable | the JavaScript engine's Intl.DateTimeFormat and its time zone data                                         | [status](../../../specs/translations/conformance/status/esm-translations.json)    |
 
 The status is the implementation's maturity: `stable` has no known conformance failures, `preview` and `development` may have some, each with an issue.
 The matrix's set of implementations is open: a new one, such as a Rust runtime, is a new key of `implementations` in [capability matrix version 2](../../../specs/translations/capabilities.md).
