@@ -202,8 +202,9 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
     }
 
     // The example workspace that ships with the editor. A macOS bundle from dotnet runic package keeps only code in
-    // Contents/MacOS and leaves a symbolic link there to the rest in Contents/Resources; the workspace checks refuse a
-    // path that crosses a link, so the example opens where the link leads.
+    // Contents/MacOS and leaves a symbolic link there to the rest in Contents/Resources. The workspace resolves links
+    // above and at its root itself (#280); resolving this one here as well keeps the example's path the same in every
+    // message, before the workspace opens.
     internal static string PackagedExampleWorkspace()
     {
         string path = Path.Combine(AppContext.BaseDirectory, "ExampleWorkspace");
@@ -490,7 +491,9 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
             foreach (EditorDiagnostic diagnostic in snapshot.Diagnostics)
             {
                 string path = string.IsNullOrWhiteSpace(diagnostic.Path) ? "workspace" : diagnostic.Path;
-                string line = $"{path}({diagnostic.Line},{diagnostic.Column}): {diagnostic.Severity} {diagnostic.Id}: {diagnostic.Message}";
+                // A diagnostic of the editor's own, such as a pending recovery, carries a notice instead of a message.
+                string message = diagnostic.Message.Length == 0 && diagnostic.Notice is { } notice ? EditorNoticeText.Render(notice) : diagnostic.Message;
+                string line = $"{path}({diagnostic.Line},{diagnostic.Column}): {diagnostic.Severity} {diagnostic.Id}: {message}";
                 if (machineOutput)
                 {
                     if (commandDiagnostics.Count < 32) commandDiagnostics.Add(new CommandDiagnostic(
@@ -528,7 +531,9 @@ internal sealed class EditorCommandLineOperations(bool opensPackagedExample) : I
         }
         catch (Exception exception) when (exception is ArgumentException or DirectoryNotFoundException or IOException or UnauthorizedAccessException)
         {
-            Console.Error.WriteLine($"Validation could not start: {exception.Message}");
+            // An editor refusal, such as a link inside the workspace, carries a notice whose code is its message (#280).
+            string reason = exception is EditorUserException owned ? EditorNoticeText.Render(owned.Notice) : exception.Message;
+            Console.Error.WriteLine($"Validation could not start: {reason}");
             return CommandOutcome.Failure<EditorCommandResult>(
                 CommandExitCategory.Usage,
                 new CommandFault("REDIT0003", "The workspace could not be opened for validation."),
