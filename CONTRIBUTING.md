@@ -8,7 +8,7 @@ Pull requests must pass the `verify` job in [CI](.github/workflows/ci.yml), whic
 
 | CI job | Local command |
 | --- | --- |
-| Source checks | `bun eng/generate-cldr.mjs --check`, `bun eng/render-capabilities.mjs --check`, `bun test --timeout 180000 eng/ci/apt-install.test.mjs` (Linux; see [Ubuntu packages in CI](#ubuntu-packages-in-ci)), `bun test eng/ci/macos-changes.test.mjs`, and `actionlint` (available in the runic-sdk development shell) |
+| Source checks | `bun eng/generate-cldr.mjs --check`, `bun eng/render-capabilities.mjs --check`, `bun test --timeout 180000 eng/ci/apt-install.test.mjs` (Linux; see [Ubuntu packages in CI](#ubuntu-packages-in-ci)), `bun test eng/ci/macos-changes.test.mjs`, `bun test eng/conformance/vendor.test.mjs` (the vendored conformance core; see [its README](eng/conformance/README.md)), and `actionlint` (available in the runic-sdk development shell) |
 | Build and test | `bun run test` (heavy; prefer the focused commands in the README while iterating; it includes the compiled corpus check, `bun eng/generate-corpus.mjs --check`), then `bun examples/bun/operation-history/verify.ts` |
 | Vite in-place message updates / Chromium | `bun run --bun build` in `packages/web/vite-plugin-runic-translations` and in `packages/web/translations-svelte`, then `bun run --bun test:hmr` in `packages/web/translations-svelte` (builds the CLI; set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to a Chromium, such as the `editor` dev shell's) |
 | RMF2 NativeAOT / linux-x64 | `bun eng/run.mjs native-aot` (NativeAOT publishes of the RMF2 suites and examples, then the size budgets: `bun tests/aot-size/measure.mjs`, see [tests/aot-size](tests/aot-size/README.md)) |
