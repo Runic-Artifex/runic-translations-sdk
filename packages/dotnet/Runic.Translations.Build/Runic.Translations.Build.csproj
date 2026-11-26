@@ -43,6 +43,10 @@
     <None Update="build\Runic.Translations.Build.Locales.targets"
           Pack="true"
           PackagePath="build\Runic.Translations.Build.Locales.targets" />
+    <!-- The old-name guards (D079.11), generated from eng/rename/old-names.json. -->
+    <None Update="build\Runic.Translations.RenamedNames.targets"
+          Pack="true"
+          PackagePath="build\Runic.Translations.RenamedNames.targets" />
     <None Update="buildMultiTargeting\Runic.Translations.Build.targets"
           Pack="true"
           PackagePath="buildMultiTargeting\Runic.Translations.Build.targets" />

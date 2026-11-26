@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "decision": "D079.11: build errors for old package IDs in the graph and for renamed MSBuild names and environment variables, through 1.0.x, removed in 2.0",
+  "family": {
+    "token": "RunicTranslations",
+    "buildName": "Runic Translations",
+    "diagnostics": {
+      "packages": "RTR0110",
+      "msbuild": "RTR0086",
+      "environment": "RTR0111"
+    },
+    "skipCondition": "'$(_TargetAssemblyProjectName)' == '' and !$(MSBuildProjectName.EndsWith('_wpftmp'))",
+    "root": "../..",
+    "generator": "eng/rename/old-names.mjs",
+    "input": "eng/rename/old-names.json",
+    "outputs": [
+      "packages/dotnet/Runic.Translations.Build/build/Runic.Translations.RenamedNames.targets"
+    ]
+  },
+  "packages": [],
+  "msbuild": [],
+  "environment": []
+}
