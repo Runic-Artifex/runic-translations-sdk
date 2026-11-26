@@ -16,7 +16,7 @@
     "dotnet",
     "esm"
   ],
-  "localeCapabilities": "capabilities-v1.json",
+  "localeCapabilities": "capabilities-v2.json",
   "functions": {
     "string": {
       "inputType": "string",

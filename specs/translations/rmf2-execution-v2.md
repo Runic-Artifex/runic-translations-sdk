@@ -218,7 +218,7 @@ CLDR `listPatterns` of the content locale's language family: `conjunction` uses
 `standard` ("A, B, and C"), `disjunction` uses `or` ("A, B, or C") and `unit`
 uses `unit` ("3 ft, 7 in"), each in its `long`, `short` or `narrow` form. The
 patterns come from the pinned CLDR subset for every locale family in the
-[capability matrix](capabilities-v1.json); a content locale without them is a
+[capability matrix](capabilities-v2.json); a content locale without them is a
 compile-time `RTR0031` error and a runtime format error.
 
 ```text

@@ -15,6 +15,7 @@ internal static class SchemaResources
         ("web-module-manifest-v3.schema.json", "Runic.Translations.Tool.Schemas.web-module-manifest-v3.schema.json"),
         ("message-ast-v5.schema.json", "Runic.Translations.Tool.Schemas.message-ast-v5.schema.json"),
         ("capabilities-v1.schema.json", "Runic.Translations.Tool.Schemas.capabilities-v1.schema.json"),
+        ("capabilities-v2.schema.json", "Runic.Translations.Tool.Schemas.capabilities-v2.schema.json"),
         ("project-v1.schema.json", "Runic.Translations.Tool.Schemas.project-v1.schema.json"),
         ("translations-tool-v1.schema.json", "Runic.Translations.Tool.Schemas.translations-tool-v1.schema.json"),
         ("translations-support-v1.schema.json", "Runic.Translations.Tool.Schemas.translations-support-v1.schema.json"),

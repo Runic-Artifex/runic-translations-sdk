@@ -20,7 +20,10 @@ const resourcePath = resolve(root, "packages/dotnet/Runic.Translations/Formattin
 // The tables and selectors as the generator emitted them before they became data (D072.2, T4): the runtime tests
 // compare the data and its interpreter with them for every locale and a sweep of operands.
 const oraclePath = resolve(root, "tests/dotnet/Runic.Translations.Runtime.Tests/Generated/CldrOracle.g.cs");
+// Capability matrix version 1 is frozen (its schema's backends tuple is closed, R7 T1-9): it stays generated, with the
+// same members, for its consumers. Version 2 lists the implementations as an open set with a status each.
 const matrixPath = resolve(root, "specs/translations/capabilities-v1.json");
+const matrixV2Path = resolve(root, "specs/translations/capabilities-v2.json");
 const formatsSourcePath = resolve(root, "specs/translations/cldr/runic-formats-48.2.json");
 // Currency, unit and compact-notation data for the compiler only: a catalog embeds the entries it uses (D055.4).
 const formatResourcePath = resolve(root, "tools/Runic.Translations.Compiler/GeneratedFormatData.bin");
@@ -469,48 +472,82 @@ const dataLocale = (table, id) => chain(dataId(id, likely), parents).some((candi
 const matrixTags = [...new Set([...Object.keys(cardinal), ...source.availableLocales])]
   .filter((id) => parseTag(id).region === null && parseTag(id).variants.length === 0)
   .sort(ordinalSort);
+const cldrSource = {
+  version: source.source.cldrVersion,
+  jsonTag: source.source.cldrJsonTag,
+  source: source.source.archive,
+  sha512: source.source.archiveSha512,
+  license: source.source.license,
+};
+const equivalence = {
+  exact: "Backends produce the same canonical value for every accepted portable input.",
+  semantic: "Backends preserve meaning but platform globalization can change punctuation, spacing, names, or representable decimal precision.",
+};
+const formatterProfile = {
+  string: { default: "exact" },
+  boolean: { default: "exact" },
+  integer: { plain: "exact", grouped: "exact" },
+  number: { plain: "exact", grouped: "exact", fixed: "exact", percent: "exact" },
+  date: { iso: "exact", localized: "semantic" },
+  time: { iso: "exact", localized: "semantic" },
+  datetime: { iso: "semantic", localized: "semantic" },
+  uuid: { d: "exact", n: "exact" },
+  currency: { symbol: "exact", narrowSymbol: "exact", code: "exact", name: "exact", accounting: "exact" },
+  unit: { short: "exact", long: "exact", narrow: "exact", compound: "exact" },
+  compact: { short: "exact", long: "exact" },
+};
+const messageProfile = { cardinal: "exact", ordinal: "exact", relativeTime: "exact", list: "exact" };
+const matrixLocales = matrixTags.map((tag) => {
+  // A locale with CLDR data but no plural rules of its own (agq, rw) uses the root rule, `other` only.
+  const plural = pluralLanguage(cardinal, tag) || dataLocale(list, tag) || dataLocale(relativeTime, tag);
+  return {
+    tag,
+    cardinal: plural,
+    ordinal: plural,
+    relativeTime: plural && dataLocale(relativeTime, tag),
+    list: dataLocale(list, tag),
+  };
+});
+// Version 2's implementations (specs/translations/capabilities.md): an open set of keys, each with its status. A new
+// implementation, such as rust, is a new key here and needs no new matrix version.
+const implementations = {
+  dotnet: {
+    name: "Runic.Translations (.NET)",
+    status: "stable",
+    dateTimeSource: "platform globalization: .NET's ICU on Linux and macOS, ICU or NLS on Windows; time zones from TimeZoneInfo",
+  },
+  esm: {
+    name: "the generated ESM runtime (generate --emit-esm)",
+    status: "stable",
+    dateTimeSource: "the JavaScript engine's Intl.DateTimeFormat and its time zone data",
+  },
+};
 const matrix =
   JSON.stringify(
     {
       capabilityMatrixVersion: 1,
       releaseTarget,
-      cldr: {
-        version: source.source.cldrVersion,
-        jsonTag: source.source.cldrJsonTag,
-        source: source.source.archive,
-        sha512: source.source.archiveSha512,
-        license: source.source.license,
-      },
+      cldr: cldrSource,
       backends: ["dotnet", "esm"],
-      equivalence: {
-        exact: "Backends produce the same canonical value for every accepted portable input.",
-        semantic: "Backends preserve meaning but platform globalization can change punctuation, spacing, names, or representable decimal precision.",
-      },
-      formatterProfile: {
-        string: { default: "exact" },
-        boolean: { default: "exact" },
-        integer: { plain: "exact", grouped: "exact" },
-        number: { plain: "exact", grouped: "exact", fixed: "exact", percent: "exact" },
-        date: { iso: "exact", localized: "semantic" },
-        time: { iso: "exact", localized: "semantic" },
-        datetime: { iso: "semantic", localized: "semantic" },
-        uuid: { d: "exact", n: "exact" },
-        currency: { symbol: "exact", narrowSymbol: "exact", code: "exact", name: "exact", accounting: "exact" },
-        unit: { short: "exact", long: "exact", narrow: "exact", compound: "exact" },
-        compact: { short: "exact", long: "exact" },
-      },
-      messageProfile: { cardinal: "exact", ordinal: "exact", relativeTime: "exact", list: "exact" },
-      locales: matrixTags.map((tag) => {
-        // A locale with CLDR data but no plural rules of its own (agq, rw) uses the root rule, `other` only.
-        const plural = pluralLanguage(cardinal, tag) || dataLocale(list, tag) || dataLocale(relativeTime, tag);
-        return {
-          tag,
-          cardinal: plural,
-          ordinal: plural,
-          relativeTime: plural && dataLocale(relativeTime, tag),
-          list: dataLocale(list, tag),
-        };
-      }),
+      equivalence,
+      formatterProfile,
+      messageProfile,
+      locales: matrixLocales,
+    },
+    null,
+    2,
+  ) + "\n";
+const matrixV2 =
+  JSON.stringify(
+    {
+      capabilityMatrixVersion: 2,
+      releaseTarget,
+      cldr: cldrSource,
+      implementations,
+      equivalence,
+      formatterProfile,
+      messageProfile,
+      locales: matrixLocales,
     },
     null,
     2,
@@ -524,6 +561,7 @@ await Promise.all([
   emitResource(resourcePath, resource, resourceJson, inflateRawSync),
   emitResource(formatResourcePath, formatResource, formatResourceJson, brotliDecompressSync),
   emit(matrixPath, matrix),
+  emit(matrixV2Path, matrixV2),
 ]);
 
 async function emit(file, content) {

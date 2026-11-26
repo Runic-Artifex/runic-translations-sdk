@@ -17,6 +17,7 @@ execution profiles and cannot be mixed in one project.
 | Runtime/generated-code ABI | RMF2 ABI 3 (markup contract v2); generated C# 5 (binary locale data and message table as DEFLATE data), runtime runs 3, 4 and 5 |
 | ESM ABI | 4 (`web-module-manifest-v3`) |
 | Transport contract | 2 ([text references](transport-v2.md); reads 1) |
+| Capability matrix | 2 ([capability matrix](capabilities.md); version 1 frozen) |
 
 Package versions are independent from these integers. New cross-runtime schemas
 use canonical `https://runic-artifex.eu/schemas/translations/` identifiers. An
