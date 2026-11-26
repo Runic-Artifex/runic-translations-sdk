@@ -46,5 +46,7 @@ supported on a platform; a `preview` implementation carries no compatibility pro
 ## Version 1 (frozen)
 
 Version 1 stays generated, with the same locales and profiles as version 2 and the backends `dotnet` and `esm`, for
-the tools and documents that read it; its schema and content rules do not change, and no implementation is added to
-it. New consumers read version 2.
+the tools and documents that read it; its content rules do not change, and no implementation is added to it. New
+consumers read version 2. Its schema changed once, as a fix: a locale's `tag` accepts a language-script locale such as
+`az-Arab` (`^[a-z]{2,8}(-[A-Z][a-z]{3})?$`, as in version 2). The matrix has always listed such locales, which the
+earlier pattern `^[a-z]{2,8}$` rejected (translations#316); every document that validated before still validates.

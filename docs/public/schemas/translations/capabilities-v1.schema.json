@@ -118,7 +118,7 @@
       "additionalProperties": false,
       "required": ["tag", "cardinal", "ordinal", "relativeTime", "list"],
       "properties": {
-        "tag": { "type": "string", "pattern": "^[a-z]{2,8}$" },
+        "tag": { "description": "A CLDR language or language-script locale.", "type": "string", "pattern": "^[a-z]{2,8}(-[A-Z][a-z]{3})?$" },
         "cardinal": { "type": "boolean" },
         "ordinal": { "type": "boolean" },
         "relativeTime": { "type": "boolean" },

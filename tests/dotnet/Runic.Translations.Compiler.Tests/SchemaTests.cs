@@ -51,6 +51,31 @@ internal sealed class SchemaTests
         }
     }
 
+    // The frozen version 1 matrix lists language-script locales such as az-Arab, which the version 1 schema's tag pattern
+    // rejected until translations#316; its pattern now matches version 2's, and a tag the pattern never accepted still fails.
+    [Test, DisplayName("capability matrix v1 validates against its own schema")]
+    public void CapabilityMatrixV1()
+    {
+        JsonSchema schema = JsonSchema.FromFile(ReadSchemaPath("capabilities-v1.schema.json"), new BuildOptions { Dialect = Dialect.Draft202012 });
+        string matrix = File.ReadAllText(RepositoryPaths.Resolve("specs", "translations", "capabilities-v1.json"));
+        AssertMatrix(matrix, true, "the generated matrix");
+        System.Text.Json.Nodes.JsonObject root = System.Text.Json.Nodes.JsonNode.Parse(matrix)!.AsObject();
+        Assert.True(root["locales"]!.AsArray().Any(static locale => (string?)locale!["tag"] == "az-Arab"), "the matrix lists no language-script locale");
+        foreach (string tag in new[] { "az-arab", "en-US", "az-Arab-IR", "AZ" })
+        {
+            System.Text.Json.Nodes.JsonObject badTag = System.Text.Json.Nodes.JsonNode.Parse(matrix)!.AsObject();
+            badTag["locales"]![0]!["tag"] = tag;
+            AssertMatrix(badTag.ToJsonString(), false, "the locale tag " + tag);
+        }
+
+        void AssertMatrix(string json, bool expected, string context)
+        {
+            using JsonDocument document = JsonDocument.Parse(json);
+            EvaluationResults result = schema.Evaluate(document.RootElement, new EvaluationOptions { OutputFormat = OutputFormat.List });
+            Assert.Equal(expected, result.IsValid, context + ": " + result);
+        }
+    }
+
     // Capability matrix version 2 lists implementations as an open set of keys (specs/translations/capabilities.md), so a
     // matrix that adds one, such as rust, still validates; version 1's backends tuple stays closed (R7 T1-9, F17).
     [Test, DisplayName("capability matrix v2 validates with an open set of implementation keys")]
