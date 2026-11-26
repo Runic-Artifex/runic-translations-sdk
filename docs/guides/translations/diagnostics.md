@@ -434,6 +434,14 @@ metadata name starts with `Runic`:
 **Fix:** rename the property, item or metadata as the message says, or delete a
 removed property.
 
+From 0.16 `RTR0086` is also the MSBuild code of the old-name guards of the Runic
+Artifex rename (D079.11), with `RTR0110` for package IDs and `RTR0111` for
+environment variables. Their list is
+`build/Runic.Translations.RenamedNames.targets`, generated from
+`eng/rename/old-names.json`; 0.16 lists no name. The rename release adds its
+renamed `Runic*` properties and items, each reported once as "The Runic
+Translations build property X is renamed to Y", through 1.0.x.
+
 ## runic-translations tool codes
 
 The `runic-translations` tool (`dotnet-runic-translations`) reports these codes
@@ -776,6 +784,32 @@ package. Ask its author for a release built with the current Translations
 release, which packs `rax/<catalog>/rax.json`, `*.ramf2` and `rax:`. In 0.16
 the `runic` names are still the current ones, so nothing reports `RTR0109`
 yet; see [Library catalog formats](libraries.md#library-catalog-formats).
+
+## RTR0110
+
+A package whose ID was renamed is in the package graph. An error from
+`Runic.Translations.Build` (from 0.16; nothing reports it before the Runic
+Artifex rename): the project references a package by its former ID
+(`PackageReference`), or another package brings it in. Packages of the old and
+the new IDs do not work together in one application: the build would load
+their targets twice, and a type of the old package would not match its renamed
+counterpart. The message names the new ID. It is one of the old-name guards
+(D079.11), reported through 1.0.x.
+
+**Fix:** run `rax migrate` (`dnx RunicArtifex.Tool migrate` without a tool
+manifest), or replace the old `PackageReference` by hand. A package that another
+package brings in moves with that package: update it to a release of the new
+names.
+
+## RTR0111
+
+An environment variable that `Runic.Translations.Build` reads was renamed, and
+the old name is set (from 0.16; nothing reports it before the Runic Artifex
+rename). The old name no longer applies; the message names the new one. It is
+one of the old-name guards (D079.11), like `RTR0110`.
+
+**Fix:** set the variable by its new name and remove the old one from the
+environment.
 
 ## RCLI8201
 

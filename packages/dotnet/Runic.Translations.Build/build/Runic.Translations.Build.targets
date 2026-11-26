@@ -17,6 +17,10 @@
     <_RunicTranslationsBuildTargetsImported>true</_RunicTranslationsBuildTargetsImported>
   </PropertyGroup>
 
+  <!-- The old-name guards of the Runic Artifex rename (D079.11), generated from eng/rename/old-names.json: an old package
+       ID in the graph (RTR0110), an old MSBuild name (RTR0086) and an old environment variable (RTR0111). -->
+  <Import Project="Runic.Translations.RenamedNames.targets" Condition="'$(_RunicTranslationsRenamedNamesImported)' != 'true'" />
+
   <!-- Permanent guard (RTR0086): the names before the Runic prefix, and the retired emit selections,
        fail with an error naming the replacement instead of being ignored. -->
   <Target Name="_RunicTranslationsRejectRetiredNames"

@@ -1,0 +1,42 @@
+<Project>
+  <!-- Generated from eng/rename/old-names.json
+       by eng/rename/old-names.mjs: do not edit; change the input and regenerate.
+       Old-name guards (D079.11), shipped through 1.0.x and removed in 2.0:
+       RTR0110: an old package ID is in the package graph (a PackageReference, or a package that NuGet resolved);
+       RTR0086: the project sets an old public MSBuild property or item;
+       RTR0111: an old environment variable is set.
+       Each name is reported once. A root package imports this file once, also when two of the family's packages ship it. -->
+  <PropertyGroup>
+    <_RunicTranslationsRenamedNamesImported>true</_RunicTranslationsRenamedNamesImported>
+  </PropertyGroup>
+  <!-- Old package IDs: none. -->
+  <!-- Old public MSBuild properties and items: none. -->
+  <!-- Old environment variables: none. -->
+
+  <!-- ErrorAndContinue reports every old name, not only the first. -->
+  <Target Name="RunicTranslationsReportRenamedNames" BeforeTargets="PrepareForBuild"
+          Condition="('@(_RunicTranslationsRenamedName)' != '' or '@(_RunicTranslationsRenamedEnvironmentVariable)' != '') and '$(DesignTimeBuild)' != 'true' and '$(_TargetAssemblyProjectName)' == '' and !$(MSBuildProjectName.EndsWith('_wpftmp'))">
+    <Error Code="RTR0086" File="$(MSBuildProjectFullPath)" HelpKeyword="RTR0086" ContinueOnError="ErrorAndContinue"
+           Condition="'@(_RunicTranslationsRenamedName)' != ''"
+           Text="The Runic Translations build %(_RunicTranslationsRenamedName.Kind) %(_RunicTranslationsRenamedName.Identity) is renamed to %(_RunicTranslationsRenamedName.NewName). The old name no longer applies; rename it in $(MSBuildProjectFile), its imports or the command line." />
+    <Error Code="RTR0111" File="$(MSBuildProjectFullPath)" HelpKeyword="RTR0111" ContinueOnError="ErrorAndContinue"
+           Condition="'@(_RunicTranslationsRenamedEnvironmentVariable)' != ''"
+           Text="The environment variable %(_RunicTranslationsRenamedEnvironmentVariable.Identity) is renamed to %(_RunicTranslationsRenamedEnvironmentVariable.NewName). The old name no longer applies; set %(_RunicTranslationsRenamedEnvironmentVariable.NewName) instead and remove %(_RunicTranslationsRenamedEnvironmentVariable.Identity) from the environment." />
+  </Target>
+
+  <!-- After restore, PackageDependencies lists every package of the graph, the transitive ones too. Package IDs
+       compare without case. -->
+  <Target Name="RunicTranslationsReportRenamedPackages" AfterTargets="ResolvePackageAssets"
+          Condition="'@(_RunicTranslationsRenamedPackage)' != '' and '$(DesignTimeBuild)' != 'true' and '$(_TargetAssemblyProjectName)' == '' and !$(MSBuildProjectName.EndsWith('_wpftmp'))">
+    <PropertyGroup>
+      <_RunicTranslationsPackageGraph>;@(PackageReference);@(PackageDependencies);</_RunicTranslationsPackageGraph>
+      <_RunicTranslationsPackageGraph>$(_RunicTranslationsPackageGraph.ToLowerInvariant())</_RunicTranslationsPackageGraph>
+    </PropertyGroup>
+    <ItemGroup>
+      <_RunicTranslationsRenamedPackageInGraph Include="@(_RunicTranslationsRenamedPackage)" Condition="$(_RunicTranslationsPackageGraph.Contains(';%(Identity);'))" />
+    </ItemGroup>
+    <Error Code="RTR0110" File="$(MSBuildProjectFullPath)" HelpKeyword="RTR0110" ContinueOnError="ErrorAndContinue"
+           Condition="'@(_RunicTranslationsRenamedPackageInGraph)' != ''"
+           Text="$(MSBuildProjectName) references the package %(_RunicTranslationsRenamedPackageInGraph.Name), directly or through another package. It is renamed to %(_RunicTranslationsRenamedPackageInGraph.NewName), and packages of the old and the new names do not work together. Run rax migrate (dnx RunicArtifex.Tool migrate without a tool manifest) to move the project to the new names." />
+  </Target>
+</Project>

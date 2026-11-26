@@ -42,6 +42,7 @@ internal sealed class NetFrameworkPropertyFunctionTests
                  {
                      "build/Runic.Translations.Build.props", "build/Runic.Translations.Build.targets",
                      "build/Runic.Translations.Build.Pack.targets", "build/Runic.Translations.Build.Locales.targets",
+                     "build/Runic.Translations.RenamedNames.targets",
                      "buildMultiTargeting/Runic.Translations.Build.targets",
                  })
         {
