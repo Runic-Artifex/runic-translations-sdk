@@ -803,6 +803,107 @@ internal static partial class EditorSmokeTest
         Require(File.Exists(sourcesPath), "The companion file is missing.");
     }
 
+    // Issue #280: a link above the workspace (macOS /tmp and /var, a linked ~/Development, a bundle's linked
+    // ExampleWorkspace), or the opened folder being a link itself, does not refuse it: the workspace works from its
+    // physical folder. A link inside the workspace, which a repository can plant, is still refused, and validate says
+    // why in words instead of the notice code.
+    private static async Task LinkedWorkspaceJourneyAsync(string container, IEditorCommandOperations commandLine)
+    {
+        string development = Path.Combine(container, "disk", "development");
+        string project = Path.Combine(development, "translations");
+        await TranslationProjectWriter.CreateAsync(TranslationProjectScaffolder.Render(
+            new TranslationProjectCreationRequest(project, "linked-smoke", "en", "Smoke.Translations", "SmokeText",
+                [new TranslationProjectLocale("de", "en")]))).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "en.rmf2"), "application {\n  title = Title\n}\n").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(project, "de.rmf2"), "application {\n  title = Titel\n}\n").ConfigureAwait(false);
+        string linkedDevelopment = Path.Combine(container, "linked-development");
+        string linkedProject = Path.Combine(container, "linked-translations");
+        try
+        {
+            Directory.CreateSymbolicLink(linkedDevelopment, development);
+            Directory.CreateSymbolicLink(linkedProject, project);
+        }
+        catch (Exception exception) when (OperatingSystem.IsWindows() && exception is IOException or UnauthorizedAccessException)
+        {
+            Console.WriteLine("SKIP: linked workspaces; this Windows account cannot create symbolic links.");
+            return;
+        }
+        // The container itself may be below a link (macOS $TMPDIR in /var), so compare with the physical folder.
+        string physical = WorkspaceFiles.PhysicalPath(project);
+        Require(!physical.StartsWith(Path.GetFullPath(linkedDevelopment), StringComparison.Ordinal), "The physical path kept a link.");
+
+        // Through a linked parent folder, and with the opened folder itself a link: load, edit and save.
+        int edits = 0;
+        foreach (string opened in new[] { Path.Combine(linkedDevelopment, "translations"), linkedProject })
+        {
+            using var session = new EditorSession(opened);
+            WorkspaceSnapshot loaded = await session.LoadAsync().ConfigureAwait(false);
+            Require(loaded.Success && loaded.Root == physical && loaded.Documents.Any(document => document.Path == "de.rmf2"),
+                $"The workspace opened through the link '{opened}' did not load from its physical folder.");
+            EditorDocument german = loaded.Documents.Single(document => document.Path == "de.rmf2");
+            string text = $"Titel {++edits}";
+            EditorDocumentDraft draft = await session.TransformDocumentAsync(german.Path, german.Content, "application_title", text).ConfigureAwait(false);
+            EditorOperationResult saved = await session.SaveAsync(german.Path, draft.Content, german.Revision).ConfigureAwait(false);
+            Require(draft.Success && saved.Ok && File.ReadAllText(Path.Combine(project, "de.rmf2")).Contains(text, StringComparison.Ordinal),
+                $"The workspace opened through the link '{opened}' did not save to its physical folder.");
+        }
+        CommandOutcome<EditorCommandResult> linkedValidation = await commandLine.ExecuteAsync(new EditorCommandRequest(
+            "validate", [Path.Combine(linkedDevelopment, "translations")], null, false, false, false, CommandOutputMode.Json)).ConfigureAwait(false);
+        Require(linkedValidation.Succeeded, "validate refused a workspace below a linked folder.");
+
+        // A relative link whose target crosses another link resolves to the same physical folder; a cycle fails.
+        string chained = Path.Combine(container, "chained");
+        Directory.CreateSymbolicLink(chained, Path.Combine("linked-development", "translations"));
+        Require(WorkspaceFiles.PhysicalPath(Path.Combine(chained, "de.rmf2")) == Path.Combine(physical, "de.rmf2"),
+            "A relative link across another link did not resolve to the physical folder.");
+        string loopA = Path.Combine(container, "loop-a");
+        string loopB = Path.Combine(container, "loop-b");
+        Directory.CreateSymbolicLink(loopA, loopB);
+        Directory.CreateSymbolicLink(loopB, loopA);
+        bool loopRefused = false;
+        try { new EditorWorkspace(Path.Combine(loopA, "translations")).Dispose(); }
+        catch (Exception exception) when (exception is IOException or EditorUserException) { loopRefused = true; }
+        Require(loopRefused, "A cycle of links opened as a workspace.");
+
+        // A link inside the workspace is still refused, opened through a linked parent or not.
+        string outside = Path.Combine(container, "outside");
+        Directory.CreateDirectory(outside);
+        string planted = Path.Combine(project, "planted");
+        Directory.CreateSymbolicLink(planted, outside);
+        using (var session = new EditorSession(Path.Combine(linkedDevelopment, "translations")))
+        {
+            string? refusal = null;
+            try { await session.LoadAsync().ConfigureAwait(false); }
+            catch (EditorUserException exception) { refusal = exception.Notice.Code; }
+            Require(refusal == "ui_backend_path_link", "A link inside a workspace below a linked folder was not refused: " + refusal);
+            EditorOperationResult escaped = await session.SaveAsync("planted/de.rmf2", "application {\n  title = Titel\n}\n",
+                EditorWorkspace.NewMf2DocumentRevision).ConfigureAwait(false);
+            Require(!escaped.Ok && escaped.Message?.Code == "ui_backend_path_link" && !File.Exists(Path.Combine(outside, "de.rmf2")),
+                "A save through a link inside the workspace was not refused.");
+        }
+        TextWriter standardError = Console.Error;
+        var captured = new StringWriter();
+        CommandOutcome<EditorCommandResult> refused;
+        Console.SetError(captured);
+        try
+        {
+            refused = await commandLine.ExecuteAsync(new EditorCommandRequest(
+                "validate", [project], null, false, false, false, CommandOutputMode.Json)).ConfigureAwait(false);
+        }
+        finally
+        {
+            Console.SetError(standardError);
+        }
+        Require(!refused.Succeeded && captured.ToString().Contains("Validation could not start: Translation sources cannot be symbolic links.", StringComparison.Ordinal) &&
+            !captured.ToString().Contains("ui_backend_path_link", StringComparison.Ordinal),
+            "validate did not report the refusal's text: " + captured);
+        Require(EditorNoticeText.Render(EditorNotice.Create("ui_backend_workspace_missing", ("path", "/nowhere"))).Contains("/nowhere", StringComparison.Ordinal) &&
+            EditorNoticeText.Render(EditorNotice.External("disk full")).Contains("disk full", StringComparison.Ordinal) &&
+            EditorNoticeText.Render(new EditorNotice("not_a_notice", [])) == "not_a_notice",
+            "A notice's arguments or an unknown code did not render.");
+        Directory.Delete(planted);
+    }
+
     // commandLine is the command-line operations (Program.cs), which a frontend
     // bootstrap build does not compile.
     public static async Task<int> RunAsync(string workspacePath, IEditorCommandOperations commandLine)
@@ -823,6 +924,7 @@ internal static partial class EditorSmokeTest
             await MalformedManifestJourneyAsync(Path.Combine(container, "malformed-manifest")).ConfigureAwait(false);
             await PreviewKeepsExternalChangesJourneyAsync(Path.Combine(container, "preview-external")).ConfigureAwait(false);
             await InterchangeOutputJourneyAsync(Path.Combine(container, "interchange-output"), commandLine).ConfigureAwait(false);
+            await LinkedWorkspaceJourneyAsync(Path.Combine(container, "linked-workspace"), commandLine).ConfigureAwait(false);
             await ReviewStampJourneyAsync(Path.Combine(container, "review-stamp")).ConfigureAwait(false);
             await IncompleteCatalogReviewJourneyAsync(Path.Combine(container, "incomplete-review")).ConfigureAwait(false);
             await ImportedApprovalJourneyAsync(Path.Combine(container, "imported-approval")).ConfigureAwait(false);

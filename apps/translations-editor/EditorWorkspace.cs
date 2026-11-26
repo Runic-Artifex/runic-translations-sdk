@@ -30,6 +30,9 @@ internal sealed class EditorWorkspace : IDisposable
         string fullRoot = Path.GetFullPath(root);
         if (!Directory.Exists(fullRoot))
             throw new EditorUserException(EditorNotice.Create("ui_backend_workspace_missing", ("path", fullRoot)));
+        // Links above the workspace, and the opened folder itself being one, are the user's own layout (#280): the
+        // workspace works from the physical folder, and the link checks refuse only links inside it.
+        fullRoot = WorkspaceFiles.PhysicalPath(fullRoot);
         WorkspaceFiles.ValidateNoReparseAncestors(fullRoot);
         _files = new WorkspaceFiles(fullRoot, requestedCatalog);
         _changes = new WorkspaceChangeTracker(_gate, _files);

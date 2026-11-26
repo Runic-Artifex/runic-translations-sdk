@@ -212,6 +212,43 @@ internal sealed class WorkspaceFiles
         }
     }
 
+    // Issue #280: the workspace root as the file system reaches it, with every symbolic link and junction on the way
+    // resolved (macOS /tmp and /var to /private/…, a linked ~/Development, a bundle's linked ExampleWorkspace). The root
+    // is resolved once, when the workspace opens; every path the editor reads or writes is then built from it, and the
+    // link checks below (ContainedPath, EnumerateSourceFiles) refuse a link inside the workspace, which a repository can
+    // plant, while the ancestors of a physical root hold none. Other reparse points (such as cloud placeholders on
+    // Windows) are not links: they stay unresolved and the ancestor check still refuses them.
+    internal static string PhysicalPath(string path) => PhysicalPath(Path.GetFullPath(path), 0);
+
+    // The kernel's own bound on links followed in one lookup (Linux MAXSYMLINKS), so a cycle fails instead of looping.
+    private const int MaximumLinks = 40;
+
+    private static string PhysicalPath(string fullPath, int links)
+    {
+        string root = Path.GetPathRoot(fullPath) ?? throw new IOException($"'{fullPath}' has no root.");
+        string[] segments = fullPath[root.Length..].Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
+        string current = root;
+        for (int index = 0; index < segments.Length; index++)
+        {
+            string next = Path.Combine(current, segments[index]);
+            FileSystemInfo entry = Directory.Exists(next) ? new DirectoryInfo(next) : new FileInfo(next);
+            if (!entry.Exists)
+                // The rest does not exist yet, so no link can be on it.
+                return Path.Combine([next, .. segments[(index + 1)..]]);
+            if (entry.LinkTarget is not null)
+            {
+                if (++links > MaximumLinks) throw new IOException($"Too many symbolic links on the way to '{fullPath}'.");
+                // A link's target can itself cross links in its own ancestors, so resolve it from its root again.
+                FileSystemInfo target = entry.ResolveLinkTarget(returnFinalTarget: true)
+                    ?? throw new IOException($"The link '{next}' could not be resolved.");
+                next = PhysicalPath(Path.GetFullPath(target.FullName), links);
+            }
+            current = next;
+        }
+        return current;
+    }
+
     internal static void ValidateNoReparseAncestors(string path)
     {
         string? current = Path.GetFullPath(path);

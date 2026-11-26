@@ -45,7 +45,11 @@ mounted add, change, delete, and rename events are handled as membership
 changes. Desktop and IDE hosts must open a common containing workspace when a
 mount is outside the configuration directory; no host silently follows a
 symlink or reparse point into an unconfigured tree. CLI and MSBuild perform the
-same bounded rescan on each invocation/build.
+same bounded rescan on each invocation/build. The editor resolves the opened
+folder to its physical path once, so links above it or the folder itself being a
+link (macOS `/tmp`, a linked `~/Development`) are the user's layout and allowed;
+a link inside the workspace, which a repository can plant, is refused on every
+read and write (#280).
 
 The editor owns workspace navigation, drafts, review state, interchange, and
 atomic workspace mutations. The compiler owns message semantics, diagnostics,
