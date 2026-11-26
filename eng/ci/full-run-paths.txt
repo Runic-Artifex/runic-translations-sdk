@@ -1,0 +1,14 @@
+# Version and release commits (eng/ci/platform-changes.sh): a push to main that changes one of these paths runs every
+# job, the macOS and Windows jobs included, whatever eng/ci/macos-paths.txt and eng/ci/windows-paths.txt say. Publish
+# preview takes a release's packages only from a full run of its commit (CONTRIBUTING.md, "CI triggers and platform
+# jobs"). `*` also matches `/`; a line starting with `!` excludes, and exclusions win.
+
+# The release version, the validation baseline and the Command Line release of the train; the npm workspace version.
+eng/Versions.props
+eng/workspace.json
+
+# A release pull request assembles eng/release/notes/<version>.md from its fragments and moves the train gate's pin in
+# Publish preview (eng/release/README.md; runic-sdk eng/train/README.md, "Choreography", step 2).
+eng/release/notes/*.md
+!eng/release/notes/*/*
+.github/workflows/publish-preview.yml

@@ -1,8 +1,11 @@
 name: CI
 
-# Pull request branches run through `pull_request` only; a push run on main is what Publish preview and the runic-sdk
-# train take a commit's packages from. The macOS jobs run on main, nightly and manual runs, and on a pull request only
-# when it changes a path they exercise (eng/ci/macos-paths.txt; CONTRIBUTING.md, "CI triggers and macOS jobs").
+# Pull request branches run through `pull_request` only. The macOS and the Windows jobs run in nightly and manual runs
+# and for a version or release commit on main (eng/ci/full-run-paths.txt); on a pull request or another push to main,
+# each platform's jobs run only when it changes a path that can behave differently there (eng/ci/macos-paths.txt,
+# eng/ci/windows-paths.txt). A run that runs both runs every job and uploads the ci-full-run artifact; Publish preview
+# and the runic-sdk train take a commit's packages only from such a full green run on main (CONTRIBUTING.md, "CI
+# triggers and platform jobs").
 on:
   push:
     branches: [main]
@@ -22,31 +25,57 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Whether the macOS jobs run: always outside pull requests; for a pull request, when its test merge commit changes a
-  # path in eng/ci/macos-paths.txt against the base branch (the merge commit's first parent).
+  # Whether the macOS and the Windows jobs run (eng/ci/platform-changes.sh): for a pull request, each when its test
+  # merge commit changes a path in that platform's list against the base branch (the merge commit's first parent); for
+  # a push to main, the same against the previous main commit, and both for a version or release commit
+  # (eng/ci/full-run-paths.txt); both in nightly and manual runs. A run that runs both runs every job, and outside pull
+  # requests it uploads the ci-full-run marker.
   changes:
     name: Platform paths
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       macos: ${{ steps.paths.outputs.macos }}
+      windows: ${{ steps.paths.outputs.windows }}
+      full: ${{ steps.paths.outputs.full }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: github.event_name == 'pull_request'
         with:
           persist-credentials: false
           fetch-depth: 2
-      - name: Decide whether the macOS jobs run
+      - name: Decide whether the macOS and Windows jobs run
         id: paths
         env:
           EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
         run: |
-          if [[ "$EVENT" != pull_request ]]; then
-            echo "A $EVENT run runs every job."
-            echo "macos=true" >> "$GITHUB_OUTPUT"
-          else
-            bash eng/ci/macos-changes.sh HEAD^1 HEAD
+          event="$EVENT"
+          # A push compares with the previous main commit. A push that moved main by more than one commit runs every job
+          # rather than miss a path that an earlier commit of it changed.
+          if [[ "$event" == push && "$BEFORE" != "$(git rev-parse HEAD^1)" ]]; then
+            echo "This push moved main from ${BEFORE:-nothing}, not from the first parent of $GITHUB_SHA."
+            event=push-range
           fi
+          bash eng/ci/platform-changes.sh --event "$event" HEAD^1 HEAD
+      # Publish preview and the runic-sdk train take a commit's packages only from a full green run on main and find it
+      # by this artifact (CONTRIBUTING.md, "CI triggers and platform jobs").
+      - name: Mark the full run
+        if: steps.paths.outputs.full == 'true' && github.event_name != 'pull_request'
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/ci-full-run"
+          jq -n --arg event "$EVENT" --arg sha "$GITHUB_SHA" --arg run "$GITHUB_RUN_ID" \
+            '{schema: "runic.ci.full-run/1", event: $event, sha: $sha, run: $run}' > "$RUNNER_TEMP/ci-full-run/full-run.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: steps.paths.outputs.full == 'true' && github.event_name != 'pull_request'
+        with:
+          name: ci-full-run
+          path: ${{ runner.temp }}/ci-full-run
+          if-no-files-found: error
+          # As long as the package artifact it vouches for.
+          retention-days: 30
+          overwrite: true
   source-checks:
     name: Source checks
     runs-on: ubuntu-24.04
@@ -67,8 +96,8 @@ jobs:
       # eng/ci/apt-install.sh against a stubbed sudo, apt-get and curl (CONTRIBUTING.md, "Ubuntu packages in CI").
       - name: Test the Ubuntu package installer
         run: bun test --timeout 180000 eng/ci/apt-install.test.mjs
-      - name: Test the macOS path rule
-        run: bun test eng/ci/macos-changes.test.mjs
+      - name: Test the platform path rule
+        run: bun test eng/ci/platform-changes.test.mjs
       # The vendored conformance driver core (eng/conformance/README.md). Offline, on every run: the copy matches its
       # stamp. The comparison with runic-sdk at the pinned commit needs the network, so it runs only when the copy or the
       # stamp changes, as the Cargo.lock checks run only on lock changes (R1 section 7).
@@ -189,7 +218,7 @@ jobs:
           name: runic-translations-packages
           path: artifacts/packages
           if-no-files-found: ignore
-          # Publish preview reuses this artifact of a successful push run on main.
+          # Publish preview reuses this artifact of a successful full run on main (the changes job's ci-full-run).
           retention-days: 30
       # TRX and Cobertura coverage of the TUnit suites (see CONTRIBUTING.md).
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -365,7 +394,8 @@ jobs:
   # there, and the ESM half runs in Bun and Node. Only the formatting tests run, one job per platform.
   formatting-windows:
     name: Localized formatting / Windows
-    needs: train-feed
+    needs: [changes, train-feed]
+    if: needs.changes.outputs.windows == 'true'
     runs-on: windows-2025
     timeout-minutes: 20
     steps:
@@ -425,7 +455,8 @@ jobs:
   # (eng/ci/editor-native-canary.sh). Linux does the same in editor-e2e under Xvfb.
   editor-windows:
     name: Editor / native window / win-x64
-    needs: train-feed
+    needs: [changes, train-feed]
+    if: needs.changes.outputs.windows == 'true'
     runs-on: windows-2025
     timeout-minutes: 30
     steps:
@@ -643,18 +674,24 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      # A macOS job may be skipped only when the changes job decided so for a pull request.
+      # A macOS or Windows job may be skipped only when the changes job decided so for a pull request or a push to main.
       - name: Require every verification job to pass
         env:
           NEEDS: ${{ toJSON(needs) }}
           MACOS: ${{ needs.changes.outputs.macos }}
           MACOS_JOBS: formatting-macos editor-macos
+          WINDOWS: ${{ needs.changes.outputs.windows }}
+          WINDOWS_JOBS: formatting-windows editor-windows
         run: |
           incomplete=false
           while IFS='=' read -r job result; do
             if [[ "$result" == success ]]; then continue; fi
             if [[ "$result" == skipped && "$MACOS" == false && " $MACOS_JOBS " == *" $job "* ]]; then
               echo "$job: skipped, no macOS path changed"
+              continue
+            fi
+            if [[ "$result" == skipped && "$WINDOWS" == false && " $WINDOWS_JOBS " == *" $job "* ]]; then
+              echo "$job: skipped, no Windows path changed"
               continue
             fi
             echo "$job: $result"

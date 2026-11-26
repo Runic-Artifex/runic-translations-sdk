@@ -4,11 +4,11 @@ Use the locked development environment through `direnv exec . <command>` or `nix
 
 ## Checks
 
-Pull requests must pass the `verify` job in [CI](.github/workflows/ci.yml), which requires every other CI job to succeed; the macOS jobs may instead be skipped when a pull request changes none of their paths ([CI triggers and macOS jobs](#ci-triggers-and-macos-jobs)). Run the matching command locally before pushing:
+Pull requests must pass the `verify` job in [CI](.github/workflows/ci.yml), which requires every other CI job to succeed; the macOS and Windows jobs may instead be skipped when a pull request or an ordinary push to `main` changes none of their paths ([CI triggers and platform jobs](#ci-triggers-and-platform-jobs)). Run the matching command locally before pushing:
 
 | CI job | Local command |
 | --- | --- |
-| Source checks | `bun eng/generate-cldr.mjs --check`, `bun eng/render-capabilities.mjs --check`, `bun test --timeout 180000 eng/ci/apt-install.test.mjs` (Linux; see [Ubuntu packages in CI](#ubuntu-packages-in-ci)), `bun test eng/ci/macos-changes.test.mjs`, `bun test eng/conformance/vendor.test.mjs` (the vendored conformance core; see [its README](eng/conformance/README.md)), `bun eng/conformance/cli.ts cases` and `bun eng/conformance/cli.ts lint` (the Translations case list and status files), and `actionlint` (available in the runic-sdk development shell) |
+| Source checks | `bun eng/generate-cldr.mjs --check`, `bun eng/render-capabilities.mjs --check`, `bun test --timeout 180000 eng/ci/apt-install.test.mjs` (Linux; see [Ubuntu packages in CI](#ubuntu-packages-in-ci)), `bun test eng/ci/platform-changes.test.mjs`, `bun test eng/conformance/vendor.test.mjs` (the vendored conformance core; see [its README](eng/conformance/README.md)), `bun eng/conformance/cli.ts cases` and `bun eng/conformance/cli.ts lint` (the Translations case list and status files), and `actionlint` (available in the runic-sdk development shell) |
 | Build and test | `bun run test` (heavy; prefer the focused commands in the README while iterating; it includes the compiled corpus check, `bun eng/generate-corpus.mjs --check`), then `bun examples/bun/operation-history/verify.ts`, `bun eng/conformance/cli.ts dotnet-translations` and `bun eng/conformance/cli.ts esm-translations` ([conformance driver](eng/conformance/README.md#translations)) |
 | Vite in-place message updates / Chromium | `bun run --bun build` in `packages/web/vite-plugin-runic-translations` and in `packages/web/translations-svelte`, then `bun run --bun test:hmr` in `packages/web/translations-svelte` (builds the CLI; set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to a Chromium, such as the `editor` dev shell's) |
 | RMF2 NativeAOT / linux-x64 | `bun eng/run.mjs native-aot` (NativeAOT publishes of the RMF2 suites and examples, then the size budgets: `bun tests/aot-size/measure.mjs`, see [tests/aot-size](tests/aot-size/README.md)) |
@@ -37,22 +37,54 @@ same configuration first. For locally packed Runtime and Build candidates, add
 xaml-package-version=<version>` instead; this exercises the packaged analyzer
 without project references.
 
-## CI triggers and macOS jobs
+## CI triggers and platform jobs
 
 CI runs on pull requests, on pushes to `main`, nightly (03:17 UTC) and when dispatched. A pull request branch runs only
-through its pull request, not a second time as a branch push, and a newer push to it cancels the running CI. Publish
-preview takes a release's packages from the push run on `main` of the version commit, and the runic-sdk train from a
-green run on `main`; both always include every job.
+through its pull request, not a second time as a branch push, and a newer push to it cancels the running CI.
 
-macOS runners are shared with runic-sdk, so the macOS jobs (`Localized formatting / macOS` and
-`Editor / native window / osx-arm64`) run on pushes to `main`, nightly and dispatched runs, and on a pull request only
-when it changes a path in [`eng/ci/macos-paths.txt`](eng/ci/macos-paths.txt): the formatting runtime, the generated ESM
-runtime, the CLDR data and conformance corpora and their tests, the editor's native host, the workflow and CI scripts,
-and the toolchain and dependency pins, including the NuGet lock files. The `Platform paths` job decides this with
-`eng/ci/macos-changes.sh` against the pull request's base; otherwise the two jobs report as skipped and `verify` accepts
-that. Check a branch locally with `bash eng/ci/macos-changes.sh "$(git merge-base origin/main HEAD)"`. To run the macOS jobs for a pull request
-that does not need them, dispatch CI on its branch (`gh workflow run ci.yml --ref <branch>`). Add a path to the list
-when a macOS job starts to exercise it.
+Linux runs every test on every change. The macOS jobs (`Localized formatting / macOS`, `Editor / native window /
+osx-arm64`) and the Windows jobs (`Localized formatting / Windows`, `Editor / native window / win-x64`) only add what
+can behave differently on that platform, so they run only where a change can make a difference there. macOS runners
+are the scarcest (at most 5 macOS jobs at once across runic-sdk, Translations and Command Line).
+
+- **Pull requests and ordinary pushes to `main`:** each platform's jobs run when the change touches a path in its list,
+  [`eng/ci/macos-paths.txt`](eng/ci/macos-paths.txt) or [`eng/ci/windows-paths.txt`](eng/ci/windows-paths.txt). Each
+  entry says why it is there:
+  - both platforms: the formatting code that reads platform globalization data (.NET on Apple's ICU or Windows'
+    `icu.dll`, the ESM runtime on the engine's `Intl`) or chooses what it passes, the pinned CLDR data and corpora the
+    comparisons hold against it, those tests; the editor's native host (WKWebView, WebView2); the job definitions and
+    the scripts these jobs run; and the toolchain pins (`global.json`, `Directory.Build.props`,
+    `Directory.Packages.props`, `eng/Versions.props`);
+  - Windows also: path containment and the Authoring workspace (separators, drive letters, case: WIN-04) and
+    `.gitattributes` (line endings).
+
+  Formatting logic without platform data, the compiler, the corpora, the conformance driver, the web packages, the
+  editor frontend and workspace services run on Linux only. A push compares with the previous `main` commit; a push
+  that moved `main` by more than one commit runs every job.
+- **Version and release commits on `main`:** every job. A push that changes a path in
+  [`eng/ci/full-run-paths.txt`](eng/ci/full-run-paths.txt): `eng/Versions.props`, `eng/workspace.json`, an assembled
+  release note `eng/release/notes/<version>.md` and Publish preview's gate pin, which release and post-release pull
+  requests change.
+- **Nightly and dispatched runs:** every job.
+- `WPF / Windows` always runs: WPF exists only on Windows, so no Linux job covers it.
+
+The `Platform paths` job decides this with `eng/ci/platform-changes.sh --event <event>`; a skipped job reports as
+skipped and `verify` accepts that. Check a branch locally with
+`bash eng/ci/platform-changes.sh "$(git merge-base origin/main HEAD)"` (the pull request rule), or a pushed commit with
+`bash eng/ci/platform-changes.sh --event push <commit>^ <commit>`. To run the platform jobs for a pull request that does
+not need them, dispatch CI on its branch (`gh workflow run ci.yml --ref <branch>`). When a platform job starts to
+exercise a path, or a path gains a platform branch (`OperatingSystem.Is*`, culture or time zone data, file system or
+process code), add it to that platform's list.
+
+**Full runs.** A run that runs the macOS and the Windows jobs runs every job, since they are the only jobs a run skips.
+Outside pull requests such a run uploads the `ci-full-run` artifact. Publish preview
+(`eng/release/ci-artifact.mjs find-ci`) takes a release's packages only from a green full run on `main` of the
+dispatched commit: its push run when it is a version or release commit, or a nightly or dispatched run of it. The
+runic-sdk train (gate and train feed, runic-sdk `eng/train/README.md`, "Run selection by commit") takes only a green
+full run at or after its pinned commit. Neither dispatches CI itself. When a commit has only an ordinary push run, both
+fail and name the command that starts a full run: `gh workflow run ci.yml -R Runic-Artifex/runic-translations-sdk --ref
+main` (while `main` is still at that commit). The platform jobs upload only their failure logs, so no consumer reads
+an artifact that an ordinary push run lacks.
 
 ## Ubuntu packages in CI
 

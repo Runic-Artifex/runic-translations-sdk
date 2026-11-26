@@ -1,5 +1,5 @@
-// Reuse the package artifact of the successful CI push run for a release.
-//   find-ci                                        green ci.yml push run on main for GITHUB_SHA and its artifact
+// Reuse the package artifact of the successful full CI run of a release's commit.
+//   find-ci                                        green full ci.yml run on main for GITHUB_SHA and its artifact
 //   prepare <packages> <version> <ci-run> <out>    check the packages; write an inventory
 //   verify <packages> <inventory> <version> <run>  check them against the inventory, version and CI run
 //   describe <packages> <version> <out>            write the CycloneDX SBOM of the release (local, deterministic)
@@ -24,15 +24,35 @@ const SCHEMA = "runic.translations.preview/1";
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 const npmArchiveName = (name, version) => `${name.replace("@", "").replace("/", "-")}-${version}.tgz`;
 
-export function selectCiRun(runs, { repository, sha }) {
-  const candidates = runs.filter(run => run.head_sha === sha && run.event === "push" && run.head_branch === "main"
+// A full run ran every job, the macOS and Windows jobs included, and its `changes` job uploaded this marker: a nightly
+// or dispatched run, the push run of a version or release commit, or a push that changed a path of both platforms
+// (CONTRIBUTING.md, "CI triggers and platform jobs"). An ordinary push run skips the platform jobs its paths don't
+// need, so its packages are never published.
+export const FULL_RUN_ARTIFACT = "ci-full-run";
+export const CI_EVENTS = ["push", "schedule", "workflow_dispatch"];
+const dispatchFullRun = repository => `gh workflow run ci.yml -R ${repository} --ref main`;
+
+// The ci.yml runs on main of exactly this commit, newest first: its push run and any nightly or dispatched run of it.
+export function ciRunsOf(runs, { repository, sha }) {
+  return runs.filter(run => run.head_sha === sha && CI_EVENTS.includes(run.event) && run.head_branch === "main"
     && run.path?.split("@")[0] === CI_WORKFLOW && run.repository?.full_name === repository
     && run.head_repository?.full_name === repository).sort((a, b) => b.id - a.id);
-  const green = candidates.find(run => run.status === "completed" && run.conclusion === "success");
+}
+
+const succeeded = run => run.status === "completed" && run.conclusion === "success";
+
+// The newest successful full run of the commit; `full` holds the ids of the runs with the ci-full-run marker.
+export function selectCiRun(runs, { repository, sha, full = new Set() }) {
+  const candidates = ciRunsOf(runs, { repository, sha });
+  const green = candidates.find(run => succeeded(run) && full.has(run.id));
   if (green) return green;
   const [latest] = candidates;
-  if (!latest) throw new Error(`No push run of ${CI_WORKFLOW} on main exists for ${sha}. Publish only a commit on main whose CI succeeded.`);
+  if (!latest) throw new Error(`No ${CI_WORKFLOW} run on main exists for ${sha}. Publish only a commit on main whose CI succeeded.`);
   if (latest.status !== "completed") throw new Error(`CI for ${sha} is still ${latest.status} (${latest.html_url}). Dispatch again after it succeeds.`);
+  const partial = candidates.filter(succeeded);
+  if (partial.length) throw new Error(`No full CI run exists for ${sha}: ${partial.map(run => run.html_url).join(", ")} skipped macOS or Windows jobs ` +
+    `(no ${FULL_RUN_ARTIFACT} artifact; an ordinary push skips the platform jobs its paths don't need). Publish takes the packages only from a run of every job. ` +
+    `Dispatch one on main (\`${dispatchFullRun(repository)}\`) and dispatch Publish preview again after it succeeds.`);
   throw new Error(`CI for ${sha} concluded ${latest.conclusion} (${latest.html_url}). Rerun its failed jobs; publish needs a successful run.`);
 }
 
@@ -63,9 +83,15 @@ export async function findCiPackages({ repository, sha, token, fetchImpl = fetch
     if (!response.ok) throw new Error(`GitHub API ${path.split("?")[0]} failed: ${response.status}`);
     return response.json();
   };
-  const query = new URLSearchParams({ head_sha: sha, event: "push", branch: "main", per_page: "100" });
-  const run = selectCiRun((await api(`actions/workflows/ci.yml/runs?${query}`)).workflow_runs, { repository, sha });
-  const artifacts = (await api(`actions/runs/${run.id}/artifacts?per_page=100`)).artifacts;
+  // Every event: a nightly or dispatched run of the commit is a full run too.
+  const query = new URLSearchParams({ head_sha: sha, branch: "main", per_page: "100" });
+  const runs = (await api(`actions/workflows/ci.yml/runs?${query}`)).workflow_runs;
+  const artifactsOf = new Map();
+  for (const candidate of ciRunsOf(runs, { repository, sha }).filter(succeeded))
+    artifactsOf.set(candidate.id, (await api(`actions/runs/${candidate.id}/artifacts?per_page=100`)).artifacts);
+  const full = new Set([...artifactsOf].filter(([, list]) => list.some(artifact => artifact.name === FULL_RUN_ARTIFACT)).map(([id]) => id));
+  const run = selectCiRun(runs, { repository, sha, full });
+  const artifacts = artifactsOf.get(run.id);
   refuseTrainFeed(artifacts, run);
   const artifact = selectArtifact(artifacts, run);
   // Download by id: re-uploading under the same name creates a new id, so the
