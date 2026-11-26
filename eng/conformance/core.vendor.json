@@ -2,7 +2,7 @@
   "format": "rax.conformance-core-vendor/1",
   "source": "https://github.com/Runic-Artifex/runic-sdk",
   "path": "eng/conformance/core",
-  "commit": "468ef03c8b09a9e956a671e92d3aab252288b878",
+  "commit": "7142a503e0bc59902c5b9e8d02475fcdf76327e2",
   "files": {
     "README.md": "sha256:88006687ec74089d1acdd8b31bd43890a66567e191ce617d8e95a62a9fe50535",
     "adapter.ts": "sha256:151fe573ff005714c901e49dc2c84292ac53c1b918a5413fc068d8ed923e96d1",
