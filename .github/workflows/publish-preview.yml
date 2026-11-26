@@ -21,10 +21,12 @@ permissions:
   contents: read
 
 jobs:
-  # Read-only: finds the successful CI push run for this commit, verifies its
-  # packages, writes their SBOM and checks NuGet, npm, tag, release
-  # and npm latest. A dry run ends here and in the train gate; this job never holds OIDC, attestation
-  # or write permissions.
+  # Read-only: finds the successful full CI run on main for this commit (every job, the macOS jobs
+  # included: the version or release commit's push run, a nightly or a dispatched run; CONTRIBUTING.md,
+  # "CI triggers and macOS jobs"), verifies its packages, writes their SBOM and checks NuGet, npm, tag,
+  # release and npm latest. Without a full run it fails and names the command that dispatches one; it
+  # never dispatches CI itself. A dry run ends here and in the train gate; this job never holds OIDC,
+  # attestation or write permissions.
   candidate:
     if: github.repository == 'Runic-Artifex/runic-translations-sdk' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04

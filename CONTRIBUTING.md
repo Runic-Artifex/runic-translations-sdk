@@ -4,7 +4,7 @@ Use the locked development environment through `direnv exec . <command>` or `nix
 
 ## Checks
 
-Pull requests must pass the `verify` job in [CI](.github/workflows/ci.yml), which requires every other CI job to succeed; the macOS jobs may instead be skipped when a pull request changes none of their paths ([CI triggers and macOS jobs](#ci-triggers-and-macos-jobs)). Run the matching command locally before pushing:
+Pull requests must pass the `verify` job in [CI](.github/workflows/ci.yml), which requires every other CI job to succeed; the macOS jobs may instead be skipped when a pull request or an ordinary push to `main` changes none of their paths ([CI triggers and macOS jobs](#ci-triggers-and-macos-jobs)). Run the matching command locally before pushing:
 
 | CI job | Local command |
 | --- | --- |
@@ -40,19 +40,38 @@ without project references.
 ## CI triggers and macOS jobs
 
 CI runs on pull requests, on pushes to `main`, nightly (03:17 UTC) and when dispatched. A pull request branch runs only
-through its pull request, not a second time as a branch push, and a newer push to it cancels the running CI. Publish
-preview takes a release's packages from the push run on `main` of the version commit, and the runic-sdk train from a
-green run on `main`; both always include every job.
+through its pull request, not a second time as a branch push, and a newer push to it cancels the running CI.
 
-macOS runners are shared with runic-sdk, so the macOS jobs (`Localized formatting / macOS` and
-`Editor / native window / osx-arm64`) run on pushes to `main`, nightly and dispatched runs, and on a pull request only
-when it changes a path in [`eng/ci/macos-paths.txt`](eng/ci/macos-paths.txt): the formatting runtime, the generated ESM
-runtime, the CLDR data and conformance corpora and their tests, the editor's native host, the workflow and CI scripts,
-and the toolchain and dependency pins, including the NuGet lock files. The `Platform paths` job decides this with
-`eng/ci/macos-changes.sh` against the pull request's base; otherwise the two jobs report as skipped and `verify` accepts
-that. Check a branch locally with `bash eng/ci/macos-changes.sh "$(git merge-base origin/main HEAD)"`. To run the macOS jobs for a pull request
-that does not need them, dispatch CI on its branch (`gh workflow run ci.yml --ref <branch>`). Add a path to the list
-when a macOS job starts to exercise it.
+macOS runners are shared with runic-sdk and Runic Command Line (at most 5 macOS jobs at once across the three
+repositories), so the macOS jobs (`Localized formatting / macOS` and `Editor / native window / osx-arm64`) run only
+where they test something:
+
+- **Pull requests and ordinary pushes to `main`:** only when the change touches a path in
+  [`eng/ci/macos-paths.txt`](eng/ci/macos-paths.txt): the formatting runtime, the generated ESM runtime, the CLDR data
+  and conformance corpora and their tests, the editor's native host, the workflow and CI scripts, and the toolchain
+  and dependency pins, including the NuGet lock files. A push compares with the previous `main` commit; a push that
+  moved `main` by more than one commit runs them.
+- **Version and release commits on `main`:** always. A push that changes a path in
+  [`eng/ci/full-run-paths.txt`](eng/ci/full-run-paths.txt) runs every job: `eng/Versions.props`,
+  `eng/workspace.json`, an assembled release note `eng/release/notes/<version>.md` and Publish preview's gate pin,
+  which the release pull request and the post-release pull request change.
+- **Nightly and dispatched runs:** always.
+
+The `Platform paths` job decides this with `eng/ci/macos-changes.sh --event <event>`; otherwise the two jobs report as
+skipped and `verify` accepts that. Check a branch locally with
+`bash eng/ci/macos-changes.sh "$(git merge-base origin/main HEAD)"` (the pull request rule), or a pushed commit with
+`bash eng/ci/macos-changes.sh --event push <commit>^ <commit>`. To run the macOS jobs for a pull request that does not
+need them, dispatch CI on its branch (`gh workflow run ci.yml --ref <branch>`). Add a path to the list when a macOS
+job starts to exercise it.
+
+**Full runs.** A run that runs the macOS jobs runs every job, since they are the only jobs a run skips. Outside pull
+requests such a run uploads the `ci-full-run` artifact. Publish preview (`eng/release/ci-artifact.mjs find-ci`) takes a
+release's packages only from a green full run on `main` of the dispatched commit: its push run when it is a version
+or release commit, or a nightly or dispatched run of it. The runic-sdk train (gate and train feed, runic-sdk
+`eng/train/README.md`, "Run selection by commit") takes only a green full run at or after its pinned commit. Neither
+dispatches CI itself. When a commit has only an ordinary push run, both fail and name the command that starts a full
+run: `gh workflow run ci.yml -R Runic-Artifex/runic-translations-sdk --ref main` (while `main` is still at that commit).
+The macOS jobs upload only their failure logs, so no consumer reads an artifact that an ordinary push run lacks.
 
 ## Ubuntu packages in CI
 

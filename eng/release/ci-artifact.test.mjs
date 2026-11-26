@@ -3,7 +3,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ARTIFACT, CI_WORKFLOW, REPOSITORY, compareVersions, createRelease, githubPrerelease, previousTag, releaseNotes, findCiPackages, prepare, refuseTrainFeed, releaseCheck, selectArtifact, scan, selectCiRun, verify } from "./ci-artifact.mjs";
+import { ARTIFACT, CI_WORKFLOW, FULL_RUN_ARTIFACT, REPOSITORY, compareVersions, createRelease, githubPrerelease, previousTag, releaseNotes, findCiPackages, prepare, refuseTrainFeed, releaseCheck, selectArtifact, scan, selectCiRun, verify } from "./ci-artifact.mjs";
 
 const sha = "a".repeat(40);
 const run = (id, extra = {}) => ({ id, head_sha: sha, event: "push", head_branch: "main", path: CI_WORKFLOW,
@@ -11,17 +11,32 @@ const run = (id, extra = {}) => ({ id, head_sha: sha, event: "push", head_branch
   html_url: `https://github.com/${REPOSITORY}/actions/runs/${id}`, ...extra });
 const workflow = name => Bun.YAML.parse(readFileSync(new URL(`../../.github/workflows/${name}`, import.meta.url), "utf8"));
 
-test("selects the newest successful push run of ci.yml on main for the exact commit", () => {
-  expect(selectCiRun([run(1), run(3), run(2, { conclusion: "failure" })], { repository: REPOSITORY, sha }).id).toBe(3);
-  for (const other of [{ head_sha: "b".repeat(40) }, { event: "workflow_dispatch" }, { event: "pull_request" }, { head_branch: "feature" },
+const all = ids => new Set(ids);
+test("selects the newest successful full run of ci.yml on main for the exact commit", () => {
+  expect(selectCiRun([run(1), run(3), run(2, { conclusion: "failure" })], { repository: REPOSITORY, sha, full: all([1, 2, 3]) }).id).toBe(3);
+  // A nightly or dispatched run of the commit is as good as its push run.
+  for (const event of ["schedule", "workflow_dispatch"])
+    expect(selectCiRun([run(1), run(4, { event })], { repository: REPOSITORY, sha, full: all([4]) }).id).toBe(4);
+  for (const other of [{ head_sha: "b".repeat(40) }, { event: "pull_request" }, { head_branch: "feature" },
     { path: ".github/workflows/publish-preview.yml" }, { head_repository: { full_name: "fork/runic-translations-sdk" } }])
-    expect(() => selectCiRun([run(9, other)], { repository: REPOSITORY, sha })).toThrow("No push run");
+    expect(() => selectCiRun([run(9, other)], { repository: REPOSITORY, sha, full: all([9]) })).toThrow(`No ${CI_WORKFLOW} run on main`);
+});
+
+test("passes over an ordinary push run that skipped the macOS jobs, and says how to start a full run", () => {
+  // Run 6, the commit's ordinary push run, has no marker; run 7, a later dispatched run, has.
+  expect(selectCiRun([run(6), run(7, { event: "workflow_dispatch" })], { repository: REPOSITORY, sha, full: all([7]) }).id).toBe(7);
+  const only = () => selectCiRun([run(6)], { repository: REPOSITORY, sha, full: all([]) });
+  expect(only).toThrow(`No full CI run exists for ${sha}: ${run(6).html_url} succeeded without the macOS jobs`);
+  expect(only).toThrow(`gh workflow run ci.yml -R ${REPOSITORY} --ref main`);
+  // A full run that is still running is waited for, not reported as missing.
+  expect(() => selectCiRun([run(6), run(8, { event: "workflow_dispatch", status: "in_progress", conclusion: null })], { repository: REPOSITORY, sha, full: all([8]) }))
+    .toThrow("still in_progress");
 });
 
 test("fails clearly when CI for the commit is missing, running or failed, or its artifact is unusable", () => {
-  expect(() => selectCiRun([], { repository: REPOSITORY, sha })).toThrow(`No push run of ${CI_WORKFLOW} on main exists for ${sha}`);
+  expect(() => selectCiRun([], { repository: REPOSITORY, sha })).toThrow(`No ${CI_WORKFLOW} run on main exists for ${sha}`);
   expect(() => selectCiRun([run(4, { status: "in_progress", conclusion: null })], { repository: REPOSITORY, sha })).toThrow("still in_progress");
-  expect(() => selectCiRun([run(5, { conclusion: "failure" })], { repository: REPOSITORY, sha })).toThrow("concluded failure");
+  expect(() => selectCiRun([run(5, { conclusion: "failure" })], { repository: REPOSITORY, sha, full: all([5]) })).toThrow("concluded failure");
   const artifact = { id: 70, name: ARTIFACT, expired: false, workflow_run: { id: 7, head_sha: sha } };
   expect(selectArtifact([artifact, { ...artifact, name: "other" }], run(7))).toBe(artifact);
   expect(selectArtifact([artifact, { ...artifact, id: 71, name: "other" }], run(7), "other").id).toBe(71);
@@ -38,16 +53,22 @@ test("refuses a CI run that built against the train feed", () => {
   expect(() => refuseTrainFeed([artifact, { ...artifact, id: 71, name: "train-feed" }], run(7))).toThrow("cannot be published");
 });
 
-test("queries GitHub for push runs of the commit", async () => {
+test("queries GitHub for the main runs of the commit and takes the full one", async () => {
   const urls = [];
+  // Run 9 is the commit's ordinary push run (no marker); run 8, its nightly, is full.
+  const names = { 8: [ARTIFACT, "editor-hosted-packed", FULL_RUN_ARTIFACT], 9: [ARTIFACT, "editor-hosted-packed"] };
   const fetchImpl = async url => {
     urls.push(new URL(url));
-    const artifacts = [ARTIFACT, "editor-hosted-packed"].map((name, index) => ({ id: 80 + index, name, expired: false, workflow_run: { id: 8, head_sha: sha } }));
-    return Response.json(url.includes("/artifacts") ? { artifacts: artifacts.reverse() } : { workflow_runs: [run(8)] });
+    const id = Number(/\/runs\/(\d+)\/artifacts/.exec(url)?.[1]);
+    const artifacts = (names[id] ?? []).map((name, index) => ({ id: id * 10 + index, name, expired: false, workflow_run: { id, head_sha: sha } }));
+    return Response.json(url.includes("/artifacts") ? { artifacts: artifacts.reverse() } : { workflow_runs: [run(9), run(8, { event: "schedule" })] });
   };
   expect(await findCiPackages({ repository: REPOSITORY, sha, token: "t", fetchImpl })).toEqual({ runId: "8", runUrl: run(8).html_url, artifact: ARTIFACT, artifactId: "80" });
   expect(urls[0].pathname).toBe(`/repos/${REPOSITORY}/actions/workflows/ci.yml/runs`);
-  expect(Object.fromEntries(urls[0].searchParams)).toMatchObject({ head_sha: sha, event: "push", branch: "main" });
+  expect(Object.fromEntries(urls[0].searchParams)).toMatchObject({ head_sha: sha, branch: "main" });
+  expect(urls[0].searchParams.has("event")).toBe(false);
+  delete names[8];
+  await expect(findCiPackages({ repository: REPOSITORY, sha, token: "t", fetchImpl })).rejects.toThrow("No full CI run exists");
   await expect(findCiPackages({ repository: REPOSITORY, sha, token: "t", fetchImpl: async () => new Response("", { status: 403 }) })).rejects.toThrow("failed: 403");
 });
 

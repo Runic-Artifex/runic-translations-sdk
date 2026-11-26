@@ -1,6 +1,7 @@
-# The paths CI's macOS jobs exercise (eng/ci/macos-changes.sh). A pull request that changes none of them skips
-# `Localized formatting / macOS` and `Editor / native window / osx-arm64`; pushes to main, the nightly run and manual
-# runs always run them. `*` also matches `/`; a line starting with `!` excludes, and exclusions win.
+# The paths CI's macOS jobs exercise (eng/ci/macos-changes.sh). A pull request or a push to main that changes none of
+# them skips `Localized formatting / macOS` and `Editor / native window / osx-arm64`; the nightly run, manual runs and a
+# version or release commit (eng/ci/full-run-paths.txt) always run them. `*` also matches `/`; a line starting with `!`
+# excludes, and exclusions win.
 
 # Documentation never changes what the jobs run.
 !*.md
