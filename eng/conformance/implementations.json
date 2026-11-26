@@ -1,0 +1,20 @@
+{
+  "implementations": {
+    "dotnet-translations": {
+      "corpus": "translations",
+      "roles": ["runtime"],
+      "build": ["dotnet", "build", "${ROOT}/tests/dotnet/Runic.Translations.Conformance/Runic.Translations.Conformance.csproj", "-c", "Release", "-nologo", "-v", "q", "-clp:ErrorsOnly"],
+      "command": ["dotnet", "${ROOT}/tests/dotnet/Runic.Translations.Conformance/bin/Release/net10.0/Runic.Translations.Conformance.dll"],
+      "env": {"DOTNET_NOLOGO": "1", "DOTNET_CLI_TELEMETRY_OPTOUT": "1"},
+      "status": "status/dotnet-translations.json"
+    },
+    "esm-translations": {
+      "corpus": "translations",
+      "roles": ["runtime"],
+      "build": ["dotnet", "run", "--project", "${ROOT}/tests/dotnet/Runic.Translations.Compiler.Tests", "-c", "Release", "--", "--treenode-filter", "/*/*/ConformanceEsmCatalogs/*", "--test-parameter", "esm-catalogs=${ROOT}/artifacts/conformance/esm-catalogs"],
+      "command": ["bun", "${ROOT}/packages/web/vite-plugin-runic-translations/test/conformance-adapter.ts"],
+      "env": {"DOTNET_NOLOGO": "1", "DOTNET_CLI_TELEMETRY_OPTOUT": "1"},
+      "status": "status/esm-translations.json"
+    }
+  }
+}

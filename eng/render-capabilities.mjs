@@ -48,6 +48,7 @@ const implementationRows = Object.entries(matrix.implementations).map(([key, imp
   implementation.name,
   implementation.status,
   implementation.dateTimeSource,
+  implementation.conformance ? `[status](../../../specs/translations/${implementation.conformance})` : "—",
 ]);
 const formatterRows = [];
 for (const [formatter, forms] of Object.entries(matrix.formatterProfile)) {
@@ -78,8 +79,8 @@ const lines = [
   "## Implementations",
   "",
   ...table(
-    ["Key", "Implementation", "Status", "Localized dates and times"],
-    ["left", "left", "left", "left"],
+    ["Key", "Implementation", "Status", "Localized dates and times", "Conformance"],
+    ["left", "left", "left", "left", "left"],
     implementationRows,
   ),
   "",

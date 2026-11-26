@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The conformance adapter of the .NET Translations runtime (runic-sdk's eng/conformance/PROTOCOL.md,
+       rax.conformance-adapter/1): `bun eng/conformance/cli.ts dotnet-translations` builds and starts it. It uses only
+       the public API of Runic.Translations, as generated code and applications do, and is never packed or shipped
+       (R7 T1-17). -->
+  <Import Project="../../../eng/build/translations.props" />
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition="'$(CI)' == 'true' and '$(RunicCommandLinePackageFeed)' == ''">true</RestoreLockedMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\packages\dotnet\Runic.Translations\Runic.Translations.csproj" />
+  </ItemGroup>
+  <Import Project="../../../eng/build/translations.targets" />
+</Project>

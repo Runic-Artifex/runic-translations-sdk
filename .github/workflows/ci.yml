@@ -81,6 +81,12 @@ jobs:
           else
             bun eng/conformance/vendor.mjs upstream
           fi
+      # The Translations conformance module (eng/conformance/README.md, "Translations"): the committed case list is current
+      # and every status file follows its rules and covers exactly the corpus's cases.
+      - name: Check the conformance case list and status files
+        run: |
+          bun eng/conformance/cli.ts cases
+          bun eng/conformance/cli.ts lint
       - name: Check rendered capability documentation
         run: bun eng/render-capabilities.mjs --check
       # runic-sdk's flake provides the same actionlint version for local runs.
@@ -158,6 +164,12 @@ jobs:
       - run: bun eng/run.mjs test
       - name: Run the Bun operation-history example outside Vite
         run: bun examples/bun/operation-history/verify.ts
+      # The Translations corpus through the conformance driver and its .NET and generated ESM adapters: each run must match
+      # its status file (eng/conformance/README.md, "Translations"). The receipts are in artifacts/conformance.
+      - name: Run the conformance driver against the .NET and ESM adapters
+        run: |
+          bun eng/conformance/cli.ts dotnet-translations
+          bun eng/conformance/cli.ts esm-translations
       # The ESM half of the localized formatting corpus ran under Bun (JavaScriptCore) above; this runs it under Node (V8).
       - name: Run the localized formatting conformance under Node
         run: |
