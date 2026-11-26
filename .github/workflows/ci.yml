@@ -55,6 +55,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The first parent, for the vendored conformance core's upstream comparison.
+          fetch-depth: 2
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.4
@@ -67,6 +69,18 @@ jobs:
         run: bun test --timeout 180000 eng/ci/apt-install.test.mjs
       - name: Test the macOS path rule
         run: bun test eng/ci/macos-changes.test.mjs
+      # The vendored conformance driver core (eng/conformance/README.md). Offline, on every run: the copy matches its
+      # stamp. The comparison with runic-sdk at the pinned commit needs the network, so it runs only when the copy or the
+      # stamp changes, as the Cargo.lock checks run only on lock changes (R1 section 7).
+      - name: Test the vendored conformance driver core
+        run: bun test eng/conformance/vendor.test.mjs
+      - name: Compare the vendored conformance driver core with runic-sdk
+        run: |
+          if git diff --quiet HEAD^1 HEAD -- eng/conformance/core eng/conformance/core.vendor.json; then
+            echo "The vendored core and its stamp are unchanged; the offline check covers them."
+          else
+            bun eng/conformance/vendor.mjs upstream
+          fi
       - name: Check rendered capability documentation
         run: bun eng/render-capabilities.mjs --check
       # runic-sdk's flake provides the same actionlint version for local runs.

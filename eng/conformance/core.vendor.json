@@ -1,0 +1,15 @@
+{
+  "format": "rax.conformance-core-vendor/1",
+  "source": "https://github.com/Runic-Artifex/runic-sdk",
+  "path": "eng/conformance/core",
+  "commit": "468ef03c8b09a9e956a671e92d3aab252288b878",
+  "files": {
+    "README.md": "sha256:88006687ec74089d1acdd8b31bd43890a66567e191ce617d8e95a62a9fe50535",
+    "adapter.ts": "sha256:151fe573ff005714c901e49dc2c84292ac53c1b918a5413fc068d8ed923e96d1",
+    "cases.ts": "sha256:eea6a3733e778eb059066cc7263058ede34ea51b801db77d667c689c9620efc1",
+    "driver.ts": "sha256:8504222c9e30edcf281e3ebf39f4359068429ca92958273f0fe803004bc34412",
+    "index.ts": "sha256:d5277560f83632660e7e50d6114ea90d31339469a22b4c84012302df31cf54c0",
+    "names.ts": "sha256:3d179fd2a84515e1c751e78ad963ded55441e3dd405879bf126c733ab350cac5",
+    "results.ts": "sha256:1f67f774b9107ed6b8991e1b582ab95b27e3af6c335b0ffe2ddbab3b48dba549"
+  }
+}
