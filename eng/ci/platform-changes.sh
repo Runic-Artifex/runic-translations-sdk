@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
-# Whether CI runs its macOS jobs, by the event and the changed paths (CONTRIBUTING.md, "CI triggers and macOS jobs").
-# CI's `changes` job runs this for every run:
-#   - pull_request: when the test merge commit changes a path in eng/ci/macos-paths.txt against the base branch;
+# Whether CI runs its macOS and its Windows jobs, by the event and the changed paths (CONTRIBUTING.md, "CI triggers and
+# platform jobs"). CI's `changes` job runs this for every run:
+#   - pull_request: each platform's jobs run when the test merge commit changes a path in that platform's list
+#     (eng/ci/macos-paths.txt, eng/ci/windows-paths.txt) against the base branch;
 #   - push (to main): the same against the previous main commit, except that a version or release commit, one that
-#     changes a path in eng/ci/full-run-paths.txt, runs them in any case;
-#   - every other event (schedule, workflow_dispatch): always.
-# The macOS jobs are the only jobs a run can skip, so a run that runs them runs every job: a full run, which CI marks
-# with the ci-full-run artifact for Publish preview and the runic-sdk train.
+#     changes a path in eng/ci/full-run-paths.txt, runs both;
+#   - every other event (schedule, workflow_dispatch): both.
+# The macOS and Windows jobs are the only jobs a run can skip, so a run that runs both runs every job: a full run, which
+# CI marks with the ci-full-run artifact for Publish preview and the runic-sdk train.
 #
-#   eng/ci/macos-changes.sh [--event <event>] <base> [<head>]   the paths `git diff --name-only <base> <head>` lists (head: HEAD)
-#   eng/ci/macos-changes.sh [--event <event>] --stdin           changed paths, one per line, on standard input
+#   eng/ci/platform-changes.sh [--event <event>] <base> [<head>]   the paths `git diff --name-only <base> <head>` lists (head: HEAD)
+#   eng/ci/platform-changes.sh [--event <event>] --stdin           changed paths, one per line, on standard input
 #
 # <event> is GitHub's event name; without --event the pull request rule applies (a local check of a branch).
-# Prints the matching paths, then `full=…` and `macos=…`; with GITHUB_OUTPUT set, also writes both lines there.
+# Prints the matching paths, then `macos=…`, `windows=…` and `full=…`; with GITHUB_OUTPUT set, also writes them there.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-usage() { echo "Usage: eng/ci/macos-changes.sh [--event <event>] <base> [<head>] | [--event <event>] --stdin" >&2; exit 64; }
+usage() { echo "Usage: eng/ci/platform-changes.sh [--event <event>] <base> [<head>] | [--event <event>] --stdin" >&2; exit 64; }
 
 event=pull_request
 if [[ "${1-}" == --event ]]; then
@@ -73,28 +74,36 @@ any_change() {
   return "$found"
 }
 
+# Each platform by its own list.
+by_paths() {
+  load macos-paths.txt
+  if any_change "macOS path"; then macos=true; fi
+  load windows-paths.txt
+  if any_change "Windows path"; then windows=true; fi
+}
+
 macos=false
+windows=false
 case "$event" in
-  pull_request)
-    load macos-paths.txt
-    if any_change "macOS path"; then macos=true; fi
-    ;;
+  pull_request) by_paths ;;
   push)
     load full-run-paths.txt
     if any_change "Version or release path"; then
       echo "A version or release commit runs every job."
       macos=true
+      windows=true
     else
-      load macos-paths.txt
-      if any_change "macOS path"; then macos=true; fi
+      by_paths
     fi
     ;;
   *)
     echo "A $event run runs every job."
     macos=true
+    windows=true
     ;;
 esac
 
-echo "full=$macos"
-echo "macos=$macos"
-if [[ -n "${GITHUB_OUTPUT-}" ]]; then printf 'full=%s\nmacos=%s\n' "$macos" "$macos" >> "$GITHUB_OUTPUT"; fi
+full=false
+if [[ "$macos" == true && "$windows" == true ]]; then full=true; fi
+printf 'macos=%s\nwindows=%s\nfull=%s\n' "$macos" "$windows" "$full"
+if [[ -n "${GITHUB_OUTPUT-}" ]]; then printf 'macos=%s\nwindows=%s\nfull=%s\n' "$macos" "$windows" "$full" >> "$GITHUB_OUTPUT"; fi

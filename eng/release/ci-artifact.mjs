@@ -24,9 +24,10 @@ const SCHEMA = "runic.translations.preview/1";
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 const npmArchiveName = (name, version) => `${name.replace("@", "").replace("/", "-")}-${version}.tgz`;
 
-// A full run ran every job, the macOS jobs included, and its `changes` job uploaded this marker: a nightly or dispatched
-// run, the push run of a version or release commit, or a push that changed a macOS path (CONTRIBUTING.md, "CI
-// triggers and macOS jobs"). An ordinary push run skips the macOS jobs, so its packages are never published.
+// A full run ran every job, the macOS and Windows jobs included, and its `changes` job uploaded this marker: a nightly
+// or dispatched run, the push run of a version or release commit, or a push that changed a path of both platforms
+// (CONTRIBUTING.md, "CI triggers and platform jobs"). An ordinary push run skips the platform jobs its paths don't
+// need, so its packages are never published.
 export const FULL_RUN_ARTIFACT = "ci-full-run";
 export const CI_EVENTS = ["push", "schedule", "workflow_dispatch"];
 const dispatchFullRun = repository => `gh workflow run ci.yml -R ${repository} --ref main`;
@@ -49,8 +50,8 @@ export function selectCiRun(runs, { repository, sha, full = new Set() }) {
   if (!latest) throw new Error(`No ${CI_WORKFLOW} run on main exists for ${sha}. Publish only a commit on main whose CI succeeded.`);
   if (latest.status !== "completed") throw new Error(`CI for ${sha} is still ${latest.status} (${latest.html_url}). Dispatch again after it succeeds.`);
   const partial = candidates.filter(succeeded);
-  if (partial.length) throw new Error(`No full CI run exists for ${sha}: ${partial.map(run => run.html_url).join(", ")} succeeded without the macOS jobs ` +
-    `(no ${FULL_RUN_ARTIFACT} artifact; an ordinary push skips them). Publish takes the packages only from a run of every job. ` +
+  if (partial.length) throw new Error(`No full CI run exists for ${sha}: ${partial.map(run => run.html_url).join(", ")} skipped macOS or Windows jobs ` +
+    `(no ${FULL_RUN_ARTIFACT} artifact; an ordinary push skips the platform jobs its paths don't need). Publish takes the packages only from a run of every job. ` +
     `Dispatch one on main (\`${dispatchFullRun(repository)}\`) and dispatch Publish preview again after it succeeds.`);
   throw new Error(`CI for ${sha} concluded ${latest.conclusion} (${latest.html_url}). Rerun its failed jobs; publish needs a successful run.`);
 }

@@ -1,10 +1,11 @@
 name: CI
 
-# Pull request branches run through `pull_request` only. The macOS jobs run in nightly and manual runs and for a version
-# or release commit on main (eng/ci/full-run-paths.txt), and on a pull request or another push to main only when it
-# changes a path they exercise (eng/ci/macos-paths.txt). A run that runs them runs every job and uploads the ci-full-run
-# artifact; Publish preview and the runic-sdk train take a commit's packages only from such a full green run on main
-# (CONTRIBUTING.md, "CI triggers and macOS jobs").
+# Pull request branches run through `pull_request` only. The macOS and the Windows jobs run in nightly and manual runs
+# and for a version or release commit on main (eng/ci/full-run-paths.txt); on a pull request or another push to main,
+# each platform's jobs run only when it changes a path that can behave differently there (eng/ci/macos-paths.txt,
+# eng/ci/windows-paths.txt). A run that runs both runs every job and uploads the ci-full-run artifact; Publish preview
+# and the runic-sdk train take a commit's packages only from such a full green run on main (CONTRIBUTING.md, "CI
+# triggers and platform jobs").
 on:
   push:
     branches: [main]
@@ -24,23 +25,25 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Whether the macOS jobs run (eng/ci/macos-changes.sh): for a pull request, when its test merge commit changes a path
-  # in eng/ci/macos-paths.txt against the base branch (the merge commit's first parent); for a push to main, the same
-  # against the previous main commit, and always for a version or release commit (eng/ci/full-run-paths.txt); always
-  # in nightly and manual runs. Such a run runs every job, and outside pull requests it uploads the ci-full-run marker.
+  # Whether the macOS and the Windows jobs run (eng/ci/platform-changes.sh): for a pull request, each when its test
+  # merge commit changes a path in that platform's list against the base branch (the merge commit's first parent); for
+  # a push to main, the same against the previous main commit, and both for a version or release commit
+  # (eng/ci/full-run-paths.txt); both in nightly and manual runs. A run that runs both runs every job, and outside pull
+  # requests it uploads the ci-full-run marker.
   changes:
     name: Platform paths
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       macos: ${{ steps.paths.outputs.macos }}
+      windows: ${{ steps.paths.outputs.windows }}
       full: ${{ steps.paths.outputs.full }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 2
-      - name: Decide whether the macOS jobs run
+      - name: Decide whether the macOS and Windows jobs run
         id: paths
         env:
           EVENT: ${{ github.event_name }}
@@ -53,9 +56,9 @@ jobs:
             echo "This push moved main from ${BEFORE:-nothing}, not from the first parent of $GITHUB_SHA."
             event=push-range
           fi
-          bash eng/ci/macos-changes.sh --event "$event" HEAD^1 HEAD
+          bash eng/ci/platform-changes.sh --event "$event" HEAD^1 HEAD
       # Publish preview and the runic-sdk train take a commit's packages only from a full green run on main and find it
-      # by this artifact (CONTRIBUTING.md, "CI triggers and macOS jobs").
+      # by this artifact (CONTRIBUTING.md, "CI triggers and platform jobs").
       - name: Mark the full run
         if: steps.paths.outputs.full == 'true' && github.event_name != 'pull_request'
         env:
@@ -93,8 +96,8 @@ jobs:
       # eng/ci/apt-install.sh against a stubbed sudo, apt-get and curl (CONTRIBUTING.md, "Ubuntu packages in CI").
       - name: Test the Ubuntu package installer
         run: bun test --timeout 180000 eng/ci/apt-install.test.mjs
-      - name: Test the macOS path rule
-        run: bun test eng/ci/macos-changes.test.mjs
+      - name: Test the platform path rule
+        run: bun test eng/ci/platform-changes.test.mjs
       # The vendored conformance driver core (eng/conformance/README.md). Offline, on every run: the copy matches its
       # stamp. The comparison with runic-sdk at the pinned commit needs the network, so it runs only when the copy or the
       # stamp changes, as the Cargo.lock checks run only on lock changes (R1 section 7).
@@ -391,7 +394,8 @@ jobs:
   # there, and the ESM half runs in Bun and Node. Only the formatting tests run, one job per platform.
   formatting-windows:
     name: Localized formatting / Windows
-    needs: train-feed
+    needs: [changes, train-feed]
+    if: needs.changes.outputs.windows == 'true'
     runs-on: windows-2025
     timeout-minutes: 20
     steps:
@@ -451,7 +455,8 @@ jobs:
   # (eng/ci/editor-native-canary.sh). Linux does the same in editor-e2e under Xvfb.
   editor-windows:
     name: Editor / native window / win-x64
-    needs: train-feed
+    needs: [changes, train-feed]
+    if: needs.changes.outputs.windows == 'true'
     runs-on: windows-2025
     timeout-minutes: 30
     steps:
@@ -669,18 +674,24 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      # A macOS job may be skipped only when the changes job decided so for a pull request or a push to main.
+      # A macOS or Windows job may be skipped only when the changes job decided so for a pull request or a push to main.
       - name: Require every verification job to pass
         env:
           NEEDS: ${{ toJSON(needs) }}
           MACOS: ${{ needs.changes.outputs.macos }}
           MACOS_JOBS: formatting-macos editor-macos
+          WINDOWS: ${{ needs.changes.outputs.windows }}
+          WINDOWS_JOBS: formatting-windows editor-windows
         run: |
           incomplete=false
           while IFS='=' read -r job result; do
             if [[ "$result" == success ]]; then continue; fi
             if [[ "$result" == skipped && "$MACOS" == false && " $MACOS_JOBS " == *" $job "* ]]; then
               echo "$job: skipped, no macOS path changed"
+              continue
+            fi
+            if [[ "$result" == skipped && "$WINDOWS" == false && " $WINDOWS_JOBS " == *" $job "* ]]; then
+              echo "$job: skipped, no Windows path changed"
               continue
             fi
             echo "$job: $result"

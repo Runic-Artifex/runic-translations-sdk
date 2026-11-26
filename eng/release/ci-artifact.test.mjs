@@ -22,11 +22,11 @@ test("selects the newest successful full run of ci.yml on main for the exact com
     expect(() => selectCiRun([run(9, other)], { repository: REPOSITORY, sha, full: all([9]) })).toThrow(`No ${CI_WORKFLOW} run on main`);
 });
 
-test("passes over an ordinary push run that skipped the macOS jobs, and says how to start a full run", () => {
+test("passes over an ordinary push run that skipped platform jobs, and says how to start a full run", () => {
   // Run 6, the commit's ordinary push run, has no marker; run 7, a later dispatched run, has.
   expect(selectCiRun([run(6), run(7, { event: "workflow_dispatch" })], { repository: REPOSITORY, sha, full: all([7]) }).id).toBe(7);
   const only = () => selectCiRun([run(6)], { repository: REPOSITORY, sha, full: all([]) });
-  expect(only).toThrow(`No full CI run exists for ${sha}: ${run(6).html_url} succeeded without the macOS jobs`);
+  expect(only).toThrow(`No full CI run exists for ${sha}: ${run(6).html_url} skipped macOS or Windows jobs`);
   expect(only).toThrow(`gh workflow run ci.yml -R ${REPOSITORY} --ref main`);
   // A full run that is still running is waited for, not reported as missing.
   expect(() => selectCiRun([run(6), run(8, { event: "workflow_dispatch", status: "in_progress", conclusion: null })], { repository: REPOSITORY, sha, full: all([8]) }))

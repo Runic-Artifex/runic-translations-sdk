@@ -128,8 +128,8 @@ a dispatch with another version fails there.
 
 Set the intended release version in both `eng/Versions.props` and
 `eng/workspace.json`, merge to `main` and wait for that commit's CI push run to
-succeed. A version or release commit's push run runs every job, the macOS jobs
-included ([CONTRIBUTING.md](../../CONTRIBUTING.md#ci-triggers-and-macos-jobs)).
+succeed. A version or release commit's push run runs every job, the macOS and
+Windows jobs included ([CONTRIBUTING.md](../../CONTRIBUTING.md#ci-triggers-and-platform-jobs)).
 Then dispatch **Publish preview** from `main` with that exact version.
 Check **dry-run** first to run every check without publishing.
 
@@ -139,11 +139,11 @@ environment) runs `eng/release/ci-artifact.mjs`:
 
 - `find-ci` finds the newest successful full `ci.yml` run on `main` for the
   dispatched commit (its push, nightly or dispatched run with the `ci-full-run`
-  artifact: every job ran, the macOS jobs included) and its
+  artifact: every job ran, the macOS and Windows jobs included) and its
   `runic-translations-packages` artifact. It fails clearly when there is no such
   run, the run is still in progress or failed, or the artifact expired (CI keeps it
   30 days; rerun all jobs of that CI run to upload it again). When the commit's
-  only green run is an ordinary push run that skipped the macOS jobs, it fails and
+  only green run is an ordinary push run that skipped platform jobs, it fails and
   names the command that starts a full run, `gh workflow run ci.yml -R
   Runic-Artifex/runic-translations-sdk --ref main`; dispatch Publish preview again
   after that run succeeds. The job has only `actions: read`, so it never dispatches

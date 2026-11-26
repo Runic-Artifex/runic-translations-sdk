@@ -1,0 +1,89 @@
+# The paths whose change can make CI's Windows jobs, `Localized formatting / Windows` and `Editor / native window /
+# win-x64`, behave differently from the same code on Linux (eng/ci/platform-changes.sh; CONTRIBUTING.md, "CI triggers
+# and platform jobs"). A pull request or a push to main that changes none of them skips both jobs. The nightly run,
+# manual runs and a version or release commit (eng/ci/full-run-paths.txt) always run them. `WPF / Windows` always runs:
+# WPF exists only on Windows, so no Linux job covers it.
+#
+# List only what can behave differently on Windows: platform globalization data (icu.dll), path separators, drive
+# letters and case, line endings, the native host (WebView2), toolchain pins. Linux runs every test of platform-neutral
+# code on every change.
+# `*` also matches `/`; a line starting with `!` excludes, and exclusions win.
+
+# Documentation and public API baselines never change what the jobs run.
+!*.md
+!*PublicAPI.*.txt
+
+# The job definitions, their local actions, and the scripts these jobs run.
+.github/workflows/ci.yml
+.github/actions/*
+eng/ci/localized-formatting.sh
+eng/ci/editor-native-canary.sh
+
+# Line endings: Windows checks text files out by these attributes.
+.gitattributes
+
+# Toolchain: the .NET SDK and runtime (how .NET loads the platform's ICU), the build settings, the central package
+# versions (Runic Desktop, the editor's native host, among them) and the Runic SDK release the editor builds on. Node
+# and Bun are pinned in ci.yml. Lock files follow Directory.Packages.props.
+global.json
+Directory.Build.props
+Directory.Packages.props
+eng/Versions.props
+
+# Localized formatting / Windows (eng/ci/localized-formatting.sh). .NET formats dates, times, zones, percentages,
+# currencies and units with Windows' icu.dll, and the generated ESM runtime asks the engine's Intl in Bun and Node. Listed: the code that reads platform globalization data (CultureInfo, NumberFormatInfo,
+# DateTimeFormatInfo, TimeZoneInfo, Intl), the code that chooses the culture and options it passes, the pinned CLDR data
+# that the comparisons hold against the platform's ICU, the corpora and divergence lists those comparisons read, and the
+# tests. The rest of Formatting/ (plural operands, selectors, markup, document rendering, validation) has no platform
+# branch.
+packages/dotnet/Runic.Translations/Formatting/DefaultTextValueFormatter.cs
+packages/dotnet/Runic.Translations/Formatting/Rmf2LocalizedFormats.cs
+packages/dotnet/Runic.Translations/Formatting/Rmf2CldrFormats.cs
+packages/dotnet/Runic.Translations/Formatting/Rmf2NumberFormats.cs
+packages/dotnet/Runic.Translations/Formatting/Rmf2RuntimeEvaluator.cs
+packages/dotnet/Runic.Translations/Formatting/Rmf2FormatData.cs
+packages/dotnet/Runic.Translations/Formatting/TextPatternFormatter.cs
+packages/dotnet/Runic.Translations/Formatting/TextRelativeTimeFormatter.cs
+packages/dotnet/Runic.Translations/Formatting/CompiledTextMessage.cs
+packages/dotnet/Runic.Translations/Formatting/GeneratedLocale*
+tools/Runic.Translations.Compiler/Generation/Rmf2EsmRuntimeV5.js
+tools/Runic.Translations.Compiler/GeneratedFormatData.bin
+tools/Runic.Translations.Compiler/Rmf2FormatDataV1.cs
+specs/translations/corpus/rmf2-date-percent-conformance.json
+specs/translations/corpus/rmf2-currency-unit-conformance.json
+specs/translations/corpus/localized-format-divergences.json
+specs/translations/corpus/localized-format-engine-coverage.json
+specs/translations/corpus/currency-unit-divergences.json
+tests/dotnet/Runic.Translations.Compiler.Tests/Runic.Translations.Compiler.Tests.csproj
+tests/dotnet/Runic.Translations.Compiler.Tests/Rmf2DatePercentConformanceTests.cs
+tests/dotnet/Runic.Translations.Compiler.Tests/Rmf2EsmLocalizedFormattingTests.cs
+tests/dotnet/Runic.Translations.Compiler.Tests/LocalizedFormatComparisonTests.cs
+tests/dotnet/Runic.Translations.Compiler.Tests/Rmf2CurrencyUnitConformanceTests.cs
+tests/dotnet/Runic.Translations.Compiler.Tests/CurrencyUnitComparisonTests.cs
+tests/dotnet/Runic.Translations.Runtime.Tests/Runic.Translations.Runtime.Tests.csproj
+tests/dotnet/Runic.Translations.Runtime.Tests/LocalizedFormattingTests.cs
+
+# Windows path rules (WIN-04): the same job runs PathContainmentTests and Rmf2AuthoringTests, which attribute files to
+# source roots: separators, drive letters, case and Path.GetRelativePath's "..\" in the compiler's containment check and
+# in the Authoring workspace, which reads, writes and moves files.
+tools/Runic.Translations.Compiler/PathContainment.cs
+packages/dotnet/Runic.Translations.Authoring/*
+tests/dotnet/Runic.Translations.Authoring.Tests/Runic.Translations.Authoring.Tests.csproj
+tests/dotnet/Runic.Translations.Authoring.Tests/PathContainmentTests.cs
+tests/dotnet/Runic.Translations.Authoring.Tests/Rmf2AuthoringTests.cs
+
+# Editor / native window / win-x64: the editor's native host published for win-x64 and opened in WebView2 (window,
+# placements, the native folder picker, per-user state paths, the desktop entry), and the publish and version commands.
+# The frontend and the workspace services are platform-neutral; Linux opens the same page in WebKitGTK (editor-e2e).
+apps/translations-editor/Runic.Translations.Editor.csproj
+apps/translations-editor/Directory.Build.props
+apps/translations-editor/Program.cs
+apps/translations-editor/EditorCommandModule.cs
+apps/translations-editor/EditorDesktopEntry.cs
+apps/translations-editor/EditorDiagnostics.cs
+apps/translations-editor/EditorLocalStateStore.cs
+apps/translations-editor/EditorWindow.cs
+apps/translations-editor/EditorWindowPlacements.cs
+apps/translations-editor/EditorWorkspacePicker.cs
+eng/run.mjs
+eng/release/editor-release.mjs
