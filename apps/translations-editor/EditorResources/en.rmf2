@@ -4036,11 +4036,6 @@ ui {
 }
 ui {
   validation {
-    compiler = compiler
-  }
-}
-ui {
-  validation {
     errors = errors
   }
 }
@@ -4067,6 +4062,11 @@ ui {
 ui {
   validation {
     message_none = No issues in this message.
+  }
+}
+ui {
+  validation {
+    older_format = Older file format (v{$version})
   }
 }
 ui {
@@ -4098,11 +4098,6 @@ ui {
       .input {$line :integer}
       {{in {$message} ({$locale}), line {$line}}}
 
-  }
-}
-ui {
-  validation {
-    schema = schema
   }
 }
 ui {
