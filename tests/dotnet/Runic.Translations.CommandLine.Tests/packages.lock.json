@@ -47,7 +47,7 @@
         "type": "Direct",
         "requested": "[0.15.0, )",
         "resolved": "0.15.0",
-        "contentHash": "3ZqP+mHbQqTHF0PmnzswccUbXzscKRF2BOV7m6yqT86A6y8ZMJY+cCYQ8s+lEtLVE7Z//lF+b/OpoPwVmVMzJA=="
+        "contentHash": "AvQEMt80HZVCwCSAOX3D2f2q9bqkrstUKuCsOYkVjuigTspJEYSPZz24gVK4j9Dp+iNi8OMfDTkSE1hIQDTJgQ=="
       },
       "TUnit.Core": {
         "type": "Direct",
