@@ -3,7 +3,7 @@ import type { BridgeConnectOptions, BridgeOperationStartOptions } from "@runic-a
 import { connectView, disposable, viewReferences, type BridgeMemberDecoders, type BridgeOperationCodec, bridgeOperations } from "@runic-artifex/views/generated";
 import * as bridgeWire from "@runic-artifex/views/generated/wire";
 import type { EditorDocumentToolsState, EditorDocumentToolsClient, EditorDocumentToolsPageReference } from "./editorDocumentTools.contract.js";
-export type { EditorDocumentToolsState, EditorDocumentToolsApplyAuthoringOperationOperation, EditorDocumentToolsApplyDiagnosticFixOperation, EditorDocumentToolsTransformDocumentOperation, EditorDocumentToolsPreviewMessageOperation, EditorDocumentToolsCreateMessageDraftOperation, EditorDocumentToolsApplyMessageDraftOperationOperation, EditorDocumentToolsClient, EditorDocumentToolsPageReference } from "./editorDocumentTools.contract.js";
+export type { EditorDocumentToolsState, EditorDocumentToolsApplyAuthoringOperationOperation, EditorDocumentToolsApplyDiagnosticFixOperation, EditorDocumentToolsTransformDocumentOperation, EditorDocumentToolsPreviewMessageOperation, EditorDocumentToolsCreateMessageDraftOperation, EditorDocumentToolsApplyMessageDraftOperationOperation, EditorDocumentToolsCommandName, EditorDocumentToolsClient, EditorDocumentToolsPageReference } from "./editorDocumentTools.contract.js";
 
 const pageEditorDocumentToolsReferences = viewReferences<EditorDocumentToolsPageReference>(id => ({ kind: "editorDocumentTools", connect: () => connectEditorDocumentToolsAt(`content${id}`) }));
 export function pageEditorDocumentTools(id: string): EditorDocumentToolsPageReference { return pageEditorDocumentToolsReferences(id); }
@@ -22,7 +22,7 @@ const members: BridgeMemberDecoders<EditorDocumentToolsState> = {
   isCreateMessageDraftExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isApplyMessageDraftOperationExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorDocumentToolsViewModel:FA8C9DF07FEC823BE3D8DC803D948539CD74484F4055CD6BAE7FAAC1F3484270";
+const bridgeContract = "Runic.Translations.Editor.EditorDocumentToolsViewModel:8F6186DB056B1A670FD95C74F975C33B16B7F0E89DAD1159D0691AA975D54E0C";
 const applyAuthoringOperationOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const applyDiagnosticFixOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const transformDocumentOperation: BridgeOperationCodec<void> = { decode: value => undefined };

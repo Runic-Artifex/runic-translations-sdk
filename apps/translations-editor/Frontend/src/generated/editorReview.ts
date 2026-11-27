@@ -3,7 +3,7 @@ import type { BridgeConnectOptions, BridgeOperationStartOptions } from "@runic-a
 import { connectView, disposable, viewReferences, type BridgeMemberDecoders, type BridgeOperationCodec, bridgeOperations } from "@runic-artifex/views/generated";
 import * as bridgeWire from "@runic-artifex/views/generated/wire";
 import type { EditorReviewState, EditorReviewClient, EditorReviewPageReference } from "./editorReview.contract.js";
-export type { EditorReviewState, EditorReviewSaveReviewOperation, EditorReviewClient, EditorReviewPageReference } from "./editorReview.contract.js";
+export type { EditorReviewState, EditorReviewSaveReviewOperation, EditorReviewCommandName, EditorReviewClient, EditorReviewPageReference } from "./editorReview.contract.js";
 
 const pageEditorReviewReferences = viewReferences<EditorReviewPageReference>(id => ({ kind: "editorReview", connect: () => connectEditorReviewAt(`content${id}`) }));
 export function pageEditorReview(id: string): EditorReviewPageReference { return pageEditorReviewReferences(id); }
@@ -12,7 +12,7 @@ const members: BridgeMemberDecoders<EditorReviewState> = {
   saveReviewResultJson: (wire: unknown) => bridgeWire.string(wire),
   isSaveReviewExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorReviewViewModel:FA8C9DF07FEC823BE3D8DC803D948539CD74484F4055CD6BAE7FAAC1F3484270";
+const bridgeContract = "Runic.Translations.Editor.EditorReviewViewModel:8853F11C4A60A4A2DD5DCFACD567F6366B1C1DECBC2E844528F814726FA03BE0";
 const saveReviewOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 
 /**

@@ -477,8 +477,8 @@ direnv exec . dotnet publish apps/translations-editor/Runic.Translations.Editor.
 
 Use `linux-x64`, `win-x64` or `osx-arm64`. The runtime selects what each publish
 carries, and it carries only its own: the Runic Desktop server library
-(`librunic_server.so`, `runic_server.dll` with `WebView2Loader.dll`, or
-`librunic_server.dylib`) and the platform provider (`Runic.Platform.Linux` with its
+(`librax_server.so`, `rax_server.dll` with `WebView2Loader.dll`, or
+`librax_server.dylib`) and the platform provider (`Runic.Platform.Linux` with its
 portal, D-Bus and GTK 4 parts, `Runic.Platform.Windows` or `Runic.Platform.MacOS`).
 Only a Linux publish references `Runic.Desktop.Gtk4` and its GirCore bindings.
 
@@ -498,7 +498,7 @@ Line and the Runic SDK packages (Views with its Runic Desktop host
 `Runic.Application.Views.Desktop`, `Runic.Desktop.Gtk4` and the native server
 `Runic.Desktop.NativeServer`, the ReactiveUI adapter, Navigation, Platform) and their
 npm counterparts resolve from independently pinned published packages; the editor is
-built on Runic SDK 0.23.0, NuGet and npm, which move together: the page and the host
+built on Runic SDK 0.24.0, NuGet and npm, which move together: the page and the host
 speak Bridge protocol 4, and the generated Views clients in `Frontend/src/generated`
 are rewritten by each SDK update. No sibling SDK checkout is needed; the packages
 resolve through the repository's ordinary NuGet.org configuration. Runic Desktop

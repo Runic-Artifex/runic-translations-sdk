@@ -3,7 +3,7 @@ import type { BridgeConnectOptions, BridgeOperationStartOptions } from "@runic-a
 import { connectView, disposable, viewReferences, type BridgeMemberDecoders, type BridgeOperationCodec, bridgeOperations } from "@runic-artifex/views/generated";
 import * as bridgeWire from "@runic-artifex/views/generated/wire";
 import type { EditorLibrariesState, EditorLibrariesClient, EditorLibrariesPageReference } from "./editorLibraries.contract.js";
-export type { EditorLibrariesState, EditorLibrariesLoadLibraryOperation, EditorLibrariesOverrideMessageOperation, EditorLibrariesSaveOverrideOperation, EditorLibrariesRevertOverrideOperation, EditorLibrariesKeepOverrideOperation, EditorLibrariesAddLocaleOperation, EditorLibrariesClient, EditorLibrariesPageReference } from "./editorLibraries.contract.js";
+export type { EditorLibrariesState, EditorLibrariesLoadLibraryOperation, EditorLibrariesOverrideMessageOperation, EditorLibrariesSaveOverrideOperation, EditorLibrariesRevertOverrideOperation, EditorLibrariesKeepOverrideOperation, EditorLibrariesAddLocaleOperation, EditorLibrariesCommandName, EditorLibrariesClient, EditorLibrariesPageReference } from "./editorLibraries.contract.js";
 
 const pageEditorLibrariesReferences = viewReferences<EditorLibrariesPageReference>(id => ({ kind: "editorLibraries", connect: () => connectEditorLibrariesAt(`content${id}`) }));
 export function pageEditorLibraries(id: string): EditorLibrariesPageReference { return pageEditorLibrariesReferences(id); }
@@ -22,7 +22,7 @@ const members: BridgeMemberDecoders<EditorLibrariesState> = {
   isKeepOverrideExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isAddLocaleExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorLibrariesViewModel:FA8C9DF07FEC823BE3D8DC803D948539CD74484F4055CD6BAE7FAAC1F3484270";
+const bridgeContract = "Runic.Translations.Editor.EditorLibrariesViewModel:C7845B59D0FFC5594BEBFBF674C0B431AD4E2E0EBE0F6514717038CF830C8977";
 const loadLibraryOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const overrideMessageOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const saveOverrideOperation: BridgeOperationCodec<void> = { decode: value => undefined };

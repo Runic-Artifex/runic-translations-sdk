@@ -3,7 +3,7 @@ import type { BridgeConnectOptions, BridgeOperationStartOptions } from "@runic-a
 import { connectView, disposable, viewReferences, type BridgeMemberDecoders, type BridgeOperationCodec, bridgeOperations } from "@runic-artifex/views/generated";
 import * as bridgeWire from "@runic-artifex/views/generated/wire";
 import type { EditorInterchangeState, EditorInterchangeClient, EditorInterchangePageReference } from "./editorInterchange.contract.js";
-export type { EditorInterchangeState, EditorInterchangePreviewCatalogImportOperation, EditorInterchangeApplyCatalogImportOperation, EditorInterchangeExportXliffOperation, EditorInterchangePreviewXliffImportOperation, EditorInterchangeApplyXliffImportOperation, EditorInterchangeExportReviewJsonOperation, EditorInterchangePreviewReviewJsonImportOperation, EditorInterchangeApplyReviewJsonImportOperation, EditorInterchangeClient, EditorInterchangePageReference } from "./editorInterchange.contract.js";
+export type { EditorInterchangeState, EditorInterchangePreviewCatalogImportOperation, EditorInterchangeApplyCatalogImportOperation, EditorInterchangeExportXliffOperation, EditorInterchangePreviewXliffImportOperation, EditorInterchangeApplyXliffImportOperation, EditorInterchangeExportReviewJsonOperation, EditorInterchangePreviewReviewJsonImportOperation, EditorInterchangeApplyReviewJsonImportOperation, EditorInterchangeCommandName, EditorInterchangeClient, EditorInterchangePageReference } from "./editorInterchange.contract.js";
 
 const pageEditorInterchangeReferences = viewReferences<EditorInterchangePageReference>(id => ({ kind: "editorInterchange", connect: () => connectEditorInterchangeAt(`content${id}`) }));
 export function pageEditorInterchange(id: string): EditorInterchangePageReference { return pageEditorInterchangeReferences(id); }
@@ -26,7 +26,7 @@ const members: BridgeMemberDecoders<EditorInterchangeState> = {
   isPreviewReviewJsonImportExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isApplyReviewJsonImportExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorInterchangeViewModel:FA8C9DF07FEC823BE3D8DC803D948539CD74484F4055CD6BAE7FAAC1F3484270";
+const bridgeContract = "Runic.Translations.Editor.EditorInterchangeViewModel:A7EBB3DEF6BF0036112944801CCB6DB58E5E025C6CB808977D4E9CBA739D6BA0";
 const previewCatalogImportOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const applyCatalogImportOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const exportXliffOperation: BridgeOperationCodec<void> = { decode: value => undefined };

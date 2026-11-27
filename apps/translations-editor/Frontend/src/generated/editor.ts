@@ -12,7 +12,7 @@ import { pageEditorProject } from "./editorProject.js";
 import { pageEditorLibraries } from "./editorLibraries.js";
 import { pageEditorDocument } from "./editorDocument.js";
 import type { EditorState, EditorInteractionContext, EditorInteractions, EditorClient, EditorPageReference } from "./editor.contract.js";
-export type { EditorState, EditorInteractionContext, EditorInteractions, EditorSetUiLocaleOperation, EditorCloseWindowOperation, EditorClient, EditorPageReference } from "./editor.contract.js";
+export type { EditorState, EditorInteractionContext, EditorInteractions, EditorSetUiLocaleOperation, EditorCloseWindowOperation, EditorCommandName, EditorClient, EditorPageReference } from "./editor.contract.js";
 import type { EditorCloseQuestion } from "./types.js";
 export type { EditorCloseQuestion } from "./types.js";
 
@@ -36,9 +36,9 @@ const members: BridgeMemberDecoders<EditorState> = {
   canCloseWindow: (wire: unknown) => bridgeWire.boolean(wire),
   isCloseWindowExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorViewModel:FA8C9DF07FEC823BE3D8DC803D948539CD74484F4055CD6BAE7FAAC1F3484270";
+const bridgeContract = "Runic.Translations.Editor.EditorViewModel:E4B303387FE8B94CA1A93A9D539F9F2BB5F57DC3B3D233E3D8FAA7E69E78ECB3";
 const interactionDefinitions = defineInteractions({
-  confirmClose: { contract: "FA8C9DF07FEC823BE3D8DC803D948539CD74484F4055CD6BAE7FAAC1F3484270:interaction:ConfirmClose", decodeInput: (value: unknown) => bridgeWire.object<EditorCloseQuestion>(value, value => ({ answerWithinMilliseconds: bridgeWire.integer(value["answerWithinMilliseconds"], -2147483648, 2147483647)})), encodeOutput: (value: unknown) => (value as boolean) },
+  confirmClose: { contract: "E4B303387FE8B94CA1A93A9D539F9F2BB5F57DC3B3D233E3D8FAA7E69E78ECB3:interaction:ConfirmClose", decodeInput: (value: unknown) => bridgeWire.object<EditorCloseQuestion>(value, value => ({ answerWithinMilliseconds: bridgeWire.integer(value["answerWithinMilliseconds"], -2147483648, 2147483647)})), encodeOutput: (value: unknown) => (value as boolean) },
 });
 const setUiLocaleOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const closeWindowOperation: BridgeOperationCodec<boolean> = { decode: value => bridgeWire.boolean(value) };

@@ -3,7 +3,7 @@ import type { BridgeConnectOptions, BridgeOperationStartOptions } from "@runic-a
 import { connectView, disposable, viewReferences, type BridgeMemberDecoders, type BridgeOperationCodec, bridgeOperations } from "@runic-artifex/views/generated";
 import * as bridgeWire from "@runic-artifex/views/generated/wire";
 import type { EditorWorkspaceState, EditorWorkspaceClient, EditorWorkspacePageReference } from "./editorWorkspace.contract.js";
-export type { EditorWorkspaceState, EditorWorkspaceLoadOperation, EditorWorkspaceCheckExternalChangesOperation, EditorWorkspacePickWorkspaceOperation, EditorWorkspacePreviewMutationOperation, EditorWorkspaceApplyMutationOperation, EditorWorkspaceRecoverTransactionOperation, EditorWorkspaceUndoOperation, EditorWorkspaceRedoOperation, EditorWorkspaceListLocalesOperation, EditorWorkspaceDescribeLocaleOperation, EditorWorkspaceClient, EditorWorkspacePageReference } from "./editorWorkspace.contract.js";
+export type { EditorWorkspaceState, EditorWorkspaceLoadOperation, EditorWorkspaceCheckExternalChangesOperation, EditorWorkspacePickWorkspaceOperation, EditorWorkspacePreviewMutationOperation, EditorWorkspaceApplyMutationOperation, EditorWorkspaceRecoverTransactionOperation, EditorWorkspaceUndoOperation, EditorWorkspaceRedoOperation, EditorWorkspaceListLocalesOperation, EditorWorkspaceDescribeLocaleOperation, EditorWorkspaceCommandName, EditorWorkspaceClient, EditorWorkspacePageReference } from "./editorWorkspace.contract.js";
 
 const pageEditorWorkspaceReferences = viewReferences<EditorWorkspacePageReference>(id => ({ kind: "editorWorkspace", connect: () => connectEditorWorkspaceAt(`content${id}`) }));
 export function pageEditorWorkspace(id: string): EditorWorkspacePageReference { return pageEditorWorkspaceReferences(id); }
@@ -30,7 +30,7 @@ const members: BridgeMemberDecoders<EditorWorkspaceState> = {
   isListLocalesExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isDescribeLocaleExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorWorkspaceViewModel:FA8C9DF07FEC823BE3D8DC803D948539CD74484F4055CD6BAE7FAAC1F3484270";
+const bridgeContract = "Runic.Translations.Editor.EditorWorkspaceViewModel:468A3B1588F6505DB27A6A6E80FD22132320A14630126F5075495FEACA32927F";
 const loadOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const checkExternalChangesOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const pickWorkspaceOperation: BridgeOperationCodec<void> = { decode: value => undefined };

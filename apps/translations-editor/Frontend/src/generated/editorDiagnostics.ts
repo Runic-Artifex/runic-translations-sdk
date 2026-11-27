@@ -3,7 +3,7 @@ import type { BridgeConnectOptions, BridgeOperationStartOptions } from "@runic-a
 import { connectView, disposable, viewReferences, type BridgeMemberDecoders, type BridgeOperationCodec, bridgeOperations } from "@runic-artifex/views/generated";
 import * as bridgeWire from "@runic-artifex/views/generated/wire";
 import type { EditorDiagnosticsState, EditorDiagnosticsClient, EditorDiagnosticsPageReference } from "./editorDiagnostics.contract.js";
-export type { EditorDiagnosticsState, EditorDiagnosticsAboutOperation, EditorDiagnosticsCreateDiagnosticBundleOperation, EditorDiagnosticsRevealDiagnosticBundleOperation, EditorDiagnosticsDeleteDiagnosticBundleOperation, EditorDiagnosticsClient, EditorDiagnosticsPageReference } from "./editorDiagnostics.contract.js";
+export type { EditorDiagnosticsState, EditorDiagnosticsAboutOperation, EditorDiagnosticsCreateDiagnosticBundleOperation, EditorDiagnosticsRevealDiagnosticBundleOperation, EditorDiagnosticsDeleteDiagnosticBundleOperation, EditorDiagnosticsCommandName, EditorDiagnosticsClient, EditorDiagnosticsPageReference } from "./editorDiagnostics.contract.js";
 
 const pageEditorDiagnosticsReferences = viewReferences<EditorDiagnosticsPageReference>(id => ({ kind: "editorDiagnostics", connect: () => connectEditorDiagnosticsAt(`content${id}`) }));
 export function pageEditorDiagnostics(id: string): EditorDiagnosticsPageReference { return pageEditorDiagnosticsReferences(id); }
@@ -18,7 +18,7 @@ const members: BridgeMemberDecoders<EditorDiagnosticsState> = {
   isRevealDiagnosticBundleExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isDeleteDiagnosticBundleExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorDiagnosticsViewModel:FA8C9DF07FEC823BE3D8DC803D948539CD74484F4055CD6BAE7FAAC1F3484270";
+const bridgeContract = "Runic.Translations.Editor.EditorDiagnosticsViewModel:58ECC16240CA23922822EEF5EB8F183BBD04BA8C0B91A77274953945F45A1405";
 const aboutOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const createDiagnosticBundleOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const revealDiagnosticBundleOperation: BridgeOperationCodec<void> = { decode: value => undefined };
