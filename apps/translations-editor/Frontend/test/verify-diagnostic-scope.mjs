@@ -174,7 +174,18 @@ assert.equal(diagnosticText({ id: "RTR0090", severity: "warning", message: "The 
   "An RTR0090 that is not about a message's review state keeps its own text.");
 assert.equal(diagnosticText(diagnostic("RTR0096", "warning", { message: "plain" })), "plain");
 
+// The file format (D086.1): a current project shows no schema version; an older one says so in plain words.
+assert.doesNotMatch(flat, /validation-older-format|ui_validation_(?:schema|compiler)\b/, "A current project shows its schema version.");
+const older = html({ ...base, currentSchemaVersion: 2 });
+assert.match(older, /<span data-slot="badge"[^\n]*? data-testid="validation-older-format">\[ui_validation_older_format version=1\]<\/span>/,
+  "An older project format is not named.");
+const { isOlderProjectFormat, currentProjectSchemaVersion } = await import("../src/lib/project-schema.ts");
+assert.equal(currentProjectSchemaVersion, 1);
+assert.deepEqual([1, 2, 3, 0, -1, 1.5, Number.NaN].map((version) => isOlderProjectFormat(version, 2)),
+  [true, false, false, false, false, false, false], "Only a valid earlier version is an older format.");
+assert.equal(isOlderProjectFormat(1), false, "Schema 1 is the current format.");
+
 const source = await readFile(new URL("../src/lib/ValidationPanel.svelte", import.meta.url), "utf8");
 const warnings = compile(source, { generate: "server" }).warnings.filter((warning) => warning.code.startsWith("a11y_"));
 assert.deepEqual(warnings, [], "ValidationPanel.svelte has compiler-reported accessibility violations.");
-console.log("PASS: the validation panel lists the selected message's diagnostics first, errors before warnings, with message lines, every other error pinned, and the other warnings collapsed.");
+console.log("PASS: the validation panel lists the selected message's diagnostics first, errors before warnings, with message lines, every other error pinned, and the other warnings collapsed; the file format is named only when it is older.");

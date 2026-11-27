@@ -29,6 +29,10 @@ export default async function scopedDiagnostics(context) {
   assert.equal(await messageIssues.locator("[data-severity]").first().getAttribute("data-severity"), "error",
     "The selected message's error is not listed first.");
   assert.match(await messageIssues.locator("[data-severity]").first().textContent(), /Line 1/, "The error does not name its line in the message.");
+  // The project is in the current file format, so the panel names no schema version (D086.1).
+  assert.equal(await page.getByTestId("validation-older-format").count(), 0, "A current project is named an older file format.");
+  assert.doesNotMatch(await page.getByRole("alert").filter({ has: messageIssues }).textContent(), /schema/i,
+    "The validation panel shows the schema version.");
   const blockingIssues = page.getByTestId("diagnostics-blocking");
   assert.equal(await blockingIssues.count(), 0, "Errors elsewhere are shown although the project has none.");
   const otherIssues = page.getByTestId("diagnostics-other");

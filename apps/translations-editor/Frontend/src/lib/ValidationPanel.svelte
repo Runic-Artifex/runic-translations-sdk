@@ -12,6 +12,7 @@
     errorsFirst, groupDiagnostics, messageDisplayName, placeDiagnostics,
     type DiagnosticSelection, type DiagnosticSources, type PlacedDiagnostic,
   } from "#lib/diagnostic-scope.js";
+  import { isOlderProjectFormat, currentProjectSchemaVersion } from "#lib/project-schema.js";
   import { diagnosticText } from "#lib/review-model.js";
   import { getUiText, displayNotice } from "#lib/ui-text.js";
 
@@ -24,7 +25,10 @@
     validLabel: string;
     invalidLabel: string;
     diagnosticsLabel: string;
+    /** The project's `runic.json` schema version: named only when it is an older file format (D086.1). */
     schemaVersion: number;
+    /** The current project schema version; a test sets it to show the older-format notice. */
+    currentSchemaVersion?: number;
     /** The documents the diagnostics point into, to name a diagnostic's message and its line in it. */
     sources?: DiagnosticSources;
     /**
@@ -47,6 +51,7 @@
     invalidLabel,
     diagnosticsLabel,
     schemaVersion,
+    currentSchemaVersion = currentProjectSchemaVersion,
     sources,
     selection,
     onselect,
@@ -57,6 +62,7 @@
   const ids = $props.id();
   let otherExpanded = $state(false);
 
+  let olderFormat = $derived(isOlderProjectFormat(schemaVersion, currentSchemaVersion));
   let invalid = $derived(errorCount > 0 || clientError !== undefined);
   let placed = $derived(placeDiagnostics(diagnostics, sources));
   let groups = $derived(groupDiagnostics(placed, selection));
@@ -156,7 +162,9 @@
         </Alert.Description>
       </div>
     </div>
-    <Badge variant="outline" class="font-mono text-[0.7rem]">{ui.text("ui_validation_compiler")} · {ui.text("ui_validation_schema")} v{schemaVersion}</Badge>
+    {#if olderFormat}
+      <Badge variant="outline" class="text-[0.7rem]" data-testid="validation-older-format">{ui.text("ui_validation_older_format", { version: schemaVersion })}</Badge>
+    {/if}
   </header>
 
   {#if clientError}
