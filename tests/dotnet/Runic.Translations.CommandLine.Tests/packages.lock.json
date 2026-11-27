@@ -45,9 +45,9 @@
       },
       "Runic.CommandLine": {
         "type": "Direct",
-        "requested": "[0.14.0, )",
-        "resolved": "0.14.0",
-        "contentHash": "gS2mzy4kRy6SEywF8x7QVSj658Hzvg7q7/O5VFn1JkbA8cf3nRDyttT7vOS+PVbqISMXjRnoeSlMwju9M+COfQ=="
+        "requested": "[0.15.0, )",
+        "resolved": "0.15.0",
+        "contentHash": "3ZqP+mHbQqTHF0PmnzswccUbXzscKRF2BOV7m6yqT86A6y8ZMJY+cCYQ8s+lEtLVE7Z//lF+b/OpoPwVmVMzJA=="
       },
       "TUnit.Core": {
         "type": "Direct",
@@ -122,16 +122,16 @@
       "runic.translations.commandline": {
         "type": "Project",
         "dependencies": {
-          "Runic.CommandLine": "[0.14.0, )",
-          "Runic.Translations": "[0.15.0, )",
-          "Runic.Translations.Hosting": "[0.15.0, )"
+          "Runic.CommandLine": "[0.15.0, )",
+          "Runic.Translations": "[0.16.0, )",
+          "Runic.Translations.Hosting": "[0.16.0, )"
         }
       },
       "runic.translations.hosting": {
         "type": "Project",
         "dependencies": {
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.14, )",
-          "Runic.Translations": "[0.15.0, )"
+          "Runic.Translations": "[0.16.0, )"
         }
       },
       "Microsoft.Extensions.DependencyInjection.Abstractions": {

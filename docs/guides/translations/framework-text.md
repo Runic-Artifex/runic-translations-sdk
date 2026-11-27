@@ -24,6 +24,7 @@ move in lockstep: one Translations minor supports exactly one Command Line minor
 
 | Runic.CommandLine | Runic.Translations.CommandLine |
 | --- | --- |
+| 0.15.x | 0.16.x |
 | 0.14.x | 0.15.x |
 | 0.13.x | 0.14.x, 0.13.x, 0.12.x, 0.11.x |
 | 0.12.x | 0.10.x |
