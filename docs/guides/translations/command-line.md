@@ -58,7 +58,11 @@ a missing argument prints `Das Argument <name> fehlt.`. Since Runic.CommandLine
 `ValueName` such as `<Container-Pfad>`) and the options in a `[requires: …]` or
 `[conflicts: …]` note by their spelling in the app's syntax (`[erfordert: /factor]`,
 `[schließt aus: /l]` with the Windows slash syntax), and help shows no default
-for flags. The adapter's German text is unchanged; only these arguments differ. The
+for flags. Since 0.15 the `--version` row (`help.show-version`, `Version anzeigen`)
+appears only in root help, not in a command's or a group's help, and a usage error
+of a root command (`RootCommand`) ends with root help's usage line and
+`Weitere Informationen erhalten Sie mit "localized --help".`. The adapter's German
+text is unchanged; only these arguments and rows differ. The
 [localized example](../../../examples/command-line/localized/README.md) is a
 complete app that is also published with NativeAOT in CI.
 
@@ -184,6 +188,7 @@ from that release's `CommandTextKeys`.
 
 | Runic.Translations.CommandLine | Runic.CommandLine |
 | --- | --- |
+| 0.16.x | 0.15.x |
 | 0.15.x | 0.14.x |
 | 0.14.x | 0.13.x |
 | 0.13.x | 0.13.x |

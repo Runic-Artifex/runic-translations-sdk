@@ -40,6 +40,7 @@ exactly one Runic Command Line minor; use the pair from one row:
 
 | Runic Translations | Runic.CommandLine |
 | --- | --- |
+| 0.16.x | 0.15.x |
 | 0.15.x | 0.14.x |
 | 0.14.x | 0.13.x |
 | 0.13.x | 0.13.x |
