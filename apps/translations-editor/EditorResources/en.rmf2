@@ -5232,3 +5232,94 @@ ui {
 
   }
 }
+ui {
+  settings {
+    spelling = Spelling
+  }
+}
+ui {
+  settings {
+    check_spelling = Check spelling
+  }
+}
+ui {
+  settings {
+    spelling_download = Download my language’s dictionary automatically
+  }
+}
+ui {
+  spelling {
+    suggestions_for =
+      .input {$word :string}
+      {{Corrections for “{$word}”}}
+
+  }
+}
+ui {
+  spelling {
+    misspelled =
+      .input {$word :string}
+      {{“{$word}” may be misspelled:}}
+
+  }
+}
+ui {
+  spelling {
+    no_suggestions = No suggestions
+  }
+}
+ui {
+  spelling {
+    add_word = Add to dictionary
+  }
+}
+ui {
+  spelling {
+    offer =
+      .input {$language :string}
+      .input {$size :string}
+      {{Spell checking in {$language} needs its dictionary ({$size} MB), downloaded from GitHub.}}
+
+  }
+}
+ui {
+  spelling {
+    download = Download
+  }
+}
+ui {
+  spelling {
+    not_now = Not now
+  }
+}
+ui {
+  spelling {
+    downloading =
+      .input {$language :string}
+      .input {$percent :integer}
+      {{Downloading the {$language} dictionary ({$percent}%).}}
+
+  }
+}
+ui {
+  spelling {
+    downloading_automatic =
+      .input {$language :string}
+      .input {$percent :integer}
+      {{Downloading the dictionary of your system language, {$language} ({$percent}%). You can turn this off in the settings.}}
+
+  }
+}
+ui {
+  spelling {
+    failed =
+      .input {$language :string}
+      {{The {$language} dictionary could not be downloaded.}}
+
+  }
+}
+ui {
+  spelling {
+    retry = Try again
+  }
+}

@@ -22,7 +22,10 @@
     type MessageInput,
   } from "#lib/message-composer.js";
   import { tick } from "svelte";
+  import SpellingMarks from "#lib/SpellingMarks.svelte";
+  import SpellingSuggestions from "#lib/SpellingSuggestions.svelte";
   import { localeDirection } from "#lib/locale-text.js";
+  import { getSpelling, markAt, marksWithin } from "#lib/state/spelling.svelte.js";
   import { getUiText } from "#lib/ui-text.js";
 
   type EditorSlot = Mf2EditorSlot;
@@ -59,6 +62,36 @@
   let textareas: HTMLTextAreaElement[] = [];
   let slots = $derived(parseMf2Slots(value));
   let inputNames = $derived(Object.keys(inputs));
+  // The editor's own spell checking (D074.10): the pattern is checked as a whole, in its language, without its
+  // placeholders and markup, and each text segment shows the marks that fall in it.
+  const spelling = getSpelling();
+  let patternMarks = $derived(spelling?.marks(locale, value) ?? []);
+  let caretAt = $state<{ slot: number; position: number }>();
+  let activeMark = $derived.by(() => {
+    if (caretAt === undefined || slots[caretAt.slot] === undefined) return undefined;
+    return markAt(slotMarks(caretAt.slot), caretAt.position);
+  });
+
+  function slotMarks(index: number) {
+    const slot = slots[index];
+    return slot === undefined ? [] : marksWithin(patternMarks, slotStart(index), slot.text.length);
+  }
+
+  function trackCaret(index: number, target: HTMLTextAreaElement): void {
+    caretAt = target.selectionStart === target.selectionEnd ? { slot: index, position: target.selectionStart } : undefined;
+  }
+
+  function replaceMark(replacement: string): void {
+    const mark = activeMark;
+    const at = caretAt;
+    if (mark === undefined || at === undefined) return;
+    const text = slots[at.slot].text;
+    const next = text.slice(0, mark.start) + replacement + text.slice(mark.start + mark.length);
+    const position = mark.start + replacement.length;
+    updateText(at.slot, next, position);
+    caretAt = { slot: at.slot, position };
+    void focusSlot(at.slot, position);
+  }
 
   function emitChange(next: string): void {
     onchange(next);
@@ -184,6 +217,7 @@
   function rememberCaret(index: number, target: HTMLTextAreaElement): void {
     activeSlot = index;
     caret = target.selectionStart ?? target.value.length;
+    trackCaret(index, target);
   }
 
   function inspectToken(name: string | undefined, slot: number): void {
@@ -314,7 +348,10 @@
   </DropdownMenu.Root>
 {/snippet}
 
-<div class="overflow-hidden rounded-pane border border-(--field-border) bg-card focus-within:border-ring focus-within:ring-1 focus-within:ring-ring">
+<div
+  class="overflow-hidden rounded-pane border border-(--field-border) bg-card focus-within:border-ring focus-within:ring-1 focus-within:ring-ring"
+  onfocusout={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) caretAt = undefined; }}
+>
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
     class="flex cursor-text flex-wrap content-start items-start gap-x-1 gap-y-2"
@@ -335,6 +372,7 @@
       {/if}
       <!-- An empty pattern (a starter's variant) shows its empty text field, ready for typing. -->
       {#if slot.text !== "" || editingSlot === index || (slots.length === 1 && slot.token === undefined)}
+        <span class="relative inline-flex max-w-full flex-none">
         <textarea
           {@attach registerTextarea(index)}
           class={[
@@ -347,12 +385,14 @@
           value={slot.text}
           aria-label={ui.text("ui_inline_text_index", { label: label, index: index + 1 })}
           placeholder={ui.text("ui_inline_write_text")}
-          spellcheck="true"
+          spellcheck="false"
           lang={locale}
           dir={localeDirection(locale)}
           onfocus={(event) => rememberCaret(index, event.currentTarget)}
           onselect={(event) => rememberCaret(index, event.currentTarget)}
-          oninput={(event) => updateText(index, event.currentTarget.value, event.currentTarget.selectionStart)}
+          onkeyup={(event) => trackCaret(index, event.currentTarget)}
+          onclick={(event) => trackCaret(index, event.currentTarget)}
+          oninput={(event) => { updateText(index, event.currentTarget.value, event.currentTarget.selectionStart); trackCaret(index, event.currentTarget); }}
           onblur={(event) => { if (event.currentTarget.value === "") editingSlot = undefined; }}
           ondragenter={(event) => allowVariableDrop(event, index)}
           ondragover={(event) => allowVariableDrop(event, index)}
@@ -361,6 +401,8 @@
           }}
           ondrop={(event) => dropVariable(event, index, event.currentTarget)}
         ></textarea>
+        <SpellingMarks text={slot.text} marks={slotMarks(index)} class="absolute inset-0 p-0 font-sans text-message leading-7" />
+        </span>
         {@render insertionPoint(index, slot.text.length, ui.text("ui_inline_after_text_index", { index: index + 1 }))}
       {/if}
       {#if slot.token !== undefined}
@@ -385,6 +427,11 @@
       {/if}
     {/each}
   </div>
+  {#if activeMark !== undefined}
+    <div class="border-t bg-muted/30 px-3 py-2">
+      <SpellingSuggestions {locale} mark={activeMark} onreplace={replaceMark} />
+    </div>
+  {/if}
 
   {#if selectedToken !== undefined}
     <div class="grid gap-3 border-t bg-muted/30 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto_auto_auto] sm:items-end">

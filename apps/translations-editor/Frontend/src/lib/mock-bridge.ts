@@ -90,6 +90,41 @@ let redoStack: MockHistoryEntry[] = [];
 let historyBytes = 0;
 let localState = new Map<string, string>();
 
+// Spell checking without a host: English is installed, every other language downloads in a second when asked, and a
+// few typos are marked.
+const mockMisspelled = new Map([["teh", ["the", "tech"]], ["recieve", ["receive"]], ["documentaton", ["documentation"]], ["fehller", ["Fehler"]]]);
+const mockUserWords = new Set<string>();
+const mockDownloads = new Map<string, number>();
+
+function mockSpellingLanguage(locale: string): { locale: string; state: string; systemLanguage: boolean; automatic: boolean; dictionary?: string; source?: string; downloadName?: string; downloadSize?: number; bytesReceived?: number; license?: string } {
+  const systemLanguage = locale.split("-")[0] === "en";
+  if (systemLanguage) return { locale, state: "ready", systemLanguage, automatic: false, dictionary: "en_US", source: "bundled" };
+  const started = mockDownloads.get(locale);
+  const downloadName = locale.replace("-", "_");
+  const downloadSize = 4_400_000;
+  if (started === undefined) return { locale, state: "downloadable", systemLanguage, automatic: false, downloadName, downloadSize, license: "GPL-2.0-or-later" };
+  const elapsed = Date.now() - started;
+  if (elapsed >= 1000) return { locale, state: "ready", systemLanguage, automatic: false, dictionary: downloadName, source: "downloaded" };
+  return { locale, state: "downloading", systemLanguage, automatic: false, downloadName, downloadSize, bytesReceived: Math.round(downloadSize * elapsed / 1000) };
+}
+
+function mockSpellingStatus(locales: string[]): { systemLanguage: string; languages: ReturnType<typeof mockSpellingLanguage>[] } {
+  return { systemLanguage: "en-US", languages: [...new Set(locales)].map(mockSpellingLanguage) };
+}
+
+function mockCheckSpelling(request: { locale: string; texts: { id: string; text: string }[] }): unknown {
+  const state = mockSpellingLanguage(request.locale).state;
+  return {
+    locale: request.locale, state,
+    results: request.texts.map(({ id, text }) => ({
+      id,
+      misspellings: state !== "ready" ? [] : [...text.matchAll(/\{[^}]*\}|[\p{L}']+/gu)]
+        .filter((match) => !match[0].startsWith("{") && mockMisspelled.has(match[0].toLowerCase()) && !mockUserWords.has(match[0]))
+        .map((match) => ({ start: match.index, length: match[0].length, word: match[0] })),
+    })),
+  };
+}
+
 function historySize(value: unknown): number {
   return new TextEncoder().encode(JSON.stringify(value)).byteLength;
 }
@@ -900,6 +935,23 @@ export async function mockExecute(operation: string, argument: unknown): Promise
       const removedEntries = localState.size;
       localState.clear();
       return { removedEntries, recovered: false };
+    }
+    case "SpellingStatus": return mockSpellingStatus((argument as { locales: string[] }).locales);
+    case "CheckSpelling": return mockCheckSpelling(argument as { locale: string; texts: { id: string; text: string }[] });
+    case "SuggestSpelling": {
+      const { locale, word } = argument as { locale: string; word: string };
+      return { locale, word, suggestions: mockMisspelled.get(word.toLowerCase()) ?? [] };
+    }
+    case "DownloadSpellingDictionary": {
+      const locale = (argument as { locale: string }).locale;
+      if (mockSpellingLanguage(locale).state === "downloadable") mockDownloads.set(locale, Date.now());
+      return mockSpellingLanguage(locale);
+    }
+    case "AddSpellingWord": {
+      const word = (argument as { word: string }).word;
+      const added = !mockUserWords.has(word);
+      mockUserWords.add(word);
+      return { word, added };
     }
     case "PreviewProject": return previewProject(argument as EditorProjectCreationRequest);
     case "CreateProject": return createProject(argument as EditorProjectCreationRequest);

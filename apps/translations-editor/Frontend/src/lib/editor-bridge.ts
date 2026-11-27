@@ -14,6 +14,12 @@ import type {
   EditorLocalStateClearResult,
   EditorLocalStateEntry,
   EditorLocalStateSnapshot,
+  EditorSpellingCheckResult,
+  EditorSpellingLanguage,
+  EditorSpellingStatus,
+  EditorSpellingSuggestions,
+  EditorSpellingText,
+  EditorSpellingWordResult,
   EditorExternalChanges,
   EditorReviewFileResult,
   EditorReviewImportPreview,
@@ -257,6 +263,13 @@ export interface EditorBridge {
   loadLocalState(): Promise<EditorLocalStateSnapshot>;
   saveLocalState(entries: EditorLocalStateEntry[]): Promise<EditorLocalStateSnapshot>;
   clearLocalState(): Promise<EditorLocalStateClearResult>;
+  /** What checks each language; with `automaticDownload`, the system language's missing dictionary starts to download. */
+  spellingStatus(locales: string[], automaticDownload: boolean): Promise<EditorSpellingStatus>;
+  checkSpelling(locale: string, texts: EditorSpellingText[]): Promise<EditorSpellingCheckResult>;
+  suggestSpelling(locale: string, word: string): Promise<EditorSpellingSuggestions>;
+  /** Starts the download the user asked for; returns at once, and `spellingStatus` reports its progress. */
+  downloadSpellingDictionary(locale: string): Promise<EditorSpellingLanguage>;
+  addSpellingWord(word: string): Promise<EditorSpellingWordResult>;
   previewProject(request: EditorProjectCreationRequest): Promise<EditorProjectPlan>;
   createProject(request: EditorProjectCreationRequest): Promise<EditorOperationResult>;
   openWorkspace(request: EditorOpenWorkspaceRequest): Promise<EditorOperationResult>;
@@ -331,6 +344,11 @@ export function createEditorBridge(): EditorBridge {
     loadLocalState: () => invokeRouted("LoadLocalState", root => root.snapshot.localState, (view, request) => view.loadLocalState(request), state => state.loadLocalStateResultJson, {}) as Promise<EditorLocalStateSnapshot>,
     saveLocalState: (entries) => invokeRouted("SaveLocalState", root => root.snapshot.localState, (view, request) => view.saveLocalState(request), state => state.saveLocalStateResultJson, entries) as Promise<EditorLocalStateSnapshot>,
     clearLocalState: () => invokeRouted("ClearLocalState", root => root.snapshot.localState, (view, request) => view.clearLocalState(request), state => state.clearLocalStateResultJson, {}) as Promise<EditorLocalStateClearResult>,
+    spellingStatus: (locales, automaticDownload) => invokeRouted("SpellingStatus", root => root.snapshot.spelling, (view, request) => view.spellingStatus(request), state => state.spellingStatusResultJson, { locales, automaticDownload }) as Promise<EditorSpellingStatus>,
+    checkSpelling: (locale, texts) => invokeRouted("CheckSpelling", root => root.snapshot.spelling, (view, request) => view.checkSpelling(request), state => state.checkSpellingResultJson, { locale, texts }) as Promise<EditorSpellingCheckResult>,
+    suggestSpelling: (locale, word) => invokeRouted("SuggestSpelling", root => root.snapshot.spelling, (view, request) => view.suggestSpelling(request), state => state.suggestSpellingResultJson, { locale, word }) as Promise<EditorSpellingSuggestions>,
+    downloadSpellingDictionary: (locale) => invokeRouted("DownloadSpellingDictionary", root => root.snapshot.spelling, (view, request) => view.downloadSpellingDictionary(request), state => state.downloadSpellingDictionaryResultJson, { locale }) as Promise<EditorSpellingLanguage>,
+    addSpellingWord: (word) => invokeRouted("AddSpellingWord", root => root.snapshot.spelling, (view, request) => view.addSpellingWord(request), state => state.addSpellingWordResultJson, { word }) as Promise<EditorSpellingWordResult>,
     previewProject: (request) => invokeRouted("PreviewProject", root => root.snapshot.project, (view, request) => view.previewProject(request), state => state.previewProjectResultJson, request) as Promise<EditorProjectPlan>,
     createProject: (request) => invokeRouted("CreateProject", root => root.snapshot.project, (view, request) => view.createProject(request), state => state.createProjectResultJson, request) as Promise<EditorOperationResult>,
     openWorkspace: (request) => invokeRouted("OpenWorkspace", root => root.snapshot.project, (view, request) => view.openWorkspace(request), state => state.openWorkspaceResultJson, request) as Promise<EditorOperationResult>,

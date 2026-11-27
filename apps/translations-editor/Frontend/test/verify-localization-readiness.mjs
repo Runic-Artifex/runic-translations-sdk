@@ -31,7 +31,9 @@ assert.match(page, /document\.documentElement\.lang = uiLocale/, "UI locale does
 assert.match(page, /document\.documentElement\.dir = uiDirection/, "UI direction does not update the document direction.");
 assert.match(page, /lang=\{selectedLocale\}/, "The editing region does not expose its selected locale.");
 assert.match(editor, /lang=\{locale\}/, "The translation editor does not expose its locale.");
-assert.match(inline, /spellcheck="true"/, "Natural-language translation input must keep spellcheck enabled.");
+// The editor checks spelling itself, in each text's language (D074.10): the webview's checker is off, the editor's marks on.
+assert.match(inline, /spellcheck="false"/, "The pattern box leaves the webview's spell checker on, which checks in the wrong language.");
+assert.match(inline, /<SpellingMarks text=\{slot\.text\}/, "The pattern box does not draw the editor's own spelling marks.");
 assert.match(inline, /dir=\{localeDirection\(locale\)\}/, "Translation input does not expose locale direction.");
 
 console.log(`PASS: mounted shared localization readiness fixtures (${localizationStressCases.length} text cases, ${visualAccessibilityStressScenarios.length} visual scenarios, ${pluralStressCounts.length} plural extremes) against editor language, direction, spellcheck, forced-colors, contrast, and reduced-motion hooks.`);

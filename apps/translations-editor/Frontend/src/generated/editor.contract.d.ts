@@ -8,6 +8,7 @@ import type { EditorDiagnosticsPageReference } from "./editorDiagnostics.contrac
 import type { EditorLocalStatePageReference } from "./editorLocalState.contract.js";
 import type { EditorProjectPageReference } from "./editorProject.contract.js";
 import type { EditorLibrariesPageReference } from "./editorLibraries.contract.js";
+import type { EditorSpellingPageReference } from "./editorSpelling.contract.js";
 import type { EditorDocumentPageReference } from "./editorDocument.contract.js";
 import type { EditorCloseQuestion } from "./types.js";
 
@@ -20,6 +21,7 @@ export interface EditorState {
   readonly localState: EditorLocalStatePageReference;
   readonly project: EditorProjectPageReference;
   readonly libraries: EditorLibrariesPageReference;
+  readonly spelling: EditorSpellingPageReference;
   readonly documents: readonly (EditorDocumentPageReference)[];
   readonly isSetUiLocaleExecuting: boolean;
   readonly canCloseWindow: boolean;

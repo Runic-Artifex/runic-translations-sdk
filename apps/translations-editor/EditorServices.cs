@@ -27,10 +27,12 @@ internal static class EditorServices
         var services = new ServiceCollection();
         services.AddRunicReactiveModelContext();
         services.AddScoped(_ => new EditorSession(workspacePath));
+        // The spell checker belongs to the process: every window shares its dictionaries, checkers and downloads.
+        services.AddSingleton(_ => new EditorSpelling());
         services.AddScoped(provider => new EditorViewModel(provider.GetRequiredService<EditorSession>(),
             provider.GetRequiredService<IRunicModelContext>(), provider.GetRequiredService<ISequencer>(),
             provider.GetRequiredService<IRunicWindowLocale>(), provider.GetRequiredService<IRunicWindowContext>(),
-            provider.GetRequiredService<IFileDialogs>(), closeQuestionTimeout));
+            provider.GetRequiredService<IFileDialogs>(), provider.GetRequiredService<EditorSpelling>(), closeQuestionTimeout));
         var locator = new DefaultViewLocator();
         locator.CreateMappingBuilder()
             .Map<EditorWorkspaceViewModel>(() => new EditorWorkspaceView())
@@ -41,6 +43,7 @@ internal static class EditorServices
             .Map<EditorLocalStateViewModel>(() => new EditorLocalStateView())
             .Map<EditorProjectViewModel>(() => new EditorProjectView())
             .Map<EditorLibrariesViewModel>(() => new EditorLibrariesView())
+            .Map<EditorSpellingViewModel>(() => new EditorSpellingView())
             .Map<EditorDocumentViewModel>(() => new EditorDocumentView());
         services.AddScoped<IRunicViewLocator>(_ => new ReactiveRunicViewLocator(locator));
         services.AddRunicWindowService();

@@ -25,6 +25,9 @@
     <PackageVersion Include="Runic.Platform.Linux.Portal" Version="$(RunicSdkDependencyVersion)" />
     <PackageVersion Include="Runic.Platform.Windows" Version="$(RunicSdkDependencyVersion)" />
     <PackageVersion Include="Runic.Platform.MacOS" Version="$(RunicSdkDependencyVersion)" />
+    <!-- The editor's spell checker (D074.10, D086.2): a preview package of runic-sdk on a version line of its own,
+         outside the 1.0 promise, released with runic-sdk 0.24.0. -->
+    <PackageVersion Include="Runic.Spelling" Version="0.24.0-preview.1" />
     <!-- TUnit test projects (see CONTRIBUTING.md); keep TUnit.Core and TUnit.Engine on one version. -->
     <PackageVersion Include="TUnit.Core" Version="1.73.19" />
     <PackageVersion Include="TUnit.Engine" Version="1.73.19" />

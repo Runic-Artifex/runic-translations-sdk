@@ -112,6 +112,28 @@ composer, the message source and the file view, but not in the search field, a
 menu or a dialog; on macOS ⌥↑ and ⌥↓ keep moving the caret in a text field, so
 there they work outside text fields only. AltGr is never one of them.
 
+### Spell checking
+
+The editor checks spelling itself, in the language of the text being edited (D074.10): each language has its own
+Hunspell checker from runic-sdk's `Runic.Spelling` (a preview package). The webview's spell checker is off, since it
+checks every field in the same languages. Misspelled words get a wavy underline in the pattern box, in a variant's
+message source and in the composer's message source. Placeholders, markup, escapes and a message's MF2 syntax are
+skipped. Put the caret in a marked word to see corrections, or add the word to your own word list. All Runic
+applications share that list.
+
+Where the dictionaries come from:
+
+- English (`en_US`, `en_GB`) ships with the editor.
+- The system's Hunspell dictionaries are used when the system has them.
+- Other languages are downloaded from the pinned catalog of `Runic.Spelling`. The catalog names each file by a fixed
+  commit on GitHub and checks its size and SHA-256 before it installs the file. Downloads go to the dictionary folder
+  that all Runic applications share (`~/.local/share/runic/dictionaries` on Linux).
+
+The dictionary of your system language downloads on its own when a project has that language and none is installed
+(D086.2). The composer says so while the download runs. Other languages are offered in the composer first, with their
+size, and download only when you choose **Download**. **Editor settings** has **Check spelling** and **Download my
+language's dictionary automatically**.
+
 ### The list view
 
 The toolbar's **Workbench | List** switch shows the selected language's messages

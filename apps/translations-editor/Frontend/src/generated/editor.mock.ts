@@ -7,7 +7,7 @@ import type { EditorCloseQuestion } from "./types.js";
 export type { EditorCloseQuestion } from "./types.js";
 
 /** The state of a mock Editor: the client state, with content as `{ kind, id }` and command state optional. */
-export type EditorMockState = Omit<EditorState, "isSetUiLocaleExecuting" | "canCloseWindow" | "isCloseWindowExecuting" | "workspace" | "documentTools" | "review" | "interchange" | "diagnostics" | "localState" | "project" | "libraries" | "documents"> & Partial<Pick<EditorState, "isSetUiLocaleExecuting" | "canCloseWindow" | "isCloseWindowExecuting">> & {
+export type EditorMockState = Omit<EditorState, "isSetUiLocaleExecuting" | "canCloseWindow" | "isCloseWindowExecuting" | "workspace" | "documentTools" | "review" | "interchange" | "diagnostics" | "localState" | "project" | "libraries" | "spelling" | "documents"> & Partial<Pick<EditorState, "isSetUiLocaleExecuting" | "canCloseWindow" | "isCloseWindowExecuting">> & {
   readonly workspace: MockReference<"editorWorkspace">;
   readonly documentTools: MockReference<"editorDocumentTools">;
   readonly review: MockReference<"editorReview">;
@@ -16,6 +16,7 @@ export type EditorMockState = Omit<EditorState, "isSetUiLocaleExecuting" | "canC
   readonly localState: MockReference<"editorLocalState">;
   readonly project: MockReference<"editorProject">;
   readonly libraries: MockReference<"editorLibraries">;
+  readonly spelling: MockReference<"editorSpelling">;
   readonly documents: readonly (MockReference<"editorDocument">)[];
 };
 
@@ -46,7 +47,7 @@ export interface EditorMock extends MockTypedView<EditorMockState, EditorClient,
 const spec: MockTypedViewSpec = {
   kind: "editor",
   route: "editor",
-  contract: "Runic.Translations.Editor.EditorViewModel:E4B303387FE8B94CA1A93A9D539F9F2BB5F57DC3B3D233E3D8FAA7E69E78ECB3",
+  contract: "Runic.Translations.Editor.EditorViewModel:E3776D3B3F08942EC858F54381FB9A41B79C580651403848202D773861C2A4B4",
   fields: {},
   defaults: { isSetUiLocaleExecuting: false, canCloseWindow: true, isCloseWindowExecuting: false },
   commands: {

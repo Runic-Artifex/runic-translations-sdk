@@ -65,6 +65,7 @@
   import { RepairController } from "#lib/state/repair-controller.svelte.js";
   import { ReviewStore } from "#lib/state/review-store.svelte.js";
   import { SaveCoordinator } from "#lib/state/save-coordinator.svelte.js";
+  import { setSpelling, SpellingController } from "#lib/state/spelling.svelte.js";
   import { currentManifest, SelectionController } from "#lib/state/selection-controller.svelte.js";
   import { UnsavedWork } from "#lib/state/unsaved-work.svelte.js";
   import { WorkspaceController } from "#lib/state/workspace-controller.svelte.js";
@@ -94,6 +95,9 @@
   const ui = projectUiText(createUiText(() => preferences.uiLocale), () => view.projectKind, () => view.textRole);
   setUiText(ui);
   const localeName = (tag: string): string => localeDisplayName(tag, preferences.uiLocale);
+  // The editor's own spell checking (D074.10, D086.2), which the pattern box, the composer and the settings read.
+  const spelling = new SpellingController({ bridge, storage: nativeStorage, uiLocale: () => preferences.uiLocale });
+  setSpelling(spelling);
 
   // Unsaved document text and the one queue per document that changes it (composer, authoring, raw validation, fixes).
   const draftStore: DraftStore = new DraftStore({ bridge, snapshot, storage: nativeStorage });
@@ -325,6 +329,9 @@
     );
   });
 
+  // The project's languages, each checked with its own dictionary; the system language's starts to download here.
+  $effect(() => spelling.setLocales((workspace.snapshot?.catalog?.locales ?? []).map((locale) => locale.tag)));
+
   onMount(() => {
     let disposed = false;
     preferences.restore();
@@ -338,12 +345,14 @@
         const nativeStateRecovered = await loadLocalEditorState();
         if (disposed) return;
         preferences.restore();
+        spelling.restore();
         workspace.loadRecentProjects();
         if (nativeStateRecovered) {
           feedback.operationMessage = notice("ui_feedback_state_recovered");
         }
       } catch (error) {
         feedback.clientError = error instanceof UiNoticeError ? error.notice : notice("ui_feedback_state_load_failed", { error: errorMessage(error) });
+        if (!disposed) spelling.restore(false);
       } finally {
         // The stored choice wins over the OS preference; either becomes the window's locale, also when the native
         // state did not load.
@@ -373,6 +382,7 @@
       stopConnection();
       colorScheme.removeEventListener("change", updateSystemTheme);
       window.clearInterval(interval);
+      spelling.dispose();
     };
   });
 

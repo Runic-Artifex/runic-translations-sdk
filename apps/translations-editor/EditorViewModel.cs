@@ -26,7 +26,7 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
     internal static readonly TimeSpan DefaultCloseQuestionTimeout = TimeSpan.FromSeconds(30);
 
     internal EditorViewModel(EditorSession session, IRunicModelContext modelContext, ISequencer scheduler,
-        IRunicWindowLocale windowLocale, IRunicWindowContext window, IFileDialogs files, TimeSpan? closeQuestionTimeout = null)
+        IRunicWindowLocale windowLocale, IRunicWindowContext window, IFileDialogs files, EditorSpelling spelling, TimeSpan? closeQuestionTimeout = null)
     {
         _session = session;
         _modelContext = modelContext;
@@ -51,8 +51,9 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
         LocalState = new EditorLocalStateViewModel(session, this, _scheduler);
         Project = new EditorProjectViewModel(session, this, _scheduler);
         Libraries = new EditorLibrariesViewModel(session, this, _scheduler);
+        Spelling = new EditorSpellingViewModel(session, this, _scheduler, spelling);
         _modelContextLease = RunicModelContextRegistry.Shared.Bind(modelContext, this, Workspace,
-            DocumentTools, Review, Interchange, Diagnostics, LocalState, Project, Libraries);
+            DocumentTools, Review, Interchange, Diagnostics, LocalState, Project, Libraries, Spelling);
     }
 
     public EditorWorkspaceViewModel Workspace { get; }
@@ -63,6 +64,7 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
     public EditorLocalStateViewModel LocalState { get; }
     public EditorProjectViewModel Project { get; }
     public EditorLibrariesViewModel Libraries { get; }
+    public EditorSpellingViewModel Spelling { get; }
     public IReadOnlyList<EditorDocumentViewModel> Documents => _documentViews;
     /// <summary>Sets the window's locale to one of the editor catalog's locales, such as <c>de</c>.</summary>
     public ReactiveCommand<string, RxVoid> SetUiLocaleCommand { get; }
@@ -172,6 +174,7 @@ public sealed class EditorViewModel : ReactiveObject, IDisposable
         LocalState.Dispose();
         Project.Dispose();
         Libraries.Dispose();
+        Spelling.Dispose();
         foreach (var document in _documents.Values) document.Dispose();
         _documents.Clear();
         foreach (var lease in _documentContextLeases.Values) lease.Dispose();
@@ -196,3 +199,4 @@ public sealed partial class EditorDiagnosticsView : ReactiveRunicView<EditorDiag
 public sealed partial class EditorLocalStateView : ReactiveRunicView<EditorLocalStateViewModel>;
 public sealed partial class EditorProjectView : ReactiveRunicView<EditorProjectViewModel>;
 public sealed partial class EditorLibrariesView : ReactiveRunicView<EditorLibrariesViewModel>;
+public sealed partial class EditorSpellingView : ReactiveRunicView<EditorSpellingViewModel>;

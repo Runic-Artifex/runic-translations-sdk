@@ -5232,3 +5232,94 @@ ui {
 
   }
 }
+ui {
+  settings {
+    spelling = Rechtschreibung
+  }
+}
+ui {
+  settings {
+    check_spelling = Rechtschreibung prüfen
+  }
+}
+ui {
+  settings {
+    spelling_download = Wörterbuch meiner Sprache automatisch laden
+  }
+}
+ui {
+  spelling {
+    suggestions_for =
+      .input {$word :string}
+      {{Korrekturen für „{$word}“}}
+
+  }
+}
+ui {
+  spelling {
+    misspelled =
+      .input {$word :string}
+      {{„{$word}“ ist vielleicht falsch geschrieben:}}
+
+  }
+}
+ui {
+  spelling {
+    no_suggestions = Keine Vorschläge
+  }
+}
+ui {
+  spelling {
+    add_word = Zum Wörterbuch hinzufügen
+  }
+}
+ui {
+  spelling {
+    offer =
+      .input {$language :string}
+      .input {$size :string}
+      {{Die Rechtschreibprüfung für {$language} braucht ihr Wörterbuch ({$size} MB), das von GitHub geladen wird.}}
+
+  }
+}
+ui {
+  spelling {
+    download = Herunterladen
+  }
+}
+ui {
+  spelling {
+    not_now = Nicht jetzt
+  }
+}
+ui {
+  spelling {
+    downloading =
+      .input {$language :string}
+      .input {$percent :integer}
+      {{Das Wörterbuch für {$language} wird geladen ({$percent} %).}}
+
+  }
+}
+ui {
+  spelling {
+    downloading_automatic =
+      .input {$language :string}
+      .input {$percent :integer}
+      {{Das Wörterbuch Ihrer Systemsprache, {$language}, wird geladen ({$percent} %). Sie können das in den Einstellungen abschalten.}}
+
+  }
+}
+ui {
+  spelling {
+    failed =
+      .input {$language :string}
+      {{Das Wörterbuch für {$language} konnte nicht geladen werden.}}
+
+  }
+}
+ui {
+  spelling {
+    retry = Erneut versuchen
+  }
+}

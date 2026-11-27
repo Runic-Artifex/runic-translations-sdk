@@ -11,6 +11,9 @@ components. Versions are fixed by `Directory.Packages.props` and
 | GirCore GObject bindings for GTK 4 and WebKitGTK 6 (`GirCore.Gtk-4.0`, `GirCore.WebKit-6.0` and their dependencies; Linux only) | Copyright (c) Marcel Tiede and contributors; https://github.com/gircore/gir.core | MIT |
 | Tmds.DBus.Protocol | Copyright (c) Tom Deseyn; https://github.com/tmds/Tmds.DBus | MIT |
 | WebView2 loader (`WebView2Loader.dll`, from `Microsoft.Web.WebView2`; Windows only) | Copyright (C) Microsoft Corporation; https://aka.ms/webview2 | BSD-3-Clause (below) |
+| Runic Spelling (`Runic.Spelling`, preview) | Copyright (c) Runic Artifex; https://github.com/Runic-Artifex/runic-sdk | MIT |
+| WeCantSpell.Hunspell, the spell checker of `Runic.Spelling` (`LICENSE_WeCantSpell.Hunspell.txt` in `dictionaries/`) | WeCantSpell.Hunspell contributors, a port of Hunspell (Copyright (C) 2002-2005 its Initial Developers); https://github.com/aarondandy/WeCantSpell.Hunspell | MPL 1.1 (of Hunspell's MPL 1.1 / GPL 2.0 / LGPL 2.1 tri-license) |
+| English Hunspell dictionaries `en_US` and `en_GB` (SCOWL 2026.02.25, `dictionaries/README_en_US.txt`, `README_en_GB.txt`) | Kevin Atkinson and contributors, affix file by Geoff Kuenning; http://wordlist.aspell.net | SCOWL's permissive license and BSD |
 | Svelte | Copyright (c) 2016-2025 Svelte contributors; https://github.com/sveltejs/svelte | MIT |
 | SvelteKit and adapter-static | Copyright (c) 2020 SvelteKit contributors; https://github.com/sveltejs/kit | MIT |
 | Vite browser build tooling | Copyright (c) 2019-present VoidZero Inc. and Vite contributors; https://github.com/vitejs/vite | MIT |
@@ -86,3 +89,6 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Dictionaries of other languages are not part of the editor. A user downloads them from `Runic.Spelling`'s pinned
+catalog, each under its own license, which is kept beside the dictionary in the shared Runic dictionary folder.

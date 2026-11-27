@@ -78,6 +78,7 @@ root = mockEditor(bridge, {
     localState: unused("editorLocalState"),
     project: unused("editorProject"),
     libraries: unused("editorLibraries"),
+    spelling: unused("editorSpelling"),
     documents: [],
   },
 });

@@ -610,3 +610,60 @@ export interface EditorMessageSemantic { text: string[]; placeholders: string[];
 
 export interface EditorDiagnosticSpan { startByte: number; lengthBytes: number; startUtf16: number; lengthUtf16: number; startLine: number; startCharacter: number; endLine: number; endCharacter: number; }
 export interface EditorDiagnosticQuickFix { id: string; title: string; diagnosticId: string; location: { path: string; startByte: number; lengthBytes: number; line: number; column: number; endLine: number; endColumn: number }; expectedRevision: string; startByte: number; lengthBytes: number; newText: string; }
+
+/** Spell checking (D074.10, D086.2): what checks one language. */
+export type EditorSpellingState = "ready" | "downloadable" | "downloading" | "failed" | "unavailable";
+
+export interface EditorSpellingLanguage {
+  locale: string;
+  state: EditorSpellingState;
+  /** The language of the system (the first of the user's languages), whose dictionary downloads on its own. */
+  systemLanguage: boolean;
+  /** The installed dictionary, such as `en_US`. */
+  dictionary?: string;
+  source?: "bundled" | "downloaded" | "system";
+  /** The catalog dictionary a download installs, such as `de_CH`, and its size in bytes. */
+  downloadName?: string;
+  downloadSize?: number;
+  bytesReceived?: number;
+  /** Whether the running download started on its own. */
+  automatic: boolean;
+  /** The catalog dictionary's license, an SPDX expression. */
+  license?: string;
+}
+
+export interface EditorSpellingStatus {
+  systemLanguage?: string;
+  languages: EditorSpellingLanguage[];
+}
+
+export interface EditorSpellingText {
+  id: string;
+  text: string;
+  /** `pattern` (the default) or `message`, a whole message's MF2 source. */
+  kind?: "pattern" | "message";
+}
+
+/** A misspelled word: UTF-16 offsets into its text. */
+export interface EditorMisspelling {
+  start: number;
+  length: number;
+  word: string;
+}
+
+export interface EditorSpellingCheckResult {
+  locale: string;
+  state: EditorSpellingState;
+  results: { id: string; misspellings: EditorMisspelling[] }[];
+}
+
+export interface EditorSpellingSuggestions {
+  locale: string;
+  word: string;
+  suggestions: string[];
+}
+
+export interface EditorSpellingWordResult {
+  word: string;
+  added: boolean;
+}
