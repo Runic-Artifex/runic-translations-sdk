@@ -1,1 +1,0 @@
-- The editor's visual text box shows keyboard focus with one ring around the box. Its focused text segment no longer draws a second ring inside it; in forced colours, which draw no box ring, the segment keeps its outline.
