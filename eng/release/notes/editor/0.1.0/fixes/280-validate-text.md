@@ -1,1 +1,0 @@
-- `validate` says why a workspace could not be opened in words, such as "Translation sources cannot be symbolic links.", instead of the notice's code (`ui_backend_path_link`), and prints the text of the editor's own diagnostics, such as a pending recovery ([#280](https://github.com/Runic-Artifex/runic-translations-sdk/issues/280)).

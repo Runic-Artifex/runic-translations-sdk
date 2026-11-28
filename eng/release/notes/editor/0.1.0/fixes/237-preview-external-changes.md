@@ -1,1 +1,0 @@
-- Previewing a change in the translations editor (a structural change such as adding or renaming a message, or an import) no longer hides a file another program changed just before: the editor still reports it as changed on disk. Only reloading the workspace or applying a change acknowledges outside edits.

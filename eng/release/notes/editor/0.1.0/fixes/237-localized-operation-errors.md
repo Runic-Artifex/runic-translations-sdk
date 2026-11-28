@@ -1,1 +1,0 @@
-- When the translations editor's message composer or a quick fix cannot apply a change, it now reports the reason in the editor's language, as typing in a message already did, with the compiler's details attached, instead of a bare English message.
