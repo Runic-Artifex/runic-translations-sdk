@@ -930,6 +930,7 @@ internal static partial class EditorSmokeTest
             await ImportedApprovalJourneyAsync(Path.Combine(container, "imported-approval")).ConfigureAwait(false);
             await StaleSourceJourneyAsync(Path.Combine(container, "stale-source")).ConfigureAwait(false);
             await LibraryCatalogJourneyAsync(Path.Combine(container, "library-catalogs")).ConfigureAwait(false);
+            await SpellingJourneyAsync(Path.Combine(container, "spelling")).ConfigureAwait(false);
             await CloseGuardJourneyAsync(Path.Combine(container, "close-guard")).ConfigureAwait(false);
             WindowPlacementJourney(Path.Combine(container, "window-placement"));
             string project = Path.Combine(container, "translations");
@@ -968,10 +969,11 @@ internal static partial class EditorSmokeTest
             await using var windowScope = windowProvider.CreateAsyncScope();
             var windowLocale = windowScope.ServiceProvider.GetRequiredService<IRunicWindowLocale>();
             await using var windowPlatform = new RunicTestPlatform();
+            using var windowSpelling = SmokeSpelling(Path.Combine(container, "window-spelling"), []);
             using (var editor = new EditorViewModel(new EditorSession(project),
                 windowScope.ServiceProvider.GetRequiredService<IRunicModelContext>(),
                 windowScope.ServiceProvider.GetRequiredService<ISequencer>(), windowLocale,
-                windowScope.ServiceProvider.GetRequiredService<IRunicWindowContext>(), windowPlatform.FileDialogs))
+                windowScope.ServiceProvider.GetRequiredService<IRunicWindowContext>(), windowPlatform.FileDialogs, windowSpelling))
             using (var window = RunicWindowTestHost.Create(windowScope.ServiceProvider, editor))
             {
                 // The page's language switch sets the window's locale, which reaches the page as a locale push; a
@@ -1023,6 +1025,21 @@ internal static partial class EditorSmokeTest
                 Require(editor.Interchange.LastExportReviewJson?.Ok == true,
                     "The interchange ViewModel did not export review state.");
                 await ExecuteRouteAsync(editor.Diagnostics.AboutCommand, () => editor.Diagnostics.AboutResultJson, "{}");
+                // The spelling operations through their generated routes (D074.10).
+                await ExecuteRouteAsync(editor.Spelling.SpellingStatusCommand, () => editor.Spelling.SpellingStatusResultJson,
+                    "{\"locales\":[\"en\"],\"automaticDownload\":false}");
+                Require(editor.Spelling.SpellingStatusResultJson.Contains("\"state\":\"ready\"", StringComparison.Ordinal),
+                    "The routed spelling status did not report English: " + editor.Spelling.SpellingStatusResultJson);
+                await ExecuteRouteAsync(editor.Spelling.CheckSpellingCommand, () => editor.Spelling.CheckSpellingResultJson,
+                    "{\"locale\":\"en\",\"texts\":[{\"id\":\"t\",\"text\":\"Teh {$name}\"}]}");
+                Require(editor.Spelling.CheckSpellingResultJson.Contains("\"word\":\"Teh\"", StringComparison.Ordinal),
+                    "The routed spelling check did not mark the word: " + editor.Spelling.CheckSpellingResultJson);
+                await ExecuteRouteAsync(editor.Spelling.SuggestSpellingCommand, () => editor.Spelling.SuggestSpellingResultJson,
+                    "{\"locale\":\"en\",\"word\":\"Teh\"}");
+                await ExecuteRouteAsync(editor.Spelling.DownloadSpellingDictionaryCommand, () => editor.Spelling.DownloadSpellingDictionaryResultJson,
+                    "{\"locale\":\"en\"}");
+                await ExecuteRouteAsync(editor.Spelling.AddSpellingWordCommand, () => editor.Spelling.AddSpellingWordResultJson,
+                    "{\"word\":\"Runic\"}");
                 Require(editor.Diagnostics.LastAbout?.Product is not null,
                     "The diagnostics ViewModel did not publish its typed product description.");
                 await ExecuteRouteAsync(editor.LocalState.LoadLocalStateCommand,

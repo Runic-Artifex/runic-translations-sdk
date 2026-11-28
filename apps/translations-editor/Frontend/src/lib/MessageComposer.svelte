@@ -8,13 +8,13 @@
   import * as Card from "#lib/components/ui/card/index.js";
   import * as Field from "#lib/components/ui/field/index.js";
   import { Input } from "#lib/components/ui/input/index.js";
-  import { Textarea } from "#lib/components/ui/textarea/index.js";
   import PatternEditor from "./PatternEditor.svelte";
+  import SpelledTextarea from "./SpelledTextarea.svelte";
+  import SpellingNotice from "./SpellingNotice.svelte";
   import { authoringInputs, nextIdentifier, variantTitle } from "./message-composer";
   import type { EditorMessageOperation, EditorMessageProjection } from "./contracts";
   import type { ResourceValue } from "./resource-model";
   import { lengthLimit, patternLength } from "./message-starter";
-  import { localeDirection } from "#lib/locale-text.js";
   import { getUiText } from "#lib/ui-text.js";
 
   interface Props {
@@ -113,6 +113,8 @@
     </div>
   </header>
 
+  <SpellingNotice {locale} />
+
   {#if rawMode || !canAuthor}
     {#if !canAuthor}
       <p class="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground" role="status">
@@ -120,7 +122,7 @@
         {#if authoring?.reason}<span class="mt-1 block text-xs">{authoring.reason}</span>{/if}
       </p>
     {/if}
-    <Textarea value={source} rows={12} class="font-mono text-sm" data-draft-field aria-label={ui.text("ui_composer_message_source")} spellcheck={false} lang={locale} dir={localeDirection(locale)} oninput={(event) => changeSource(event.currentTarget.value)} />
+    <SpelledTextarea value={source} rows={12} {locale} kind="message" class="font-mono text-sm" label={ui.text("ui_composer_message_source")} onchange={changeSource} />
   {:else if authoring}
     {#if structure && authoring.selectors.length === 0}
       <Button variant="outline" class="justify-self-start" disabled={authoringBusy} onclick={enablePluralForms}>

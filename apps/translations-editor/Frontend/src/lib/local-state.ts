@@ -21,6 +21,9 @@ const exactKeys = new Set([
   "runic-translations.pseudo-localization",
   "runic-translations.ui-direction",
   "runic-translations.ui-locale",
+  // Spell checking on or off, and whether the system language's dictionary downloads on its own (state/spelling.svelte.ts).
+  "runic-translations.spelling",
+  "runic-translations.spelling-download",
   "runic-translations:recent:1",
   // The last selected locale and message of the most recent catalogs (catalog-selection.ts `catalogSelectionStateKey`).
   "runic-translations:catalog-selection:1",

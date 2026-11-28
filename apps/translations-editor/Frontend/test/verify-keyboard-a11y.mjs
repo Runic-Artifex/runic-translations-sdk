@@ -80,6 +80,10 @@ const componentEntries = await Promise.all([
   "MessageList.svelte",
   "MessageToolbar.svelte",
   "PatternEditor.svelte",
+  "SpelledTextarea.svelte",
+  "SpellingMarks.svelte",
+  "SpellingNotice.svelte",
+  "SpellingSuggestions.svelte",
   "TranslationEditor.svelte",
 ].map(async (name) => [name, await readFile(new URL(`../src/lib/${name}`, import.meta.url), "utf8")]));
 const [english, german] = await Promise.all([
@@ -239,8 +243,10 @@ assert.match(page, /onredo=\{redo\}/, "The toolbar's Redo does not use the unsav
 assert.match(page, /undoTitle: undoLabel,\s*redoTitle: redoLabel/, "The palette's Undo and Redo are not named as the toolbar's.");
 for (const [name, pattern] of [
   ["TranslationEditor.svelte", /id="translation-value"\s*data-draft-field/],
-  ["MessageComposer.svelte", /<Textarea value=\{source\}[^>]*data-draft-field/],
-  ["PatternEditor.svelte", /<Textarea value=\{visiblePattern\}[^>]*data-draft-field/],
+  // The MF2 source fields are spell checked (D074.10); SpelledTextarea marks its field.
+  ["MessageComposer.svelte", /<SpelledTextarea value=\{source\}/],
+  ["PatternEditor.svelte", /<SpelledTextarea value=\{visiblePattern\}/],
+  ["SpelledTextarea.svelte", /<Textarea[^>]*data-draft-field/],
   ["InlineMessageEditor.svelte", /<textarea[^>]*data-draft-field/],
 ]) assert.match(sources[name], pattern, `${name} does not mark its draft field.`);
 // The composer's fields show the draft again after an undo: text typed before it belongs to an older revision.

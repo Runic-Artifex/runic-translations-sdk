@@ -365,3 +365,35 @@ public sealed class EditorProjectViewModel : EditorFeatureViewModel
     public ReactiveCommand<string, RxVoid> CreateProjectCommand { get; }
     public ReactiveCommand<string, RxVoid> OpenWorkspaceCommand { get; }
 }
+
+/// <summary>Spell checking (D074.10, D086.2) exposed as individual generated View commands. The checker and the
+/// dictionaries belong to the process (<see cref="EditorSpelling"/>), shared by every window.</summary>
+public sealed class EditorSpellingViewModel : EditorFeatureViewModel
+{
+    private string _spellingStatusResultJson = "null";
+    private string _checkSpellingResultJson = "null";
+    private string _suggestSpellingResultJson = "null";
+    private string _downloadSpellingDictionaryResultJson = "null";
+    private string _addSpellingWordResultJson = "null";
+
+    internal EditorSpellingViewModel(EditorSession session, EditorViewModel owner, ISequencer scheduler, EditorSpelling spelling) : base(session, owner, scheduler)
+    {
+        SpellingStatusCommand = CreateCommand(argument => Task.FromResult(spelling.Status(Parse<EditorSpellingStatusRequest>(argument))), (_, value) => SpellingStatusResultJson = value);
+        CheckSpellingCommand = CreateCommand(argument => spelling.CheckAsync(Parse<EditorSpellingCheckRequest>(argument)), (_, value) => CheckSpellingResultJson = value);
+        SuggestSpellingCommand = CreateCommand(argument => spelling.SuggestAsync(Parse<EditorSpellingSuggestRequest>(argument)), (_, value) => SuggestSpellingResultJson = value);
+        DownloadSpellingDictionaryCommand = CreateCommand(argument => Task.FromResult(spelling.Download(Parse<EditorSpellingDownloadRequest>(argument).Locale)), (_, value) => DownloadSpellingDictionaryResultJson = value);
+        AddSpellingWordCommand = CreateCommand(argument => spelling.AddWordAsync(Parse<EditorSpellingWordRequest>(argument)), (_, value) => AddSpellingWordResultJson = value);
+    }
+
+    public string SpellingStatusResultJson { get => _spellingStatusResultJson; private set => this.RaiseAndSetIfChanged(ref _spellingStatusResultJson, value); }
+    public string CheckSpellingResultJson { get => _checkSpellingResultJson; private set => this.RaiseAndSetIfChanged(ref _checkSpellingResultJson, value); }
+    public string SuggestSpellingResultJson { get => _suggestSpellingResultJson; private set => this.RaiseAndSetIfChanged(ref _suggestSpellingResultJson, value); }
+    public string DownloadSpellingDictionaryResultJson { get => _downloadSpellingDictionaryResultJson; private set => this.RaiseAndSetIfChanged(ref _downloadSpellingDictionaryResultJson, value); }
+    public string AddSpellingWordResultJson { get => _addSpellingWordResultJson; private set => this.RaiseAndSetIfChanged(ref _addSpellingWordResultJson, value); }
+
+    public ReactiveCommand<string, RxVoid> SpellingStatusCommand { get; }
+    public ReactiveCommand<string, RxVoid> CheckSpellingCommand { get; }
+    public ReactiveCommand<string, RxVoid> SuggestSpellingCommand { get; }
+    public ReactiveCommand<string, RxVoid> DownloadSpellingDictionaryCommand { get; }
+    public ReactiveCommand<string, RxVoid> AddSpellingWordCommand { get; }
+}

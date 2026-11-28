@@ -117,9 +117,9 @@ export function createContext({ page, workspace, reportDirectory, observations }
       };
     });
     await messageRow(key).click();
-    await page.locator('textarea[spellcheck="true"]').first().waitFor();
+    await page.locator('[data-pattern-box] textarea[data-draft-field]').first().waitFor();
   };
-  const editor = () => page.locator('textarea[spellcheck="true"]').first();
+  const editor = () => page.locator('[data-pattern-box] textarea[data-draft-field]').first();
   // The toolbar's one save state: "Saved", or "Unsaved changes: …" naming what is unsaved.
   const saveState = async () => (await page.getByTestId("save-state").textContent())?.trim();
   const reloadFiles = async () => {

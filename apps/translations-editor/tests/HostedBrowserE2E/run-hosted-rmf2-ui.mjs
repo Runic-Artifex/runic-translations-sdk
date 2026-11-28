@@ -24,6 +24,17 @@ const workspace = join(temporaryRoot, "workspace");
 const state = join(temporaryRoot, "state");
 const driver = join(fixtureDirectory, "hosted-rmf2-ui.mjs");
 const childEnvironment = { ...process.env, XDG_STATE_HOME: state, RUNIC_EDITOR_HOSTED_E2E_REPORT_DIR: reportDirectory };
+// Spell checking (stages/420-spelling.mjs): the host's system language is English, whose dictionaries the editor
+// bundles; downloads and the system's Hunspell folders under XDG_DATA_HOME, XDG_DATA_DIRS and DICPATH are empty
+// folders of this run; and HTTPS goes to a closed port, so no dictionary is ever downloaded.
+const spellingData = join(temporaryRoot, "spelling");
+const hostEnvironment = {
+  ...childEnvironment,
+  LANGUAGE: "en_US", LC_MESSAGES: "en_US.UTF-8",
+  XDG_DATA_HOME: join(spellingData, "data"), XDG_DATA_DIRS: join(spellingData, "data-dirs"), DICPATH: join(spellingData, "dicpath"),
+  HTTPS_PROXY: "http://127.0.0.1:9", https_proxy: "http://127.0.0.1:9", NO_PROXY: "127.0.0.1,localhost", no_proxy: "127.0.0.1,localhost",
+};
+delete hostEnvironment.LC_ALL;
 let host;
 let hostOutput = "";
 let browserOutput = "";
@@ -54,7 +65,7 @@ try {
   const ready = new Promise((resolveReady, reject) => {
     // Standard input stays open: a line written to it is the Runic Desktop host's request to stop serving.
     host = spawn("dotnet", [assembly, "serve", "--workspace", workspace], {
-      cwd: dirname(assembly), env: childEnvironment, stdio: ["pipe", "pipe", "pipe"],
+      cwd: dirname(assembly), env: hostEnvironment, stdio: ["pipe", "pipe", "pipe"],
     });
     const timer = setTimeout(() => reject(new Error("Hosted editor did not announce its loopback URL within 30 seconds.")), 30_000);
     // The serve-only protocol's first RUNIC_APPLICATION_URL= line, the window's capability URL. It admits one browser,

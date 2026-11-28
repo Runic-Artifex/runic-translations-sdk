@@ -21,6 +21,8 @@
     <ProjectReference Include="..\..\..\packages\dotnet\Runic.Translations.Authoring\Runic.Translations.Authoring.csproj" />
     <!-- The editor-state store belongs to the Translations Editor (an executable); its cases compile the source. -->
     <Compile Include="..\..\..\apps\translations-editor\EditorState\*.cs" Link="EditorState\%(Filename)%(Extension)" />
+    <!-- The spell check's MF2 scanner (D074.10), which needs no editor services. -->
+    <Compile Include="..\..\..\apps\translations-editor\Spelling\EditorSpellingRanges.cs" Link="Spelling\EditorSpellingRanges.cs" />
   </ItemGroup>
   <Import Project="../../../eng/build/translations.targets" />
 </Project>

@@ -3,7 +3,7 @@ import type { BridgeConnectOptions, BridgeOperationStartOptions } from "@runic-a
 import { connectView, disposable, viewReferences, type BridgeMemberDecoders, type BridgeOperationCodec, bridgeOperations } from "@runic-artifex/views/generated";
 import * as bridgeWire from "@runic-artifex/views/generated/wire";
 import type { EditorProjectState, EditorProjectClient, EditorProjectPageReference } from "./editorProject.contract.js";
-export type { EditorProjectState, EditorProjectPreviewProjectOperation, EditorProjectCreateProjectOperation, EditorProjectOpenWorkspaceOperation, EditorProjectClient, EditorProjectPageReference } from "./editorProject.contract.js";
+export type { EditorProjectState, EditorProjectPreviewProjectOperation, EditorProjectCreateProjectOperation, EditorProjectOpenWorkspaceOperation, EditorProjectCommandName, EditorProjectClient, EditorProjectPageReference } from "./editorProject.contract.js";
 
 const pageEditorProjectReferences = viewReferences<EditorProjectPageReference>(id => ({ kind: "editorProject", connect: () => connectEditorProjectAt(`content${id}`) }));
 export function pageEditorProject(id: string): EditorProjectPageReference { return pageEditorProjectReferences(id); }
@@ -16,7 +16,7 @@ const members: BridgeMemberDecoders<EditorProjectState> = {
   isCreateProjectExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isOpenWorkspaceExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorProjectViewModel:FA8C9DF07FEC823BE3D8DC803D948539CD74484F4055CD6BAE7FAAC1F3484270";
+const bridgeContract = "Runic.Translations.Editor.EditorProjectViewModel:90836D7FEA90D8E5CA29D45E9E39A3C22DDA974573D5A523511301D7AA8B97E7";
 const previewProjectOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const createProjectOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const openWorkspaceOperation: BridgeOperationCodec<void> = { decode: value => undefined };

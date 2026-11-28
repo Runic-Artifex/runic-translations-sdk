@@ -3,7 +3,7 @@ import type { BridgeConnectOptions, BridgeOperationStartOptions } from "@runic-a
 import { connectView, disposable, viewReferences, type BridgeMemberDecoders, type BridgeOperationCodec, bridgeOperations } from "@runic-artifex/views/generated";
 import * as bridgeWire from "@runic-artifex/views/generated/wire";
 import type { EditorLocalStateState, EditorLocalStateClient, EditorLocalStatePageReference } from "./editorLocalState.contract.js";
-export type { EditorLocalStateState, EditorLocalStateLoadLocalStateOperation, EditorLocalStateSaveLocalStateOperation, EditorLocalStateClearLocalStateOperation, EditorLocalStateClient, EditorLocalStatePageReference } from "./editorLocalState.contract.js";
+export type { EditorLocalStateState, EditorLocalStateLoadLocalStateOperation, EditorLocalStateSaveLocalStateOperation, EditorLocalStateClearLocalStateOperation, EditorLocalStateCommandName, EditorLocalStateClient, EditorLocalStatePageReference } from "./editorLocalState.contract.js";
 
 const pageEditorLocalStateReferences = viewReferences<EditorLocalStatePageReference>(id => ({ kind: "editorLocalState", connect: () => connectEditorLocalStateAt(`content${id}`) }));
 export function pageEditorLocalState(id: string): EditorLocalStatePageReference { return pageEditorLocalStateReferences(id); }
@@ -16,7 +16,7 @@ const members: BridgeMemberDecoders<EditorLocalStateState> = {
   isSaveLocalStateExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   isClearLocalStateExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorLocalStateViewModel:FA8C9DF07FEC823BE3D8DC803D948539CD74484F4055CD6BAE7FAAC1F3484270";
+const bridgeContract = "Runic.Translations.Editor.EditorLocalStateViewModel:2BA0D414B769D28EBF85AEFBB99DC078AF6ECF86B9F3C37F047B03E3DF89FEAE";
 const loadLocalStateOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const saveLocalStateOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const clearLocalStateOperation: BridgeOperationCodec<void> = { decode: value => undefined };

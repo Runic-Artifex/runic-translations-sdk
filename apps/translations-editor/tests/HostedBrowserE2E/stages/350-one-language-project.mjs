@@ -96,7 +96,7 @@ export default async function oneLanguageProject(context) {
   // The toolbar has no Next missing; the editor no workflow, source panel or Copy source; the developers' note is
   // labelled as such; the composer edits "the text".
   await messageRow("settings_language").click();
-  await page.locator('textarea[spellcheck="true"]').first().waitFor();
+  await page.locator('[data-pattern-box] textarea[data-draft-field]').first().waitFor();
   assert.equal(await page.getByTestId("next-message").count(), 0, "A content-editing project shows Next missing.");
   assert.equal(await page.getByRole("button", { name: /^Workflow/ }).count(), 0, "A content-editing project shows the review workflow.");
   assert.equal(await page.getByTestId("workflow-stale").count(), 0);
@@ -216,7 +216,7 @@ export default async function oneLanguageProject(context) {
   await openWorkspace(workspace, "runic-hosted-e2e");
   await page.getByRole("button", { name: /^en / }).first().click();
   await messageRow("common_cancel").click();
-  await page.locator('textarea[spellcheck="true"]').first().waitFor();
+  await page.locator('[data-pattern-box] textarea[data-draft-field]').first().waitFor();
   assert.equal(await saveState(), "Saved");
   assert.deepEqual(pageErrors, [], "The production editor reported uncaught browser errors.");
 }

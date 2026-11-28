@@ -7,6 +7,8 @@
   import Rows4Icon from "@lucide/svelte/icons/rows-4";
   import Settings2Icon from "@lucide/svelte/icons/settings-2";
   import SunIcon from "@lucide/svelte/icons/sun";
+  import DownloadIcon from "@lucide/svelte/icons/download";
+  import SpellCheckIcon from "@lucide/svelte/icons/spell-check";
   import ChevronsUpDownIcon from "@lucide/svelte/icons/chevrons-up-down";
   import { Badge } from "#lib/components/ui/badge/index.js";
   import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.js";
@@ -15,6 +17,7 @@
   import type { UiDirection } from "#lib/simulation.js";
   import { getUiText } from "#lib/ui-text.js";
   import { uiLocaleName } from "#lib/ui-locale.js";
+  import { getSpelling } from "#lib/state/spelling.svelte.js";
 
   let {
     locale,
@@ -46,6 +49,7 @@
   } = $props();
 
   const ui = getUiText();
+  const spelling = getSpelling();
 
   const modeNames: Record<ThemeMode, string> = $derived({ system: ui.text("ui_settings_system"), light: ui.text("ui_settings_light"), dark: ui.text("ui_settings_dark") });
   const densityNames: Record<Density, string> = $derived({ comfortable: ui.text("ui_settings_comfortable"), compact: ui.text("ui_settings_compact") });
@@ -97,6 +101,18 @@
             <LanguagesIcon />
             {ui.text("ui_settings_right_to_left")}
           </DropdownMenu.CheckboxItem>
+          {#if spelling !== undefined}
+            <DropdownMenu.Separator />
+            <DropdownMenu.Label>{ui.text("ui_settings_spelling")}</DropdownMenu.Label>
+            <DropdownMenu.CheckboxItem checked={spelling.enabled} onCheckedChange={(checked) => spelling.setEnabled(checked)} data-testid="settings-spelling">
+              <SpellCheckIcon />
+              {ui.text("ui_settings_check_spelling")}
+            </DropdownMenu.CheckboxItem>
+            <DropdownMenu.CheckboxItem checked={spelling.automaticDownload} disabled={!spelling.enabled} onCheckedChange={(checked) => spelling.setAutomaticDownload(checked)} data-testid="settings-spelling-download">
+              <DownloadIcon />
+              {ui.text("ui_settings_spelling_download")}
+            </DropdownMenu.CheckboxItem>
+          {/if}
           <DropdownMenu.Separator />
           <DropdownMenu.Label>{ui.text("ui_settings_interface_language")}</DropdownMenu.Label>
           <DropdownMenu.RadioGroup value={locale} onValueChange={onlocalechange}>

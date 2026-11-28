@@ -1,9 +1,8 @@
 <script lang="ts">
   import { Button } from "#lib/components/ui/button/index.js";
-  import { Textarea } from "#lib/components/ui/textarea/index.js";
   import InlineMessageEditor from "./InlineMessageEditor.svelte";
+  import SpelledTextarea from "./SpelledTextarea.svelte";
   import type { InputType, MessageInput } from "./message-model";
-  import { localeDirection } from "./locale-text";
   import { getUiText } from "./ui-text";
 
   let { pattern, inputs, locale, label, onchange, onensureinput, revision = 0, sourceToggle = true, compact = false }: {
@@ -35,7 +34,7 @@
 
 <div class="grid gap-2">
   {#if sourceMode && sourceToggle}
-    <Textarea value={visiblePattern} class="min-h-32 font-mono" data-draft-field aria-label={label} spellcheck={false} lang={locale} dir={localeDirection(locale)} oninput={(event) => changePattern(event.currentTarget.value)} />
+    <SpelledTextarea value={visiblePattern} {locale} kind="pattern" class="min-h-32 font-mono" {label} onchange={changePattern} />
   {:else}
     <InlineMessageEditor value={visiblePattern} {inputs} {locale} {label} onchange={changePattern} {onensureinput} {compact} />
   {/if}

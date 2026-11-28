@@ -46,7 +46,7 @@ export interface EditorLibrariesMock extends MockTypedView<EditorLibrariesMockSt
 const spec: MockTypedViewSpec = {
   kind: "editorLibraries",
   route: "editorLibraries",
-  contract: "Runic.Translations.Editor.EditorLibrariesViewModel:FA8C9DF07FEC823BE3D8DC803D948539CD74484F4055CD6BAE7FAAC1F3484270",
+  contract: "Runic.Translations.Editor.EditorLibrariesViewModel:C7845B59D0FFC5594BEBFBF674C0B431AD4E2E0EBE0F6514717038CF830C8977",
   fields: {
     loadLibraryResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     overrideMessageResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },

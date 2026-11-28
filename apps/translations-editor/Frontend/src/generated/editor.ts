@@ -10,9 +10,10 @@ import { pageEditorDiagnostics } from "./editorDiagnostics.js";
 import { pageEditorLocalState } from "./editorLocalState.js";
 import { pageEditorProject } from "./editorProject.js";
 import { pageEditorLibraries } from "./editorLibraries.js";
+import { pageEditorSpelling } from "./editorSpelling.js";
 import { pageEditorDocument } from "./editorDocument.js";
 import type { EditorState, EditorInteractionContext, EditorInteractions, EditorClient, EditorPageReference } from "./editor.contract.js";
-export type { EditorState, EditorInteractionContext, EditorInteractions, EditorSetUiLocaleOperation, EditorCloseWindowOperation, EditorClient, EditorPageReference } from "./editor.contract.js";
+export type { EditorState, EditorInteractionContext, EditorInteractions, EditorSetUiLocaleOperation, EditorCloseWindowOperation, EditorCommandName, EditorClient, EditorPageReference } from "./editor.contract.js";
 import type { EditorCloseQuestion } from "./types.js";
 export type { EditorCloseQuestion } from "./types.js";
 
@@ -31,14 +32,15 @@ const members: BridgeMemberDecoders<EditorState> = {
   localState: (wire: unknown) => { const reference = contentReference(wire); return reference.kind === "editorLocalState" ? pageEditorLocalState(reference.id) : (() => { throw new BridgeError("failed", "Unknown localState kind."); })(); },
   project: (wire: unknown) => { const reference = contentReference(wire); return reference.kind === "editorProject" ? pageEditorProject(reference.id) : (() => { throw new BridgeError("failed", "Unknown project kind."); })(); },
   libraries: (wire: unknown) => { const reference = contentReference(wire); return reference.kind === "editorLibraries" ? pageEditorLibraries(reference.id) : (() => { throw new BridgeError("failed", "Unknown libraries kind."); })(); },
+  spelling: (wire: unknown) => { const reference = contentReference(wire); return reference.kind === "editorSpelling" ? pageEditorSpelling(reference.id) : (() => { throw new BridgeError("failed", "Unknown spelling kind."); })(); },
   documents: (wire: unknown) => bridgeWire.array(wire, item => { const reference = contentReference(item); return reference.kind === "editorDocument" ? pageEditorDocument(reference.id) : (() => { throw new BridgeError("failed", "Unknown documents kind."); })(); }),
   isSetUiLocaleExecuting: (wire: unknown) => bridgeWire.boolean(wire),
   canCloseWindow: (wire: unknown) => bridgeWire.boolean(wire),
   isCloseWindowExecuting: (wire: unknown) => bridgeWire.boolean(wire),
 };
-const bridgeContract = "Runic.Translations.Editor.EditorViewModel:FA8C9DF07FEC823BE3D8DC803D948539CD74484F4055CD6BAE7FAAC1F3484270";
+const bridgeContract = "Runic.Translations.Editor.EditorViewModel:E3776D3B3F08942EC858F54381FB9A41B79C580651403848202D773861C2A4B4";
 const interactionDefinitions = defineInteractions({
-  confirmClose: { contract: "FA8C9DF07FEC823BE3D8DC803D948539CD74484F4055CD6BAE7FAAC1F3484270:interaction:ConfirmClose", decodeInput: (value: unknown) => bridgeWire.object<EditorCloseQuestion>(value, value => ({ answerWithinMilliseconds: bridgeWire.integer(value["answerWithinMilliseconds"], -2147483648, 2147483647)})), encodeOutput: (value: unknown) => (value as boolean) },
+  confirmClose: { contract: "E3776D3B3F08942EC858F54381FB9A41B79C580651403848202D773861C2A4B4:interaction:ConfirmClose", decodeInput: (value: unknown) => bridgeWire.object<EditorCloseQuestion>(value, value => ({ answerWithinMilliseconds: bridgeWire.integer(value["answerWithinMilliseconds"], -2147483648, 2147483647)})), encodeOutput: (value: unknown) => (value as boolean) },
 });
 const setUiLocaleOperation: BridgeOperationCodec<void> = { decode: value => undefined };
 const closeWindowOperation: BridgeOperationCodec<boolean> = { decode: value => bridgeWire.boolean(value) };

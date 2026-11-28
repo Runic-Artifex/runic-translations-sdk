@@ -188,6 +188,16 @@ The About dialog reports product version, update channel, source revision, runti
 
 They exclude workspace roots, relative file paths, diagnostic messages, JSON source, translation text, review notes, sample arguments, and recent-project history. Nothing is uploaded automatically.
 
+**Spelling dictionaries** are the editor's only network requests (D074.10, D086.2). When a project has the system
+language and no dictionary for it is installed, the editor downloads that dictionary on its own. Turn this off with
+**Editor settings → Download my language's dictionary automatically**. Every other language downloads only after you
+choose **Download** in the composer. A download requests only the HTTPS addresses in `Runic.Spelling`'s pinned catalog,
+`raw.githubusercontent.com` files at a fixed commit. It sends a generic `User-Agent` and no workspace, text or user data;
+GitHub sees the request's IP address. The files are checked against the catalog's SHA-256 before they are installed in
+the folder that all Runic applications share. That folder also holds each dictionary's license and readme. Words added
+to the dictionary go to the user's own word list (`user-words.txt` in the same shared Runic folder), readable only by
+the user.
+
 ## Per-user local state
 
 The packaged browser or WebView profile stores no durable editor state. Preferences, recent-project metadata, and crash-recovery drafts are held in one native per-user application-data record, independently of the browser origin or profile. It contains no account, telemetry, machine-translation provider, or background synchronization state: providers are unavailable in this preview and therefore cannot receive customer text or request consent. **About & diagnostics** offers a privacy-bounded inventory (entry counts and byte totals only) and a **Clear local state** action. Clearing removes only this editor’s application-owned records; it never changes workspace files and deliberately leaves work already open in the current window in memory.

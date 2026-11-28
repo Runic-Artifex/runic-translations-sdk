@@ -27,6 +27,9 @@ internal static class EditorLocalStateStore
         "runic-translations.pseudo-localization",
         "runic-translations.ui-direction",
         "runic-translations.ui-locale",
+        // Spell checking on or off, and whether the system language's dictionary downloads on its own (D086.2).
+        "runic-translations.spelling",
+        "runic-translations.spelling-download",
         "runic-translations:recent:1",
         // The last selected locale and message of the most recent catalogs (one bounded record, not one entry per catalog).
         "runic-translations:catalog-selection:1",

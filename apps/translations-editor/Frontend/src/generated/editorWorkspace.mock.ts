@@ -58,7 +58,7 @@ export interface EditorWorkspaceMock extends MockTypedView<EditorWorkspaceMockSt
 const spec: MockTypedViewSpec = {
   kind: "editorWorkspace",
   route: "editorWorkspace",
-  contract: "Runic.Translations.Editor.EditorWorkspaceViewModel:FA8C9DF07FEC823BE3D8DC803D948539CD74484F4055CD6BAE7FAAC1F3484270",
+  contract: "Runic.Translations.Editor.EditorWorkspaceViewModel:468A3B1588F6505DB27A6A6E80FD22132320A14630126F5075495FEACA32927F",
   fields: {
     loadResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },
     checkExternalChangesResultJson: { encode: (value: unknown) => { const typed = value as string; return typed; }, decode: (wire: unknown) => bridgeWire.string(wire) },

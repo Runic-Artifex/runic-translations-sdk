@@ -98,6 +98,8 @@
     <PackageReference Include="Runic.Desktop.NativeServer" />
     <PackageReference Include="Runic.Application.Views.ReactiveUI" />
     <PackageReference Include="Runic.CommandLine" />
+    <!-- Hunspell spell checking with the bundled English dictionaries (copied into the build and publish output). -->
+    <PackageReference Include="Runic.Spelling" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(RunicEditorUsePackedTranslations)' != 'true'">

@@ -54,12 +54,15 @@ assert.match(text(german), /\[ui_source_panel_title language=English\].*Save/);
 assert.doesNotMatch(html(TranslationEditor, editorProps("en")), /data-testid="source-text"/, "The base locale has no source panel.");
 assert.doesNotMatch(html(TranslationEditor, editorProps("de", "raw")), /data-testid="source-text"/, "The file view shows the file only.");
 
-// The composer's MF2 source box is not spell-checked (P11); the visual pattern segments are, in the target language.
-const [composer, inline, patternEditor] = await Promise.all(["MessageComposer", "InlineMessageEditor", "PatternEditor"]
+// The webview's checker never reads MF2 source (P11): it is off everywhere, and the editor's own checker (D074.10) reads
+// only the words of the text, the source boxes' as a whole message or a pattern, the visual segments' in the target
+// language.
+const [composer, inline, patternEditor, spelled] = await Promise.all(["MessageComposer", "InlineMessageEditor", "PatternEditor", "SpelledTextarea"]
   .map((name) => readFile(new URL(`../src/lib/${name}.svelte`, import.meta.url), "utf8")));
-assert.match(composer, /<Textarea value=\{source\}[^>]*spellcheck=\{false\}/, "The composer's MF2 source box is spell-checked.");
-assert.match(patternEditor, /<Textarea value=\{visiblePattern\}[^>]*spellcheck=\{false\}/, "A variant's MF2 source box is spell-checked.");
-assert.match(inline, /spellcheck="true"\s+lang=\{locale\}/, "The visual text segments lost spell-checking.");
+assert.match(composer, /<SpelledTextarea value=\{source\}[^>]*kind="message"/, "The composer's MF2 source box is not checked as a message.");
+assert.match(patternEditor, /<SpelledTextarea value=\{visiblePattern\}[^>]*kind="pattern"/, "A variant's MF2 source box is not checked as a pattern.");
+assert.match(spelled, /spellcheck=\{false\}/, "The webview spell-checks the MF2 source boxes.");
+assert.match(inline, /spellcheck="false"\s+lang=\{locale\}/, "The webview spell-checks the visual text segments.");
 // The pattern box reads as one text field (P22): a text cursor, and a click on its empty area focuses the last segment.
 assert.match(inline, /class="[^"]*cursor-text[^"]*"\s+role="group"[\s\S]*?onmousedown=\{focusEnd\}/);
 assert.match(inline, /function focusEnd[\s\S]*?event\.target !== event\.currentTarget[\s\S]*?editingSlot = last;[\s\S]*?focusSlot\(last, slots\[last\]\.text\.length\)/);
