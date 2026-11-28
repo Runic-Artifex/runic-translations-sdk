@@ -54,9 +54,16 @@ test("a checksum file holds the digest and the file name, as sha256sum writes it
 
 test("a release takes only assembled notes; a dry run previews the fragments", () => {
   const version = editorVersion();
-  const preview = releaseNotes(version, { directory: editorNotesDirectory });
-  expect(preview.startsWith(`# Runic Translations Editor ${version}\n`)).toBe(true);
-  expect(() => releaseNotes(version, { release: true, directory: editorNotesDirectory })).toThrow(/unassembled/);
+  // The repository's own notes: assembled once a release is prepared, fragments before.
+  expect(releaseNotes(version, { directory: editorNotesDirectory }).startsWith(`# Runic Translations Editor ${version}\n`)).toBe(true);
+  // Fragments only, as between releases: a dry run previews them, a release refuses them.
+  scratch(directory => {
+    mkdirSync(join(directory, version, "features"), { recursive: true });
+    writeFileSync(join(directory, version, "_intro.md"), `# Runic Translations Editor ${version}\n\nIntro.\n`);
+    writeFileSync(join(directory, version, "features", "one.md"), "## One\n\nA feature.\n");
+    expect(releaseNotes(version, { directory }).startsWith(`# Runic Translations Editor ${version}\n`)).toBe(true);
+    expect(() => releaseNotes(version, { release: true, directory })).toThrow(/unassembled/);
+  });
   scratch(directory => {
     writeFileSync(join(directory, `${version}.md`), "# Notes\n");
     expect(releaseNotes(version, { release: true, directory })).toBe("# Notes\n");
